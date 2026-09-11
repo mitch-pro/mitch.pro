@@ -290,41 +290,56 @@ try {
   assert.equal(dataAuthStatus.displayName, 'Matrix Test User');
   console.log('Authenticated SSO status passed:', dataAuthStatus);
 
-  console.log('--- 3b. Testing Matrix SSO handoff always uses alternate domain from site.json ---');
+  console.log('--- 3b. Testing Matrix SSO returns to the school host that opened chat ---');
   const siteConfig = JSON.parse(readFileSync(join(DATA_DIR, 'site.json'), 'utf8'));
-  const targetOrigin = new URL(siteConfig.alternate || 'https://mitchdog.com').origin;
-  const targetHost = new URL(targetOrigin).host;
+  const identityOrigin = new URL(siteConfig.alternate || 'https://mitchdog.com').origin;
+  const identityHost = new URL(identityOrigin).host;
+  const schoolMatrixBack = 'https://rjuhsd.school/matrix/';
 
-  const bridgeRes = await fetch(`${BASE_URL}/api/sso/bridge?back=${encodeURIComponent('https://mitch.pro/matrix/')}`, {
+  // Identity host is signed in; school Matrix is the destination. Exchange must
+  // land back on rjuhsd.school — not rewrite the user onto mitchdog.com/matrix/.
+  const bridgeRes = await fetch(`${BASE_URL}/api/sso/bridge?back=${encodeURIComponent(schoolMatrixBack)}`, {
     headers: {
-      'Host': 'rjuhsd.school',
+      'Host': identityHost,
       'Cookie': `studentId=${testSid}`
     },
     redirect: 'manual'
   });
   assert.equal(bridgeRes.status, 302);
   const bridgeLocation = new URL(bridgeRes.headers.get('Location'));
-  assert.equal(bridgeLocation.origin, targetOrigin, `SSO bridge for /matrix/ must target alternate origin ${targetOrigin}`);
+  assert.equal(bridgeLocation.origin, 'https://rjuhsd.school', 'Matrix SSO exchange must target the school host that opened chat');
   assert.equal(bridgeLocation.pathname, '/api/sso/exchange');
   assert.equal(bridgeRes.headers.get('Referrer-Policy'), 'no-referrer');
   const bridgeToken = bridgeLocation.searchParams.get('token');
   assert(bridgeToken, 'Bridge handoff must contain a single-use token');
   const bridgeBack = bridgeLocation.searchParams.get('back');
-  assert.equal(new URL(bridgeBack).origin, targetOrigin, `SSO bridge back URL must target alternate origin ${targetOrigin}`);
+  assert.equal(bridgeBack, schoolMatrixBack, 'Matrix SSO back URL must remain the school Matrix URL');
 
   const exchangeRes = await fetch(`${BASE_URL}/api/sso/exchange?${new URLSearchParams({
     token: bridgeToken,
     back: bridgeBack
   })}`, {
     headers: {
-      'Host': targetHost
+      'Host': 'rjuhsd.school'
     },
     redirect: 'manual'
   });
   assert.equal(exchangeRes.status, 302);
-  assert.equal(exchangeRes.headers.get('Location'), `${targetOrigin}/matrix/`);
-  assert(exchangeRes.headers.get('Set-Cookie')?.includes('mitch_session='), 'Destination exchange must create a session on alternate domain');
-  console.log('Matrix SSO alternate domain handoff passed');
+  assert.equal(exchangeRes.headers.get('Location'), schoolMatrixBack);
+  assert(exchangeRes.headers.get('Set-Cookie')?.includes('mitch_session='), 'School exchange must create a session on rjuhsd.school');
+  console.log('Matrix SSO return-to-school handoff passed');
+
+  // Same-origin Matrix on the school host must not bounce to the alternate.
+  const sameOriginBridge = await fetch(`${BASE_URL}/api/sso/bridge?back=${encodeURIComponent(schoolMatrixBack)}`, {
+    headers: {
+      'Host': 'rjuhsd.school',
+      'Cookie': `studentId=${testSid}`
+    },
+    redirect: 'manual'
+  });
+  assert.equal(sameOriginBridge.status, 302);
+  assert.equal(sameOriginBridge.headers.get('Location'), schoolMatrixBack, 'Signed-in school Matrix must stay on rjuhsd.school');
+  console.log('Matrix SSO same-origin school stay passed');
 
   console.log('--- 3c. Testing non-Matrix SSO hop uses same-origin handoff (CSP form-action safe) ---');
   const pickleBack = 'https://sexypickleclub.com/';
@@ -390,23 +405,25 @@ try {
   const configData = await resConfig.json();
   assert.equal(configData.defaultHomeserver, 0);
   assert(Array.isArray(configData.homeserverList));
-  assert(configData.homeserverList.includes(targetHost), 'homeserverList must include alternate host');
+  assert(configData.homeserverList.includes(identityHost), 'homeserverList must include identity/alternate host');
   assert(configData.featuredCommunities);
   assert.equal(configData.featuredCommunities.openAsDefault, true);
   assert(configData.featuredCommunities.servers.includes('mitch.pro'));
   assert(configData.featuredCommunities.rooms.includes('#general:mitch.pro'));
   const matrixPage = readFileSync(join(REPO_ROOT, 'webserver', 'matrix', 'index.html'), 'utf8');
-  assert(matrixPage.includes("storedSessionIsValid(stored.token, stored.userId)"), 'Matrix must reuse a valid browser device session');
+  assert(matrixPage.includes('storedSessionIsValid(stored.token, stored.userId)'), 'Matrix must reuse a valid browser device session');
   assert(matrixPage.includes("navigator.locks.request('mitch-matrix-session'"), 'Concurrent tabs must serialize Matrix SSO');
-  assert(matrixPage.includes("hostname !== targetHost"), 'Matrix chat must redirect when not on alternate host');
-  assert(matrixPage.includes("__MATRIX_SSO_TARGET__"), 'Matrix page must support __MATRIX_SSO_TARGET__');
+  assert(matrixPage.includes('Stay on the host that opened Matrix'), 'Matrix must remain on the host that opened chat');
+  assert(!matrixPage.includes('hostname !== targetHost'), 'Matrix must not force-redirect to the alternate host');
+  assert(!matrixPage.includes('__MATRIX_SSO_TARGET__'), 'Matrix page must not depend on __MATRIX_SSO_TARGET__ redirect injection');
 
   const resMatrixHtml = await fetch(`${BASE_URL}/matrix/`);
   assert.equal(resMatrixHtml.status, 200);
   const htmlContent = await resMatrixHtml.text();
-  assert(htmlContent.includes('__MATRIX_SSO_TARGET__'), 'Served /matrix/ HTML must include injected __MATRIX_SSO_TARGET__');
-  assert(htmlContent.includes(targetOrigin), 'Served /matrix/ HTML must inject target alternate origin');
-  console.log('/matrix/config.json and HTML injection passed');
+  assert(!htmlContent.includes('__MATRIX_SSO_TARGET__'), 'Served /matrix/ HTML must not inject alternate-host redirect target');
+  assert(htmlContent.includes('/api/sso/bridge?back=/matrix/') || htmlContent.includes('/api/sso/bridge?back=%2Fmatrix%2F'),
+    'Served /matrix/ HTML must keep same-host SSO bridge back=/matrix/');
+  console.log('/matrix/config.json and stay-on-origin HTML passed');
 
   // 4b. Matrix asset immutable caching and gzip serving check
   console.log('--- 4b. Testing asset caching and gzip for /matrix/assets ---');

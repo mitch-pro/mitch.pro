@@ -12758,21 +12758,11 @@ async function handleRequest(req, server) {
 
         const selfHost = (requestHost(req) || '').split(':')[0].toLowerCase();
         const isMatrixPath = back.pathname === '/matrix' || back.pathname.startsWith('/matrix/');
-        const isLocal = selfHost === 'localhost' || selfHost === '127.0.0.1' || back.hostname === 'localhost' || back.hostname === '127.0.0.1';
-
-        // Matrix chat SSO ALWAYS uses whatever alternate is configured in data/site.json.
-        if (isMatrixPath && !isLocal) {
-          const targetOrigin = matrixSsoTargetOrigin();
-          try {
-            const u = new URL(targetOrigin);
-            back.protocol = u.protocol;
-            back.host = u.host;
-            back.hostname = u.hostname;
-            back.port = u.port;
-          } catch {}
-        }
 
         // Already signed in here? Mint a token and hop straight across.
+        // Matrix chat stays on the host the user opened (e.g. rjuhsd.school/matrix/).
+        // mitchdog.com / site.json alternate is only the identity SSO hop — the
+        // `back` URL must not be rewritten to the alternate Matrix origin.
         if (checkPasswordCookie(req)) {
           const cookies = getCookies(req);
           const sid = cookies['studentId'] || cookies['id'] || '';
@@ -12785,10 +12775,9 @@ async function handleRequest(req, server) {
               const dest = new URL('https://' + back.hostname + '/api/sso/exchange');
               dest.searchParams.set('token', token);
               dest.searchParams.set('back', back.toString());
-              // Matrix chat keeps its sessions and encryption keys on the alternate
-              // origin configured in site.json and does not need to copy the legacy
-              // Secure Chat JWK. A normal top-level redirect also works with the
-              // site's form-action CSP, unlike a cross-origin hidden form.
+              // Matrix does not need the legacy Secure Chat JWK handoff. A
+              // normal top-level redirect also works with the site's
+              // form-action CSP, unlike a cross-origin hidden form.
               if (isMatrixPath) {
                 return new Response(null, {
                   status: 302,
@@ -12907,9 +12896,9 @@ async function handleRequest(req, server) {
 
     if (path === '/api/sso/exchange' && (method === 'GET' || method === 'POST')) {
       try {
-        // The token may land on any approved site origin. This is required
-        // when a signed-in school page sends Matrix back to its canonical
-        // mitch.pro origin so the browser keeps one encryption store.
+        // The token may land on any approved site origin so school/club Matrix
+        // (and other SSO destinations) can establish a host-scoped session
+        // after hopping through the identity host.
         if (!isRjuhsdHost(req) && !isPickleHost(req) && !isMitchSsoHost(requestHost(req))) {
           return jsonResp(400, { error: 'Exchange is not available on this host.' });
         }
@@ -23516,14 +23505,7 @@ async function handleRequest(req, server) {
 	    if (path.startsWith('/matrix/') && !path.includes('.')) {
 	      const indexPath = join(WEBROOT, 'matrix', 'index.html');
 	      if (existsSync(indexPath)) {
-	        let content = readFileSync(indexPath, 'utf8');
-	        const targetOrigin = matrixSsoTargetOrigin();
-	        const injectTag = `<script>window.__MATRIX_SSO_TARGET__ = ${JSON.stringify(targetOrigin)};</script>\n`;
-	        if (content.includes('<head>')) {
-	          content = content.replace('<head>', '<head>\n    ' + injectTag);
-	        } else {
-	          content = injectTag + content;
-	        }
+	        const content = readFileSync(indexPath, 'utf8');
 	        return new Response(content, {
 	          headers: { 'Content-Type': 'text/html; charset=utf-8' }
 	        });
@@ -23592,9 +23574,6 @@ async function handleRequest(req, server) {
           // Page-specific galaxy layers must come after the legacy relaunch layer.
           if (!isEmbeddedGameRuntime && (path === '/encrypt' || path === '/encrypt/' || path === '/encrypt/index.html') && !raw.includes(Buffer.from('/encrypt-galaxy.css'))) {
             injectStr += '<link rel="stylesheet" href="/encrypt-galaxy.css">\n';
-          }
-          if (!isEmbeddedGameRuntime && (path === '/matrix' || path.startsWith('/matrix/')) && !raw.includes(Buffer.from('__MATRIX_SSO_TARGET__'))) {
-            injectStr += `<script>window.__MATRIX_SSO_TARGET__ = ${JSON.stringify(matrixSsoTargetOrigin())};</script>\n`;
           }
           if (!isEmbeddedGameRuntime) {
             if (!raw.includes(Buffer.from('fonts.googleapis.com'))) injectStr += '<link rel="preconnect" href="https://fonts.googleapis.com">\n<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n';

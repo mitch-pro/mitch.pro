@@ -226,53 +226,10 @@
       })();
 
       // ── Single Sign-On (SSO) & Bootstrapping ──────────────────────
+      // Stay on the host that opened Matrix (e.g. rjuhsd.school/matrix/).
+      // Unsigned users hit /api/sso/bridge?back=/matrix/, which hops through
+      // the identity host (mitchdog.com) and returns here after exchange.
       (function() {
-        const hostname = window.location.hostname.toLowerCase();
-        const isLocalPreview = hostname === 'localhost' || hostname === '127.0.0.1';
-
-        // Resolve Matrix SSO target domain dynamically from site.json (via server injection or fallback)
-        let targetHost = '';
-        let targetProtocol = 'https:';
-        try {
-          const rawTarget = window.__MATRIX_SSO_TARGET__;
-          if (rawTarget) {
-            const u = new URL(rawTarget);
-            targetHost = u.hostname.toLowerCase();
-            if (u.protocol) targetProtocol = u.protocol;
-          }
-        } catch {}
-
-        if (!targetHost && !isLocalPreview) {
-          try {
-            const xhr = new XMLHttpRequest();
-            xhr.open('GET', '/api/site-info', false);
-            xhr.send(null);
-            if (xhr.status === 200) {
-              const info = JSON.parse(xhr.responseText);
-              const alt = info.alternate || info.primary;
-              if (alt) {
-                const u = new URL(alt);
-                targetHost = u.hostname.toLowerCase();
-                if (u.protocol) targetProtocol = u.protocol;
-              }
-            }
-          } catch {}
-        }
-
-        if (!targetHost) {
-          targetHost = 'mitchdog.com';
-        }
-
-        if (!isLocalPreview && hostname !== targetHost) {
-          const destination = new URL(window.location.href);
-          destination.protocol = targetProtocol;
-          destination.host = targetHost;
-          const bridge = new URL('/api/sso/bridge', window.location.origin);
-          bridge.searchParams.set('back', destination.toString());
-          window.location.replace(bridge.toString());
-          return;
-        }
-
         const banner = document.getElementById("mitch-sso-banner");
 
         function bootCinny() {
