@@ -326,6 +326,63 @@ try {
   assert(exchangeRes.headers.get('Set-Cookie')?.includes('mitch_session='), 'Destination exchange must create a session on alternate domain');
   console.log('Matrix SSO alternate domain handoff passed');
 
+  console.log('--- 3c. Testing non-Matrix SSO hop uses same-origin handoff (CSP form-action safe) ---');
+  const pickleBack = 'https://sexypickleclub.com/';
+  const pickleHopRes = await fetch(`${BASE_URL}/api/sso/bridge?back=${encodeURIComponent(pickleBack)}`, {
+    headers: {
+      'Host': 'mitch.pro',
+      'Cookie': `studentId=${testSid}`
+    },
+    redirect: 'manual'
+  });
+  assert.equal(pickleHopRes.status, 200, 'Cross-domain non-Matrix SSO must return hop HTML');
+  const pickleHopHtml = await pickleHopRes.text();
+  assert(pickleHopHtml.includes('f.action = "/api/sso/bridge/handoff"') || pickleHopHtml.includes("f.action = \"/api/sso/bridge/handoff\""),
+    'Hop page must same-origin POST to /api/sso/bridge/handoff (not cross-origin exchange)');
+  assert(!/f\.action = "https:\/\/sexypickleclub\.com\/api\/sso\/exchange/.test(pickleHopHtml),
+    'Hop page must not form-POST cross-origin (blocked by form-action \'self\')');
+  const hopTokenMatch = pickleHopHtml.match(/add\("token", "([^"]+)"\)/);
+  assert(hopTokenMatch, 'Hop HTML must embed the bridge token');
+  const hopToken = hopTokenMatch[1];
+
+  const sampleJwk = {
+    kty: 'EC', crv: 'P-256',
+    x: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+    y: 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',
+    d: 'CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC',
+    ext: true
+  };
+  const handoffRes = await fetch(`${BASE_URL}/api/sso/bridge/handoff`, {
+    method: 'POST',
+    headers: {
+      'Host': 'mitch.pro',
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: new URLSearchParams({
+      token: hopToken,
+      back: pickleBack,
+      e2ePrivateJwk: JSON.stringify(sampleJwk)
+    }).toString(),
+    redirect: 'manual'
+  });
+  assert.equal(handoffRes.status, 302, 'Handoff must redirect to destination exchange');
+  const handoffLoc = new URL(handoffRes.headers.get('Location'));
+  assert.equal(handoffLoc.origin, 'https://sexypickleclub.com');
+  assert.equal(handoffLoc.pathname, '/api/sso/exchange');
+  assert.equal(handoffLoc.searchParams.get('token'), hopToken);
+  assert.equal(handoffLoc.searchParams.get('back'), pickleBack);
+
+  const pickleExchangeRes = await fetch(`${BASE_URL}/api/sso/exchange?${handoffLoc.searchParams.toString()}`, {
+    headers: { 'Host': 'sexypickleclub.com' },
+    redirect: 'manual'
+  });
+  assert.equal(pickleExchangeRes.status, 200, 'Exchange with attached JWK must return settle HTML');
+  assert(pickleExchangeRes.headers.get('Set-Cookie')?.includes('mitch_session='), 'Pickle exchange must create a session');
+  const settleHtml = await pickleExchangeRes.text();
+  assert(settleHtml.includes('localStorage.setItem'), 'Settle page must write E2E JWK into destination localStorage');
+  assert(settleHtml.includes('sexypickleclub.com/'), 'Settle page must continue to pickle back URL');
+  console.log('Pickle SSO same-origin handoff passed');
+
   // 4. Matrix config check
   console.log('--- 4. Testing /matrix/config.json ---');
   const resConfig = await fetch(`${BASE_URL}/matrix/config.json`);

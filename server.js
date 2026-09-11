@@ -2798,6 +2798,7 @@ const PUBLIC_API_PATHS = new Set([
   '/api/stats',
   '/api/next',
   '/api/sso/bridge',
+  '/api/sso/bridge/handoff',
   '/api/sso/exchange',
   '/api/weather',
   '/api/school-calendar',
@@ -5536,7 +5537,7 @@ const SSO_BRIDGE_TTL_MS = 90 * 1000;
 
 function createSsoBridgeToken(normEmail) {
   const token = randomBytes(24).toString('base64url');
-  SSO_BRIDGE_TOKENS.set(token, { email: normalizeEmail(normEmail), expires: Date.now() + SSO_BRIDGE_TTL_MS });
+  SSO_BRIDGE_TOKENS.set(token, { email: normalizeEmail(normEmail), expires: Date.now() + SSO_BRIDGE_TTL_MS, e2ePrivateJwk: null });
   if (SSO_BRIDGE_TOKENS.size > 500) {
     const now = Date.now();
     for (const [t, rec] of SSO_BRIDGE_TOKENS) {
@@ -5552,6 +5553,20 @@ function consumeSsoBridgeToken(token) {
   SSO_BRIDGE_TOKENS.delete(String(token));
   if (Date.now() > rec.expires || !rec.email) return null;
   return rec;
+}
+
+// Validate a Secure Chat private JWK carried across the SSO hop. Returns a
+// stripped JWK object or null.
+function parseSsoE2ePrivateJwk(raw) {
+  const rawJwk = String(raw || '').slice(0, 8192);
+  if (!rawJwk) return null;
+  try {
+    const cand = JSON.parse(rawJwk);
+    if (cand && cand.kty === 'EC' && cand.crv === 'P-256' && cand.x && cand.y && cand.d) {
+      return { kty: cand.kty, crv: cand.crv, x: cand.x, y: cand.y, d: cand.d, ext: true };
+    }
+  } catch {}
+  return null;
 }
 
 function sameOriginRequest(req) {
@@ -5579,15 +5594,17 @@ function sameOriginRequest(req) {
   return false;
 }
 
-// Endpoints exempt from the same-origin CSRF check. /api/sso/exchange is the
-// cross-domain hop target of the SSO bridge: the bridge page form-POSTs from
-// another origin (mitch.pro → rjuhsd.school / sexypickleclub.com) with no
-// custom headers, so the header check would always block it. It doesn't need
-// CSRF protection anyway — the single-use, 90-second token minted server-side
-// for an authenticated session IS the authorization.
+// Endpoints exempt from the same-origin CSRF check.
+// /api/sso/bridge/handoff is a same-origin form POST from the SSO hop page
+// (no custom headers). It attaches an optional E2E JWK to the single-use
+// bridge token, then 302s to the destination /api/sso/exchange — avoiding a
+// cross-origin form POST that Caddy's form-action 'self' CSP would block.
+// /api/sso/exchange remains exempt for direct GET/POST handoffs (Matrix) and
+// legacy clients; the single-use, 90-second token IS the authorization.
 // /api/dm/attachment/upload is session-authenticated with strict MIME & quota checks.
 const CSRF_EXEMPT_PATHS = new Set([
   '/api/sso/exchange',
+  '/api/sso/bridge/handoff',
   '/api/dm/attachment/upload',
   '/api/games',
   '/api/premium/email/register',
@@ -12776,14 +12793,15 @@ async function handleRequest(req, server) {
                   }
                 });
               }
-              // localStorage is per-origin, so the school site can't see the
-              // Secure Chat identity cached on mitch.pro. This hop page runs
-              // on mitch.pro first, picks up the device's cached private key,
-              // and POSTs it with the token so the exchange can hand it to the
-              // school origin — Secure Chat then needs no second password
-              // prompt after an SSO sign-in. It's the user's own key going
-              // from their own browser to their own device over HTTPS.
+              // localStorage is per-origin, so the school/club site can't see the
+              // Secure Chat identity cached on mitch.pro. This hop page runs on
+              // the identity origin first, picks up the device's cached private
+              // key, and same-origin form-POSTs it to /api/sso/bridge/handoff.
+              // That endpoint attaches the JWK to the token and 302s to the
+              // destination /api/sso/exchange — a same-origin form that works
+              // with Caddy's form-action 'self' CSP (a cross-origin form does not).
               const jwkKey = '_e2e_private_jwk_v3:' + encodeURIComponent(e2eClientStorageEmail(email));
+              const handoffUrl = '/api/sso/bridge/handoff';
               const hopHtml =
                 '<!doctype html><meta charset="utf-8"><title>Signing in…</title>\n' +
                 // The <body> element must exist before this script runs — an
@@ -12796,7 +12814,7 @@ async function handleRequest(req, server) {
                 `    jwk = localStorage.getItem(${JSON.stringify(jwkKey)}) || localStorage.getItem("_e2e_private_jwk") || "";\n` +
                 '  } catch (e) {}\n' +
                 '  var f = document.createElement("form");\n' +
-                `  f.action = ${JSON.stringify(dest.toString())};\n` +
+                `  f.action = ${JSON.stringify(handoffUrl)};\n` +
                 '  f.method = "POST";\n' +
                 '  function add(n, v) { var i = document.createElement("input"); i.type = "hidden"; i.name = n; i.value = v; f.appendChild(i); }\n' +
                 `  add("token", ${JSON.stringify(token)});\n` +
@@ -12806,7 +12824,14 @@ async function handleRequest(req, server) {
                 '  f.submit();\n' +
                 '})();\n' +
                 '<\/script>\n';
-              return new Response(hopHtml, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+              return new Response(hopHtml, {
+                status: 200,
+                headers: {
+                  'Content-Type': 'text/html; charset=utf-8',
+                  'Cache-Control': 'no-store',
+                  'Referrer-Policy': 'no-referrer'
+                }
+              });
             }
             // Bound for the current origin — the session already works here.
             return new Response(null, { status: 302, headers: { Location: back.toString() } });
@@ -12836,6 +12861,44 @@ async function handleRequest(req, server) {
       }
     }
 
+    // Same-origin hop from the SSO bridge page: attach optional E2E JWK to the
+    // single-use token, then redirect to the destination exchange URL.
+    if (path === '/api/sso/bridge/handoff' && method === 'POST') {
+      try {
+        const form = new URLSearchParams(await req.text());
+        const token = String(form.get('token') || '');
+        const rec = SSO_BRIDGE_TOKENS.get(token);
+        if (!rec || Date.now() > rec.expires || !rec.email) {
+          return new Response(null, { status: 302, headers: { Location: '/?sso=expired' } });
+        }
+        const jwkJson = parseSsoE2ePrivateJwk(form.get('e2ePrivateJwk'));
+        if (jwkJson) rec.e2ePrivateJwk = jwkJson;
+
+        const back = ssoBackAllowed(form.get('back') || '', req);
+        if (!back) return jsonResp(400, { error: 'Invalid back URL.' });
+        const selfHost = (requestHost(req) || '').split(':')[0].toLowerCase();
+        if (back.hostname.toLowerCase() === selfHost) {
+          // Shouldn't happen for cross-domain hops; fall through to back.
+          SSO_BRIDGE_TOKENS.delete(token);
+          return new Response(null, { status: 302, headers: { Location: back.toString(), 'Cache-Control': 'no-store' } });
+        }
+        const dest = new URL('https://' + back.hostname + '/api/sso/exchange');
+        dest.searchParams.set('token', token);
+        dest.searchParams.set('back', back.toString());
+        return new Response(null, {
+          status: 302,
+          headers: {
+            Location: dest.toString(),
+            'Cache-Control': 'no-store',
+            'Referrer-Policy': 'no-referrer'
+          }
+        });
+      } catch (e) {
+        console.error('[sso-handoff] failed:', e);
+        return jsonResp(500, { error: 'Sign-in handoff failed.' });
+      }
+    }
+
     if (path === '/api/sso/exchange' && (method === 'GET' || method === 'POST')) {
       try {
         // The token may land on any approved site origin. This is required
@@ -12844,8 +12907,8 @@ async function handleRequest(req, server) {
         if (!isRjuhsdHost(req) && !isPickleHost(req) && !isMitchSsoHost(requestHost(req))) {
           return jsonResp(400, { error: 'Exchange is not available on this host.' });
         }
-        // The bridge hop page arrives as a form POST carrying the device's
-        // cached Secure Chat private JWK alongside the token.
+        // Preferred path: GET after /api/sso/bridge/handoff (JWK already on the
+        // token). Legacy path: form POST still accepts e2ePrivateJwk in the body.
         let params = url.searchParams;
         if (method === 'POST') {
           const form = new URLSearchParams(await req.text());
@@ -12877,20 +12940,11 @@ async function handleRequest(req, server) {
         headers.set('Referrer-Policy', 'no-referrer');
         writeAppLog('info', 'sso', 'Cross-domain sign-in', { email: rec.email, host: requestHost(req), ip });
 
-        // A private JWK came along: validate it, then cache it in this
-        // origin's localStorage before continuing to the destination, so the
-        // Secure Chat page unlocks without a second password prompt.
-        let jwkJson = null;
-        const rawJwk = String(params.get('e2ePrivateJwk') || '').slice(0, 8192);
-        if (rawJwk) {
-          try {
-            const cand = JSON.parse(rawJwk);
-            if (cand && cand.kty === 'EC' && cand.crv === 'P-256' && cand.x && cand.y && cand.d) {
-              jwkJson = { kty: cand.kty, crv: cand.crv, x: cand.x, y: cand.y, d: cand.d, ext: true };
-            }
-          } catch {}
-        }
-        if (jwkJson && method === 'POST') {
+        // Prefer a JWK attached to the token (handoff path); fall back to a
+        // legacy form-body JWK. Validate body JWK the same way either way.
+        let jwkJson = rec.e2ePrivateJwk || null;
+        if (!jwkJson) jwkJson = parseSsoE2ePrivateJwk(params.get('e2ePrivateJwk'));
+        if (jwkJson) {
           const storeKey = '_e2e_private_jwk_v3:' + encodeURIComponent(e2eClientStorageEmail(rec.email));
           headers.set('Content-Type', 'text/html; charset=utf-8');
           const settleHtml =
