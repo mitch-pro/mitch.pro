@@ -1732,16 +1732,22 @@ function htmlBaseTemplate(email, subject, contentHtml, footerHtml = '') {
   `.trim();
 }
 
-function makeVerificationCodeHtml(email, label, code, expiryMinutes) {
+// Callers pass (label, code, expiryMinutes[, email]). email is optional and only
+// used for the unsubscribe footer when it's a real address.
+function makeVerificationCodeHtml(label, code, expiryMinutes, email = '') {
+  const safeLabel = String(label || 'this action');
+  const safeCode = String(code || '').trim();
+  const mins = Number(expiryMinutes);
+  const safeMins = Number.isFinite(mins) && mins > 0 ? mins : 10;
   const content = `
     <h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 700; color: #f4f4f5;">Verification Code</h2>
-    <p style="margin: 0 0 24px;">Please use the following verification code to confirm <strong>${label}</strong> on your account:</p>
+    <p style="margin: 0 0 24px;">Please use the following verification code to confirm <strong>${safeLabel}</strong> on your account:</p>
     <div style="background-color: rgba(168, 85, 247, 0.1); border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px;">
-      <span style="font-family: monospace; font-size: 36px; font-weight: 800; letter-spacing: 0.25em; color: #c084fc; padding-left: 0.25em;">${code}</span>
+      <span style="font-family: monospace; font-size: 36px; font-weight: 800; letter-spacing: 0.25em; color: #c084fc; padding-left: 0.25em;">${safeCode}</span>
     </div>
-    <p style="margin: 0; font-size: 13px; color: #f87171;">⚠️ This verification code is active and valid for <strong>${expiryMinutes} minutes</strong>. If you did not request this action, please secure your account.</p>
+    <p style="margin: 0; font-size: 13px; color: #f87171;">⚠️ This verification code is active and valid for <strong>${safeMins} minutes</strong>. If you did not request this action, please secure your account.</p>
   `;
-  return htmlBaseTemplate(email, `Confirm ${label} - mitch.pro`, content);
+  return htmlBaseTemplate(email, `Confirm ${safeLabel} - mitch.pro`, content);
 }
 
 function makeWeeklyDigestHtml(email, totalVisits, topGame, eloData, cookies) {
@@ -2478,7 +2484,7 @@ function sendSecurityActionCode(normEmail, action) {
     expires: Date.now() + 10 * 60 * 1000,
   });
   const targetEmail = canonicalDeliveryEmail(normEmail);
-  sendEmailBg(targetEmail, `Confirm ${label} - mitch.pro`, makeVerificationCodeHtml(label, code, 10));
+  sendEmailBg(targetEmail, `Confirm ${label} - mitch.pro`, makeVerificationCodeHtml(label, code, 10, targetEmail));
   return { ok: true };
 }
 
@@ -13590,7 +13596,7 @@ async function handleRequest(req, server) {
           if (twofa.type === 'email') {
             rec.code = Math.floor(100000 + Math.random() * 900000).toString();
             const targetEmail = canonicalDeliveryEmail(normEmail);
-            sendEmailBg(targetEmail, 'Your mitch.pro login code', makeVerificationCodeHtml('Login Two-Factor Authentication', rec.code, 5));
+            sendEmailBg(targetEmail, 'Your mitch.pro login code', makeVerificationCodeHtml('Login Two-Factor Authentication', rec.code, 5, targetEmail));
           }
           pendingTwoFactor.set(tempToken, rec);
           writeAppLog('info', 'login', 'Login requires 2FA', { email: normEmail, type: twofa.type, ip });
@@ -13741,7 +13747,7 @@ async function handleRequest(req, server) {
           if (twofa.type === 'email') {
             rec.code = Math.floor(100000 + Math.random() * 900000).toString();
             const targetEmail = canonicalDeliveryEmail(credEmail);
-            sendEmailBg(targetEmail, 'Your mitch.pro login code', makeVerificationCodeHtml('Login Two-Factor Authentication', rec.code, 5));
+            sendEmailBg(targetEmail, 'Your mitch.pro login code', makeVerificationCodeHtml('Login Two-Factor Authentication', rec.code, 5, targetEmail));
           }
           pendingTwoFactor.set(tempToken, rec);
           writeAppLog('info', 'webauthn', 'Passkey login requires 2FA', { email: credEmail, type: twofa.type, ip });
@@ -13931,7 +13937,7 @@ async function handleRequest(req, server) {
         saveJson(SIGNUP_CODES_FILE, codes);
 
         const _s = site();
-        sendEmailBg(email, `Your ${_s.name} Verification Code`, makeVerificationCodeHtml('Account Signup', code, 30));
+        sendEmailBg(email, `Your ${_s.name} Verification Code`, makeVerificationCodeHtml('Account Signup', code, 30, email));
 
         writeAppLog('info', 'signup', 'Signup verification code sent', { email: normEmail, ip });
         return jsonResp(200, { success: true });
@@ -14060,7 +14066,7 @@ async function handleRequest(req, server) {
         saveTokens(tokens);
 
         const _s = site();
-        sendEmailBg(email, `Your ${_s.name} Reset Code`, makeVerificationCodeHtml('Password Reset', otp, 30));
+        sendEmailBg(email, `Your ${_s.name} Reset Code`, makeVerificationCodeHtml('Password Reset', otp, 30, email));
 
         return jsonResp(200, { success: true });
       } catch (e) { return jsonResp(400, { success: false, message: String(e) }); }
@@ -15005,7 +15011,7 @@ async function handleRequest(req, server) {
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       const token = createTempToken();
       pendingEmailChanges.set(token, { oldNorm, newNorm, newEmail, code, expires: Date.now() + 30 * 60 * 1000, attempts: 0 });
-      sendEmailBg(newEmail, 'Confirm your mitch.pro email change', makeVerificationCodeHtml('Email Change Request', code, 30));
+      sendEmailBg(newEmail, 'Confirm your mitch.pro email change', makeVerificationCodeHtml('Email Change Request', code, 30, newEmail));
       return jsonResp(200, { ok: true, change_token: token });
     }
 
