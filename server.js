@@ -9204,6 +9204,15 @@ async function handleRequest(req, server) {
       });
     }
 
+    // Serve federation discovery from the website. Forwarding this request to
+    // Conduit causes homeserver discovery to fail on some Matrix clients.
+    if (path === '/.well-known/matrix/server' && method === 'GET') {
+      return jsonResp(200, { 'm.server': 'mitch.pro:443' }, {
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'public, max-age=300'
+      });
+    }
+
     // Matrix Client-Server VoIP STUN/TURN Discovery for WebRTC peer connections
     if (method === 'GET' && path.match(/^\/_matrix\/client\/(?:v3|r0)\/voip\/turnServer/)) {
       return jsonResp(200, {
