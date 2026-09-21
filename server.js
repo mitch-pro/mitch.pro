@@ -8377,7 +8377,12 @@ async function isMatrixStaffMember(req, roomId, account = null) {
   return false;
 }
 
-async function loginOrRegisterMatrixUser(uid, desiredUsername, displayName) {
+function sanitizeMatrixDeviceId(value) {
+  const deviceId = String(value || '').trim();
+  return /^[A-Za-z0-9._~-]{1,255}$/.test(deviceId) ? deviceId : '';
+}
+
+async function loginOrRegisterMatrixUser(uid, desiredUsername, displayName, requestedDeviceId = '') {
   const matrixUsers = loadJson(MATRIX_USERS_FILE, {});
   let assignedUser = matrixUsers[uid];
   if (!assignedUser) {
@@ -8387,18 +8392,23 @@ async function loginOrRegisterMatrixUser(uid, desiredUsername, displayName) {
 
   const password = getMatrixPasswordForUid(uid);
 
-  // 1. Try login first
+  const deviceId = sanitizeMatrixDeviceId(requestedDeviceId);
+
+  // 1. Try login first. Reusing the browser's existing device ID keeps its
+  // local E2EE account paired with the same Matrix device when a token expires.
   let loginRes;
   try {
+    const loginBody = {
+      type: 'm.login.password',
+      identifier: { type: 'm.id.user', user: assignedUser },
+      password,
+      initial_device_display_name: 'Mitch.pro Web'
+    };
+    if (deviceId) loginBody.device_id = deviceId;
     loginRes = await callConduit('/_matrix/client/v3/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type: 'm.login.password',
-        identifier: { type: 'm.id.user', user: assignedUser },
-        password,
-        initial_device_display_name: 'Mitch.pro Web'
-      })
+      body: JSON.stringify(loginBody)
     });
   } catch (err) {
     throw new Error('Conduit homeserver unreachable: ' + (err?.message || err));
@@ -8411,14 +8421,16 @@ async function loginOrRegisterMatrixUser(uid, desiredUsername, displayName) {
     let candidateName = assignedUser;
     let registered = false;
     for (let attempt = 0; attempt < 5; attempt++) {
+      const registrationBody = {
+        username: candidateName,
+        password,
+        auth: { type: 'm.login.dummy' }
+      };
+      if (deviceId) registrationBody.device_id = deviceId;
       const regRes = await callConduit('/_matrix/client/v3/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: candidateName,
-          password,
-          auth: { type: 'm.login.dummy' }
-        })
+        body: JSON.stringify(registrationBody)
       });
       const regData = await regRes.json();
       if (regRes.ok && regData.access_token) {
@@ -9922,8 +9934,12 @@ async function handleRequest(req, server) {
     const username = normalizeUsername(prof.username || (email ? defaultUsernameForEmail(norm) : 'user_' + uid.slice(0, 6)));
     const displayName = prof.displayName || prof.nickname || username;
 
+    let ssoBody = {};
+    try { ssoBody = await req.json(); } catch (_) {}
+    const requestedDeviceId = sanitizeMatrixDeviceId(ssoBody?.device_id);
+
     try {
-      const authResult = await loginOrRegisterMatrixUser(uid, username, displayName);
+      const authResult = await loginOrRegisterMatrixUser(uid, username, displayName, requestedDeviceId);
       if (authResult.access_token) {
         matrixTokenToAccount.set(authResult.access_token, {
           uid,

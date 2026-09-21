@@ -123,6 +123,7 @@ let mockPowerLevels = { users: { '@mitch_admin:mitch.pro': 100 }, users_default:
 const kickedUsers = [];
 const bannedUsers = [];
 const redactedEvents = [];
+const matrixLoginBodies = [];
 let mockDevices = [
   { device_id: 'DEV_CURRENT', last_seen_ts: Date.now() },
   { device_id: 'DEV_OLD_1', last_seen_ts: Date.now() - (10 * 24 * 60 * 60 * 1000) },
@@ -139,12 +140,18 @@ const mockConduit = Bun.serve({
 
     if (path === '/_matrix/client/v3/login' && method === 'POST') {
       const b = await req.json().catch(() => ({}));
+      matrixLoginBodies.push(b);
       const user = b.identifier?.user || 'user';
       const expectedPassword = getMatrixPasswordForUid(testSid);
       if (b.type === 'm.login.password' && user === 'matrixtestuser' && b.password !== expectedPassword) {
         return Response.json({ errcode: 'M_FORBIDDEN', error: 'Invalid password' }, { status: 403 });
       }
-      return Response.json({ user_id: `@${user}:mitch.pro`, access_token: `tok_${user}`, device_id: 'DEV_MOCK', home_server: 'mitch.pro' });
+      return Response.json({
+        user_id: `@${user}:mitch.pro`,
+        access_token: `tok_${user}`,
+        device_id: b.device_id || 'DEV_MOCK',
+        home_server: 'mitch.pro'
+      });
     }
     if ((path === '/_matrix/client/v3/keys/device_signing/upload' || path === '/_matrix/client/v3/room_keys/version') && method === 'POST') {
       const b = await req.json().catch(() => ({}));
@@ -476,7 +483,11 @@ try {
   assert(configData.featuredCommunities.servers.includes('mitch.pro'));
   assert(configData.featuredCommunities.rooms.includes('#general:mitch.pro'));
   const matrixPage = readFileSync(join(REPO_ROOT, 'webserver', 'matrix', 'index.html'), 'utf8');
-  assert(matrixPage.includes('storedSessionIsValid(stored.token, stored.userId)'), 'Matrix must reuse a valid browser device session');
+  assert(matrixPage.includes('storedSessionIsValid(stored.token, stored.userId, stored.deviceId)'), 'Matrix must validate both the user and device before reusing a browser session');
+  assert(matrixPage.includes("body: JSON.stringify(reusableDeviceId ? { device_id: reusableDeviceId } : {})"), 'Matrix SSO refresh must request the browser\'s existing device ID');
+  assert(matrixPage.includes("account in the store doesn't match the account in the constructor"), 'Matrix must detect the Rust crypto-store account mismatch');
+  assert(matrixPage.includes('completePendingMatrixStoreRecovery()'), 'Matrix must repair mismatched IndexedDB stores before restarting Cinny');
+  assert(matrixPage.includes("'matrix-js-sdk::matrix-sdk-crypto'"), 'Matrix recovery must clear the Rust crypto database that contains the mismatched account');
   assert(matrixPage.includes("navigator.locks.request('mitch-matrix-session'"), 'Concurrent tabs must serialize Matrix SSO');
   assert(!matrixPage.includes('removeLegacyCryptoStorage'), 'Matrix must preserve crypto storage for E2EE keys');
   assert(matrixPage.includes('/matrix/assets/index-BVlPv2dR.js'), 'Matrix bundle URL must load updated E2EE client');
@@ -510,7 +521,8 @@ try {
   console.log('--- 5. Testing authenticated user /api/matrix/sso-login (member PL 0) ---');
   const resUserLogin = await fetch(`${BASE_URL}/api/matrix/sso-login`, {
     method: 'POST',
-    headers: { 'Cookie': `studentId=${testSid}` }
+    headers: { 'Cookie': `studentId=${testSid}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ device_id: 'q5KT0JowzT' })
   });
   assert.equal(resUserLogin.status, 200);
   const dataUserLogin = await resUserLogin.json();
@@ -518,6 +530,9 @@ try {
   assert.equal(dataUserLogin.role, 'member');
   assert.equal(dataUserLogin.powerLevel, 0);
   assert.equal(dataUserLogin.officialRoom, '#general:mitch.pro');
+  assert.equal(dataUserLogin.device_id, 'q5KT0JowzT', 'SSO refresh must reuse the requested Matrix device');
+  const reusedDeviceLogin = matrixLoginBodies.find(body => body.identifier?.user === 'matrixtestuser' && body.device_id === 'q5KT0JowzT');
+  assert(reusedDeviceLogin, 'Server must forward the existing device_id to the Matrix homeserver');
   console.log('Regular member auto-provisioning passed:', dataUserLogin.user_id);
 
   // 6. Admin user auto-promotion (Power Level 100)

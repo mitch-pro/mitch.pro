@@ -322,6 +322,49 @@
       // the identity host (mitchdog.com) and returns here after exchange.
       (function() {
         const banner = document.getElementById("mitch-sso-banner");
+        const MATRIX_STORE_RECOVERY_KEY = 'mitch_matrix_store_recovery_v1';
+        const MATRIX_DATABASES = [
+          'matrix-js-sdk:web-sync-store',
+          'crypto-store',
+          'matrix-js-sdk:crypto',
+          'matrix-js-sdk::matrix-sdk-crypto',
+          'matrix-js-sdk::matrix-sdk-crypto-meta'
+        ];
+        let matrixStoreRecoveryStarted = false;
+
+        function isMatrixStoreAccountMismatch(value) {
+          const message = String(value?.message || value || '');
+          return /account in the store doesn't match the account in the constructor/i.test(message);
+        }
+
+        function beginMatrixStoreRecovery() {
+          if (matrixStoreRecoveryStarted) return;
+          matrixStoreRecoveryStarted = true;
+          localStorage.setItem(MATRIX_STORE_RECOVERY_KEY, '1');
+          setTimeout(() => window.location.reload(), 50);
+        }
+
+        window.addEventListener('error', event => {
+          if (isMatrixStoreAccountMismatch(event.error || event.message)) beginMatrixStoreRecovery();
+        });
+        window.addEventListener('unhandledrejection', event => {
+          if (isMatrixStoreAccountMismatch(event.reason)) beginMatrixStoreRecovery();
+        });
+
+        // Cinny catches startup failures and renders them instead of leaving an
+        // unhandled rejection, so also watch its error panel for this exact
+        // Matrix crypto-store identity failure.
+        new MutationObserver(mutations => {
+          for (const mutation of mutations) {
+            for (const node of mutation.addedNodes) {
+              const message = node.nodeType === Node.TEXT_NODE ? node.nodeValue : node.textContent;
+              if (isMatrixStoreAccountMismatch(message)) {
+                beginMatrixStoreRecovery();
+                return;
+              }
+            }
+          }
+        }).observe(document.documentElement, { childList: true, subtree: true });
 
         function bootCinny() {
           if (window.__cinnyLoaded) return;
@@ -336,7 +379,8 @@
         function readStoredSession() {
           return {
             token: localStorage.getItem("cinny_access_token") || '',
-            userId: localStorage.getItem("cinny_user_id") || ''
+            userId: localStorage.getItem("cinny_user_id") || '',
+            deviceId: localStorage.getItem("cinny_device_id") || ''
           };
         }
 
@@ -346,8 +390,44 @@
           }
         }
 
-        async function storedSessionIsValid(token, expectedUserId) {
-          if (!token || !expectedUserId) return false;
+        function deleteMatrixDatabase(name) {
+          return new Promise(resolve => {
+            let settled = false;
+            const finish = result => {
+              if (settled) return;
+              settled = true;
+              resolve(result);
+            };
+            try {
+              const request = indexedDB.deleteDatabase(name);
+              request.onsuccess = () => finish(true);
+              request.onerror = () => finish(false);
+              request.onblocked = () => setTimeout(() => finish(false), 1500);
+              setTimeout(() => finish(false), 3000);
+            } catch (_) {
+              finish(false);
+            }
+          });
+        }
+
+        async function resetMatrixClientStores() {
+          if (!('indexedDB' in window)) return true;
+          const results = await Promise.all(MATRIX_DATABASES.map(deleteMatrixDatabase));
+          return results.every(Boolean);
+        }
+
+        async function completePendingMatrixStoreRecovery() {
+          if (localStorage.getItem(MATRIX_STORE_RECOVERY_KEY) !== '1') {
+            return { pending: false, cleared: true };
+          }
+          clearStoredSession();
+          const cleared = await resetMatrixClientStores();
+          if (cleared) localStorage.removeItem(MATRIX_STORE_RECOVERY_KEY);
+          return { pending: true, cleared };
+        }
+
+        async function storedSessionIsValid(token, expectedUserId, expectedDeviceId) {
+          if (!token || !expectedUserId || !expectedDeviceId) return false;
           try {
             const response = await fetch('/_matrix/client/v3/account/whoami', {
               headers: { Authorization: `Bearer ${token}` },
@@ -356,7 +436,7 @@
             });
             if (!response.ok) return false;
             const data = await response.json();
-            return data.user_id === expectedUserId;
+            return data.user_id === expectedUserId && data.device_id === expectedDeviceId;
           } catch (_) {
             return false;
           }
@@ -370,7 +450,18 @@
         }
 
         async function initMitchSSO() {
+          let shouldBootCinny = true;
           try {
+            const recovery = await completePendingMatrixStoreRecovery();
+            if (recovery.pending && !recovery.cleared) {
+              shouldBootCinny = false;
+              if (banner) banner.style.display = 'flex';
+              const message = document.getElementById('mitch-sso-msg');
+              if (message) message.textContent = 'Repairing encrypted chat storage… close other chat tabs if this page keeps reloading.';
+              setTimeout(() => window.location.reload(), 2000);
+              return;
+            }
+
             const statusRes = await fetch('/api/matrix/sso-status', {
               credentials: 'same-origin',
               cache: 'no-store'
@@ -380,15 +471,18 @@
 
             // Reuse this browser's existing Matrix device. Logging in again on
             // every page load creates abandoned devices and destabilizes E2EE.
-            if (stored.token && stored.userId &&
+            if (stored.token && stored.userId && stored.deviceId &&
                 (!status.authenticated || stored.userId === status.user_id) &&
-                await storedSessionIsValid(stored.token, stored.userId)) {
+                await storedSessionIsValid(stored.token, stored.userId, stored.deviceId)) {
               localStorage.setItem('cinny_hs_base_url', 'https://mitchdog.com');
               if (banner) banner.style.display = 'none';
               bootCinny();
               return;
             }
 
+            const reusableDeviceId = status.authenticated && stored.userId === status.user_id
+              ? stored.deviceId
+              : '';
             if (stored.token || stored.userId) clearStoredSession();
 
             if (!status.authenticated) {
@@ -400,7 +494,8 @@
             const res = await fetch("/api/matrix/sso-login", {
               method: "POST",
               headers: { "Content-Type": "application/json", "X-Mitch-Requested-With": "1" },
-              credentials: "same-origin"
+              credentials: "same-origin",
+              body: JSON.stringify(reusableDeviceId ? { device_id: reusableDeviceId } : {})
             });
             if (res.ok) {
               const data = await res.json();
@@ -415,7 +510,7 @@
             console.warn("[Mitch Matrix SSO]", e);
             if (!readStoredSession().token && banner) banner.style.display = "flex";
           } finally {
-            bootCinny();
+            if (shouldBootCinny) bootCinny();
           }
         }
 
