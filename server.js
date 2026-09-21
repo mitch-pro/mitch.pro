@@ -6947,6 +6947,7 @@ const MODERATOR_ACTION_LABELS = {
   content_featured: 'Set featured game',
   moderator_role: 'Update moderator role',
   moderator_panel: 'Update moderator panel',
+  tester_role: 'Update tester role',
 };
 
 const MODERATOR_ACTION_BY_URL = {
@@ -7037,6 +7038,8 @@ function cleanModeratorActionPayload(action, payload = {}) {
       return { email: canonicalEmail(p.email, 'email'), active: p.active === true };
     case 'moderator_panel':
       return { links: sanitizeModeratorPanelLinks(p.links) };
+    case 'tester_role':
+      return { email: canonicalEmail(p.email, 'email'), active: p.active !== false };
   }
   adminActionError(400, 'unknown moderator action');
 }
@@ -7313,6 +7316,24 @@ function executeModeratorApprovedAction(action, rawPayload, approverEmail, reque
     saveJsonSync(MODERATOR_PANEL_FILE, { links });
     logAdminAction(actor, 'update_moderator_panel', { linkCount: links.length, requestedBy: requesterEmail });
     return { ok: true, links };
+  }
+  if (action === 'tester_role') {
+    const targetRaw = String(payload.email || '').trim();
+    const target = normalizeEmail(targetRaw);
+    let testers = testerEmails();
+    if (payload.active) {
+      if (!testers.some(t => normalizeEmail(t) === target)) testers.push(target);
+    } else {
+      testers = testers.filter(t => normalizeEmail(t) !== target);
+      const adminCfg = loadAdminConfig();
+      if (Array.isArray(adminCfg.testers) && adminCfg.testers.some(t => normalizeEmail(t) === target)) {
+        adminCfg.testers = adminCfg.testers.filter(t => normalizeEmail(t) !== target);
+        saveJsonSync(ADMINS_FILE, adminCfg);
+      }
+    }
+    saveJsonSync(TESTERS_FILE, testers.sort());
+    logAdminAction(actor, payload.active ? 'add_tester' : 'remove_tester', { target, requestedBy: requesterEmail });
+    return { ok: true, testers };
   }
   adminActionError(400, 'unknown moderator action');
 }
@@ -13319,16 +13340,21 @@ async function handleRequest(req, server) {
       const adminEmail = emailFromSid(sid) || 'admin';
       const targetRaw = String(body.email || '').trim();
       const target = normalizeEmail(targetRaw);
-      if (!target) return jsonResp(400, { error: 'valid email required' });
-      const active = !!body.active;
+      if (!target || !target.includes('@')) return jsonResp(400, { error: 'valid email required' });
+      const active = body.active !== false;
       let testers = testerEmails();
       if (active) {
-        if (!testers.some(t => normalizeEmail(t) === target)) testers.push(targetRaw);
+        if (!testers.some(t => normalizeEmail(t) === target)) testers.push(target);
       } else {
         testers = testers.filter(t => normalizeEmail(t) !== target);
+        const adminCfg = loadAdminConfig();
+        if (Array.isArray(adminCfg.testers) && adminCfg.testers.some(t => normalizeEmail(t) === target)) {
+          adminCfg.testers = adminCfg.testers.filter(t => normalizeEmail(t) !== target);
+          await saveJson(ADMINS_FILE, adminCfg);
+        }
       }
-      await saveJson(TESTERS_FILE, testers);
-      logAdminAction(adminEmail, active ? 'add_tester' : 'remove_tester', { target: targetRaw });
+      await saveJson(TESTERS_FILE, testers.sort());
+      logAdminAction(adminEmail, active ? 'add_tester' : 'remove_tester', { target });
       return jsonResp(200, { ok: true, testers });
     }
 

@@ -211,4 +211,29 @@ assert.equal(filteredLeaderboard.length, 2, 'Leaderboard must only contain non-t
 
 console.log('Business logic simulation tests passed!');
 
+console.log('--- 5. Testing Admin Panel Tester Management Integration ---');
+
+const adminHtml = readFileSync('webserver/admin/index.html', 'utf8');
+assert(adminHtml.includes('id="tester-card"'), 'Admin HTML must contain #tester-card');
+assert(adminHtml.includes('id="tester-list"'), 'Admin HTML must contain #tester-list');
+assert(adminHtml.includes('id="tester-email"'), 'Admin HTML must contain #tester-email');
+assert(adminHtml.includes('id="tester-status"'), 'Admin HTML must contain #tester-status');
+assert(adminHtml.includes('addTester(event)'), 'Admin HTML must attach addTester form submit handler');
+assert(adminHtml.includes('function addTester('), 'Admin HTML must define addTester function');
+assert(adminHtml.includes('function removeTester('), 'Admin HTML must define removeTester function');
+assert(adminHtml.includes('function renderTesters('), 'Admin HTML must define renderTesters function');
+assert(adminHtml.includes('function loadTesters('), 'Admin HTML must define loadTesters function');
+assert(adminHtml.includes('body.moderator-mode #tester-card'), 'Admin CSS must hide #tester-card in moderator mode');
+assert(adminHtml.includes("'/api/admin/testers': 'tester_role'"), 'Admin JS must map /api/admin/testers to tester_role in ACTION_BY_URL');
+assert(adminHtml.includes("document.getElementById('tester-card').style.display = 'block'"), 'Admin JS init must show tester card for admins');
+assert(adminHtml.includes('loadTesters()'), 'Admin JS init must call loadTesters()');
+
+// Server-side action mappings
+assert(serverSource.includes("tester_role: 'Update tester role'"), 'MODERATOR_ACTION_LABELS must include tester_role');
+assert(serverSource.includes("case 'tester_role':"), 'cleanModeratorActionPayload must handle tester_role');
+assert(serverSource.includes("if (action === 'tester_role')"), 'executeModeratorApprovedAction must handle tester_role');
+
+console.log('Admin Panel tester management tests passed!');
+
 console.log('\n=== ALL TESTER FEATURE CHECKS PASSED SUCCESSFULLY ===');
+

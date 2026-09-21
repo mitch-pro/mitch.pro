@@ -480,6 +480,7 @@
     body.moderator-mode #logs-tools,
     body.moderator-mode #moderator-card,
     body.moderator-mode #blog-contributor-card,
+    body.moderator-mode #tester-card,
     body.moderator-mode #people-tools form:nth-of-type(1),
     body.moderator-mode #people-tools form:nth-of-type(2) {
       display: none !important;
@@ -732,6 +733,17 @@
           <button type="submit" style="width:auto">Add</button>
         </form>
         <div id="blog-contributor-status" class="form-status"></div>
+      </div>
+
+      <div class="action-card" id="tester-card" style="display:none">
+        <h2>Beta Testers</h2>
+        <p>Beta testers get access to /tester/ tools, unlimited test coins, test notifications, and cooldown bypasses.</p>
+        <div id="tester-list" style="font-size:0.75rem; margin-bottom:10px;"></div>
+        <form onsubmit="addTester(event)" style="display:flex; gap:5px;">
+          <input id="tester-email" type="email" placeholder="user@email.com" required style="flex:1">
+          <button type="submit" style="width:auto">Add</button>
+        </form>
+        <div id="tester-status" class="form-status"></div>
       </div>
     </section>
 
@@ -1313,6 +1325,7 @@
       '/api/admin/content/featured': 'content_featured',
       '/api/admin/moderators': 'moderator_role',
       '/api/admin/moderator-panel': 'moderator_panel',
+      '/api/admin/testers': 'tester_role',
     };
 
     function esc(v) {
@@ -1542,6 +1555,59 @@
         if (!r.ok) return;
         const d = await r.json();
         renderBlogContributors(d.contributors || []);
+      } catch (e) {}
+    }
+
+    async function addTester(e) {
+      e.preventDefault();
+      const email = document.getElementById('tester-email').value.trim();
+      if (!email) return;
+      setStatus('tester-status', 'Adding tester...', '');
+      try {
+        const d = await postAdmin('/api/admin/testers', { email, active: true });
+        document.getElementById('tester-email').value = '';
+        setStatus('tester-status', 'Added tester.', 'ok');
+        if (d && Array.isArray(d.testers)) {
+          renderTesters(d.testers);
+        } else {
+          loadTesters();
+        }
+      } catch (err) {
+        setStatus('tester-status', err.message, 'err');
+      }
+    }
+
+    async function removeTester(email) {
+      if (!(await customConfirm('Remove', 'Remove ' + email + ' from testers?'))) return;
+      try {
+        const d = await postAdmin('/api/admin/testers', { email, active: false });
+        if (d && Array.isArray(d.testers)) {
+          renderTesters(d.testers);
+        } else {
+          loadTesters();
+        }
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    function renderTesters(testers) {
+      const list = document.getElementById('tester-list');
+      if (!list) return;
+      list.innerHTML = (testers || []).map(email => `
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+          <span>${esc(email)}</span>
+          <button onclick='removeTester(${JSON.stringify(email)})' style="padding:2px 6px; font-size:10px; width:auto;">X</button>
+        </div>
+      `).join('') || '<div class="muted">No testers added.</div>';
+    }
+
+    async function loadTesters() {
+      try {
+        const r = await fetch('/api/admin/testers', { credentials: 'include', headers: getAdminHeaders() });
+        if (!r.ok) return;
+        const d = await r.json();
+        renderTesters(d.testers || []);
       } catch (e) {}
     }
 
@@ -2974,6 +3040,8 @@
       if (currentUser.isAdmin) {
         document.getElementById('blog-contributor-card').style.display = 'block';
         loadBlogContributors();
+        document.getElementById('tester-card').style.display = 'block';
+        loadTesters();
       }
 
       const rLogs = await fetch('/api/admin/search-logs', { credentials: 'include', headers: getAdminHeaders() });
