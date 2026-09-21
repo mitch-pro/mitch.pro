@@ -107,12 +107,12 @@
 
       <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; text-align: left;">
         <label style="font-size: 0.85rem; color: #94a3b8; display: flex; flex-direction: column; gap: 4px;">
-          <span>Password (minimum 8 characters)</span>
-          <input type="password" id="provision-password" minlength="8" maxlength="128" required autocomplete="new-password" style="padding: 9px 12px; border-radius: 8px; background: #0f172a; border: 1px solid #334155; color: #fff;">
+          <span>Password (any non-empty length)</span>
+          <input type="password" id="provision-password" required autocomplete="new-password" style="padding: 9px 12px; border-radius: 8px; background: #0f172a; border: 1px solid #334155; color: #fff;">
         </label>
         <label style="font-size: 0.85rem; color: #94a3b8; display: flex; flex-direction: column; gap: 4px;">
           <span>Confirm Password</span>
-          <input type="password" id="provision-confirm-password" minlength="8" maxlength="128" required autocomplete="new-password" style="padding: 9px 12px; border-radius: 8px; background: #0f172a; border: 1px solid #334155; color: #fff;">
+          <input type="password" id="provision-confirm-password" required autocomplete="new-password" style="padding: 9px 12px; border-radius: 8px; background: #0f172a; border: 1px solid #334155; color: #fff;">
         </label>
       </div>
 
@@ -161,6 +161,6 @@
   </dialog>
 
   <script src="/app-shell.js?v=17" defer></script>
-  <script src="/vms/portal.js?v=3" defer></script>
+  <script src="/vms/portal.js?v=4" defer></script>
 </body>
 </html>

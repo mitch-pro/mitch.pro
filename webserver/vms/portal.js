@@ -157,8 +157,8 @@
     const pass = $('provision-password').value;
     const confirm = $('provision-confirm-password').value;
     const statusEl = $('provision-status');
-    if (pass.length < 8) {
-      statusEl.textContent = 'Password must be at least 8 characters long.';
+    if (!pass.length) {
+      statusEl.textContent = 'Password cannot be empty.';
       return;
     }
     if (pass !== confirm) {

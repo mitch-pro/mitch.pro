@@ -1297,7 +1297,7 @@ function renderOnlineMembers(members) {
   });
   var online = allMembers.filter(function(m) { return m.online; });
   var signature = JSON.stringify(allMembers.map(function(m) {
-    return [m.email || '', m.displayName || '', m.pfp || '', m.badge || '', m.color || '', !!m.online, m.playing || ''];
+    return [m.email || '', m.displayName || '', m.pfp || '', m.badge || '', m.color || '', !!m.online, m.activity || m.playing || '', m.page || ''];
   }));
   if (signature === window._onlineMembersSignature) return;
   window._onlineMembersSignature = signature;
@@ -1349,7 +1349,7 @@ function renderOnlineMembers(members) {
     var avatar = m.pfp
       ? '<img class="member-presence-avatar" src="' + escText(m.pfp) + '" alt="" data-initials="' + escText(initials) + '" referrerpolicy="no-referrer">'
       : '<span class="member-presence-avatar member-presence-initials" aria-hidden="true">' + escText(initials) + '</span>';
-    var statusText = m.online ? (m.playing || 'Online now') : 'Offline';
+    var statusText = m.online ? (m.activity || m.playing || 'Online now') + (m.page ? ' · ' + m.page : '') : 'Offline';
     var tooltip = email.includes('@') ? email : '';
     return '<a class="member-presence-card name ' + escText(colorClass) + (m.online ? ' is-online' : ' is-offline') + '" href="/profile/?u=' + encodeURIComponent(email) + '" title="' + escText(tooltip) + '">' +
       avatar + '<span class="member-presence-copy"><span class="member-presence-name">' + nameContent + badgeHtml + '</span><span class="member-presence-status"><span class="online-dot"></span>' + statusText + '</span></span></a>';
@@ -1413,7 +1413,7 @@ async function loadFriends() {
     }
     const d = await r.json();
     const list = (d.friends || []).slice().sort((a, b) => Number(!!b.online) - Number(!!a.online) || String(a.maskedEmail || a.email || '').localeCompare(String(b.maskedEmail || b.email || '')));
-    const signature = JSON.stringify(list.map(f => [f.email || '', f.maskedEmail || '', !!f.online, f.playing || '']));
+    const signature = JSON.stringify(list.map(f => [f.email || '', f.maskedEmail || '', !!f.online, f.activity || f.playing || '', f.page || '']));
     if (signature === window._friendsSignature) return;
     window._friendsSignature = signature;
     if (list.length === 0) {
@@ -1424,7 +1424,7 @@ async function loadFriends() {
       const email = f.email;
       const masked = f.maskedEmail || f.email || 'Friend';
       const isOnline = f.online;
-      const statusText = isOnline ? (f.playing || 'Online now') : 'Offline';
+      const statusText = isOnline ? (f.activity || f.playing || 'Online now') + (f.page ? ' · ' + f.page : '') : 'Offline';
       const initials = String(masked).replace(/[^a-z0-9 ]/gi, ' ').trim().split(/\s+/).slice(0, 2).map(part => part.charAt(0)).join('').toUpperCase() || 'F';
       
       return `
@@ -3958,7 +3958,7 @@ goBack = function() {
     };
   })();
 </script>
-<script src="/broadcast.js?v=8"></script>
+<script src="/broadcast.js?v=9"></script>
 <script src="/sync.js?v=1779165304438"></script>
 <script src="/cookie-consent.js" defer></script>
 </body>

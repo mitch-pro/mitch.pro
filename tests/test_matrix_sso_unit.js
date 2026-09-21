@@ -822,9 +822,9 @@ try {
   const matrixNotifAfter = bellDataAfter.notifications.find(n => n.type === 'matrix' && n.matrixRoomId === '!official_general:mitch.pro');
   assert(!matrixNotifAfter, 'Cleared Matrix notification must no longer appear as unread');
 
-  // Verify 24h email alert throttling: email sent timestamp must be recorded in matrix_email_sent.json
+  // Verify email alert throttling: email sent timestamp must be recorded for the per-user cooldown.
   const sentMap = readDocument(join(DATA_DIR, 'matrix_email_sent.json'), {});
-  assert(sentMap[adminNormEmail], 'Admin user must have sent timestamp recorded in matrix_email_sent.json for 24h throttle');
+  assert(sentMap[adminNormEmail], 'Admin user must have sent timestamp recorded in matrix_email_sent.json for email throttling');
   assert(Date.now() - sentMap[adminNormEmail] < 60_000, 'Sent timestamp must be recent');
 
   console.log('Matrix outbound message and invite notifications passed');

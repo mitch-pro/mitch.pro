@@ -165,19 +165,15 @@ let unsafeLoginError = null;
 try { await guestService.enableFriendlyDesktopLogin(301, 'desktop\nroot'); } catch (error) { unsafeLoginError = error; }
 assert(unsafeLoginError?.code === 'INVALID_DESKTOP_LOGIN', 'desktop login setup must reject unsafe usernames');
 
-// --- Desktop Password Validation (min 8 chars, max 128 chars) ---
-const login8 = guestService.validateDesktopLogin('studentuser', '12345678');
-assert(login8.username === 'studentuser' && login8.password === '12345678', '8-character password must be accepted');
-const login128 = guestService.validateDesktopLogin('studentuser', 'A'.repeat(128));
-assert(login128.password.length === 128, '128-character password must be accepted');
+// --- Desktop Password Validation (any non-empty length) ---
+const login1 = guestService.validateDesktopLogin('studentuser', 'x');
+assert(login1.username === 'studentuser' && login1.password === 'x', '1-character password must be accepted');
+const loginLong = guestService.validateDesktopLogin('studentuser', 'A'.repeat(4096));
+assert(loginLong.password.length === 4096, 'Long passwords must be accepted without an artificial maximum');
 
-let shortPassError = null;
-try { guestService.validateDesktopLogin('studentuser', '1234567'); } catch (e) { shortPassError = e; }
-assert(shortPassError?.code === 'INVALID_DESKTOP_LOGIN', '7-character password must be rejected');
-
-let longPassError = null;
-try { guestService.validateDesktopLogin('studentuser', 'A'.repeat(129)); } catch (e) { longPassError = e; }
-assert(longPassError?.code === 'INVALID_DESKTOP_LOGIN', '129-character password must be rejected');
+let emptyPassError = null;
+try { guestService.validateDesktopLogin('studentuser', ''); } catch (e) { emptyPassError = e; }
+assert(emptyPassError?.code === 'INVALID_DESKTOP_LOGIN', 'Empty passwords must be rejected');
 
 let badCharError = null;
 try { guestService.validateDesktopLogin('studentuser', 'password\n123'); } catch (e) { badCharError = e; }

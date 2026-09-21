@@ -147,6 +147,10 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .presence-detail { margin-top:0.55rem; padding:0.5rem 0.6rem; border-radius:8px; background:var(--t-bg3); color:var(--t-fg2); font-size:0.72rem; line-height:1.35; }
+  .presence-detail.is-online { color:#86efac; }
+  .presence-detail.is-chat { color:#d8b4fe; border:1px solid color-mix(in srgb,#a855f7 35%,transparent); }
+  .presence-detail code { display:block; margin-top:0.18rem; color:var(--t-fg2); font-size:0.65rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .role {
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -443,11 +447,15 @@
         const handle = member.handle ? '@' + member.handle : member.email;
         const pfpSrc = safeImageSrc(member.pfp);
         const pfp = pfpSrc ? '<img src="' + esc(pfpSrc) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">' : esc(initials(member));
+        const activity = member.online ? String(member.activity || member.playing || 'Online now') : 'Offline';
+        const presencePage = member.online ? String(member.page || '/') : '';
+        const inChat = member.online && /chat|matrix|encrypt/i.test(activity + ' ' + presencePage);
         return '<article class="member">' +
           '<div class="cover"><div class="avatar">' + pfp + '</div><span class="online-dot ' + (member.online ? 'on' : '') + '"></span></div>' +
           '<div class="body">' +
             '<div class="name-row"><div class="name">' + esc(displayName(member)) + '</div><span class="pill role ' + role + '">' + esc(member.role || 'member') + '</span></div>' +
             '<div class="handle">' + esc(handle) + '</div>' +
+            '<div class="presence-detail ' + (member.online ? 'is-online' : '') + (inChat ? ' is-chat' : '') + '">' + esc(activity) + (presencePage ? '<code>' + esc(presencePage) + '</code>' : '') + '</div>' +
             (member.bio ? '<div class="bio">' + esc(member.bio) + '</div>' : '') +
           '</div>' +
           '<div class="actions">' +

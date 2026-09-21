@@ -3,6 +3,7 @@
     var presenceTimer;
     var reconnectTimer;
     var fallbackTimer;
+    var peopleRefreshTimer;
     var LAST_BROADCAST_KEY = 'mitch:last-admin-broadcast';
     var lastBroadcastId = '';
     var pageOpenedAt = Date.now();
@@ -10,10 +11,37 @@
       if (presenceTimer) clearInterval(presenceTimer);
       presenceTimer = null;
     }
+    function presenceDetails() {
+      var path = location.pathname || '/';
+      var explicit = String(window.currentPlayingActivity || '').trim();
+      var activity = explicit;
+      if (/^\/matrix(?:\/|$)/.test(path)) activity = 'Chatting in Matrix';
+      else if (/^\/encrypt(?:\/|$)/.test(path)) activity = 'Using secure chat';
+      else if (/^\/public-chat(?:\/|$)/.test(path)) activity = 'In public chat';
+      else if (/^\/vms\/desktop(?:\/|$)/.test(path)) activity = 'Using VM desktop';
+      else if (/^\/vms(?:\/|$)/.test(path)) activity = 'Managing a VM';
+      else if (/^\/(?:game-portal|games|casino|chess)(?:\/|$)/.test(path) && !activity) activity = 'Playing games';
+      else if (path === '/' || path === '/index.html') activity = 'On the homepage';
+      else if (!activity) activity = 'Viewing ' + (document.title || path).replace(/\s*[—|-]\s*mitch(?:\.pro)?\s*$/i, '').trim();
+      return {
+        type: 'presence_ping',
+        activity: activity.slice(0, 120),
+        playing: activity.slice(0, 120),
+        page: path.slice(0, 180),
+        title: String(document.title || '').slice(0, 100),
+        visible: !document.hidden
+      };
+    }
     function sendPresencePing() {
+      var details = presenceDetails();
       if (ws && ws.readyState === WebSocket.OPEN) {
-        try { ws.send(JSON.stringify({ type: 'presence_ping' })); } catch(ex) {}
+        try { ws.send(JSON.stringify(details)); return; } catch(ex) {}
       }
+      fetch('/api/presence/heartbeat', {
+        method: 'POST', credentials: 'same-origin', keepalive: true,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(details)
+      }).catch(function() {});
     }
     function hasSeenBroadcast(data) {
       if (!data || !data.broadcastId) return false;
@@ -42,6 +70,7 @@
           window.__handleIncomingDm(data.message || null);
         }
       }
+      if (data.type === 'presence_changed') schedulePeopleRefresh();
       window.dispatchEvent(new CustomEvent('ws-broadcast-message', { detail: data }));
     }
     function scheduleReconnect() {
@@ -67,16 +96,80 @@
         } catch(ex) {}
       };
       ws.onopen = function() {
-        stopPresencePing();
         sendPresencePing();
-        presenceTimer = setInterval(sendPresencePing, 20000);
         window.dispatchEvent(new CustomEvent('ws-broadcast-status', { detail: { connected: true } }));
       };
       ws.onclose = function() {
-        stopPresencePing();
         window.dispatchEvent(new CustomEvent('ws-broadcast-status', { detail: { connected: false } }));
         scheduleReconnect();
       };
+    }
+    function formatPresenceAge(ts) {
+      var minutes = Math.max(0, Math.floor((Date.now() - Number(ts || Date.now())) / 60000));
+      if (minutes < 1) return 'just now';
+      if (minutes < 60) return minutes + 'm';
+      return Math.floor(minutes / 60) + 'h ' + (minutes % 60) + 'm';
+    }
+    function ensurePeoplePanel() {
+      if (document.getElementById('site-presence')) return;
+      var style = document.createElement('style');
+      style.textContent = '#site-presence{position:fixed;right:16px;bottom:16px;z-index:2147482000;font:12px/1.35 system-ui,sans-serif;color:#f4f7fb}#site-presence button{font:inherit}.site-presence-toggle{display:flex;align-items:center;gap:8px;min-height:38px;padding:8px 12px;border:1px solid #ffffff28;border-radius:999px;background:#111827ed;color:#fff;box-shadow:0 10px 35px #0007;cursor:pointer}.site-presence-dot{width:9px;height:9px;border-radius:50%;background:#42d392;box-shadow:0 0 0 4px #42d39225}.site-presence-panel{display:none;position:absolute;right:0;bottom:46px;width:min(360px,calc(100vw - 24px));max-height:min(520px,70vh);overflow:auto;border:1px solid #ffffff24;border-radius:18px;background:#101722f7;box-shadow:0 22px 70px #000a;backdrop-filter:blur(18px)}#site-presence.open .site-presence-panel{display:block}.site-presence-head{position:sticky;top:0;display:flex;justify-content:space-between;gap:10px;padding:14px 15px;background:#101722fa;border-bottom:1px solid #ffffff18}.site-presence-head strong{font-size:14px}.site-presence-head a{color:#a8c7fa}.site-presence-list{display:grid;gap:7px;padding:10px}.site-presence-person{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:9px;align-items:center;padding:9px;border-radius:12px;color:inherit;text-decoration:none;background:#ffffff08}.site-presence-person:hover{background:#ffffff10}.site-presence-person.is-chat{background:#7c3aed22;border:1px solid #a78bfa45}.site-presence-avatar{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:#263348;font-weight:800;overflow:hidden}.site-presence-avatar img{width:100%;height:100%;object-fit:cover}.site-presence-copy{min-width:0}.site-presence-name,.site-presence-activity,.site-presence-page{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.site-presence-name{font-weight:750}.site-presence-activity{color:#cbd5e1}.site-presence-page{color:#8290a5;font:10px ui-monospace,monospace}.site-presence-age{color:#8290a5;font-size:10px}.site-presence-empty{padding:22px;text-align:center;color:#9aa6b8}@media(max-width:760px){#site-presence{right:10px;bottom:calc(72px + env(safe-area-inset-bottom))}.site-presence-panel{bottom:44px}}';
+      document.head.appendChild(style);
+      var root = document.createElement('aside');
+      root.id = 'site-presence';
+      root.setAttribute('aria-label', 'People online');
+      root.innerHTML = '<button class="site-presence-toggle" type="button" aria-expanded="false"><span class="site-presence-dot"></span><span class="site-presence-count">Online</span></button><section class="site-presence-panel"><header class="site-presence-head"><strong>Who\'s online</strong><a href="/members/">All people</a></header><div class="site-presence-list"><div class="site-presence-empty">Checking activity…</div></div></section>';
+      document.body.appendChild(root);
+      root.querySelector('.site-presence-toggle').onclick = function(event) {
+        event.stopPropagation();
+        root.classList.toggle('open');
+        this.setAttribute('aria-expanded', String(root.classList.contains('open')));
+        if (root.classList.contains('open')) refreshPeoplePanel();
+      };
+      root.onclick = function(event) { event.stopPropagation(); };
+      document.addEventListener('click', function() { root.classList.remove('open'); root.querySelector('.site-presence-toggle').setAttribute('aria-expanded', 'false'); });
+    }
+    function renderPeoplePanel(members) {
+      ensurePeoplePanel();
+      var root = document.getElementById('site-presence');
+      var online = (members || []).filter(function(member) { return member.online; });
+      online.sort(function(a, b) {
+        var aChat = /chat|matrix|encrypt/i.test(String(a.activity || a.playing || '') + ' ' + String(a.page || ''));
+        var bChat = /chat|matrix|encrypt/i.test(String(b.activity || b.playing || '') + ' ' + String(b.page || ''));
+        return Number(bChat) - Number(aChat) || String(a.displayName || a.handle || '').localeCompare(String(b.displayName || b.handle || ''));
+      });
+      root.querySelector('.site-presence-count').textContent = online.length + ' online';
+      var list = root.querySelector('.site-presence-list');
+      list.replaceChildren();
+      if (!online.length) { list.innerHTML = '<div class="site-presence-empty">Nobody else is active right now.</div>'; return; }
+      online.forEach(function(member) {
+        var activity = String(member.activity || member.playing || 'Online now');
+        var page = String(member.page || '/');
+        var chat = /chat|matrix|encrypt/i.test(activity + ' ' + page);
+        var name = String(member.displayName || member.handle || member.email || 'Member');
+        var card = document.createElement('a');
+        card.className = 'site-presence-person' + (chat ? ' is-chat' : '');
+        card.href = member.profileUrl || ('/profile/?u=' + encodeURIComponent(member.handle || member.email || ''));
+        var avatar = document.createElement('span'); avatar.className = 'site-presence-avatar'; avatar.textContent = name.slice(0,1).toUpperCase();
+        if (member.pfp) { var img = document.createElement('img'); img.src = member.pfp; img.alt = ''; img.onerror = function(){ img.remove(); }; avatar.appendChild(img); }
+        var copy = document.createElement('span'); copy.className = 'site-presence-copy';
+        var nameEl = document.createElement('span'); nameEl.className = 'site-presence-name'; nameEl.textContent = name + (chat ? ' · CHAT' : '');
+        var activityEl = document.createElement('span'); activityEl.className = 'site-presence-activity'; activityEl.textContent = activity;
+        var pageEl = document.createElement('code'); pageEl.className = 'site-presence-page'; pageEl.textContent = page;
+        copy.append(nameEl, activityEl, pageEl);
+        var age = document.createElement('span'); age.className = 'site-presence-age'; age.textContent = formatPresenceAge(member.onlineSince);
+        card.append(avatar, copy, age); list.appendChild(card);
+      });
+    }
+    function refreshPeoplePanel() {
+      fetch('/api/members?t=' + Date.now(), { credentials: 'same-origin', cache: 'no-store' })
+        .then(function(response) { return response.ok ? response.json() : null; })
+        .then(function(data) { if (data) renderPeoplePanel(data.members || []); })
+        .catch(function() {});
+    }
+    function schedulePeopleRefresh() {
+      clearTimeout(peopleRefreshTimer);
+      peopleRefreshTimer = setTimeout(refreshPeoplePanel, 150);
     }
     function pollLatestBroadcast() {
       fetch('/api/broadcast/latest', {
@@ -92,11 +185,18 @@
     }
     function start() {
       connect();
+      stopPresencePing();
+      sendPresencePing();
+      presenceTimer = setInterval(sendPresencePing, 20000);
+      ensurePeoplePanel();
+      refreshPeoplePanel();
       pollLatestBroadcast();
       fallbackTimer = setInterval(pollLatestBroadcast, 3000);
       document.addEventListener('visibilitychange', function() {
-        if (!document.hidden) pollLatestBroadcast();
+        sendPresencePing();
+        if (!document.hidden) { pollLatestBroadcast(); refreshPeoplePanel(); }
       });
+      setInterval(refreshPeoplePanel, 30000);
     }
     function showJumpscare(msg) {
       showVideoJumpscare(msg);

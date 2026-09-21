@@ -1091,7 +1091,7 @@ setInterval(() => {
 }, 60 * 60 * 1000);
 
 
-const userPresence = {}; // normalizedEmail -> { lastSeen: ms, playing: string }
+const userPresence = {}; // normalizedEmail -> { lastSeen, since, activity, page, title, playing }
 const PRESENCE_FALLBACK_TTL_MS = 45_000;
 const presenceOfflineTimers = new Map();
 
@@ -1112,7 +1112,44 @@ function isUserPresent(email, now = Date.now()) {
   return !!presence && now - Number(presence.lastSeen || 0) < PRESENCE_FALLBACK_TTL_MS;
 }
 
-function broadcastPresenceChanged(email, online, playing = '') {
+function sanitizePresenceDetails(input = {}) {
+  const activity = String(input.activity || input.playing || '').trim().replace(/[\r\n\0]+/g, ' ').slice(0, 120);
+  let page = String(input.page || '').trim().replace(/[\r\n\0]+/g, '').slice(0, 180);
+  try {
+    if (/^https?:\/\//i.test(page)) page = new URL(page).pathname;
+  } catch { page = ''; }
+  if (!page.startsWith('/')) page = '';
+  const title = String(input.title || '').trim().replace(/[\r\n\0]+/g, ' ').slice(0, 100);
+  return { activity, page, title, visible: input.visible !== false };
+}
+
+function presenceActivityOf(presence) {
+  return String(presence?.activity || presence?.playing || '').trim();
+}
+
+function presencePriority(presence) {
+  const activity = presenceActivityOf(presence).toLowerCase();
+  const page = String(presence?.page || '').toLowerCase();
+  const visible = presence?.visible !== false ? 1000 : 0;
+  const chat = /chat|matrix|encrypt|message/.test(`${activity} ${page}`) ? 200 : 0;
+  const vm = /vm|computer|desktop/.test(`${activity} ${page}`) ? 100 : 0;
+  const game = /play|game|chess|casino/.test(`${activity} ${page}`) ? 50 : 0;
+  return visible + chat + vm + game;
+}
+
+function bestSocketPresence(email) {
+  const norm = normalizeEmail(email);
+  let best = null;
+  for (const socket of allSockets) {
+    if (!socket.data?.isBroadcast || normalizeEmail(socket.data.email) !== norm || socket.readyState !== 1) continue;
+    const candidate = socket.data.presence;
+    if (!candidate) continue;
+    if (!best || presencePriority(candidate) > presencePriority(best) || (presencePriority(candidate) === presencePriority(best) && Number(candidate.lastSeen || 0) > Number(best.lastSeen || 0))) best = candidate;
+  }
+  return best;
+}
+
+function broadcastPresenceChanged(email, online, presence = {}) {
   const norm = normalizeEmail(email);
   if (!norm) return;
   const friends = loadJson(FRIENDS_FILE, {});
@@ -1122,7 +1159,10 @@ function broadcastPresenceChanged(email, online, playing = '') {
     type: 'presence_changed',
     email: displayEmail(norm),
     online: !!online,
-    playing: online ? String(playing || '').trim() : '',
+    playing: online ? presenceActivityOf(presence) : '',
+    activity: online ? presenceActivityOf(presence) : '',
+    page: online ? String(presence?.page || '') : '',
+    title: online ? String(presence?.title || '') : '',
     ts: Date.now(),
   });
   for (const ws of allSockets) {
@@ -1132,16 +1172,22 @@ function broadcastPresenceChanged(email, online, playing = '') {
   }
 }
 
-function touchUserPresence(email, playing = '') {
+function touchUserPresence(email, playing = '', details = {}) {
   if (!email) return;
   const norm = normalizeEmail(email);
   const now = Date.now();
   const wasOffline = !isUserPresent(norm, now);
-  const previousPlaying = String(userPresence[norm]?.playing || '');
+  const previous = userPresence[norm] || {};
+  const next = sanitizePresenceDetails(typeof playing === 'object' ? playing : { ...details, activity: playing });
 
   userPresence[norm] = {
     lastSeen: now,
-    playing: String(playing || '').trim()
+    since: wasOffline ? now : Number(previous.since || now),
+    activity: next.activity,
+    playing: next.activity,
+    page: next.page,
+    title: next.title,
+    visible: next.visible
   };
 
   cvOnline[email] = now;
@@ -1150,8 +1196,8 @@ function touchUserPresence(email, playing = '') {
   if (wasOffline) {
     notifyFriendsOnline(email);
   }
-  if (wasOffline || previousPlaying !== userPresence[norm].playing) {
-    broadcastPresenceChanged(norm, true, userPresence[norm].playing);
+  if (wasOffline || presenceActivityOf(previous) !== next.activity || String(previous.page || '') !== next.page || String(previous.title || '') !== next.title) {
+    broadcastPresenceChanged(norm, true, userPresence[norm]);
   }
 }
 
@@ -1160,7 +1206,7 @@ setInterval(() => {
   for (const [email, presence] of Object.entries(userPresence)) {
     if (!hasAuthenticatedBroadcastSocket(email) && now - Number(presence.lastSeen || 0) >= PRESENCE_FALLBACK_TTL_MS) {
       delete userPresence[email];
-      broadcastPresenceChanged(email, false, '');
+      broadcastPresenceChanged(email, false, {});
     }
   }
 }, 10_000);
@@ -7207,7 +7253,6 @@ function executeModeratorApprovedAction(action, rawPayload, approverEmail, reque
   if (action === 'gift_coins') {
     const amount = Number(payload.amount);
     if (!Number.isFinite(amount) || amount <= 0) adminActionError(400, 'amount must be a positive number');
-    if (amount > 1_000_000_000) adminActionError(400, 'amount is too large');
     addCoins(payload.targetEmail, amount);
     addCoinGiftNotice(payload.targetEmail, amount, actor, payload.reason || 'admin gift');
     logAdminAction(actor, 'gift_coins', { targetEmail: payload.targetEmail, amount, reason: payload.reason, requestedBy: requesterEmail });
@@ -7688,7 +7733,7 @@ function injectReadability(html, urlPath) {
 
 function injectBroadcast(html) {
   if (html.includes('/broadcast.js')) return html;
-  const tag = '<script src="/broadcast.js?v=8" defer></script>';
+  const tag = '<script src="/broadcast.js?v=9" defer></script>';
   const bi = html.lastIndexOf('</body>');
   return bi >= 0 ? html.slice(0, bi) + tag + html.slice(bi) : html + tag;
 }
@@ -8753,7 +8798,11 @@ async function getMatrixRoomInfoForNotifications(roomId, token) {
 
 const matrixUserLastSeen = new Map();
 const matrixPendingEmailAlerts = new Map();
-const MATRIX_EMAIL_INTERVAL_MS = 24 * 60 * 60 * 1000;
+// Ordinary chat messages are summarized sparingly. Calls and invitations stay
+// more timely, but can still generate at most one email per day per account.
+const MATRIX_MESSAGE_EMAIL_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
+const MATRIX_URGENT_EMAIL_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const MATRIX_MESSAGE_EMAIL_DELAY_MS = 10 * 60 * 1000;
 const matrixLastEmailSent = new Map(Object.entries(loadJson(MATRIX_EMAIL_SENT_FILE, {})));
 
 function recordMatrixEmailSent(memberNorm) {
@@ -8900,7 +8949,8 @@ function queueMatrixUnreadEmail(memberNorm, { senderDisplayName, roomTitle, prev
   if (!norm) return;
   const now = Date.now();
   const lastSent = Number(matrixLastEmailSent.get(norm)) || 0;
-  if (now - lastSent < MATRIX_EMAIL_INTERVAL_MS) return;
+  const interval = isCall || isInvite ? MATRIX_URGENT_EMAIL_INTERVAL_MS : MATRIX_MESSAGE_EMAIL_INTERVAL_MS;
+  if (now - lastSent < interval) return;
 
   if (isCall || isInvite) {
     sendMatrixEmailAlert(norm, {
@@ -8927,7 +8977,7 @@ function queueMatrixUnreadEmail(memberNorm, { senderDisplayName, roomTitle, prev
   const timer = setTimeout(() => {
     matrixPendingEmailAlerts.delete(key);
     const sentRecently = Number(matrixLastEmailSent.get(norm)) || 0;
-    if (Date.now() - sentRecently < MATRIX_EMAIL_INTERVAL_MS) return;
+    if (Date.now() - sentRecently < MATRIX_MESSAGE_EMAIL_INTERVAL_MS) return;
     const all = loadJson(MATRIX_NOTIFICATIONS_FILE, {});
     const list = Array.isArray(all[norm]) ? all[norm] : [];
     const hasUnread = list.some(n => !n.read && n.roomId === roomId);
@@ -8943,7 +8993,7 @@ function queueMatrixUnreadEmail(memberNorm, { senderDisplayName, roomTitle, prev
         roomId
       });
     }
-  }, 120_000);
+  }, MATRIX_MESSAGE_EMAIL_DELAY_MS);
 
   matrixPendingEmailAlerts.set(key, {
     timer,
@@ -9853,17 +9903,12 @@ async function handleRequest(req, server) {
 
     // Track active user in Matrix for presence / email alert gating
     try {
-      const authHeader = req.headers.get('authorization') || '';
-      if (authHeader) {
-        const tok = authHeader.replace(/^Bearer\s+/i, '');
-        const acc = matrixTokenToAccount.get(tok);
-        if (acc && acc.normEmail) matrixUserLastSeen.set(acc.normEmail, Date.now());
-      }
-      const cookies = getCookies(req);
-      const sid = cookies['studentId'] || cookies['id'] || '';
-      if (sid) {
-        const email = emailFromSid(sid);
-        if (email) matrixUserLastSeen.set(normalizeEmail(email), Date.now());
+      const activeMatrixAccount = await resolveMatrixAccount(req);
+      const activeMatrixNorm = normalizeEmail(activeMatrixAccount?.normEmail || '');
+      if (activeMatrixNorm) {
+        matrixUserLastSeen.set(activeMatrixNorm, Date.now());
+        touchUserPresence(activeMatrixNorm, 'Chatting in Matrix', { page: '/matrix/', title: 'Matrix Chat', visible: true });
+        cancelPendingMatrixEmailAlert(activeMatrixNorm);
       }
     } catch (_) {}
 
@@ -13209,10 +13254,6 @@ async function handleRequest(req, server) {
       if (!Number.isFinite(amount) || amount <= 0) {
         return jsonResp(400, { error: 'amount must be a positive number' });
       }
-      if (amount > 1_000_000_000) {
-        return jsonResp(400, { error: 'amount is too large' });
-      }
-
       addCoins(targetRaw, amount);
       addCoinGiftNotice(targetRaw, amount, adminEmail, reason);
       console.log(`[admin] ${adminEmail} gifted ${amount} coins to ${targetEmail}: ${reason}`);
@@ -16851,7 +16892,7 @@ async function handleRequest(req, server) {
           const bi = contents.lastIndexOf('<\/body>');
           contents = bi >= 0 ? contents.slice(0, bi) + asstTag + contents.slice(bi) : contents + asstTag;
         }
-        const bcastTag = '<script src="/broadcast.js?v=8" defer><\/script>';
+        const bcastTag = '<script src="/broadcast.js?v=9" defer><\/script>';
         if (!contents.includes('/broadcast.js')) {
           const bi = contents.lastIndexOf('<\/body>');
           contents = bi >= 0 ? contents.slice(0, bi) + bcastTag + contents.slice(bi) : contents + bcastTag;
@@ -17451,8 +17492,8 @@ async function handleRequest(req, server) {
       const email = emailFromSid(sid);
       if (!email) return jsonResp(401, { error: 'email not found' });
       if (!await tryParseJson()) return jsonResp(400, { error: 'bad json' });
-      const playing = String(body.playing || '').trim();
-      touchUserPresence(email, playing);
+      const details = sanitizePresenceDetails(body);
+      touchUserPresence(email, details.activity, details);
       return jsonResp(200, { ok: true });
     }
 
@@ -19647,7 +19688,7 @@ async function handleRequest(req, server) {
       desktopLogin = proxmoxDesktop.validateDesktopLogin(requestedUsername, body.desktopPassword);
     } catch {
       vmPowerRequests.delete(lockKey);
-      return jsonResp(400, { error: 'Choose a password of 8 to 128 characters.', code: 'invalid_desktop_login' });
+      return jsonResp(400, { error: 'Choose a non-empty password without line breaks.', code: 'invalid_desktop_login' });
     }
     const templateVmid = Number(proxmoxDesktop.templateVmids[0] || 9010);
     let pendingRecord = { ownerEmail: actor.email, vmid: null, id: '' };
@@ -19721,7 +19762,7 @@ async function handleRequest(req, server) {
       desktopLogin = proxmoxDesktop.validateDesktopLogin(requestedUsername, body.desktopPassword);
     } catch {
       vmPowerRequests.delete(lockKey);
-      return jsonResp(400, { error: 'Choose a password of 8 to 128 characters.', code: 'invalid_desktop_login' });
+      return jsonResp(400, { error: 'Choose a non-empty password without line breaks.', code: 'invalid_desktop_login' });
     }
 
     // 1. Delete existing computer(s) owned by user
@@ -20213,7 +20254,7 @@ async function handleRequest(req, server) {
     if (!proxmoxDesktop.templateVmids.includes(templateVmid)) return jsonResp(400, { error: 'Choose an available desktop template.' });
     let desktopLogin;
     try { desktopLogin = proxmoxDesktop.validateDesktopLogin(body.desktopUsername, body.desktopPassword); }
-    catch { return jsonResp(400, { error: 'Choose a desktop username and a password of 8 to 128 characters.', code: 'invalid_desktop_login' }); }
+    catch { return jsonResp(400, { error: 'Choose a desktop username and a non-empty password without line breaks.', code: 'invalid_desktop_login' }); }
     const cpuCores = Math.max(2, Math.min(Math.round(Number(body.cpuCores) || 6), 16));
     const memoryMb = Math.max(2048, Math.min(Math.round(Number(body.memoryMb) || 16384), 65536));
     const diskGb = Math.max(40, Math.min(Math.round(Number(body.diskGb) || 64), 256));
@@ -20904,7 +20945,12 @@ async function handleRequest(req, server) {
           profileUrl: `/profile/?u=${encodeURIComponent(username)}`,
           pfp: sanitizeProfileImageUrl(profile.pfp || '', { allowData: true, maxDataBytes: 120000 }),
           online: memberOnline,
-          playing: memberOnline && memberPresence ? String(memberPresence.playing || '') : '',
+          playing: memberOnline && memberPresence ? presenceActivityOf(memberPresence) : '',
+          activity: memberOnline && memberPresence ? presenceActivityOf(memberPresence) : '',
+          page: memberOnline && memberPresence ? String(memberPresence.page || '') : '',
+          pageTitle: memberOnline && memberPresence ? String(memberPresence.title || '') : '',
+          onlineSince: memberOnline && memberPresence ? Number(memberPresence.since || memberPresence.lastSeen || 0) : 0,
+          lastSeen: memberPresence ? Number(memberPresence.lastSeen || 0) : 0,
           role,
           displayName: processed.displayName,
           bio: String(profile.bio || '').slice(0, 160),
@@ -25668,7 +25714,11 @@ async function handleRequest(req, server) {
           pfp: sanitizeProfileImageUrl(profile.pfp || '', { allowData: true, maxDataBytes: 120000 }),
           profileUrl: `/profile/?u=${encodeURIComponent(username)}`,
           online: isOnline,
-          playing: isOnline && presence ? presence.playing : ''
+          playing: isOnline && presence ? presenceActivityOf(presence) : '',
+          activity: isOnline && presence ? presenceActivityOf(presence) : '',
+          page: isOnline && presence ? String(presence.page || '') : '',
+          pageTitle: isOnline && presence ? String(presence.title || '') : '',
+          onlineSince: isOnline && presence ? Number(presence.since || presence.lastSeen || 0) : 0
         };
       });
       return jsonResp(200, { friends: res });
@@ -26502,7 +26552,7 @@ async function handleRequest(req, server) {
           }
 
           if (isAuthenticatedHtml && !isEmbeddedGameRuntime && !raw.includes(Buffer.from('/broadcast.js'))) {
-            injectStr += '<script src="/broadcast.js?v=8" defer></script>\n';
+            injectStr += '<script src="/broadcast.js?v=9" defer></script>\n';
           } else if (!isAuthenticatedHtml && raw.includes(Buffer.from('/broadcast.js'))) {
             raw = Buffer.from(stripBroadcast(raw.toString('utf8')));
           }
@@ -26707,10 +26757,10 @@ Bun.serve({
         const pendingOffline = presenceOfflineTimers.get(presenceEmail);
         if (pendingOffline) clearTimeout(pendingOffline);
         presenceOfflineTimers.delete(presenceEmail);
-        const playing = String(userPresence[presenceEmail]?.playing || '');
-        userPresence[presenceEmail] = { lastSeen: Date.now(), playing };
+        const previous = userPresence[presenceEmail] || {};
+        userPresence[presenceEmail] = { ...previous, lastSeen: Date.now(), since: Number(previous.since || Date.now()) };
         if (!wasPresent) notifyFriendsOnline(presenceEmail);
-        broadcastPresenceChanged(presenceEmail, true, playing);
+        broadcastPresenceChanged(presenceEmail, true, userPresence[presenceEmail]);
       }
       if (ws.data && ws.data.isBlooketBot) {
         console.log(`[blooket-bot-ws] Client socket opened for ${ws.data.email}`);
@@ -26834,8 +26884,13 @@ Bun.serve({
               ws.close(1008, 'Session expired');
               return;
             }
-            const playing = String(userPresence[email]?.playing || '');
-            userPresence[email] = { lastSeen: Date.now(), playing };
+            const details = sanitizePresenceDetails(payload);
+            ws.data.presence = { ...details, lastSeen: Date.now() };
+            const matrixSeen = Number(matrixUserLastSeen.get(email) || 0);
+            const best = Date.now() - matrixSeen < PRESENCE_FALLBACK_TTL_MS
+              ? { activity: 'Chatting in Matrix', page: '/matrix/', title: 'Matrix Chat', visible: true, lastSeen: matrixSeen }
+              : (bestSocketPresence(email) || ws.data.presence);
+            touchUserPresence(email, best.activity, best);
             return;
           }
         } catch {}
@@ -27002,16 +27057,19 @@ Bun.serve({
       allSockets.delete(ws);
       if (ws.data?.isBroadcast && ws.data.email) {
         const presenceEmail = normalizeEmail(ws.data.email);
-        if (presenceEmail && !hasAuthenticatedBroadcastSocket(presenceEmail)) {
-          const playing = String(userPresence[presenceEmail]?.playing || '');
-          userPresence[presenceEmail] = { lastSeen: Date.now(), playing };
+        if (presenceEmail && hasAuthenticatedBroadcastSocket(presenceEmail)) {
+          const best = bestSocketPresence(presenceEmail);
+          if (best) touchUserPresence(presenceEmail, best.activity, best);
+        } else if (presenceEmail) {
+          const previous = userPresence[presenceEmail] || {};
+          userPresence[presenceEmail] = { ...previous, lastSeen: Date.now(), since: Number(previous.since || Date.now()) };
           const previousTimer = presenceOfflineTimers.get(presenceEmail);
           if (previousTimer) clearTimeout(previousTimer);
           const timer = setTimeout(() => {
             presenceOfflineTimers.delete(presenceEmail);
             if (!hasAuthenticatedBroadcastSocket(presenceEmail)) {
               delete userPresence[presenceEmail];
-              broadcastPresenceChanged(presenceEmail, false, '');
+              broadcastPresenceChanged(presenceEmail, false, {});
             }
           }, 3000);
           presenceOfflineTimers.set(presenceEmail, timer);
@@ -28049,7 +28107,7 @@ function friendlyVmError(error) {
     if (error.code === 'STOPPED') return { status: 409, error: 'Your computer is currently offline. Start it and try again.', code: 'computer_offline' };
     if (error.code === 'TIMEOUT' || error.code === 'TASK_TIMEOUT') return { status: 504, error: 'Your computer is still starting. Try again in a moment.', code: 'computer_starting' };
     if (error.code === 'INVALID_ACTION' || error.code === 'INVALID_VM' || error.code === 'INVALID_TEMPLATE') return { status: 400, error: error.message || 'That computer request is not valid.', code: 'invalid_request' };
-    if (error.code === 'INVALID_DESKTOP_LOGIN') return { status: 400, error: error.message || 'Choose a desktop username and a password of 8 to 128 characters.', code: 'invalid_desktop_login' };
+    if (error.code === 'INVALID_DESKTOP_LOGIN') return { status: 400, error: error.message || 'Choose a desktop username and a non-empty password without line breaks.', code: 'invalid_desktop_login' };
     if (error.code === 'NO_CAPACITY') return { status: 409, error: 'No computer slots are available right now.', code: 'no_capacity' };
     if (error.code === 'NO_GRAPHICAL_DESKTOP') return { status: 409, error: 'This machine does not have a graphical desktop.', code: 'desktop_unavailable' };
     if (error.code === 'GUEST_SETUP_FAILED') return { status: 504, error: error.message || 'The graphical desktop did not finish starting.', code: 'guest_setup_failed' };
