@@ -637,6 +637,16 @@
     <section class="tool-group" id="owner-tools">
       <div class="section-head"><h2>Site operations</h2><span class="tag">Owner access</span></div>
       <div class="actions-panel" id="owner-operations"></div>
+      <section class="action-card" id="admin-role-card" hidden style="border-color:#ef4444;background:rgba(127,29,29,.16);margin-bottom:18px;">
+        <h2>Full Administrator Access</h2>
+        <p><strong>Danger zone.</strong> Administrators have broad control over accounts, moderation, content, coins, and site operations. Owner changes here apply immediately with no approval step.</p>
+        <div id="admin-role-list" style="font-size:.78rem;margin-bottom:10px;"></div>
+        <form onsubmit="addAdministrator(event)" style="display:flex;gap:7px;flex-wrap:wrap;">
+          <input id="admin-role-email" type="email" placeholder="existing-user@email.com" required style="flex:1;min-width:220px">
+          <button type="submit" data-danger style="width:auto">Grant full admin</button>
+        </form>
+        <div id="admin-role-status" class="form-status" role="status"></div>
+      </section>
       <section class="owner-account-tools" id="owner-account-tools" hidden aria-label="Owner account controls">
         <h3>Accounts &amp; Mitch Coins</h3>
         <p>Remove sign-in registrations so those email addresses can sign up again. This revokes website sessions, passwords, passkeys, and recovery links. Profiles, posts, chat history, and existing Matrix sessions are not deleted. Owner accounts are protected.</p>
@@ -1512,6 +1522,48 @@
           </div>
         `).join('') || '<div class="muted">No moderators added.</div>';
       } catch (e) {}
+    }
+
+    async function loadAdministrators() {
+      const list = document.getElementById('admin-role-list');
+      if (!list || !currentUser?.isOwner) return;
+      try {
+        const r = await fetch('/api/admin/admins', { credentials: 'include', cache: 'no-store', headers: getAdminHeaders() });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || 'Could not load administrators.');
+        list.innerHTML = (d.admins || []).map(email => `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;padding:7px 9px;border:1px solid rgba(239,68,68,.25);border-radius:8px;">
+            <span>${esc(email)}</span>
+            <button type="button" data-danger onclick='removeAdministrator(${JSON.stringify(email)})' style="padding:4px 8px;font-size:11px;width:auto;">Remove admin</button>
+          </div>
+        `).join('') || '<div class="muted">No additional administrators.</div>';
+      } catch (err) {
+        setStatus('admin-role-status', err.message, 'err');
+      }
+    }
+
+    async function addAdministrator(event) {
+      event.preventDefault();
+      const input = document.getElementById('admin-role-email');
+      const email = input.value.trim();
+      if (!email || !(await customConfirm('Grant full administrator access', `${email} will receive broad control of the website immediately. Continue?`))) return;
+      setStatus('admin-role-status', 'Granting access...', '');
+      try {
+        await postAdmin('/api/admin/admins', { email, active: true });
+        input.value = '';
+        setStatus('admin-role-status', 'Administrator access granted immediately.', 'ok');
+        await loadAdministrators();
+      } catch (err) { setStatus('admin-role-status', err.message, 'err'); }
+    }
+
+    async function removeAdministrator(email) {
+      if (!(await customConfirm('Remove administrator access', `Remove full administrator access from ${email}?`))) return;
+      setStatus('admin-role-status', 'Removing access...', '');
+      try {
+        await postAdmin('/api/admin/admins', { email, active: false });
+        setStatus('admin-role-status', 'Administrator access removed.', 'ok');
+        await loadAdministrators();
+      } catch (err) { setStatus('admin-role-status', err.message, 'err'); }
     }
 
     async function addBlogContributor(e) {
@@ -2992,7 +3044,11 @@
       const ownerSwitch = document.querySelector('.owner-switch');
       if (ownerSwitch) ownerSwitch.hidden = !currentUser.isOwner;
       document.querySelector('.owner-nav').hidden = !currentUser.isOwner;
-      if (currentUser.isOwner) document.getElementById('owner-operations').appendChild(document.getElementById('soft-maintenance-card'));
+      if (currentUser.isOwner) {
+        document.getElementById('owner-operations').appendChild(document.getElementById('soft-maintenance-card'));
+        document.getElementById('admin-role-card').hidden = false;
+        loadAdministrators();
+      }
       if (location.hash === '#owner-tools' && !currentUser.isOwner) activateToolGroup('approval-tools');
       const eyebrow = document.querySelector('.staff-eyebrow');
       if (eyebrow && currentUser.isCoOwner) eyebrow.textContent = 'mitch.pro / co-owner systems';

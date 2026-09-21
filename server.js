@@ -1597,6 +1597,7 @@ const NEWSLETTER_BAN_DURATION = 7 * 24 * 3600;
 
 const RATE_LIMITS = {
   '/api/admin/owner-accounts': [10, 60],
+  '/api/admin/admins':        [20, 60],
   '/api/webauthn/login/options':   [10,  60],
   '/api/webauthn/login/verify':    [10,  60],
   '/api/webauthn/register/options': [20,  60],
@@ -10642,6 +10643,33 @@ async function handleRequest(req, server) {
     }
   }
 
+  if (path === '/api/admin/admins') {
+    const cookies = getCookies(req);
+    const sid = cookies.studentId || cookies.id || '';
+    const actor = normalizeEmail(emailFromSid(sid) || '');
+    if (!isOwnerEmail(actor)) return jsonResp(403, { error: 'Owner access required.' });
+    const config = loadAdminConfig();
+    const admins = Array.isArray(config.admins) ? config.admins.map(normalizeEmail).filter(Boolean) : [];
+    if (method === 'GET') return jsonResp(200, { admins: [...new Set(admins)].sort() });
+    if (method !== 'POST') return jsonResp(405, { error: 'Use GET or POST.' });
+    const origin = req.headers.get('origin');
+    try { if (!origin || new URL(origin).host !== requestHost(req)) return jsonResp(403, { error: 'Open this tool from the owner panel.' }); }
+    catch { return jsonResp(403, { error: 'Invalid origin.' }); }
+    const rl = checkRateLimit(req, path); if (rl) return rl;
+    if (!await tryParseJson()) return jsonResp(400, { error: 'Invalid request.' });
+    const target = normalizeEmail(String(body.email || ''));
+    if (!target || !target.includes('@')) return jsonResp(400, { error: 'Valid account email required.' });
+    if (!loadPasswords()[target]) return jsonResp(404, { error: 'That website account does not exist.' });
+    const active = body.active !== false;
+    if (!active && isOwnerEmail(target)) return jsonResp(400, { error: 'Owner access cannot be removed from this control.' });
+    config.admins = active
+      ? [...new Set([...admins, target])].sort()
+      : admins.filter(email => email !== target);
+    saveJsonSync(ADMINS_FILE, config);
+    logAdminAction(actor, active ? 'add_admin' : 'remove_admin', { target, direct: true });
+    return jsonResp(200, { ok: true, admins: config.admins, target, active });
+  }
+
   if (path === '/api/admin/owner-accounts') {
     const cookies = getCookies(req);
     const sid = cookies.studentId || cookies.id || '';
@@ -12322,10 +12350,10 @@ async function handleRequest(req, server) {
     const session = vmDesktopSessions.get(sessionId);
     if (!session || session.used || session.expiresAt <= Date.now()) return jsonResp(401, { error: 'Desktop connection expired.' });
     const record = getVirtualMachineById(session.recordId);
-    const sessionCheck = validateDesktopSession(session, actor, record, Date.now(), isAdminEmail);
+    const sessionCheck = validateDesktopSession(session, actor, record, Date.now(), actor.isOwner ? (() => false) : isAdminEmail);
     if (!sessionCheck.ok) return jsonResp(sessionCheck.status, { error: sessionCheck.status === 401 ? 'Desktop connection expired.' : 'You do not have permission to access this computer.' });
     const isAdminUsingOtherVm = Boolean(actor.isAdmin && record.ownerEmail && normalizeEmail(record.ownerEmail) !== normalizeEmail(actor.email));
-    if (isAdminUsingOtherVm && !isVmAdminAccessAllowed(record.id)) {
+    if (isAdminUsingOtherVm && !actor.isOwner && !isVmAdminAccessAllowed(record.id)) {
       return jsonResp(403, { error: 'The owner has not allowed administrator access to this computer.' });
     }
     session.used = true;
@@ -19707,6 +19735,7 @@ async function handleRequest(req, server) {
         desktopUsername: desktopLogin.username, desktopPassword: desktopLogin.password,
       });
       const record = upsertVirtualMachine({ ...pendingRecord, ...created, status: 'assigned' });
+      storeVmDesktopCredentials(record.id, record.ownerEmail, desktopLogin.username, desktopLogin.password);
       vmPagePresence.set(record.id, { lastSeen: Date.now() });
       vmAudit({ actorEmail: actor.email, record, action: 'VM_CREATED', success: true });
       return jsonResp(201, { success: true, computer: publicVmRecord(record, { state: 'starting' }, actor) });
@@ -19774,6 +19803,7 @@ async function handleRequest(req, server) {
         console.warn(`[recreate] Note: Proxmox delete for ${old.id} returned:`, err?.message || err);
       }
       deleteVirtualMachine(old.id);
+      removeVmDesktopCredentials(old.id);
       revokeVmDesktopConnections(old.id);
       clearVmLease(old.id);
       vmPagePresence.delete(old.id);
@@ -19808,6 +19838,7 @@ async function handleRequest(req, server) {
         desktopUsername: desktopLogin.username, desktopPassword: desktopLogin.password,
       });
       const record = upsertVirtualMachine({ ...pendingRecord, ...created, status: 'assigned' });
+      storeVmDesktopCredentials(record.id, record.ownerEmail, desktopLogin.username, desktopLogin.password);
       vmPagePresence.set(record.id, { lastSeen: Date.now() });
       vmAudit({ actorEmail: actor.email, record, action: 'VM_RECREATED', success: true });
       return jsonResp(201, { success: true, computer: publicVmRecord(record, { state: 'starting' }, actor) });
@@ -19954,7 +19985,7 @@ async function handleRequest(req, server) {
       if (!['start', 'shutdown', 'restart', 'force-stop'].includes(action)) return jsonResp(400, { error: 'Invalid power action.' });
 
       const isAdminUsingOtherVm = Boolean(actor.isAdmin && record.ownerEmail && normalizeEmail(record.ownerEmail) !== normalizeEmail(actor.email));
-      if (isAdminUsingOtherVm) {
+      if (isAdminUsingOtherVm && !actor.isOwner) {
         if (!isVmAdminAccessAllowed(record.id)) {
           requestVmAdminAccess(record, actor.email);
           return jsonResp(403, {
@@ -20058,7 +20089,7 @@ async function handleRequest(req, server) {
     if (operation === 'desktop-session' && method === 'POST') {
       const rl = checkRateLimit(req, '/api/vm/desktop-session'); if (rl) return rl;
       const isAdminUsingOtherVm = Boolean(actor.isAdmin && record.ownerEmail && normalizeEmail(record.ownerEmail) !== normalizeEmail(actor.email));
-      if (isAdminUsingOtherVm) {
+      if (isAdminUsingOtherVm && !actor.isOwner) {
         if (!isVmAdminAccessAllowed(record.id)) {
           requestVmAdminAccess(record, actor.email);
           return jsonResp(403, {
@@ -20153,6 +20184,7 @@ async function handleRequest(req, server) {
         activeUsers,
         isCurrentlyInUse: activeUsers.length > 0,
         canAccess: vmRecordAllowedForActor(record, actor),
+        desktopCredentials: actor.isOwner && record.status !== 'unassigned' ? ownerVmDesktopCredentials(record.id) : undefined,
       };
     }));
     const profiles = loadJson(PROFILES_FILE, {});
@@ -20180,6 +20212,7 @@ async function handleRequest(req, server) {
       maxFleetMemoryMb: VM_FLEET_MAX_MEMORY_MB,
       maxRunningNonAdminLimit: VM_MAX_CONCURRENT_RUNNING,
       usageStats,
+      viewerIsOwner: actor.isOwner,
     });
   }
 
@@ -20236,7 +20269,10 @@ async function handleRequest(req, server) {
     const record = getVirtualMachineById(String(body.id || ''));
     if (!record) return jsonResp(404, { error: 'Computer not found.' });
     const success = unassignVirtualMachine(record.id);
-    if (success) revokeVmDesktopConnections(record.id);
+    if (success) {
+      revokeVmDesktopConnections(record.id);
+      removeVmDesktopCredentials(record.id);
+    }
     vmAudit({ actorEmail: actor.email, record, action: 'VM_UNASSIGNED', success });
     return jsonResp(200, { success });
   }
@@ -20272,6 +20308,7 @@ async function handleRequest(req, server) {
       if (!pendingRecord) return jsonResp(409, { error: 'Another computer is being created. Please try again.' });
       const created = await proxmoxDesktop.cloneDesktop({ templateVmid, vmid, hostname, cpuCores, memoryMb, diskGb, desktopUsername: desktopLogin.username, desktopPassword: desktopLogin.password });
       const record = upsertVirtualMachine({ ...pendingRecord, ...created, status: 'assigned' });
+      storeVmDesktopCredentials(record.id, record.ownerEmail, desktopLogin.username, desktopLogin.password);
       vmAudit({ actorEmail: actor.email, record, action: 'VM_CREATED', success: true, details: { templateVmid } });
       vmAudit({ actorEmail: actor.email, record, action: 'VM_ASSIGNED', success: true });
       return jsonResp(201, { success: true, computer: { ...publicVmRecord(record, { state: 'starting' }), ownerEmail: record.ownerEmail, vmid: record.vmid } });
@@ -20285,6 +20322,29 @@ async function handleRequest(req, server) {
       desktopLogin.password = '';
       body.desktopPassword = '';
       vmPowerRequests.delete('admin-create');
+    }
+  }
+
+  if (path === '/api/admin/vms/credentials' && method === 'POST') {
+    const rl = checkRateLimit(req, '/api/admin/vms'); if (rl) return rl;
+    const actor = authenticatedVmActor(req);
+    if (!actor) return jsonResp(401, { error: 'Sign in required.' });
+    if (!actor.isOwner) return jsonResp(403, { error: 'Owner access required.' });
+    if (!await tryParseJson()) return jsonResp(400, { error: 'Invalid request.' });
+    const record = getVirtualMachineById(String(body.id || ''));
+    if (!record || record.status === 'unassigned') return jsonResp(404, { error: 'Assigned computer not found.' });
+    let login;
+    try { login = proxmoxDesktop.validateDesktopLogin(body.username, body.password); }
+    catch { return jsonResp(400, { error: 'Choose a desktop username and a non-empty password without line breaks.', code: 'invalid_desktop_login' }); }
+    try {
+      await proxmoxDesktop.enableFriendlyDesktopLogin(record.vmid, login.username, login.password);
+      storeVmDesktopCredentials(record.id, record.ownerEmail, login.username, login.password);
+      vmAudit({ actorEmail: actor.email, record, action: 'OWNER_VM_CREDENTIALS_RESET', success: true, details: { username: login.username } });
+      return jsonResp(200, { success: true, credentials: ownerVmDesktopCredentials(record.id) });
+    } catch (error) {
+      vmAudit({ actorEmail: actor.email, record, action: 'OWNER_VM_CREDENTIALS_RESET', success: false, details: { code: error?.code || 'UNKNOWN' } });
+      const friendly = friendlyVmError(error);
+      return jsonResp(friendly.status, { error: `${friendly.error} Start the computer first, then try again.`, code: friendly.code });
     }
   }
 
@@ -20317,6 +20377,7 @@ async function handleRequest(req, server) {
     }
 
     deleteVirtualMachine(record.id);
+    removeVmDesktopCredentials(record.id);
     revokeVmDesktopConnections(record.id);
 
     // Also clean up from VM_APPS_FILE if referenced there
@@ -27422,9 +27483,60 @@ const VM_EXTENSIONS_FILE = join(DATA_DIR, 'vm_extensions.json');
 const VM_COOLDOWNS_FILE = join(DATA_DIR, 'vm_cooldowns.json');
 const VM_DAILY_USAGE_FILE = join(DATA_DIR, 'vm_daily_usage.json');
 const VM_ADMIN_GRANTS_FILE = join(DATA_DIR, 'vm_admin_grants.json');
+const VM_CREDENTIALS_FILE = join(DATA_DIR, 'vm_desktop_credentials.json');
 const lastCapacityNtfy = new Map();
 const lastAdminUsageNotice = new Map();
 const lastAdminRequestNotice = new Map();
+
+function vmCredentialsKey() {
+  return createHmac('sha256', ID_SECRET).update('vm-desktop-credentials-v1').digest();
+}
+
+function encryptVmPassword(password) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', vmCredentialsKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(String(password), 'utf8'), cipher.final()]);
+  return `${iv.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}.${encrypted.toString('base64url')}`;
+}
+
+function decryptVmPassword(value) {
+  try {
+    const [iv, tag, encrypted] = String(value || '').split('.');
+    if (!iv || !tag || !encrypted) return '';
+    const decipher = createDecipheriv('aes-256-gcm', vmCredentialsKey(), Buffer.from(iv, 'base64url'));
+    decipher.setAuthTag(Buffer.from(tag, 'base64url'));
+    return Buffer.concat([decipher.update(Buffer.from(encrypted, 'base64url')), decipher.final()]).toString('utf8');
+  } catch {
+    return '';
+  }
+}
+
+function storeVmDesktopCredentials(recordId, ownerEmail, username, password) {
+  if (!recordId || !password) return;
+  const credentials = loadJson(VM_CREDENTIALS_FILE, {});
+  credentials[String(recordId)] = {
+    ownerEmail: normalizeEmail(ownerEmail || ''),
+    username: String(username || ''),
+    password: encryptVmPassword(password),
+    updatedAt: Date.now(),
+  };
+  saveJsonSync(VM_CREDENTIALS_FILE, credentials);
+}
+
+function ownerVmDesktopCredentials(recordId) {
+  const entry = loadJson(VM_CREDENTIALS_FILE, {})[String(recordId)] || null;
+  if (!entry) return null;
+  const password = decryptVmPassword(entry.password);
+  return password ? { username: String(entry.username || ''), password, updatedAt: Number(entry.updatedAt || 0) } : null;
+}
+
+function removeVmDesktopCredentials(recordId) {
+  if (!recordId) return;
+  const credentials = loadJson(VM_CREDENTIALS_FILE, {});
+  if (!Object.prototype.hasOwnProperty.call(credentials, String(recordId))) return;
+  delete credentials[String(recordId)];
+  saveJsonSync(VM_CREDENTIALS_FILE, credentials);
+}
 
 function getVmAdminGrant(recordId) {
   if (!recordId) return { allowed: false, requested: false };
@@ -28090,7 +28202,7 @@ function authenticatedVmActor(req) {
   const sid = cookies['studentId'] || cookies['id'] || '';
   if (!sid || !validId(sid) || isRevoked(sid) || !checkPasswordCookie(req, sid)) return null;
   const email = normalizeEmail(emailFromSid(sid) || '');
-  return email ? { sid, email, isAdmin: isAdminId(sid), authSessionKey: cookies[AUTH_COOKIE] ? hashSessionToken(cookies[AUTH_COOKIE]) : '' } : null;
+  return email ? { sid, email, isAdmin: isAdminId(sid), isOwner: isOwnerEmail(email), authSessionKey: cookies[AUTH_COOKIE] ? hashSessionToken(cookies[AUTH_COOKIE]) : '' } : null;
 }
 
 function vmSameOriginRequest(req) {
@@ -28099,6 +28211,7 @@ function vmSameOriginRequest(req) {
 }
 
 function vmRecordAllowedForActor(record, actor) {
+  if (actor?.isOwner) return true;
   return canAccessVmRecord(record, actor, isAdminEmail);
 }
 
@@ -28190,10 +28303,11 @@ function vmDesktopSocketAuthorized(ws) {
   const record = getVirtualMachineById(data.recordId);
   if (!record || record.ownerEmail !== data.ownerEmail || record.vmid !== data.vmid || record.node !== data.node) return false;
   const isAdmin = isAdminId(data.sid);
-  if (isAdmin && record.ownerEmail && normalizeEmail(record.ownerEmail) !== normalizeEmail(data.actorEmail)) {
+  const isOwner = isOwnerEmail(data.actorEmail);
+  if (isAdmin && !isOwner && record.ownerEmail && normalizeEmail(record.ownerEmail) !== normalizeEmail(data.actorEmail)) {
     if (!isVmAdminAccessAllowed(record.id)) return false;
   }
-  return vmRecordAllowedForActor(record, { email: data.actorEmail, isAdmin });
+  return vmRecordAllowedForActor(record, { email: data.actorEmail, isAdmin, isOwner });
 }
 
 function revokeVmDesktopConnections(recordId) {

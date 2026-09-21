@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0e1116">
   <title>Computer Admin · mitch.pro</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="/admin/vms/admin-vms.css?v=2">
+  <link rel="stylesheet" href="/admin/vms/admin-vms.css?v=3">
 </head>
 <body class="computer-admin">
   <main class="admin-shell">
@@ -106,8 +106,8 @@
           <label>Hostname<input id="create-hostname" placeholder="computer-name" maxlength="48" pattern="[a-zA-Z0-9\-]+" required></label>
           <label>Desktop<select id="create-template" required></select></label>
           <label>Desktop username<input id="create-username" value="desktop" minlength="2" maxlength="32" pattern="[a-z][a-z0-9_\-]{1,31}" autocomplete="off" required></label>
-          <label>Desktop password<input id="create-password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></label>
-          <p class="login-note">Give these login details to the user securely. The password is sent to the new computer once and is not saved in this portal.</p>
+          <label>Desktop password<input id="create-password" type="password" autocomplete="new-password" required></label>
+          <p class="login-note">Give these login details to the user securely. Owner accounts can retrieve the encrypted saved credential from the fleet list.</p>
           <div class="resource-row"><label>CPU cores<select id="create-cpu"><option>2</option><option>4</option><option selected>6</option><option>8</option></select></label><label>Memory<select id="create-memory"><option value="2048">2 GB</option><option value="4096">4 GB</option><option value="8192">8 GB</option><option value="16384" selected>16 GB</option><option value="65536">64 GB</option></select></label><label>Disk<select id="create-disk"><option value="40">40 GB</option><option value="64" selected>64 GB</option><option value="80">80 GB</option><option value="128">128 GB</option></select></label></div>
           <button class="primary" type="submit" id="create-button">Create & start computer</button>
           <p class="form-status" id="create-status" role="status"></p>
@@ -131,6 +131,6 @@
       <div class="audit-list" id="audit-list"><p class="empty">No activity yet.</p></div>
     </section>
   </main>
-  <script src="/admin/vms/admin-vms.js?v=2" defer></script>
+  <script src="/admin/vms/admin-vms.js?v=3" defer></script>
 </body>
 </html>

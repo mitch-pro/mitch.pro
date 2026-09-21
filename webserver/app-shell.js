@@ -34,15 +34,13 @@
   var IS_RJUHSD = /(^|\.)rjuhsd\.school$/.test(location.hostname || '');
 
   var NAV_MITCH = [
-    { href: '/vms/', label: 'Computer', icon: '▣', match: function (p) { return p.indexOf('/vms') === 0; } },
     { href: '/', label: 'Home', icon: '⌂', match: function (p) { return p === '/' || p === '/index.html'; } },
+    { href: '/vms/', label: 'VM Lab', badge: 'FREE', icon: '▣', match: function (p) { return p.indexOf('/vms') === 0; } },
     { href: '/matrix/', label: 'Chat', icon: '◉', match: function (p) { return p.indexOf('/matrix') === 0 || p.indexOf('/encrypt') === 0 || p.indexOf('/public-chat') === 0; } },
-    { href: '/games/', label: 'Games', icon: '◆', match: function (p) { return p.indexOf('/games') === 0; } },
+    { href: '/game-portal/', label: 'Games', icon: '◆', match: function (p) { return p.indexOf('/games') === 0 || p.indexOf('/game-portal') === 0; } },
     { href: 'https://woodcreek.site/', label: 'Blooket Bot', icon: '▣', match: function () { return false; } },
-    { href: '/members/', label: 'Members', icon: '●', match: function (p) { return p.indexOf('/members') === 0 || p.indexOf('/friends') === 0 || p.indexOf('/profile') === 0; } },
-    { href: 'https://rjuhsd.school/', label: 'Bell', icon: '◷', match: function () { return false; } },
-    { href: '/shop/', label: 'Shop', icon: '▣', match: function (p) { return p.indexOf('/shop') === 0 || p.indexOf('/marketplace') === 0; } },
-    { href: '/preferences/', label: 'Settings', icon: '⚙', match: function (p) { return p.indexOf('/preferences') === 0; } }
+    { href: '/members/', label: 'People', icon: '●', match: function (p) { return p.indexOf('/members') === 0 || p.indexOf('/friends') === 0 || p.indexOf('/profile') === 0; } },
+    { href: 'https://rjuhsd.school/', label: 'Schedule', icon: '◷', match: function () { return false; } }
   ];
 
   var NAV_RJUHSD = [
@@ -94,6 +92,7 @@
     document.body.classList.add('mitch-next');
     var homeBar = document.querySelector('.home-masthead');
     if (homeBar) {
+      homeBar.classList.add('unified-masthead');
       // broadcast.js builds its floating bell toolbar during parsing, before
       // this deferred script runs — fold it into the masthead instead of
       // leaving a second fixed #site-topbar stacked in the top-right corner.
@@ -107,7 +106,7 @@
     }
     var style = document.createElement('link');
     style.rel = 'stylesheet';
-    style.href = '/mitch-ui.css?v=2';
+    style.href = '/mitch-ui.css?v=3';
     document.head.appendChild(style);
     var paths = {
       home: '<path d="m3 10 9-7 9 7v10H3Z"/><path d="M9 20v-7h6v7"/>',
@@ -239,7 +238,7 @@
     var path = currentPath();
     var bar = document.createElement('header');
     bar.id = 'app-topbar';
-    bar.className = 'app-topbar';
+    bar.className = 'app-topbar unified-masthead';
     bar.setAttribute('role', 'banner');
 
     var brand = document.createElement('a');
@@ -262,6 +261,12 @@
       var a = document.createElement('a');
       a.href = item.href;
       a.textContent = item.label;
+      if (item.badge) {
+        var badge = document.createElement('span');
+        badge.className = 'nav-pill-free';
+        badge.textContent = item.badge;
+        a.appendChild(badge);
+      }
       if (item.match(path)) a.setAttribute('aria-current', 'page');
       nav.appendChild(a);
     }

@@ -115,6 +115,62 @@
         : '';
       return `<article class="fleet-item" data-id="${esc(vm.id)}"><div class="fleet-identity"><strong>${esc(vm.name)}</strong><small>${esc(vm.operatingSystem || 'Linux desktop')}</small></div><div class="fleet-owner"><strong title="${esc(vm.ownerEmail)}">${esc(vm.ownerEmail)}</strong><small>${esc(vm.hostname || 'No hostname')}</small></div><span class="fleet-state ${running ? 'running' : ''}">${busy ? 'Updating...' : running ? 'Running' : stopped ? 'Offline' : esc(vm.status)}</span>${inUse ? `<span class="fleet-in-use" style="background:#15803d; color:#f0fdf4; font-size:0.75rem; font-weight:700; padding:2px 8px; border-radius:999px; margin-left:4px;" title="Active desktop session">👤 In Use (${esc(activeUserLabel)})</span>` : ''}<span class="fleet-resources">${esc(vm.cpuCores)} CPU &middot; ${bytes(vm.memoryTotal)}<small>${bytes(vm.diskTotal)} disk</small></span><span class="fleet-address">${esc(vm.ipAddress || 'No IP yet')}</span><div class="fleet-actions">${openDesktopAction}${powerButtons}<button data-unassign class="unassign" ${busy ? 'disabled' : ''}>Unassign</button><button data-delete class="danger" ${busy ? 'disabled' : ''}>Delete</button>${hasFailedDelete ? `<button data-force-delete class="danger" style="background:#ef4444; color:#fff; border-color:#ef4444; font-weight:700;" ${busy ? 'disabled' : ''}>⚠️ Force Delete</button>` : ''}</div></article>`;
     }).join('') : '<p class="empty">No customer computers are assigned.</p>';
+    if (overview.viewerIsOwner) {
+      rows.forEach(vm => {
+        const item = $('fleet-list').querySelector(`[data-id="${CSS.escape(vm.id)}"]`);
+        if (!item) return;
+        const box = document.createElement('div');
+        box.className = 'fleet-credentials' + (vm.desktopCredentials ? '' : ' unavailable');
+        const label = document.createElement('small');
+        label.textContent = 'Desktop login';
+        box.appendChild(label);
+        const makeResetButton = usernameHint => {
+          const reset = document.createElement('button');
+          reset.type = 'button';
+          reset.textContent = 'Set new login';
+          reset.addEventListener('click', async event => {
+            event.stopPropagation();
+            const username = prompt('Desktop username', usernameHint || 'desktop');
+            if (!username) return;
+            const password = prompt('New desktop password (any non-empty length)');
+            if (!password) return;
+            reset.disabled = true;
+            reset.textContent = 'Updating...';
+            try {
+              await api('/api/admin/vms/credentials', { id: vm.id, username, password });
+              status('fleet-status', 'Desktop login updated and saved securely for owners.', 'success');
+              await load();
+            } catch (error) {
+              status('fleet-status', error.message, 'error');
+              reset.disabled = false;
+              reset.textContent = 'Set new login';
+            }
+          });
+          return reset;
+        };
+        if (vm.desktopCredentials) {
+          const username = document.createElement('code');
+          username.textContent = vm.desktopCredentials.username || 'desktop';
+          const password = document.createElement('code');
+          password.textContent = vm.desktopCredentials.password;
+          const copy = document.createElement('button');
+          copy.type = 'button';
+          copy.textContent = 'Copy password';
+          copy.addEventListener('click', async event => {
+            event.stopPropagation();
+            await navigator.clipboard.writeText(vm.desktopCredentials.password);
+            copy.textContent = 'Copied';
+            setTimeout(() => { copy.textContent = 'Copy password'; }, 1200);
+          });
+          box.append(username, password, copy, makeResetButton(vm.desktopCredentials.username));
+        } else {
+          const unavailable = document.createElement('span');
+          unavailable.textContent = 'Not stored for this older VM. Start it, then set a new login here.';
+          box.append(unavailable, makeResetButton('desktop'));
+        }
+        item.insertBefore(box, item.querySelector('.fleet-actions'));
+      });
+    }
   }
   function renderAudit() {
     const rows = overview.audit || [];

@@ -258,3 +258,11 @@ body.mitch-design.mitch-next.encrypt-page .modal-card { background: var(--t-bg) 
   body.home.mitch-design.mitch-next .staff-access-button > .staff-access-copy { width: auto; height: auto; background: none; box-shadow: none; }
 }
 @media (prefers-reduced-motion: reduce) { body.mitch-next * { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
+
+/* Shared homepage masthead across every mitch.pro page. */
+body.mitch-design.mitch-next .unified-masthead{width:100%!important;min-height:58px!important;margin:0!important;padding:0 max(24px,calc((100vw - 1280px)/2))!important;display:flex!important;align-items:center!important;gap:24px!important;border:0!important;border-bottom:1px solid var(--t-bd)!important;border-radius:0!important;background:var(--t-bg)!important;box-shadow:none!important;backdrop-filter:none!important}
+body.mitch-design.mitch-next .unified-masthead :is(.app-nav,.home-masthead-links){display:flex;align-self:stretch;align-items:stretch;gap:20px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none}
+body.mitch-design.mitch-next .unified-masthead :is(.app-nav,.home-masthead-links) a{position:relative;display:inline-flex;align-items:center;gap:5px;min-height:57px;padding:0!important;border:0!important;border-bottom:2px solid transparent!important;border-radius:0!important;background:transparent!important;color:var(--t-fg2)!important;font-size:13px!important;font-weight:650;white-space:nowrap;text-decoration:none}
+body.mitch-design.mitch-next .unified-masthead :is(.app-nav,.home-masthead-links) a:hover,body.mitch-design.mitch-next .unified-masthead :is(.app-nav,.home-masthead-links) a[aria-current]{color:var(--t-fg)!important;border-bottom-color:var(--t-ac)!important}
+body.mitch-design.mitch-next .unified-masthead .nav-pill-free{padding:2px 5px;border-radius:4px;background:#16a34a;color:#fff;font-size:8px;font-weight:850;letter-spacing:.05em}
+@media(max-width:760px){body.mitch-design.mitch-next .unified-masthead{min-height:64px!important;padding:8px 16px!important;gap:10px!important}body.mitch-design.mitch-next .unified-masthead :is(.app-nav,.home-masthead-links){display:none!important}}

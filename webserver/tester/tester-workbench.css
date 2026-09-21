@@ -1,0 +1,77 @@
+/* Tester workbench: deliberately utilitarian, printed and slightly imperfect. */
+body.tester-page {
+  --paper: #f4edda;
+  --ink: #1d211e;
+  --red: #c43d2d;
+  --blue: #245f73;
+  --rule: rgba(29, 33, 30, .18);
+  color: var(--ink) !important;
+  background-color: #d9d0b9 !important;
+  background-image: linear-gradient(var(--rule) 1px, transparent 1px), linear-gradient(90deg, var(--rule) 1px, transparent 1px) !important;
+  background-size: 28px 28px !important;
+  font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace !important;
+}
+.tester-page .tester-shell { width:min(1120px,calc(100% - 30px)); padding:34px 0 80px; }
+.tester-page .tester-topbar,
+.tester-page .hero-banner,
+.tester-page .stat-chip,
+.tester-page .qa-card,
+.tester-page .qa-link-card,
+.tester-page .unauthorized-banner {
+  color:var(--ink) !important;
+  background:var(--paper) !important;
+  border:2px solid var(--ink) !important;
+  border-radius:2px !important;
+  box-shadow:6px 6px 0 rgba(29,33,30,.9) !important;
+  backdrop-filter:none !important;
+}
+.tester-page .tester-topbar { position:relative; margin-bottom:30px; padding:13px 16px; transform:rotate(-.25deg); }
+.tester-page .tester-topbar::after { content:"INTERNAL / BREAK THINGS CAREFULLY"; position:absolute; right:18px; bottom:-18px; padding:4px 8px; color:#fff; background:var(--red); border:2px solid var(--ink); font:700 10px/1 ui-monospace,monospace; letter-spacing:.08em; transform:rotate(1.2deg); }
+.tester-page .brand-eyebrow { color:var(--red) !important; letter-spacing:.12em; }
+.tester-page .brand-title { font-family:Georgia,"Times New Roman",serif; font-size:1.6rem; }
+.tester-page .back-btn,
+.tester-page .btn {
+  min-height:38px;
+  color:var(--ink) !important;
+  background:#fffaf0 !important;
+  border:2px solid var(--ink) !important;
+  border-radius:2px !important;
+  box-shadow:3px 3px 0 var(--ink) !important;
+  font-family:inherit;
+  font-weight:800;
+  transform:none !important;
+}
+.tester-page .btn:hover:not(:disabled), .tester-page .back-btn:hover { color:#fff !important; background:var(--blue) !important; box-shadow:1px 1px 0 var(--ink) !important; translate:2px 2px; }
+.tester-page .btn.primary { color:#fff !important; background:var(--red) !important; }
+.tester-page .tester-pill-badge { color:var(--ink) !important; background:#f2c94c !important; border:2px solid var(--ink) !important; border-radius:2px !important; box-shadow:2px 2px 0 var(--ink); text-transform:uppercase; }
+.tester-page .tester-pill-badge i { background:var(--red); box-shadow:none; border-radius:0; }
+.tester-page .hero-banner { align-items:flex-end; padding:28px; transform:rotate(.12deg); }
+.tester-page .hero-copy h1 { font:800 clamp(2.2rem,7vw,5.5rem)/.88 Georgia,"Times New Roman",serif; letter-spacing:-.055em; max-width:720px; }
+.tester-page .hero-copy p,
+.tester-page .qa-card-desc,
+.tester-page .qa-link-card small,
+.tester-page .unauthorized-banner p { color:#4a4d47 !important; }
+.tester-page .hero-stats-grid { gap:14px; }
+.tester-page .stat-chip { position:relative; padding:18px 16px; box-shadow:4px 4px 0 var(--ink) !important; }
+.tester-page .stat-chip:nth-child(even) { transform:rotate(.6deg); }
+.tester-page .stat-chip:nth-child(odd) { transform:rotate(-.45deg); }
+.tester-page .stat-chip small { color:var(--red) !important; }
+.tester-page .stat-chip b, .tester-page .stat-chip b.accent { color:var(--ink) !important; }
+.tester-page .grid-2col { gap:26px; }
+.tester-page .qa-card { position:relative; padding:25px; }
+.tester-page .qa-card:nth-child(2n) { transform:rotate(.18deg); }
+.tester-page .qa-card h2 { padding-bottom:10px; border-bottom:2px solid var(--ink); font:800 1.22rem/1.1 Georgia,"Times New Roman",serif; }
+.tester-page .qa-card h2 > span, .tester-page .qa-link-icon { display:none; }
+.tester-page .toggle-switch-row { border:2px dashed var(--ink); border-radius:0; background:rgba(255,255,255,.38); }
+.tester-page .toggle-copy small { color:#5c6159 !important; }
+.tester-page .toggle-btn { border:2px solid var(--ink); border-radius:2px; background:#c9c2ae; }
+.tester-page .toggle-btn.active { background:var(--blue); }
+.tester-page .toggle-knob { border-radius:0; box-shadow:none; }
+.tester-page .input-row input { color:var(--ink); background:#fffaf0; border:2px solid var(--ink); border-radius:2px; font-family:inherit; }
+.tester-page .links-grid { gap:14px; }
+.tester-page .qa-link-card { min-height:120px; justify-content:flex-end; box-shadow:3px 3px 0 var(--ink) !important; }
+.tester-page .qa-link-card:hover { color:#fff !important; background:var(--blue) !important; transform:rotate(-1deg) translateY(-2px); }
+.tester-page .qa-link-card:hover small { color:#e9f4f4 !important; }
+.tester-page .toast-box { color:#fff; background:var(--ink); border:2px solid #fffaf0; border-radius:2px; font-family:inherit; }
+html.theme-light body.tester-page, html.theme-dark body.tester-page { color:var(--ink) !important; }
+@media(max-width:700px){.tester-page .tester-topbar::after{display:none}.tester-page .hero-banner{align-items:flex-start}.tester-page .hero-copy h1{font-size:3.25rem}.tester-page .tester-topbar{transform:none}.tester-page .stat-chip{transform:none!important}.tester-page .fleet-credentials{grid-template-columns:1fr}}
