@@ -31,8 +31,8 @@ assert.match(server, /function publishAdminBroadcast\(type, message\)/);
 assert.match(server, /ADMIN_BROADCAST_TTL_MS = 5 \* 60 \* 1000/);
 assert.match(server, /path === '\/api\/broadcast\/latest'/);
 assert.match(server, /'Cache-Control', 'private, no-store, max-age=0'/);
-assert.match(home, /broadcast\.js\?v=8/);
-assert.match(server, /broadcast\.js\?v=8/);
+assert.match(home, /broadcast\.js\?v=9/);
+assert.match(server, /broadcast\.js\?v=9/);
 assert.match(serviceWorker, /requestUrl\.pathname === '\/media\/admin-jumpscare-krupp-1935\.webm'/, 'Service Worker must not cache the large authenticated video stream');
 
 console.log('Video jumpscare asset, resilient multi-PC delivery, deduplication, cleanup, and cache-version checks passed.');
