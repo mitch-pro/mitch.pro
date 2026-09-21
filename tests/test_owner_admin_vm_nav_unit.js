@@ -29,7 +29,8 @@ for (const label of ['Home', 'VM Lab', 'Chat', 'Games', 'Blooket Bot', 'People',
 }
 assert.match(shell, /unified-masthead/, 'home and interior mastheads must share one class');
 assert.match(shellCss, /Shared homepage masthead across every mitch\.pro page/, 'shared masthead styling must be global');
-assert.match(tester, /tester-workbench\.css\?v=1/, 'tester page must load its custom workbench design');
-assert.match(testerCss, /INTERNAL \/ BREAK THINGS CAREFULLY/, 'tester workbench must have bespoke visual copy');
+assert.match(tester, /tester-workbench\.css\?v=2/, 'tester page must load its custom design');
+assert.match(testerCss, /home-burning-cherry\.webp/, 'tester colors must be designed around its actual background');
+assert.doesNotMatch(testerCss, /BREAK THINGS|deliberately|imperfect/i, 'tester design must not include gimmicky generated comments');
 
 console.log('Owner admin controls, owner VM access, shared navigation, and tester redesign checks passed.');
