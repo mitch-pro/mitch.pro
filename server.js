@@ -261,6 +261,7 @@ const MATRIX_ROOM_SETTINGS_FILE  = join(DATA_DIR, 'matrix_room_settings.json');
 const ADMIN_ACTION_LOG_FILE   = join(DATA_DIR, 'admin_actions.json');
 const MODERATORS_FILE        = join(DATA_DIR, 'moderators.json');
 const TESTERS_FILE           = join(DATA_DIR, 'testers.json');
+const TESTER_OVERRIDES_FILE = join(DATA_DIR, 'tester_overrides.json');
 const MODERATOR_PANEL_FILE   = join(DATA_DIR, 'moderator_panel.json');
 const MODERATOR_REQUESTS_FILE = join(DATA_DIR, 'moderator_requests.json');
 const GENERATIONS_FILE       = join(DATA_DIR, 'generations.json');
@@ -3151,10 +3152,32 @@ function loadCoins() {
   return coinsCache;
 }
 function saveCoins(c) { coinsCache = c; saveJson(COINS_FILE, c); }
-function getCoins(email) { if (!email) return 0; return loadCoins()[normalizeEmail(email)] || 0; }
+function getCoins(email) {
+  if (!email) return 0;
+  const norm = normalizeEmail(email);
+  if (isTesterEmail(norm)) {
+    const overrides = loadTesterOverrides()[norm] || {};
+    if (overrides.unlimitedCoins === false && typeof overrides.customCoins === 'number') {
+      return Math.max(0, overrides.customCoins);
+    }
+    return 999999999;
+  }
+  return loadCoins()[norm] || 0;
+}
 function addCoins(email, amount, reason = '') {
   if (!email) return;
   const norm = normalizeEmail(email);
+  if (isTesterEmail(norm)) {
+    const overrides = loadTesterOverrides();
+    const userCfg = overrides[norm] || {};
+    if (userCfg.unlimitedCoins === false && typeof userCfg.customCoins === 'number') {
+      userCfg.customCoins = Math.max(0, Number((userCfg.customCoins + amount).toFixed(4)));
+      overrides[norm] = userCfg;
+      saveTesterOverrides(overrides);
+    }
+    // Testers with unlimited coins retain their unlimited coin balance
+    return;
+  }
   const coins = loadCoins();
   const stats = loadUserStats();
   const personalHH = (stats[norm]?.personal_happy_hour_until || 0) > Date.now();
@@ -6380,9 +6403,16 @@ function userE2eAttachmentUsage(userEmail, idx) {
 
 function isPremiumEmail(email) {
   if (!email) return false;
+  const norm = normalizeEmail(email);
+  if (isTesterEmail(norm)) {
+    const overrides = loadTesterOverrides();
+    if (overrides[norm]?.premium !== undefined) {
+      return overrides[norm].premium === true;
+    }
+    return true;
+  }
   if (isAdminEmail(email) || isModeratorEmail(email)) return true;
   try {
-    const norm = normalizeEmail(email);
     return applications.some(a =>
       normalizeEmail(a.email || '') === norm &&
       a.status === 'approved' &&
@@ -6501,6 +6531,38 @@ function isTesterId(sid) {
   if (!sid) return false;
   const email = emailFromSid(sid);
   return email ? isTesterEmail(email) : false;
+}
+
+let testerOverridesCache = null;
+function loadTesterOverrides() {
+  if (!testerOverridesCache) {
+    testerOverridesCache = loadJson(TESTER_OVERRIDES_FILE, {});
+  }
+  return testerOverridesCache || {};
+}
+
+function saveTesterOverrides(data) {
+  testerOverridesCache = data;
+  saveJson(TESTER_OVERRIDES_FILE, data);
+}
+
+function isTesterBypassingCooldowns(email) {
+  if (!email) return false;
+  const norm = normalizeEmail(email);
+  if (!isTesterEmail(norm)) return false;
+  return loadTesterOverrides()[norm]?.bypassCooldowns === true;
+}
+
+function isTesterUnlockingCosmetics(email) {
+  if (!email) return false;
+  const norm = normalizeEmail(email);
+  if (!isTesterEmail(norm)) return false;
+  return loadTesterOverrides()[norm]?.unlockAllCosmetics === true;
+}
+
+function canAccessTesterTools(sid) {
+  if (!sid) return false;
+  return isTesterId(sid) || isAnyAdminId(sid);
 }
 
 function blogContributorEmails() {
@@ -7523,6 +7585,17 @@ function buildInventory(email) {
   const daily = dailyLogins[norm] || {};
   const userCosm = sanitizeCosmeticsForEmail(email, cosm[norm] || {});
   const ai = Array.isArray(unlockedAi[norm]) ? [...new Set(unlockedAi[norm].filter(Boolean))] : [];
+  const unlockAll = isTesterUnlockingCosmetics(email);
+
+  if (unlockAll) {
+    userCosm.colors = [...new Set([...(userCosm.colors || []), ...SHOP_CATALOG.filter(i => i.costType === 'name_color').map(i => i.id)])];
+    userCosm.badges = [...new Set([...(userCosm.badges || []), ...SHOP_CATALOG.filter(i => i.costType === 'chat_badge' || i.costType === 'badge').map(i => i.id)])];
+    userCosm.chatEffects = [...new Set([...(userCosm.chatEffects || []), ...SHOP_CATALOG.filter(i => i.costType === 'chat_effect').map(i => i.id)])];
+    userCosm.profileEffects = [...new Set([...(userCosm.profileEffects || []), ...SHOP_CATALOG.filter(i => i.costType === 'profile_effect').map(i => i.id)])];
+    userCosm.themes = [...new Set([...(userCosm.themes || []), ...SHOP_CATALOG.filter(i => i.costType === 'theme').map(i => i.id)])];
+    userCosm.tools = [...new Set([...(userCosm.tools || []), ...SHOP_CATALOG.filter(i => i.costType === 'tool').map(i => i.id)])];
+  }
+
   const itemIds = new Set([
     ...(userCosm.colors || []),
     ...(userCosm.badges || []),
@@ -7530,7 +7603,8 @@ function buildInventory(email) {
     ...(userCosm.profileEffects || []),
     ...(userCosm.themes || []),
     ...(userCosm.tools || []),
-    ...ai
+    ...ai,
+    ...(unlockAll ? SHOP_CATALOG.map(i => i.id) : [])
   ]);
   const itemDetails = Array.from(itemIds).map(id => {
     const item = shopItemById(id) || { id, name: id.replace(/[_-]/g, ' '), section: 'Removed Items', type: 'cosmetic', costType: 'unknown', desc: 'This item is no longer listed in the shop.' };
@@ -12726,8 +12800,7 @@ async function handleRequest(req, server) {
         const nextItemId = String(itemId || '');
         const item = nextItemId ? shopItemById(nextItemId) : null;
         if (nextItemId && (!item || item.costType !== equipType)) return jsonResp(400, { error: 'invalid item' });
-        if (nextItemId && item.adminOnly && !isAdminEmail(email)) return jsonResp(403, { error: 'Admins and owners only.' });
-        if (nextItemId && !isAdminEmail(email) && !userCosm[cfg.bucket].includes(nextItemId)) {
+        if (nextItemId && !isAdminEmail(email) && !isTesterUnlockingCosmetics(email) && !userCosm[cfg.bucket].includes(nextItemId)) {
           return jsonResp(403, { error: 'You do not own this item' });
         }
         userCosm[cfg.active] = nextItemId;
@@ -12737,7 +12810,7 @@ async function handleRequest(req, server) {
         const unlocked = loadJson(UNLOCKED_AI_FILE, {});
         const mine = Array.isArray(unlocked[norm]) ? unlocked[norm] : [];
         if (nextItemId && (!item || item.costType !== 'ai_personality')) return jsonResp(400, { error: 'invalid item' });
-        if (nextItemId && !isAdminEmail(email) && !mine.includes(nextItemId)) {
+        if (nextItemId && !isAdminEmail(email) && !isTesterUnlockingCosmetics(email) && !mine.includes(nextItemId)) {
           return jsonResp(403, { error: 'You do not own this personality' });
         }
         userCosm.activeAi = nextItemId;
@@ -13248,6 +13321,161 @@ async function handleRequest(req, server) {
       const sid = cookies['studentId'] || cookies['id'] || '';
       if (!isAnyAdminId(sid)) return jsonResp(403, { error: 'forbidden' });
       return jsonResp(200, { testers: testerEmails() });
+    }
+
+    // ── Tester Endpoints ──────────────────────────────────────────
+    // GET /api/tester/status
+    if (path === '/api/tester/status' && method === 'GET') {
+      const cookies = getCookies(req);
+      const sid = cookies['studentId'] || cookies['id'] || '';
+      if (!sid || !validId(sid) || isRevoked(sid)) return jsonResp(401, { error: 'auth required' });
+      const email = emailFromSid(sid);
+      if (!email) return jsonResp(401, { error: 'email not found' });
+      const norm = normalizeEmail(email);
+      if (!isTesterEmail(norm) && !isAnyAdminId(sid)) return jsonResp(403, { error: 'Tester role required' });
+      const overrides = loadTesterOverrides()[norm] || {};
+      const isUnlimited = overrides.unlimitedCoins !== false && overrides.customCoins == null;
+      return jsonResp(200, {
+        ok: true,
+        email: norm,
+        isTester: true,
+        isPremium: isPremiumEmail(email),
+        coins: getCoins(email),
+        unlimitedCoins: isUnlimited,
+        settings: {
+          premium: overrides.premium !== undefined ? overrides.premium : true,
+          unlimitedCoins: isUnlimited,
+          customCoins: overrides.customCoins != null ? overrides.customCoins : null,
+          unlockAllCosmetics: overrides.unlockAllCosmetics === true,
+          bypassCooldowns: overrides.bypassCooldowns === true
+        }
+      });
+    }
+
+    // POST /api/tester/toggle-premium
+    if (path === '/api/tester/toggle-premium' && method === 'POST') {
+      const cookies = getCookies(req);
+      const sid = cookies['studentId'] || cookies['id'] || '';
+      if (!sid || !validId(sid) || isRevoked(sid)) return jsonResp(401, { error: 'auth required' });
+      const email = emailFromSid(sid);
+      if (!email) return jsonResp(401, { error: 'email not found' });
+      const norm = normalizeEmail(email);
+      if (!isTesterEmail(norm) && !isAnyAdminId(sid)) return jsonResp(403, { error: 'Tester role required' });
+      await tryParseJson();
+      const overrides = loadTesterOverrides();
+      const current = overrides[norm] || {};
+      const nextVal = typeof body?.premium === 'boolean' ? body.premium : (current.premium === undefined ? false : !current.premium);
+      current.premium = nextVal;
+      overrides[norm] = current;
+      saveTesterOverrides(overrides);
+      return jsonResp(200, {
+        ok: true,
+        premium: nextVal,
+        isPremium: isPremiumEmail(email),
+        message: nextVal ? 'Premium mode enabled for tester' : 'Premium mode disabled for tester'
+      });
+    }
+
+    // POST /api/tester/coins
+    if (path === '/api/tester/coins' && method === 'POST') {
+      const cookies = getCookies(req);
+      const sid = cookies['studentId'] || cookies['id'] || '';
+      if (!sid || !validId(sid) || isRevoked(sid)) return jsonResp(401, { error: 'auth required' });
+      const email = emailFromSid(sid);
+      if (!email) return jsonResp(401, { error: 'email not found' });
+      const norm = normalizeEmail(email);
+      if (!isTesterEmail(norm) && !isAnyAdminId(sid)) return jsonResp(403, { error: 'Tester role required' });
+      if (!await tryParseJson()) return jsonResp(400, { error: 'bad json' });
+      const overrides = loadTesterOverrides();
+      const current = overrides[norm] || {};
+      if (body.mode === 'unlimited') {
+        current.unlimitedCoins = true;
+        delete current.customCoins;
+      } else if (body.mode === 'custom') {
+        current.unlimitedCoins = false;
+        current.customCoins = Math.max(0, Number(body.amount) || 0);
+      }
+      overrides[norm] = current;
+      saveTesterOverrides(overrides);
+      return jsonResp(200, {
+        ok: true,
+        coins: getCoins(email),
+        unlimitedCoins: current.unlimitedCoins !== false && current.customCoins == null,
+        message: 'Tester coin balance updated'
+      });
+    }
+
+    // POST /api/tester/settings
+    if (path === '/api/tester/settings' && method === 'POST') {
+      const cookies = getCookies(req);
+      const sid = cookies['studentId'] || cookies['id'] || '';
+      if (!sid || !validId(sid) || isRevoked(sid)) return jsonResp(401, { error: 'auth required' });
+      const email = emailFromSid(sid);
+      if (!email) return jsonResp(401, { error: 'email not found' });
+      const norm = normalizeEmail(email);
+      if (!isTesterEmail(norm) && !isAnyAdminId(sid)) return jsonResp(403, { error: 'Tester role required' });
+      if (!await tryParseJson()) return jsonResp(400, { error: 'bad json' });
+      const overrides = loadTesterOverrides();
+      const current = overrides[norm] || {};
+      if (typeof body.premium === 'boolean') current.premium = body.premium;
+      if (typeof body.unlockAllCosmetics === 'boolean') current.unlockAllCosmetics = body.unlockAllCosmetics;
+      if (typeof body.bypassCooldowns === 'boolean') current.bypassCooldowns = body.bypassCooldowns;
+      if (body.mode === 'unlimited') {
+        current.unlimitedCoins = true;
+        delete current.customCoins;
+      } else if (body.mode === 'custom') {
+        current.unlimitedCoins = false;
+        current.customCoins = Math.max(0, Number(body.amount) || 0);
+      }
+      overrides[norm] = current;
+      saveTesterOverrides(overrides);
+      return jsonResp(200, {
+        ok: true,
+        settings: current,
+        coins: getCoins(email),
+        isPremium: isPremiumEmail(email)
+      });
+    }
+
+    // POST /api/tester/reset-cooldowns
+    if (path === '/api/tester/reset-cooldowns' && method === 'POST') {
+      const cookies = getCookies(req);
+      const sid = cookies['studentId'] || cookies['id'] || '';
+      if (!sid || !validId(sid) || isRevoked(sid)) return jsonResp(401, { error: 'auth required' });
+      const email = emailFromSid(sid);
+      if (!email) return jsonResp(401, { error: 'email not found' });
+      const norm = normalizeEmail(email);
+      if (!isTesterEmail(norm) && !isAnyAdminId(sid)) return jsonResp(403, { error: 'Tester role required' });
+      
+      delete dailyLogins[norm];
+      saveJson(DAILY_LOGINS_FILE, dailyLogins);
+
+      const stats = loadUserStats();
+      if (stats[norm]) {
+        stats[norm].game_portal_reward_today = 0;
+        stats[norm].game_portal_reward_day = '';
+        saveUserStats(stats);
+      }
+
+      for (const [k] of lastLoggedPing) {
+        if (k.includes(norm)) lastLoggedPing.delete(k);
+      }
+      return jsonResp(200, { ok: true, message: 'All daily cooldowns and game reward caps reset!' });
+    }
+
+    // POST /api/tester/test-notification
+    if (path === '/api/tester/test-notification' && method === 'POST') {
+      const cookies = getCookies(req);
+      const sid = cookies['studentId'] || cookies['id'] || '';
+      if (!sid || !validId(sid) || isRevoked(sid)) return jsonResp(401, { error: 'auth required' });
+      const email = emailFromSid(sid);
+      if (!email) return jsonResp(401, { error: 'email not found' });
+      const norm = normalizeEmail(email);
+      if (!isTesterEmail(norm) && !isAnyAdminId(sid)) return jsonResp(403, { error: 'Tester role required' });
+      await tryParseJson();
+      const msg = String(body?.message || '🧪 Test notification dispatched to tester device. All systems nominal!').slice(0, 200);
+      sendUserNotification(email, msg);
+      return jsonResp(200, { ok: true, message: 'Notification sent' });
     }
 
     if (path === '/api/admin/moderator-panel' && method === 'GET') {
@@ -18478,7 +18706,7 @@ async function handleRequest(req, server) {
       const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const yesterdayStr = yesterday.toISOString().split('T')[0];
 
-      if (data.lastClaimDate === todayStr) {
+      if (data.lastClaimDate === todayStr && !isTesterBypassingCooldowns(email)) {
         return jsonResp(400, { error: 'Already claimed today' });
       }
 
@@ -20844,6 +21072,8 @@ async function handleRequest(req, server) {
         isAdmin: isAdminEmail(email),
         isModerator: isModeratorEmail(email),
         isTester: isTesterEmail(email),
+        unlimitedCoins: isTesterEmail(email) && (loadTesterOverrides()[norm]?.unlimitedCoins !== false && loadTesterOverrides()[norm]?.customCoins == null),
+        coins: getCoins(email),
         stats: loadUserStats()[norm] || {},
         achievements: getAchievements(email),
         totalAchievementsCount: Object.keys(ACHIEVEMENT_DEFINITIONS).length,
@@ -20891,6 +21121,8 @@ async function handleRequest(req, server) {
         isAdmin: isAdminEmail(actualEmail),
         isModerator: isModeratorEmail(actualEmail),
         isTester: isTesterEmail(actualEmail),
+        unlimitedCoins: isTesterEmail(actualEmail) && (loadTesterOverrides()[norm]?.unlimitedCoins !== false && loadTesterOverrides()[norm]?.customCoins == null),
+        coins: getCoins(actualEmail),
         stats: loadUserStats()[norm] || {},
         achievements: getAchievements(actualEmail),
         totalAchievementsCount: Object.keys(ACHIEVEMENT_DEFINITIONS).length,
@@ -25292,11 +25524,17 @@ async function handleRequest(req, server) {
       if (!validId(sid)) return jsonResp(200, { authenticated: false, coins: null });
       const email = emailFromSid(sid);
       if (!email) return jsonResp(200, { authenticated: false, coins: null });
+      const norm = normalizeEmail(email);
+      const isTester = isTesterEmail(norm);
+      const overrides = isTester ? loadTesterOverrides()[norm] || {} : {};
+      const isUnlimited = isTester && overrides.unlimitedCoins !== false && overrides.customCoins == null;
       return jsonResp(200, {
         authenticated: true,
         coins: getCoins(email),
+        unlimitedCoins: isUnlimited,
+        isTester,
         achievements: getAchievements(email),
-        stats: loadUserStats()[normalizeEmail(email)] || {}
+        stats: loadUserStats()[norm] || {}
       });
     }
 
@@ -25305,45 +25543,54 @@ async function handleRequest(req, server) {
       const cookies = getCookies(req);
       const viewerEmail = emailFromSid(cookies['studentId'] || cookies['id'] || '');
       const viewerNorm = viewerEmail ? normalizeEmail(viewerEmail) : '';
+      const viewerIsTester = viewerNorm ? isTesterEmail(viewerNorm) : false;
       const coinsMap = loadCoins();
       const statsMap = loadUserStats();
       const profiles = loadJson(PROFILES_FILE, {});
       const cosmetics = loadJson(COSMETICS_FILE, {});
       const emails = new Set([...Object.keys(profiles), ...Object.keys(coinsMap)]);
-      if (viewerNorm) emails.add(viewerNorm);
+      if (viewerNorm && !viewerIsTester) emails.add(viewerNorm);
       
-      const leaderboard = Array.from(emails).map((email) => {
-        const norm = normalizeEmail(email);
-        const profile = profiles[norm] || {};
-        const cosm = cosmetics[norm] || {};
-        return {
-          _norm: norm,
-          name: profile.nickname || profile.displayName || profile.username || defaultUsernameForEmail(norm),
-          coins: Number(coinsMap[norm] || 0),
-          wins: statsMap[norm]?.chess_wins || 0,
-          puzzles: statsMap[norm]?.puzzles_solved || 0,
-          pixels: statsMap[norm]?.pixels || 0,
-          clicker_pts: statsMap[norm]?.clicker_points || 0,
-          clicker_coins: statsMap[norm]?.clicker_coins || 0,
-          typing_races: statsMap[norm]?.typing_races || 0,
-          typing_coins: statsMap[norm]?.typing_coins || 0,
-          logic_puzzles: statsMap[norm]?.logic_puzzles || 0,
-          logic_coins: statsMap[norm]?.logic_coins || 0,
-          email: profile.username || getUidForEmail(norm),
-          color: publicActiveColor(email, cosm.activeColor),
-          badge: cosm.activeBadge || null
-        };
+      const leaderboard = Array.from(emails)
+        .filter(email => !isTesterEmail(email)) // Testers NEVER appear on the leaderboard!
+        .map((email) => {
+          const norm = normalizeEmail(email);
+          const profile = profiles[norm] || {};
+          const cosm = cosmetics[norm] || {};
+          return {
+            _norm: norm,
+            name: profile.nickname || profile.displayName || profile.username || defaultUsernameForEmail(norm),
+            coins: Number(coinsMap[norm] || 0),
+            wins: statsMap[norm]?.chess_wins || 0,
+            puzzles: statsMap[norm]?.puzzles_solved || 0,
+            pixels: statsMap[norm]?.pixels || 0,
+            clicker_pts: statsMap[norm]?.clicker_points || 0,
+            clicker_coins: statsMap[norm]?.clicker_coins || 0,
+            typing_races: statsMap[norm]?.typing_races || 0,
+            typing_coins: statsMap[norm]?.typing_coins || 0,
+            logic_puzzles: statsMap[norm]?.logic_puzzles || 0,
+            logic_coins: statsMap[norm]?.logic_coins || 0,
+            email: profile.username || getUidForEmail(norm),
+            color: publicActiveColor(email, cosm.activeColor),
+            badge: cosm.activeBadge || null
+          };
 
-      });
+        });
       
       leaderboard.sort((a, b) => (b.coins - a.coins) || a.name.localeCompare(b.name));
       leaderboard.forEach((entry, index) => { entry.rank = index + 1; });
-      const viewerRow = viewerNorm ? leaderboard.find(entry => entry._norm === viewerNorm) : null;
+      const viewerRow = (viewerNorm && !viewerIsTester) ? leaderboard.find(entry => entry._norm === viewerNorm) : null;
       if (viewerRow) viewerRow.isMe = true;
       const top = leaderboard.slice(0, 10);
       for (const entry of leaderboard) delete entry._norm;
       const me = viewerRow && viewerRow.rank > 10 ? viewerRow : null;
-      return jsonResp(200, { top, me, players: leaderboard.slice(0, 100), total: leaderboard.length });
+      return jsonResp(200, {
+        top,
+        me,
+        players: leaderboard.slice(0, 100),
+        total: leaderboard.length,
+        isTester: viewerIsTester
+      });
     }
 
     if (path === '/api/canvas/heatmap') {

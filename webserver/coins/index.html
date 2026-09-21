@@ -39,9 +39,10 @@
       <div><h1>MitchCoins</h1><p>Earn them around mitch.pro and use them for games, cosmetics, and perks.</p></div>
       <div class="coin-bank"><img src="/mitchcoin.png" alt=""><div><span>Your balance</span><strong id="coinBalance">—</strong></div></div>
     </header>
-    <nav class="coin-actions" aria-label="MitchCoin actions">
+    <nav class="coin-actions" id="coinActions" aria-label="MitchCoin actions">
       <a class="coin-action primary" href="/#daily-login-widget"><span>Claim daily reward</span><span aria-hidden="true">→</span></a>
       <a class="coin-action" href="/shop/"><span>Open shop</span><span aria-hidden="true">→</span></a>
+      <a class="coin-action" id="testerAction" href="/tester/" style="display:none;border-color:rgba(168,85,247,0.45);background:rgba(168,85,247,0.12);color:#d8b4fe;"><span>🧪 Tester Hub</span><span aria-hidden="true">→</span></a>
     </nav>
     <div class="earn-title"><h2>Earn more</h2><span>Rewards save to your account</span></div>
     <section class="earn-grid">
@@ -59,7 +60,19 @@
     <p class="coin-note">MitchCoins are virtual and have no cash value.</p>
   </main>
   <script>
-    fetch('/api/me/coins',{credentials:'include',cache:'no-store'}).then(function(r){return r.ok?r.json():Promise.reject()}).then(function(d){document.getElementById('coinBalance').textContent=d.authenticated===false?'Sign in':Number(d.coins||0).toLocaleString(undefined,{maximumFractionDigits:2})}).catch(function(){document.getElementById('coinBalance').textContent='Unavailable'});
+    fetch('/api/me/coins',{credentials:'include',cache:'no-store'}).then(function(r){return r.ok?r.json():Promise.reject()}).then(function(d){
+      if(d.unlimitedCoins){
+        document.getElementById('coinBalance').textContent='∞ Unlimited';
+      }else{
+        document.getElementById('coinBalance').textContent=d.authenticated===false?'Sign in':Number(d.coins||0).toLocaleString(undefined,{maximumFractionDigits:2});
+      }
+      if(d.isTester){
+        var ta=document.getElementById('testerAction');
+        if(ta) ta.style.display='flex';
+        var actions=document.getElementById('coinActions');
+        if(actions) actions.style.gridTemplateColumns='repeat(auto-fit, minmax(180px, 1fr))';
+      }
+    }).catch(function(){document.getElementById('coinBalance').textContent='Unavailable'});
   </script>
 </body>
 </html>

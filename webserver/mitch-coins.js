@@ -13,6 +13,15 @@
   function render() {
     for (const widget of widgets) {
       const amount = widget.querySelector('.mitch-wallet-value');
+      if (balance === Infinity) {
+        amount.textContent = '∞';
+        widget.dataset.state = status;
+        widget.href = '/coins/';
+        widget.title = 'Unlimited MitchCoins (Beta Tester) · Open wallet';
+        widget.setAttribute('aria-label', widget.title);
+        widget.setAttribute('aria-busy', 'false');
+        continue;
+      }
       const exact = balance === null ? null : fullFormat.format(balance);
       amount.textContent = exact === null ? (status === 'guest' ? 'Sign in' : '—') : (balance >= 10000 ? compactFormat.format(balance) : exact);
       widget.dataset.state = status;
@@ -23,6 +32,20 @@
     }
   }
 
+  function mountTesterPills() {
+    for (const widget of widgets) {
+      const parent = widget.parentElement;
+      if (!parent || parent.querySelector('.mitch-tester-pill')) continue;
+      const pill = document.createElement('a');
+      pill.className = 'mitch-tester-pill';
+      pill.href = '/tester/';
+      pill.title = 'Beta Tester Hub';
+      pill.innerHTML = '🧪 <span class="tester-pill-text">Tester</span>';
+      if (widget.nextSibling) parent.insertBefore(pill, widget.nextSibling);
+      else parent.appendChild(pill);
+    }
+  }
+
   function accept(data) {
     if (data?.authenticated === false) {
       balance = null;
@@ -30,10 +53,18 @@
       render();
       return true;
     }
+    if (data?.unlimitedCoins) {
+      balance = Infinity;
+      status = 'ready';
+      render();
+      if (data?.isTester) mountTesterPills();
+      return true;
+    }
     if (!data || !['number', 'string'].includes(typeof data.coins) || String(data.coins).trim() === '' || !Number.isFinite(Number(data.coins))) return false;
     balance = Math.max(0, Number(data.coins));
     status = 'ready';
     render();
+    if (data?.isTester) mountTesterPills();
     return true;
   }
 

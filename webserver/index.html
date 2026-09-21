@@ -1155,6 +1155,14 @@ function escText(t) {
         window.location.href = '/moderator/';
       };
     }
+    var testerWrap = document.getElementById('tester-action-wrap');
+    if (testerWrap && (me.isTester || me.isAdmin || me.isOwner || me.isCoOwner)) {
+      document.body.classList.add('is-staff');
+      testerWrap.style.display = 'block';
+      document.getElementById('tester-action-btn').onclick = function() {
+        window.location.href = '/tester/';
+      };
+    }
     var ownerWrap = document.getElementById('owner-action-wrap');
     if (ownerWrap && (me.isOwner || me.isCoOwner)) {
       document.body.classList.add('is-staff');
@@ -3400,6 +3408,9 @@ if (document.readyState === 'loading') {
   </div>
   <div id="moderator-action-wrap">
     <a id="moderator-action-btn" class="staff-access-button staff-moderator" href="/moderator/" title="Moderator tools"><span aria-hidden="true">&#10003;</span><span class="staff-access-copy"><b>Moderator tools</b><small>Safety workspace</small></span></a>
+  </div>
+  <div id="tester-action-wrap" style="display:none">
+    <a id="tester-action-btn" class="staff-access-button staff-tester" href="/tester/" title="Tester tools"><span aria-hidden="true">🧪</span><span class="staff-tester-copy"><b>Tester hub</b><small>QA &amp; sandbox</small></span></a>
   </div>
 </nav>
 

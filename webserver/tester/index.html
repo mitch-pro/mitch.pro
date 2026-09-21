@@ -1,0 +1,845 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Beta Tester Hub — mitch.pro</title>
+  <script src="/theme.js?v=11"></script>
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/staff-galaxy.css?v=4">
+  <script src="/api.js"></script>
+  <script src="/app-shell.js" defer></script>
+  <style>
+    :root {
+      --tester-ac: #a855f7;
+      --tester-ac-glow: rgba(168, 85, 247, 0.25);
+      --tester-bg-card: rgba(18, 14, 34, 0.78);
+      --tester-border: rgba(168, 85, 247, 0.28);
+    }
+    body.tester-page {
+      min-height: 100vh;
+      color: var(--staff-text, #f8f5ff);
+      background-color: #080414;
+      --t-bgr:
+        linear-gradient(180deg, rgba(6, 3, 16, 0.6), rgba(10, 5, 24, 0.9)),
+        radial-gradient(circle at 18% 12%, rgba(168, 85, 247, 0.22), transparent 32rem),
+        radial-gradient(circle at 82% 20%, rgba(236, 72, 153, 0.16), transparent 30rem),
+        url('/home-burning-cherry.webp') center / cover no-repeat;
+      font-family: 'Plus Jakarta Sans', Inter, system-ui, sans-serif;
+    }
+    html.theme-light body.tester-page {
+      --t-bgr: linear-gradient(160deg, #faf5ff, #f3e8ff);
+      color: #1e1035;
+      --tester-bg-card: rgba(255, 255, 255, 0.85);
+      --tester-border: rgba(168, 85, 247, 0.2);
+    }
+    .tester-shell {
+      width: min(1080px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 24px 0 64px;
+    }
+    .tester-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 22px;
+      padding: 14px 18px;
+      border: 1px solid var(--tester-border);
+      border-radius: 20px;
+      background: var(--tester-bg-card);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.24);
+    }
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border: 1px solid var(--tester-border);
+      border-radius: 12px;
+      background: rgba(168, 85, 247, 0.12);
+      color: #e9d5ff;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 0.84rem;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .back-btn:hover {
+      background: rgba(168, 85, 247, 0.25);
+      color: #fff;
+    }
+    .brand-group {
+      display: flex;
+      flex-direction: column;
+    }
+    .brand-eyebrow {
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #c084fc;
+    }
+    .brand-title {
+      margin: 2px 0 0;
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+    }
+    .tester-pill-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 13px;
+      border: 1px solid rgba(168, 85, 247, 0.45);
+      border-radius: 999px;
+      background: rgba(168, 85, 247, 0.18);
+      color: #d8b4fe;
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+    }
+    .tester-pill-badge i {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #c084fc;
+      box-shadow: 0 0 8px #c084fc;
+    }
+    .hero-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 24px;
+      padding: 24px 28px;
+      border: 1px solid var(--tester-border);
+      border-radius: 20px;
+      background: linear-gradient(135deg, rgba(168, 85, 247, 0.14), rgba(236, 72, 153, 0.08)), var(--tester-bg-card);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
+    }
+    .hero-copy h1 {
+      margin: 0;
+      font-size: clamp(1.4rem, 3.2vw, 2.1rem);
+      font-weight: 800;
+      line-height: 1.2;
+    }
+    .hero-copy p {
+      margin: 8px 0 0;
+      max-width: 680px;
+      color: #c4b5fd;
+      font-size: 0.94rem;
+      line-height: 1.5;
+    }
+    .hero-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .stat-chip {
+      padding: 14px 16px;
+      border: 1px solid var(--tester-border);
+      border-radius: 16px;
+      background: var(--tester-bg-card);
+      backdrop-filter: blur(8px);
+    }
+    .stat-chip small {
+      display: block;
+      color: #a78bfa;
+      font-size: 0.7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .stat-chip b {
+      display: block;
+      margin-top: 4px;
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #fff;
+    }
+    .stat-chip b.accent {
+      color: #c084fc;
+    }
+    .grid-2col {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+    .qa-card {
+      padding: 22px;
+      border: 1px solid var(--tester-border);
+      border-radius: 18px;
+      background: var(--tester-bg-card);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+    }
+    .qa-card h2 {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0;
+      font-size: 1.15rem;
+      font-weight: 800;
+    }
+    .qa-card-desc {
+      margin: 6px 0 16px;
+      color: #c4b5fd;
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 40px;
+      padding: 8px 16px;
+      border: 1px solid var(--tester-border);
+      border-radius: 12px;
+      background: rgba(168, 85, 247, 0.16);
+      color: #f3e8ff;
+      font-weight: 700;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, transform 0.12s;
+    }
+    .btn:hover:not(:disabled) {
+      background: rgba(168, 85, 247, 0.32);
+      border-color: #c084fc;
+      transform: translateY(-1px);
+    }
+    .btn.primary {
+      background: #9333ea;
+      border-color: #a855f7;
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(147, 51, 234, 0.35);
+    }
+    .btn.primary:hover:not(:disabled) {
+      background: #a855f7;
+    }
+    .btn.subtle {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.12);
+      color: #ddd;
+    }
+    .btn.subtle:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .input-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .input-row input {
+      flex: 1;
+      min-width: 0;
+      min-height: 40px;
+      padding: 0 14px;
+      border: 1px solid var(--tester-border);
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.35);
+      color: #fff;
+      font-size: 0.9rem;
+      outline: none;
+    }
+    .input-row input:focus {
+      border-color: #c084fc;
+      box-shadow: 0 0 0 2px rgba(192, 132, 252, 0.25);
+    }
+    .toggle-switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 12px 14px;
+      border: 1px solid var(--tester-border);
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.22);
+      margin-bottom: 10px;
+    }
+    .toggle-copy strong {
+      display: block;
+      font-size: 0.88rem;
+    }
+    .toggle-copy small {
+      display: block;
+      color: #a78bfa;
+      font-size: 0.74rem;
+      margin-top: 2px;
+    }
+    .toggle-btn {
+      position: relative;
+      width: 50px;
+      height: 28px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.15);
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      transition: background 0.2s;
+    }
+    .toggle-btn.active {
+      background: #9333ea;
+    }
+    .toggle-knob {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+      transition: transform 0.2s;
+    }
+    .toggle-btn.active .toggle-knob {
+      transform: translateX(22px);
+    }
+    .toast-box {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      max-width: 420px;
+      padding: 12px 18px;
+      border: 1px solid #a855f7;
+      border-radius: 14px;
+      background: rgba(20, 12, 38, 0.95);
+      color: #fff;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+      transform: translateY(120%);
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      font-size: 0.88rem;
+    }
+    .toast-box.show {
+      transform: translateY(0);
+    }
+    .links-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .qa-link-card {
+      display: flex;
+      flex-direction: column;
+      padding: 14px 16px;
+      border: 1px solid var(--tester-border);
+      border-radius: 14px;
+      background: var(--tester-bg-card);
+      color: #fff;
+      text-decoration: none;
+      transition: transform 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .qa-link-card:hover {
+      transform: translateY(-2px);
+      border-color: #c084fc;
+      background: rgba(168, 85, 247, 0.16);
+    }
+    .qa-link-icon {
+      font-size: 1.4rem;
+      margin-bottom: 6px;
+    }
+    .qa-link-card b {
+      font-size: 0.92rem;
+    }
+    .qa-link-card small {
+      color: #c4b5fd;
+      font-size: 0.74rem;
+      margin-top: 3px;
+    }
+    .unauthorized-banner {
+      padding: 44px 24px;
+      text-align: center;
+      border: 1px solid var(--tester-border);
+      border-radius: 20px;
+      background: var(--tester-bg-card);
+    }
+    .unauthorized-banner h2 {
+      margin: 0 0 10px;
+      font-size: 1.6rem;
+    }
+    .unauthorized-banner p {
+      color: #c4b5fd;
+      margin: 0 auto 20px;
+      max-width: 480px;
+      font-size: 0.95rem;
+    }
+    @media (max-width: 860px) {
+      .hero-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-2col { grid-template-columns: 1fr; }
+      .links-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 540px) {
+      .hero-banner { flex-direction: column; align-items: flex-start; }
+      .links-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body class="tester-page">
+  <main class="tester-shell">
+    <header class="tester-topbar">
+      <div class="topbar-left">
+        <a class="back-btn" href="/">← Home</a>
+        <div class="brand-group">
+          <span class="brand-eyebrow">mitch.pro / QA environment</span>
+          <div class="brand-title">🧪 Beta Tester Hub</div>
+        </div>
+      </div>
+      <span class="tester-pill-badge"><i></i> Active Tester</span>
+    </header>
+
+    <div id="unauth-view" style="display:none;" class="unauthorized-banner">
+      <h2>🔒 Beta Tester Role Required</h2>
+      <p id="unauth-msg">Your account is not configured as a beta tester on mitch.pro. Contact an administrator to receive testing access.</p>
+      <a class="btn primary" href="/profile/">View Account</a>
+    </div>
+
+    <div id="tester-content" style="display:none;">
+      <section class="hero-banner">
+        <div class="hero-copy">
+          <h1 id="greeting-title">Welcome to the Sandbox</h1>
+          <p>You have full beta testing privileges. You enjoy unlimited MitchCoins by default and are completely excluded from public leaderboards. Use the controls below to configure your test profile.</p>
+        </div>
+        <div class="tester-pill-badge" id="account-pill-email" style="font-size:0.85rem;padding:8px 16px;">
+          tester@mitch.pro
+        </div>
+      </section>
+
+      <section class="hero-stats-grid">
+        <div class="stat-chip">
+          <small>Coin Balance</small>
+          <b id="stat-coins" class="accent">∞ Unlimited</b>
+        </div>
+        <div class="stat-chip">
+          <small>Premium Tier</small>
+          <b id="stat-premium">★ Active</b>
+        </div>
+        <div class="stat-chip">
+          <small>Cosmetics QA</small>
+          <b id="stat-cosmetics">Standard</b>
+        </div>
+        <div class="stat-chip">
+          <small>Daily Cooldowns</small>
+          <b id="stat-cooldowns">Normal</b>
+        </div>
+      </section>
+
+      <section class="grid-2col">
+        <!-- Card 1: Unlimited & Custom Coins -->
+        <article class="qa-card">
+          <h2><span>💰</span> MitchCoins Sandbox</h2>
+          <p class="qa-card-desc">Testers possess unlimited coins by default and are safely excluded from the public leaderboard. You can also simulate low or zero-balance accounts to test transaction validation.</p>
+          
+          <div style="font-size:0.88rem;color:#e9d5ff;margin-bottom:8px;">
+            Current Mode: <strong id="current-coin-mode" style="color:#c084fc;">Unlimited (∞)</strong>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn primary" id="btn-unlimited-coins" onclick="setCoinMode('unlimited')">∞ Set Unlimited</button>
+            <button class="btn subtle" onclick="setCustomCoins(0)">0 (Broke)</button>
+            <button class="btn subtle" onclick="setCustomCoins(50)">50 Coins</button>
+            <button class="btn subtle" onclick="setCustomCoins(1000)">1,000 Coins</button>
+          </div>
+
+          <div class="input-row">
+            <input type="number" id="custom-coins-amt" placeholder="Enter custom balance..." min="0" max="999999999">
+            <button class="btn" onclick="applyCustomInput()">Set Custom</button>
+          </div>
+        </article>
+
+        <!-- Card 2: Premium Tier Toggle -->
+        <article class="qa-card">
+          <h2><span>★</span> Premium Membership Toggle</h2>
+          <p class="qa-card-desc">Switch between Premium and Free tier on the fly to test tier-gated features, special badge displays, restricted themes, priority cloud VMs, and sales upgrade banners.</p>
+          
+          <div class="toggle-switch-row">
+            <div class="toggle-copy">
+              <strong>Premium Membership</strong>
+              <small id="premium-status-sub">Active — testing premium features</small>
+            </div>
+            <button type="button" class="toggle-btn active" id="toggle-premium-btn" aria-label="Toggle premium" onclick="togglePremium()">
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+
+          <p style="color:#9ca3af;font-size:0.76rem;margin:10px 0 0;">
+            Note: Toggling changes how <code style="color:#c084fc;">isPremiumEmail()</code> evaluates your account across the entire site without affecting your real purchase records.
+          </p>
+        </article>
+      </section>
+
+      <section class="grid-2col">
+        <!-- Card 3: Cosmetics & Catalog QA -->
+        <article class="qa-card">
+          <h2><span>🎨</span> Cosmetics &amp; Shop Testing</h2>
+          <p class="qa-card-desc">Instantly unlock the entire shop cosmetic catalog (colors, titles, badges, and themes) in your inventory so you can test equipping any cosmetic in preferences without buying.</p>
+          
+          <div class="toggle-switch-row">
+            <div class="toggle-copy">
+              <strong>Unlock All Catalog Cosmetics</strong>
+              <small id="cosmetics-status-sub">Temporarily bypass item ownership checks</small>
+            </div>
+            <button type="button" class="toggle-btn" id="toggle-cosmetics-btn" aria-label="Toggle cosmetic unlock" onclick="toggleCosmetics()">
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+
+          <div class="btn-row">
+            <a class="btn subtle" href="/preferences/" target="_blank">Open Preferences ↗</a>
+            <a class="btn subtle" href="/shop/" target="_blank">Open Shop ↗</a>
+          </div>
+        </article>
+
+        <!-- Card 4: Daily Limits & Cooldown Resets -->
+        <article class="qa-card">
+          <h2><span>⏱️</span> Cooldowns &amp; Daily Limits</h2>
+          <p class="qa-card-desc">Reset your daily login streak claim, game portal daily caps, and rate limits, or toggle cooldown bypass to claim daily rewards multiple times back-to-back.</p>
+          
+          <div class="toggle-switch-row">
+            <div class="toggle-copy">
+              <strong>Bypass Daily Claim Cooldown</strong>
+              <small id="cooldown-status-sub">Claim daily login streaks repeatedly without waiting 24h</small>
+            </div>
+            <button type="button" class="toggle-btn" id="toggle-cooldown-btn" aria-label="Toggle cooldown bypass" onclick="toggleCooldownBypass()">
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn primary" id="btn-reset-cooldowns" onclick="resetCooldowns()">🔄 Reset Daily Cooldowns Now</button>
+          </div>
+        </article>
+      </section>
+
+      <!-- Card 5: Realtime Notification QA -->
+      <section class="qa-card" style="margin-bottom:24px;">
+        <h2><span>🔔</span> Realtime Notification Dispatcher</h2>
+        <p class="qa-card-desc">Send a realtime toast notification to your account session. Test system alert audio, toast animations, and message delivery on both desktop and mobile devices.</p>
+        
+        <div class="input-row">
+          <input type="text" id="notif-input" value="🧪 Test notification dispatched to tester device. All systems nominal!" maxlength="200">
+          <button class="btn primary" id="btn-send-notif" onclick="sendTestNotification()">Dispatch Alert</button>
+        </div>
+      </section>
+
+      <!-- Card 6: Quick QA Surface Links -->
+      <section class="qa-card">
+        <h2><span>🚀</span> Quick Test Surfaces</h2>
+        <p class="qa-card-desc">Direct links to test key areas where your tester permissions, unlimited coins, and cosmetics can be validated.</p>
+        
+        <div class="links-grid">
+          <a class="qa-link-card" href="/casino/">
+            <span class="qa-link-icon">🎰</span>
+            <b>Casino Hub</b>
+            <small>Test slots, blackjack, roulette</small>
+          </a>
+          <a class="qa-link-card" href="/shop/">
+            <span class="qa-link-icon">🛍️</span>
+            <b>Cosmetics Shop</b>
+            <small>Test purchasing with unlimited coins</small>
+          </a>
+          <a class="qa-link-card" href="/leaderboard/">
+            <span class="qa-link-icon">🏆</span>
+            <b>Leaderboard</b>
+            <small>Verify tester exclusion from ranks</small>
+          </a>
+          <a class="qa-link-card" href="/coins/">
+            <span class="qa-link-icon">👛</span>
+            <b>MitchCoins Wallet</b>
+            <small>Check infinite balance display</small>
+          </a>
+          <a class="qa-link-card" href="/preferences/">
+            <span class="qa-link-icon">🎨</span>
+            <b>Preferences</b>
+            <small>Equip badges, colors, and titles</small>
+          </a>
+          <a class="qa-link-card" href="/game-portal/">
+            <span class="qa-link-icon">🎮</span>
+            <b>Game Portal</b>
+            <small>Play arcade games &amp; earn rewards</small>
+          </a>
+          <a class="qa-link-card" href="/matrix/">
+            <span class="qa-link-icon">💬</span>
+            <b>Matrix Chat</b>
+            <small>Test chat perks and badges</small>
+          </a>
+          <a class="qa-link-card" href="/vms/">
+            <span class="qa-link-icon">🖥️</span>
+            <b>Cloud VMs</b>
+            <small>Manage cloud development instances</small>
+          </a>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div id="toast" class="toast-box"><span>🧪</span><span id="toast-text">Success</span></div>
+
+  <script>
+    var state = {
+      email: '',
+      isTester: false,
+      isPremium: true,
+      unlimitedCoins: true,
+      coins: 999999999,
+      settings: {
+        premium: true,
+        unlimitedCoins: true,
+        customCoins: null,
+        unlockAllCosmetics: false,
+        bypassCooldowns: false
+      }
+    };
+
+    function showToast(msg) {
+      var t = document.getElementById('toast');
+      var txt = document.getElementById('toast-text');
+      txt.textContent = msg;
+      t.classList.add('show');
+      clearTimeout(window._toastTimeout);
+      window._toastTimeout = setTimeout(function() {
+        t.classList.remove('show');
+      }, 3500);
+    }
+
+    async function loadStatus() {
+      try {
+        var r = await fetch('/api/tester/status', { credentials: 'include', cache: 'no-store' });
+        if (r.status === 401 || r.status === 403) {
+          document.getElementById('unauth-view').style.display = 'block';
+          document.getElementById('tester-content').style.display = 'none';
+          return;
+        }
+        if (!r.ok) throw new Error('Status failed');
+        var d = await r.json();
+        state = d;
+        renderUI();
+        document.getElementById('unauth-view').style.display = 'none';
+        document.getElementById('tester-content').style.display = 'block';
+      } catch (err) {
+        document.getElementById('unauth-view').style.display = 'block';
+        document.getElementById('unauth-msg').textContent = 'Unable to connect to tester services. Please try again.';
+      }
+    }
+
+    function renderUI() {
+      document.getElementById('account-pill-email').textContent = state.email || 'Beta Tester';
+      document.getElementById('greeting-title').textContent = 'Welcome, ' + (state.email ? state.email.split('@')[0] : 'Tester');
+      
+      // Coins
+      var isUnlimited = state.unlimitedCoins;
+      var coinsDisplay = isUnlimited ? '∞ Unlimited' : Number(state.coins || 0).toLocaleString();
+      document.getElementById('stat-coins').textContent = coinsDisplay;
+      document.getElementById('current-coin-mode').textContent = isUnlimited ? 'Unlimited (∞)' : 'Custom (' + Number(state.coins || 0).toLocaleString() + ' Coins)';
+
+      // Premium
+      var isPrem = state.isPremium;
+      document.getElementById('stat-premium').textContent = isPrem ? '★ Active' : 'Free Tier';
+      document.getElementById('stat-premium').style.color = isPrem ? '#c084fc' : '#9ca3af';
+      var premBtn = document.getElementById('toggle-premium-btn');
+      if (isPrem) premBtn.classList.add('active'); else premBtn.classList.remove('active');
+      document.getElementById('premium-status-sub').textContent = isPrem ? 'Active — testing premium features' : 'Inactive — testing standard free tier';
+
+      // Cosmetics
+      var unlockCosmetics = state.settings?.unlockAllCosmetics === true;
+      document.getElementById('stat-cosmetics').textContent = unlockCosmetics ? 'All Unlocked' : 'Standard';
+      document.getElementById('stat-cosmetics').style.color = unlockCosmetics ? '#c084fc' : '#9ca3af';
+      var cosmBtn = document.getElementById('toggle-cosmetics-btn');
+      if (unlockCosmetics) cosmBtn.classList.add('active'); else cosmBtn.classList.remove('active');
+      document.getElementById('cosmetics-status-sub').textContent = unlockCosmetics ? 'All catalog items unlocked for equipping' : 'Standard owned inventory';
+
+      // Cooldowns
+      var bypassCool = state.settings?.bypassCooldowns === true;
+      document.getElementById('stat-cooldowns').textContent = bypassCool ? 'Bypassing' : 'Normal';
+      document.getElementById('stat-cooldowns').style.color = bypassCool ? '#c084fc' : '#9ca3af';
+      var coolBtn = document.getElementById('toggle-cooldown-btn');
+      if (bypassCool) coolBtn.classList.add('active'); else coolBtn.classList.remove('active');
+      document.getElementById('cooldown-status-sub').textContent = bypassCool ? 'Daily cooldowns bypassed (unlimited claims)' : 'Standard 24h cooldown timer';
+    }
+
+    async function togglePremium() {
+      try {
+        var next = !state.isPremium;
+        var r = await fetch('/api/tester/toggle-premium', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ premium: next })
+        });
+        var d = await r.json();
+        if (d.ok) {
+          state.isPremium = d.isPremium;
+          renderUI();
+          showToast(d.message || 'Premium status updated');
+        } else {
+          showToast('Failed to toggle premium');
+        }
+      } catch (err) {
+        showToast('Error toggling premium');
+      }
+    }
+
+    async function setCoinMode(mode) {
+      try {
+        var r = await fetch('/api/tester/coins', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ mode: mode })
+        });
+        var d = await r.json();
+        if (d.ok) {
+          state.unlimitedCoins = d.unlimitedCoins;
+          state.coins = d.coins;
+          renderUI();
+          showToast('Coin mode set to ' + mode);
+        }
+      } catch (err) {
+        showToast('Error updating coins');
+      }
+    }
+
+    async function setCustomCoins(amount) {
+      try {
+        var r = await fetch('/api/tester/coins', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ mode: 'custom', amount: amount })
+        });
+        var d = await r.json();
+        if (d.ok) {
+          state.unlimitedCoins = d.unlimitedCoins;
+          state.coins = d.coins;
+          renderUI();
+          showToast('Coins set to ' + amount.toLocaleString());
+        }
+      } catch (err) {
+        showToast('Error setting coins');
+      }
+    }
+
+    function applyCustomInput() {
+      var val = Number(document.getElementById('custom-coins-amt').value);
+      if (isNaN(val) || val < 0) {
+        showToast('Please enter a valid coin amount');
+        return;
+      }
+      setCustomCoins(val);
+    }
+
+    async function toggleCosmetics() {
+      try {
+        var next = !(state.settings?.unlockAllCosmetics === true);
+        var r = await fetch('/api/tester/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ unlockAllCosmetics: next })
+        });
+        var d = await r.json();
+        if (d.ok) {
+          state.settings = d.settings;
+          renderUI();
+          showToast(next ? 'All catalog cosmetics unlocked!' : 'Standard cosmetics restored');
+        }
+      } catch (err) {
+        showToast('Error updating cosmetics');
+      }
+    }
+
+    async function toggleCooldownBypass() {
+      try {
+        var next = !(state.settings?.bypassCooldowns === true);
+        var r = await fetch('/api/tester/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ bypassCooldowns: next })
+        });
+        var d = await r.json();
+        if (d.ok) {
+          state.settings = d.settings;
+          renderUI();
+          showToast(next ? 'Daily cooldown bypass enabled!' : 'Daily cooldowns enabled');
+        }
+      } catch (err) {
+        showToast('Error updating cooldown settings');
+      }
+    }
+
+    async function resetCooldowns() {
+      var btn = document.getElementById('btn-reset-cooldowns');
+      btn.disabled = true;
+      try {
+        var r = await fetch('/api/tester/reset-cooldowns', {
+          method: 'POST',
+          credentials: 'include'
+        });
+        var d = await r.json();
+        if (d.ok) {
+          showToast(d.message || 'All daily cooldowns reset!');
+        } else {
+          showToast('Failed to reset cooldowns');
+        }
+      } catch (err) {
+        showToast('Error resetting cooldowns');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function sendTestNotification() {
+      var input = document.getElementById('notif-input');
+      var msg = input.value.trim();
+      if (!msg) return;
+      var btn = document.getElementById('btn-send-notif');
+      btn.disabled = true;
+      try {
+        var r = await fetch('/api/tester/test-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ message: msg })
+        });
+        var d = await r.json();
+        if (d.ok) {
+          showToast('Notification sent to your account!');
+        } else {
+          showToast('Failed to send notification');
+        }
+      } catch (err) {
+        showToast('Error sending notification');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    loadStatus();
+  </script>
+  <script src="/cookie-consent.js" defer></script>
+</body>
+</html>

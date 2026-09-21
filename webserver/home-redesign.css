@@ -383,12 +383,12 @@ body.home .staff-access-rail:hover .staff-access-button,
 body.home .staff-access-rail:focus-within .staff-access-button { width: 208px; }
 body.home .staff-access-button:hover { transform: translateX(2px); border-color: rgba(255,255,255,.13); background: rgba(255,255,255,.06); }
 body.home .staff-access-button > span:first-child { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 13px; box-shadow: inset 0 1px rgba(255,255,255,.2), 0 8px 20px rgba(0,0,0,.18); }
-body.home .staff-access-copy { display: flex; min-width: 130px; flex-direction: column; gap: 2px; }
-body.home .staff-access-rail:not(:hover):not(:focus-within) .staff-access-copy { opacity: 0; visibility: hidden; transform: translateX(-5px); transition: opacity .08s ease, visibility 0s linear .08s; }
-body.home .staff-access-rail:hover .staff-access-copy,
-body.home .staff-access-rail:focus-within .staff-access-copy { opacity: 1; visibility: visible; transform: none; transition: opacity .14s ease .05s, transform .14s ease .05s; }
-body.home .staff-access-copy b { position: static; width: auto; height: auto; overflow: visible; clip: auto; color: var(--t-fg); font: 800 13px/1.15 Outfit, sans-serif; white-space: nowrap; }
-body.home .staff-access-copy small { color: var(--t-fg2); font-size: 10px; font-weight: 650; white-space: nowrap; }
+body.home :is(.staff-access-copy, .staff-tester-copy) { display: flex; min-width: 130px; flex-direction: column; gap: 2px; }
+body.home .staff-access-rail:not(:hover):not(:focus-within) :is(.staff-access-copy, .staff-tester-copy) { opacity: 0; visibility: hidden; transform: translateX(-5px); transition: opacity .08s ease, visibility 0s linear .08s; }
+body.home .staff-access-rail:hover :is(.staff-access-copy, .staff-tester-copy),
+body.home .staff-access-rail:focus-within :is(.staff-access-copy, .staff-tester-copy) { opacity: 1; visibility: visible; transform: none; transition: opacity .14s ease .05s, transform .14s ease .05s; }
+body.home :is(.staff-access-copy, .staff-tester-copy) b { position: static; width: auto; height: auto; overflow: visible; clip: auto; color: var(--t-fg); font: 800 13px/1.15 Outfit, sans-serif; white-space: nowrap; }
+body.home :is(.staff-access-copy, .staff-tester-copy) small { color: var(--t-fg2); font-size: 10px; font-weight: 650; white-space: nowrap; }
 
 /* Staff controls inherit the selected background colors instead of using a
    separate rainbow palette. */
@@ -397,7 +397,7 @@ body.home .staff-access-rail {
   background: color-mix(in srgb, var(--t-bg2) 92%, transparent);
   box-shadow: 0 18px 48px #0005, inset 0 1px #ffffff12;
 }
-body.home :is(.staff-owner,.staff-admin,.staff-moderator) > span:first-child {
+body.home :is(.staff-owner,.staff-admin,.staff-moderator,.staff-tester) > span:first-child {
   color: var(--t-fg);
   background: color-mix(in srgb, var(--t-ac) 18%, var(--t-bg3));
   border: 1px solid color-mix(in srgb, var(--t-ac) 34%, var(--t-bd));
