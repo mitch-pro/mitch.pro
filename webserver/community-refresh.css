@@ -33,8 +33,17 @@ body.home .home-day-card { min-height:0!important; }
 body.home .hud-container { max-width:1240px; }
 body.home .hud-title { font-size:clamp(23px,3vw,36px)!important; }
 body.home .hud-panel { border-radius:16px; }
+html body.home .home-features { align-items:start; }
 html body.home .home-features .home-feature { box-sizing:border-box; min-height:185px!important; padding:20px!important; border-radius:18px!important; background:linear-gradient(125deg,color-mix(in srgb,var(--t-ac,#9ab4c3) 18%,var(--t-bg2,#20242b)),var(--t-bg2,#20242b))!important; color:var(--t-fg)!important; }
 html body.home .home-features .home-feature h2 { font-size:32px!important; margin:14px 0!important; }
+html body.home .home-features :is(.feature-vms,.feature-games) { min-height:132px!important; padding:15px 17px!important; border-radius:14px!important; }
+html body.home .home-features :is(.feature-vms,.feature-games) h2 { max-width:72%; margin:7px 0!important; font-size:24px!important; letter-spacing:-.035em; }
+html body.home .home-features :is(.feature-vms,.feature-games) .feature-eyebrow { font-size:9px; }
+html body.home .home-features :is(.feature-vms,.feature-games) .feature-bottom { max-width:82%; font-size:10px; line-height:1.25; }
+html body.home .home-features :is(.feature-vms,.feature-games) .feature-bottom b { width:25px; height:25px; font-size:16px; }
+html body.home .home-features .feature-vms .feature-vm-art { right:2px; bottom:18px; width:102px; height:82px; opacity:.48; }
+html body.home .home-features .feature-games .feature-game-art { right:-8px; bottom:21px; width:92px; height:92px; background-size:31px 31px; opacity:.5; }
+html body.home .home-features .feature-games .feature-game-art span { font-size:61px; }
 html body.home .hud-topbar { padding-block:12px!important; gap:14px!important; margin-bottom:20px!important; }
 html body.home #greeting-email { font-size:15px!important; overflow-wrap:anywhere; }
 html body.home .home-main { padding-top:10px!important; }
@@ -75,6 +84,6 @@ html body.enroll-page .enroll-hero { animation:none!important; }
 html body.enroll-page .enroll-main { gap:30px!important; padding-top:20px!important; min-height:0!important; }
 html body.enroll-page .enroll-brand { display:none!important; }
 html body.enroll-page #mobile-dock { display:none!important; }
-@media(max-width:700px) { html body.enroll-page.mitch-design .enroll-hero h1 { font-size:28px!important; margin:0 0 12px!important; } html body.enroll-page .enroll-hero h1 br { display:none; } html body.enroll-page .enroll-main { width:100%!important; margin-top:16px!important; } html body.home .home-features .home-feature { min-height:165px!important; } }
+@media(max-width:700px) { html body.enroll-page.mitch-design .enroll-hero h1 { font-size:28px!important; margin:0 0 12px!important; } html body.enroll-page .enroll-hero h1 br { display:none; } html body.enroll-page .enroll-main { width:100%!important; margin-top:16px!important; } html body.home .home-features .home-feature { min-height:165px!important; } html body.home .home-features :is(.feature-vms,.feature-games) { min-height:124px!important; padding:14px 16px!important; } }
 @media(max-width:700px) { body.enroll-page .enroll-main { display:block!important; padding:16px; } body.enroll-page .enroll-hero { padding:8px 8px 20px!important; } body.enroll-page .enroll-hero h1 { font-size:26px!important; } body.enroll-page .enroll-hero p,body.enroll-page .auth-eyebrow { display:none; } body.enroll-page .enroll-brand img { width:44px; height:44px; } }
 @media(max-width:700px) { body.home .home-dayboard-grid { grid-template-columns:1fr!important; } body.home .home-friends { width:calc(100% - 28px); margin:10px 14px 2px; padding:7px 0; } .home-friend { flex-basis:75px; width:75px; } .home-friend-avatar { width:57px; height:57px; } .home-friend-list { gap:8px; } #sw-notif-panel { width:min(380px,calc(100vw - 24px))!important; } .guest-clock { bottom:calc(12px + env(safe-area-inset-bottom)); } }

@@ -26471,7 +26471,7 @@ async function handleRequest(req, server) {
           const pageSid = pageCookies['studentId'] || pageCookies['id'] || '';
           const isAuthenticatedHtml = !!pageSid && validId(pageSid) && !isRevoked(pageSid) && checkPasswordCookie(req, pageSid);
           if (!isSalesPage && !isRjuhsdHost(req) && !isPickleHost(req) && (!isEmbeddedGameRuntime || isStandaloneGamePortal)) {
-            injectStr += '<link rel="stylesheet" href="/community-refresh.css?v=2">\n';
+            injectStr += '<link rel="stylesheet" href="/community-refresh.css?v=4">\n';
             if (!isAuthenticatedHtml) injectStr += '<script src="/guest-preview.js?v=1" defer></script>\n';
           }
 
