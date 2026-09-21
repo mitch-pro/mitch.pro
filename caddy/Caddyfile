@@ -13,7 +13,7 @@
         default {real_ip}
     }
 
-    reverse_proxy webserver-blue:6800 {
+    reverse_proxy webserver-green:6800 {
         header_up X-Mitch-Client-IP {mitch_client_ip}
         header_up X-Real-IP {mitch_client_ip}
         header_up X-Forwarded-For {mitch_client_ip}
@@ -27,7 +27,7 @@
         X-Content-Type-Options nosniff
         Referrer-Policy strict-origin-when-cross-origin
         X-Frame-Options SAMEORIGIN
-        Content-Security-Policy "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data: https://fonts.googleapis.com https://cdnjs.cloudflare.com https://www.google.com https://www.gstatic.com https://www.recaptcha.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' blob: data: https: wss: ws:; worker-src 'self' blob: data:; frame-src 'self' blob: data: https://www.google.com https://www.recaptcha.net https://html5.gamemonetize.co https://html5.gamemonetize.com https://lumassets.pages.dev https://calculated2.github.io"
+        Content-Security-Policy "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data: https://fonts.googleapis.com https://cdnjs.cloudflare.com https://www.google.com https://www.gstatic.com https://www.recaptcha.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' blob: data: https: wss: ws:; worker-src 'self' blob: data:; frame-src 'self' blob: data: https://www.google.com https://www.recaptcha.net https://html5.gamemonetize.co https://html5.gamemonetize.com https://lumassets.pages.dev https://calculated2.github.io https://jellyfin.mitchdog.com https://*.mitchdog.com"
         -Server
     }
 
