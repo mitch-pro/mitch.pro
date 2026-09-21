@@ -17,9 +17,13 @@
     .coin-bank img{width:46px;height:46px;object-fit:contain}
     .coin-bank span{display:block;color:var(--t-fg2);font-size:.72rem;font-weight:700}
     .coin-bank strong{display:block;color:var(--t-fg);font-size:1.25rem;font-variant-numeric:tabular-nums}
-    .coin-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;margin-bottom:1.25rem}
+    .coin-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:.75rem;margin-bottom:1.25rem}
     .coin-action{display:flex;align-items:center;justify-content:space-between;min-height:56px;padding:.7rem .85rem;border:1px solid var(--t-bd);border-radius:14px;background:color-mix(in srgb,var(--t-bg2) 86%,transparent);color:var(--t-fg);font-weight:800}
     .coin-action.primary{background:var(--t-ac);color:var(--t-bg);border-color:var(--t-ac)}
+    .coin-promo-banner{margin-bottom:1.25rem;padding:1rem 1.15rem;border:1px solid color-mix(in srgb,var(--t-ac) 40%,var(--t-bd));border-radius:16px;background:linear-gradient(135deg,color-mix(in srgb,var(--t-ac) 12%,var(--t-bg2)),color-mix(in srgb,var(--t-bg2) 95%,transparent));display:flex;align-items:center;justify-content:space-between;gap:1.25rem;flex-wrap:wrap}
+    .coin-promo-tag{display:inline-block;padding:.15rem .5rem;border-radius:999px;background:var(--t-ac);color:var(--t-bg);font-size:.68rem;font-weight:900;text-transform:uppercase;letter-spacing:.05em}
+    .coin-promo-title{display:block;font-size:1.08rem;color:var(--t-fg);margin:.3rem 0 .2rem}
+    .coin-promo-text{margin:0;color:var(--t-fg2);font-size:.82rem;line-height:1.4}
     .earn-title{display:flex;align-items:end;justify-content:space-between;gap:1rem;margin:0 0 .7rem}
     .earn-title h2{margin:0;font-size:1.2rem}.earn-title span{color:var(--t-fg2);font-size:.78rem}
     .earn-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem}
@@ -42,8 +46,20 @@
     <nav class="coin-actions" id="coinActions" aria-label="MitchCoin actions">
       <a class="coin-action primary" href="/#daily-login-widget"><span>Claim daily reward</span><span aria-hidden="true">→</span></a>
       <a class="coin-action" href="/shop/"><span>Open shop</span><span aria-hidden="true">→</span></a>
+      <a class="coin-action" href="/vms/#upgrades" style="border-color:color-mix(in srgb,var(--t-ac) 45%,var(--t-bd));background:color-mix(in srgb,var(--t-ac) 10%,var(--t-bg2));"><span>🖥 Upgrade Cloud PC</span><span aria-hidden="true">→</span></a>
       <a class="coin-action" id="testerAction" href="/tester/" style="display:none;border-color:rgba(168,85,247,0.45);background:rgba(168,85,247,0.12);color:#d8b4fe;"><span>🧪 Tester Hub</span><span aria-hidden="true">→</span></a>
     </nav>
+    <aside class="coin-promo-banner">
+      <div style="flex:1 1 300px">
+        <div style="display:flex;align-items:center;gap:.5rem">
+          <span class="coin-promo-tag">Featured Perk</span>
+          <span style="color:var(--t-fg2);font-size:.75rem;font-weight:600">VM Lab Hardware Upgrades</span>
+        </div>
+        <strong class="coin-promo-title">Power Up Your In-Browser Cloud PC</strong>
+        <p class="coin-promo-text">Spend MitchCoins on dedicated compute: up to 6 CPU cores, 16 GB RAM, 128 GB persistent SSD, and longer daily session passes.</p>
+      </div>
+      <a href="/vms/#upgrades" class="coin-action primary" style="min-height:44px;padding:.55rem 1.1rem;text-decoration:none;font-weight:800;white-space:nowrap"><span>Customize Hardware</span> <span aria-hidden="true">→</span></a>
+    </aside>
     <div class="earn-title"><h2>Earn more</h2><span>Rewards save to your account</span></div>
     <section class="earn-grid">
       <a class="earn-card" href="/games/kodys-keyboard/"><span class="earn-icon">W</span><b>Typing race</b><small>Faster typing earns larger rewards.</small></a>

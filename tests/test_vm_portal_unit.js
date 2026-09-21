@@ -7,6 +7,7 @@ import {
   VM_EXTENSION_COOLDOWN_MS,
   VM_COOLDOWN_DURATION_MS,
   VM_OFFPAGE_INACTIVITY_MS,
+  VM_ADMIN_OFFPAGE_INACTIVITY_MS,
   VM_DEFAULT_CPU_CORES,
   VM_DEFAULT_MEMORY_MB,
   VM_DEFAULT_BALLOON_MB,
@@ -208,11 +209,15 @@ assert(computeCooldownRemaining(now - 1000, { isAdmin: false, now }) === 0, 'exp
 assert(computeCooldownRemaining(null, { isAdmin: false, now }) === 0, 'no cooldown should report 0 seconds remaining');
 assert(computeCooldownRemaining(now + 1800 * 1000, { isAdmin: true, now }) === 0, 'admin should have 0 cooldown remaining');
 
-// --- 10-minute Off-Page Inactivity Detection ---
+// --- 10-minute Off-Page Inactivity Detection (User) & 30-minute Detection (Admin) ---
 assert(!isVmInactive(now - (9 * 60 * 1000), { now }), 'activity 9 minutes ago must not be considered inactive');
 assert(isVmInactive(now - (10 * 60 * 1000), { now }), 'activity 10 minutes ago must be considered inactive');
 assert(isVmInactive(now - (15 * 60 * 1000), { now }), 'activity 15 minutes ago must be considered inactive');
 assert(!isVmInactive(null, { now }), 'null presence must not be marked inactive');
+assert(!isVmInactive(now - (29 * 60 * 1000), { now, isAdmin: true }), 'admin activity 29 minutes ago must not be inactive');
+assert(isVmInactive(now - (30 * 60 * 1000), { now, isAdmin: true }), 'admin activity 30 minutes ago must be inactive');
+assert(isVmInactive(now - (35 * 60 * 1000), { now, isAdmin: true }), 'admin activity 35 minutes ago must be inactive');
+assert(!isVmInactive(now - (15 * 60 * 1000), { now, isAdmin: true }), 'admin activity 15 minutes ago must not be inactive');
 
 // --- Fleet Capacity Limit ---
 assert(VM_FLEET_MAX_CORES === 36, 'max fleet CPU cores must be 36');
@@ -220,6 +225,7 @@ assert(VM_FLEET_MAX_MEMORY_MB === 98304, 'max fleet memory must be 96 GB (98304 
 assert(VM_COOLDOWN_DURATION_MS === 30 * 60 * 1000, 'cooldown duration must be 30 minutes');
 assert(VM_EXTENSION_COOLDOWN_MS === 24 * 60 * 60 * 1000, 'extension cooldown must be 24 hours');
 assert(VM_OFFPAGE_INACTIVITY_MS === 10 * 60 * 1000, 'offpage inactivity timeout must be 10 minutes');
+assert(VM_ADMIN_OFFPAGE_INACTIVITY_MS === 30 * 60 * 1000, 'admin offpage inactivity timeout must be 30 minutes');
 
 // --- VM Defaults (2 Cores, 4 GB RAM, 64 GB Disk) and Upgrades (Up to 6 Cores, 16 GB RAM, 256 GB Disk) ---
 assert(VM_DAILY_MAX_SECONDS === 6 * 3600, 'daily max VM seconds must be 6 hours (21600 seconds)');

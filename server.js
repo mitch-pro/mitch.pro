@@ -53,6 +53,7 @@ import {
   VM_EXTENSION_COOLDOWN_MS,
   VM_COOLDOWN_DURATION_MS,
   VM_OFFPAGE_INACTIVITY_MS,
+  VM_ADMIN_OFFPAGE_INACTIVITY_MS,
   VM_DEFAULT_CPU_CORES,
   VM_DEFAULT_MEMORY_MB,
   VM_DEFAULT_BALLOON_MB,
@@ -28121,91 +28122,93 @@ async function enforceVmMaxUptimeWorker() {
           }
         } catch {}
       }
-      // Admins are exempt from VM time limits
-      if (ownerEmail && isAdminEmail(ownerEmail)) {
-        continue;
-      }
+      const isAdmin = Boolean(ownerEmail && isAdminEmail(ownerEmail));
       const recordKey = record ? record.id : `vmid-${guest.vmid}`;
-      const lease = getVmLease(recordKey, guest.uptime, {
-        isAdmin: false,
-        ownerEmail: ownerEmail || '',
-      });
-      if (lease.isExempt) continue;
-      if (lease.remainingSeconds != null && lease.remainingSeconds <= 0) {
-        const isDailyLimit = (lease.dailyRemainingSeconds != null && lease.dailyRemainingSeconds <= 0);
-        console.log(`[vm-watchdog] VM ${recordKey} (VMID ${guest.vmid}) reached ${isDailyLimit ? 'daily limit (6h)' : 'max uptime'} (${guest.uptime}s / ${lease.maxUptimeSeconds}s). Automatically shutting down...`);
-        if (record) {
-          vmAudit({
-            actorEmail: 'system',
-            record,
-            action: isDailyLimit ? 'VM_SHUTDOWN_DAILY_LIMIT' : 'VM_SHUTDOWN_TIMEOUT',
-            success: true,
-            details: { uptime: guest.uptime, maxUptimeSeconds: lease.maxUptimeSeconds, extended: lease.extended, dailyRemainingSeconds: lease.dailyRemainingSeconds },
-          });
-          revokeVmDesktopConnections(record.id);
-          try {
-            await proxmoxDesktop.power(record, 'shutdown');
-          } catch (err) {
-            console.warn(`[vm-watchdog] Graceful shutdown failed for ${record.id}, attempting force-stop:`, err?.message || err);
+
+      if (!isAdmin) {
+        const lease = getVmLease(recordKey, guest.uptime, {
+          isAdmin: false,
+          ownerEmail: ownerEmail || '',
+        });
+        if (lease.isExempt) continue;
+        if (lease.remainingSeconds != null && lease.remainingSeconds <= 0) {
+          const isDailyLimit = (lease.dailyRemainingSeconds != null && lease.dailyRemainingSeconds <= 0);
+          console.log(`[vm-watchdog] VM ${recordKey} (VMID ${guest.vmid}) reached ${isDailyLimit ? 'daily limit (6h)' : 'max uptime'} (${guest.uptime}s / ${lease.maxUptimeSeconds}s). Automatically shutting down...`);
+          if (record) {
+            vmAudit({
+              actorEmail: 'system',
+              record,
+              action: isDailyLimit ? 'VM_SHUTDOWN_DAILY_LIMIT' : 'VM_SHUTDOWN_TIMEOUT',
+              success: true,
+              details: { uptime: guest.uptime, maxUptimeSeconds: lease.maxUptimeSeconds, extended: lease.extended, dailyRemainingSeconds: lease.dailyRemainingSeconds },
+            });
+            revokeVmDesktopConnections(record.id);
             try {
-              await proxmoxDesktop.power(record, 'force-stop');
-            } catch (stopErr) {
-              console.error(`[vm-watchdog] Force stop failed for ${record.id}:`, stopErr?.message || stopErr);
-            }
-          }
-          if (record.ownerEmail) triggerVmCooldown(record.ownerEmail, isDailyLimit ? 'daily_limit_reached' : 'max_uptime_reached');
-        } else {
-          try {
-            await proxmoxDesktop.power({ vmid: guest.vmid, node: guest.node, guestType: guest.type }, 'shutdown');
-          } catch (err) {
-            try {
-              await proxmoxDesktop.power({ vmid: guest.vmid, node: guest.node, guestType: guest.type }, 'force-stop');
-            } catch {}
-          }
-        }
-        vmLeases.delete(recordKey);
-        vmPagePresence.delete(recordKey);
-      } else {
-        // Check 10-minute off-page inactivity limit
-        let hasOpenSocket = false;
-        for (const ws of vmDesktopSockets) {
-          if (ws.readyState === 1 && ws.data?.recordId === recordKey) {
-            hasOpenSocket = true;
-            vmPagePresence.set(recordKey, { lastSeen: Date.now() });
-            break;
-          }
-        }
-        if (!hasOpenSocket) {
-          const presence = vmPagePresence.get(recordKey);
-          const lastSeen = presence?.lastSeen || (Date.now() - (guest.uptime * 1000));
-          if (isVmInactive(lastSeen)) {
-            const inactiveMs = Date.now() - lastSeen;
-            console.log(`[vm-watchdog] VM ${recordKey} (VMID ${guest.vmid}) inactive/off-page for ${Math.round(inactiveMs / 60000)}m. Automatically shutting down...`);
-            if (record) {
-              vmAudit({
-                actorEmail: 'system',
-                record,
-                action: 'VM_SHUTDOWN_INACTIVITY',
-                success: true,
-                details: { inactiveSeconds: Math.floor(inactiveMs / 1000) },
-              });
-              revokeVmDesktopConnections(record.id);
+              await proxmoxDesktop.power(record, 'shutdown');
+            } catch (err) {
+              console.warn(`[vm-watchdog] Graceful shutdown failed for ${record.id}, attempting force-stop:`, err?.message || err);
               try {
-                await proxmoxDesktop.power(record, 'shutdown');
-              } catch (err) {
-                try { await proxmoxDesktop.power(record, 'force-stop'); } catch {}
-              }
-              if (record.ownerEmail) triggerVmCooldown(record.ownerEmail, 'inactivity_10m');
-            } else {
-              try {
-                await proxmoxDesktop.power({ vmid: guest.vmid, node: guest.node, guestType: guest.type }, 'shutdown');
-              } catch {
-                try { await proxmoxDesktop.power({ vmid: guest.vmid, node: guest.node, guestType: guest.type }, 'force-stop'); } catch {}
+                await proxmoxDesktop.power(record, 'force-stop');
+              } catch (stopErr) {
+                console.error(`[vm-watchdog] Force stop failed for ${record.id}:`, stopErr?.message || stopErr);
               }
             }
-            vmLeases.delete(recordKey);
-            vmPagePresence.delete(recordKey);
+            if (record.ownerEmail) triggerVmCooldown(record.ownerEmail, isDailyLimit ? 'daily_limit_reached' : 'max_uptime_reached');
+          } else {
+            try {
+              await proxmoxDesktop.power({ vmid: guest.vmid, node: guest.node, guestType: guest.type }, 'shutdown');
+            } catch (err) {
+              try {
+                await proxmoxDesktop.power({ vmid: guest.vmid, node: guest.node, guestType: guest.type }, 'force-stop');
+              } catch {}
+            }
           }
+          vmLeases.delete(recordKey);
+          vmPagePresence.delete(recordKey);
+          continue;
+        }
+      }
+
+      // Check off-page inactivity limit (10m for standard users, 30m for admins)
+      let hasOpenSocket = false;
+      for (const ws of vmDesktopSockets) {
+        if (ws.readyState === 1 && ws.data?.recordId === recordKey) {
+          hasOpenSocket = true;
+          vmPagePresence.set(recordKey, { lastSeen: Date.now() });
+          break;
+        }
+      }
+      if (!hasOpenSocket) {
+        const presence = vmPagePresence.get(recordKey);
+        const lastSeen = presence?.lastSeen || (Date.now() - (guest.uptime * 1000));
+        const inactivityTimeoutMs = isAdmin ? VM_ADMIN_OFFPAGE_INACTIVITY_MS : VM_OFFPAGE_INACTIVITY_MS;
+        if (isVmInactive(lastSeen, { timeoutMs: inactivityTimeoutMs, isAdmin })) {
+          const inactiveMs = Date.now() - lastSeen;
+          console.log(`[vm-watchdog] VM ${recordKey} (VMID ${guest.vmid}, admin: ${isAdmin}) inactive/off-page for ${Math.round(inactiveMs / 60000)}m (limit: ${isAdmin ? '30m' : '10m'}). Automatically shutting down...`);
+          if (record) {
+            vmAudit({
+              actorEmail: 'system',
+              record,
+              action: 'VM_SHUTDOWN_INACTIVITY',
+              success: true,
+              details: { inactiveSeconds: Math.floor(inactiveMs / 1000), isAdmin },
+            });
+            revokeVmDesktopConnections(record.id);
+            try {
+              await proxmoxDesktop.power(record, 'shutdown');
+            } catch (err) {
+              try { await proxmoxDesktop.power(record, 'force-stop'); } catch {}
+            }
+            if (record.ownerEmail && !isAdmin) triggerVmCooldown(record.ownerEmail, 'inactivity_10m');
+          } else {
+            try {
+              await proxmoxDesktop.power({ vmid: guest.vmid, node: guest.node, guestType: guest.type }, 'shutdown');
+            } catch {
+              try { await proxmoxDesktop.power({ vmid: guest.vmid, node: guest.node, guestType: guest.type }, 'force-stop'); } catch {}
+            }
+          }
+          vmLeases.delete(recordKey);
+          vmPagePresence.delete(recordKey);
         }
       }
     }
@@ -28723,13 +28726,15 @@ async function purgeExpiredVmsWorker() {
 async function pruneInactiveFreeVmsWorker() {
   try {
     const now = Date.now();
-    const maxInactiveMs = 15 * 60 * 1000; // 15 minutes of inactivity (no dashboard polling)
-    const maxLifespanMs = 60 * 60 * 1000; // 1 hour max duration
+    const maxInactiveMs = 15 * 60 * 1000; // 15 minutes of inactivity for standard users
+    const maxLifespanMs = 60 * 60 * 1000; // 1 hour max duration for standard users
     for (const [email, entry] of activeFreeVms.entries()) {
-      const isInactive = (now - entry.lastActive) > maxInactiveMs;
-      const isExpired = (now - entry.startedAt) > maxLifespanMs;
+      const isAdmin = isAdminEmail(email);
+      const effectiveInactiveMs = isAdmin ? VM_ADMIN_OFFPAGE_INACTIVITY_MS : maxInactiveMs;
+      const isInactive = (now - entry.lastActive) > effectiveInactiveMs;
+      const isExpired = !isAdmin && (now - entry.startedAt) > maxLifespanMs;
       if (isInactive || isExpired) {
-        console.log(`[free-vm] Pruning free VM ${entry.vmid} for ${email} (inactive: ${isInactive}, expired: ${isExpired})`);
+        console.log(`[free-vm] Pruning free VM ${entry.vmid} for ${email} (admin: ${isAdmin}, inactive: ${isInactive}, expired: ${isExpired})`);
         await terminateUserVm(entry.vmid);
         activeFreeVms.delete(email);
       }

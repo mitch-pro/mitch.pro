@@ -30,9 +30,34 @@
     <section id="empty-state" class="state-panel is-hidden">
       <div class="empty-icon" aria-hidden="true">🖥️</div>
       <div id="empty-create-box">
+        <span class="empty-badge">⚡ Instant Cloud Linux</span>
         <strong>Get Your Free Computer</strong>
-        <p>Available to RJUHSD students (@student.rjuhsd.us) and Mitch.pro Premium members.</p>
-        <button type="button" id="create-vm-btn" class="primary-button" style="margin-top: 14px;">Set Password &amp; Create Computer</button>
+        <p>A full personal Linux workstation streamed directly to your browser. Free for RJUHSD students (@student.rjuhsd.us) and Mitch.pro Premium members.</p>
+        
+        <div class="vm-selling-points">
+          <div class="vm-sp-card">
+            <span>🖥️</span>
+            <b>Full Desktop in Browser</b>
+            <small>Runs on school Chromebooks, laptops, and phones with zero install</small>
+          </div>
+          <div class="vm-sp-card">
+            <span>⚡</span>
+            <b>Root &amp; Sudo Access</b>
+            <small>Install packages with apt, run Python, Node.js, C++, and dev servers</small>
+          </div>
+          <div class="vm-sp-card">
+            <span>💾</span>
+            <b>Persistent SSD Storage</b>
+            <small>64GB to 128GB disk keeps your code and workspace saved permanently</small>
+          </div>
+          <div class="vm-sp-card">
+            <span>🪙</span>
+            <b>MitchCoins Upgrades</b>
+            <small>Boost hardware up to 6 cores &amp; 16GB RAM using earned coins</small>
+          </div>
+        </div>
+
+        <button type="button" id="create-vm-btn" class="primary-button" style="margin-top: 18px; font-size: 0.96rem; padding: 12px 24px;">Set Password &amp; Create Computer →</button>
       </div>
       <div id="empty-unauthorized-box" class="is-hidden">
         <strong>No computer assigned yet</strong>
