@@ -6280,7 +6280,7 @@ function processMemberFields(memberEmail, profile, viewerEmail) {
   // A saved display name must be visible to other members. Previously the
   // generated username always won, making profile edits look like they had
   // failed everywhere except the owner's own session.
-  const publicName = p.nickname || p.displayName || username;
+  const publicName = p.displayName || p.nickname || username;
 
   if (!viewerCanSee) {
     return {
@@ -6290,7 +6290,7 @@ function processMemberFields(memberEmail, profile, viewerEmail) {
   }
 
   return {
-    displayName: p.nickname || p.displayName || username,
+    displayName: p.displayName || p.nickname || username,
     email: maskEmail(memberEmail)
   };
 }
@@ -17035,7 +17035,11 @@ async function handleRequest(req, server) {
 
     if (path === '/api/profile' && method === 'POST') {
       const cookies = getCookies(req);
-      const email = emailFromSid(cookies['studentId'] || '');
+      // Legacy, SSO, and bridged sessions can still carry the `id` cookie.
+      // Every other authenticated account route accepts both cookie names, so
+      // profile saves must do the same or the entire editor fails with 401.
+      const sid = cookies['studentId'] || cookies['id'] || '';
+      const email = emailFromSid(sid);
       if (!email) return jsonResp(401, { error: 'not logged in' });
 
       if (!await tryParseJson()) return jsonResp(400, { error: 'bad json' });
@@ -21194,7 +21198,8 @@ async function handleRequest(req, server) {
     // /api/profile (own) and /api/profile/:email (public)
     if (path === '/api/profile') {
       const cookies = getCookies(req);
-      const email = emailFromSid(cookies['studentId'] || '');
+      const sid = cookies['studentId'] || cookies['id'] || '';
+      const email = emailFromSid(sid);
       if (!email) return jsonResp(401, { error: 'not logged in' });
       const profiles = loadJson(PROFILES_FILE, {});
       const norm = normalizeEmail(email);
@@ -21216,7 +21221,9 @@ async function handleRequest(req, server) {
       safeProfile.website = sanitizeProfileWebsiteUrl(safeProfile.website || '');
       return jsonResp(200, {
         ...safeProfile,
-        displayName: processed.displayName,
+        // Return the stored value to the owner, not a public-name fallback.
+        // Otherwise a nickname can overwrite the display-name input on load.
+        displayName: safeProfile.displayName || '',
         email: processed.email,
         isPremium: isPremiumEmail(email),
         isAdmin: isAdminEmail(email),
