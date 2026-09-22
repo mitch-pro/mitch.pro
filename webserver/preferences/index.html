@@ -872,6 +872,440 @@
     animation: none !important;
     transition: none !important;
   }
+
+  /* Current Wallpaper Showcase */
+  .current-wallpaper-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px 16px;
+    border: 1px solid var(--t-bd);
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--t-bg2) 80%, transparent);
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    cursor: pointer;
+    transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+  }
+  .current-wallpaper-card:hover {
+    border-color: var(--t-bda);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  }
+  #currentWallpaperThumb {
+    width: 80px;
+    height: 50px;
+    border-radius: 10px;
+    border: 1px solid var(--t-bd);
+    background: var(--t-bg3);
+    background-size: cover;
+    background-position: center;
+    flex-shrink: 0;
+    overflow: hidden;
+    position: relative;
+    display: grid;
+    place-items: center;
+  }
+
+  /* Wallpaper Library Dialog */
+  .wallpaper-dialog {
+    width: min(1040px, calc(100% - 24px));
+    max-height: min(88vh, 850px);
+    height: min(88vh, 850px);
+    padding: 0;
+    margin: auto;
+    border: 1px solid var(--t-bd);
+    border-radius: 24px;
+    background: color-mix(in srgb, var(--t-bg2) 95%, #000 5%);
+    color: var(--t-fg);
+    box-shadow: 0 25px 80px rgba(0, 0, 0, 0.75), 0 0 0 1px color-mix(in srgb, var(--t-ac) 20%, transparent);
+    overflow: hidden;
+    display: none;
+    flex-direction: column;
+    z-index: 1000;
+  }
+  .wallpaper-dialog[open] {
+    display: flex;
+  }
+  .wallpaper-dialog::backdrop {
+    background: rgba(4, 6, 14, 0.82);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .wallpaper-dialog-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+  }
+  .wallpaper-dialog-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--t-bd);
+    background: color-mix(in srgb, var(--t-bg) 45%, var(--t-bg2));
+    flex-shrink: 0;
+  }
+  .wl-header-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--t-ac);
+    margin-bottom: 4px;
+  }
+  .wallpaper-dialog-title {
+    margin: 0;
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: var(--t-fg);
+    line-height: 1.2;
+  }
+  .wallpaper-dialog-subtitle {
+    margin: 4px 0 0;
+    font-size: 0.82rem;
+    color: var(--t-fg2);
+  }
+  .wallpaper-dialog-close {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: 1px solid var(--t-bd);
+    background: var(--t-bg3);
+    color: var(--t-fg2);
+    font-size: 15px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+  }
+  .wallpaper-dialog-close:hover {
+    background: color-mix(in srgb, var(--t-ac) 20%, var(--t-bg3));
+    border-color: var(--t-ac);
+    color: var(--t-fg);
+  }
+  .wallpaper-dialog-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 24px;
+    border-bottom: 1px solid var(--t-bd);
+    background: color-mix(in srgb, var(--t-bg2) 75%, transparent);
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  .wl-search-box {
+    position: relative;
+    flex: 1 1 240px;
+    min-width: 200px;
+  }
+  .wl-search-box input {
+    width: 100%;
+    min-height: 38px !important;
+    height: 38px !important;
+    padding: 0 32px 0 34px !important;
+    border-radius: 12px !important;
+    font-size: 0.82rem !important;
+    background: var(--t-bg) !important;
+    border: 1px solid var(--t-bd) !important;
+    color: var(--t-fg) !important;
+  }
+  .wl-search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 13px;
+    pointer-events: none;
+    opacity: 0.6;
+  }
+  .wl-search-clear {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: transparent;
+    color: var(--t-fg2);
+    font-size: 12px;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+  }
+  .wl-filter-tabs {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 2px 0;
+  }
+  .wl-tab {
+    min-height: 34px !important;
+    height: 34px !important;
+    padding: 0 12px !important;
+    border-radius: 999px !important;
+    border: 1px solid var(--t-bd) !important;
+    background: var(--t-bg3) !important;
+    color: var(--t-fg2) !important;
+    font-size: 0.76rem !important;
+    font-weight: 700 !important;
+    cursor: pointer;
+    white-space: nowrap;
+    display: inline-flex !important;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s ease;
+  }
+  .wl-tab:hover {
+    border-color: var(--t-bda) !important;
+    color: var(--t-fg) !important;
+  }
+  .wl-tab.active {
+    background: var(--t-ac) !important;
+    color: #fff !important;
+    border-color: var(--t-ac) !important;
+  }
+  .wl-count {
+    font-size: 0.68rem;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.22);
+  }
+  .prefs-page .wallpaper-dialog .soft-btn {
+    min-height: 36px !important;
+    height: 36px !important;
+    padding: 0 14px !important;
+    font-size: 12px !important;
+  }
+  .wallpaper-dialog-content {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 20px 24px;
+    scroll-behavior: smooth;
+  }
+  .wallpaper-library-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+    gap: 16px;
+  }
+  .wl-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--t-bd);
+    border-radius: 16px;
+    background: var(--t-bg3);
+    overflow: hidden;
+    cursor: pointer;
+    text-align: left;
+    padding: 0;
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  }
+  .wl-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--t-bda);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
+  }
+  .wl-card.active {
+    border-color: var(--t-ac);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--t-ac) 60%, transparent), 0 12px 28px rgba(0, 0, 0, 0.35);
+  }
+  .wl-card-preview {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9.5;
+    background: var(--t-bg);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .wl-card-media {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: opacity 0.2s ease, transform 0.3s ease;
+  }
+  .wl-card:hover .wl-card-media {
+    transform: scale(1.04);
+  }
+  .wl-card-media.wl-card-vid {
+    z-index: 2;
+  }
+  .wl-card-badges {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    display: flex;
+    gap: 4px;
+    z-index: 3;
+  }
+  .wl-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: rgba(10, 12, 18, 0.78);
+    backdrop-filter: blur(4px);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  .wl-badge.live {
+    background: rgba(225, 29, 72, 0.88);
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+  .wl-badge.live .pulse-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 6px #fff;
+    animation: wlPulse 1.2s infinite ease-in-out;
+  }
+  @keyframes wlPulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.4); opacity: 0.6; }
+  }
+  .wl-card-check {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: none;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: var(--t-ac);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    z-index: 3;
+  }
+  .wl-card.active .wl-card-check {
+    display: inline-flex;
+  }
+  .wl-card-body {
+    padding: 10px 12px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    background: color-mix(in srgb, var(--t-bg2) 90%, transparent);
+  }
+  .wl-card-meta {
+    min-width: 0;
+    flex: 1;
+  }
+  .wl-card-title {
+    margin: 0;
+    font-size: 0.84rem;
+    font-weight: 750;
+    color: var(--t-fg);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .wl-card-sub {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--t-fg2);
+    margin-top: 2px;
+  }
+  .wl-card-del {
+    width: 26px;
+    height: 26px;
+    display: grid;
+    place-items: center;
+    border-radius: 6px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--t-fg2);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+  }
+  .wl-card-del:hover {
+    background: rgba(225, 29, 72, 0.15);
+    border-color: rgba(225, 29, 72, 0.4);
+    color: #e11d48;
+  }
+  .wallpaper-empty-state {
+    text-align: center;
+    padding: 48px 16px;
+    color: var(--t-fg2);
+  }
+  .wallpaper-empty-state .empty-icon {
+    font-size: 40px;
+    display: block;
+    margin-bottom: 10px;
+    opacity: 0.6;
+  }
+  .wallpaper-empty-state h3 {
+    margin: 0 0 6px;
+    color: var(--t-fg);
+  }
+  .wallpaper-empty-state p {
+    margin: 0;
+    font-size: 0.84rem;
+  }
+  .wallpaper-dialog-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 24px;
+    border-top: 1px solid var(--t-bd);
+    background: color-mix(in srgb, var(--t-bg) 45%, var(--t-bg2));
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .wl-footer-stats {
+    font-size: 0.78rem;
+    color: var(--t-fg2);
+  }
+  .wl-footer-actions {
+    display: flex;
+    gap: 8px;
+  }
+  @media (max-width: 640px) {
+    .wallpaper-dialog {
+      width: calc(100% - 16px);
+      max-height: 92vh;
+      border-radius: 18px;
+    }
+    .wallpaper-dialog-header {
+      padding: 14px 16px;
+    }
+    .wallpaper-dialog-toolbar {
+      padding: 10px 16px;
+    }
+    .wallpaper-dialog-content {
+      padding: 14px 16px;
+    }
+    .wallpaper-library-grid {
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+    }
+    .wallpaper-dialog-footer {
+      padding: 12px 16px;
+    }
+  }
 </style>
 <link rel="stylesheet" href="/preferences-school.css?v=4">
 </head>
@@ -925,8 +1359,33 @@
       </div>
 
       <div class="field" style="grid-column:1/-1">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-          <label style="margin:0">Official Backgrounds</label>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px">
+          <label style="margin:0">Wallpaper &amp; Background</label>
+          <button class="soft-btn primary-soft" type="button" id="openWallpaperLibraryBtn" style="display:inline-flex;align-items:center;gap:6px;font-weight:750;font-size:0.84rem;padding:6px 14px;border-color:var(--t-bda);background:color-mix(in srgb,var(--t-ac) 15%,var(--t-bg2));color:var(--t-fg)">
+            <span>🖼️</span> <span>Browse Wallpaper Library…</span>
+          </button>
+        </div>
+
+        <!-- Current Wallpaper Showcase Card -->
+        <div class="current-wallpaper-card" id="currentWallpaperCard">
+          <div style="display:flex;align-items:center;gap:14px;min-width:0">
+            <div id="currentWallpaperThumb">
+              <span style="font-size:22px;opacity:0.65">🖼️</span>
+            </div>
+            <div style="min-width:0">
+              <span style="display:block;font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;color:var(--t-ac)" id="currentWallpaperBadge">Current Wallpaper</span>
+              <strong style="display:block;font-size:0.98rem;color:var(--t-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:320px" id="currentWallpaperName">Default Wallpaper</strong>
+              <small style="display:block;color:var(--t-fg2);font-size:0.75rem" id="currentWallpaperDesc">Loading selection…</small>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <button class="soft-btn primary-soft" type="button" id="changeWallpaperBtn" style="font-weight:750">Open Library ↗</button>
+            <button class="soft-btn" type="button" id="clearWallpaperBtn">Reset to None</button>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px">
+          <span style="color:var(--t-fg2);font-size:0.76rem;font-weight:600">Quick Presets</span>
           <div class="bg-scroll-controls" style="display:inline-flex;gap:4px">
             <button class="soft-btn" type="button" onclick="scrollBgRow('bgPresetGrid',-260)" title="Scroll left" aria-label="Scroll wallpapers left" style="min-height:28px;height:28px;width:28px;padding:0;font-size:14px;border-radius:8px">‹</button>
             <button class="soft-btn" type="button" onclick="scrollBgRow('bgPresetGrid',260)" title="Scroll right" aria-label="Scroll wallpapers right" style="min-height:28px;height:28px;width:28px;padding:0;font-size:14px;border-radius:8px">›</button>
@@ -1557,6 +2016,59 @@
     <span id="savedMsg">✓ Saved</span>
   </div>
 </main>
+
+<dialog id="wallpaperLibraryModal" class="wallpaper-dialog" aria-labelledby="wlModalTitle">
+  <div class="wallpaper-dialog-container">
+    <header class="wallpaper-dialog-header">
+      <div>
+        <div class="wl-header-badge">Wallpaper Collection</div>
+        <h2 id="wlModalTitle" class="wallpaper-dialog-title">Wallpaper Library</h2>
+        <p class="wallpaper-dialog-subtitle">Browse official animated and static backgrounds, or manage your custom uploads.</p>
+      </div>
+      <button type="button" class="wallpaper-dialog-close" id="closeWallpaperDialog" aria-label="Close library">✕</button>
+    </header>
+
+    <div class="wallpaper-dialog-toolbar">
+      <div class="wl-search-box">
+        <span class="wl-search-icon" aria-hidden="true">🔍</span>
+        <input type="search" id="wlSearchInput" placeholder="Search wallpapers by title..." autocomplete="off" aria-label="Search wallpapers">
+        <button type="button" id="wlSearchClear" class="wl-search-clear" style="display:none" aria-label="Clear search">✕</button>
+      </div>
+      <div class="wl-filter-tabs" role="tablist" aria-label="Wallpaper categories">
+        <button type="button" class="wl-tab active" data-filter="all">All <span class="wl-count" id="wlCountAll">0</span></button>
+        <button type="button" class="wl-tab" data-filter="video">✨ Animated <span class="wl-count" id="wlCountVideo">0</span></button>
+        <button type="button" class="wl-tab" data-filter="image">🖼️ Static <span class="wl-count" id="wlCountImage">0</span></button>
+        <button type="button" class="wl-tab" data-filter="mine">📁 My Uploads <span class="wl-count" id="wlCountMine">0</span></button>
+      </div>
+      <div class="wl-toolbar-actions">
+        <button type="button" class="soft-btn wl-upload-btn" id="wlUploadActionBtn">
+          <span>⬆️ Upload New</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="wallpaper-dialog-content">
+      <div class="wallpaper-library-grid" id="wallpaperLibraryGrid">
+        <!-- Dynamically rendered cards -->
+      </div>
+      <div id="wallpaperEmptyState" class="wallpaper-empty-state" style="display:none">
+        <span class="empty-icon" aria-hidden="true">🖼️</span>
+        <h3>No wallpapers found</h3>
+        <p>Try searching for a different keyword or choose another category filter.</p>
+      </div>
+    </div>
+
+    <footer class="wallpaper-dialog-footer">
+      <div class="wl-footer-stats">
+        <span id="wlStatsText">Loading wallpapers…</span>
+      </div>
+      <div class="wl-footer-actions">
+        <button type="button" class="soft-btn" id="wlClearBgBtn">Reset to None</button>
+        <button type="button" class="soft-btn primary-btn" id="wlDoneBtn">Done</button>
+      </div>
+    </footer>
+  </div>
+</dialog>
 
 <script>
 var myEmail = '';
@@ -2282,8 +2794,302 @@ function applyChipPreview(chip, url, name, thumbUrl) {
   }
 }
 
+window._cachedOfficialBgs = [];
+window._cachedMyBgs = [];
+window._isWallpaperLibraryOpen = false;
+var currentWlFilter = 'all';
+var currentWlQuery = '';
+
+function escWl(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function updateCurrentWallpaperCard() {
+  var card = document.getElementById('currentWallpaperCard');
+  if (!card) return;
+  var cur = getCookieValue('bgimg', '');
+  var thumbEl = document.getElementById('currentWallpaperThumb');
+  var nameEl = document.getElementById('currentWallpaperName');
+  var descEl = document.getElementById('currentWallpaperDesc');
+  var badgeEl = document.getElementById('currentWallpaperBadge');
+
+  if (!cur) {
+    if (nameEl) nameEl.textContent = 'Default Solid Theme';
+    if (descEl) descEl.textContent = 'No custom wallpaper — using theme background';
+    if (badgeEl) badgeEl.textContent = 'Solid Color';
+    if (thumbEl) {
+      thumbEl.style.backgroundImage = 'none';
+      thumbEl.innerHTML = '<span style="font-size:22px;opacity:0.65">🎨</span>';
+    }
+    return;
+  }
+
+  var official = window._cachedOfficialBgs || (window.__theme && window.__theme.backgrounds) || [];
+  var my = window._cachedMyBgs || [];
+  var item = official.find(function(b) { return b.url === cur; }) || my.find(function(m) { return m.url === cur; });
+
+  var name = item ? item.name : (cur.split('/').pop().replace(/\.(webp|webm|png|jpg|jpeg)$/i, '').replace(/^bg-/, '').replace(/-/g, ' '));
+  var isVid = /\.(webm|mp4)($|\?)/i.test(cur) || (item && item.type === 'video');
+  var isMine = item && (item.isMine || my.some(function(m) { return m.url === cur; }));
+
+  if (nameEl) nameEl.textContent = name;
+  if (descEl) descEl.textContent = isVid ? 'Animated Video Wallpaper' : (isMine ? 'Custom Uploaded Wallpaper' : 'Official Preset Wallpaper');
+  if (badgeEl) badgeEl.textContent = isVid ? '✨ Animated' : (isMine ? '📁 Upload' : '🖼️ Wallpaper');
+
+  if (thumbEl) {
+    thumbEl.innerHTML = '';
+    var preview = (item && item.thumbUrl) || cur;
+    if (isVid && (!item || !item.thumbUrl)) {
+      if (cur.startsWith('/backgrounds/')) {
+        var base = cur.split('/').pop().replace(/\.(webp|webm|png|jpg|jpeg)$/i, '');
+        preview = '/backgrounds/thumbs/' + base + '.webp';
+      }
+    }
+    thumbEl.style.backgroundImage = 'url("' + preview + '")';
+    thumbEl.style.backgroundSize = 'cover';
+    thumbEl.style.backgroundPosition = 'center';
+  }
+}
+
+function openWallpaperLibrary() {
+  var dialog = document.getElementById('wallpaperLibraryModal');
+  if (!dialog) return;
+  window._isWallpaperLibraryOpen = true;
+  currentWlQuery = '';
+  currentWlFilter = 'all';
+  var searchInput = document.getElementById('wlSearchInput');
+  if (searchInput) searchInput.value = '';
+  var searchClear = document.getElementById('wlSearchClear');
+  if (searchClear) searchClear.style.display = 'none';
+
+  document.querySelectorAll('.wl-tab').forEach(function(tab) {
+    tab.classList.toggle('active', tab.getAttribute('data-filter') === 'all');
+  });
+
+  renderWallpaperLibraryGrid();
+  if (typeof dialog.showModal === 'function') {
+    dialog.showModal();
+  } else {
+    dialog.setAttribute('open', '');
+  }
+}
+
+function closeWallpaperLibrary() {
+  var dialog = document.getElementById('wallpaperLibraryModal');
+  if (!dialog) return;
+  window._isWallpaperLibraryOpen = false;
+  if (typeof dialog.close === 'function') {
+    dialog.close();
+  } else {
+    dialog.removeAttribute('open');
+  }
+}
+
+function renderWallpaperLibraryGrid() {
+  var grid = document.getElementById('wallpaperLibraryGrid');
+  var emptyState = document.getElementById('wallpaperEmptyState');
+  if (!grid) return;
+
+  var cur = getCookieValue('bgimg', '');
+  var official = (window._cachedOfficialBgs || (window.__theme && window.__theme.backgrounds) || []).map(function(b) {
+    return {
+      id: b.id,
+      name: b.name,
+      url: b.url,
+      thumbUrl: b.thumbUrl,
+      type: b.type || (/\.(webm|mp4)($|\?)/i.test(b.url) ? 'video' : 'image'),
+      isOfficial: true
+    };
+  });
+
+  var mine = (window._cachedMyBgs || []).map(function(m) {
+    return {
+      id: m.id,
+      name: m.name || 'Uploaded Wallpaper',
+      url: m.url,
+      thumbUrl: m.thumbUrl,
+      type: /\.(webm|mp4)($|\?)/i.test(m.url) ? 'video' : 'image',
+      isMine: true
+    };
+  });
+
+  var all = official.concat(mine);
+
+  // Update filter tab counts
+  var countAll = all.length;
+  var countVideo = all.filter(function(x) { return x.type === 'video'; }).length;
+  var countImage = all.filter(function(x) { return x.type === 'image'; }).length;
+  var countMine = mine.length;
+
+  var elCountAll = document.getElementById('wlCountAll');
+  var elCountVideo = document.getElementById('wlCountVideo');
+  var elCountImage = document.getElementById('wlCountImage');
+  var elCountMine = document.getElementById('wlCountMine');
+  if (elCountAll) elCountAll.textContent = countAll;
+  if (elCountVideo) elCountVideo.textContent = countVideo;
+  if (elCountImage) elCountImage.textContent = countImage;
+  if (elCountMine) elCountMine.textContent = countMine;
+
+  var filtered = all.filter(function(item) {
+    if (currentWlFilter === 'video' && item.type !== 'video') return false;
+    if (currentWlFilter === 'image' && item.type !== 'image') return false;
+    if (currentWlFilter === 'mine' && !item.isMine) return false;
+
+    if (currentWlQuery) {
+      var q = currentWlQuery.toLowerCase().trim();
+      var n = (item.name || '').toLowerCase();
+      if (!n.includes(q)) return false;
+    }
+    return true;
+  });
+
+  grid.innerHTML = '';
+
+  // None / Solid Theme card
+  if ((currentWlFilter === 'all' || currentWlFilter === 'image') && !currentWlQuery) {
+    var noneCard = document.createElement('article');
+    noneCard.className = 'wl-card' + (!cur ? ' active' : '');
+    noneCard.innerHTML = `
+      <div class="wl-card-preview" style="background: linear-gradient(135deg, var(--t-bg2), var(--t-bg3));">
+        <span style="font-size:32px;opacity:0.7">🎨</span>
+        <span class="wl-card-check">✓ Active</span>
+      </div>
+      <div class="wl-card-body">
+        <div class="wl-card-meta">
+          <h4 class="wl-card-title">Default Solid Theme</h4>
+          <span class="wl-card-sub">No custom wallpaper</span>
+        </div>
+      </div>
+    `;
+    noneCard.onclick = function() {
+      setCookieValue('bgimg', '');
+      document.getElementById('bgImageInput').value = '';
+      syncAppearanceControls();
+      applyAppearanceLive('Wallpaper removed — theme default applied.');
+      saveAll();
+      renderWallpaperLibraryGrid();
+    };
+    grid.appendChild(noneCard);
+  }
+
+  if (filtered.length === 0 && ((currentWlFilter !== 'all' && currentWlFilter !== 'image') || currentWlQuery)) {
+    if (emptyState) emptyState.style.display = 'block';
+  } else {
+    if (emptyState) emptyState.style.display = 'none';
+  }
+
+  filtered.forEach(function(item) {
+    var isVid = item.type === 'video' || /\.(webm|mp4)($|\?)/i.test(item.url);
+    var isActive = cur === item.url;
+    var card = document.createElement('article');
+    card.className = 'wl-card' + (isActive ? ' active' : '');
+    card.setAttribute('data-url', item.url);
+
+    var previewSrc = item.thumbUrl;
+    if (!previewSrc) {
+      if (item.url.startsWith('/backgrounds/')) {
+        var base = item.url.split('/').pop().replace(/\.(webp|webm|png|jpg|jpeg)$/i, '');
+        previewSrc = '/backgrounds/thumbs/' + base + '.webp';
+      } else if (item.url.startsWith('/api/bg/')) {
+        var match = item.url.match(/\/api\/bg\/([0-9a-f]{24})\./i);
+        previewSrc = match ? ('/api/bg/thumb/' + match[1] + '.webp') : item.url;
+      } else {
+        previewSrc = item.url;
+      }
+    }
+
+    card.innerHTML = `
+      <div class="wl-card-preview">
+        <div class="wl-card-badges">
+          ${isVid ? '<span class="wl-badge live"><i class="pulse-dot"></i> Live</span>' : '<span class="wl-badge">Static</span>'}
+          ${item.isMine ? '<span class="wl-badge" style="background:rgba(124,58,237,0.85)">Upload</span>' : ''}
+        </div>
+        <span class="wl-card-check">✓ Active</span>
+        <img class="wl-card-media" src="${escWl(previewSrc)}" alt="${escWl(item.name)}" loading="lazy">
+      </div>
+      <div class="wl-card-body">
+        <div class="wl-card-meta">
+          <h4 class="wl-card-title">${escWl(item.name)}</h4>
+          <span class="wl-card-sub">${isVid ? 'Animated video wallpaper' : (item.isMine ? 'Custom uploaded background' : 'Official preset wallpaper')}</span>
+        </div>
+        ${item.isMine ? `<button type="button" class="wl-card-del" title="Delete this upload" aria-label="Delete ${escWl(item.name)}">🗑</button>` : ''}
+      </div>
+    `;
+
+    var imgEl = card.querySelector('img.wl-card-media');
+    if (imgEl) {
+      imgEl.onerror = function() {
+        if (this.src !== item.url && !isVid) {
+          this.src = item.url;
+        }
+      };
+    }
+
+    if (isVid) {
+      var vidEl = null;
+      card.addEventListener('mouseenter', function() {
+        if (!vidEl) {
+          vidEl = document.createElement('video');
+          var src = item.url.includes('#') ? item.url : (item.url + '#t=0.1');
+          vidEl.src = src;
+          vidEl.muted = true;
+          vidEl.playsInline = true;
+          vidEl.loop = true;
+          vidEl.className = 'wl-card-media wl-card-vid';
+          card.querySelector('.wl-card-preview').appendChild(vidEl);
+        }
+        vidEl.play().catch(function(){});
+      });
+      card.addEventListener('mouseleave', function() {
+        if (vidEl) {
+          vidEl.pause();
+          try { vidEl.currentTime = 0.1; } catch(e){}
+        }
+      });
+    }
+
+    card.onclick = function(e) {
+      if (e.target.closest('.wl-card-del')) return;
+      setCookieValue('bgimg', item.url);
+      document.getElementById('bgImageInput').value = item.url;
+      syncAppearanceControls();
+      applyAppearanceLive(item.name + ' background applied.');
+      saveAll();
+      renderWallpaperLibraryGrid();
+    };
+
+    var delBtn = card.querySelector('.wl-card-del');
+    if (delBtn) {
+      delBtn.onclick = function(e) {
+        e.stopPropagation();
+        if (!confirm('Delete "' + item.name + '"?')) return;
+        fetch('/api/backgrounds/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: item.id })
+        }).then(function() {
+          renderBgChips();
+        });
+      };
+    }
+
+    grid.appendChild(card);
+  });
+
+  var statsText = document.getElementById('wlStatsText');
+  if (statsText) {
+    var totalCount = filtered.length;
+    statsText.textContent = totalCount + ' wallpaper' + (totalCount === 1 ? '' : 's') + ' available • Click any wallpaper to apply live';
+  }
+}
+
 function renderPresetBgChips(presetGrid, bgs, cur) {
   if (window.__theme && window.__theme.mergeBackgrounds) bgs = window.__theme.mergeBackgrounds(bgs);
+  window._cachedOfficialBgs = bgs;
   presetGrid.innerHTML = '';
   attachBgWheelScroll(presetGrid);
   var effective = cur || (document.documentElement.classList.contains('school-preferences') ? '/backgrounds/wallhaven-ghost-of-tsushima.webp' : '/backgrounds/wallhaven-black-mountain.webp');
@@ -2308,6 +3114,7 @@ function renderPresetBgChips(presetGrid, bgs, cur) {
   if (active && active.scrollIntoView) {
     setTimeout(function() { active.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' }); }, 50);
   }
+  updateCurrentWallpaperCard();
 }
 
 function renderBgChips() {
@@ -2317,18 +3124,26 @@ function renderBgChips() {
   attachBgWheelScroll(presetGrid);
   attachBgWheelScroll(myBgGrid);
   var cur = getCookieValue('bgimg', '');
-  // The server lists whatever .webp or .webm files sit in webserver/backgrounds/ — drop
-  // one in (or .mp4/.gif which auto-convert to .webm) and it appears as a chip.
   var fallback = (window.__theme && window.__theme.backgrounds) || [];
   fetch('/api/backgrounds/list').then(function(r) { return r.ok ? r.json() : null; }).then(function(res) {
     var bgs = (res && res.ok && Array.isArray(res.items) && res.items.length) ? res.items : fallback;
+    window._cachedOfficialBgs = bgs;
     renderPresetBgChips(presetGrid, bgs, cur);
+    updateCurrentWallpaperCard();
+    if (window._isWallpaperLibraryOpen) renderWallpaperLibraryGrid();
   }).catch(function() {
+    window._cachedOfficialBgs = fallback;
     renderPresetBgChips(presetGrid, fallback, cur);
+    updateCurrentWallpaperCard();
+    if (window._isWallpaperLibraryOpen) renderWallpaperLibraryGrid();
   });
   myBgGrid.innerHTML = '';
   fetch('/api/backgrounds/mine').then(function(r) { return r.ok ? r.json() : null; }).then(function(res) {
-    if (!res || !res.ok) return;
+    if (!res || !res.ok) {
+      window._cachedMyBgs = [];
+      return;
+    }
+    window._cachedMyBgs = res.items || [];
     (res.items || []).forEach(function(item) {
       var chip = document.createElement('button');
       chip.type = 'button';
@@ -2362,7 +3177,11 @@ function renderBgChips() {
       chip.appendChild(del);
       myBgGrid.appendChild(chip);
     });
-  }).catch(function() {});
+    updateCurrentWallpaperCard();
+    if (window._isWallpaperLibraryOpen) renderWallpaperLibraryGrid();
+  }).catch(function() {
+    window._cachedMyBgs = [];
+  });
 }
 
 function syncAppearanceControls() {
@@ -2381,6 +3200,7 @@ function syncAppearanceControls() {
   document.getElementById('bgBlurRange').value = blur;
   document.getElementById('bgBlurValue').textContent = blur + 'px';
   updateBgChipActive();
+  updateCurrentWallpaperCard();
   document.getElementById('densitySelect').value = getThemePref('density', 'normal');
   document.getElementById('radiusSelect').value = getThemePref('radius', 'soft');
   document.getElementById('fontSelect').value = getThemePref('font', 'system');
@@ -2460,6 +3280,92 @@ function setupAppearanceControls() {
     applyAppearanceLive('Background blur updated.');
   });
 
+  // Wallpaper Library trigger buttons & Showcase Card
+  var openLib = function() { openWallpaperLibrary(); };
+  var openLibBtn = document.getElementById('openWallpaperLibraryBtn');
+  if (openLibBtn) openLibBtn.onclick = openLib;
+  var changeWpBtn = document.getElementById('changeWallpaperBtn');
+  if (changeWpBtn) changeWpBtn.onclick = openLib;
+  var curWpCard = document.getElementById('currentWallpaperCard');
+  if (curWpCard) {
+    curWpCard.addEventListener('click', function(e) {
+      if (e.target.closest('button')) return;
+      openWallpaperLibrary();
+    });
+  }
+  var clearWpBtn = document.getElementById('clearWallpaperBtn');
+  if (clearWpBtn) {
+    clearWpBtn.onclick = function() {
+      setCookieValue('bgimg', '');
+      document.getElementById('bgImageInput').value = '';
+      syncAppearanceControls();
+      applyAppearanceLive('Wallpaper reset to theme default.');
+      saveAll();
+    };
+  }
+
+  // Modal dialog controls
+  var closeLibBtn = document.getElementById('closeWallpaperDialog');
+  if (closeLibBtn) closeLibBtn.onclick = closeWallpaperLibrary;
+  var doneLibBtn = document.getElementById('wlDoneBtn');
+  if (doneLibBtn) doneLibBtn.onclick = closeWallpaperLibrary;
+  var clearLibBtn = document.getElementById('wlClearBgBtn');
+  if (clearLibBtn) {
+    clearLibBtn.onclick = function() {
+      setCookieValue('bgimg', '');
+      document.getElementById('bgImageInput').value = '';
+      syncAppearanceControls();
+      applyAppearanceLive('Wallpaper removed — theme default applied.');
+      saveAll();
+      renderWallpaperLibraryGrid();
+    };
+  }
+  var uploadActionBtn = document.getElementById('wlUploadActionBtn');
+  if (uploadActionBtn) {
+    uploadActionBtn.onclick = function() {
+      document.getElementById('bgUploadInput').click();
+    };
+  }
+
+  var searchInput = document.getElementById('wlSearchInput');
+  var searchClear = document.getElementById('wlSearchClear');
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      currentWlQuery = this.value;
+      if (searchClear) searchClear.style.display = currentWlQuery ? 'grid' : 'none';
+      renderWallpaperLibraryGrid();
+    });
+  }
+  if (searchClear) {
+    searchClear.addEventListener('click', function() {
+      currentWlQuery = '';
+      if (searchInput) searchInput.value = '';
+      this.style.display = 'none';
+      renderWallpaperLibraryGrid();
+    });
+  }
+
+  document.querySelectorAll('.wl-tab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      currentWlFilter = this.getAttribute('data-filter') || 'all';
+      document.querySelectorAll('.wl-tab').forEach(function(t) { t.classList.remove('active'); });
+      this.classList.add('active');
+      renderWallpaperLibraryGrid();
+    });
+  });
+
+  var modal = document.getElementById('wallpaperLibraryModal');
+  if (modal) {
+    modal.addEventListener('click', function(e) {
+      if (e.target === modal) {
+        closeWallpaperLibrary();
+      }
+    });
+    modal.addEventListener('close', function() {
+      window._isWallpaperLibraryOpen = false;
+    });
+  }
+
   document.getElementById('bgUploadBtn').onclick = function() {
     document.getElementById('bgUploadInput').click();
   };
@@ -2485,6 +3391,7 @@ function setupAppearanceControls() {
       syncAppearanceControls();
       applyAppearanceLive('Custom background uploaded.');
       saveAll();
+      if (window._isWallpaperLibraryOpen) renderWallpaperLibraryGrid();
     } catch (err) {
       status.textContent = err.message || 'Upload failed.';
     }

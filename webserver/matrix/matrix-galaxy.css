@@ -1245,6 +1245,7 @@ html.theme-light body::before {
 
 /* The compact brand tile mirrors the home link at the top of /encrypt/. */
 #mitch-matrix-home {
+  display: none !important;
   position: fixed;
   top: 7px;
   left: 7px;
