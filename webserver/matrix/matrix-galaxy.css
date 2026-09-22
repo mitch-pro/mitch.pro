@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Syne:wght@600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap');
 
 /* ── Mitch.pro Design System Tokens (Fallbacks for theme.js) ───────── */
 :root {
@@ -17,13 +17,13 @@
   --t-gls: rgba(180, 94, 255, 0.14);
   --t-gr: linear-gradient(135deg, #7957f1, #ca57f5 56%, #ff5fa7);
   --t-radius: 16px;
-  --t-font: 'DM Sans', Figtree, system-ui, -apple-system, sans-serif;
-  --t-display: 'Syne', Figtree, system-ui, sans-serif;
+  --t-font: 'Figtree', system-ui, -apple-system, sans-serif;
+  --t-display: 'Figtree', system-ui, -apple-system, sans-serif;
 
   /* Cinny Typography & Link Color Overrides */
-  --font-secondary: var(--t-font, 'DM Sans', sans-serif) !important;
+  --font-secondary: var(--t-font, 'Figtree', sans-serif) !important;
   --tc-link: var(--t-ac, #b86cff) !important;
-  --_164xfge1: var(--t-font, 'DM Sans', sans-serif) !important;
+  --_164xfge1: var(--t-font, 'Figtree', sans-serif) !important;
 }
 
 /* Light Mode System Token Fallbacks */
@@ -293,7 +293,7 @@ html.theme-light:not([data-bglayer]) body::before {
 .hru6be0 [role=heading],
 .hru6be0 ._1xny9xl5,
 .hru6be0 ._1xny9xl6 {
-  font-family: var(--t-display, 'Syne', sans-serif) !important;
+  font-family: var(--t-display, 'Figtree', sans-serif) !important;
   font-weight: 700 !important;
   letter-spacing: -0.02em !important;
   color: var(--t-fg) !important;
@@ -1211,5 +1211,409 @@ button[data-variant="critical"]:hover,
 button._e[variant="Critical"]:hover {
   transform: translateY(-1px) !important;
   box-shadow: 0 6px 20px rgba(239, 68, 68, 0.5) !important;
+}
+
+/* ── Encrypt-aligned Matrix skin ───────────────────────────────────────
+   Matrix is a full application, but it should feel like the sibling of
+   /encrypt/: quiet translucent planes, compact controls, restrained accent
+   states, and chat content that takes priority over decorative effects. */
+
+html,
+body,
+#root,
+#root button,
+#root input,
+#root textarea,
+#root select {
+  font-family: var(--t-font, 'Figtree', system-ui, sans-serif) !important;
+}
+
+html:not(.theme-light) body::before {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--t-bg2) 35%, transparent), transparent 28%),
+    var(--t-bg) !important;
+  background-size: auto !important;
+  opacity: 1 !important;
+}
+
+html.theme-light body::before {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--t-bg3) 48%, transparent), transparent 32%),
+    var(--t-bg) !important;
+  opacity: 1 !important;
+}
+
+/* The compact brand tile mirrors the home link at the top of /encrypt/. */
+#mitch-matrix-home {
+  position: fixed;
+  top: 7px;
+  left: 7px;
+  z-index: 1000;
+  width: 38px;
+  height: 38px;
+  min-height: 38px;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--t-bd);
+  border-radius: var(--t-radius, 8px);
+  color: #fff;
+  background: color-mix(in srgb, var(--t-ac) 86%, #000 14%);
+  text-decoration: none;
+  box-shadow: none;
+  transition: border-color var(--t-motion, .15s) ease,
+              background var(--t-motion, .15s) ease;
+}
+
+#mitch-matrix-home span {
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -.08em;
+  transform: translateX(-1px);
+}
+
+#mitch-matrix-home:hover,
+#mitch-matrix-home:focus-visible {
+  color: #fff;
+  border-color: var(--t-bda);
+  background: var(--t-ac);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--t-gls);
+}
+
+/* Navigation and room list use the same two-plane layout as Encrypt. */
+._1ho1fyw0,
+._1xki9of1,
+._1xki9of0,
+._18fjf6z0 {
+  background: color-mix(in srgb, var(--t-bg2) 72%, transparent) !important;
+  border-color: var(--t-bd) !important;
+  backdrop-filter: blur(12px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(140%) !important;
+}
+
+._1ho1fyw0 {
+  padding-top: 52px !important;
+}
+
+._1ho1fyw4 {
+  border-radius: var(--t-radius, 8px) !important;
+  transition: opacity var(--t-motion, .15s) ease,
+              background var(--t-motion, .15s) ease !important;
+}
+
+._1ho1fyw4:hover {
+  transform: none !important;
+  box-shadow: none !important;
+  background: var(--t-bg3) !important;
+}
+
+._1ho1fyw4::before {
+  width: 2px !important;
+  border-radius: 0 2px 2px 0 !important;
+  background: var(--t-ac) !important;
+  box-shadow: none !important;
+}
+
+._1xki9of2,
+._18fjf6z1 {
+  min-height: 3.15rem !important;
+  border-bottom: 1px solid var(--t-bd) !important;
+}
+
+.t4fedt8 {
+  margin: 2px 6px !important;
+  border: 0 !important;
+  border-radius: var(--t-radius, 8px) !important;
+  transition: background var(--t-motion, .15s) ease,
+              color var(--t-motion, .15s) ease !important;
+}
+
+.t4fedt8:hover {
+  color: var(--t-fg) !important;
+  background: color-mix(in srgb, var(--t-bg3) 70%, transparent) !important;
+  border-color: transparent !important;
+  transform: none !important;
+}
+
+.t4fedt8[aria-selected=true] {
+  color: var(--t-fg) !important;
+  background: color-mix(in srgb, var(--t-ac) 10%, transparent) !important;
+  border-color: transparent !important;
+  box-shadow: inset 2px 0 0 var(--t-ac) !important;
+}
+
+.t4fedt8[aria-selected=true] .t4fedto {
+  color: var(--t-fg) !important;
+  font-weight: 700 !important;
+}
+
+/* Room header: compact, flat, and separated by one quiet rule. */
+.hru6be0,
+.hru6bec,
+.hru6bed,
+._1t5i6nr1,
+.ty6xms1,
+._1v145rl1 {
+  min-height: 3.5rem !important;
+  background: color-mix(in srgb, var(--t-bg2) 45%, transparent) !important;
+  border-bottom: 1px solid var(--t-bd) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  box-shadow: none !important;
+}
+
+.hru6be0 h1,
+.hru6be0 h2,
+.hru6be0 [role=heading],
+.hru6be0 ._1xny9xl5,
+.hru6be0 ._1xny9xl6 {
+  font-family: var(--t-font, 'Figtree', system-ui, sans-serif) !important;
+  font-size: .95rem !important;
+  font-weight: 800 !important;
+  letter-spacing: -.02em !important;
+}
+
+/* Encrypt keeps messages as a readable timeline rather than floating cards. */
+._161nxver {
+  margin-block: 2px !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+._161nxveo {
+  transition: background var(--t-motion, .12s) ease !important;
+}
+
+._161nxveo:hover {
+  transform: none !important;
+  background: color-mix(in srgb, var(--t-bg3) 32%, transparent) !important;
+}
+
+._1684mq5c,
+._1684mq5d,
+._1684mq51 {
+  border-radius: calc(var(--t-radius, 8px) - 2px) !important;
+}
+
+._1m2qi7r3 {
+  border-left: 2px solid var(--t-ac) !important;
+  border-radius: 0 calc(var(--t-radius, 8px) - 2px) calc(var(--t-radius, 8px) - 2px) 0 !important;
+  background: var(--t-bg2) !important;
+}
+
+/* Composer matches Encrypt's input row: clear edge, calm focus ring, no pill. */
+.ay20pp9,
+.coabsl0 {
+  padding: 4px 8px !important;
+  background: var(--t-bg2) !important;
+  border: 1px solid var(--t-bd) !important;
+  border-radius: var(--t-radius, 8px) !important;
+  box-shadow: none !important;
+  transition: border-color var(--t-motion, .15s) ease,
+              box-shadow var(--t-motion, .15s) ease !important;
+}
+
+.ay20pp9:has(textarea:focus),
+.coabsl0:focus-within {
+  border-color: var(--t-ac) !important;
+  box-shadow: 0 0 0 3px var(--t-gls) !important;
+}
+
+.ay20pp9 button,
+.coabsl0 button {
+  border-radius: calc(var(--t-radius, 8px) - 2px) !important;
+  transition: color var(--t-motion, .15s) ease,
+              background var(--t-motion, .15s) ease !important;
+}
+
+.ay20pp9 button:hover,
+.coabsl0 button:hover {
+  transform: none !important;
+  color: var(--t-fg) !important;
+  background: var(--t-bg3) !important;
+}
+
+/* Shared control language from Encrypt. */
+.epr39zm,
+button[data-priority=300],
+button[data-variant=primary],
+.epr39zd[data-variant=primary] {
+  color: #fff !important;
+  background: color-mix(in srgb, var(--t-ac) 88%, #000 12%) !important;
+  border: 1px solid var(--t-bda) !important;
+  border-radius: var(--t-radius, 8px) !important;
+  box-shadow: none !important;
+  font-weight: 700 !important;
+}
+
+.epr39zm:hover,
+button[data-priority=300]:hover,
+button[data-variant=primary]:hover {
+  color: #fff !important;
+  background: var(--t-ac) !important;
+  transform: none !important;
+  filter: none !important;
+  box-shadow: 0 0 0 3px var(--t-gls) !important;
+}
+
+.epr39zn,
+button[data-priority=200],
+button[data-variant=secondary] {
+  color: var(--t-fg2) !important;
+  background: var(--t-bg2) !important;
+  border: 1px solid var(--t-bd) !important;
+  border-radius: var(--t-radius, 8px) !important;
+  box-shadow: none !important;
+}
+
+.epr39zn:hover,
+button[data-priority=200]:hover,
+button[data-variant=secondary]:hover {
+  color: var(--t-fg) !important;
+  background: var(--t-bg3) !important;
+  border-color: color-mix(in srgb, var(--t-bd) 65%, var(--t-ac) 35%) !important;
+  transform: none !important;
+}
+
+/* Dialogs are elevated only enough to separate them from the conversation. */
+._1fc5sz51,
+._5z5e2h1,
+._1cmtvyv0,
+._1f6snux0,
+._1vnya282,
+dialog,
+._15upz2y1 {
+  background: color-mix(in srgb, var(--t-bg2) 96%, transparent) !important;
+  border: 1px solid var(--t-bd) !important;
+  border-radius: calc(var(--t-radius, 8px) + 4px) !important;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, .42) !important;
+  backdrop-filter: blur(14px) saturate(130%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(130%) !important;
+}
+
+._1oc5jl82 {
+  background: rgba(0, 0, 0, .58) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
+/* Site-owned prompts follow Encrypt's toast/card scale. */
+#mitch-sso-banner,
+#mitch-push-banner {
+  background: color-mix(in srgb, var(--t-bg2) 94%, transparent) !important;
+  border: 1px solid var(--t-bd) !important;
+  border-radius: var(--t-radius, 8px) !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .38) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  animation: none !important;
+}
+
+#mitch-sso-btn,
+.mitch-push-btn-enable,
+.mitch-push-btn-later {
+  border-radius: calc(var(--t-radius, 8px) - 2px) !important;
+  box-shadow: none !important;
+}
+
+#mitch-sso-btn,
+.mitch-push-btn-enable {
+  background: color-mix(in srgb, var(--t-ac) 88%, #000 12%) !important;
+  border-color: var(--t-bda) !important;
+}
+
+#mitch-sso-btn:hover,
+.mitch-push-btn-enable:hover,
+button[aria-label*="Call" i]:hover,
+button[aria-label*="Join" i]:hover {
+  transform: none !important;
+  box-shadow: 0 0 0 3px var(--t-gls) !important;
+}
+
+iframe[title="Call Embed"] {
+  border-radius: var(--t-radius, 8px) !important;
+  border-color: var(--t-bd) !important;
+  box-shadow: none !important;
+}
+
+html.theme-light ._1ho1fyw0,
+html.theme-light ._1xki9of1,
+html.theme-light ._1xki9of0,
+html.theme-light ._18fjf6z0,
+html.theme-light .hru6be0,
+html.theme-light .hru6bec,
+html.theme-light .hru6bed,
+html.theme-light ._1t5i6nr1,
+html.theme-light .ty6xms1,
+html.theme-light ._1v145rl1 {
+  background: color-mix(in srgb, var(--t-bg2) 88%, transparent) !important;
+  border-color: var(--t-bd) !important;
+}
+
+html.theme-light ._161nxver {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html.theme-light .ay20pp9,
+html.theme-light .coabsl0 {
+  background: var(--t-bg2) !important;
+  border-color: var(--t-bd) !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 768px) {
+  #mitch-matrix-home {
+    top: calc(7px + env(safe-area-inset-top, 0px));
+    left: calc(7px + env(safe-area-inset-left, 0px));
+    width: 38px;
+    height: 38px;
+    min-height: 38px;
+    margin: 0;
+  }
+
+  .t4fedt8 {
+    min-height: 48px !important;
+    margin: 2px 5px !important;
+    border-radius: var(--t-radius, 8px) !important;
+  }
+
+  ._161nxver {
+    max-width: 100% !important;
+    padding: 7px 10px !important;
+    margin-bottom: 2px !important;
+    border-radius: 0 !important;
+  }
+
+  .ay20pp9,
+  .coabsl0 {
+    margin: 4px 6px max(6px, env(safe-area-inset-bottom, 6px)) !important;
+    border-radius: var(--t-radius, 8px) !important;
+  }
+
+  dialog,
+  ._1fc5sz51,
+  ._5z5e2h1,
+  ._1cmtvyv0,
+  ._1f6snux0 {
+    border-radius: calc(var(--t-radius, 8px) + 4px) calc(var(--t-radius, 8px) + 4px) 0 0 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #mitch-matrix-home,
+  .t4fedt8,
+  ._161nxveo,
+  .ay20pp9,
+  .coabsl0,
+  button {
+    transition: none !important;
+    animation: none !important;
+  }
 }
 
