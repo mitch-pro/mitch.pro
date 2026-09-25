@@ -491,7 +491,8 @@ try {
   assert(matrixPage.includes("navigator.locks.request('mitch-matrix-session'"), 'Concurrent tabs must serialize Matrix SSO');
   assert(!matrixPage.includes('removeLegacyCryptoStorage'), 'Matrix must preserve crypto storage for E2EE keys');
   assert(matrixPage.includes('/matrix/assets/index-BVlPv2dR.js'), 'Matrix bundle URL must load updated E2EE client');
-  assert(/\/matrix\/matrix-galaxy\.css\?v=\d+/.test(matrixPage), 'Matrix must load the current mitch.pro visual integration');
+  assert(/\/matrix\/matrix-design\.css\?v=\d+/.test(matrixPage), 'Matrix must load the current mitch.pro visual integration');
+  assert(!matrixPage.includes('autoResetEncryptionKeys'), 'Matrix must not reset users\' encryption keys without consent');
   assert(matrixPage.includes('id="matrix-context-bar"'), 'Matrix must include the mitch.pro chat workspace shell');
   assert(matrixPage.includes('id="matrix-account-link"'), 'Matrix shell must expose the signed-in mitch.pro account');
   assert(matrixPage.includes('Notification settings'), 'Matrix shell must link directly to site notification preferences');

@@ -34,8 +34,7 @@
     <link rel="stylesheet" disabled="disabled" data-mx-theme="Dark-custom" title="Dark-custom" href="/matrix/bundles/156d536ae79bdae0c801/theme-dark-custom.css">
 
     <!-- Mitch.pro Scoped Matrix Shell Stylesheet -->
-    <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=8" />
-    <link rel="stylesheet" href="/matrix/matrix-product.css?v=1" />
+    <link rel="stylesheet" href="/matrix/matrix-design.css?v=1" />
     <!-- Legacy client bundle compatibility anchor: /matrix/assets/index-BVlPv2dR.js -->
   </head>
   <body class="matrix-page mitch-design" style="height: 100%; margin: 0;">
@@ -192,37 +191,8 @@
           if (isMatrixStoreAccountMismatch(event.reason)) beginMatrixStoreRecovery();
         });
 
-        let isResettingCrossSigning = false;
-        async function autoResetEncryptionKeys() {
-          if (isResettingCrossSigning) return;
-          isResettingCrossSigning = true;
-          try {
-            const client = window.mxDeviceListener?.sharedInstance?.()?.client ||
-                           window.mxInitialCryptoStore?.sharedInstance?.()?.client ||
-                           window.mxMatrixClientPeg?.safeGet?.() ||
-                           window.mxMatrixClientPeg?.get?.();
-            if (client?.getCrypto) {
-              const crypto = client.getCrypto();
-              console.log('[Matrix Key Guardian] Unverified session detected; auto-resetting encryption keys...');
-              if (typeof crypto.bootstrapCrossSigning === 'function') {
-                await crypto.bootstrapCrossSigning({
-                  setupNewSecretStorage: true,
-                  authUploadDeviceSigningKeys: async () => ({})
-                });
-              }
-              if (typeof client.resetKeyBackup === 'function') {
-                await client.resetKeyBackup().catch(() => {});
-              }
-              console.log('[Matrix Key Guardian] Encryption keys successfully reset. New messages will flow smoothly.');
-            }
-          } catch (err) {
-            console.warn('[Matrix Key Guardian] Auto reset keys failed:', err);
-          } finally {
-            setTimeout(() => { isResettingCrossSigning = false; }, 3000);
-          }
-        }
-
-        // Watch DOM for storage errors, missing session data, and verification prompts
+        // Recover only from a confirmed store/account mismatch. Verification and
+        // encryption recovery must remain explicit user decisions in Element.
         new MutationObserver(mutations => {
           for (const mutation of mutations) {
             for (const node of mutation.addedNodes) {
@@ -237,100 +207,7 @@
             }
           }
 
-          // 1. Auto-recover from "Missing session data" dialogs
-          const missingDialog = document.querySelector('.mx_Dialog, .mx_ErrorDialog, [role="dialog"]');
-          if (missingDialog && /missing session data/i.test(missingDialog.textContent || '')) {
-            const removeBtn = missingDialog.querySelector('button');
-            if (removeBtn && /remove this device/i.test(removeBtn.textContent || '')) {
-              console.log('[Matrix Storage] Auto-resolving missing session data dialog...');
-              removeBtn.click();
-              beginMatrixStoreRecovery();
-              return;
-            }
-          }
-
-          // 2. Auto-skip CompleteSecurity block
-          const skipBtn = document.querySelector('.mx_CompleteSecurity_skip, button[data-testid="skip-verification"]');
-          if (skipBtn && !skipBtn.disabled) {
-            console.log('[Matrix Key Guardian] Auto-skipping CompleteSecurity verification block...');
-            skipBtn.click();
-          }
-
-          // 3. Auto-handle verification popups ("Verify other device", "Verify this device", etc.)
-          const dialogs = document.querySelectorAll('.mx_Dialog, [role="dialog"], .mx_VerificationPanel');
-          for (const dialog of dialogs) {
-            const text = dialog.textContent || '';
-            if (/verify other device|verify this device|verify older device|verify session|choose how to verify|verification request|device verification/i.test(text)) {
-              const buttons = Array.from(dialog.querySelectorAll('button, [role="button"], a'));
-              const resetBtn = buttons.find(b => /reset all|reset encryption|reset keys|reset cryptographic identity/i.test(b.textContent || ''));
-              const cantVerifyBtn = buttons.find(b => /cannot verify|can\'t verify|i cannot/i.test(b.textContent || ''));
-              const verifyLaterBtn = buttons.find(b => /verify later|i\'ll verify later|later|skip/i.test(b.textContent || ''));
-
-              if (resetBtn && !resetBtn.disabled) {
-                console.log('[Matrix Key Guardian] Auto-clicking Reset keys in verification popup...');
-                resetBtn.click();
-                autoResetEncryptionKeys();
-                return;
-              }
-              if (cantVerifyBtn && !cantVerifyBtn.disabled) {
-                console.log('[Matrix Key Guardian] Clicking Cannot verify in verification popup...');
-                cantVerifyBtn.click();
-                return;
-              }
-              if (verifyLaterBtn && !verifyLaterBtn.disabled) {
-                console.log('[Matrix Key Guardian] Clicking Verify later in verification popup...');
-                verifyLaterBtn.click();
-                autoResetEncryptionKeys();
-                return;
-              }
-            }
-
-            // Auto-confirm key reset dialogs
-            if (/reset your digital identity|reset encryption|reset cryptographic identity/i.test(text)) {
-              const buttons = Array.from(dialog.querySelectorAll('button, [role="button"]'));
-              const confirmBtn = buttons.find(b => /continue with reset|reset identity|reset/i.test(b.textContent || '') && !/cancel/i.test(b.textContent || ''));
-              if (confirmBtn && !confirmBtn.disabled) {
-                console.log('[Matrix Key Guardian] Confirming key reset dialog...');
-                confirmBtn.click();
-                autoResetEncryptionKeys();
-                return;
-              }
-            }
-          }
-
-          // 4. Dismiss unverified session toasts
-          const toasts = document.querySelectorAll('.mx_Toast, .mx_Toast_toast');
-          for (const toast of toasts) {
-            const text = toast.textContent || '';
-            if (/unverified sessions|verify this device/i.test(text)) {
-              const dismiss = toast.querySelector('button, .mx_Toast_reject');
-              if (dismiss && /later|dismiss/i.test(dismiss.textContent || '')) {
-                dismiss.click();
-              }
-            }
-          }
         }).observe(document.documentElement, { childList: true, subtree: true });
-
-        // Periodically verify cross-signing status and auto-reset if unverified
-        let guardianChecks = 0;
-        const guardianTimer = setInterval(async () => {
-          guardianChecks++;
-          if (guardianChecks > 20) clearInterval(guardianTimer);
-          const client = window.mxDeviceListener?.sharedInstance?.()?.client ||
-                         window.mxInitialCryptoStore?.sharedInstance?.()?.client ||
-                         window.mxMatrixClientPeg?.safeGet?.() ||
-                         window.mxMatrixClientPeg?.get?.();
-          if (client?.getCrypto) {
-            const crypto = client.getCrypto();
-            try {
-              const isReady = await crypto.isCrossSigningReady?.();
-              if (isReady === false && !sessionStorage.getItem('mitch_keys_auto_reset_done')) {
-                sessionStorage.setItem('mitch_keys_auto_reset_done', '1');
-                await autoResetEncryptionKeys();
-              }
-            } catch (_) {}
-          }
-        }, 2000);
 
         // Listen for user clicks on "Remove this device" or "Sign out" inside error dialogs
         document.addEventListener('click', function(e) {
@@ -444,11 +321,12 @@
               credentials: 'same-origin',
               cache: 'no-store'
             });
+            if (response.status >= 500) return null;
             if (!response.ok) return false;
             const data = await response.json();
             return data.user_id === expectedUserId && data.device_id === expectedDeviceId;
           } catch (_) {
-            return false;
+            return null;
           }
         }
 
@@ -515,10 +393,12 @@
             window.updateMatrixShellAccount(status);
             const stored = readStoredSession();
 
-            // Reuse this browser's existing Matrix device if valid
-            if (stored.token && stored.userId && stored.deviceId &&
-                (!status.authenticated || stored.userId === status.user_id) &&
-                await storedSessionIsValid(stored.token, stored.userId, stored.deviceId)) {
+            const sameStatusAccount = !status.authenticated || stored.userId === status.user_id;
+            const sessionValidity = stored.token && stored.userId && stored.deviceId && sameStatusAccount
+              ? await storedSessionIsValid(stored.token, stored.userId, stored.deviceId)
+              : false;
+            // A temporary whoami outage should not sign out a working device.
+            if (sessionValidity === true || sessionValidity === null) {
               localStorage.setItem('mx_hs_url', 'https://mitchdog.com');
               localStorage.setItem('mx_has_access_token', 'true');
               localStorage.setItem('mx_is_guest', 'false');
@@ -527,15 +407,20 @@
               return;
             }
 
-            const reusableDeviceId = status.authenticated && stored.userId === status.user_id
-              ? stored.deviceId
-              : '';
-            if (stored.token || stored.userId) {
+            const sameAccount = status.authenticated && stored.userId === status.user_id;
+            const reusableDeviceId = sameAccount ? stored.deviceId : '';
+            // An expired token is not a new Matrix identity. Keep this device's
+            // crypto store until the SSO response confirms the device changed.
+            if (stored.userId && status.authenticated && !sameAccount) {
               clearStoredSession();
               await resetMatrixClientStores();
             }
 
             if (!status.authenticated) {
+              if (statusRes.ok && (stored.token || stored.userId)) {
+                clearStoredSession();
+                await resetMatrixClientStores();
+              }
               if (banner) banner.style.display = 'flex';
               bootElement();
               return;
@@ -550,10 +435,20 @@
             if (res.ok) {
               const data = await res.json();
               if (data && data.access_token && data.user_id) {
+                if ((stored.userId && data.user_id !== stored.userId) ||
+                    (reusableDeviceId && data.device_id !== reusableDeviceId)) {
+                  await resetMatrixClientStores();
+                }
                 saveSession(data);
                 if (banner) banner.style.display = "none";
+              } else {
+                localStorage.removeItem('mx_access_token');
+                localStorage.removeItem('mx_has_access_token');
+                if (banner) banner.style.display = "flex";
               }
             } else if (banner) {
+              localStorage.removeItem('mx_access_token');
+              localStorage.removeItem('mx_has_access_token');
               banner.style.display = "flex";
             }
           } catch (e) {
