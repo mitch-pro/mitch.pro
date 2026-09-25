@@ -159,17 +159,31 @@ svg {
   color: var(--t-fg, #ffffff);
 }
 
-/* Compound Web IconButtons and Action Buttons sizing & contrast */
+/* Compound Web IconButtons and Action Buttons sizing, contrast & precise centering */
 ._icon-button_1215g_8,
 button[class*="_icon-button_"],
 .mx_RoomHeader button,
 .mx_SpacePanel button,
 .mx_MessageComposer button,
-.mx_LeftPanel button {
+.mx_LeftPanel button,
+.mx_MessageComposer_button,
+.mx_AccessibleButton {
+  box-sizing: border-box !important;
+}
+
+._icon-button_1215g_8,
+button[class*="_icon-button_"],
+.mx_RoomHeader_icon,
+.mx_HeaderButtons_button,
+.mx_SpaceButton_icon,
+.mx_ThreadsActivityCentreButton,
+.mx_QuickSettingsButton {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
+  padding: 0 !important;
   color: var(--t-fg2, #b4a9c9) !important;
+  vertical-align: middle !important;
 }
 
 ._icon-button_1215g_8 svg,
@@ -179,16 +193,22 @@ button[class*="_icon-button_"] svg,
 .mx_MessageComposer button svg,
 .mx_LeftPanel button svg,
 .mx_RoomHeader_icon,
-.mx_HeaderButtons_button svg {
+.mx_HeaderButtons_button svg,
+.mx_ThreadsActivityCentreButton svg,
+.mx_QuickSettingsButton svg {
   width: 18px !important;
   height: 18px !important;
   min-width: 18px !important;
   min-height: 18px !important;
   display: block !important;
+  margin: auto !important;
+  padding: 0 !important;
   visibility: visible !important;
   opacity: 1 !important;
   fill: currentColor !important;
   color: var(--t-fg2, #b4a9c9) !important;
+  flex-shrink: 0 !important;
+  transform: none !important;
 }
 
 ._icon-button_1215g_8:hover svg,
@@ -196,8 +216,63 @@ button[class*="_icon-button_"]:hover svg,
 .mx_RoomHeader button:hover svg,
 .mx_SpacePanel button:hover svg,
 .mx_MessageComposer button:hover svg,
-.mx_LeftPanel button:hover svg {
+.mx_LeftPanel button:hover svg,
+.mx_ThreadsActivityCentreButton:hover svg,
+.mx_QuickSettingsButton:hover svg {
   color: var(--t-fg, #ffffff) !important;
+}
+
+/* Room list: online badge positioning and room name spacing to prevent overlap */
+.mx_RoomAvatarView,
+._roomListItem_vaz9j_8 .mx_BaseAvatar,
+._roomListItem_vaz9j_8 [class*="avatar"] {
+  margin-inline-end: 14px !important;
+  position: relative !important;
+  overflow: visible !important;
+}
+
+.mx_RoomAvatarView .mx_RoomAvatarView_PresenceDecoration,
+.mx_DecoratedRoomAvatar .mx_DecoratedRoomAvatar_icon,
+[class*="PresenceDecoration"],
+[class*="presenceDecoration"] {
+  bottom: -1px !important;
+  right: -1px !important;
+  left: auto !important;
+  position: absolute !important;
+}
+
+.mx_RoomTile_nameContainer,
+.mx_RoomTile_name,
+[class*="_roomName_"],
+[class*="_content_vaz9j"],
+._content_vaz9j_86,
+.mx_RoomTile_title {
+  padding-inline-start: 6px !important;
+  margin-inline-start: 2px !important;
+}
+
+/* Timeline message vertical spacing - make messages further apart */
+.mx_EventTile,
+._root_1eu7g_9,
+[class*="_eventTile_"] {
+  margin-block: 10px !important;
+  padding-block: 6px !important;
+}
+
+.mx_EventTile_info,
+.mx_GenericEventListSummary .mx_EventTile,
+._root_1eu7g_9._stateInfo_1eu7g_174,
+[class*="_stateInfo_"] {
+  min-height: 38px !important;
+  margin-block: 10px !important;
+  padding-block: 6px !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.mx_DateSeparator,
+[class*="_dateSeparator_"] {
+  margin-block: 20px !important;
 }
 
 /* Fix timeline state event avatar overlap in GenericEventListSummary and StateInfo */
@@ -222,7 +297,26 @@ button[class*="_icon-button_"]:hover svg,
 .mx_EventTile_info .mx_BaseAvatar {
   position: absolute !important;
   left: 8px !important;
-  top: 2px !important;
+  top: 4px !important;
+}
+
+/* Graceful avatar error fallback: hide failed images to cleanly show letter avatars */
+.mx_BaseAvatar img:not([src]),
+.mx_BaseAvatar img[src=""],
+._triggerButton_dh4sb_100 img:not([src]),
+._triggerButton_dh4sb_100 img[src=""],
+.broken-avatar,
+.avatar-img-failed img {
+  display: none !important;
+}
+
+.mx_BaseAvatar .mx_BaseAvatar_initial,
+._avatar-imageless_va14e_55,
+._triggerButton_dh4sb_100 {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
 }
 
 /* Mitch.pro Top Navigation Bar */

@@ -4501,15 +4501,44 @@ pub async fn handle_matrix_gateway(
                 }
             }
 
+            // Fallback for missing/404 Matrix media (e.g. missing avatar):
+            // Return 1x1 transparent PNG so the browser never renders a broken-image placeholder
+            if method == Method::GET && !status.is_success() && path.starts_with("/_matrix/media/") {
+                if path.contains("/download/") || path.contains("/thumbnail/") {
+                    static TRANSPARENT_PNG: [u8; 67] = [
+                        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+                        0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+                        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
+                        0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+                        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+                        0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+                    ];
+                    return Some(cors_response(StatusCode::OK, Bytes::from_static(&TRANSPARENT_PNG), Some("image/png")));
+                }
+            }
+
             Some(proxy_response_with_cors(status, &upstream_headers, bytes))
         }
-        Err(err) => Some(cors_json_response(
-            502,
-            json!({
-                "error": "Matrix chat backend unavailable",
-                "details": err
-            }),
-        )),
+        Err(err) => {
+            if method == Method::GET && path.starts_with("/_matrix/media/") && (path.contains("/download/") || path.contains("/thumbnail/")) {
+                static TRANSPARENT_PNG: [u8; 67] = [
+                    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+                    0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+                    0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
+                    0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+                    0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+                    0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+                ];
+                return Some(cors_response(StatusCode::OK, Bytes::from_static(&TRANSPARENT_PNG), Some("image/png")));
+            }
+            Some(cors_json_response(
+                502,
+                json!({
+                    "error": "Matrix chat backend unavailable",
+                    "details": err
+                }),
+            ))
+        }
     }
 }
 

@@ -344,6 +344,24 @@
           }
         }, true);
 
+        // Graceful fallback for broken avatar images: hide broken <img> so the styled initial avatar displays
+        window.addEventListener('error', function(e) {
+          const target = e.target;
+          if (target && target.tagName === 'IMG') {
+            const isAvatar = target.classList.contains('mx_BaseAvatar_image') ||
+              target.closest('.mx_BaseAvatar') ||
+              target.closest('._triggerButton_dh4sb_100') ||
+              target.closest('[class*="avatar"]') ||
+              target.closest('[class*="Avatar"]');
+            if (isAvatar) {
+              target.classList.add('broken-avatar');
+              target.style.display = 'none';
+              const parent = target.parentElement;
+              if (parent) parent.classList.add('avatar-img-failed');
+            }
+          }
+        }, true);
+
         function bootElement() {
           if (window.__elementLoaded) return;
           window.__elementLoaded = true;
