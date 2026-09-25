@@ -83,9 +83,9 @@ main#main { display: flex; flex-direction: column; gap: 0; }
 .hero { order: 0; }
 .snapshot { order: 1; }
 .schedule-zone { order: 2; }
-.week-zone { order: 3; }
+.apps-zone { order: 3; }
 .district-schools-zone { order: 4; }
-.apps-zone { order: 5; }
+.week-zone { order: 5; }
 .events-zone { order: 6; }
 .tools-zone { order: 7; }
 .faq-zone { order: 8; }

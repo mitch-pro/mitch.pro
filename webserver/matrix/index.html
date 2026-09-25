@@ -86,7 +86,7 @@
     <link rel="stylesheet" disabled="disabled" data-mx-theme="Dark-custom" title="Dark-custom" href="/matrix/bundles/156d536ae79bdae0c801/theme-dark-custom.css">
 
     <!-- Mitch.pro Galaxy visual theme & overrides -->
-    <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=5" />
+    <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=6" />
     <!-- Legacy client bundle compatibility anchor: /matrix/assets/index-BVlPv2dR.js -->
   </head>
   <body id="appBody">
@@ -362,7 +362,7 @@
 
         function isMatrixStoreAccountMismatch(value) {
           const message = String(value?.message || value || '');
-          return /account in the store doesn't match the account in the constructor/i.test(message);
+          return /account in the store doesn't match the account in the constructor|storage inconsistency|StorageManager consistency check failed|Missing session data|storage_evicted/i.test(message);
         }
 
         function beginMatrixStoreRecovery() {
@@ -379,18 +379,33 @@
           if (isMatrixStoreAccountMismatch(event.reason)) beginMatrixStoreRecovery();
         });
 
-        // Watch error panel for Matrix crypto-store identity failure
+        // Watch error panel & dialogs for Matrix crypto-store identity failure
         new MutationObserver(mutations => {
           for (const mutation of mutations) {
             for (const node of mutation.addedNodes) {
-              const message = node.nodeType === Node.TEXT_NODE ? node.nodeValue : node.textContent;
+              const message = node.nodeType === Node.TEXT_NODE ? node.nodeValue : (node.textContent || '');
               if (isMatrixStoreAccountMismatch(message)) {
+                console.warn('[Matrix Storage] Storage error detected in DOM:', message.slice(0, 100));
+                localStorage.removeItem("mx_crypto_initialised");
+                localStorage.removeItem("mx_has_pickle_key");
                 beginMatrixStoreRecovery();
                 return;
               }
             }
           }
         }).observe(document.documentElement, { childList: true, subtree: true });
+
+        // Listen for user clicks on "Remove this device" or "Sign out" inside error dialogs
+        document.addEventListener('click', function(e) {
+          const btn = e.target && e.target.closest && e.target.closest('button');
+          if (btn && (/remove this device/i.test(btn.textContent) || /sign out/i.test(btn.textContent))) {
+            const dialog = btn.closest('.mx_Dialog, .mx_ErrorDialog, [role="dialog"]');
+            if (dialog && /missing session data|storage/i.test(dialog.textContent)) {
+              console.log('[Matrix Storage] User clicked Remove this device. Performing clean store reset.');
+              beginMatrixStoreRecovery();
+            }
+          }
+        }, true);
 
         function bootElement() {
           if (window.__elementLoaded) return;
@@ -401,9 +416,28 @@
         }
         const bootCinny = bootElement;
 
-        function readStoredSession() {
+        async function readStoredSession() {
+          let token = localStorage.getItem("mx_access_token") || localStorage.getItem("cinny_access_token") || '';
+          if (!token && 'indexedDB' in window) {
+            token = await new Promise(resolve => {
+              try {
+                const req = indexedDB.open('matrix-react-sdk');
+                req.onerror = () => resolve('');
+                req.onsuccess = () => {
+                  try {
+                    const db = req.result;
+                    if (!db.objectStoreNames.contains('account')) { db.close(); return resolve(''); }
+                    const tx = db.transaction('account', 'readonly');
+                    const getReq = tx.objectStore('account').get('mx_access_token');
+                    getReq.onsuccess = () => { db.close(); resolve(getReq.result || ''); };
+                    getReq.onerror = () => { db.close(); resolve(''); };
+                  } catch (_) { resolve(''); }
+                };
+              } catch (_) { resolve(''); }
+            });
+          }
           return {
-            token: localStorage.getItem("mx_access_token") || localStorage.getItem("cinny_access_token") || '',
+            token,
             userId: localStorage.getItem("mx_user_id") || localStorage.getItem("cinny_user_id") || '',
             deviceId: localStorage.getItem("mx_device_id") || localStorage.getItem("cinny_device_id") || ''
           };
@@ -412,6 +446,8 @@
         function clearStoredSession() {
           for (const key of [
             'mx_access_token', 'mx_device_id', 'mx_user_id', 'mx_hs_url', 'mx_has_access_token', 'mx_is_guest',
+            'mx_crypto_initialised', 'mx_has_pickle_key', 'mx_soft_logout', 'must_verify_device', 'mx_fresh_login',
+            'mx_has_refresh_token', 'mx_refresh_token',
             'cinny_access_token', 'cinny_device_id', 'cinny_user_id', 'cinny_hs_base_url'
           ]) {
             localStorage.removeItem(key);
@@ -452,6 +488,29 @@
           const cleared = await resetMatrixClientStores();
           if (cleared) localStorage.removeItem(MATRIX_STORE_RECOVERY_KEY);
           return { pending: true, cleared };
+        }
+
+        async function sanitizeStorageBeforeBoot() {
+          if (localStorage.getItem("mx_crypto_initialised")) {
+            const hasCryptoDb = await new Promise(resolve => {
+              if (!('indexedDB' in window)) return resolve(false);
+              try {
+                const req = indexedDB.open('matrix-js-sdk::matrix-sdk-crypto');
+                req.onerror = () => resolve(false);
+                req.onsuccess = () => {
+                  const db = req.result;
+                  const hasStores = db.objectStoreNames.length > 0;
+                  db.close();
+                  resolve(hasStores);
+                };
+              } catch (_) { resolve(false); }
+            });
+            if (!hasCryptoDb) {
+              console.warn('[Matrix Storage] Resetting stale mx_crypto_initialised flag (no crypto db found in IndexedDB)');
+              localStorage.removeItem("mx_crypto_initialised");
+              localStorage.removeItem("mx_has_pickle_key");
+            }
+          }
         }
 
         async function storedSessionIsValid(token, expectedUserId, expectedDeviceId) {
@@ -505,7 +564,7 @@
             if (typeof window.updateMatrixShellAccount === 'function') {
               window.updateMatrixShellAccount(status);
             }
-            const stored = readStoredSession();
+            const stored = await readStoredSession();
 
             // Reuse this browser's existing Matrix device. Logging in again on
             // every page load creates abandoned devices and destabilizes E2EE.
@@ -517,6 +576,7 @@
               localStorage.setItem('mx_is_guest', 'false');
               localStorage.setItem('cinny_hs_base_url', 'https://mitchdog.com');
               if (banner) banner.style.display = 'none';
+              await sanitizeStorageBeforeBoot();
               bootElement();
               return;
             }
@@ -524,10 +584,14 @@
             const reusableDeviceId = status.authenticated && stored.userId === status.user_id
               ? stored.deviceId
               : '';
-            if (stored.token || stored.userId) clearStoredSession();
+            if (stored.token || stored.userId) {
+              clearStoredSession();
+              await resetMatrixClientStores();
+            }
 
             if (!status.authenticated) {
               if (banner) banner.style.display = 'flex';
+              await sanitizeStorageBeforeBoot();
               bootElement();
               return;
             }
@@ -549,9 +613,13 @@
             }
           } catch (e) {
             console.warn("[Mitch Matrix SSO]", e);
-            if (!readStoredSession().token && banner) banner.style.display = "flex";
+            const current = await readStoredSession();
+            if (!current.token && banner) banner.style.display = "flex";
           } finally {
-            if (shouldBootCinny) bootElement();
+            if (shouldBootCinny) {
+              await sanitizeStorageBeforeBoot();
+              bootElement();
+            }
           }
         }
 
@@ -778,8 +846,5 @@
     <div id="mx_Dialog_StaticContainer"></div>
     <div id="mx_Dialog_Container"></div>
     <div id="mx_ContextualMenu_Container"></div>
-
-    <div id="root" style="display:none"></div>
-    <div id="portalContainer" style="display:none"></div>
   </body>
 </html>

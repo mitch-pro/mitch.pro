@@ -304,19 +304,15 @@ html:not([data-bglayer]) body::after { display: none !important; }
 
 
 #root {
-  position: relative;
-  z-index: 1;
-  flex: 1 1 0;
-  min-height: 0;
-  height: auto;
-  width: auto;
-  margin: 12px max(12px, calc((100vw - 1440px) / 2));
-  display: flex !important;
-  overflow: hidden !important;
-  background: var(--t-bg2) !important;
-  border: 1px solid var(--t-bd);
-  border-radius: 18px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  position: absolute !important;
+  top: -9999px !important;
 }
 
 #root,
