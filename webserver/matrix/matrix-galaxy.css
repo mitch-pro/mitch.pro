@@ -762,3 +762,172 @@ html.theme-light #mitch-sso-banner {
   color: var(--t-fg, #24292f);
   box-shadow: 0 8px 24px rgba(0,0,0,0.12);
 }
+
+/* Keep Element's login and onboarding in the same visual system as the site. */
+.matrix-page .mx_AuthPage {
+  width: 100% !important;
+  min-height: 100% !important;
+  background: color-mix(in srgb, var(--t-bg, #070510) 86%, transparent) !important;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.matrix-page .mx_AuthPage_modal {
+  box-sizing: border-box;
+  width: min(480px, calc(100% - 32px)) !important;
+  max-width: calc(100% - 32px) !important;
+  margin-inline: auto;
+  border: 1px solid var(--t-bd, rgba(255, 255, 255, .1));
+  border-radius: 20px;
+  background: var(--t-bg2, #171526) !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .28);
+  overflow: hidden;
+}
+
+.matrix-page .mx_AuthPage_modalContent,
+.matrix-page .mx_AuthPage_modalContent > *,
+.matrix-page .mx_Welcome,
+.matrix-page .mx_DefaultWelcome {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.matrix-page .mx_AuthPage_modalBlur { display: none !important; }
+.matrix-page .mx_AuthPage_modal_withBlur .mx_AuthPage_modalContent {
+  display: block !important;
+  width: 100%;
+}
+.matrix-page .mx_AuthPage_modal_withBlur .mx_AuthBody {
+  box-sizing: border-box;
+  width: 100% !important;
+  max-width: 100% !important;
+  padding: 28px 32px 32px;
+  background: transparent !important;
+}
+.matrix-page .mx_AuthPage_modal_withBlur .mx_AuthBody form,
+.matrix-page .mx_AuthPage_modal_withBlur .mx_Field { max-width: 100%; }
+
+.matrix-page .mx_Welcome {
+  width: 100%;
+  padding: 36px 32px 24px;
+  background: transparent !important;
+}
+
+.matrix-page .mx_DefaultWelcome { width: 100%; }
+.matrix-page .mx_DefaultWelcome_logo { display: none !important; }
+.matrix-page .mx_DefaultWelcome::before {
+  content: '';
+  display: block;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 8px;
+  background: url('/icon-192.png') center / contain no-repeat;
+}
+.matrix-page .mx_DefaultWelcome h1 {
+  max-width: 100%;
+  margin: 16px 0 24px;
+  color: var(--t-fg, #fff) !important;
+  font-size: clamp(22px, 4vw, 28px);
+  line-height: 1.18;
+  letter-spacing: -.035em;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.matrix-page .mx_DefaultWelcome_buttons { width: 100%; max-width: 100%; }
+.matrix-page .mx_DefaultWelcome_buttons a {
+  box-sizing: border-box;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 40px;
+}
+.matrix-page .mx_DefaultWelcome_buttons a[data-kind="primary"] {
+  color: #fff !important;
+  background: var(--t-ac, #9e6bea) !important;
+  border-color: transparent !important;
+}
+.matrix-page .mx_DefaultWelcome_buttons a[data-kind="primary"]:hover {
+  background: var(--t-ac2, #ad7af3) !important;
+}
+.matrix-page .mx_DefaultWelcome_buttons a[data-kind="secondary"] {
+  color: var(--t-fg, #fff) !important;
+  border-color: var(--t-bd, rgba(255,255,255,.16)) !important;
+}
+.matrix-page .mx_DefaultWelcome_buttons a[data-kind="tertiary"] {
+  color: var(--t-ac, #b86cff) !important;
+}
+.matrix-page .mx_DefaultWelcome_buttons a:focus-visible,
+#matrix-site-bar a:focus-visible,
+#mitch-sso-btn:focus-visible {
+  outline: 2px solid var(--t-ac, #b86cff);
+  outline-offset: 3px;
+}
+
+.matrix-page .mx_AuthFooter {
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 18px;
+}
+.matrix-page .mx_AuthFooter a { color: var(--t-fg2, #b4a9c9); }
+
+#matrix-site-bar .matrix-blooket-status {
+  max-width: 126px;
+  font-size: 10px;
+  line-height: 1.15;
+  white-space: normal;
+}
+
+@media (max-width: 760px) {
+  #matrix-site-bar {
+    height: 86px;
+    min-height: 86px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 42px 44px;
+    gap: 0 12px;
+    padding: 0 12px;
+  }
+  #matrix-site-bar .matrix-wordmark { grid-column: 1; grid-row: 1; }
+  #matrix-site-bar .matrix-site-actions { grid-column: 2; grid-row: 1; }
+  #matrix-site-bar .matrix-site-links {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-width: 0;
+    width: 100%;
+    height: 44px;
+    gap: 18px;
+    border-top: 1px solid var(--t-bd, rgba(255,255,255,.08));
+  }
+  #matrix-site-bar .matrix-site-links a { min-height: 44px; }
+  #matrix-site-bar .matrix-blooket-status {
+    max-width: none;
+    white-space: nowrap;
+  }
+  .matrix-network-status { display: none; }
+  #matrixchat { height: calc(100dvh - 86px) !important; }
+  #mitch-sso-banner {
+    top: 96px;
+    box-sizing: border-box;
+    width: calc(100% - 24px);
+    max-width: 440px;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+  .matrix-page:has(#mitch-sso-banner[style*="flex"]) .mx_AuthPage_modal { margin-top: 106px; }
+  .matrix-page .mx_Welcome { padding: 28px 20px 18px; }
+  .matrix-page .mx_AuthPage_modal { border-radius: 16px; }
+}
+
+@media (max-width: 420px) {
+  .matrix-page .mx_AuthPage_modal { width: calc(100% - 20px) !important; max-width: calc(100% - 20px) !important; }
+  .matrix-page .mx_Welcome { padding-inline: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #matrix-site-bar a,
+  .matrix-page .mx_DefaultWelcome_buttons a { transition: none !important; }
+}

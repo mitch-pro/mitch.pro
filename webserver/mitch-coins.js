@@ -125,8 +125,9 @@
     const widget = document.createElement('a');
     widget.className = 'mitch-wallet' + (placement ? ' ' + placement : '');
     widget.innerHTML = '<img class="mitch-coin-icon" src="' + icon + '" width="32" height="32" alt="" decoding="async" loading="lazy" fetchpriority="low"><span class="mitch-wallet-copy"><span class="mitch-wallet-label">MitchCoins</span><strong class="mitch-wallet-value">—</strong></span>';
+    // An account link inside a nested nav is not a direct child of host.
     const account = host.querySelector('.app-account-link, .home-account-link, #nav-login');
-    host.insertBefore(widget, account || null);
+    host.insertBefore(widget, account && account.parentElement === host ? account : null);
     host.classList.add('has-mitch-wallet');
     widgets.push(widget);
   }

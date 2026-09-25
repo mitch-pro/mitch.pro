@@ -895,7 +895,7 @@
     if (!document.getElementById('mitch-watermark')) {
       var wm = document.createElement('img');
       wm.id = 'mitch-watermark';
-      wm.src = '/favicon.ico';
+      wm.src = '/icon-192.png';
       wm.style.cssText = 'position:fixed;right:15px;bottom:15px;width:32px;height:32px;opacity:0.7;pointer-events:none;z-index:999998;';
       document.body.appendChild(wm);
     }

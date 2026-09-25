@@ -34,10 +34,10 @@
     <link rel="stylesheet" disabled="disabled" data-mx-theme="Dark-custom" title="Dark-custom" href="/matrix/bundles/156d536ae79bdae0c801/theme-dark-custom.css">
 
     <!-- Mitch.pro Scoped Matrix Shell Stylesheet -->
-    <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=7" />
+    <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=8" />
     <!-- Legacy client bundle compatibility anchor: /matrix/assets/index-BVlPv2dR.js -->
   </head>
-  <body style="height: 100%; margin: 0;">
+  <body class="matrix-page mitch-design" style="height: 100%; margin: 0;">
     <header id="matrix-site-bar">
       <a class="matrix-wordmark" href="/" aria-label="mitch.pro home"><b>mitch</b><span>.pro</span></a>
       <nav class="matrix-site-links" aria-label="Main navigation">
@@ -45,12 +45,11 @@
         <a href="/vms/">VM Lab <span class="matrix-free-pill">FREE</span></a>
         <a href="/matrix/" aria-current="page">Chat</a>
         <a href="/game-portal/">Games</a>
-        <a href="https://woodcreek.site/">Blooket Bot</a>
+        <a class="matrix-blooket-status" href="https://woodcreek.site/">Blooket Bot currently blocked :(</a>
         <a href="/members/">People</a>
         <a href="https://rjuhsd.school/">Schedule</a>
       </nav>
       <div class="matrix-site-actions">
-        <span class="matrix-network-status"><i></i> Encrypted</span>
         <a id="matrix-account-link" class="matrix-account-link" href="/preferences/#account">
           <span id="matrix-account-avatar" aria-hidden="true">M</span>
           <span id="matrix-account-name">Account</span>
@@ -69,7 +68,7 @@
 
     <!-- Mitch.pro SSO Connect Banner -->
     <div id="mitch-sso-banner">
-      <span id="mitch-sso-msg">✨ Connect your Mitch.pro account for instant single sign-on</span>
+      <span id="mitch-sso-msg">Connect your Mitch.pro account to chat</span>
       <a id="mitch-sso-btn" href="/api/sso/bridge?back=/matrix/">Login with mitch.pro</a>
     </div>
 
