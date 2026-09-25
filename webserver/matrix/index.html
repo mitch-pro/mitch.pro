@@ -260,7 +260,7 @@
           const dialogs = document.querySelectorAll('.mx_Dialog, [role="dialog"], .mx_VerificationPanel');
           for (const dialog of dialogs) {
             const text = dialog.textContent || '';
-            if (/verify other device|verify this device|verify session|choose how to verify|verification request/i.test(text)) {
+            if (/verify other device|verify this device|verify older device|verify session|choose how to verify|verification request|device verification/i.test(text)) {
               const buttons = Array.from(dialog.querySelectorAll('button, [role="button"], a'));
               const resetBtn = buttons.find(b => /reset all|reset encryption|reset keys|reset cryptographic identity/i.test(b.textContent || ''));
               const cantVerifyBtn = buttons.find(b => /cannot verify|can\'t verify|i cannot/i.test(b.textContent || ''));

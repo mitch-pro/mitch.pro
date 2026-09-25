@@ -159,6 +159,72 @@ svg {
   color: var(--t-fg, #ffffff);
 }
 
+/* Compound Web IconButtons and Action Buttons sizing & contrast */
+._icon-button_1215g_8,
+button[class*="_icon-button_"],
+.mx_RoomHeader button,
+.mx_SpacePanel button,
+.mx_MessageComposer button,
+.mx_LeftPanel button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: var(--t-fg2, #b4a9c9) !important;
+}
+
+._icon-button_1215g_8 svg,
+button[class*="_icon-button_"] svg,
+.mx_RoomHeader button svg,
+.mx_SpacePanel button svg,
+.mx_MessageComposer button svg,
+.mx_LeftPanel button svg,
+.mx_RoomHeader_icon,
+.mx_HeaderButtons_button svg {
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  fill: currentColor !important;
+  color: var(--t-fg2, #b4a9c9) !important;
+}
+
+._icon-button_1215g_8:hover svg,
+button[class*="_icon-button_"]:hover svg,
+.mx_RoomHeader button:hover svg,
+.mx_SpacePanel button:hover svg,
+.mx_MessageComposer button:hover svg,
+.mx_LeftPanel button:hover svg {
+  color: var(--t-fg, #ffffff) !important;
+}
+
+/* Fix timeline state event avatar overlap in GenericEventListSummary and StateInfo */
+._root_1eu7g_9._stateInfo_1eu7g_174 ._line_1eu7g_71,
+._root_1eu7g_9._stateInfo_1eu7g_174 .mx_EventTile_line,
+.mx_EventTile._stateInfo_1eu7g_174 .mx_EventTile_line,
+.mx_GenericEventListSummary .mx_EventTile_line,
+.mx_GenericEventListSummary[data-layout=bubble] .mx_EventTile_line,
+.mx_GenericEventListSummary .mx_EventTile:has(.mx_BaseAvatar) .mx_EventTile_line,
+.mx_EventTile_info .mx_EventTile_line,
+.mx_EventTile[data-layout=bubble] .mx_EventTile_line {
+  padding-inline-start: calc(var(--event-tile-group-gutter, 64px) + 52px) !important;
+}
+
+._root_1eu7g_9._stateInfo_1eu7g_174 ._slotAvatar_1eu7g_95 {
+  inset-inline-start: var(--event-tile-group-gutter, 64px) !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.mx_GenericEventListSummary .mx_BaseAvatar,
+.mx_EventTile_info .mx_BaseAvatar {
+  position: absolute !important;
+  left: 8px !important;
+  top: 2px !important;
+}
+
 /* Mitch.pro Top Navigation Bar */
 #matrix-site-bar {
   position: relative;
