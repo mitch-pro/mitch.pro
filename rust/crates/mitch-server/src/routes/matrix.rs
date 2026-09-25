@@ -924,6 +924,120 @@ pub async fn sync_profile_to_matrix(
                 )
                 .await;
             }
+        } else {
+            let avatar_bytes_opt: Option<(String, Vec<u8>)> = if raw_pfp.starts_with("data:image/") {
+                if let Some((meta, data)) = raw_pfp.split_once(',') {
+                    let mime = meta
+                        .trim_start_matches("data:")
+                        .split(';')
+                        .next()
+                        .unwrap_or("image/png");
+                    if meta.contains(";base64") {
+                        use base64::Engine;
+                        base64::engine::general_purpose::STANDARD
+                            .decode(data.trim())
+                            .ok()
+                            .map(|b| (mime.to_string(), b))
+                    } else {
+                        Some((mime.to_string(), data.as_bytes().to_vec()))
+                    }
+                } else {
+                    None
+                }
+            } else if raw_pfp.starts_with('/') {
+                let clean = raw_pfp.trim_start_matches('/');
+                let p1 = state.store.base_dir.join("webserver").join(clean);
+                let p2 = state.data_dir().join(clean);
+                let target = if p1.exists() {
+                    Some(p1)
+                } else if p2.exists() {
+                    Some(p2)
+                } else {
+                    None
+                };
+                if let Some(path) = target {
+                    if let Ok(bytes) = tokio::fs::read(&path).await {
+                        let mime = if clean.ends_with(".png") {
+                            "image/png"
+                        } else if clean.ends_with(".jpg") || clean.ends_with(".jpeg") {
+                            "image/jpeg"
+                        } else if clean.ends_with(".webp") {
+                            "image/webp"
+                        } else if clean.ends_with(".gif") {
+                            "image/gif"
+                        } else if clean.ends_with(".svg") {
+                            "image/svg+xml"
+                        } else {
+                            "image/png"
+                        };
+                        Some((mime.to_string(), bytes))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else if raw_pfp.starts_with("http://") || raw_pfp.starts_with("https://") {
+                if let Ok(resp) = conduit_client()
+                    .get(raw_pfp)
+                    .timeout(std::time::Duration::from_secs(5))
+                    .send()
+                    .await
+                {
+                    if resp.status().is_success() {
+                        let mime = resp
+                            .headers()
+                            .get("content-type")
+                            .and_then(|v| v.to_str().ok())
+                            .unwrap_or("image/png")
+                            .to_string();
+                        if let Ok(bytes) = resp.bytes().await {
+                            Some((mime, bytes.to_vec()))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            if let Some((mime, bytes)) = avatar_bytes_opt {
+                let mut upload_headers = HeaderMap::new();
+                if let Ok(val) = HeaderValue::from_str(&format!("Bearer {token}")) {
+                    upload_headers.insert("Authorization", val);
+                }
+                if let Ok(val) = HeaderValue::from_str(&mime) {
+                    upload_headers.insert("Content-Type", val);
+                }
+                if let Ok((status, _, upload_resp)) = call_conduit(
+                    "/_matrix/media/v3/upload?filename=avatar",
+                    Method::POST,
+                    Some(upload_headers),
+                    Some(Bytes::from(bytes)),
+                )
+                .await
+                {
+                    if status.is_success() {
+                        if let Ok(resp_json) = serde_json::from_slice::<Value>(&upload_resp) {
+                            if let Some(mxc_uri) = resp_json.get("content_uri").and_then(|v| v.as_str()) {
+                                let body = json!({ "avatar_url": mxc_uri });
+                                let _ = call_conduit(
+                                    &format!("/_matrix/client/v3/profile/{encoded_user_id}/avatar_url"),
+                                    Method::PUT,
+                                    Some(auth_header.clone()),
+                                    Some(Bytes::from(serde_json::to_vec(&body).unwrap_or_default())),
+                                )
+                                .await;
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -1435,6 +1549,12 @@ fn api_sso_status(state: &AppState, headers: &HeaderMap) -> Response {
         .or_else(|| prof.get("nickname"))
         .and_then(|v| v.as_str())
         .unwrap_or(username);
+    let raw_pfp = prof.get("pfp").and_then(|v| v.as_str()).unwrap_or("");
+    let pfp_val = if let Some(stripped) = raw_pfp.strip_prefix("mxc://") {
+        format!("/_matrix/media/v3/download/{stripped}")
+    } else {
+        raw_pfp.to_string()
+    };
 
     cors_json_response(
         200,
@@ -1443,7 +1563,7 @@ fn api_sso_status(state: &AppState, headers: &HeaderMap) -> Response {
             "username": username,
             "user_id": format!("@{assigned_username}:mitch.pro"),
             "displayName": display_name,
-            "pfp": prof.get("pfp").and_then(|v| v.as_str()).unwrap_or(""),
+            "pfp": pfp_val,
             "bio": prof.get("bio").and_then(|v| v.as_str()).unwrap_or(""),
         }),
     )
@@ -1639,18 +1759,24 @@ async fn api_sso_login(state: &AppState, headers: &HeaderMap, body_bytes: &[u8])
     sync_matrix_user_to_official_rooms(&state.id_secret, user_id, access_token, target_power_level)
         .await;
 
-    let pfp_val = prof.get("pfp").and_then(|v| v.as_str()).unwrap_or("");
+    let raw_pfp = prof.get("pfp").and_then(|v| v.as_str()).unwrap_or("");
     let bio_val = prof.get("bio").and_then(|v| v.as_str()).unwrap_or("");
 
     sync_profile_to_matrix(
         state,
         uid,
         Some(display_name),
-        Some(pfp_val),
+        Some(raw_pfp),
         Some(bio_val),
         Some(access_token),
     )
     .await;
+
+    let pfp_val = if let Some(stripped) = raw_pfp.strip_prefix("mxc://") {
+        format!("/_matrix/media/v3/download/{stripped}")
+    } else {
+        raw_pfp.to_string()
+    };
 
     cors_json_response(
         200,

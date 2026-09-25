@@ -16,6 +16,7 @@
   },
   "disable_custom_urls": true,
   "disable_guests": false,
+  "force_verification": false,
   "brand": "Mitch.pro Matrix",
   "default_theme": "dark",
   "setting_defaults": {

@@ -11,11 +11,152 @@ html, body {
   margin: 0;
   padding: 0;
   overflow: hidden;
+  background: var(--t-bg-img-layer, var(--t-bg, #070510)) !important;
+  background-attachment: fixed !important;
+  background-size: var(--t-bg-size, cover) !important;
+  background-position: var(--t-bg-pos, center) !important;
+  background-repeat: var(--t-bg-repeat, no-repeat) !important;
+  color: var(--t-fg, #faf7ff);
 }
 
 #matrixchat {
   height: calc(100% - 44px) !important;
   width: 100% !important;
+  background: transparent !important;
+}
+
+/* ── Compound & Element Web Token Sync with Mitch.pro Theme Engine ────── */
+:root,
+body,
+.cpd-theme-dark,
+.cpd-theme-light,
+#matrixchat,
+.mx_MatrixChat {
+  /* Surfaces & Backgrounds */
+  --cpd-color-bg-canvas-default: var(--t-bg, #070510) !important;
+  --cpd-color-bg-canvas-inset: var(--t-bg, #070510) !important;
+  --cpd-color-bg-canvas-disabled: var(--t-bg3, rgba(42, 23, 76, 0.74)) !important;
+  --cpd-color-bg-subtle-secondary: var(--t-bg2, rgba(22, 13, 44, 0.75)) !important;
+  --cpd-color-bg-subtle-primary: var(--t-bg3, rgba(42, 23, 76, 0.6)) !important;
+  --cpd-color-theme-bg: var(--t-bg, #070510) !important;
+
+  /* Text & Labels */
+  --cpd-color-text-primary: var(--t-fg, #faf7ff) !important;
+  --cpd-color-text-secondary: var(--t-fg2, #b4a9c9) !important;
+  --cpd-color-text-disabled: var(--t-fg3, rgba(180, 169, 201, 0.5)) !important;
+  --cpd-color-text-action-accent: var(--t-ac, #b86cff) !important;
+  --cpd-color-text-link-external: var(--t-ac, #b86cff) !important;
+  --cpd-color-text-badge-accent: var(--t-ac, #b86cff) !important;
+  --cpd-color-text-on-solid-primary: #ffffff !important;
+
+  /* Icons */
+  --cpd-color-icon-primary: var(--t-fg, #faf7ff) !important;
+  --cpd-color-icon-secondary: var(--t-fg2, #b4a9c9) !important;
+  --cpd-color-icon-tertiary: var(--t-fg2, #8a7c9f) !important;
+  --cpd-color-icon-accent-tertiary: var(--t-ac, #b86cff) !important;
+  --cpd-color-icon-on-solid-primary: #ffffff !important;
+  --icon-color: var(--t-fg2, #b4a9c9) !important;
+  --v-icon-color: var(--t-fg2, #b4a9c9) !important;
+
+  /* Actions & Interactive */
+  --cpd-color-bg-action-primary-rest: var(--t-ac, #b86cff) !important;
+  --cpd-color-bg-action-primary-hovered: var(--t-ac2, #e47cff) !important;
+  --cpd-color-bg-action-primary-pressed: var(--t-ac3, #8257ff) !important;
+  --cpd-color-bg-action-secondary-rest: var(--t-bg3, rgba(42, 23, 76, 0.6)) !important;
+  --cpd-color-bg-action-secondary-hovered: var(--t-bda, rgba(194, 126, 255, 0.48)) !important;
+  --cpd-color-border-interactive-primary: var(--t-ac, #b86cff) !important;
+  --cpd-color-border-interactive-hovered: var(--t-ac2, #e47cff) !important;
+  --cpd-color-border-interactive-secondary: var(--t-bd, rgba(224, 198, 255, 0.16)) !important;
+  --cpd-color-separator-primary: var(--t-bd, rgba(224, 198, 255, 0.16)) !important;
+
+  /* Legacy Element Web Theme Variables */
+  --accent-color: var(--t-ac, #b86cff) !important;
+  --primary-color: var(--t-ac, #b86cff) !important;
+  --timeline-background-color: transparent !important;
+  --roomlist-background-color: var(--t-bg2, rgba(22, 13, 44, 0.75)) !important;
+  --sidebar-color: var(--t-bg2, rgba(22, 13, 44, 0.75)) !important;
+  --panel-gradient: var(--t-gr, linear-gradient(135deg, #7957f1, #ca57f5)) !important;
+  --header-panel-bg-color: var(--t-bg2, rgba(22, 13, 44, 0.8)) !important;
+  --dialog-background-color: var(--t-bg2, rgba(22, 13, 44, 0.95)) !important;
+  --quinary-content-color: var(--t-bd, rgba(224, 198, 255, 0.16)) !important;
+}
+
+#mx_theme_accentColor {
+  color: var(--t-ac, #b86cff) !important;
+}
+#mx_theme_secondaryAccentColor {
+  color: var(--t-ac2, #e47cff) !important;
+}
+#mx_theme_tertiaryAccentColor {
+  color: var(--t-ac3, #8257ff) !important;
+}
+
+/* Translucent chat panels letting active wallpaper shine through */
+.mx_MatrixChat {
+  background: transparent !important;
+}
+
+.mx_MatrixChat > .mx_LeftPanel,
+.mx_LeftPanel {
+  background: color-mix(in srgb, var(--t-bg2, rgba(22, 13, 44, 0.82)) 88%, transparent) !important;
+  backdrop-filter: blur(var(--t-bg-blur, 8px)) !important;
+  -webkit-backdrop-filter: blur(var(--t-bg-blur, 8px)) !important;
+  border-right: 1px solid var(--t-bd, rgba(224, 198, 255, 0.12)) !important;
+}
+
+.mx_MatrixChat > .mx_SpacePanel,
+.mx_SpacePanel {
+  background: color-mix(in srgb, var(--t-bg, rgba(7, 5, 16, 0.92)) 92%, transparent) !important;
+  backdrop-filter: blur(var(--t-bg-blur, 8px)) !important;
+  -webkit-backdrop-filter: blur(var(--t-bg-blur, 8px)) !important;
+  border-right: 1px solid var(--t-bd, rgba(224, 198, 255, 0.12)) !important;
+}
+
+.mx_RoomView,
+.mx_RoomView_wrapper {
+  background: color-mix(in srgb, var(--t-bg, #070510) 82%, transparent) !important;
+  backdrop-filter: blur(calc(var(--t-bg-blur, 8px) / 2)) !important;
+  -webkit-backdrop-filter: blur(calc(var(--t-bg-blur, 8px) / 2)) !important;
+}
+
+.mx_RoomHeader {
+  background: color-mix(in srgb, var(--t-bg2, rgba(22, 13, 44, 0.85)) 88%, transparent) !important;
+  backdrop-filter: blur(var(--t-bg-blur, 8px)) !important;
+  -webkit-backdrop-filter: blur(var(--t-bg-blur, 8px)) !important;
+  border-bottom: 1px solid var(--t-bd, rgba(224, 198, 255, 0.12)) !important;
+}
+
+.mx_MessageComposer {
+  background: color-mix(in srgb, var(--t-bg2, rgba(22, 13, 44, 0.85)) 88%, transparent) !important;
+  backdrop-filter: blur(var(--t-bg-blur, 8px)) !important;
+  -webkit-backdrop-filter: blur(var(--t-bg-blur, 8px)) !important;
+  border-top: 1px solid var(--t-bd, rgba(224, 198, 255, 0.12)) !important;
+}
+
+.mx_Dialog {
+  background: var(--t-bg2, rgba(22, 13, 44, 0.96)) !important;
+  border: 1px solid var(--t-bd, rgba(224, 198, 255, 0.2)) !important;
+  border-radius: var(--t-radius, 12px) !important;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 24px var(--t-gls, rgba(180, 94, 255, 0.14)) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  color: var(--t-fg, #faf7ff) !important;
+}
+
+/* Ensure SVG icons render cleanly with contrast */
+.mx_Icon,
+svg {
+  color: inherit;
+}
+.mx_RoomHeader_icon,
+.mx_HeaderButtons_button,
+.mx_SpaceButton_icon {
+  color: var(--t-fg2, #b4a9c9);
+}
+.mx_RoomHeader_icon:hover,
+.mx_HeaderButtons_button:hover,
+.mx_SpaceButton_icon:hover {
+  color: var(--t-fg, #ffffff);
 }
 
 /* Mitch.pro Top Navigation Bar */
@@ -30,23 +171,25 @@ html, body {
   justify-content: space-between;
   gap: 16px;
   padding: 0 16px;
-  background: #111217;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  color: #e1e6eb;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: color-mix(in srgb, var(--t-bg2, rgba(22, 13, 44, 0.9)) 90%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--t-bd, rgba(255, 255, 255, 0.08));
+  color: var(--t-fg, #e1e6eb);
+  font-family: var(--t-font, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
   font-size: 13px;
   user-select: none;
   box-sizing: border-box;
 }
 
 #matrix-site-bar a {
-  color: #9da6b2;
+  color: var(--t-fg2, #9da6b2);
   text-decoration: none;
   transition: color 0.15s ease;
 }
 
 #matrix-site-bar a:hover {
-  color: #ffffff;
+  color: var(--t-fg, #ffffff);
 }
 
 .matrix-wordmark {
@@ -54,12 +197,12 @@ html, body {
   align-items: baseline;
   font-size: 16px;
   font-weight: 700;
-  color: #ffffff !important;
+  color: var(--t-fg, #ffffff) !important;
   letter-spacing: -0.03em;
   text-decoration: none;
 }
-.matrix-wordmark b { font-weight: 800; color: #ffffff; }
-.matrix-wordmark span { color: #8a96a4; font-weight: 500; }
+.matrix-wordmark b { font-weight: 800; color: var(--t-fg, #ffffff); }
+.matrix-wordmark span { color: var(--t-fg2, #8a96a4); font-weight: 500; }
 
 .matrix-site-links {
   display: flex;
@@ -78,15 +221,18 @@ html, body {
   font-weight: 500;
   white-space: nowrap;
 }
-.matrix-site-links a[aria-current='page'],
+.matrix-site-links a[aria-current='page'] {
+  color: var(--t-ac, #b86cff) !important;
+  font-weight: 600;
+}
 .matrix-site-links a:hover {
-  color: #ffffff;
+  color: var(--t-fg, #ffffff);
 }
 
 .matrix-free-pill {
   padding: 1px 5px;
   color: #032030;
-  background: #38bdf8;
+  background: var(--t-ac, #38bdf8);
   border-radius: 999px;
   font-size: 8px;
   font-weight: 800;
@@ -103,7 +249,7 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #8a96a4;
+  color: var(--t-fg2, #8a96a4);
   font-size: 11px;
 }
 .matrix-network-status i {
@@ -117,7 +263,7 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  color: #e1e6eb !important;
+  color: var(--t-fg, #e1e6eb) !important;
   font-size: 12px;
   font-weight: 600;
 }
@@ -126,7 +272,7 @@ html, body {
   width: 24px;
   height: 24px;
   border-radius: 6px;
-  background: linear-gradient(135deg, #6366f1, #a855f7);
+  background: linear-gradient(135deg, var(--t-ac, #6366f1), var(--t-ac2, #a855f7));
   display: grid;
   place-items: center;
   color: #ffffff;
@@ -154,49 +300,73 @@ html, body {
   align-items: center;
   gap: 12px;
   padding: 8px 16px;
-  background: #1e1f26;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  color: #f0f2f5;
+  background: var(--t-bg2, rgba(22, 13, 44, 0.95));
+  border: 1px solid var(--t-bda, rgba(184, 108, 255, 0.4));
+  border-radius: var(--t-radius, 10px);
+  color: var(--t-fg, #f0f2f5);
   font-size: 13px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 16px var(--t-gls, rgba(180, 94, 255, 0.15));
+  font-family: var(--t-font, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 #mitch-sso-btn {
   padding: 5px 12px;
   color: #ffffff;
-  background: #6366f1;
+  background: var(--t-ac, #6366f1);
   border-radius: 6px;
   font-weight: 600;
   font-size: 12px;
   text-decoration: none;
+  transition: background 0.15s ease;
 }
 #mitch-sso-btn:hover {
-  background: #4f46e5;
+  background: var(--t-ac2, #4f46e5);
 }
 
 /* Light Mode Variations */
+html.theme-light,
+html.theme-light body,
+html.theme-light .cpd-theme-light,
+html.theme-light .mx_MatrixChat {
+  --cpd-color-bg-canvas-default: var(--t-bg, #eef1f9) !important;
+  --cpd-color-bg-canvas-inset: var(--t-bg3, #e7ebf7) !important;
+  --cpd-color-bg-subtle-secondary: var(--t-bg2, #ffffff) !important;
+  --cpd-color-bg-subtle-primary: var(--t-bg3, #e7ebf7) !important;
+  --cpd-color-text-primary: var(--t-fg, #101426) !important;
+  --cpd-color-text-secondary: var(--t-fg2, #3f4560) !important;
+  --cpd-color-text-action-accent: var(--t-ac, #4f46e5) !important;
+  --cpd-color-icon-accent-tertiary: var(--t-ac, #4f46e5) !important;
+  --cpd-color-bg-action-primary-rest: var(--t-ac, #4f46e5) !important;
+  --cpd-color-bg-action-primary-hovered: var(--t-ac2, #0891b2) !important;
+  --cpd-color-border-interactive-primary: var(--t-ac, #4f46e5) !important;
+  --roomlist-background-color: var(--t-bg2, #ffffff) !important;
+  --sidebar-color: var(--t-bg2, #ffffff) !important;
+  --header-panel-bg-color: var(--t-bg2, #ffffff) !important;
+  --dialog-background-color: var(--t-bg2, #ffffff) !important;
+}
+
 html.theme-light #matrix-site-bar {
-  background: #f6f8fa;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-  color: #24292f;
+  background: var(--t-bg2, #f6f8fa);
+  border-bottom: 1px solid var(--t-bd, rgba(0, 0, 0, 0.1));
+  color: var(--t-fg, #24292f);
 }
 html.theme-light #matrix-site-bar a {
-  color: #57606a;
+  color: var(--t-fg2, #57606a);
 }
 html.theme-light #matrix-site-bar a:hover,
 html.theme-light .matrix-site-links a[aria-current='page'] {
-  color: #24292f;
+  color: var(--t-ac, #4f46e5) !important;
 }
 html.theme-light .matrix-wordmark {
-  color: #24292f !important;
+  color: var(--t-fg, #24292f) !important;
 }
 html.theme-light .matrix-wordmark span {
-  color: #57606a;
+  color: var(--t-fg2, #57606a);
 }
 html.theme-light #mitch-sso-banner {
-  background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  color: #24292f;
+  background: var(--t-bg2, #ffffff);
+  border: 1px solid var(--t-bd, rgba(0, 0, 0, 0.12));
+  color: var(--t-fg, #24292f);
   box-shadow: 0 8px 24px rgba(0,0,0,0.12);
 }

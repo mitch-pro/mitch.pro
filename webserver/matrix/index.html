@@ -192,7 +192,37 @@
           if (isMatrixStoreAccountMismatch(event.reason)) beginMatrixStoreRecovery();
         });
 
-        // Watch error panel & dialogs for Matrix crypto-store identity failure
+        let isResettingCrossSigning = false;
+        async function autoResetEncryptionKeys() {
+          if (isResettingCrossSigning) return;
+          isResettingCrossSigning = true;
+          try {
+            const client = window.mxDeviceListener?.sharedInstance?.()?.client ||
+                           window.mxInitialCryptoStore?.sharedInstance?.()?.client ||
+                           window.mxMatrixClientPeg?.safeGet?.() ||
+                           window.mxMatrixClientPeg?.get?.();
+            if (client?.getCrypto) {
+              const crypto = client.getCrypto();
+              console.log('[Matrix Key Guardian] Unverified session detected; auto-resetting encryption keys...');
+              if (typeof crypto.bootstrapCrossSigning === 'function') {
+                await crypto.bootstrapCrossSigning({
+                  setupNewSecretStorage: true,
+                  authUploadDeviceSigningKeys: async () => ({})
+                });
+              }
+              if (typeof client.resetKeyBackup === 'function') {
+                await client.resetKeyBackup().catch(() => {});
+              }
+              console.log('[Matrix Key Guardian] Encryption keys successfully reset. New messages will flow smoothly.');
+            }
+          } catch (err) {
+            console.warn('[Matrix Key Guardian] Auto reset keys failed:', err);
+          } finally {
+            setTimeout(() => { isResettingCrossSigning = false; }, 3000);
+          }
+        }
+
+        // Watch DOM for storage errors, missing session data, and verification prompts
         new MutationObserver(mutations => {
           for (const mutation of mutations) {
             for (const node of mutation.addedNodes) {
@@ -206,7 +236,101 @@
               }
             }
           }
+
+          // 1. Auto-recover from "Missing session data" dialogs
+          const missingDialog = document.querySelector('.mx_Dialog, .mx_ErrorDialog, [role="dialog"]');
+          if (missingDialog && /missing session data/i.test(missingDialog.textContent || '')) {
+            const removeBtn = missingDialog.querySelector('button');
+            if (removeBtn && /remove this device/i.test(removeBtn.textContent || '')) {
+              console.log('[Matrix Storage] Auto-resolving missing session data dialog...');
+              removeBtn.click();
+              beginMatrixStoreRecovery();
+              return;
+            }
+          }
+
+          // 2. Auto-skip CompleteSecurity block
+          const skipBtn = document.querySelector('.mx_CompleteSecurity_skip, button[data-testid="skip-verification"]');
+          if (skipBtn && !skipBtn.disabled) {
+            console.log('[Matrix Key Guardian] Auto-skipping CompleteSecurity verification block...');
+            skipBtn.click();
+          }
+
+          // 3. Auto-handle verification popups ("Verify other device", "Verify this device", etc.)
+          const dialogs = document.querySelectorAll('.mx_Dialog, [role="dialog"], .mx_VerificationPanel');
+          for (const dialog of dialogs) {
+            const text = dialog.textContent || '';
+            if (/verify other device|verify this device|verify session|choose how to verify|verification request/i.test(text)) {
+              const buttons = Array.from(dialog.querySelectorAll('button, [role="button"], a'));
+              const resetBtn = buttons.find(b => /reset all|reset encryption|reset keys|reset cryptographic identity/i.test(b.textContent || ''));
+              const cantVerifyBtn = buttons.find(b => /cannot verify|can\'t verify|i cannot/i.test(b.textContent || ''));
+              const verifyLaterBtn = buttons.find(b => /verify later|i\'ll verify later|later|skip/i.test(b.textContent || ''));
+
+              if (resetBtn && !resetBtn.disabled) {
+                console.log('[Matrix Key Guardian] Auto-clicking Reset keys in verification popup...');
+                resetBtn.click();
+                autoResetEncryptionKeys();
+                return;
+              }
+              if (cantVerifyBtn && !cantVerifyBtn.disabled) {
+                console.log('[Matrix Key Guardian] Clicking Cannot verify in verification popup...');
+                cantVerifyBtn.click();
+                return;
+              }
+              if (verifyLaterBtn && !verifyLaterBtn.disabled) {
+                console.log('[Matrix Key Guardian] Clicking Verify later in verification popup...');
+                verifyLaterBtn.click();
+                autoResetEncryptionKeys();
+                return;
+              }
+            }
+
+            // Auto-confirm key reset dialogs
+            if (/reset your digital identity|reset encryption|reset cryptographic identity/i.test(text)) {
+              const buttons = Array.from(dialog.querySelectorAll('button, [role="button"]'));
+              const confirmBtn = buttons.find(b => /continue with reset|reset identity|reset/i.test(b.textContent || '') && !/cancel/i.test(b.textContent || ''));
+              if (confirmBtn && !confirmBtn.disabled) {
+                console.log('[Matrix Key Guardian] Confirming key reset dialog...');
+                confirmBtn.click();
+                autoResetEncryptionKeys();
+                return;
+              }
+            }
+          }
+
+          // 4. Dismiss unverified session toasts
+          const toasts = document.querySelectorAll('.mx_Toast, .mx_Toast_toast');
+          for (const toast of toasts) {
+            const text = toast.textContent || '';
+            if (/unverified sessions|verify this device/i.test(text)) {
+              const dismiss = toast.querySelector('button, .mx_Toast_reject');
+              if (dismiss && /later|dismiss/i.test(dismiss.textContent || '')) {
+                dismiss.click();
+              }
+            }
+          }
         }).observe(document.documentElement, { childList: true, subtree: true });
+
+        // Periodically verify cross-signing status and auto-reset if unverified
+        let guardianChecks = 0;
+        const guardianTimer = setInterval(async () => {
+          guardianChecks++;
+          if (guardianChecks > 20) clearInterval(guardianTimer);
+          const client = window.mxDeviceListener?.sharedInstance?.()?.client ||
+                         window.mxInitialCryptoStore?.sharedInstance?.()?.client ||
+                         window.mxMatrixClientPeg?.safeGet?.() ||
+                         window.mxMatrixClientPeg?.get?.();
+          if (client?.getCrypto) {
+            const crypto = client.getCrypto();
+            try {
+              const isReady = await crypto.isCrossSigningReady?.();
+              if (isReady === false && !sessionStorage.getItem('mitch_keys_auto_reset_done')) {
+                sessionStorage.setItem('mitch_keys_auto_reset_done', '1');
+                await autoResetEncryptionKeys();
+              }
+            } catch (_) {}
+          }
+        }, 2000);
 
         // Listen for user clicks on "Remove this device" or "Sign out" inside error dialogs
         document.addEventListener('click', function(e) {
@@ -325,8 +449,14 @@
           const label = raw.replace(/^@/, '').split(':')[0];
           name.textContent = label;
           if (status.pfp) {
+            let pfpUrl = status.pfp;
+            if (pfpUrl.startsWith('mxc://')) {
+              pfpUrl = '/_matrix/media/v3/download/' + pfpUrl.slice(6);
+            }
             avatar.textContent = '';
-            avatar.style.backgroundImage = 'url("' + status.pfp + '")';
+            avatar.style.backgroundImage = 'url("' + pfpUrl + '")';
+            avatar.style.backgroundSize = 'cover';
+            avatar.style.backgroundPosition = 'center';
           } else {
             avatar.style.backgroundImage = '';
             avatar.textContent = (label.trim()[0] || 'M').toUpperCase();
@@ -418,18 +548,10 @@
     <noscript>Sorry, Matrix Chat requires JavaScript to be enabled.</noscript>
     <div id="matrixchat" style="height: calc(100% - 44px);" class="notranslate"></div>
 
-    <!-- Legacy supporting Prefetch images -->
-    <img src="" aria-hidden alt="" width="24" height="23" style="visibility: hidden; position: absolute; top: 0px; left: 0px;"/>
-    <img src="" aria-hidden alt="" width="25" height="22" style="visibility: hidden; position: absolute; top: 0px; left: 0px;"/>
-    <img src="" aria-hidden alt="" width="25" height="22" style="visibility: hidden; position: absolute; top: 0px; left: 0px;"/>
-    <img src="" aria-hidden alt="" width="25" height="22" style="visibility: hidden; position: absolute; top: 0px; left: 0px;"/>
-    <img src="" aria-hidden alt="" width="25" height="22" style="visibility: hidden; position: absolute; top: 0px; left: 0px;"/>
-    <img src="" aria-hidden alt="" width="25" height="22" style="visibility: hidden; position: absolute; top: 0px; left: 0px;"/>
-
     <!-- CSS theme constants container for Element Web -->
-    <div id="mx_theme_accentColor"></div>
-    <div id="mx_theme_secondaryAccentColor"></div>
-    <div id="mx_theme_tertiaryAccentColor"></div>
+    <div id="mx_theme_accentColor" style="color: var(--t-ac, #b86cff);"></div>
+    <div id="mx_theme_secondaryAccentColor" style="color: var(--t-ac2, #e47cff);"></div>
+    <div id="mx_theme_tertiaryAccentColor" style="color: var(--t-ac3, #8257ff);"></div>
 
     <!-- Eager Element containers for stacking context -->
     <div id="mx_PersistedElement_container"></div>
