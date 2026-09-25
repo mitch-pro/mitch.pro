@@ -36,6 +36,9 @@ pub async fn handle(
     if path == "/api/site-info" && *method == Method::GET {
         return Some(site_info(state));
     }
+    if path == "/api/pass" && *method == Method::POST {
+        return Some(site_catalog(state, headers));
+    }
     if path == "/api/verify-open" || path == "/verify-open.json" {
         return Some(verify_open(method));
     }
@@ -143,6 +146,51 @@ fn site_info(state: &Arc<AppState>) -> Response {
             "name": site.get("name").and_then(|v| v.as_str()).unwrap_or("mitch.pro"),
         }),
     )
+}
+
+/// Homepage destination catalog. Keep the existing line-format response used
+/// by parseSites(), including edits made through the admin content tools.
+fn site_catalog(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
+    if !state.check_password_cookie(headers, None) {
+        return json_response(200, json!({ "success": false }));
+    }
+
+    let raw = match std::fs::read_to_string(state.cfg.data_dir.join("sites")) {
+        Ok(raw) => raw,
+        Err(error) => {
+            tracing::error!("failed to read homepage site catalog: {error}");
+            return json_response(500, json!({ "success": false, "error": "catalog_unavailable" }));
+        }
+    };
+    let cookie_header = headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("");
+    let cookies = mitch_lib::auth::get_cookies_from_header_value(
+        cookie_header,
+        &state.store,
+        &state.id_secret,
+        std::env::var("NODE_ENV").unwrap_or_default() == "test",
+    );
+    let is_admin = mitch_lib::auth::is_admin_id(
+        &state.store,
+        &state.id_secret,
+        &cookies.auth_sid(),
+        std::env::var("NODE_ENV").unwrap_or_default() == "test",
+    );
+    json_response(
+        200,
+        json!({ "success": true, "content": visible_site_catalog(&raw, is_admin) }),
+    )
+}
+
+fn visible_site_catalog(raw: &str, is_admin: bool) -> String {
+    raw.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with("//"))
+        .filter(|line| is_admin || !line.starts_with("admin "))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// `GET /api/bad-passwords` — server.js:20450-20459. Raw file passthrough.
@@ -1000,6 +1048,19 @@ fn health_check() -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn site_catalog_filters_comments_and_staff_links() {
+        let raw = "// hidden\nurl /matrix/ Matrix Chat\nadmin url /admin/ Admin\n\nurl /casino/ Casino\n";
+        assert_eq!(
+            visible_site_catalog(raw, false),
+            "url /matrix/ Matrix Chat\nurl /casino/ Casino"
+        );
+        assert_eq!(
+            visible_site_catalog(raw, true),
+            "url /matrix/ Matrix Chat\nadmin url /admin/ Admin\nurl /casino/ Casino"
+        );
+    }
 
     #[test]
     fn test_verify_open_options() {
