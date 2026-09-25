@@ -123,9 +123,15 @@ body.matrix-page #theme-btn, body.matrix-page #mitch-watermark { display: none !
 .matrix-page .mx_DefaultWelcome h1 { max-width: 100%; color: var(--matrix-fg) !important; font-size: 27px; letter-spacing: -.035em; text-align: center; overflow-wrap: anywhere; }
 .matrix-page .mx_DefaultWelcome_buttons a { box-sizing: border-box; width: 100% !important; max-width: 100% !important; min-height: 42px; border-radius: 9px !important; }
 .matrix-page .mx_DefaultWelcome_buttons a[data-kind="primary"] { background: var(--matrix-accent) !important; color: #fff !important; }
-#mitch-sso-banner { display: none; position: fixed; z-index: 10000; top: calc(var(--matrix-nav-height) + 10px); left: 50%; transform: translateX(-50%); box-sizing: border-box; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--matrix-border); border-radius: 12px; background: var(--matrix-sidebar); box-shadow: 0 12px 38px rgba(0,0,0,.28); color: var(--matrix-fg); font-size: 13px; }
-#mitch-sso-btn { padding: 7px 11px; border-radius: 8px; background: var(--matrix-accent); color: #fff; text-decoration: none; white-space: nowrap; font-weight: 650; }
-:is(#matrix-site-bar a, #mitch-sso-btn, .mx_RoomTile, .mx_RoomHeader button, .mx_MessageComposer button):focus-visible { outline: 2px solid var(--matrix-accent) !important; outline-offset: 2px; }
+#matrix-auth-gate { position: fixed; z-index: 40; inset: var(--matrix-nav-height) 0 0; display: grid; place-items: center; padding: 24px; background: var(--matrix-canvas); }
+#matrix-auth-gate[hidden], #matrix-auth-gate [hidden] { display: none !important; }
+.matrix-auth-card { box-sizing: border-box; width: min(100%, 430px); padding: 36px; border: 1px solid var(--matrix-border); border-radius: 20px; background: var(--matrix-sidebar); box-shadow: 0 18px 48px rgba(0,0,0,.18); text-align: center; }
+.matrix-auth-card img { display: block; margin: 0 auto 18px; }
+.matrix-auth-card h1 { margin: 0; color: var(--matrix-fg); font-size: 25px; line-height: 1.2; letter-spacing: -.035em; }
+.matrix-auth-card p { margin: 10px 0 0; color: var(--matrix-muted); font-size: 14px; line-height: 1.55; }
+.matrix-auth-card :is(a, button) { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; min-height: 42px; margin-top: 24px; padding: 0 18px; border: 0; border-radius: 10px; background: var(--matrix-accent); color: #fff; font: inherit; font-size: 13px; font-weight: 700; text-decoration: none; cursor: pointer; }
+.matrix-auth-card :is(a, button):hover { filter: brightness(1.08); }
+:is(#matrix-site-bar a, .matrix-auth-card a, .matrix-auth-card button, .mx_RoomTile, .mx_RoomHeader button, .mx_MessageComposer button):focus-visible { outline: 2px solid var(--matrix-accent) !important; outline-offset: 2px; }
 
 @media (max-width: 850px) {
   #matrix-site-bar { gap: 18px; padding-inline: 16px; }
@@ -144,6 +150,6 @@ body.matrix-page #theme-btn, body.matrix-page #mitch-watermark { display: none !
   .mx_EventTile .mx_EventTile_line { padding-left: 44px !important; }
   .mx_MessageComposer { padding: 8px 4px 12px !important; }
   .mx_MessageComposer :is(textarea, [contenteditable="true"]) { min-width: 0; }
-  #mitch-sso-banner { width: calc(100% - 20px); justify-content: space-between; flex-wrap: wrap; }
+  .matrix-auth-card { padding: 28px 22px; }
 }
 @media (prefers-reduced-motion: reduce) { #matrix-site-bar a, .mx_RoomTile { transition: none !important; } }

@@ -34,7 +34,7 @@
     <link rel="stylesheet" disabled="disabled" data-mx-theme="Dark-custom" title="Dark-custom" href="/matrix/bundles/156d536ae79bdae0c801/theme-dark-custom.css">
 
     <!-- Mitch.pro Scoped Matrix Shell Stylesheet -->
-    <link rel="stylesheet" href="/matrix/matrix-design.css?v=1" />
+    <link rel="stylesheet" href="/matrix/matrix-design.css?v=2" />
     <!-- Legacy client bundle compatibility anchor: /matrix/assets/index-BVlPv2dR.js -->
   </head>
   <body class="matrix-page mitch-design" style="height: 100%; margin: 0;">
@@ -66,10 +66,14 @@
       </div>
     </div>
 
-    <!-- Mitch.pro SSO Connect Banner -->
-    <div id="mitch-sso-banner">
-      <span id="mitch-sso-msg">Connect your Mitch.pro account to chat</span>
-      <a id="mitch-sso-btn" href="/api/sso/bridge?back=/matrix/">Login with mitch.pro</a>
+    <div id="matrix-auth-gate" role="status" aria-live="polite">
+      <div class="matrix-auth-card">
+        <img src="/icon-192.png" alt="" width="40" height="40">
+        <h1 id="matrix-auth-title">Opening chat</h1>
+        <p id="matrix-auth-message">Checking your mitch.pro account…</p>
+        <a id="matrix-auth-signin" href="/api/sso/bridge?back=/matrix/" hidden>Sign in to mitch.pro</a>
+        <button id="matrix-auth-retry" type="button" hidden>Try again</button>
+      </div>
     </div>
 
     <script>
@@ -159,7 +163,18 @@
 
       // ── Mitch.pro Single Sign-On (SSO) & Bootstrapping ────────────
       (function() {
-        const banner = document.getElementById("mitch-sso-banner");
+        const gate = document.getElementById('matrix-auth-gate');
+        const gateTitle = document.getElementById('matrix-auth-title');
+        const gateMessage = document.getElementById('matrix-auth-message');
+        const signInLink = document.getElementById('matrix-auth-signin');
+        const retryButton = document.getElementById('matrix-auth-retry');
+        function showGate(title, message, action) {
+          gate.hidden = false;
+          gateTitle.textContent = title;
+          gateMessage.textContent = message;
+          signInLink.hidden = action !== 'signin';
+          retryButton.hidden = action !== 'retry';
+        }
         const MATRIX_STORE_RECOVERY_KEY = 'mitch_matrix_store_recovery_v1';
         const MATRIX_DATABASES = [
           'account',
@@ -255,6 +270,11 @@
           window.__elementLoaded = true;
           const script = document.createElement("script");
           script.src = "/matrix/bundles/156d536ae79bdae0c801/bundle.js";
+          script.onload = () => { gate.hidden = true; };
+          script.onerror = () => {
+            window.__elementLoaded = false;
+            showGate('Chat could not load', 'Check your connection and try again.', 'retry');
+          };
           document.body.appendChild(script);
         }
 
@@ -373,15 +393,11 @@
         };
 
         async function initMitchSSO() {
-          let shouldBootElement = true;
+          showGate('Opening chat', 'Checking your mitch.pro account…');
           try {
             const recovery = await completePendingMatrixStoreRecovery();
             if (recovery.pending && !recovery.cleared) {
-              shouldBootElement = false;
-              if (banner) banner.style.display = 'flex';
-              const message = document.getElementById('mitch-sso-msg');
-              if (message) message.textContent = 'Repairing encrypted chat storage… close other chat tabs if this page keeps reloading.';
-              setTimeout(() => window.location.reload(), 2000);
+              showGate('Chat storage is busy', 'Close your other chat tabs, then try again.', 'retry');
               return;
             }
 
@@ -389,84 +405,71 @@
               credentials: 'same-origin',
               cache: 'no-store'
             });
-            const status = statusRes.ok ? await statusRes.json() : { authenticated: false };
+            if (!statusRes.ok) throw new Error(`Account check failed (${statusRes.status})`);
+            const status = await statusRes.json();
             window.updateMatrixShellAccount(status);
             const stored = readStoredSession();
 
-            const sameStatusAccount = !status.authenticated || stored.userId === status.user_id;
-            const sessionValidity = stored.token && stored.userId && stored.deviceId && sameStatusAccount
+            if (!status.authenticated) {
+              showGate('Sign in to chat', 'Use your mitch.pro account to continue.', 'signin');
+              return;
+            }
+
+            const sameAccount = stored.userId === status.user_id;
+            const sessionValidity = stored.token && stored.userId && stored.deviceId && sameAccount
               ? await storedSessionIsValid(stored.token, stored.userId, stored.deviceId)
               : false;
-            // A temporary whoami outage should not sign out a working device.
             if (sessionValidity === true || sessionValidity === null) {
               localStorage.setItem('mx_hs_url', 'https://mitchdog.com');
               localStorage.setItem('mx_has_access_token', 'true');
               localStorage.setItem('mx_is_guest', 'false');
-              if (banner) banner.style.display = 'none';
               bootElement();
               return;
             }
 
-            const sameAccount = status.authenticated && stored.userId === status.user_id;
             const reusableDeviceId = sameAccount ? stored.deviceId : '';
-            // An expired token is not a new Matrix identity. Keep this device's
-            // crypto store until the SSO response confirms the device changed.
-            if (stored.userId && status.authenticated && !sameAccount) {
-              clearStoredSession();
-              await resetMatrixClientStores();
-            }
-
-            if (!status.authenticated) {
-              if (statusRes.ok && (stored.token || stored.userId)) {
-                clearStoredSession();
-                await resetMatrixClientStores();
-              }
-              if (banner) banner.style.display = 'flex';
-              bootElement();
-              return;
-            }
-
+            showGate('Signing in', 'Connecting chat to your mitch.pro account…');
             const res = await fetch("/api/matrix/sso-login", {
               method: "POST",
               headers: { "Content-Type": "application/json", "X-Mitch-Requested-With": "1" },
               credentials: "same-origin",
               body: JSON.stringify(reusableDeviceId ? { device_id: reusableDeviceId } : {})
             });
-            if (res.ok) {
-              const data = await res.json();
-              if (data && data.access_token && data.user_id) {
-                if ((stored.userId && data.user_id !== stored.userId) ||
-                    (reusableDeviceId && data.device_id !== reusableDeviceId)) {
-                  await resetMatrixClientStores();
-                }
-                saveSession(data);
-                if (banner) banner.style.display = "none";
-              } else {
-                localStorage.removeItem('mx_access_token');
-                localStorage.removeItem('mx_has_access_token');
-                if (banner) banner.style.display = "flex";
+            if (!res.ok) {
+              if (res.status === 401 || res.status === 403) {
+                showGate('Sign in to chat', 'Your mitch.pro session has ended. Sign in again to continue.', 'signin');
+                return;
               }
-            } else if (banner) {
-              localStorage.removeItem('mx_access_token');
-              localStorage.removeItem('mx_has_access_token');
-              banner.style.display = "flex";
+              throw new Error(`Chat sign-in failed (${res.status})`);
             }
+            const data = await res.json();
+            if (!data || !data.access_token || !data.user_id || !data.device_id) {
+              throw new Error('Chat sign-in returned an incomplete session');
+            }
+            const previousDevice = Boolean(stored.token || stored.userId || stored.deviceId);
+            if (previousDevice && (data.user_id !== stored.userId || data.device_id !== stored.deviceId)) {
+              if (!await resetMatrixClientStores()) {
+                showGate('Chat storage is busy', 'Close your other chat tabs, then try again.', 'retry');
+                return;
+              }
+              clearStoredSession();
+            }
+            saveSession(data);
+            bootElement();
           } catch (e) {
             console.warn("[Mitch Matrix SSO]", e);
-            const current = readStoredSession();
-            if (!current.token && banner) banner.style.display = "flex";
-          } finally {
-            if (shouldBootElement) {
-              bootElement();
-            }
+            showGate('Chat is unavailable', 'We could not connect your account to chat. Try again in a moment.', 'retry');
           }
         }
 
-        if (navigator.locks && typeof navigator.locks.request === 'function') {
-          navigator.locks.request('mitch-matrix-session', initMitchSSO);
-        } else {
-          initMitchSSO();
+        function runMitchSSO() {
+          if (navigator.locks && typeof navigator.locks.request === 'function') {
+            return navigator.locks.request('mitch-matrix-session', initMitchSSO);
+          }
+          return initMitchSSO();
         }
+        retryButton.addEventListener('click', () => { runMitchSSO(); });
+        runMitchSSO();
       })();
     </script>
 

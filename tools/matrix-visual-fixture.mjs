@@ -6,6 +6,12 @@ const browser = await chromium.launch({
   executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe',
 });
 const refreshMode = process.argv.includes('--refresh');
+const freshMode = process.argv.includes('--fresh');
+const signedOutMode = process.argv.includes('--signed-out');
+const failureMode = process.argv.includes('--failure');
+const recoverMode = process.argv.includes('--recover');
+const switchMode = process.argv.includes('--switch');
+let loginAttempts = 0;
 const page = await browser.newPage({ viewport: { width: Number(process.argv[2]) || 1440, height: 900 }, serviceWorkers: 'block' });
 const requests = new Set();
 const errors = [];
@@ -14,20 +20,22 @@ page.on('pageerror', error => errors.push(error.stack || error.message));
 page.on('response', response => {
   if (response.status() >= 400 && response.url().includes('/_matrix/')) requests.add(`${response.status()} ${new URL(response.url()).pathname}`);
 });
-await page.addInitScript(() => {
+await page.addInitScript(({ fresh, switchAccount }) => {
   window.__deletedMatrixDatabases = [];
   const deleteDatabase = indexedDB.deleteDatabase.bind(indexedDB);
   indexedDB.deleteDatabase = name => {
     window.__deletedMatrixDatabases.push(name);
     return deleteDatabase(name);
   };
-  localStorage.setItem('mx_access_token', 'fixture-token');
-  localStorage.setItem('mx_user_id', '@fixture:mitch.pro');
-  localStorage.setItem('mx_device_id', 'FIXTUREDEVICE');
-  localStorage.setItem('mx_hs_url', 'https://mitchdog.com');
-  localStorage.setItem('mx_has_access_token', 'true');
-  localStorage.setItem('mx_is_guest', 'false');
-});
+  if (!fresh) {
+    localStorage.setItem('mx_access_token', 'fixture-token');
+    localStorage.setItem('mx_user_id', switchAccount ? '@previous:mitch.pro' : '@fixture:mitch.pro');
+    localStorage.setItem('mx_device_id', switchAccount ? 'PREVIOUSDEVICE' : 'FIXTUREDEVICE');
+    localStorage.setItem('mx_hs_url', 'https://mitchdog.com');
+    localStorage.setItem('mx_has_access_token', 'true');
+    localStorage.setItem('mx_is_guest', 'false');
+  }
+}, { fresh: freshMode || failureMode || recoverMode, switchAccount: switchMode });
 
 const event = (id, sender, body, age = 0) => ({
   type: 'm.room.message',
@@ -65,11 +73,13 @@ const sync = {
   } },
 };
 
-await page.route('**/api/matrix/sso-status', route => route.fulfill({ json: refreshMode ? { authenticated: true, user_id: '@fixture:mitch.pro', username: 'fixture' } : { authenticated: false } }));
-await page.route('**/api/matrix/sso-login', route => route.fulfill({ json: { access_token: 'refreshed-fixture-token', user_id: '@fixture:mitch.pro', device_id: 'FIXTUREDEVICE', base_url: 'https://mitchdog.com' } }));
+await page.route('**/api/matrix/sso-status', route => route.fulfill({ json: signedOutMode ? { authenticated: false } : { authenticated: true, user_id: '@fixture:mitch.pro', username: 'fixture' } }));
+await page.route('**/api/matrix/sso-login', route => (failureMode || (recoverMode && ++loginAttempts === 1))
+  ? route.fulfill({ status: 503, json: { error: 'Temporary service failure' } })
+  : route.fulfill({ json: { access_token: 'refreshed-fixture-token', user_id: '@fixture:mitch.pro', device_id: 'FIXTUREDEVICE', base_url: 'https://mitchdog.com' } }));
 await page.route('**/matrix/', async route => route.fulfill({ contentType: 'text/html', body: await readFile(new URL('../webserver/matrix/index.html', import.meta.url), 'utf8') }));
 await page.route('**/matrix/matrix-design.css*', async route => route.fulfill({ contentType: 'text/css', body: await readFile(new URL('../webserver/matrix/matrix-design.css', import.meta.url), 'utf8') }));
-if (refreshMode) await page.route('**/matrix/bundles/*/bundle.js', route => route.fulfill({ contentType: 'application/javascript', body: '' }));
+if (refreshMode || freshMode || signedOutMode || failureMode || recoverMode || switchMode) await page.route('**/matrix/bundles/*/bundle.js', route => route.fulfill({ contentType: 'application/javascript', body: '' }));
 await page.route('**/_matrix/**', route => {
   const url = new URL(route.request().url());
   const path = url.pathname;
@@ -107,6 +117,10 @@ if (await general.count() && await general.first().isVisible()) await general.fi
 await page.waitForTimeout(2500);
 const later = page.getByRole('button', { name: 'Later', exact: true });
 if (await later.count()) await later.first().click();
+if (recoverMode) {
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await page.waitForTimeout(500);
+}
 const editor = page.locator('[contenteditable="true"]').first();
 if (await editor.count()) {
   await editor.fill('Fixture send check');
@@ -119,11 +133,16 @@ const layout = await page.evaluate(() => ['.mx_SpacePanel', '.mx_LeftPanel', '.m
   return { selector, width: Math.round(box?.width || 0), left: Math.round(box?.left || 0), padding: node ? getComputedStyle(node).padding : '' };
 }));
 const session = await page.evaluate(() => ({ token: localStorage.getItem('mx_access_token'), deletedDatabases: window.__deletedMatrixDatabases }));
-console.log(JSON.stringify({ url: page.url(), sends, session, layout, errors: errors.map(error => error.split('\n')[0]), failed: [...requests] }, null, 2));
+const gate = await page.evaluate(() => ({ visible: !document.getElementById('matrix-auth-gate').hidden, title: document.getElementById('matrix-auth-title').textContent, signInVisible: !document.getElementById('matrix-auth-signin').hidden, retryVisible: !document.getElementById('matrix-auth-retry').hidden }));
+console.log(JSON.stringify({ url: page.url(), sends, session, gate, layout, errors: errors.map(error => error.split('\n')[0]), failed: [...requests] }, null, 2));
 if (process.argv.includes('--screenshot')) await page.screenshot({ path: `matrix-fixture-${process.argv[2] || '1440'}.png`, fullPage: true });
 await browser.close();
 if (errors.length) throw new Error('Matrix fixture had page errors');
-if (refreshMode && (session.token !== 'refreshed-fixture-token' || session.deletedDatabases.length)) {
+if ((refreshMode || freshMode) && (session.token !== 'refreshed-fixture-token' || session.deletedDatabases.length || gate.visible)) {
   throw new Error('SSO refresh did not preserve the Matrix device store');
 }
-if (!refreshMode && sends.length !== 1) throw new Error('Matrix composer did not send exactly one message');
+if (signedOutMode && (!gate.visible || !gate.signInVisible || sends.length)) throw new Error('Signed-out chat did not show site sign-in');
+if (failureMode && (!gate.visible || !gate.retryVisible || sends.length)) throw new Error('SSO failure did not show retry');
+if (recoverMode && (gate.visible || session.token !== 'refreshed-fixture-token')) throw new Error('SSO retry did not sign in');
+if (switchMode && (gate.visible || session.token !== 'refreshed-fixture-token' || !session.deletedDatabases.includes('matrix-js-sdk::matrix-sdk-crypto'))) throw new Error('Account switch did not reset the previous device');
+if (!refreshMode && !freshMode && !signedOutMode && !failureMode && !recoverMode && !switchMode && sends.length !== 1) throw new Error('Matrix composer did not send exactly one message');
