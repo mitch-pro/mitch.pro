@@ -1210,7 +1210,6 @@ pub fn handle_cinny_config() -> Response {
                     }
                 ]
             },
-            "default_server_name": "mitch.pro",
             "disable_custom_urls": true,
             "disable_guests": false,
             "brand": "Mitch.pro Matrix",
