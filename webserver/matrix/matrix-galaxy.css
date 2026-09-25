@@ -98,39 +98,41 @@ body,
 
 .mx_MatrixChat > .mx_LeftPanel,
 .mx_LeftPanel {
-  background: color-mix(in srgb, var(--t-bg2, rgba(22, 13, 44, 0.82)) 88%, transparent) !important;
-  backdrop-filter: blur(var(--t-bg-blur, 8px)) !important;
-  -webkit-backdrop-filter: blur(var(--t-bg-blur, 8px)) !important;
-  border-right: 1px solid var(--t-bd, rgba(224, 198, 255, 0.12)) !important;
+  background: color-mix(in srgb, var(--t-bg2, rgba(22, 13, 44, 0.85)) 88%, transparent) !important;
+  backdrop-filter: blur(var(--t-bg-blur, 10px)) !important;
+  -webkit-backdrop-filter: blur(var(--t-bg-blur, 10px)) !important;
+  border-right: 1px solid var(--t-bd, rgba(224, 198, 255, 0.14)) !important;
 }
 
 .mx_MatrixChat > .mx_SpacePanel,
 .mx_SpacePanel {
-  background: color-mix(in srgb, var(--t-bg, rgba(7, 5, 16, 0.92)) 92%, transparent) !important;
-  backdrop-filter: blur(var(--t-bg-blur, 8px)) !important;
-  -webkit-backdrop-filter: blur(var(--t-bg-blur, 8px)) !important;
+  background: color-mix(in srgb, var(--t-bg, rgba(7, 5, 16, 0.95)) 92%, transparent) !important;
+  backdrop-filter: blur(var(--t-bg-blur, 10px)) !important;
+  -webkit-backdrop-filter: blur(var(--t-bg-blur, 10px)) !important;
   border-right: 1px solid var(--t-bd, rgba(224, 198, 255, 0.12)) !important;
 }
 
 .mx_RoomView,
 .mx_RoomView_wrapper {
-  background: color-mix(in srgb, var(--t-bg, #070510) 82%, transparent) !important;
+  background: color-mix(in srgb, var(--t-bg, #070510) 84%, transparent) !important;
   backdrop-filter: blur(calc(var(--t-bg-blur, 8px) / 2)) !important;
   -webkit-backdrop-filter: blur(calc(var(--t-bg-blur, 8px) / 2)) !important;
 }
 
 .mx_RoomHeader {
-  background: color-mix(in srgb, var(--t-bg2, rgba(22, 13, 44, 0.85)) 88%, transparent) !important;
-  backdrop-filter: blur(var(--t-bg-blur, 8px)) !important;
-  -webkit-backdrop-filter: blur(var(--t-bg-blur, 8px)) !important;
-  border-bottom: 1px solid var(--t-bd, rgba(224, 198, 255, 0.12)) !important;
+  background: color-mix(in srgb, var(--t-bg2, rgba(22, 13, 44, 0.88)) 86%, transparent) !important;
+  backdrop-filter: blur(var(--t-bg-blur, 10px)) !important;
+  -webkit-backdrop-filter: blur(var(--t-bg-blur, 10px)) !important;
+  border-bottom: 1px solid var(--t-bd, rgba(224, 198, 255, 0.14)) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
 }
 
 .mx_MessageComposer {
-  background: color-mix(in srgb, var(--t-bg2, rgba(22, 13, 44, 0.85)) 88%, transparent) !important;
-  backdrop-filter: blur(var(--t-bg-blur, 8px)) !important;
-  -webkit-backdrop-filter: blur(var(--t-bg-blur, 8px)) !important;
-  border-top: 1px solid var(--t-bd, rgba(224, 198, 255, 0.12)) !important;
+  background: color-mix(in srgb, var(--t-bg2, rgba(22, 13, 44, 0.88)) 86%, transparent) !important;
+  backdrop-filter: blur(var(--t-bg-blur, 10px)) !important;
+  -webkit-backdrop-filter: blur(var(--t-bg-blur, 10px)) !important;
+  border-top: 1px solid var(--t-bd, rgba(224, 198, 255, 0.14)) !important;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.2) !important;
 }
 
 .mx_Dialog {
@@ -148,134 +150,328 @@ body,
 svg {
   color: inherit;
 }
-.mx_RoomHeader_icon,
-.mx_HeaderButtons_button,
-.mx_SpaceButton_icon {
-  color: var(--t-fg2, #b4a9c9);
-}
-.mx_RoomHeader_icon:hover,
-.mx_HeaderButtons_button:hover,
-.mx_SpaceButton_icon:hover {
-  color: var(--t-fg, #ffffff);
-}
 
-/* Compound Web IconButtons and Action Buttons sizing, contrast & precise centering */
+/* ── Compound & Element Web Action Button Sizing & Centering ────── */
 ._icon-button_1215g_8,
 button[class*="_icon-button_"],
+.mx_HeaderButtons_button,
 .mx_RoomHeader button,
-.mx_SpacePanel button,
-.mx_MessageComposer button,
-.mx_LeftPanel button,
-.mx_MessageComposer_button,
-.mx_AccessibleButton {
+.mx_RightPanel_headerButton {
   box-sizing: border-box !important;
-}
-
-._icon-button_1215g_8,
-button[class*="_icon-button_"],
-.mx_RoomHeader_icon,
-.mx_HeaderButtons_button,
-.mx_SpaceButton_icon,
-.mx_ThreadsActivityCentreButton,
-.mx_QuickSettingsButton {
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
+  max-width: 32px !important;
+  max-height: 32px !important;
+  border-radius: 8px !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
   padding: 0 !important;
+  margin: 0 2px !important;
   color: var(--t-fg2, #b4a9c9) !important;
+  background: transparent !important;
+  box-shadow: none !important;
   vertical-align: middle !important;
+  transition: background 0.15s ease, color 0.15s ease !important;
+}
+
+._icon-button_1215g_8:hover,
+button[class*="_icon-button_"]:hover,
+.mx_HeaderButtons_button:hover,
+.mx_RoomHeader button:hover,
+.mx_RightPanel_headerButton:hover {
+  background: var(--t-bg3, rgba(42, 23, 76, 0.6)) !important;
+  color: var(--t-fg, #ffffff) !important;
 }
 
 ._icon-button_1215g_8 svg,
 button[class*="_icon-button_"] svg,
-.mx_RoomHeader button svg,
-.mx_SpacePanel button svg,
-.mx_MessageComposer button svg,
-.mx_LeftPanel button svg,
-.mx_RoomHeader_icon,
 .mx_HeaderButtons_button svg,
-.mx_ThreadsActivityCentreButton svg,
-.mx_QuickSettingsButton svg {
+.mx_RoomHeader button svg,
+.mx_RightPanel_headerButton svg {
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
+  max-width: 18px !important;
+  max-height: 18px !important;
+  display: block !important;
+  margin: auto !important;
+  padding: 0 !important;
+  fill: currentColor !important;
+  color: inherit !important;
+  transform: none !important;
+}
+
+/* Message Composer Buttons */
+.mx_MessageComposer_button,
+.mx_MessageComposer_wysiwyg .mx_MessageComposer_button,
+.mx_MessageComposer_wysiwyg .mx_EmojiButton {
+  box-sizing: border-box !important;
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
+  max-width: 32px !important;
+  max-height: 32px !important;
+  border-radius: 8px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  margin: 0 2px !important;
+  background: transparent !important;
+  color: var(--t-fg2, #b4a9c9) !important;
+  box-shadow: none !important;
+  transition: background 0.15s ease, color 0.15s ease !important;
+}
+
+.mx_MessageComposer_button:hover,
+.mx_MessageComposer_wysiwyg .mx_MessageComposer_button:hover,
+.mx_MessageComposer_wysiwyg .mx_EmojiButton:hover {
+  background: var(--t-bg3, rgba(42, 23, 76, 0.6)) !important;
+  color: var(--t-fg, #ffffff) !important;
+}
+
+.mx_MessageComposer_button svg,
+.mx_MessageComposer_wysiwyg .mx_MessageComposer_button svg,
+.mx_MessageComposer_wysiwyg .mx_EmojiButton svg {
   width: 18px !important;
   height: 18px !important;
   min-width: 18px !important;
   min-height: 18px !important;
   display: block !important;
   margin: auto !important;
-  padding: 0 !important;
-  visibility: visible !important;
-  opacity: 1 !important;
+  color: inherit !important;
   fill: currentColor !important;
-  color: var(--t-fg2, #b4a9c9) !important;
-  flex-shrink: 0 !important;
-  transform: none !important;
 }
 
-._icon-button_1215g_8:hover svg,
-button[class*="_icon-button_"]:hover svg,
-.mx_RoomHeader button:hover svg,
-.mx_SpacePanel button:hover svg,
-.mx_MessageComposer button:hover svg,
-.mx_LeftPanel button:hover svg,
-.mx_ThreadsActivityCentreButton:hover svg,
-.mx_QuickSettingsButton:hover svg {
+.mx_MessageComposer_sendMessage {
+  box-sizing: border-box !important;
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
+  border-radius: 8px !important;
+  background-color: var(--t-ac, #b86cff) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  margin: 0 4px !important;
+  transition: background 0.15s ease !important;
+}
+
+.mx_MessageComposer_sendMessage:hover {
+  background-color: var(--t-ac2, #e47cff) !important;
+}
+
+.mx_MessageComposer_sendMessage svg {
+  width: 16px !important;
+  height: 16px !important;
+  color: #ffffff !important;
+  margin: auto !important;
+}
+
+/* Space Panel Rail Buttons */
+.mx_SpacePanel ._icon-button_1215g_8,
+.mx_SpacePanel button,
+.mx_SpaceButton,
+.mx_QuickSettingsButton {
+  box-sizing: border-box !important;
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  max-width: 36px !important;
+  max-height: 36px !important;
+  border-radius: 10px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  margin: 4px auto !important;
+  background: transparent !important;
+  color: var(--t-fg2, #b4a9c9) !important;
+  transition: background 0.15s ease, color 0.15s ease !important;
+}
+
+.mx_SpacePanel ._icon-button_1215g_8:hover,
+.mx_SpacePanel button:hover,
+.mx_SpaceButton:hover,
+.mx_QuickSettingsButton:hover {
+  background: var(--t-bg3, rgba(42, 23, 76, 0.6)) !important;
   color: var(--t-fg, #ffffff) !important;
 }
 
-/* Room list: online badge positioning and room name spacing to prevent overlap */
+.mx_SpacePanel ._icon-button_1215g_8 svg,
+.mx_SpacePanel button svg,
+.mx_SpaceButton svg,
+.mx_QuickSettingsButton svg {
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  min-height: 20px !important;
+  display: block !important;
+  margin: auto !important;
+}
+
+/* ── Room List: Presence Indicators & Alignment ────── */
 .mx_RoomAvatarView,
 ._roomListItem_vaz9j_8 .mx_BaseAvatar,
 ._roomListItem_vaz9j_8 [class*="avatar"] {
-  margin-inline-end: 14px !important;
+  margin-inline-end: 12px !important;
   position: relative !important;
+  flex-shrink: 0 !important;
   overflow: visible !important;
 }
 
-.mx_RoomAvatarView .mx_RoomAvatarView_PresenceDecoration,
-.mx_DecoratedRoomAvatar .mx_DecoratedRoomAvatar_icon,
-[class*="PresenceDecoration"],
-[class*="presenceDecoration"] {
-  bottom: -1px !important;
-  right: -1px !important;
-  left: auto !important;
-  position: absolute !important;
+/* Hide offline presence indicator completely — clean modern chat UX */
+.mx_RoomAvatarView_PresenceDecoration[aria-label*="offline" i],
+.mx_DecoratedRoomAvatar_icon_offline,
+svg.mx_RoomAvatarView_PresenceDecoration[aria-label*="offline" i] {
+  display: none !important;
 }
 
+/* Unmask avatar when user is offline so no cutout notch is visible */
+.mx_RoomAvatarView:has([aria-label*="offline" i]) .mx_RoomAvatarView_RoomAvatar_presence {
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+}
+
+/* Online Presence Badge: solid emerald dot docked at bottom-right corner */
+.mx_RoomAvatarView_PresenceDecoration[aria-label*="online" i],
+.mx_DecoratedRoomAvatar_icon_online,
+svg.mx_RoomAvatarView_PresenceDecoration[aria-label*="online" i] {
+  display: block !important;
+  width: 10px !important;
+  height: 10px !important;
+  min-width: 10px !important;
+  min-height: 10px !important;
+  max-width: 10px !important;
+  max-height: 10px !important;
+  border-radius: 50% !important;
+  background: #10b981 !important;
+  color: #10b981 !important;
+  fill: #10b981 !important;
+  position: absolute !important;
+  bottom: 0px !important;
+  right: 0px !important;
+  left: auto !important;
+  top: auto !important;
+  box-shadow: 0 0 0 2px var(--t-bg, #070510) !important;
+  z-index: 2 !important;
+}
+
+/* Away Presence Badge */
+.mx_RoomAvatarView_PresenceDecoration[aria-label*="away" i],
+.mx_DecoratedRoomAvatar_icon_away,
+svg.mx_RoomAvatarView_PresenceDecoration[aria-label*="away" i] {
+  display: block !important;
+  width: 10px !important;
+  height: 10px !important;
+  min-width: 10px !important;
+  min-height: 10px !important;
+  max-width: 10px !important;
+  max-height: 10px !important;
+  border-radius: 50% !important;
+  background: #f59e0b !important;
+  color: #f59e0b !important;
+  fill: #f59e0b !important;
+  position: absolute !important;
+  bottom: 0px !important;
+  right: 0px !important;
+  left: auto !important;
+  top: auto !important;
+  box-shadow: 0 0 0 2px var(--t-bg, #070510) !important;
+  z-index: 2 !important;
+}
+
+/* Busy Presence Badge */
+.mx_RoomAvatarView_PresenceDecoration[aria-label*="busy" i],
+.mx_DecoratedRoomAvatar_icon_busy,
+svg.mx_RoomAvatarView_PresenceDecoration[aria-label*="busy" i] {
+  display: block !important;
+  width: 10px !important;
+  height: 10px !important;
+  min-width: 10px !important;
+  min-height: 10px !important;
+  max-width: 10px !important;
+  max-height: 10px !important;
+  border-radius: 50% !important;
+  background: #ef4444 !important;
+  color: #ef4444 !important;
+  fill: #ef4444 !important;
+  position: absolute !important;
+  bottom: 0px !important;
+  right: 0px !important;
+  left: auto !important;
+  top: auto !important;
+  box-shadow: 0 0 0 2px var(--t-bg, #070510) !important;
+  z-index: 2 !important;
+}
+
+/* Room List Item Styling */
 .mx_RoomTile_nameContainer,
 .mx_RoomTile_name,
 [class*="_roomName_"],
 [class*="_content_vaz9j"],
 ._content_vaz9j_86,
 .mx_RoomTile_title {
-  padding-inline-start: 6px !important;
-  margin-inline-start: 2px !important;
+  padding-inline-start: 4px !important;
+  margin-inline-start: 0 !important;
 }
 
-/* Timeline message vertical spacing - make messages further apart */
+._roomListItem_vaz9j_8[aria-selected="true"],
+.mx_RoomTile[aria-selected="true"],
+.mx_RoomTile.mx_RoomTile_selected {
+  background: color-mix(in srgb, var(--t-ac, #b86cff) 22%, var(--t-bg3, rgba(42, 23, 76, 0.8))) !important;
+  border: 1px solid var(--t-bda, rgba(194, 126, 255, 0.4)) !important;
+  border-radius: var(--t-radius, 10px) !important;
+}
+
+._roomListItem_vaz9j_8:hover:not([aria-selected="true"]),
+.mx_RoomTile:hover:not([aria-selected="true"]) {
+  background: var(--t-bg3, rgba(42, 23, 76, 0.45)) !important;
+  border-radius: var(--t-radius, 10px) !important;
+}
+
+/* ── Timeline Spacing: Generous Breathing Room ────── */
 .mx_EventTile,
-._root_1eu7g_9,
-[class*="_eventTile_"] {
-  margin-block: 10px !important;
-  padding-block: 6px !important;
-}
-
-.mx_EventTile_info,
+.mx_GenericEventListSummary,
 .mx_GenericEventListSummary .mx_EventTile,
-._root_1eu7g_9._stateInfo_1eu7g_174,
+.mx_EventTile_info,
+._root_1eu7g_9,
+[class*="_eventTile_"],
 [class*="_stateInfo_"] {
-  min-height: 38px !important;
-  margin-block: 10px !important;
+  margin-block: 14px !important;
   padding-block: 6px !important;
-  display: flex !important;
-  align-items: center !important;
 }
 
 .mx_DateSeparator,
 [class*="_dateSeparator_"] {
-  margin-block: 20px !important;
+  margin-block: 28px !important;
 }
 
-/* Fix timeline state event avatar overlap in GenericEventListSummary and StateInfo */
+/* Timeline State Event Summaries: Clean Glass Look */
+.mx_GenericEventListSummary,
+.mx_GenericEventListSummary .mx_EventTile,
+.mx_EventTile_info,
+._root_1eu7g_9._stateInfo_1eu7g_174,
+[class*="_stateInfo_"] {
+  min-height: 38px !important;
+  background: transparent !important;
+  color: var(--t-fg2, #b4a9c9) !important;
+}
+
+.mx_GenericEventListSummary_summary,
+.mx_GenericEventListSummary .mx_TextualEvent {
+  color: var(--t-fg2, #b4a9c9) !important;
+}
+
+/* Timeline state event avatar alignment */
 ._root_1eu7g_9._stateInfo_1eu7g_174 ._line_1eu7g_71,
 ._root_1eu7g_9._stateInfo_1eu7g_174 .mx_EventTile_line,
 .mx_EventTile._stateInfo_1eu7g_174 .mx_EventTile_line,
@@ -300,23 +496,59 @@ button[class*="_icon-button_"]:hover svg,
   top: 4px !important;
 }
 
-/* Graceful avatar error fallback: hide failed images to cleanly show letter avatars */
+/* ── Graceful Avatar Fallbacks & Letter Initial Styling ────── */
 .mx_BaseAvatar img:not([src]),
 .mx_BaseAvatar img[src=""],
 ._triggerButton_dh4sb_100 img:not([src]),
 ._triggerButton_dh4sb_100 img[src=""],
 .broken-avatar,
-.avatar-img-failed img {
+.avatar-img-failed img,
+.mx_BaseAvatar .broken-avatar,
+._avatar_va14e_8 .broken-avatar {
   display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
+.mx_BaseAvatar,
+._avatar_va14e_8,
+[class*="_avatar_"] {
+  border-radius: var(--t-radius, 8px) !important;
+  overflow: hidden !important;
 }
 
 .mx_BaseAvatar .mx_BaseAvatar_initial,
 ._avatar-imageless_va14e_55,
-._triggerButton_dh4sb_100 {
+[class*="_avatar-imageless_"],
+.avatar-img-failed .mx_BaseAvatar_initial,
+.avatar-img-failed [class*="_avatar-imageless_"] {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   text-align: center !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  background: linear-gradient(135deg, var(--t-ac, #b86cff), var(--t-ac3, #8257ff)) !important;
+  text-transform: uppercase !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Space Panel User Menu Button Avatar */
+._triggerButton_dh4sb_100 {
+  border-radius: 50% !important;
+  background: transparent !important;
+}
+._triggerButton_dh4sb_100 ._avatar_va14e_8,
+._triggerButton_dh4sb_100 [class*="_avatar_"] {
+  border-radius: 50% !important;
+  background: linear-gradient(135deg, var(--t-ac, #b86cff), var(--t-ac3, #8257ff)) !important;
+  color: #ffffff !important;
+}
+._triggerButton_dh4sb_100 ._avatar-imageless_va14e_55 {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  font-size: 14px !important;
 }
 
 /* Mitch.pro Top Navigation Bar */

@@ -34,7 +34,7 @@
     <link rel="stylesheet" disabled="disabled" data-mx-theme="Dark-custom" title="Dark-custom" href="/matrix/bundles/156d536ae79bdae0c801/theme-dark-custom.css">
 
     <!-- Mitch.pro Scoped Matrix Shell Stylesheet -->
-    <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=6" />
+    <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=7" />
     <!-- Legacy client bundle compatibility anchor: /matrix/assets/index-BVlPv2dR.js -->
   </head>
   <body style="height: 100%; margin: 0;">
@@ -349,15 +349,26 @@
           const target = e.target;
           if (target && target.tagName === 'IMG') {
             const isAvatar = target.classList.contains('mx_BaseAvatar_image') ||
+              target.classList.contains('_image_va14e_43') ||
               target.closest('.mx_BaseAvatar') ||
               target.closest('._triggerButton_dh4sb_100') ||
+              target.closest('._avatar_va14e_8') ||
               target.closest('[class*="avatar"]') ||
               target.closest('[class*="Avatar"]');
             if (isAvatar) {
               target.classList.add('broken-avatar');
               target.style.display = 'none';
               const parent = target.parentElement;
-              if (parent) parent.classList.add('avatar-img-failed');
+              if (parent) {
+                parent.classList.add('avatar-img-failed');
+                // Ensure initial element is visible
+                const initial = parent.querySelector('.mx_BaseAvatar_initial, [class*="_avatar-imageless_"]');
+                if (initial) {
+                  initial.style.display = 'flex';
+                  initial.style.visibility = 'visible';
+                  initial.style.opacity = '1';
+                }
+              }
             }
           }
         }, true);
@@ -480,6 +491,7 @@
             avatar.textContent = (label.trim()[0] || 'M').toUpperCase();
           }
           link.href = '/preferences/#account';
+          if (status.bio) link.title = status.bio;
         };
 
         async function initMitchSSO() {

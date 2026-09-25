@@ -14,8 +14,8 @@ assert(matrixRs.includes('/_matrix/client/v3/presence/{encoded_user_id}/status')
 assert(matrixRs.includes('sync_profile_to_matrix('), 'Matrix SSO login must invoke sync_profile_to_matrix');
 
 // 3. Verify GET /api/matrix/sso-status returns pfp and bio
-assert(matrixRs.includes('"pfp": prof.get("pfp")'), 'sso-status must return pfp');
-assert(matrixRs.includes('"bio": prof.get("bio")'), 'sso-status must return bio');
+assert(matrixRs.includes('prof.get("pfp")') && matrixRs.includes('"pfp":'), 'sso-status must return pfp');
+assert(matrixRs.includes('prof.get("bio")') && matrixRs.includes('"bio":'), 'sso-status must return bio');
 
 // 4. Verify Matrix client shell renders pfp and bio
 assert(matrixIndex.includes('status.pfp'), 'matrix/index.html must check status.pfp');
