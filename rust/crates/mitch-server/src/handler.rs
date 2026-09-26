@@ -1520,7 +1520,7 @@ pub async fn handle(
     }
 
     // SPA route fallback for Matrix Chat (/matrix/*) — server.js:24647-24657.
-    if path.starts_with("/matrix/") && !path.contains('.') {
+    if path.starts_with("/matrix/") {
         let rel_path = path.strip_prefix("/matrix/").unwrap_or("");
         let candidate = std::path::Path::new(&webroot).join("matrix").join(rel_path);
         if candidate.is_file() {
@@ -1539,16 +1539,26 @@ pub async fn handle(
                     .expect("static file response");
             }
         }
-        let index_path = std::path::Path::new(&webroot)
-            .join("matrix")
-            .join("index.html");
-        if index_path.exists() {
-            if let Ok(content) = std::fs::read_to_string(&index_path) {
-                return Response::builder()
-                    .status(StatusCode::OK)
-                    .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")
-                    .body(axum::body::Body::from(content))
-                    .expect("static response");
+        let is_asset = path.starts_with("/matrix/assets/")
+            || path.starts_with("/matrix/public/")
+            || [
+                ".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".wasm",
+                ".map", ".woff", ".woff2", ".ttf", ".json",
+            ]
+            .iter()
+            .any(|ext| path.ends_with(ext));
+        if !is_asset {
+            let index_path = std::path::Path::new(&webroot)
+                .join("matrix")
+                .join("index.html");
+            if index_path.exists() {
+                if let Ok(content) = std::fs::read_to_string(&index_path) {
+                    return Response::builder()
+                        .status(StatusCode::OK)
+                        .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")
+                        .body(axum::body::Body::from(content))
+                        .expect("static response");
+                }
             }
         }
     }
