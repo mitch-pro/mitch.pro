@@ -30,12 +30,14 @@ fn api_key() -> String {
 /// `LIVEKIT_API_SECRET` (server.js:7867) — env override, else
 /// `createHmac('sha256', ID_SECRET).update('livekit-secret').digest('hex')`.
 /// The default is the hex STRING; both are used verbatim as the HMAC key.
-fn api_secret_bytes(id_secret: &[u8]) -> Vec<u8> {
+fn api_secret_bytes(_id_secret: &[u8]) -> Vec<u8> {
     let raw = std::env::var("LIVEKIT_API_SECRET").unwrap_or_default();
     if !raw.is_empty() {
         return raw.into_bytes();
     }
-    mitch_lib::crypto::hmac_sha256_hex(id_secret, b"livekit-secret").into_bytes()
+    // Matches server.js:8066 and docker-compose.yml LiveKit server keys:
+    // process.env.LIVEKIT_API_SECRET || 'mitch-secret-livekit-matrix-key-2026'
+    b"mitch-secret-livekit-matrix-key-2026".to_vec()
 }
 
 /// `generateLiveKitToken({identity, name, roomName})` (server.js:7889-7912).
@@ -190,22 +192,40 @@ fn token_endpoint(
         profiles.get(&norm_email).cloned().unwrap_or(json!({}))
     };
 
-    // JS: `body.room || body.room_id || 'default'` — raw `||`, no coercion.
+    // JS: `body.room || body.room_id || body.roomId || 'default'`.
     let room = jsval::or(
         body.get("room"),
-        jsval::or(body.get("room_id"), json!("default")),
+        jsval::or(
+            body.get("room_id"),
+            jsval::or(body.get("roomId"), json!("default")),
+        ),
     );
 
-    // JS: `body.member?.claimed_user_id || body.user_id || ''`.
+    // JS: `body.member?.claimed_user_id || body.claimed_user_id || body.user_id || body.userId || body.openid_token?.user_id || ''`.
     let member_claimed = body
         .get("member")
         .filter(|v| jsval::truthy(v))
         .and_then(|m| m.get("claimed_user_id"))
         .filter(|v| jsval::truthy(v))
         .cloned();
+    let openid_claimed = body
+        .get("openid_token")
+        .filter(|v| jsval::truthy(v))
+        .and_then(|o| o.get("user_id"))
+        .filter(|v| jsval::truthy(v))
+        .cloned();
     let raw_user_id_val = jsval::or(
         member_claimed.as_ref(),
-        jsval::or(body.get("user_id"), json!("")),
+        jsval::or(
+            body.get("claimed_user_id"),
+            jsval::or(
+                body.get("user_id"),
+                jsval::or(
+                    body.get("userId"),
+                    jsval::or(openid_claimed.as_ref(), json!("")),
+                ),
+            ),
+        ),
     );
     // JS then builds the string; a non-string truthy body value would throw
     // in the JS (`.startsWith` on a number) — we stringify instead.
@@ -242,7 +262,13 @@ fn token_endpoint(
     };
     let identity_val = json!(identity);
 
-    // JS: `body.name || prof.displayName || identity.split(':')[0].replace(/^@/,'')`.
+    // JS: `body.name || body.member?.display_name || prof.displayName || identity.split(':')[0].replace(/^@/,'')`.
+    let member_display_name = body
+        .get("member")
+        .filter(|v| jsval::truthy(v))
+        .and_then(|m| m.get("display_name"))
+        .filter(|v| jsval::truthy(v))
+        .cloned();
     let identity_default_name = json!(identity
         .split(':')
         .next()
@@ -250,7 +276,10 @@ fn token_endpoint(
         .trim_start_matches('@'));
     let display_name = jsval::or(
         body.get("name"),
-        jsval::or(prof.get("displayName"), identity_default_name),
+        jsval::or(
+            member_display_name.as_ref(),
+            jsval::or(prof.get("displayName"), identity_default_name),
+        ),
     );
 
     let jwt = generate_livekit_token(&state.id_secret, &identity_val, &display_name, &room);
@@ -266,7 +295,16 @@ fn token_endpoint(
         "{}{host}/livekit/rtc",
         if is_wss { "wss://" } else { "ws://" }
     );
-    json_with_cors(200, json!({ "url": ws_url, "jwt": jwt }), false)
+    json_with_cors(
+        200,
+        json!({
+            "url": ws_url,
+            "jwt": jwt,
+            "token": jwt,
+            "access_token": jwt
+        }),
+        false,
+    )
 }
 
 // ── /livekit/rtc WS proxy (server.js:11725-11735, 24933-24961, 25041-25051) ──
@@ -311,7 +349,14 @@ async fn run_rtc_proxy(client: WebSocket, search: String) {
         }
     });
     let livekit_port = std::env::var("LIVEKIT_PORT").unwrap_or_else(|_| "7880".to_string());
-    let upstream_url = format!("ws://{livekit_host}:{livekit_port}/rtc{search}");
+    let query_part = if search.is_empty() {
+        String::new()
+    } else if search.starts_with('?') {
+        search.clone()
+    } else {
+        format!("?{search}")
+    };
+    let upstream_url = format!("ws://{livekit_host}:{livekit_port}/rtc{query_part}");
 
     let (mut client_sink, mut client_stream) = client.split();
     // In the JS the `new WebSocket` connect is async: a failure fires
@@ -474,12 +519,12 @@ mod tests {
         assert_eq!(payload["video"]["canPublishData"], true);
         assert_eq!(payload["exp"], payload["iat"].as_i64().unwrap_or(0) + 86400);
         assert_eq!(payload["nbf"], payload["iat"].as_i64().unwrap_or(0) - 10);
-        // Sig verifies against the default secret chain:
-        // HMAC(hex(HMAC(ID_SECRET,'livekit-secret')), "h.p").
-        let secret = mitch_lib::crypto::hmac_sha256_hex(SECRET, b"livekit-secret");
+        // Sig verifies against the default secret:
+        // 'mitch-secret-livekit-matrix-key-2026'.
+        let secret = b"mitch-secret-livekit-matrix-key-2026";
         let expected = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
             mitch_lib::crypto::hmac_sha256(
-                secret.as_bytes(),
+                secret,
                 format!("{}.{}", parts[0], parts[1]).as_bytes(),
             ),
         );

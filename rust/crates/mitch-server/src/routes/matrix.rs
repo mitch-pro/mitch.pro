@@ -1305,22 +1305,28 @@ pub async fn resolve_matrix_account(
 }
 
 /// Dynamic Cinny configuration for Mitch.pro.
-pub fn handle_cinny_config() -> Response {
+pub fn handle_cinny_config(headers: &HeaderMap) -> Response {
+    let host = request_host(headers);
+    let proto = if host.starts_with("localhost") || host.starts_with("127.0.0.1") {
+        "http://"
+    } else {
+        "https://"
+    };
     cors_json_response(
         200,
         json!({
             "defaultHomeserver": 0,
-            "homeserverList": ["mitchdog.com"],
+            "homeserverList": [host, "mitchdog.com", "mitch.pro"],
             "allowCustomHomeservers": false,
             "default_server_config": {
                 "m.homeserver": {
-                    "base_url": "https://mitchdog.com",
+                    "base_url": format!("{proto}{host}"),
                     "server_name": "mitch.pro"
                 },
                 "org.matrix.msc4143.rtc_foci": [
                     {
                         "type": "livekit",
-                        "livekit_service_url": "https://mitchdog.com/livekit"
+                        "livekit_service_url": format!("{proto}{host}/livekit")
                     }
                 ]
             },
@@ -3902,7 +3908,7 @@ pub async fn handle_matrix_gateway(
     }
 
     if path == "/matrix/config.json" && method == Method::GET {
-        return Some(handle_cinny_config());
+        return Some(handle_cinny_config(headers));
     }
 
     if (path == "/matrix/public/element-call/config.json"
@@ -4562,7 +4568,8 @@ mod tests {
 
     #[test]
     fn test_cinny_config() {
-        let resp = handle_cinny_config();
+        let headers = HeaderMap::new();
+        let resp = handle_cinny_config(&headers);
         assert_eq!(resp.status(), StatusCode::OK);
     }
 

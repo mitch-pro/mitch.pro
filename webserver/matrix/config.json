@@ -1,7 +1,19 @@
 {
   "defaultHomeserver": 0,
-  "homeserverList": ["mitch.pro"],
+  "homeserverList": ["mitchdog.com", "mitch.pro"],
   "allowCustomHomeservers": false,
+  "default_server_config": {
+    "m.homeserver": {
+      "base_url": "https://mitchdog.com",
+      "server_name": "mitch.pro"
+    },
+    "org.matrix.msc4143.rtc_foci": [
+      {
+        "type": "livekit",
+        "livekit_service_url": "https://mitchdog.com/livekit"
+      }
+    ]
+  },
 
   "featuredCommunities": {
     "openAsDefault": true,
