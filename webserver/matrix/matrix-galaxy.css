@@ -310,7 +310,7 @@ html:not([data-bglayer]) body::after { display: none !important; }
   min-height: 0;
   height: auto;
   width: auto;
-  margin: 12px max(12px, calc((100vw - 1440px) / 2));
+  margin: 12px max(16px, calc((100vw - 1800px) / 2));
   display: flex !important;
   overflow: hidden !important;
   background: var(--t-bg2) !important;
@@ -875,7 +875,7 @@ button[data-variant='critical'] {
   box-shadow: none !important;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 900px), (hover: none) and (pointer: coarse) {
   html,
   body {
     position: fixed !important;
@@ -903,11 +903,11 @@ button[data-variant='critical'] {
 
   .matrix-site-actions { display: none; }
 
-
   #root {
     position: relative !important;
     inset: auto;
-    width: 100vw !important;
+    width: 100% !important;
+    max-width: 100% !important;
     height: auto !important;
     max-height: none !important;
     min-height: 0 !important;
@@ -917,12 +917,7 @@ button[data-variant='critical'] {
     border-radius: 0 !important;
     box-shadow: none !important;
     overflow: hidden !important;
-  }
-
-  #root {
-    padding-top: env(safe-area-inset-top, 0px);
-    padding-right: env(safe-area-inset-right, 0px);
-    padding-left: env(safe-area-inset-left, 0px);
+    padding: 0 !important;
   }
 
   ._1ho1fyw0 {
@@ -1064,7 +1059,7 @@ button[data-variant='critical'] {
   .matrix-site-links a:nth-child(6) { display: none; }
 }
 
-@media (min-width: 769px) and (max-width: 1180px) {
+@media (min-width: 901px) and (max-width: 1180px) {
   #matrix-site-bar { gap: 28px; }
   .matrix-site-links { gap: 20px; }
   .matrix-site-links a:nth-child(5),
