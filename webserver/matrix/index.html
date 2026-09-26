@@ -69,7 +69,8 @@
 
     <!-- Cinny Stylesheet & Mitch.pro chat overrides -->
     <link rel="stylesheet" crossorigin href="/matrix/assets/index-DmaX6Xe5.css" />
-    <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=5" />
+    <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=6" />
+    <script defer src="/matrix/media-auth.js?v=1"></script>
   </head>
   <body id="appBody">
     <header id="matrix-site-bar">
@@ -479,6 +480,21 @@
           localStorage.setItem("cinny_hs_base_url", data.base_url);
         }
 
+        async function joinMitchSpace(token, userId) {
+          const marker = `mitch_matrix_space_joined:${userId}`;
+          const lastJoin = Number(localStorage.getItem(marker)) || 0;
+          if (!token || !userId || Date.now() - lastJoin < 24 * 60 * 60 * 1000) return;
+          try {
+            const response = await fetch('/_matrix/client/v3/join/%23mitch.pro%3Amitch.pro', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: '{}'
+            });
+            if (response.ok) localStorage.setItem(marker, String(Date.now()));
+          } catch (_) {}
+        }
+
         async function initMitchSSO() {
           let shouldBootCinny = true;
           try {
@@ -510,6 +526,7 @@
               localStorage.setItem('cinny_hs_base_url', 'https://mitchdog.com');
               if (banner) banner.style.display = 'none';
               bootCinny();
+              joinMitchSpace(stored.token, stored.userId);
               return;
             }
 
@@ -535,6 +552,7 @@
               if (data && data.access_token && data.user_id) {
                 saveSession(data);
                 if (banner) banner.style.display = "none";
+                joinMitchSpace(data.access_token, data.user_id);
               }
             } else if (banner) {
               banner.style.display = "flex";
@@ -617,7 +635,7 @@
 
             let reg = await navigator.serviceWorker.getRegistration('/');
             if (!reg) {
-              reg = await navigator.serviceWorker.register('/sw.js?v=42', { scope: '/', updateViaCache: 'none' });
+              reg = await navigator.serviceWorker.register('/sw.js?v=44', { scope: '/', updateViaCache: 'none' });
             }
             await navigator.serviceWorker.ready;
 
@@ -671,7 +689,7 @@
 
         // Register Service Worker on / scope
         if ('serviceWorker' in navigator && window.isSecureContext) {
-          navigator.serviceWorker.register('/sw.js?v=42', { scope: '/', updateViaCache: 'none' }).catch(() => {});
+          navigator.serviceWorker.register('/sw.js?v=44', { scope: '/', updateViaCache: 'none' }).catch(() => {});
         }
 
         // Auto-sync if notification permission is already granted

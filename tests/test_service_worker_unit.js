@@ -7,6 +7,8 @@ assert.match(worker, /if \(e\.request\.method !== 'GET'\) return;/,
   'Service worker must bypass POST and every other non-GET request before Cache Storage');
 assert.match(worker, /if \(requestUrl\.origin !== self\.location\.origin\) return;/,
   'Service worker must bypass cross-origin requests so CORP failures are not returned by the worker');
+assert.match(worker, /requestUrl\.pathname\.startsWith\('\/_matrix\/'\)/,
+  'Service worker must bypass authenticated Matrix traffic');
 
 const registrationFiles = [
   'webserver/app-shell.js',
@@ -22,7 +24,7 @@ const registrationFiles = [
 
 for (const file of registrationFiles) {
   const source = readFileSync(file, 'utf8');
-  assert(source.includes('/sw.js?v=42'), `${file} must register the current service worker version`);
+  assert(source.includes('/sw.js?v=44'), `${file} must register the current service worker version`);
   assert(!/\/sw\.js\?v=(?:11|13|37)/.test(source), `${file} must not reinstall a stale service worker URL`);
 }
 

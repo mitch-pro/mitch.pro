@@ -482,6 +482,7 @@ try {
   assert.equal(configData.featuredCommunities.openAsDefault, true);
   assert(configData.featuredCommunities.servers.includes('mitch.pro'));
   assert(configData.featuredCommunities.rooms.includes('#general:mitch.pro'));
+  assert(configData.featuredCommunities.spaces.includes('#mitch.pro:mitch.pro'), 'Official rooms must be grouped in the mitch.pro space');
   const matrixPage = readFileSync(join(REPO_ROOT, 'webserver', 'matrix', 'index.html'), 'utf8');
   assert(matrixPage.includes('storedSessionIsValid(stored.token, stored.userId, stored.deviceId)'), 'Matrix must validate both the user and device before reusing a browser session');
   assert(matrixPage.includes("body: JSON.stringify(reusableDeviceId ? { device_id: reusableDeviceId } : {})"), 'Matrix SSO refresh must request the browser\'s existing device ID');
@@ -491,7 +492,8 @@ try {
   assert(matrixPage.includes("navigator.locks.request('mitch-matrix-session'"), 'Concurrent tabs must serialize Matrix SSO');
   assert(!matrixPage.includes('removeLegacyCryptoStorage'), 'Matrix must preserve crypto storage for E2EE keys');
   assert(matrixPage.includes('/matrix/assets/index-BVlPv2dR.js'), 'Matrix bundle URL must load updated E2EE client');
-  assert(matrixPage.includes('/matrix/matrix-galaxy.css?v=5'), 'Matrix must load the current mitch.pro visual integration');
+  assert(matrixPage.includes('/matrix/matrix-galaxy.css?v=6'), 'Matrix must load the current mitch.pro visual integration');
+  assert(matrixPage.includes('/matrix/media-auth.js?v=1'), 'Matrix must load authenticated media repair');
   assert(matrixPage.includes('id="matrix-context-bar"'), 'Matrix must include the mitch.pro chat workspace shell');
   assert(matrixPage.includes('id="matrix-account-link"'), 'Matrix shell must expose the signed-in mitch.pro account');
   assert(matrixPage.includes('Notification settings'), 'Matrix shell must link directly to site notification preferences');

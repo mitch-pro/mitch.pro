@@ -553,10 +553,81 @@ pub async fn sync_matrix_user_to_official_rooms(
     user_token: &str,
     target_power_level: i64,
 ) {
+    let space_alias = url::form_urlencoded::byte_serialize(b"#mitch.pro:mitch.pro")
+        .collect::<String>();
+    let space_id = if let Ok((status, _, bytes)) = call_conduit(
+        &format!("/_matrix/client/v3/directory/room/{space_alias}"),
+        Method::GET,
+        None,
+        None,
+    )
+    .await
+    {
+        if status.is_success() {
+            serde_json::from_slice::<Value>(&bytes)
+                .ok()
+                .and_then(|data| data["room_id"].as_str().map(str::to_owned))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    let admin_token = get_system_admin_matrix_token(secret).await.ok();
+    if let Some(space_id) = &space_id {
+        let encoded_space = url::form_urlencoded::byte_serialize(space_id.as_bytes())
+            .collect::<String>();
+        for token in [Some(user_token), admin_token.as_deref()].into_iter().flatten() {
+            if token.is_empty() {
+                continue;
+            }
+            let mut headers = HeaderMap::new();
+            headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+            if let Ok(value) = HeaderValue::from_str(&format!("Bearer {token}")) {
+                headers.insert("Authorization", value);
+            }
+            let _ = call_conduit(
+                &format!("/_matrix/client/v3/join/{encoded_space}"),
+                Method::POST,
+                Some(headers),
+                Some(Bytes::from_static(b"{}")),
+            )
+            .await;
+        }
+    }
+
     for (alias, name, topic) in OFFICIAL_ROOMS {
         let Ok(room_id) = ensure_official_room(secret, alias, name, topic).await else {
             continue;
         };
+
+        if let (Some(space_id), Some(admin_token)) = (&space_id, &admin_token) {
+            let encoded_space = url::form_urlencoded::byte_serialize(space_id.as_bytes())
+                .collect::<String>();
+            let encoded_room = url::form_urlencoded::byte_serialize(room_id.as_bytes())
+                .collect::<String>();
+            let mut headers = HeaderMap::new();
+            headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+            if let Ok(value) = HeaderValue::from_str(&format!("Bearer {admin_token}")) {
+                headers.insert("Authorization", value);
+            }
+            let child_path = format!(
+                "/_matrix/client/v3/rooms/{encoded_space}/state/m.space.child/{encoded_room}"
+            );
+            let child_exists = matches!(
+                call_conduit(&child_path, Method::GET, Some(headers.clone()), None).await,
+                Ok((status, _, _)) if status.is_success()
+            );
+            if !child_exists {
+                let _ = call_conduit(
+                    &child_path,
+                    Method::PUT,
+                    Some(headers),
+                    Some(Bytes::from_static(b"{\"via\":[\"mitch.pro\"]}")),
+                )
+                .await;
+            }
+        }
 
         // 1. Join user to official room
         if !user_token.is_empty() {
@@ -577,7 +648,7 @@ pub async fn sync_matrix_user_to_official_rooms(
         }
 
         // 2. Fetch current power levels
-        let Ok(admin_token) = get_system_admin_matrix_token(secret).await else {
+        let Some(admin_token) = &admin_token else {
             continue;
         };
         let encoded_room =
@@ -1365,7 +1436,7 @@ pub fn handle_cinny_config(headers: &HeaderMap) -> Response {
                     "#computers:mitch.pro",
                     "#random:mitch.pro"
                 ],
-                "spaces": []
+                "spaces": ["#mitch.pro:mitch.pro"]
             },
             "hashRouter": {
                 "enabled": false,

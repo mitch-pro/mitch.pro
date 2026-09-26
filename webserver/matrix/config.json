@@ -17,7 +17,7 @@
 
   "featuredCommunities": {
     "openAsDefault": true,
-    "spaces": [],
+    "spaces": ["#mitch.pro:mitch.pro"],
     "rooms": [
       "#general:mitch.pro",
       "#tech:mitch.pro",

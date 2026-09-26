@@ -64,8 +64,8 @@ self.addEventListener('fetch', (e) => {
   // network-error responses returned by the worker.
   if (requestUrl.origin !== self.location.origin) return;
 
-  // Never intercept API or WebSocket requests
-  if (requestUrl.pathname.startsWith('/api/') || e.request.url.startsWith('ws')) {
+  // Matrix media and sync carry account credentials and must never enter a shared cache.
+  if (requestUrl.pathname.startsWith('/api/') || requestUrl.pathname.startsWith('/_matrix/') || e.request.url.startsWith('ws')) {
     return;
   }
 
