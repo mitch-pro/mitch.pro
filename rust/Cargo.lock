@@ -2232,6 +2232,7 @@ dependencies = [
 name = "mitch-server"
 version = "0.1.0"
 dependencies = [
+ "aes-gcm 0.10.3",
  "axum",
  "base64 0.22.1",
  "chrono",

@@ -194,7 +194,7 @@ pub async fn handle(
     }
 
     // ── VM management (Step 8 wiring; Proxmox exec in Step 13) ──
-    if let Some(resp) = vm::handle(state, method, path, headers, body, &ctx) {
+    if let Some(resp) = vm::handle(state, method, path, headers, search, body, &ctx).await {
         return Some(resp);
     }
 

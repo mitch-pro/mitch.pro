@@ -28,7 +28,7 @@ function urlBase64ToUint8Array(base64String) {
 
     // ?v=11 busts any stale copy of the worker script itself; keep this in
     // sync with the app-shell.js registration so pages don't flip-flop workers.
-    const sw = await navigator.serviceWorker.register("/sw.js?v=42", { scope: "/", updateViaCache: "none" });
+    const sw = await navigator.serviceWorker.register("/sw.js?v=44", { scope: "/", updateViaCache: "none" });
     console.log("Service Worker registered");
 
     let subscription = await sw.pushManager.getSubscription();

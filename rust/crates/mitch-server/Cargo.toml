@@ -35,6 +35,7 @@ rustls-pki-types = "1"
 # /livekit JWT base64url segments (JS Buffer.toString('base64url')).
 base64 = { workspace = true }
 reqwest = { workspace = true }
+aes-gcm = { workspace = true }
 web-push = "0.10"
 rand = { workspace = true }
 # /api/e2e/join mints a per-session ECDH P-256 server keypair (the JS

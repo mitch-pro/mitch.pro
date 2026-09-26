@@ -1030,7 +1030,35 @@ fn dm_digest_impl(state: &Arc<AppState>) -> Result<(), String> {
             if !crate::routes::dm::notif_allowed(state, recip, "digest") {
                 continue;
             }
+            let target_email = canonical_email(state, recip);
+            if target_email.is_empty() || !target_email.contains('@') {
+                continue;
+            }
+
             let ulog = log_entry(&log, recip);
+            let ulog_target = log_entry(&log, &target_email);
+
+            // Limit unread messages email digest for matrix per day to 1 maximum per person.
+            let day_key = chrono::Utc::now().format("%Y-%m-%d").to_string();
+            let last_sent = ulog
+                .get("matrix_digest_sent_at")
+                .or_else(|| ulog_target.get("matrix_digest_sent_at"))
+                .and_then(jsval::number);
+            if let Some(sent_at) = last_sent {
+                if (now_ms as f64) - sent_at < 86_400_000.0 {
+                    continue;
+                }
+            }
+            let last_day = ulog
+                .get("matrix_digest_day")
+                .or_else(|| ulog_target.get("matrix_digest_day"))
+                .and_then(|v| v.as_str());
+            if let Some(day) = last_day {
+                if day == day_key {
+                    continue;
+                }
+            }
+
             let mut latest = f64::NEG_INFINITY;
             for n in &unread_list {
                 // `n.ts || 0`, then Math.max.
@@ -1078,32 +1106,55 @@ fn dm_digest_impl(state: &Arc<AppState>) -> Result<(), String> {
                 first.and_then(|n| n.get("detail")),
                 "You have unread chat messages waiting on Mitch.pro.",
             );
-            let target_email = canonical_email(state, recip);
-            if !target_email.is_empty() && target_email.contains('@') {
-                let title = format!("💬 You have {total_str} unread Matrix message{plural}");
-                let html = make_matrix_notification_email_html(
-                    state,
+            let title = format!("💬 You have {total_str} unread Matrix message{plural}");
+            let html = make_matrix_notification_email_html(
+                state,
+                &target_email,
+                &title,
+                &sender_names,
+                &room_title,
+                &preview_text,
+            );
+            crate::routes::push::send_email_bg(
+                state,
+                &target_email,
+                &format!("💬 {total_str} unread Matrix message{plural} on mitch.pro"),
+                &html,
+            );
+            set_log_field(
+                &mut log,
+                recip,
+                "matrix_digest_ts",
+                jsval::num_value(latest),
+            );
+            set_log_field(
+                &mut log,
+                recip,
+                "matrix_digest_sent_at",
+                jsval::num_value(now_ms as f64),
+            );
+            set_log_field(
+                &mut log,
+                recip,
+                "matrix_digest_day",
+                json!(day_key),
+            );
+            if &target_email != recip {
+                set_log_field(
+                    &mut log,
                     &target_email,
-                    &title,
-                    &sender_names,
-                    &room_title,
-                    &preview_text,
-                );
-                crate::routes::push::send_email_bg(
-                    state,
-                    &target_email,
-                    &format!("💬 {total_str} unread Matrix message{plural} on mitch.pro"),
-                    &html,
+                    "matrix_digest_sent_at",
+                    jsval::num_value(now_ms as f64),
                 );
                 set_log_field(
                     &mut log,
-                    recip,
-                    "matrix_digest_ts",
-                    jsval::num_value(latest),
+                    &target_email,
+                    "matrix_digest_day",
+                    json!(day_key),
                 );
-                changed = true;
-                tracing::info!("[matrix-digest] {} msgs → {target_email}", total_str);
             }
+            changed = true;
+            tracing::info!("[matrix-digest] {} msgs → {target_email}", total_str);
         }
     }
 
@@ -1401,4 +1452,75 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(dir);
     }
+
+    #[tokio::test]
+    async fn test_matrix_digest_daily_limit() {
+        let (state, dir) = test_state();
+
+        let email = "tester@mitch.pro";
+        let now = mitch_lib::school::now_millis();
+        let old_ts = (now - 2 * 3600 * 1000) as f64; // 2 hours ago (eligible: > 1h)
+
+        // 1. Write matrix notification
+        let notifs = json!({
+            email: [
+                {
+                    "id": "matrix:!room:1",
+                    "type": "matrix",
+                    "roomId": "!room:test",
+                    "sender": "Alice",
+                    "roomTitle": "General",
+                    "detail": "Hello world",
+                    "read": false,
+                    "count": 1,
+                    "ts": old_ts,
+                }
+            ]
+        });
+        let _ = state.store.write_document(&state.data_dir().join("matrix_notifications.json"), &notifs);
+
+        // Run digest worker
+        let res = dm_digest_impl(&state);
+        assert!(res.is_ok());
+
+        // Check email_log was written with sent_at and day
+        let log = load_email_log(&state);
+        let ulog = log_entry(&log, email);
+        assert!(truthy_of(ulog.get("matrix_digest_ts")));
+        assert!(truthy_of(ulog.get("matrix_digest_sent_at")));
+        let day = ulog.get("matrix_digest_day").and_then(|v| v.as_str()).unwrap();
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        assert_eq!(day, today);
+
+        // 2. Add a new unread notification with newer timestamp
+        let newer_ts = (now - 3600 * 1000) as f64;
+        let notifs2 = json!({
+            email: [
+                {
+                    "id": "matrix:!room:2",
+                    "type": "matrix",
+                    "roomId": "!room:test",
+                    "sender": "Bob",
+                    "roomTitle": "General",
+                    "detail": "Second message",
+                    "read": false,
+                    "count": 1,
+                    "ts": newer_ts,
+                }
+            ]
+        });
+        let _ = state.store.write_document(&state.data_dir().join("matrix_notifications.json"), &notifs2);
+
+        // Run digest worker again
+        let res2 = dm_digest_impl(&state);
+        assert!(res2.is_ok());
+
+        // Verify matrix_digest_ts was NOT updated to newer_ts because of the daily limit!
+        let log2 = load_email_log(&state);
+        let ulog2 = log_entry(&log2, email);
+        assert_eq!(ulog2.get("matrix_digest_ts").and_then(jsval::number), Some(old_ts));
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }
+

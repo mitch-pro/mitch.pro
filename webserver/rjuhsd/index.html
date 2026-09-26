@@ -27,7 +27,7 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {
-        navigator.serviceWorker.register('/sw.js?v=42', { updateViaCache: 'none' }).catch(function(e) {
+        navigator.serviceWorker.register('/sw.js?v=44', { updateViaCache: 'none' }).catch(function(e) {
           console.warn('[PWA] ServiceWorker registration failed:', e);
         });
       });

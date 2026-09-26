@@ -1275,6 +1275,14 @@ pub async fn handle(
         {
             return resp;
         }
+        // daily-login group (server.js:19279, 21081).
+        if path.starts_with("/api/daily-login/") {
+            if let Some(resp) =
+                crate::routes::daily_login::handle(&state, &method, &path, headers, body_bytes).await
+            {
+                return resp;
+            }
+        }
         // dm group (Step 11) — wired before canvas (JS file order:
         // dm at 19452, canvas at 21634+).
         if let Some(resp) =

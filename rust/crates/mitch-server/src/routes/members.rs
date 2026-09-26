@@ -40,6 +40,7 @@ pub async fn handle(
         // The JS branches check the path only — every method lands here.
         (_, "/api/userdata") => Some(userdata(state, headers, body_bytes)),
         (_, "/api/members") => Some(members(state, headers)),
+        (_, "/api/premium-members") => Some(premium_members(state, headers)),
         (_, "/api/admin-members") => Some(admin_members(state, headers)),
         (_, "/api/moderator-members") => Some(moderator_members(state, headers)),
         (_, "/api/owner-members") => Some(owner_members(state, headers)),
@@ -599,6 +600,58 @@ fn owner_members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             })
         })
         .collect();
+    json_response(200, json!({ "members": members }))
+}
+
+/// `server.js:21525-21555` — public list of approved premium users.
+fn premium_members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
+    let Some((_, viewer_email)) = member_gate(state, headers) else {
+        return json_response(401, json!({ "error": "auth required" }));
+    };
+    let applications = state
+        .store
+        .read_document(&data_file(state, "applications.json"), json!([]));
+    let profiles = state
+        .store
+        .read_document(&data_file(state, "profiles.json"), json!({}));
+    let cosmetics = state
+        .store
+        .read_document(&data_file(state, "cosmetics.json"), json!({}));
+
+    let mut seen: Vec<String> = Vec::new();
+    let mut members: Vec<Value> = Vec::new();
+    if let Some(apps) = applications.as_array() {
+        for a in apps {
+            let status = a.get("status").and_then(|v| v.as_str()).unwrap_or("");
+            let app_type = a.get("type").and_then(|v| v.as_str()).unwrap_or("");
+            let grant_premium = a.get("grantPremium").and_then(|v| v.as_bool()).unwrap_or(false);
+            let email = a.get("email").and_then(|v| v.as_str()).unwrap_or("");
+            if status == "approved" && (app_type == "premium" || grant_premium) && email != TEST_ACCOUNT_EMAIL {
+                let norm = auth::normalize_email(email);
+                if seen.contains(&norm) {
+                    continue;
+                }
+                seen.push(norm.clone());
+                let prof = profiles.get(norm.as_str()).cloned().unwrap_or(json!({}));
+                let cosm = cosmetics.get(norm.as_str()).cloned().unwrap_or(json!({}));
+                let processed = profile::process_member_fields(
+                    &state.store,
+                    state.data_dir(),
+                    email,
+                    Some(&prof),
+                    Some(&viewer_email),
+                );
+                members.push(json!({
+                    "displayName": processed.get("displayName").cloned().unwrap_or(Value::Null),
+                    "email": processed.get("email").cloned().unwrap_or(Value::Null),
+                    "color": shop::public_active_color(&state.store, email, cosm.get("activeColor").unwrap_or(&Value::Null))
+                        .map(|c| json!(c))
+                        .unwrap_or(Value::Null),
+                    "badge": jsval::or(cosm.get("activeBadge"), json!(Value::Null)),
+                }));
+            }
+        }
+    }
     json_response(200, json!({ "members": members }))
 }
 

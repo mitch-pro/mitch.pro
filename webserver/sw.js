@@ -1,10 +1,11 @@
-const CACHE_NAME = 'mitch-pro-cache-v43';
+const CACHE_NAME = 'mitch-pro-cache-v44';
 const ASSETS = [
   '/favicon.ico',
   '/manifest.json',
   '/apple-touch-icon.png',
   '/icon-192.png',
   '/icon-512.png',
+  '/cookie-consent.js',
   '/relaunch.css',
   '/portal-redesign.css?v=16',
   '/home-redesign.css?v=2',
@@ -85,8 +86,9 @@ const isThemeJs = requestUrl.pathname === '/theme.js';
           caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
         }
         return response;
-      }).catch(() => {
-        return caches.match(e.request);
+      }).catch(async () => {
+        const cached = await caches.match(e.request);
+        return cached || new Response('', { status: 504, statusText: 'Gateway Timeout' });
       })
     );
   } else if (isHtmlRequest(e.request)) {
@@ -98,9 +100,13 @@ const isThemeJs = requestUrl.pathname === '/theme.js';
           caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
         }
         return response;
-      }).catch(() => {
+      }).catch(async () => {
         // Offline fallback: serve cached version if available
-        return caches.match(e.request);
+        const cached = await caches.match(e.request);
+        return cached || new Response('<!DOCTYPE html><html><body>Offline</body></html>', {
+          status: 503,
+          headers: { 'Content-Type': 'text/html' }
+        });
       })
     );
   } else {
@@ -116,7 +122,10 @@ const isThemeJs = requestUrl.pathname === '/theme.js';
             caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
           }
           return response;
-        }).catch(() => caches.match(e.request))
+        }).catch(async () => {
+          const cached = await caches.match(e.request);
+          return cached || new Response('', { status: 504, statusText: 'Gateway Timeout' });
+        })
       );
     } else {
       // Cache-first for slow-changing assets (images, fonts, media)
@@ -133,6 +142,8 @@ const isThemeJs = requestUrl.pathname === '/theme.js';
               });
             }
             return response;
+          }).catch(() => {
+            return new Response('', { status: 504, statusText: 'Gateway Timeout' });
           });
         })
       );

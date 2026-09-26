@@ -813,6 +813,7 @@ pub fn rate_limit_for(endpoint: &str) -> (u32, u32) {
         "/api/admin/gift-coins" => (10, 60),
         "/api/admin/grant-premium" => (10, 60),
         "/api/admin/revoke-premium" => (10, 60),
+        "/api/admin/vms" => (30, 60),
         "/api/admin/send-notification" => (20, 60),
         "/api/admin/unsend-notification" => (20, 60),
         "/api/admin/blog-contributors" => (20, 60),
