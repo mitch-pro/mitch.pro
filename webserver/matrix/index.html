@@ -1,61 +1,97 @@
-<!doctype html>
-<html lang="en" style="height: 100%;">
+<!DOCTYPE html>
+<html lang="en">
   <head>
-    <meta charset="utf-8">
+    <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>Matrix Chat — mitch.pro</title>
     <meta name="name" content="Mitch.pro Matrix" />
     <meta name="author" content="Mitch.pro" />
-    <meta name="description" content="Official decentralized, end-to-end encrypted Matrix chat on mitch.pro." />
-    <meta name="theme-color" content="#15171b">
+    <meta
+      name="description"
+      content="Official decentralized, end-to-end encrypted Matrix chat on mitch.pro."
+    />
+    <meta
+      name="keywords"
+      content="mitch.pro, matrix, chat, e2ee, conduit, secure chat"
+    />
 
-    <link rel="apple-touch-icon" sizes="120x120" href="/matrix/vector-icons/120.570a7f9.png">
-    <link rel="apple-touch-icon" sizes="144x144" href="/matrix/vector-icons/144.5a63bf2.png">
-    <link rel="apple-touch-icon" sizes="152x152" href="/matrix/vector-icons/152.1ccdc8a.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="/matrix/vector-icons/180.30b915f.png">
-    <link rel="manifest" href="/matrix/manifest.json">
-    <meta name="referrer" content="no-referrer">
-    <link rel="icon" type="image/png" sizes="24x24" href="/matrix/vector-icons/24.97ab000.png">
-    <link rel="icon" type="image/png" sizes="144x144" href="/matrix/vector-icons/144.5a63bf2.png">
-    <link rel="icon" type="image/png" sizes="512x512" href="/matrix/vector-icons/512.7ce350d.png">
+    <meta property="og:title" content="Matrix Chat — mitch.pro" />
+    <meta property="og:url" content="https://mitch.pro/matrix/" />
+    <meta property="og:image" content="/icon-192.png" />
+    <meta
+      property="og:description"
+      content="Official decentralized, end-to-end encrypted Matrix chat on mitch.pro."
+    />
+    <meta name="theme-color" content="#070510" />
+
+    <link id="favicon" rel="shortcut icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="Mitch.pro Matrix" />
+    <meta name="apple-mobile-web-app-title" content="Mitch.pro Matrix" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
     <!-- Mitch.pro Global Theme Engine -->
     <script src="/theme.js?v=13"></script>
 
-    <!-- Element Web Theme Stylesheets -->
-    <link rel="stylesheet" href="/matrix/bundles/156d536ae79bdae0c801/bundle.css">
-    <link rel="stylesheet" disabled="disabled" data-mx-theme="Legacy-light" title="Legacy-light" href="/matrix/bundles/156d536ae79bdae0c801/theme-legacy-light.css">
-    <link rel="stylesheet" disabled="disabled" data-mx-theme="Legacy-dark" title="Legacy-dark" href="/matrix/bundles/156d536ae79bdae0c801/theme-legacy-dark.css">
-    <link rel="stylesheet" disabled="disabled" data-mx-theme="Light" title="Light" href="/matrix/bundles/156d536ae79bdae0c801/theme-light.css">
-    <link rel="stylesheet" disabled="disabled" data-mx-theme="Light-high-contrast" title="Light-high-contrast" href="/matrix/bundles/156d536ae79bdae0c801/theme-light-high-contrast.css">
-    <link rel="stylesheet" disabled="disabled" data-mx-theme="Dark" title="Dark" href="/matrix/bundles/156d536ae79bdae0c801/theme-dark.css">
-    <link rel="stylesheet" disabled="disabled" data-mx-theme="Light-custom" title="Light-custom" href="/matrix/bundles/156d536ae79bdae0c801/theme-light-custom.css">
-    <link rel="stylesheet" disabled="disabled" data-mx-theme="Dark-custom" title="Dark-custom" href="/matrix/bundles/156d536ae79bdae0c801/theme-dark-custom.css">
+    <!-- UI hygiene: hide floating theme button & prevent rogue root scrollbars -->
+    <style>
+      #theme-btn {
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        opacity: 0 !important;
+        width: 0 !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        position: absolute !important;
+        top: -9999px !important;
+        left: -9999px !important;
+      }
+      html, body, #root {
+        overflow: hidden !important;
+        scrollbar-width: none !important;
+      }
+      html::-webkit-scrollbar,
+      body::-webkit-scrollbar,
+      #root::-webkit-scrollbar {
+        display: none !important;
+        width: 0 !important;
+        height: 0 !important;
+      }
+    </style>
 
-    <!-- Mitch.pro Scoped Matrix Shell Stylesheet -->
-    <link rel="stylesheet" href="/matrix/matrix-design.css?v=2" />
-    <!-- Legacy client bundle compatibility anchor: /matrix/assets/index-BVlPv2dR.js -->
+    <!-- Cinny Stylesheet & Mitch.pro chat overrides -->
+    <link rel="stylesheet" crossorigin href="/matrix/assets/index-DmaX6Xe5.css" />
+    <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=5" />
   </head>
-  <body class="matrix-page mitch-design" style="height: 100%; margin: 0;">
+  <body id="appBody">
     <header id="matrix-site-bar">
-      <a class="matrix-wordmark" href="/" aria-label="mitch.pro home"><img src="/icon-192.png" alt="" width="26" height="26"><b>mitch</b><span>.pro</span></a>
+      <a class="matrix-wordmark" href="/" aria-label="mitch.pro home"><b>mitch</b><span>.pro</span></a>
       <nav class="matrix-site-links" aria-label="Main navigation">
         <a href="/">Home</a>
         <a href="/vms/">VM Lab <span class="matrix-free-pill">FREE</span></a>
         <a href="/matrix/" aria-current="page">Chat</a>
         <a href="/game-portal/">Games</a>
-        <a class="matrix-blooket-status" href="https://woodcreek.site/">Blooket Bot currently blocked :(</a>
+        <a href="https://woodcreek.site/">Blooket Bot</a>
         <a href="/members/">People</a>
         <a href="https://rjuhsd.school/">Schedule</a>
       </nav>
       <div class="matrix-site-actions">
+        <span class="matrix-network-status"><i></i> Encrypted</span>
         <a id="matrix-account-link" class="matrix-account-link" href="/preferences/#account">
           <span id="matrix-account-avatar" aria-hidden="true">M</span>
           <span id="matrix-account-name">Account</span>
         </a>
       </div>
     </header>
+
 
     <div id="matrix-context-bar" aria-hidden="true" style="display:none">
       <div class="matrix-context-title"><span>COMMUNITY</span><b>Matrix chat</b></div>
@@ -66,47 +102,56 @@
       </div>
     </div>
 
-    <div id="matrix-auth-gate" role="status" aria-live="polite">
-      <div class="matrix-auth-card">
-        <img src="/icon-192.png" alt="" width="40" height="40">
-        <h1 id="matrix-auth-title">Opening chat</h1>
-        <p id="matrix-auth-message">Checking your mitch.pro account…</p>
-        <a id="matrix-auth-signin" href="/api/sso/bridge?back=/matrix/" hidden>Sign in to mitch.pro</a>
-        <button id="matrix-auth-retry" type="button" hidden>Try again</button>
+    <!-- Mitch.pro SSO Connect Banner (only shown if guest/logged out) -->
+    <div id="mitch-sso-banner">
+      <span id="mitch-sso-msg">✨ Connect your account for instant single sign-on</span>
+      <a id="mitch-sso-btn" href="/api/sso/bridge?back=/matrix/">Login with mitch.pro</a>
+      <a id="mitch-home-btn" href="/" style="margin-left: 12px; color: var(--t-fg2); text-decoration: none; font-size: 13px; opacity: 0.85; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.85'">← Return to mitch.pro</a>
+    </div>
+
+    <!-- Mitch.pro Push Notification Opt-in Prompt -->
+    <div id="mitch-push-banner" role="dialog" aria-label="Enable notifications">
+      <div class="mitch-push-header">
+        <span class="mitch-push-icon" aria-hidden="true">🔔</span>
+        <span>Enable Call & Chat Notifications</span>
+      </div>
+      <div class="mitch-push-desc">
+        Never miss an incoming voice/video call or message when you're away or your device is locked.
+      </div>
+      <div class="mitch-push-actions">
+        <button id="mitch-push-later" class="mitch-push-btn-later" type="button">Remind later</button>
+        <button id="mitch-push-enable" class="mitch-push-btn-enable" type="button">Turn On</button>
       </div>
     </div>
 
     <script>
       window.global ||= window;
 
-      // ── Clean up and prevent Element Web auto-updater reload loop ──
-      try {
-        if (window.location.search && window.location.search.includes('updated=')) {
-          const cleanUrl = new URL(window.location.href);
-          cleanUrl.searchParams.delete('updated');
-          window.history.replaceState(null, '', cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
-        }
-      } catch (_) {}
-
+      // ── Ensure Sun/Theme Button is Never Rendered in Matrix UI ──
       (function() {
-        const origFetch = window.fetch;
-        if (typeof origFetch === 'function') {
-          window.fetch = function(input, init) {
-            try {
-              const urlStr = typeof input === 'string' ? input : (input && input.url ? input.url : '');
-              if (urlStr === 'version' || urlStr === '/matrix/version' || urlStr.endsWith('/version')) {
-                return Promise.resolve(new Response('v1.12.28\n', {
-                  status: 200,
-                  headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-                }));
-              }
-            } catch (_) {}
-            return origFetch.apply(this, arguments);
-          };
+        function removeSun() {
+          const btn = document.getElementById('theme-btn');
+          if (btn) btn.remove();
         }
+        removeSun();
+        if (window.MutationObserver) {
+          const obs = new MutationObserver(function(mutations) {
+            for (let i = 0; i < mutations.length; i++) {
+              for (let j = 0; j < mutations[i].addedNodes.length; j++) {
+                const node = mutations[i].addedNodes[j];
+                if (node && (node.id === 'theme-btn' || (node.querySelector && node.querySelector('#theme-btn')))) {
+                  removeSun();
+                }
+              }
+            }
+          });
+          obs.observe(document.documentElement, { childList: true, subtree: true });
+        }
+        document.addEventListener('DOMContentLoaded', removeSun);
+        window.addEventListener('load', removeSun);
       })();
 
-      // ── Synchronize Element Dark/Light Theme with theme.js ────────
+      // ── Synchronize Cinny Dark/Light Mode & Colors with theme.js ────────
       (function() {
         function getSiteThemeMode() {
           try {
@@ -123,73 +168,203 @@
           return document.documentElement.classList.contains('theme-light') ? 'light' : 'dark';
         }
 
-        function applyElementTheme(mode) {
+        function primeCinnySettings(mode) {
+          try {
+            const raw = localStorage.getItem('settings');
+            const settings = raw ? JSON.parse(raw) : {};
+            const targetThemeId = mode === 'light' ? 'light-theme' : 'dark-theme';
+            if (settings.themeId !== targetThemeId || settings.useSystemTheme !== false) {
+              settings.themeId = targetThemeId;
+              settings.useSystemTheme = false;
+              if (mode === 'light') settings.lightThemeId = 'light-theme';
+              else settings.darkThemeId = 'dark-theme';
+              localStorage.setItem('settings', JSON.stringify(settings));
+            }
+          } catch (_) {}
+        }
+
+        function applyModeToDom(mode) {
           const isLight = mode === 'light';
           document.documentElement.classList.toggle('theme-light', isLight);
           document.documentElement.style.colorScheme = isLight ? 'light' : 'dark';
-          const links = document.querySelectorAll('link[data-mx-theme]');
-          links.forEach(l => {
-            const title = (l.getAttribute('title') || '').toLowerCase();
-            if (isLight && title === 'light') {
-              l.removeAttribute('disabled');
-            } else if (!isLight && title === 'dark') {
-              l.removeAttribute('disabled');
+          if (document.body) {
+            if (isLight) {
+              document.body.classList.remove('dark-theme', '_15q3ngn1', '_18gnz541', 'prism-dark');
+              document.body.classList.add('light-theme', 'oq6d071w', '_18gnz540', 'prism-light');
             } else {
-              l.setAttribute('disabled', 'disabled');
+              document.body.classList.remove('light-theme', 'oq6d071w', '_18gnz540', 'prism-light');
+              document.body.classList.add('dark-theme', '_15q3ngn1', '_18gnz541', 'prism-dark');
             }
-          });
-          try {
-            localStorage.setItem('mx_theme', isLight ? 'Light' : 'Dark');
-          } catch (_) {}
+          }
           const metaTheme = document.querySelector('meta[name="theme-color"]');
-          if (metaTheme) metaTheme.setAttribute('content', isLight ? '#f6f8fa' : '#15171b');
+          if (metaTheme) metaTheme.setAttribute('content', isLight ? '#eef1f9' : '#070510');
         }
 
+        // Prime Cinny settings IMMEDIATELY before React boots
         const initialMode = getSiteThemeMode();
-        applyElementTheme(initialMode);
+        primeCinnySettings(initialMode);
+        applyModeToDom(initialMode);
 
+        // React to theme.js changes (e.g. user taps #theme-btn or calls __theme.apply)
         window.addEventListener('themechange', function(e) {
           const detail = e && e.detail ? String(e.detail).toLowerCase() : '';
           const nextMode = (detail === 'light') ? 'light' : (detail === 'dark' ? 'dark' : getSiteThemeMode());
-          applyElementTheme(nextMode);
+          primeCinnySettings(nextMode);
+          applyModeToDom(nextMode);
         });
 
+        // Listen for storage changes across tabs
         window.addEventListener('storage', function(e) {
           if (e.key === 'theme' || e.key === 'theme_mode') {
-            applyElementTheme(getSiteThemeMode());
+            const nextMode = getSiteThemeMode();
+            primeCinnySettings(nextMode);
+            applyModeToDom(nextMode);
           }
         });
+
+        // Two-way sync: if the user explicitly switches themes in Cinny's Settings UI
+        let isSyncing = false;
+        const themeObserver = new MutationObserver(function() {
+          if (isSyncing || !document.body) return;
+          const cls = document.body.className || '';
+          const isLightCinny = cls.includes('light-theme') || cls.includes('silver-theme') || cls.includes('oq6d071w') || cls.includes('prism-light');
+          const siteMode = getSiteThemeMode();
+          const siteIsLight = siteMode === 'light';
+          if (isLightCinny !== siteIsLight) {
+            isSyncing = true;
+            const next = isLightCinny ? 'light' : 'dark';
+            primeCinnySettings(next);
+            if (window.__theme && typeof window.__theme.apply === 'function') {
+              window.__theme.apply(next);
+            }
+            applyModeToDom(next);
+            isSyncing = false;
+          }
+        });
+
+        function initThemeSync() {
+          if (document.body) {
+            themeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+            applyModeToDom(getSiteThemeMode());
+          } else {
+            document.addEventListener('DOMContentLoaded', function() {
+              if (document.body) {
+                themeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+                applyModeToDom(getSiteThemeMode());
+              }
+            });
+          }
+        }
+        initThemeSync();
       })();
 
-      // ── Mitch.pro Single Sign-On (SSO) & Bootstrapping ────────────
+      // ── Rebranding & Document Title Guardian ────────────────────
       (function() {
-        const gate = document.getElementById('matrix-auth-gate');
-        const gateTitle = document.getElementById('matrix-auth-title');
-        const gateMessage = document.getElementById('matrix-auth-message');
-        const signInLink = document.getElementById('matrix-auth-signin');
-        const retryButton = document.getElementById('matrix-auth-retry');
-        function showGate(title, message, action) {
-          gate.hidden = false;
-          gateTitle.textContent = title;
-          gateMessage.textContent = message;
-          signInLink.hidden = action !== 'signin';
-          retryButton.hidden = action !== 'retry';
+        const host = window.location.hostname || '';
+        const isPickle = /(^|\.)sexypickleclub\.com$/.test(host);
+        const brandName = isPickle ? 'Sexy Pickle Club' : 'mitch.pro';
+        const matrixLabel = isPickle ? 'Pickle Matrix' : 'Mitch.pro Matrix';
+        const defaultTitle = `Matrix Chat — ${brandName}`;
+
+        const ssoMsg = document.getElementById('mitch-sso-msg');
+        const ssoBtn = document.getElementById('mitch-sso-btn');
+        if (ssoMsg) {
+          ssoMsg.textContent = isPickle
+            ? '✨ Connect your Sexy Pickle Club account for instant single sign-on'
+            : '✨ Connect your Mitch.pro account for instant single sign-on';
         }
+        if (ssoBtn) {
+          ssoBtn.textContent = isPickle ? 'Log In' : 'Login with mitch.pro';
+        }
+
+        const origTitleSetter = Object.getOwnPropertyDescriptor(Document.prototype, 'title')?.set;
+        if (origTitleSetter) {
+          Object.defineProperty(document, 'title', {
+            configurable: true,
+            enumerable: true,
+            set: function(val) {
+              if (typeof val === 'string') {
+                let clean = val.replace(/\bCinny\b/gi, matrixLabel);
+                if (!clean.toLowerCase().includes(brandName.toLowerCase())) {
+                  clean = clean ? `${clean} — ${brandName}` : defaultTitle;
+                }
+                origTitleSetter.call(document, clean);
+              } else {
+                origTitleSetter.call(document, val);
+              }
+            },
+            get: function() {
+              return Object.getOwnPropertyDescriptor(Document.prototype, 'title')?.get?.call(document) || defaultTitle;
+            }
+          });
+        }
+        document.title = defaultTitle;
+
+        function sanitizeCinnyBranding(rootNode) {
+          if (!rootNode) return;
+          if (rootNode.nodeType === Node.TEXT_NODE) {
+            if (rootNode.nodeValue && rootNode.nodeValue.includes('Cinny')) {
+              rootNode.nodeValue = rootNode.nodeValue
+                .replace(/Welcome to Cinny/g, `Welcome to ${matrixLabel}`)
+                .replace(/Cinny Web/g, matrixLabel)
+                .replace(/Cinny/g, matrixLabel);
+            }
+            return;
+          }
+          const walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_TEXT, null, false);
+          let node;
+          while ((node = walker.nextNode())) {
+            if (node.nodeValue && node.nodeValue.includes('Cinny')) {
+              node.nodeValue = node.nodeValue
+                .replace(/Welcome to Cinny/g, `Welcome to ${matrixLabel}`)
+                .replace(/Cinny Web/g, matrixLabel)
+                .replace(/Cinny/g, matrixLabel);
+            }
+          }
+          if (rootNode.querySelectorAll) {
+            const logos = rootNode.querySelectorAll('img[alt*="Cinny" i]');
+            logos.forEach(img => {
+              img.src = '/icon-192.png';
+              img.alt = `${brandName} Logo`;
+              img.style.borderRadius = '14px';
+              img.style.boxShadow = '0 8px 24px rgba(184, 108, 255, 0.35)';
+            });
+          }
+        }
+
+        const observer = new MutationObserver(mutations => {
+          for (const mutation of mutations) {
+            if (mutation.type === 'childList') {
+              mutation.addedNodes.forEach(n => {
+                if (n.nodeType === Node.ELEMENT_NODE || n.nodeType === Node.TEXT_NODE) {
+                  sanitizeCinnyBranding(n);
+                }
+              });
+            }
+          }
+        });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+      })();
+
+      // ── Single Sign-On (SSO) & Bootstrapping ──────────────────────
+      // Stay on the host that opened Matrix (e.g. rjuhsd.school/matrix/).
+      // Unsigned users hit /api/sso/bridge?back=/matrix/, which hops through
+      // the identity host (mitchdog.com) and returns here after exchange.
+      (function() {
+        const banner = document.getElementById("mitch-sso-banner");
         const MATRIX_STORE_RECOVERY_KEY = 'mitch_matrix_store_recovery_v1';
         const MATRIX_DATABASES = [
-          'account',
           'matrix-js-sdk:web-sync-store',
           'crypto-store',
           'matrix-js-sdk:crypto',
           'matrix-js-sdk::matrix-sdk-crypto',
-          'matrix-js-sdk::matrix-sdk-crypto-meta',
-          'matrix-react-sdk'
+          'matrix-js-sdk::matrix-sdk-crypto-meta'
         ];
         let matrixStoreRecoveryStarted = false;
 
         function isMatrixStoreAccountMismatch(value) {
           const message = String(value?.message || value || '');
-          return /account in the store doesn't match the account in the constructor|storage inconsistency|StorageManager consistency check failed|Missing session data|storage_evicted/i.test(message);
+          return /account in the store doesn't match the account in the constructor/i.test(message);
         }
 
         function beginMatrixStoreRecovery() {
@@ -206,93 +381,41 @@
           if (isMatrixStoreAccountMismatch(event.reason)) beginMatrixStoreRecovery();
         });
 
-        // Recover only from a confirmed store/account mismatch. Verification and
-        // encryption recovery must remain explicit user decisions in Element.
+        // Cinny catches startup failures and renders them instead of leaving an
+        // unhandled rejection, so also watch its error panel for this exact
+        // Matrix crypto-store identity failure.
         new MutationObserver(mutations => {
           for (const mutation of mutations) {
             for (const node of mutation.addedNodes) {
-              const message = node.nodeType === Node.TEXT_NODE ? node.nodeValue : (node.textContent || '');
+              const message = node.nodeType === Node.TEXT_NODE ? node.nodeValue : node.textContent;
               if (isMatrixStoreAccountMismatch(message)) {
-                console.warn('[Matrix Storage] Storage error detected in DOM:', message.slice(0, 100));
-                localStorage.removeItem("mx_crypto_initialised");
-                localStorage.removeItem("mx_has_pickle_key");
                 beginMatrixStoreRecovery();
                 return;
               }
             }
           }
-
         }).observe(document.documentElement, { childList: true, subtree: true });
 
-        // Listen for user clicks on "Remove this device" or "Sign out" inside error dialogs
-        document.addEventListener('click', function(e) {
-          const btn = e.target && e.target.closest && e.target.closest('button');
-          if (btn && (/remove this device/i.test(btn.textContent) || /sign out/i.test(btn.textContent))) {
-            const dialog = btn.closest('.mx_Dialog, .mx_ErrorDialog, [role="dialog"]');
-            if (dialog && /missing session data|storage/i.test(dialog.textContent)) {
-              console.log('[Matrix Storage] User clicked Remove this device. Performing clean store reset.');
-              beginMatrixStoreRecovery();
-            }
-          }
-        }, true);
-
-        // Graceful fallback for broken avatar images: hide broken <img> so the styled initial avatar displays
-        window.addEventListener('error', function(e) {
-          const target = e.target;
-          if (target && target.tagName === 'IMG') {
-            const isAvatar = target.classList.contains('mx_BaseAvatar_image') ||
-              target.classList.contains('_image_va14e_43') ||
-              target.closest('.mx_BaseAvatar') ||
-              target.closest('._triggerButton_dh4sb_100') ||
-              target.closest('._avatar_va14e_8') ||
-              target.closest('[class*="avatar"]') ||
-              target.closest('[class*="Avatar"]');
-            if (isAvatar) {
-              target.classList.add('broken-avatar');
-              target.style.display = 'none';
-              const parent = target.parentElement;
-              if (parent) {
-                parent.classList.add('avatar-img-failed');
-                // Ensure initial element is visible
-                const initial = parent.querySelector('.mx_BaseAvatar_initial, [class*="_avatar-imageless_"]');
-                if (initial) {
-                  initial.style.display = 'flex';
-                  initial.style.visibility = 'visible';
-                  initial.style.opacity = '1';
-                }
-              }
-            }
-          }
-        }, true);
-
-        function bootElement() {
-          if (window.__elementLoaded) return;
-          window.__elementLoaded = true;
+        function bootCinny() {
+          if (window.__cinnyLoaded) return;
+          window.__cinnyLoaded = true;
           const script = document.createElement("script");
-          script.src = "/matrix/bundles/156d536ae79bdae0c801/bundle.js";
-          script.onload = () => { gate.hidden = true; };
-          script.onerror = () => {
-            window.__elementLoaded = false;
-            showGate('Chat could not load', 'Check your connection and try again.', 'retry');
-          };
-          document.body.appendChild(script);
+          script.type = "module";
+          script.crossOrigin = "anonymous";
+          script.src = "/matrix/assets/index-BVlPv2dR.js";
+          document.head.appendChild(script);
         }
 
         function readStoredSession() {
           return {
-            token: localStorage.getItem("mx_access_token") || '',
-            userId: localStorage.getItem("mx_user_id") || '',
-            deviceId: localStorage.getItem("mx_device_id") || ''
+            token: localStorage.getItem("cinny_access_token") || '',
+            userId: localStorage.getItem("cinny_user_id") || '',
+            deviceId: localStorage.getItem("cinny_device_id") || ''
           };
         }
 
         function clearStoredSession() {
-          for (const key of [
-            'mx_access_token', 'mx_device_id', 'mx_user_id', 'mx_hs_url', 'mx_has_access_token', 'mx_is_guest',
-            'mx_crypto_initialised', 'mx_has_pickle_key', 'mx_soft_logout', 'must_verify_device', 'mx_fresh_login',
-            'mx_has_refresh_token', 'mx_refresh_token',
-            'cinny_access_token', 'cinny_device_id', 'cinny_user_id', 'cinny_hs_base_url'
-          ]) {
+          for (const key of ['cinny_access_token', 'cinny_device_id', 'cinny_user_id', 'cinny_hs_base_url']) {
             localStorage.removeItem(key);
           }
         }
@@ -341,25 +464,98 @@
               credentials: 'same-origin',
               cache: 'no-store'
             });
-            if (response.status >= 500) return null;
             if (!response.ok) return false;
             const data = await response.json();
             return data.user_id === expectedUserId && data.device_id === expectedDeviceId;
           } catch (_) {
-            return null;
+            return false;
           }
         }
 
         function saveSession(data) {
-          const hs = data.base_url || 'https://mitchdog.com';
-          localStorage.setItem("mx_access_token", data.access_token);
-          localStorage.setItem("mx_device_id", data.device_id);
-          localStorage.setItem("mx_user_id", data.user_id);
-          localStorage.setItem("mx_hs_url", hs);
-          localStorage.setItem("mx_has_access_token", "true");
-          localStorage.setItem("mx_is_guest", "false");
+          localStorage.setItem("cinny_access_token", data.access_token);
+          localStorage.setItem("cinny_device_id", data.device_id);
+          localStorage.setItem("cinny_user_id", data.user_id);
+          localStorage.setItem("cinny_hs_base_url", data.base_url);
         }
 
+        async function initMitchSSO() {
+          let shouldBootCinny = true;
+          try {
+            const recovery = await completePendingMatrixStoreRecovery();
+            if (recovery.pending && !recovery.cleared) {
+              shouldBootCinny = false;
+              if (banner) banner.style.display = 'flex';
+              const message = document.getElementById('mitch-sso-msg');
+              if (message) message.textContent = 'Repairing encrypted chat storage… close other chat tabs if this page keeps reloading.';
+              setTimeout(() => window.location.reload(), 2000);
+              return;
+            }
+
+            const statusRes = await fetch('/api/matrix/sso-status', {
+              credentials: 'same-origin',
+              cache: 'no-store'
+            });
+            const status = statusRes.ok ? await statusRes.json() : { authenticated: false };
+            if (typeof window.updateMatrixShellAccount === 'function') {
+              window.updateMatrixShellAccount(status);
+            }
+            const stored = readStoredSession();
+
+            // Reuse this browser's existing Matrix device. Logging in again on
+            // every page load creates abandoned devices and destabilizes E2EE.
+            if (stored.token && stored.userId && stored.deviceId &&
+                (!status.authenticated || stored.userId === status.user_id) &&
+                await storedSessionIsValid(stored.token, stored.userId, stored.deviceId)) {
+              localStorage.setItem('cinny_hs_base_url', 'https://mitchdog.com');
+              if (banner) banner.style.display = 'none';
+              bootCinny();
+              return;
+            }
+
+            const reusableDeviceId = status.authenticated && stored.userId === status.user_id
+              ? stored.deviceId
+              : '';
+            if (stored.token || stored.userId) clearStoredSession();
+
+            if (!status.authenticated) {
+              if (banner) banner.style.display = 'flex';
+              bootCinny();
+              return;
+            }
+
+            const res = await fetch("/api/matrix/sso-login", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-Mitch-Requested-With": "1" },
+              credentials: "same-origin",
+              body: JSON.stringify(reusableDeviceId ? { device_id: reusableDeviceId } : {})
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data && data.access_token && data.user_id) {
+                saveSession(data);
+                if (banner) banner.style.display = "none";
+              }
+            } else if (banner) {
+              banner.style.display = "flex";
+            }
+          } catch (e) {
+            console.warn("[Mitch Matrix SSO]", e);
+            if (!readStoredSession().token && banner) banner.style.display = "flex";
+          } finally {
+            if (shouldBootCinny) bootCinny();
+          }
+        }
+
+        if (navigator.locks && typeof navigator.locks.request === 'function') {
+          navigator.locks.request('mitch-matrix-session', initMitchSSO);
+        } else {
+          initMitchSSO();
+        }
+      })();
+
+      // Keep the shared site shell personal without coupling Cinny's boot to it.
+      (function() {
         window.updateMatrixShellAccount = function(status) {
           const name = document.getElementById('matrix-account-name');
           const avatar = document.getElementById('matrix-account-avatar');
@@ -370,121 +566,191 @@
             avatar.textContent = 'M';
             avatar.style.backgroundImage = '';
             link.href = '/api/sso/bridge?back=/matrix/';
+            link.removeAttribute('title');
             return;
           }
           const raw = String(status.displayName || status.username || status.user_id || 'Account');
           const label = raw.replace(/^@/, '').split(':')[0];
           name.textContent = label;
           if (status.pfp) {
-            let pfpUrl = status.pfp;
-            if (pfpUrl.startsWith('mxc://')) {
-              pfpUrl = '/_matrix/media/v3/download/' + pfpUrl.slice(6);
-            }
             avatar.textContent = '';
-            avatar.style.backgroundImage = 'url("' + pfpUrl + '")';
+            avatar.style.backgroundImage = 'url("' + status.pfp + '")';
             avatar.style.backgroundSize = 'cover';
             avatar.style.backgroundPosition = 'center';
+            avatar.style.backgroundRepeat = 'no-repeat';
           } else {
             avatar.style.backgroundImage = '';
             avatar.textContent = (label.trim()[0] || 'M').toUpperCase();
           }
+          if (status.bio) {
+            link.title = status.bio;
+          } else {
+            link.removeAttribute('title');
+          }
           link.href = '/preferences/#account';
-          if (status.bio) link.title = status.bio;
         };
+      })();
 
-        async function initMitchSSO() {
-          showGate('Opening chat', 'Checking your mitch.pro account…');
+      // ── Mitch.pro Push Notification Integration ───────────────────
+      (function() {
+        function b64ToUint8(b64) {
+          const pad = '='.repeat((4 - (b64.length % 4)) % 4);
+          const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+          return Uint8Array.from(Array.prototype.map.call(raw, c => c.charCodeAt(0)));
+        }
+
+        async function syncMitchPushSubscription(askPermission = false) {
+          if (!window.isSecureContext || !('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+            return false;
+          }
+          let permission = Notification.permission;
+          if (permission === 'default' && askPermission) {
+            permission = await Notification.requestPermission();
+          }
+          if (permission !== 'granted') return false;
+
           try {
-            const recovery = await completePendingMatrixStoreRecovery();
-            if (recovery.pending && !recovery.cleared) {
-              showGate('Chat storage is busy', 'Close your other chat tabs, then try again.', 'retry');
-              return;
-            }
+            const keyRes = await fetch('/api/push/vapid-key', { credentials: 'same-origin', cache: 'no-store' });
+            if (!keyRes.ok) return false;
+            const keyData = await keyRes.json();
+            if (!keyData.publicKey) return false;
 
-            const statusRes = await fetch('/api/matrix/sso-status', {
+            let reg = await navigator.serviceWorker.getRegistration('/');
+            if (!reg) {
+              reg = await navigator.serviceWorker.register('/sw.js?v=42', { scope: '/', updateViaCache: 'none' });
+            }
+            await navigator.serviceWorker.ready;
+
+            let sub = await reg.pushManager.getSubscription();
+            if (!sub) {
+              sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: b64ToUint8(keyData.publicKey)
+              });
+            }
+            const saveRes = await fetch('/api/push/subscribe', {
+              method: 'POST',
               credentials: 'same-origin',
-              cache: 'no-store'
+              headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
+              body: JSON.stringify(sub)
             });
-            if (!statusRes.ok) throw new Error(`Account check failed (${statusRes.status})`);
-            const status = await statusRes.json();
-            window.updateMatrixShellAccount(status);
-            const stored = readStoredSession();
-
-            if (!status.authenticated) {
-              showGate('Sign in to chat', 'Use your mitch.pro account to continue.', 'signin');
-              return;
-            }
-
-            const sameAccount = stored.userId === status.user_id;
-            const sessionValidity = stored.token && stored.userId && stored.deviceId && sameAccount
-              ? await storedSessionIsValid(stored.token, stored.userId, stored.deviceId)
-              : false;
-            if (sessionValidity === true || sessionValidity === null) {
-              localStorage.setItem('mx_hs_url', 'https://mitchdog.com');
-              localStorage.setItem('mx_has_access_token', 'true');
-              localStorage.setItem('mx_is_guest', 'false');
-              bootElement();
-              return;
-            }
-
-            const reusableDeviceId = sameAccount ? stored.deviceId : '';
-            showGate('Signing in', 'Connecting chat to your mitch.pro account…');
-            const res = await fetch("/api/matrix/sso-login", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", "X-Mitch-Requested-With": "1" },
-              credentials: "same-origin",
-              body: JSON.stringify(reusableDeviceId ? { device_id: reusableDeviceId } : {})
-            });
-            if (!res.ok) {
-              if (res.status === 401 || res.status === 403) {
-                showGate('Sign in to chat', 'Your mitch.pro session has ended. Sign in again to continue.', 'signin');
-                return;
-              }
-              throw new Error(`Chat sign-in failed (${res.status})`);
-            }
-            const data = await res.json();
-            if (!data || !data.access_token || !data.user_id || !data.device_id) {
-              throw new Error('Chat sign-in returned an incomplete session');
-            }
-            const previousDevice = Boolean(stored.token || stored.userId || stored.deviceId);
-            if (previousDevice && (data.user_id !== stored.userId || data.device_id !== stored.deviceId)) {
-              if (!await resetMatrixClientStores()) {
-                showGate('Chat storage is busy', 'Close your other chat tabs, then try again.', 'retry');
-                return;
-              }
-              clearStoredSession();
-            }
-            saveSession(data);
-            bootElement();
-          } catch (e) {
-            console.warn("[Mitch Matrix SSO]", e);
-            showGate('Chat is unavailable', 'We could not connect your account to chat. Try again in a moment.', 'retry');
+            return saveRes.ok;
+          } catch (err) {
+            console.warn('[Mitch Matrix Push] Failed to sync push subscription:', err);
+            return false;
           }
         }
 
-        function runMitchSSO() {
-          if (navigator.locks && typeof navigator.locks.request === 'function') {
-            return navigator.locks.request('mitch-matrix-session', initMitchSSO);
-          }
-          return initMitchSSO();
+        // Hook Notification.requestPermission so Cinny settings/prompts also register with mitch.pro
+        if ('Notification' in window) {
+          const origRequestPermission = Notification.requestPermission.bind(Notification);
+          Notification.requestPermission = async function(callback) {
+            const res = await origRequestPermission(callback);
+            if (res === 'granted') {
+              syncMitchPushSubscription(false).catch(() => {});
+              const banner = document.getElementById('mitch-push-banner');
+              if (banner) banner.classList.remove('show');
+            }
+            return res;
+          };
         }
-        retryButton.addEventListener('click', () => { runMitchSSO(); });
-        runMitchSSO();
+
+        // Register Service Worker on / scope
+        if ('serviceWorker' in navigator && window.isSecureContext) {
+          navigator.serviceWorker.register('/sw.js?v=42', { scope: '/', updateViaCache: 'none' }).catch(() => {});
+        }
+
+        // Auto-sync if notification permission is already granted
+        if (window.Notification && Notification.permission === 'granted') {
+          syncMitchPushSubscription(false).catch(() => {});
+        }
+
+        // Banner prompt handlers
+        function setupBanner() {
+          const banner = document.getElementById('mitch-push-banner');
+          const btnLater = document.getElementById('mitch-push-later');
+          const btnEnable = document.getElementById('mitch-push-enable');
+          if (!banner || !btnLater || !btnEnable) return;
+
+          btnLater.addEventListener('click', () => {
+            localStorage.setItem('mitch_matrix_push_dismissed', String(Date.now()));
+            banner.classList.remove('show');
+          });
+
+          btnEnable.addEventListener('click', async () => {
+            const ok = await syncMitchPushSubscription(true);
+            if (ok || Notification.permission !== 'default') {
+              banner.classList.remove('show');
+            }
+          });
+
+          // Check if banner should be displayed (snooze 5 minutes)
+          if (window.Notification && Notification.permission === 'default') {
+            const dismissed = localStorage.getItem('mitch_matrix_push_dismissed');
+            if (!dismissed || (Date.now() - parseInt(dismissed, 10) > 5 * 60 * 1000)) {
+              setTimeout(() => {
+                if (Notification.permission === 'default') {
+                  banner.classList.add('show');
+                }
+              }, 800);
+            }
+          }
+        }
+
+        // Synchronize Matrix room reads to Mitch.pro notification bell
+        function markCurrentRoomRead() {
+          const m = location.hash.match(/#\/room\/([^/?]+)/);
+          if (m && m[1]) {
+            const roomId = decodeURIComponent(m[1]);
+            fetch('/api/matrix/notifications/read', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
+              body: JSON.stringify({ roomId })
+            }).catch(() => {});
+          }
+        }
+        window.addEventListener('hashchange', markCurrentRoomRead);
+        document.addEventListener('click', () => setTimeout(markCurrentRoomRead, 300));
+        setTimeout(markCurrentRoomRead, 1500);
+        setInterval(markCurrentRoomRead, 12000);
+
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', setupBanner);
+        } else {
+          setupBanner();
+        }
+      })();
+
+      // ── Stale Matrix Session Hygiene (E2EE Key Health) ────────────
+      (function() {
+        async function pruneStaleMatrixDevices() {
+          const token = localStorage.getItem('cinny_access_token');
+          const currentDeviceId = localStorage.getItem('cinny_device_id');
+          if (!token) return;
+          const lastPrune = Number(localStorage.getItem('mitch_matrix_last_prune')) || 0;
+          if (Date.now() - lastPrune < 24 * 60 * 60 * 1000) return;
+
+          try {
+            const res = await fetch('/api/matrix/devices/prune-stale', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'X-Matrix-Device-Id': currentDeviceId || ''
+              },
+              credentials: 'same-origin',
+              body: JSON.stringify({ currentDeviceId, maxAgeDays: 7 })
+            });
+            if (res.ok) {
+              localStorage.setItem('mitch_matrix_last_prune', String(Date.now()));
+            }
+          } catch (_) {}
+        }
+        setTimeout(pruneStaleMatrixDevices, 8000);
       })();
     </script>
-
-    <noscript>Sorry, Matrix Chat requires JavaScript to be enabled.</noscript>
-    <div id="matrixchat" style="height: calc(100% - 44px);" class="notranslate"></div>
-
-    <!-- CSS theme constants container for Element Web -->
-    <div id="mx_theme_accentColor" style="color: var(--t-ac, #b86cff);"></div>
-    <div id="mx_theme_secondaryAccentColor" style="color: var(--t-ac2, #e47cff);"></div>
-    <div id="mx_theme_tertiaryAccentColor" style="color: var(--t-ac3, #8257ff);"></div>
-
-    <!-- Eager Element containers for stacking context -->
-    <div id="mx_PersistedElement_container"></div>
-    <div id="mx_Dialog_StaticContainer"></div>
-    <div id="mx_Dialog_Container"></div>
-    <div id="mx_ContextualMenu_Container"></div>
+    <div id="root"></div>
+    <div id="portalContainer"></div>
   </body>
 </html>

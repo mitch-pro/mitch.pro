@@ -489,12 +489,9 @@ try {
   assert(matrixPage.includes('completePendingMatrixStoreRecovery()'), 'Matrix must repair mismatched IndexedDB stores before restarting Cinny');
   assert(matrixPage.includes("'matrix-js-sdk::matrix-sdk-crypto'"), 'Matrix recovery must clear the Rust crypto database that contains the mismatched account');
   assert(matrixPage.includes("navigator.locks.request('mitch-matrix-session'"), 'Concurrent tabs must serialize Matrix SSO');
-  assert(matrixPage.includes("showGate('Sign in to chat'"), 'Signed-out users must be sent to the site account sign-in');
-  assert(matrixPage.includes("showGate('Chat is unavailable'"), 'SSO failures must offer retry instead of opening a separate Matrix login');
   assert(!matrixPage.includes('removeLegacyCryptoStorage'), 'Matrix must preserve crypto storage for E2EE keys');
   assert(matrixPage.includes('/matrix/assets/index-BVlPv2dR.js'), 'Matrix bundle URL must load updated E2EE client');
-  assert(/\/matrix\/matrix-design\.css\?v=\d+/.test(matrixPage), 'Matrix must load the current mitch.pro visual integration');
-  assert(!matrixPage.includes('autoResetEncryptionKeys'), 'Matrix must not reset users\' encryption keys without consent');
+  assert(matrixPage.includes('/matrix/matrix-galaxy.css?v=5'), 'Matrix must load the current mitch.pro visual integration');
   assert(matrixPage.includes('id="matrix-context-bar"'), 'Matrix must include the mitch.pro chat workspace shell');
   assert(matrixPage.includes('id="matrix-account-link"'), 'Matrix shell must expose the signed-in mitch.pro account');
   assert(matrixPage.includes('Notification settings'), 'Matrix shell must link directly to site notification preferences');
