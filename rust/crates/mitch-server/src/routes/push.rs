@@ -108,8 +108,24 @@ pub(crate) async fn send_web_push(
     if let Err(e) = client.send(message).await {
         let gone = matches!(
             e,
-            web_push::WebPushError::EndpointNotFound | web_push::WebPushError::EndpointNotValid
-        );
+            web_push::WebPushError::EndpointNotFound
+                | web_push::WebPushError::EndpointNotValid
+                | web_push::WebPushError::Unauthorized
+        ) || match e {
+            web_push::WebPushError::Other(ref code) => {
+                code.contains("401")
+                    || code.contains("403")
+                    || code.contains("404")
+                    || code.contains("410")
+                    || code.contains("Forbidden")
+                    || code.contains("Unauthorized")
+                    || code.contains("Gone")
+                    || code.contains("NotFound")
+                    || code.contains("BadDeviceToken")
+                    || code.contains("Unregistered")
+            }
+            _ => false,
+        };
         if gone {
             let file = state.cfg.data_dir.join("push_subs.json");
             let mut subs = state.store.read_document(&file, serde_json::json!({}));
@@ -119,7 +135,8 @@ pub(crate) async fn send_web_push(
             }
             let _ = state.store.write_document(&file, &subs);
         }
-        tracing::warn!("push send failed: {e}");
+        tracing::warn!("push send failed: {e:?} ({e}) endpoint={endpoint}");
+        return gone;
     }
     false
 }
@@ -455,6 +472,16 @@ pub fn handle_push_routes(
     headers: &axum::http::HeaderMap,
     body_bytes: &[u8],
 ) -> Option<axum::response::Response> {
+    if path == "/api/push/vapid-key" && *method == axum::http::Method::GET {
+        let vapid_public = std::env::var("VAPID_PUBLIC_KEY")
+            .map(|v| v.trim().to_string())
+            .unwrap_or_default();
+        return Some(crate::errors::json_resp(
+            200,
+            serde_json::json!({ "publicKey": vapid_public }),
+        ));
+    }
+
     if path == "/api/push/subscribe" && *method == axum::http::Method::POST {
         let cookies = crate::routes::me::cookies_of(state, headers);
         let sid = cookies

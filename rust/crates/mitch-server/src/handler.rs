@@ -1522,42 +1522,50 @@ pub async fn handle(
     // SPA route fallback for Matrix Chat (/matrix/*) — server.js:24647-24657.
     if path.starts_with("/matrix/") {
         let rel_path = path.strip_prefix("/matrix/").unwrap_or("");
-        let candidate = std::path::Path::new(&webroot).join("matrix").join(rel_path);
-        if candidate.is_file() {
+        if rel_path == "version" {
+            let candidate = std::path::Path::new(&webroot).join("matrix").join(rel_path);
             if let Ok(content) = std::fs::read(&candidate) {
-                let ct = if rel_path == "version" {
-                    "text/plain; charset=utf-8"
-                } else if rel_path == "apple-app-site-association" {
-                    "application/json"
-                } else {
-                    "application/octet-stream"
-                };
                 return Response::builder()
                     .status(StatusCode::OK)
-                    .header(axum::http::header::CONTENT_TYPE, ct)
+                    .header(axum::http::header::CONTENT_TYPE, "text/plain; charset=utf-8")
+                    .body(axum::body::Body::from(content))
+                    .expect("static file response");
+            }
+        } else if rel_path == "apple-app-site-association" {
+            let candidate = std::path::Path::new(&webroot).join("matrix").join(rel_path);
+            if let Ok(content) = std::fs::read(&candidate) {
+                return Response::builder()
+                    .status(StatusCode::OK)
+                    .header(axum::http::header::CONTENT_TYPE, "application/json")
                     .body(axum::body::Body::from(content))
                     .expect("static file response");
             }
         }
-        let is_asset = path.starts_with("/matrix/assets/")
-            || path.starts_with("/matrix/public/")
-            || [
-                ".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".wasm",
-                ".map", ".woff", ".woff2", ".ttf", ".json",
-            ]
-            .iter()
-            .any(|ext| path.ends_with(ext));
-        if !is_asset {
-            let index_path = std::path::Path::new(&webroot)
-                .join("matrix")
-                .join("index.html");
-            if index_path.exists() {
-                if let Ok(content) = std::fs::read_to_string(&index_path) {
-                    return Response::builder()
-                        .status(StatusCode::OK)
-                        .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")
-                        .body(axum::body::Body::from(content))
-                        .expect("static response");
+
+        // If it's a real file that exists on disk (e.g. css, js, images), DO NOT intercept here!
+        // Allow it to fall through to serve_static() which inspects MIME types, adds caching headers, etc.
+        let candidate = std::path::Path::new(&webroot).join("matrix").join(rel_path);
+        if !candidate.is_file() {
+            let is_asset = path.starts_with("/matrix/assets/")
+                || path.starts_with("/matrix/public/")
+                || [
+                    ".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".wasm",
+                    ".map", ".woff", ".woff2", ".ttf", ".json",
+                ]
+                .iter()
+                .any(|ext| path.ends_with(ext));
+            if !is_asset {
+                let index_path = std::path::Path::new(&webroot)
+                    .join("matrix")
+                    .join("index.html");
+                if index_path.exists() {
+                    if let Ok(content) = std::fs::read_to_string(&index_path) {
+                        return Response::builder()
+                            .status(StatusCode::OK)
+                            .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")
+                            .body(axum::body::Body::from(content))
+                            .expect("static response");
+                    }
                 }
             }
         }

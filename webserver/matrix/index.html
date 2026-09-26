@@ -621,11 +621,25 @@
             }
             await navigator.serviceWorker.ready;
 
+            const targetKey = b64ToUint8(keyData.publicKey);
             let sub = await reg.pushManager.getSubscription();
+            if (sub && sub.options && sub.options.applicationServerKey) {
+              const currentKey = new Uint8Array(sub.options.applicationServerKey);
+              let mismatch = currentKey.length !== targetKey.length;
+              if (!mismatch) {
+                for (let i = 0; i < currentKey.length; i++) {
+                  if (currentKey[i] !== targetKey[i]) { mismatch = true; break; }
+                }
+              }
+              if (mismatch) {
+                try { await sub.unsubscribe(); } catch (_) {}
+                sub = null;
+              }
+            }
             if (!sub) {
               sub = await reg.pushManager.subscribe({
                 userVisibleOnly: true,
-                applicationServerKey: b64ToUint8(keyData.publicKey)
+                applicationServerKey: targetKey
               });
             }
             const saveRes = await fetch('/api/push/subscribe', {
@@ -748,6 +762,325 @@
           } catch (_) {}
         }
         setTimeout(pruneStaleMatrixDevices, 8000);
+      })();
+
+      // ── Mitch GIF & Sticker Picker Integration ────────────────────
+      (function() {
+        let activeTab = 'gifs'; // 'gifs' | 'stickers'
+        let cachedGifs = [];
+        let cachedPacks = [];
+        let currentPackId = '';
+        let searchTimeout = null;
+
+        function getOrCreatePopover() {
+          let popover = document.getElementById('mitch-gif-popover');
+          if (popover) return popover;
+
+          popover = document.createElement('div');
+          popover.id = 'mitch-gif-popover';
+          popover.style.display = 'none';
+          popover.innerHTML = `
+            <div class="mitch-gif-header">
+              <div class="mitch-gif-tabs">
+                <button type="button" class="mitch-gif-tab active" data-tab="gifs">GIFs</button>
+                <button type="button" class="mitch-gif-tab" data-tab="stickers">Stickers</button>
+              </div>
+              <div class="mitch-gif-search-box">
+                <input type="text" placeholder="Search Tenor & Giphy..." aria-label="Search GIFs and Stickers" id="mitch-gif-search-input" autocomplete="off" />
+              </div>
+              <button type="button" class="mitch-gif-close-btn" aria-label="Close" id="mitch-gif-close">&times;</button>
+            </div>
+            <div class="mitch-gif-categories" id="mitch-gif-categories"></div>
+            <div id="mitch-gif-content" class="mitch-gif-grid"></div>
+            <div class="mitch-gif-footer">
+              <span>Tenor &amp; Giphy • Mitch.pro</span>
+              <span id="mitch-gif-status">Ready</span>
+            </div>
+          `;
+          document.body.appendChild(popover);
+
+          // Tab click handlers
+          popover.querySelectorAll('.mitch-gif-tab').forEach(tabBtn => {
+            tabBtn.addEventListener('click', () => {
+              popover.querySelectorAll('.mitch-gif-tab').forEach(b => b.classList.remove('active'));
+              tabBtn.classList.add('active');
+              activeTab = tabBtn.dataset.tab;
+              const input = document.getElementById('mitch-gif-search-input');
+              if (input) {
+                input.value = '';
+                input.placeholder = activeTab === 'gifs' ? 'Search Tenor & Giphy...' : 'Search stickers...';
+              }
+              renderCategories();
+              loadContent('');
+            });
+          });
+
+          // Close button
+          const closeBtn = document.getElementById('mitch-gif-close');
+          if (closeBtn) closeBtn.addEventListener('click', closePopover);
+
+          // Search input debounce
+          const searchInput = document.getElementById('mitch-gif-search-input');
+          if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+              clearTimeout(searchTimeout);
+              searchTimeout = setTimeout(() => {
+                loadContent(e.target.value.trim());
+              }, 250);
+            });
+          }
+
+          // Close on clicking outside
+          document.addEventListener('pointerdown', (e) => {
+            if (!popover || popover.style.display === 'none') return;
+            if (!popover.contains(e.target) && !e.target.closest('.mitch-gif-btn')) {
+              closePopover();
+            }
+          });
+
+          return popover;
+        }
+
+        function openPopover() {
+          const popover = getOrCreatePopover();
+          popover.style.display = 'flex';
+          const btn = document.querySelector('.mitch-gif-btn');
+          if (btn) btn.classList.add('active');
+          renderCategories();
+          loadContent('');
+          const input = document.getElementById('mitch-gif-search-input');
+          if (input) {
+            setTimeout(() => input.focus(), 80);
+          }
+        }
+
+        function closePopover() {
+          const popover = document.getElementById('mitch-gif-popover');
+          if (popover) popover.style.display = 'none';
+          const btn = document.querySelector('.mitch-gif-btn');
+          if (btn) btn.classList.remove('active');
+        }
+
+        function togglePopover() {
+          const popover = document.getElementById('mitch-gif-popover');
+          if (popover && popover.style.display === 'flex') {
+            closePopover();
+          } else {
+            openPopover();
+          }
+        }
+
+        function renderCategories() {
+          const container = document.getElementById('mitch-gif-categories');
+          if (!container) return;
+          container.innerHTML = '';
+
+          if (activeTab === 'gifs') {
+            const gifCats = ['Trending', 'Laugh', 'Excited', 'Cat', 'Doge', 'Anime', 'Dance', 'Sad', 'Facepalm', 'Cheers', 'Confused', 'Thumbs Up'];
+            gifCats.forEach((cat, idx) => {
+              const pill = document.createElement('button');
+              pill.type = 'button';
+              pill.className = 'mitch-gif-pill' + (idx === 0 ? ' active' : '');
+              pill.textContent = cat;
+              pill.addEventListener('click', () => {
+                container.querySelectorAll('.mitch-gif-pill').forEach(p => p.classList.remove('active'));
+                pill.classList.add('active');
+                const query = cat === 'Trending' ? '' : cat;
+                const input = document.getElementById('mitch-gif-search-input');
+                if (input) input.value = query;
+                loadContent(query);
+              });
+              container.appendChild(pill);
+            });
+          } else {
+            if (cachedPacks.length > 0) {
+              cachedPacks.forEach((pack, idx) => {
+                const pill = document.createElement('button');
+                pill.type = 'button';
+                pill.className = 'mitch-gif-pill' + ((currentPackId ? currentPackId === pack.id : idx === 0) ? ' active' : '');
+                pill.textContent = pack.name;
+                pill.addEventListener('click', () => {
+                  container.querySelectorAll('.mitch-gif-pill').forEach(p => p.classList.remove('active'));
+                  pill.classList.add('active');
+                  currentPackId = pack.id;
+                  renderStickerPack(pack);
+                });
+                container.appendChild(pill);
+              });
+            }
+          }
+        }
+
+        async function loadContent(query) {
+          const status = document.getElementById('mitch-gif-status');
+          const content = document.getElementById('mitch-gif-content');
+          if (!content) return;
+
+          if (activeTab === 'gifs') {
+            content.className = 'mitch-gif-grid';
+            if (status) status.textContent = 'Loading…';
+            content.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 30px; color: var(--t-fg3); font-size: 13px;">Searching GIFs…</div>';
+
+            try {
+              const endpoint = query
+                ? `/api/matrix/gifs/search?q=${encodeURIComponent(query)}`
+                : '/api/matrix/gifs/trending';
+              const res = await fetch(endpoint, { credentials: 'same-origin' });
+              if (!res.ok) throw new Error('Failed to load GIFs');
+              const data = await res.json();
+              const items = data.results || [];
+              cachedGifs = items;
+              renderGifs(items);
+              if (status) status.textContent = `${items.length} GIFs`;
+            } catch (e) {
+              content.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 30px; color: #ff6b6b; font-size: 13px;">Could not load GIFs</div>';
+              if (status) status.textContent = 'Offline';
+            }
+          } else {
+            content.className = 'mitch-sticker-grid';
+            if (status) status.textContent = 'Loading…';
+            try {
+              if (cachedPacks.length === 0) {
+                const res = await fetch('/api/matrix/stickers/packs', { credentials: 'same-origin' });
+                if (!res.ok) throw new Error('Failed to load stickers');
+                const data = await res.json();
+                cachedPacks = data.packs || [];
+                renderCategories();
+              }
+              const activePack = cachedPacks.find(p => p.id === currentPackId) || cachedPacks[0];
+              if (activePack) {
+                currentPackId = activePack.id;
+                renderStickerPack(activePack, query);
+              }
+              if (status) status.textContent = 'Stickers ready';
+            } catch (e) {
+              content.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 30px; color: #ff6b6b; font-size: 13px;">Could not load stickers</div>';
+              if (status) status.textContent = 'Offline';
+            }
+          }
+        }
+
+        function renderGifs(items) {
+          const content = document.getElementById('mitch-gif-content');
+          if (!content) return;
+          content.innerHTML = '';
+
+          if (items.length === 0) {
+            content.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 30px; color: var(--t-fg3); font-size: 13px;">No GIFs found</div>';
+            return;
+          }
+
+          items.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'mitch-gif-card';
+            card.title = item.title || 'Send GIF';
+            const img = document.createElement('img');
+            img.src = item.preview || item.url;
+            img.loading = 'lazy';
+            img.alt = item.title || 'GIF';
+            card.appendChild(img);
+            card.addEventListener('click', () => sendMedia(item.url, item.title, 'gif'));
+            content.appendChild(card);
+          });
+        }
+
+        function renderStickerPack(pack, filterQuery) {
+          const content = document.getElementById('mitch-gif-content');
+          if (!content || !pack) return;
+          content.innerHTML = '';
+
+          let stickers = pack.stickers || [];
+          if (filterQuery) {
+            const q = filterQuery.toLowerCase();
+            stickers = stickers.filter(s => s.name.toLowerCase().includes(q));
+          }
+
+          if (stickers.length === 0) {
+            content.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 30px; color: var(--t-fg3); font-size: 13px;">No stickers found</div>';
+            return;
+          }
+
+          stickers.forEach(s => {
+            const card = document.createElement('div');
+            card.className = 'mitch-sticker-card';
+            card.title = s.name;
+            const img = document.createElement('img');
+            img.src = s.url;
+            img.loading = 'lazy';
+            img.alt = s.name;
+            card.appendChild(img);
+            card.addEventListener('click', () => sendMedia(s.url, s.name, s.url.endsWith('.png') ? 'png' : s.url.endsWith('.webp') ? 'webp' : 'gif'));
+            content.appendChild(card);
+          });
+        }
+
+        async function sendMedia(url, title, format) {
+          const status = document.getElementById('mitch-gif-status');
+          if (status) status.textContent = 'Sending…';
+
+          try {
+            const res = await fetch(url);
+            const blob = await res.blob();
+            const ext = format || 'gif';
+            const filename = (title || 'media').toLowerCase().replace(/[^a-z0-9_-]+/g, '_') + '.' + ext;
+            const file = new File([blob], filename, { type: blob.type || (ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/gif') });
+
+            const input = document.querySelector('[data-editable-name="RoomInput"]') || document.querySelector('.coabsl3');
+            if (input) {
+              input.focus();
+              const dt = new DataTransfer();
+              dt.items.add(file);
+              const pasteEvent = new ClipboardEvent('paste', {
+                bubbles: true,
+                cancelable: true,
+                clipboardData: dt
+              });
+              input.dispatchEvent(pasteEvent);
+
+              closePopover();
+
+              setTimeout(() => {
+                const sendBtn = document.querySelector('.coabsl0 button[aria-label*="Send" i], button[title*="Send" i]');
+                if (sendBtn) sendBtn.click();
+              }, 350);
+            }
+            if (status) status.textContent = 'Sent!';
+          } catch (err) {
+            console.warn('[Mitch GIF] Send failed:', err);
+            if (status) status.textContent = 'Send failed';
+          }
+        }
+
+        function injectGifButton() {
+          const buttonBar = document.querySelector('.coabsl1');
+          if (!buttonBar) return;
+          if (buttonBar.querySelector('.mitch-gif-btn')) return;
+
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'mitch-gif-btn';
+          btn.title = 'GIFs & Stickers';
+          btn.setAttribute('aria-label', 'GIFs and Stickers');
+          btn.innerHTML = '<span>GIF</span>';
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            togglePopover();
+          });
+
+          if (buttonBar.lastElementChild) {
+            buttonBar.insertBefore(btn, buttonBar.lastElementChild);
+          } else {
+            buttonBar.appendChild(btn);
+          }
+        }
+
+        const observer = new MutationObserver(() => {
+          injectGifButton();
+        });
+        if (document.body) {
+          observer.observe(document.body, { childList: true, subtree: true });
+        }
+        setInterval(injectGifButton, 1000);
       })();
     </script>
     <div id="root"></div>

@@ -626,6 +626,10 @@ pub const PUBLIC_API_PATHS: &[&str] = &[
     "/api/madlibs/list",
     "/api/matrix/sso-status",
     "/api/matrix/sso-login",
+    "/api/matrix/gifs/trending",
+    "/api/matrix/gifs/search",
+    "/api/matrix/stickers/packs",
+    "/api/push/vapid-key",
     "/api/tor/status",
     "/api/tor/newnym",
 ];

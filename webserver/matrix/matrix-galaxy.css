@@ -181,12 +181,13 @@ html:not([data-bglayer]) body::after { display: none !important; }
   position: relative;
   z-index: 20;
   width: 100%;
-  min-height: 68px;
-  flex: 0 0 68px;
+  min-height: 56px;
+  height: 56px;
+  flex: 0 0 56px;
   display: flex;
   align-items: center;
-  gap: 46px;
-  padding: 0 max(28px, calc((100vw - 1280px) / 2));
+  gap: 32px;
+  padding: 0 max(18px, calc((100vw - 1800px) / 2));
   color: var(--t-fg);
   background: var(--t-bg);
   border-bottom: 1px solid var(--t-bd);
@@ -875,7 +876,7 @@ button[data-variant='critical'] {
   box-shadow: none !important;
 }
 
-@media (max-width: 900px), (hover: none) and (pointer: coarse) {
+@media (max-width: 768px) {
   html,
   body {
     position: fixed !important;
@@ -887,21 +888,22 @@ button[data-variant='critical'] {
   }
 
   #matrix-site-bar {
-    min-height: 56px;
-    flex-basis: 56px;
-    gap: 22px;
-    padding-inline: 18px;
+    min-height: 52px;
+    height: 52px;
+    flex-basis: 52px;
+    gap: 16px;
+    padding-inline: 14px;
   }
 
-  .matrix-wordmark { font-size: 19px; }
+  .matrix-wordmark { font-size: 18px; }
 
-  .matrix-site-links { gap: 22px; }
+  .matrix-site-links { gap: 16px; }
 
   .matrix-site-links a { font-size: 12px; }
 
   .matrix-network-status { display: none; }
 
-  .matrix-site-actions { display: none; }
+  #matrix-account-name { display: none; }
 
   #root {
     position: relative !important;
@@ -1016,10 +1018,6 @@ button[data-variant='critical'] {
     padding: 4px !important;
   }
 
-  .coabsl0 button[aria-label='Stickers' i] {
-    display: none !important;
-  }
-
   dialog,
   ._1fc5sz51,
   ._5z5e2h1,
@@ -1068,7 +1066,6 @@ button[data-variant='critical'] {
 }
 
 @media (max-width: 480px) {
-  .coabsl0 button[aria-label='Stickers' i],
   .coabsl0 button[aria-label*='format' i] {
     display: none !important;
   }
@@ -1091,3 +1088,245 @@ button[data-variant='critical'] {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Mitch GIF & Sticker Picker ─────────────────────────────── */
+.mitch-gif-btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  min-width: 38px;
+  padding: 0 7px !important;
+  margin: 0 2px !important;
+  border-radius: 8px !important;
+  background: color-mix(in srgb, var(--t-ac) 15%, transparent) !important;
+  color: var(--t-ac) !important;
+  font-weight: 800 !important;
+  font-size: 11px !important;
+  letter-spacing: 0.04em;
+  border: 1px solid color-mix(in srgb, var(--t-ac) 28%, transparent) !important;
+  cursor: pointer;
+  transition: all 0.15s ease !important;
+  user-select: none;
+}
+.mitch-gif-btn:hover {
+  background: color-mix(in srgb, var(--t-ac) 30%, transparent) !important;
+  color: #fff !important;
+  transform: translateY(-1px);
+}
+.mitch-gif-btn.active {
+  background: var(--t-ac) !important;
+  color: #fff !important;
+}
+
+#mitch-gif-popover {
+  position: fixed;
+  bottom: 82px;
+  right: 28px;
+  width: min(440px, calc(100vw - 20px));
+  height: 460px;
+  max-height: calc(100dvh - 110px);
+  background: rgba(18, 12, 34, 0.95);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--t-bd);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 30px rgba(184, 108, 255, 0.18);
+  display: flex;
+  flex-direction: column;
+  z-index: 9999;
+  overflow: hidden;
+  animation: mitchGifPop 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes mitchGifPop {
+  from { opacity: 0; transform: translateY(12px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.mitch-gif-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--t-bd);
+}
+
+.mitch-gif-tabs {
+  display: flex;
+  gap: 4px;
+  background: color-mix(in srgb, var(--t-bg3) 60%, transparent);
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.mitch-gif-tab {
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--t-fg2);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mitch-gif-tab.active {
+  color: #fff;
+  background: var(--t-ac);
+}
+
+.mitch-gif-search-box {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.mitch-gif-search-box input {
+  width: 100%;
+  height: 32px;
+  padding: 0 28px 0 10px;
+  font-size: 12.5px;
+  color: var(--t-fg);
+  background: color-mix(in srgb, var(--t-bg) 65%, transparent);
+  border: 1px solid var(--t-bd);
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.mitch-gif-search-box input:focus {
+  border-color: var(--t-ac);
+}
+
+.mitch-gif-close-btn {
+  background: transparent;
+  border: 0;
+  color: var(--t-fg2);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mitch-gif-close-btn:hover {
+  color: var(--t-fg);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mitch-gif-categories {
+  display: flex;
+  gap: 6px;
+  padding: 8px 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.mitch-gif-categories::-webkit-scrollbar { display: none; }
+
+.mitch-gif-pill {
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--t-fg2);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+.mitch-gif-pill:hover,
+.mitch-gif-pill.active {
+  color: #fff;
+  background: color-mix(in srgb, var(--t-ac) 25%, transparent);
+  border-color: color-mix(in srgb, var(--t-ac) 45%, transparent);
+}
+
+.mitch-gif-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-gap: 8px;
+  align-content: start;
+}
+
+.mitch-gif-card {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  aspect-ratio: 16 / 10;
+  background: rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.mitch-gif-card:hover {
+  transform: scale(1.025);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 12px var(--t-gls);
+  z-index: 2;
+}
+
+.mitch-gif-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.mitch-sticker-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-gap: 8px;
+  align-content: start;
+}
+
+.mitch-sticker-card {
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.mitch-sticker-card:hover {
+  transform: scale(1.1);
+  background: rgba(255, 255, 255, 0.1);
+}
+.mitch-sticker-card img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.mitch-gif-footer {
+  padding: 6px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--t-fg3);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+@media (max-width: 768px) {
+  #mitch-gif-popover {
+    right: 10px;
+    bottom: 74px;
+    width: calc(100vw - 20px);
+    height: 380px;
+  }
+}
+
