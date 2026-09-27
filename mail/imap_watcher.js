@@ -25,6 +25,8 @@ const CACHE_FILE       = path.join(__dirname, '..', 'data', 'team_inbox_cache.js
 const AUTOREPLY_FILE   = path.join(__dirname, '..', 'data', 'autoreply_sent.json');
 const SUPPORT_SEND     = path.join(__dirname, 'support_send.js');
 const NTFY_TOPIC       = (process.env.NTFY_TOPIC || '').trim();
+const NTFY_USER        = (process.env.NTFY_USER || '').trim();
+const NTFY_PASS        = (process.env.NTFY_PASS || '').trim();
 
 const AUTOREPLY_BODY = 'Thank you for contacting mitch.pro support. Please reply with your problem and we will get you into contact with a mitch.pro representative as soon as possible.';
 
@@ -38,10 +40,14 @@ async function ntfy(msg, title = 'Support Email', priority = 'high') {
   const url = /^https?:\/\//i.test(NTFY_TOPIC)
     ? NTFY_TOPIC
     : `https://ntfy.sh/${NTFY_TOPIC.replace(/^\/+/, '')}`;
+  const headers = { Title: title, Priority: priority };
+  if (NTFY_USER || NTFY_PASS) {
+    headers['Authorization'] = 'Basic ' + Buffer.from(`${NTFY_USER}:${NTFY_PASS}`).toString('base64');
+  }
   try {
     await fetch(url, {
       method: 'POST', body: msg,
-      headers: { Title: title, Priority: priority },
+      headers,
     });
   } catch {}
 }

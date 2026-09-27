@@ -50,20 +50,28 @@ run_git() {
     fi
 }
 
-# 1. Fetch only NTFY_TOPIC for the deploy script's notifications
+# 1. Fetch NTFY_TOPIC, NTFY_USER, and NTFY_PASS for the deploy script's notifications
 NTFY_TOPIC=""
+NTFY_USER=""
+NTFY_PASS=""
 DOPPLER_AVAILABLE=false
 export DOPPLER_ENABLE_DNS_RESOLVER=true
 if command -v doppler &> /dev/null && doppler secrets download --format json &> /dev/null; then
     DOPPLER_AVAILABLE=true
     NTFY_TOPIC=$(doppler secrets get NTFY_TOPIC --plain 2>/dev/null || echo "")
+    NTFY_USER=$(doppler secrets get NTFY_USER --plain 2>/dev/null || echo "")
+    NTFY_PASS=$(doppler secrets get NTFY_PASS --plain 2>/dev/null || echo "")
 else
     ENV_PATH="$PROJECT_DIR/.env"
     if [ -f "$ENV_PATH" ]; then
         NTFY_TOPIC=$(grep -E "^NTFY_TOPIC=" "$ENV_PATH" | cut -d= -f2- | tr -d '"' | tr -d "'")
+        NTFY_USER=$(grep -E "^NTFY_USER=" "$ENV_PATH" | cut -d= -f2- | tr -d '"' | tr -d "'")
+        NTFY_PASS=$(grep -E "^NTFY_PASS=" "$ENV_PATH" | cut -d= -f2- | tr -d '"' | tr -d "'")
     fi
 fi
 NTFY_TOPIC="${NTFY_TOPIC:-}"
+NTFY_USER="${NTFY_USER:-}"
+NTFY_PASS="${NTFY_PASS:-}"
 
 send_notification() {
     [ -z "${NTFY_TOPIC:-}" ] && return 0
@@ -76,7 +84,11 @@ send_notification() {
     else
         url="https://ntfy.sh/${NTFY_TOPIC#/}"
     fi
-    curl -s -H "Title: $title" -H "Priority: $priority" -d "$msg" "$url" > /dev/null || true
+    local auth_args=()
+    if [ -n "$NTFY_USER" ] || [ -n "$NTFY_PASS" ]; then
+        auth_args=(-u "$NTFY_USER:$NTFY_PASS")
+    fi
+    curl -s "${auth_args[@]}" -H "Title: $title" -H "Priority: $priority" -d "$msg" "$url" > /dev/null || true
 }
 
 # Helper to run docker compose wrapped in doppler run (if Doppler is available), keeping secrets off disk and avoiding bash evaluation bugs.

@@ -397,6 +397,8 @@ mod tests {
             port: 6902,
             imap_host: "mail.mitch.pro".into(),
             ntfy_topic: String::new(),
+            ntfy_user: String::new(),
+            ntfy_pass: String::new(),
         };
         let store = DataStore::open(&base, &base.join("data")).unwrap();
         (cfg, store)

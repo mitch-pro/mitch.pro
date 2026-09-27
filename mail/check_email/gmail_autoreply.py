@@ -28,7 +28,9 @@ def load_env():
             pass
 
 load_env()
-NTFY_TOPIC = os.environ.get('NTFY_TOPIC', '')
+NTFY_TOPIC = os.environ.get('NTFY_TOPIC', '').strip()
+NTFY_USER  = os.environ.get('NTFY_USER', '').strip()
+NTFY_PASS  = os.environ.get('NTFY_PASS', '').strip()
 GMAIL_ADDR  = 'mitchell.fogler@student.rjuhsd.us'
 
 def acquire_lock():
@@ -77,11 +79,16 @@ def ntfy(msg, title='Support Email', priority='default'):
     if not NTFY_TOPIC:
         return
     url = NTFY_TOPIC if NTFY_TOPIC.startswith(('http://', 'https://')) else f'https://ntfy.sh/{NTFY_TOPIC.lstrip("/")}'
+    headers = {'Title': title, 'Priority': priority}
+    if NTFY_USER or NTFY_PASS:
+        import base64
+        cred = base64.b64encode(f'{NTFY_USER}:{NTFY_PASS}'.encode()).decode()
+        headers['Authorization'] = f'Basic {cred}'
     try:
         req = urllib.request.Request(
             url,
             data=msg.encode(),
-            headers={'Title': title, 'Priority': priority},
+            headers=headers,
             method='POST',
         )
         urllib.request.urlopen(req, timeout=5)

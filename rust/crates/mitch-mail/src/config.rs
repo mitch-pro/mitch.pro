@@ -111,6 +111,10 @@ pub struct MailConfig {
     pub imap_host: String,
     /// NTFY_TOPIC (empty disables ntfy notifications).
     pub ntfy_topic: String,
+    /// NTFY_USER (optional basic auth username for ntfy).
+    pub ntfy_user: String,
+    /// NTFY_PASS (optional basic auth password for ntfy).
+    pub ntfy_pass: String,
 }
 
 impl MailConfig {
@@ -137,6 +141,8 @@ impl MailConfig {
                 }
             },
             ntfy_topic: env_trim("NTFY_TOPIC"),
+            ntfy_user: env_trim("NTFY_USER"),
+            ntfy_pass: env_trim("NTFY_PASS"),
         }
     }
 }

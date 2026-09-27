@@ -158,6 +158,12 @@ pub(crate) fn ntfy_notify_user(
     } else {
         js_slice120(title)
     };
+    let ntfy_user = std::env::var("NTFY_USER")
+        .map(|v| v.trim().to_string())
+        .unwrap_or_default();
+    let ntfy_pass = std::env::var("NTFY_PASS")
+        .map(|v| v.trim().to_string())
+        .unwrap_or_default();
     tokio::spawn(async move {
         let mut req = reqwest::Client::new()
             .post(target_url)
@@ -165,6 +171,9 @@ pub(crate) fn ntfy_notify_user(
             .header("Priority", "default")
             .header("Tags", "lock")
             .timeout(std::time::Duration::from_secs(5));
+        if !ntfy_user.is_empty() || !ntfy_pass.is_empty() {
+            req = req.basic_auth(&ntfy_user, Some(&ntfy_pass));
+        }
         if !click_url.is_empty() {
             req = req.header("Click", click_url);
         }

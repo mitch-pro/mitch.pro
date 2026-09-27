@@ -190,6 +190,12 @@ pub fn ntfy_notify(msg: &str, title: &str, priority: &str) {
         return;
     }
     let url = resolve_ntfy_url(&topic);
+    let ntfy_user = std::env::var("NTFY_USER")
+        .map(|v| v.trim().to_string())
+        .unwrap_or_default();
+    let ntfy_pass = std::env::var("NTFY_PASS")
+        .map(|v| v.trim().to_string())
+        .unwrap_or_default();
     let msg = msg.to_string();
     let title = title.to_string();
     let priority = priority.to_string();
@@ -198,6 +204,9 @@ pub fn ntfy_notify(msg: &str, title: &str, priority: &str) {
             .post(&url)
             .header("Content-Type", "text/plain")
             .timeout(std::time::Duration::from_secs(5));
+        if !ntfy_user.is_empty() || !ntfy_pass.is_empty() {
+            req = req.basic_auth(&ntfy_user, Some(&ntfy_pass));
+        }
         if !title.is_empty() {
             req = req.header("Title", title);
         }

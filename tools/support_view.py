@@ -15,7 +15,9 @@ try:
         if _m: os.environ.setdefault(_m.group(1), _m.group(2).strip())
 except: pass
 
-NTFY_TOPIC  = os.environ.get('NTFY_TOPIC', '')
+NTFY_TOPIC  = os.environ.get('NTFY_TOPIC', '').strip()
+NTFY_USER   = os.environ.get('NTFY_USER', '').strip()
+NTFY_PASS   = os.environ.get('NTFY_PASS', '').strip()
 TEXTBELT_KEY = os.environ.get('TEXTBELT_API_KEY', '')
 
 def _site():
@@ -29,6 +31,10 @@ def ntfy(msg, title=None):
     try:
         headers = {'Content-Type': 'text/plain'}
         if title: headers['Title'] = title
+        if NTFY_USER or NTFY_PASS:
+            import base64
+            cred = base64.b64encode(f'{NTFY_USER}:{NTFY_PASS}'.encode()).decode()
+            headers['Authorization'] = f'Basic {cred}'
         url = NTFY_TOPIC if NTFY_TOPIC.startswith(('http://', 'https://')) else f'https://ntfy.sh/{NTFY_TOPIC.lstrip("/")}'
         req = urllib.request.Request(
             url,

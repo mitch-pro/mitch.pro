@@ -85,6 +85,8 @@ Key environment variables:
 | `SSH_GATEWAY_URL` | WebSocket URI for SSH gateway | `ws://ssh-gateway:6820` |
 | `ENABLE_ADMIN_KEY_HEADER`| Break-glass admin bypass header (keep disabled) | `0` |
 | `NTFY_TOPIC` | Optional push notification topic | None |
+| `NTFY_USER` | Optional ntfy basic auth username | None |
+| `NTFY_PASS` | Optional ntfy basic auth password | None |
 
 ---
 

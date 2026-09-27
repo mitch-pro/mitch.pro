@@ -296,6 +296,8 @@ fn check_for_support_emails(
             "Support Request",
             "high",
             &cfg.ntfy_topic,
+            &cfg.ntfy_user,
+            &cfg.ntfy_pass,
         );
         // sendSupportAutoreply
         let reply_subject = if subject.starts_with("Re:") {
@@ -335,7 +337,7 @@ fn check_for_support_emails(
     Ok(())
 }
 
-fn ntfy_blocking(msg: &str, title: &str, priority: &str, topic: &str) {
+fn ntfy_blocking(msg: &str, title: &str, priority: &str, topic: &str, user: &str, pass: &str) {
     let topic = topic.trim();
     if topic.is_empty() {
         return;
@@ -352,12 +354,15 @@ fn ntfy_blocking(msg: &str, title: &str, priority: &str, topic: &str) {
         Ok(c) => c,
         Err(_) => return,
     };
-    let _ = client
+    let mut req = client
         .post(url)
         .body(msg.to_string())
         .header("Title", title)
-        .header("Priority", priority)
-        .send();
+        .header("Priority", priority);
+    if !user.is_empty() || !pass.is_empty() {
+        req = req.basic_auth(user, Some(pass));
+    }
+    let _ = req.send();
 }
 
 /// One watcher session: connect, initial fetch+cache, IDLE loop. Returns on

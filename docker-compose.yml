@@ -55,6 +55,8 @@ services:
       - MAIL_SMTP_HOST
       - MAIL_IMAP_HOST
       - NTFY_TOPIC
+      - NTFY_USER
+      - NTFY_PASS
       - SUPPORT_EMAIL
       - GMAIL_USER_ALT
       - GMAIL_USER
@@ -139,6 +141,8 @@ services:
       - MAIL_SMTP_HOST
       - MAIL_IMAP_HOST
       - NTFY_TOPIC
+      - NTFY_USER
+      - NTFY_PASS
       - SUPPORT_EMAIL
       - GMAIL_USER_ALT
       - GMAIL_USER
@@ -220,6 +224,8 @@ services:
       - MAIL_SMTP_HOST
       - MAIL_IMAP_HOST
       - NTFY_TOPIC
+      - NTFY_USER
+      - NTFY_PASS
       - SUPPORT_EMAIL
       - GMAIL_USER_ALT
       - GMAIL_USER
