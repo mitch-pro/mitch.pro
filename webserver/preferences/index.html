@@ -1796,9 +1796,9 @@
 
     <div class="action-center">
       <h3 class="subsection-title">Chat Alerts via ntfy</h3>
-      <p class="section-sub">Get Secure Chat alerts on your phone with the free <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a> app, even without web push. Install ntfy, subscribe to any topic, and enter that topic below (letters, numbers, dashes, underscores — keep it unguessable). Leave blank to disable.</p>
+      <p class="section-sub">Get Secure Chat alerts on your phone with the free <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a> app, even without web push. Enter a topic name (letters, numbers, dashes, underscores) to use ntfy.sh, or paste a full custom server URL. Leave blank to disable.</p>
       <div class="session-actions">
-        <input id="ntfyTopicInput" type="text" maxlength="64" placeholder="ntfy topic (e.g. mitch-chat-x7k2)" style="flex:1;min-width:220px">
+        <input id="ntfyTopicInput" type="text" maxlength="256" placeholder="ntfy topic or custom URL (e.g. mitch-chat-x7k2 or https://ntfy.example.com/topic)" style="flex:1;min-width:220px">
         <button class="soft-btn" id="saveNtfyBtn" type="button" onclick="saveNtfyTopic()">Save</button>
       </div>
       <div class="status-line" id="ntfyStatus"></div>

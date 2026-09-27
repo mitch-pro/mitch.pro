@@ -336,9 +336,15 @@ fn check_for_support_emails(
 }
 
 fn ntfy_blocking(msg: &str, title: &str, priority: &str, topic: &str) {
+    let topic = topic.trim();
     if topic.is_empty() {
         return;
     }
+    let url = if topic.starts_with("http://") || topic.starts_with("https://") {
+        topic.to_string()
+    } else {
+        format!("https://ntfy.sh/{}", topic.trim_start_matches('/'))
+    };
     let client = match reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(15))
         .build()
@@ -347,7 +353,7 @@ fn ntfy_blocking(msg: &str, title: &str, priority: &str, topic: &str) {
         Err(_) => return,
     };
     let _ = client
-        .post(format!("https://ntfy.sh/{topic}"))
+        .post(url)
         .body(msg.to_string())
         .header("Title", title)
         .header("Priority", priority)

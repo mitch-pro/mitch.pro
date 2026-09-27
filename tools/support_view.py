@@ -29,8 +29,9 @@ def ntfy(msg, title=None):
     try:
         headers = {'Content-Type': 'text/plain'}
         if title: headers['Title'] = title
+        url = NTFY_TOPIC if NTFY_TOPIC.startswith(('http://', 'https://')) else f'https://ntfy.sh/{NTFY_TOPIC.lstrip("/")}'
         req = urllib.request.Request(
-            f'https://ntfy.sh/{NTFY_TOPIC}',
+            url,
             data=msg.encode(), headers=headers, method='POST')
         urllib.request.urlopen(req, timeout=5)
     except Exception: pass

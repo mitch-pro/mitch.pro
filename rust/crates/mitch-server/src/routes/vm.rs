@@ -5324,12 +5324,31 @@ pub(crate) async fn handle(
                             .lock()
                             .unwrap_or_else(|e| e.into_inner())
                             .insert(comp_id.to_string(), now_ms());
+                        state
+                            .vm_shutdown_initiated
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .remove(comp_id);
                     }
                     if action == "shutdown" || action == "force-stop" {
                         revoke_vm_desktop_connections(state, comp_id);
                         trigger_vm_cooldown(state, &record_owner, "user_power_off");
                         state
                             .vm_page_presence
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .remove(comp_id);
+                    }
+                    if action == "shutdown" {
+                        state
+                            .vm_shutdown_initiated
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .entry(comp_id.to_string())
+                            .or_insert_with(|| now_ms() as i64);
+                    } else if action == "force-stop" || action == "restart" {
+                        state
+                            .vm_shutdown_initiated
                             .lock()
                             .unwrap_or_else(|e| e.into_inner())
                             .remove(comp_id);

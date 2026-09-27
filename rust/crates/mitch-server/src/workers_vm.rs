@@ -239,7 +239,7 @@ pub(crate) async fn enforce_vm_max_uptime_worker(state: &AppState) {
     for guest in guests {
         let is_template = guest.get("template").map(jsval::truthy).unwrap_or(false);
         let status = jsval::str_or(guest.get("status"), "");
-        if is_template || status != "running" {
+        if is_template {
             continue;
         }
 
@@ -250,6 +250,19 @@ pub(crate) async fn enforce_vm_max_uptime_worker(state: &AppState) {
 
         let record_opt = vmlib::get_virtual_machine_by_vmid(&state.store, vmid);
         let record = record_opt.as_ref().map(|r| r.to_json());
+        let record_key = record_opt
+            .as_ref()
+            .map(|r| r.id.clone())
+            .unwrap_or_else(|| format!("vmid-{}", vmid as i64));
+
+        if status != "running" {
+            state
+                .vm_shutdown_initiated
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&record_key);
+            continue;
+        }
 
         let mut owner_email = record_opt
             .as_ref()
@@ -283,218 +296,255 @@ pub(crate) async fn enforce_vm_max_uptime_worker(state: &AppState) {
             continue;
         }
 
-        let record_key = record_opt
-            .as_ref()
-            .map(|r| r.id.clone())
-            .unwrap_or_else(|| format!("vmid-{}", vmid as i64));
+        let now = now_ms() as i64;
         let uptime = guest.get("uptime").and_then(jsval::number).unwrap_or(0.0);
         let lease =
             crate::routes::vm::get_vm_lease(state, &record_key, uptime, false, &owner_email);
 
-        if lease.get("isExempt").map(jsval::truthy).unwrap_or(false) {
-            continue;
-        }
-
-        let remaining_seconds = lease.get("remainingSeconds").and_then(jsval::number);
-        if remaining_seconds.map(|s| s <= 0.0).unwrap_or(false) {
-            let daily_remaining = lease
-                .get("dailyRemainingSeconds")
-                .and_then(jsval::number)
-                .unwrap_or(f64::NAN);
-            let is_daily_limit = daily_remaining.is_finite() && daily_remaining <= 0.0;
-            let max_uptime = lease
-                .get("maxUptimeSeconds")
-                .and_then(jsval::number)
-                .unwrap_or(0.0);
-
-            println!(
-                "[vm-watchdog] VM {} (VMID {}) reached {} ({}s / {}s). Automatically shutting down...",
-                record_key,
-                vmid as i64,
-                if is_daily_limit {
-                    "daily limit (6h)"
-                } else {
-                    "max uptime"
-                },
-                uptime,
-                max_uptime
-            );
-
-            if let Some(rec) = record.as_ref() {
-                crate::routes::vm::vm_audit(
-                    state,
-                    "system",
-                    Some(rec),
-                    if is_daily_limit {
-                        "VM_SHUTDOWN_DAILY_LIMIT"
-                    } else {
-                        "VM_SHUTDOWN_TIMEOUT"
-                    },
-                    true,
-                    Some(&json!({
-                        "uptime": uptime,
-                        "maxUptimeSeconds": max_uptime,
-                        "extended": lease.get("extended"),
-                        "dailyRemainingSeconds": lease.get("dailyRemainingSeconds"),
-                    })),
-                );
-                crate::routes::vm::revoke_vm_desktop_connections(state, &record_key);
-                if let Err(err) = crate::proxmox_desktop::desktop()
-                    .power(rec, "shutdown")
-                    .await
-                {
-                    tracing::warn!(
-                        "[vm-watchdog] Graceful shutdown failed for {}, attempting force-stop: {:?}",
-                        record_key,
-                        err
-                    );
-                    let _ = crate::proxmox_desktop::desktop()
-                        .power(rec, "force-stop")
-                        .await;
-                }
-                if !owner_email.is_empty() {
-                    crate::routes::vm::trigger_vm_cooldown(
-                        state,
-                        &owner_email,
-                        if is_daily_limit {
-                            "daily_limit_reached"
-                        } else {
-                            "max_uptime_reached"
-                        },
-                    );
-                }
-            } else {
-                let synthetic = json!({
-                    "vmid": vmid,
-                    "node": guest.get("node"),
-                    "guestType": guest.get("type"),
-                });
-                if crate::proxmox_desktop::desktop()
-                    .power(&synthetic, "shutdown")
-                    .await
-                    .is_err()
-                {
-                    let _ = crate::proxmox_desktop::desktop()
-                        .power(&synthetic, "force-stop")
-                        .await;
+        let mut has_open_socket = false;
+        {
+            let sockets = state
+                .vm_desktop_sockets
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            for client in sockets.values() {
+                let d = &client.data;
+                let rec_id = jsval::str_or(d.get("recordId"), "");
+                let sock_vmid = d.get("vmid").and_then(jsval::number);
+                if rec_id == record_key || sock_vmid == Some(vmid) {
+                    has_open_socket = true;
+                    break;
                 }
             }
+        }
 
-            state
-                .vm_leases
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .remove(&record_key);
+        if has_open_socket {
             state
                 .vm_page_presence
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
+                .insert(record_key.clone(), now);
+            state
+                .vm_shutdown_initiated
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
                 .remove(&record_key);
-        } else {
-            // Check 10-minute off-page inactivity limit
-            let mut has_open_socket = false;
-            {
-                let sockets = state
-                    .vm_desktop_sockets
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner());
-                for client in sockets.values() {
-                    let d = &client.data;
-                    if jsval::str_or(d.get("recordId"), "") == record_key {
-                        has_open_socket = true;
-                        break;
-                    }
-                }
-            }
+        }
 
-            let now = now_ms() as i64;
-            if has_open_socket {
+        let is_lease_exempt = lease.get("isExempt").map(jsval::truthy).unwrap_or(false);
+        let remaining_seconds = lease.get("remainingSeconds").and_then(jsval::number);
+        let daily_remaining = lease
+            .get("dailyRemainingSeconds")
+            .and_then(jsval::number)
+            .unwrap_or(f64::NAN);
+        let is_daily_limit = daily_remaining.is_finite() && daily_remaining <= 0.0;
+        let max_uptime = lease
+            .get("maxUptimeSeconds")
+            .and_then(jsval::number)
+            .unwrap_or(0.0);
+
+        // Daily / session uptime expiration (only for non-exempt users)
+        let is_uptime_expired = !is_lease_exempt && remaining_seconds.map(|s| s <= 0.0).unwrap_or(false);
+
+        // Inactivity expiration (applies to ALL users, even if they bought unlimited time)
+        let mut is_inactive = false;
+        let mut inactive_ms: u64 = 0;
+        if !has_open_socket {
+            let presence_last = state
+                .vm_page_presence
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(&record_key)
+                .copied();
+            let last_seen = presence_last.unwrap_or_else(|| {
+                let past = (now as f64) - (uptime * 1000.0);
+                if past >= 0.0 {
+                    past as i64
+                } else {
+                    now
+                }
+            });
+            if presence_last.is_none() {
                 state
                     .vm_page_presence
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
-                    .insert(record_key.clone(), now);
+                    .insert(record_key.clone(), last_seen);
+            }
+
+            inactive_ms = (now - last_seen).max(0) as u64;
+            if is_vm_inactive(last_seen as f64, now as f64) {
+                is_inactive = true;
+            }
+        }
+
+        let shutdown_initiated = state
+            .vm_shutdown_initiated
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&record_key)
+            .copied();
+
+        if is_inactive || is_uptime_expired || shutdown_initiated.is_some() {
+            let shutdown_reason = if shutdown_initiated.is_some() {
+                if is_inactive {
+                    "inactivity_10m"
+                } else if is_daily_limit {
+                    "daily_limit_reached"
+                } else if is_uptime_expired {
+                    "max_uptime_reached"
+                } else {
+                    "shutdown_timeout_10m"
+                }
+            } else if is_inactive {
+                "inactivity_10m"
+            } else if is_daily_limit {
+                "daily_limit_reached"
             } else {
-                let presence_last = state
+                "max_uptime_reached"
+            };
+
+            let force_timeout_ms: i64 = 10 * 60 * 1000; // 10 minutes
+            let must_force_stop = match shutdown_initiated {
+                Some(initiated_at) => (now - initiated_at) >= force_timeout_ms,
+                None => false,
+            };
+
+            if must_force_stop {
+                let elapsed_ms = shutdown_initiated.map(|t| now - t).unwrap_or(0);
+                println!(
+                    "[vm-watchdog] VM {} (VMID {}) did not shut off in 10m after shutdown signal (elapsed: {}m). Force stopping...",
+                    record_key,
+                    vmid as i64,
+                    (elapsed_ms as f64 / 60000.0).round() as i64
+                );
+
+                if let Some(rec) = record.as_ref() {
+                    crate::routes::vm::vm_audit(
+                        state,
+                        "system",
+                        Some(rec),
+                        "VM_SHUTDOWN_FORCE_STOP",
+                        true,
+                        Some(&json!({
+                            "elapsedSeconds": elapsed_ms / 1000,
+                            "reason": shutdown_reason,
+                            "vmid": vmid,
+                        })),
+                    );
+                    crate::routes::vm::revoke_vm_desktop_connections(state, &record_key);
+                    let _ = crate::proxmox_desktop::desktop()
+                        .power(rec, "force-stop")
+                        .await;
+                } else {
+                    let synthetic = json!({
+                        "vmid": vmid,
+                        "node": guest.get("node"),
+                        "guestType": guest.get("type"),
+                    });
+                    let _ = crate::proxmox_desktop::desktop()
+                        .power(&synthetic, "force-stop")
+                        .await;
+                }
+
+                state
+                    .vm_shutdown_initiated
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(&record_key);
+                state
+                    .vm_leases
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(&record_key);
+                state
                     .vm_page_presence
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
-                    .get(&record_key)
-                    .copied();
-                let last_seen = presence_last.unwrap_or_else(|| {
-                    let past = (now as f64) - (uptime * 1000.0);
-                    if past >= 0.0 {
-                        past as i64
-                    } else {
-                        0
-                    }
-                });
+                    .remove(&record_key);
+            } else if shutdown_initiated.is_none() {
+                // First detection: initiate graceful shutdown and record timestamp
+                state
+                    .vm_shutdown_initiated
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(record_key.clone(), now);
 
-                if is_vm_inactive(last_seen as f64, now as f64) {
-                    let inactive_ms = (now - last_seen).max(0) as u64;
-                    println!(
-                        "[vm-watchdog] VM {} (VMID {}) inactive/off-page for {}m. Automatically shutting down...",
-                        record_key,
-                        vmid as i64,
-                        (inactive_ms as f64 / 60000.0).round() as i64
+                println!(
+                    "[vm-watchdog] VM {} (VMID {}) reached {} (inactive: {}m). Requesting graceful shutdown...",
+                    record_key,
+                    vmid as i64,
+                    shutdown_reason,
+                    (inactive_ms as f64 / 60000.0).round() as i64
+                );
+
+                if let Some(rec) = record.as_ref() {
+                    crate::routes::vm::vm_audit(
+                        state,
+                        "system",
+                        Some(rec),
+                        if is_inactive {
+                            "VM_SHUTDOWN_INACTIVITY"
+                        } else if is_daily_limit {
+                            "VM_SHUTDOWN_DAILY_LIMIT"
+                        } else {
+                            "VM_SHUTDOWN_TIMEOUT"
+                        },
+                        true,
+                        Some(&json!({
+                            "uptime": uptime,
+                            "maxUptimeSeconds": max_uptime,
+                            "inactiveSeconds": inactive_ms / 1000,
+                            "reason": shutdown_reason,
+                        })),
                     );
-
-                    if let Some(rec) = record.as_ref() {
-                        crate::routes::vm::vm_audit(
-                            state,
-                            "system",
-                            Some(rec),
-                            "VM_SHUTDOWN_INACTIVITY",
-                            true,
-                            Some(&json!({
-                                "inactiveSeconds": (inactive_ms / 1000) as i64,
-                            })),
+                    crate::routes::vm::revoke_vm_desktop_connections(state, &record_key);
+                    if let Err(err) = crate::proxmox_desktop::desktop()
+                        .power(rec, "shutdown")
+                        .await
+                    {
+                        tracing::warn!(
+                            "[vm-watchdog] Graceful shutdown failed immediately for {}, force stopping: {:?}",
+                            record_key,
+                            err
                         );
-                        crate::routes::vm::revoke_vm_desktop_connections(state, &record_key);
-                        if let Err(_err) = crate::proxmox_desktop::desktop()
-                            .power(rec, "shutdown")
-                            .await
-                        {
-                            let _ = crate::proxmox_desktop::desktop()
-                                .power(rec, "force-stop")
-                                .await;
-                        }
-                        if !owner_email.is_empty() {
-                            crate::routes::vm::trigger_vm_cooldown(
-                                state,
-                                &owner_email,
-                                "inactivity_10m",
-                            );
-                        }
-                    } else {
-                        let synthetic = json!({
-                            "vmid": vmid,
-                            "node": guest.get("node"),
-                            "guestType": guest.get("type"),
-                        });
-                        if crate::proxmox_desktop::desktop()
-                            .power(&synthetic, "shutdown")
-                            .await
-                            .is_err()
-                        {
-                            let _ = crate::proxmox_desktop::desktop()
-                                .power(&synthetic, "force-stop")
-                                .await;
-                        }
+                        let _ = crate::proxmox_desktop::desktop()
+                            .power(rec, "force-stop")
+                            .await;
                     }
-
-                    state
-                        .vm_leases
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .remove(&record_key);
-                    state
-                        .vm_page_presence
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .remove(&record_key);
+                    if !owner_email.is_empty() {
+                        crate::routes::vm::trigger_vm_cooldown(
+                            state,
+                            &owner_email,
+                            shutdown_reason,
+                        );
+                    }
+                } else {
+                    let synthetic = json!({
+                        "vmid": vmid,
+                        "node": guest.get("node"),
+                        "guestType": guest.get("type"),
+                    });
+                    if crate::proxmox_desktop::desktop()
+                        .power(&synthetic, "shutdown")
+                        .await
+                        .is_err()
+                    {
+                        let _ = crate::proxmox_desktop::desktop()
+                            .power(&synthetic, "force-stop")
+                            .await;
+                    }
                 }
+            } else {
+                // Graceful shutdown has already been sent, waiting for VM to shut off (up to 10m).
             }
+        } else {
+            // VM is active / not expired: ensure no stale shutdown_initiated timestamp
+            state
+                .vm_shutdown_initiated
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&record_key);
         }
     }
 }
@@ -631,5 +681,48 @@ pub fn spawn(state: Arc<AppState>) {
                 crate::routes::vm::cleanup_vm_desktop_sessions(&state);
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_vm_inactivity_threshold() {
+        let now = 1_000_000_000_000.0;
+        // 9 minutes ago -> not inactive
+        let active_9m = now - (9.0 * 60.0 * 1000.0);
+        assert!(!is_vm_inactive(active_9m, now));
+
+        // 10 minutes ago -> inactive
+        let inactive_10m = now - (10.0 * 60.0 * 1000.0);
+        assert!(is_vm_inactive(inactive_10m, now));
+
+        // 15 minutes ago -> inactive
+        let inactive_15m = now - (15.0 * 60.0 * 1000.0);
+        assert!(is_vm_inactive(inactive_15m, now));
+    }
+
+    #[test]
+    fn test_force_stop_timeout() {
+        let now: i64 = 1_000_000_000_000;
+        let force_timeout_ms: i64 = 10 * 60 * 1000; // 10 minutes
+
+        // 5 minutes since shutdown initiated -> must NOT force stop
+        let initiated_5m = now - (5 * 60 * 1000);
+        assert!((now - initiated_5m) < force_timeout_ms);
+
+        // 9m59s since shutdown initiated -> must NOT force stop
+        let initiated_almost_10m = now - (9 * 60 * 1000 + 59 * 1000);
+        assert!((now - initiated_almost_10m) < force_timeout_ms);
+
+        // Exactly 10 minutes -> MUST force stop
+        let initiated_10m = now - (10 * 60 * 1000);
+        assert!((now - initiated_10m) >= force_timeout_ms);
+
+        // 12 minutes -> MUST force stop
+        let initiated_12m = now - (12 * 60 * 1000);
+        assert!((now - initiated_12m) >= force_timeout_ms);
     }
 }

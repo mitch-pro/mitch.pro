@@ -35,8 +35,11 @@ function saveSent(s) { fs.writeFileSync(AUTOREPLY_FILE, JSON.stringify([...s]));
 
 async function ntfy(msg, title = 'Support Email', priority = 'high') {
   if (!NTFY_TOPIC) return;
+  const url = /^https?:\/\//i.test(NTFY_TOPIC)
+    ? NTFY_TOPIC
+    : `https://ntfy.sh/${NTFY_TOPIC.replace(/^\/+/, '')}`;
   try {
-    await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
+    await fetch(url, {
       method: 'POST', body: msg,
       headers: { Title: title, Priority: priority },
     });

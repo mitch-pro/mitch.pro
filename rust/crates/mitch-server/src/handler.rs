@@ -1087,8 +1087,8 @@ pub async fn handle(
                 return resp;
             }
         }
-        // Web push subscription routes
-        if path.starts_with("/api/push/") {
+        // Web push subscription and ntfy routes
+        if path.starts_with("/api/push/") || path == "/api/ntfy/topic" {
             if let Some(resp) =
                 crate::routes::push::handle_push_routes(&state, &method, &path, headers, body_bytes)
             {

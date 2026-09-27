@@ -208,6 +208,9 @@ pub struct AppState {
     /// `vmPagePresence` (server.js:27283) — recordId → { lastSeen } (only
     /// `lastSeen` is ever stored/read).
     pub vm_page_presence: std::sync::Mutex<std::collections::HashMap<String, i64>>,
+    /// Record of when VM shutdown was requested (recordId/key -> timestamp ms)
+    /// Used to force-stop VMs that fail to shut off within 10 minutes.
+    pub vm_shutdown_initiated: std::sync::Mutex<std::collections::HashMap<String, i64>>,
     /// `lastCapacityNtfy` (server.js:27095) — norm email → last ntfy ms.
     pub last_capacity_ntfy: std::sync::Mutex<std::collections::HashMap<String, i64>>,
     /// `lastAdminUsageNotice` (server.js:27096) — `owner:recordId:op` → ms.
@@ -435,6 +438,7 @@ impl AppState {
             )),
             vm_leases: std::sync::Mutex::new(std::collections::HashMap::new()),
             vm_page_presence: std::sync::Mutex::new(std::collections::HashMap::new()),
+            vm_shutdown_initiated: std::sync::Mutex::new(std::collections::HashMap::new()),
             last_capacity_ntfy: std::sync::Mutex::new(std::collections::HashMap::new()),
             last_admin_usage_notice: std::sync::Mutex::new(std::collections::HashMap::new()),
             last_admin_request_notice: std::sync::Mutex::new(std::collections::HashMap::new()),

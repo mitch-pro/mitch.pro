@@ -70,7 +70,13 @@ send_notification() {
     local msg="$1"
     local title="${2:-Deploy Status}"
     local priority="${3:-default}"
-    curl -s -H "Title: $title" -H "Priority: $priority" -d "$msg" "https://ntfy.sh/$NTFY_TOPIC" > /dev/null || true
+    local url
+    if [[ "$NTFY_TOPIC" =~ ^https?:// ]]; then
+        url="$NTFY_TOPIC"
+    else
+        url="https://ntfy.sh/${NTFY_TOPIC#/}"
+    fi
+    curl -s -H "Title: $title" -H "Priority: $priority" -d "$msg" "$url" > /dev/null || true
 }
 
 # Helper to run docker compose wrapped in doppler run (if Doppler is available), keeping secrets off disk and avoiding bash evaluation bugs.

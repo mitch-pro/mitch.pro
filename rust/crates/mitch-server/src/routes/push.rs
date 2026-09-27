@@ -170,6 +170,17 @@ pub async fn send_web_push_clean(state: &Arc<AppState>, email: &str, payload: &s
     }
 }
 
+/// Resolve a topic or secret to an HTTP/HTTPS URL. If it starts with http:// or https://,
+/// it is returned as a custom server URL. Otherwise, it is formatted against https://ntfy.sh/{topic}.
+pub fn resolve_ntfy_url(secret_or_topic: &str) -> String {
+    let trimmed = secret_or_topic.trim();
+    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+        trimmed.to_string()
+    } else {
+        format!("https://ntfy.sh/{}", trimmed.trim_start_matches('/'))
+    }
+}
+
 /// `ntfy(msg, {title, priority})` — POST to ntfy.sh (silent without topic).
 pub fn ntfy_notify(msg: &str, title: &str, priority: &str) {
     let topic = std::env::var("NTFY_TOPIC")
@@ -178,7 +189,7 @@ pub fn ntfy_notify(msg: &str, title: &str, priority: &str) {
     if topic.is_empty() {
         return;
     }
-    let url = format!("https://ntfy.sh/{topic}");
+    let url = resolve_ntfy_url(&topic);
     let msg = msg.to_string();
     let title = title.to_string();
     let priority = priority.to_string();
@@ -568,5 +579,132 @@ pub fn handle_push_routes(
         ));
     }
 
+    if path == "/api/ntfy/topic" && *method == axum::http::Method::GET {
+        let cookies = crate::routes::me::cookies_of(state, headers);
+        let sid = cookies
+            .get("studentId")
+            .filter(|s| !s.is_empty())
+            .or_else(|| cookies.get("id"))
+            .unwrap_or("");
+        if sid.is_empty()
+            || !mitch_lib::auth::valid_id(sid, &state.id_secret)
+            || state.is_revoked_id(sid)
+        {
+            return Some(crate::errors::json_resp(
+                401,
+                serde_json::json!({ "error": "auth required" }),
+            ));
+        }
+        let email = mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, sid)
+            .unwrap_or_default();
+        if email.is_empty() {
+            return Some(crate::errors::json_resp(
+                403,
+                serde_json::json!({ "error": "email not found" }),
+            ));
+        }
+        let norm = mitch_lib::auth::normalize_email(&email);
+        let ntfy_file = state.data_dir().join("ntfy_topics.json");
+        let topics = state.store.read_document(&ntfy_file, serde_json::json!({}));
+        let topic_val = topics.get(&norm).and_then(|v| v.as_str());
+        return Some(crate::errors::json_resp(
+            200,
+            serde_json::json!({ "topic": topic_val }),
+        ));
+    }
+
+    if path == "/api/ntfy/topic" && *method == axum::http::Method::POST {
+        let cookies = crate::routes::me::cookies_of(state, headers);
+        let sid = cookies
+            .get("studentId")
+            .filter(|s| !s.is_empty())
+            .or_else(|| cookies.get("id"))
+            .unwrap_or("");
+        if sid.is_empty()
+            || !mitch_lib::auth::valid_id(sid, &state.id_secret)
+            || state.is_revoked_id(sid)
+        {
+            return Some(crate::errors::json_resp(
+                401,
+                serde_json::json!({ "error": "auth required" }),
+            ));
+        }
+        let email = mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, sid)
+            .unwrap_or_default();
+        if email.is_empty() {
+            return Some(crate::errors::json_resp(
+                403,
+                serde_json::json!({ "error": "email not found" }),
+            ));
+        }
+        let Ok(body) = serde_json::from_slice::<serde_json::Value>(body_bytes) else {
+            return Some(crate::errors::json_resp(
+                400,
+                serde_json::json!({ "error": "bad json" }),
+            ));
+        };
+        let topic = body.get("topic").and_then(|v| v.as_str()).unwrap_or("").trim();
+        if !topic.is_empty() {
+            let is_url = topic.starts_with("http://") || topic.starts_with("https://");
+            if is_url {
+                if topic.len() > 1024 {
+                    return Some(crate::errors::json_resp(
+                        400,
+                        serde_json::json!({ "error": "url is too long" }),
+                    ));
+                }
+            } else {
+                let topic_ok = (6..=64).contains(&topic.chars().count())
+                    && topic
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+                if !topic_ok {
+                    return Some(crate::errors::json_resp(
+                        400,
+                        serde_json::json!({ "error": "topic must be 6-64 letters, numbers, dashes or underscores, or a full url" }),
+                    ));
+                }
+            }
+        }
+        let norm = mitch_lib::auth::normalize_email(&email);
+        let ntfy_file = state.data_dir().join("ntfy_topics.json");
+        let mut topics = state.store.read_document(&ntfy_file, serde_json::json!({}));
+        if let Some(map) = topics.as_object_mut() {
+            if topic.is_empty() {
+                map.remove(&norm);
+            } else {
+                map.insert(norm, serde_json::json!(topic));
+            }
+            let _ = state.store.write_document(&ntfy_file, &topics);
+        }
+        return Some(crate::errors::json_resp(
+            200,
+            serde_json::json!({ "success": true, "topic": if topic.is_empty() { serde_json::Value::Null } else { serde_json::json!(topic) } }),
+        ));
+    }
+
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_resolve_ntfy_url() {
+        // Bare topic
+        assert_eq!(resolve_ntfy_url("my-alerts"), "https://ntfy.sh/my-alerts");
+        // Bare topic with leading slash
+        assert_eq!(resolve_ntfy_url("/my-alerts"), "https://ntfy.sh/my-alerts");
+        // Custom HTTPS URL
+        assert_eq!(
+            resolve_ntfy_url("https://custom-ntfy.example.com/topic123"),
+            "https://custom-ntfy.example.com/topic123"
+        );
+        // Custom HTTP URL
+        assert_eq!(
+            resolve_ntfy_url("http://192.168.1.50:8080/alerts"),
+            "http://192.168.1.50:8080/alerts"
+        );
+    }
 }

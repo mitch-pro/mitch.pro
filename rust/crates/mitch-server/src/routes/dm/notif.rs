@@ -124,15 +124,26 @@ pub(crate) fn ntfy_notify_user(
     let Some(raw_topic) = topics.get(norm.as_str()) else {
         return;
     };
-    let topic = jsval::string(raw_topic);
-    // /^[a-zA-Z0-9_-]{6,64}$/
-    let topic_ok = (6..=64).contains(&topic.chars().count())
-        && topic
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
-    if !topic_ok {
+    let topic = jsval::string(raw_topic).trim().to_string();
+    if topic.is_empty() {
         return;
     }
+    let target_url = if topic.starts_with("http://") || topic.starts_with("https://") {
+        if topic.len() > 1024 {
+            return;
+        }
+        topic
+    } else {
+        // /^[a-zA-Z0-9_-]{6,64}$/
+        let topic_ok = (6..=64).contains(&topic.chars().count())
+            && topic
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+        if !topic_ok {
+            return;
+        }
+        format!("https://ntfy.sh/{}", topic.trim_start_matches('/'))
+    };
     // ntfy's Click header must be absolute, so resolve relative notification
     // paths against the configured primary origin.
     let mut click_url = url.to_string();
@@ -149,7 +160,7 @@ pub(crate) fn ntfy_notify_user(
     };
     tokio::spawn(async move {
         let mut req = reqwest::Client::new()
-            .post(format!("https://ntfy.sh/{topic}"))
+            .post(target_url)
             .header("Title", title)
             .header("Priority", "default")
             .header("Tags", "lock")

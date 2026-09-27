@@ -76,9 +76,10 @@ def first_part_only(body):
 def ntfy(msg, title='Support Email', priority='default'):
     if not NTFY_TOPIC:
         return
+    url = NTFY_TOPIC if NTFY_TOPIC.startswith(('http://', 'https://')) else f'https://ntfy.sh/{NTFY_TOPIC.lstrip("/")}'
     try:
         req = urllib.request.Request(
-            f'https://ntfy.sh/{NTFY_TOPIC}',
+            url,
             data=msg.encode(),
             headers={'Title': title, 'Priority': priority},
             method='POST',
