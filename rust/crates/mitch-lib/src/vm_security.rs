@@ -228,6 +228,8 @@ pub const VM_EXTENSION_COOLDOWN_MS: f64 = 86_400_000.0;
 pub const VM_COOLDOWN_DURATION_MS: f64 = 1_800_000.0;
 /// `VM_OFFPAGE_INACTIVITY_MS` = 10 minutes.
 pub const VM_OFFPAGE_INACTIVITY_MS: f64 = 600_000.0;
+/// `VM_ADMIN_OFFPAGE_INACTIVITY_MS` = 30 minutes.
+pub const VM_ADMIN_OFFPAGE_INACTIVITY_MS: f64 = 1_800_000.0;
 
 /// `VM_UPGRADE_CATALOG` (vm_security.js:75-101) — the exact tiers, labels,
 /// costs and durations the /api/vm/upgrade + /upgrades endpoints serve.
@@ -364,12 +366,17 @@ pub fn compute_cooldown_remaining(cooldown_until: f64, is_admin: bool, now: f64)
     }
 }
 
-/// `isVmInactive(lastSeen, {now, timeoutMs})` (vm_security.js:153-156).
-pub fn is_vm_inactive(last_seen: f64, now: f64) -> bool {
+/// `isVmInactive(lastSeen, {now, timeoutMs, isAdmin})` (vm_security.js:153-156).
+pub fn is_vm_inactive(last_seen: f64, now: f64, is_admin: bool) -> bool {
     if last_seen == 0.0 {
         return false;
     }
-    now - last_seen >= VM_OFFPAGE_INACTIVITY_MS
+    let timeout = if is_admin {
+        VM_ADMIN_OFFPAGE_INACTIVITY_MS
+    } else {
+        VM_OFFPAGE_INACTIVITY_MS
+    };
+    now - last_seen >= timeout
 }
 
 /// `isVmAdminAccessAllowed(recordId, grants)` (vm_security.js:158-161).
@@ -770,11 +777,13 @@ mod tests {
         assert_eq!(compute_cooldown_remaining(500.0, false, 1000.0), 0.0);
         assert_eq!(compute_cooldown_remaining(9999.0, true, 0.0), 0.0);
         assert!(
-            !is_vm_inactive(0.0, 1_000_000.0),
+            !is_vm_inactive(0.0, 1_000_000.0, false),
             "lastSeen 0 → never inactive"
         );
-        assert!(!is_vm_inactive(900_000.0, 1_000_000.0));
-        assert!(is_vm_inactive(400_000.0, 1_000_000.0), "600s elapsed");
+        assert!(!is_vm_inactive(900_000.0, 1_000_000.0, false));
+        assert!(is_vm_inactive(400_000.0, 1_000_000.0, false), "600s elapsed");
+        assert!(!is_vm_inactive(1_000_000.0 - 29.0 * 60_000.0, 1_000_000.0, true));
+        assert!(is_vm_inactive(1_000_000.0 - 30.0 * 60_000.0, 1_000_000.0, true));
     }
 
     #[test]

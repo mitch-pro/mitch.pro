@@ -20,7 +20,7 @@
       try { sessionStorage.setItem('sw-scripts', JSON.stringify(seenSW)); } catch (_) {}
       location.reload();
     });
-    navigator.serviceWorker.register('/sw.js?v=44', { scope: '/', updateViaCache: 'none' })
+    navigator.serviceWorker.register('/sw.js?v=45', { scope: '/', updateViaCache: 'none' })
       .then(function (reg) {
         try { reg.update(); } catch (_) {}
         setInterval(function () { try { reg.update(); } catch (_) {} }, 30 * 60 * 1000);

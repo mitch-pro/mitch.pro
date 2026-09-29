@@ -592,27 +592,27 @@
             Administrative endpoints are locked. Please enter your passphrase to proceed.
           </p>
         </div>
-        <div id="lock-box-form-container" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-          <input type="password" id="admin-passphrase-input" placeholder="Passphrase..." style="width: auto; min-width: 200px; margin: 0;">
-          <button type="button" id="admin-passphrase-btn" onclick="submitPassphrase()" style="width: auto; margin: 0;">Unlock Panel</button>
-        </div>
+        <form id="lock-box-form-container" onsubmit="event.preventDefault(); submitPassphrase();" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+          <input type="password" id="admin-passphrase-input" placeholder="Passphrase..." autocomplete="current-password" style="width: auto; min-width: 200px; margin: 0;">
+          <button type="submit" id="admin-passphrase-btn" style="width: auto; margin: 0;">Unlock Panel</button>
+        </form>
         <div id="lock-box-unlocked-container" style="display: none; align-items: center; gap: 10px;">
           <span class="pill ok" style="font-weight: 800; font-size: 0.75rem; padding: 4px 10px;">Panel Unlocked</span>
           <button type="button" onclick="showChangePassphraseForm()" style="width: auto; margin: 0; background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.3); color: #60a5fa;">Change Passphrase</button>
           <button type="button" onclick="showResetOtherPassphraseForm()" style="width: auto; margin: 0; background: rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.3); color: #a78bfa;">Reset Other Admin</button>
           <button type="button" onclick="lockAdminPanel()" style="width: auto; margin: 0; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); color: #f87171;">Lock Panel</button>
         </div>
-        <div id="lock-box-change-container" style="display: none; align-items: center; gap: 8px; flex-wrap: wrap;">
-          <input type="password" id="admin-new-passphrase-input" placeholder="New passphrase..." style="width: auto; min-width: 200px; margin: 0;">
-          <button type="button" onclick="submitChangePassphrase()" style="width: auto; margin: 0; background: rgba(139,92,246, 0.1); border-color: rgba(139,92,246, 0.3); color: #c084fc;">Confirm Change</button>
+        <form id="lock-box-change-container" onsubmit="event.preventDefault(); submitChangePassphrase();" style="display: none; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <input type="password" id="admin-new-passphrase-input" placeholder="New passphrase..." autocomplete="new-password" style="width: auto; min-width: 200px; margin: 0;">
+          <button type="submit" style="width: auto; margin: 0; background: rgba(139,92,246, 0.1); border-color: rgba(139,92,246, 0.3); color: #c084fc;">Confirm Change</button>
           <button type="button" onclick="hideChangePassphraseForm()" style="width: auto; margin: 0; background: rgba(107, 114, 128, 0.1); border-color: rgba(107, 114, 128, 0.3); color: #9ca3af;">Cancel</button>
-        </div>
-        <div id="lock-box-reset-other-container" style="display: none; align-items: center; gap: 8px; flex-wrap: wrap;">
+        </form>
+        <form id="lock-box-reset-other-container" onsubmit="event.preventDefault(); submitResetOtherPassphrase();" style="display: none; align-items: center; gap: 8px; flex-wrap: wrap;">
           <input type="email" id="admin-reset-target-email" placeholder="Other Admin's Email..." style="width: auto; min-width: 180px; margin: 0;">
-          <input type="password" id="admin-reset-new-passphrase" placeholder="New Passphrase..." style="width: auto; min-width: 180px; margin: 0;">
-          <button type="button" onclick="submitResetOtherPassphrase()" style="width: auto; margin: 0; background: rgba(139,92,246, 0.1); border-color: rgba(139,92,246, 0.3); color: #c084fc;">Confirm Reset</button>
+          <input type="password" id="admin-reset-new-passphrase" placeholder="New Passphrase..." autocomplete="new-password" style="width: auto; min-width: 180px; margin: 0;">
+          <button type="submit" style="width: auto; margin: 0; background: rgba(139,92,246, 0.1); border-color: rgba(139,92,246, 0.3); color: #c084fc;">Confirm Reset</button>
           <button type="button" onclick="hideResetOtherPassphraseForm()" style="width: auto; margin: 0; background: rgba(107, 114, 128, 0.1); border-color: rgba(107, 114, 128, 0.3); color: #9ca3af;">Cancel</button>
-        </div>
+        </form>
       </div>
       <div id="lock-box-status" class="form-status" style="margin-top: 8px;"></div>
     </div>
@@ -2486,6 +2486,7 @@
             }).join('');
           }
         }
+      } catch (e) {
         container.innerHTML = '<span class="muted">Error loading Matrix staff: ' + esc(e.message) + '</span>';
       }
     }

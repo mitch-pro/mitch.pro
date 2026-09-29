@@ -635,7 +635,7 @@
 
             let reg = await navigator.serviceWorker.getRegistration('/');
             if (!reg) {
-              reg = await navigator.serviceWorker.register('/sw.js?v=44', { scope: '/', updateViaCache: 'none' });
+              reg = await navigator.serviceWorker.register('/sw.js?v=45', { scope: '/', updateViaCache: 'none' });
             }
             await navigator.serviceWorker.ready;
 
@@ -689,7 +689,7 @@
 
         // Register Service Worker on / scope
         if ('serviceWorker' in navigator && window.isSecureContext) {
-          navigator.serviceWorker.register('/sw.js?v=44', { scope: '/', updateViaCache: 'none' }).catch(() => {});
+          navigator.serviceWorker.register('/sw.js?v=45', { scope: '/', updateViaCache: 'none' }).catch(() => {});
         }
 
         // Auto-sync if notification permission is already granted

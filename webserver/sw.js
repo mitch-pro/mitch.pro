@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mitch-pro-cache-v44';
+const CACHE_NAME = 'mitch-pro-cache-v45';
 const ASSETS = [
   '/favicon.ico',
   '/manifest.json',
@@ -64,8 +64,8 @@ self.addEventListener('fetch', (e) => {
   // network-error responses returned by the worker.
   if (requestUrl.origin !== self.location.origin) return;
 
-  // Matrix media and sync carry account credentials and must never enter a shared cache.
-  if (requestUrl.pathname.startsWith('/api/') || requestUrl.pathname.startsWith('/_matrix/') || e.request.url.startsWith('ws')) {
+  // Admin panel, Matrix media and sync, and APIs carry credentials and must never enter a shared cache.
+  if (requestUrl.pathname.startsWith('/admin') || requestUrl.pathname.startsWith('/api/') || requestUrl.pathname.startsWith('/_matrix/') || e.request.url.startsWith('ws')) {
     return;
   }
 
