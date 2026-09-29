@@ -922,6 +922,18 @@
           <div id="matrix-mutes-roster" style="min-height: 24px;"><span class="muted">No users currently muted.</span></div>
         </div>
 
+        <!-- Active User Bans (Easy Unban) -->
+        <div style="margin-top: 14px;" id="matrix-bans-container">
+          <h3 style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--t-fg2); margin-bottom: 8px;">Banned Users</h3>
+          <div id="matrix-bans-roster" style="min-height: 24px;"><span class="muted">No users currently banned.</span></div>
+        </div>
+
+        <!-- Per-Person Slowmodes -->
+        <div style="margin-top: 14px;" id="matrix-user-slowmodes-container">
+          <h3 style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--t-fg2); margin-bottom: 8px;">Per-Person Slowmodes</h3>
+          <div id="matrix-user-slowmodes-roster" style="min-height: 24px;"><span class="muted">No per-user slowmodes active.</span></div>
+        </div>
+
         <div style="margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;">
           <!-- User Role & Punishment Form -->
           <form onsubmit="submitMatrixUserAction(event)" style="display:flex; flex-direction:column; gap:8px; background:rgba(0,0,0,0.15); padding:12px; border-radius:8px; border:1px solid var(--t-bd);">
@@ -936,8 +948,14 @@
               <option value="mute_24h">Mute User (24 hours)</option>
               <option value="mute_forever">Mute User (Indefinite)</option>
               <option value="unmute">Unmute User</option>
+              <option value="slowmode_5s">Set User Slowmode (5 seconds)</option>
+              <option value="slowmode_10s">Set User Slowmode (10 seconds)</option>
+              <option value="slowmode_30s">Set User Slowmode (30 seconds)</option>
+              <option value="slowmode_60s">Set User Slowmode (1 minute)</option>
+              <option value="slowmode_off">Remove User Slowmode (Off)</option>
               <option value="kick">Kick User from General</option>
               <option value="ban">Ban User from General</option>
+              <option value="unban">Unban User</option>
             </select>
             <input id="matrix-action-reason" type="text" placeholder="Reason (optional)" maxlength="200" style="font-size:0.82rem;">
             <button type="submit" style="font-size:0.82rem; padding:8px;">Execute Action</button>
@@ -2436,7 +2454,38 @@
             }).join('');
           }
         }
-      } catch (e) {
+
+        // Banned users roster (easy unban)
+        const bansContainer = document.getElementById('matrix-bans-roster');
+        if (bansContainer) {
+          if (!data.bannedUsers || !data.bannedUsers.length) {
+            bansContainer.innerHTML = '<span class="muted">No users currently banned.</span>';
+          } else {
+            bansContainer.innerHTML = data.bannedUsers.map(b => {
+              const reasonStr = b.reason ? ` — "${esc(b.reason)}"` : '';
+              const byStr = b.bannedBy ? ` (by ${esc(b.bannedBy)})` : '';
+              return `<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 10px; background:rgba(255,255,255,0.03); border:1px solid var(--t-bd); border-radius:6px; margin-bottom:6px; flex-wrap:wrap; gap:6px;">` +
+                `<div><b>${esc(b.userId)}</b> <span class="pill danger" style="margin-left:6px; font-size:0.75rem;">Banned</span>${reasonStr}${byStr}</div>` +
+                `<div><button type="button" class="mini ok" onclick="matrixUnbanUser('${esc(b.userId)}')">Unban</button></div>` +
+                `</div>`;
+            }).join('');
+          }
+        }
+
+        // Per-user slowmodes roster
+        const userSlowContainer = document.getElementById('matrix-user-slowmodes-roster');
+        if (userSlowContainer) {
+          if (!data.userSlowmodes || !data.userSlowmodes.length) {
+            userSlowContainer.innerHTML = '<span class="muted">No per-user slowmodes active.</span>';
+          } else {
+            userSlowContainer.innerHTML = data.userSlowmodes.map(u => {
+              return `<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 10px; background:rgba(255,255,255,0.03); border:1px solid var(--t-bd); border-radius:6px; margin-bottom:6px; flex-wrap:wrap; gap:6px;">` +
+                `<div><b>${esc(u.userId)}</b> <span class="pill warn" style="margin-left:6px; font-size:0.75rem;">${u.slowmodeSeconds}s Slowmode</span></div>` +
+                `<div><button type="button" class="mini" onclick="matrixSetUserSlowmode('${esc(u.userId)}', 0)">Remove (Off)</button></div>` +
+                `</div>`;
+            }).join('');
+          }
+        }
         container.innerHTML = '<span class="muted">Error loading Matrix staff: ' + esc(e.message) + '</span>';
       }
     }
@@ -2574,6 +2623,15 @@
           await matrixBanUser(userId, reason, true);
           statusEl.textContent = `User ${userId} was banned`;
           statusEl.className = 'form-status ok';
+        } else if (action === 'unban') {
+          await matrixUnbanUser(userId, true);
+          statusEl.textContent = `User ${userId} was unbanned`;
+          statusEl.className = 'form-status ok';
+        } else if (action.startsWith('slowmode_')) {
+          const sec = action === 'slowmode_off' ? 0 : parseInt(action.replace('slowmode_', '').replace('s', ''), 10);
+          await matrixSetUserSlowmode(userId, sec);
+          statusEl.textContent = sec > 0 ? `User ${userId} slowmode set to ${sec}s` : `User ${userId} slowmode removed`;
+          statusEl.className = 'form-status ok';
         }
         userIdInput.value = '';
         reasonInput.value = '';
@@ -2649,6 +2707,32 @@
       loadMatrixModeration();
     }
 
+    async function matrixUnbanUser(userId, skipConfirm = false) {
+      if (!skipConfirm && !confirm(`Unban ${userId} from Matrix chat?`)) return;
+      const res = await fetch('/api/matrix/moderation/unban', {
+        method: 'POST',
+        credentials: 'include',
+        headers: getAdminHeaders({ 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' }),
+        body: JSON.stringify({ userId })
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed to unban user');
+      if (!skipConfirm) alert(`User ${userId} was unbanned.`);
+      loadMatrixModeration();
+    }
+
+    async function matrixSetUserSlowmode(userId, seconds) {
+      const res = await fetch('/api/matrix/moderation/user-slowmode', {
+        method: 'POST',
+        credentials: 'include',
+        headers: getAdminHeaders({ 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' }),
+        body: JSON.stringify({ userId, seconds: Number(seconds) })
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed to set user slowmode');
+      loadMatrixModeration();
+    }
+
     async function matrixRedact(roomId, eventId, reason, skipConfirm = false) {
       if (!skipConfirm && !confirm(`Redact/delete event ${eventId}?`)) return;
       const res = await fetch('/api/matrix/moderation/redact', {
@@ -2676,6 +2760,9 @@
       '/api/admin/broadcast',
       '/api/matrix/moderation/kick',
       '/api/matrix/moderation/ban',
+      '/api/matrix/moderation/unban',
+      '/api/matrix/moderation/slowmode',
+      '/api/matrix/moderation/user-slowmode',
       '/api/matrix/moderation/redact'
     ]);
 

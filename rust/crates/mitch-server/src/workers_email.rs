@@ -99,10 +99,82 @@ fn load_email_log(state: &AppState) -> Value {
 }
 
 fn save_email_log(state: &AppState, log: &Value) {
-    state.store.write_document(&email_log_path(state), log).ok();
+    let p = email_log_path(state);
+    let _ = state.store.write_document(&p, log);
+    let _ = std::fs::write(&p, mitch_lib::data::js_stringify_pretty(log));
 }
 
-/// Loads the set of unsubscribed email addresses from both the data store and disk.
+/// Helper to check if a user's stored userdata preferences indicate they unsubscribed.
+pub(crate) fn check_userdata_unsubscribed(ud: &Value) -> bool {
+    if !ud.is_object() {
+        return false;
+    }
+    // Check top-level boolean preferences
+    if ud.get("newsletter") == Some(&json!(false))
+        || ud.get("puzzle") == Some(&json!(false))
+        || ud.get("dailyPuzzle") == Some(&json!(false))
+        || ud.get("chessPuzzle") == Some(&json!(false))
+        || ud.get("unsubscribed") == Some(&json!(true))
+    {
+        return true;
+    }
+    // Check _snapshot._prefPrivacy and _prefPrivacy
+    let pref_raw = ud
+        .get("_snapshot")
+        .and_then(|s| s.get("_prefPrivacy"))
+        .or_else(|| ud.get("_prefPrivacy"));
+    if let Some(val) = pref_raw {
+        let pref_obj: Option<Value> = match val {
+            Value::String(s) => serde_json::from_str(s).ok(),
+            Value::Object(_) => Some(val.clone()),
+            _ => None,
+        };
+        if let Some(p) = pref_obj {
+            if p.get("newsletter") == Some(&json!(false))
+                || p.get("puzzle") == Some(&json!(false))
+                || p.get("dailyPuzzle") == Some(&json!(false))
+                || p.get("chessPuzzle") == Some(&json!(false))
+                || p.get("unsubscribed") == Some(&json!(true))
+            {
+                return true;
+            }
+        }
+    }
+    // Check preferences object
+    if let Some(p) = ud.get("preferences").and_then(|p| p.as_object()) {
+        if p.get("newsletter") == Some(&json!(false))
+            || p.get("puzzle") == Some(&json!(false))
+            || p.get("dailyPuzzle") == Some(&json!(false))
+            || p.get("chessPuzzle") == Some(&json!(false))
+            || p.get("unsubscribed") == Some(&json!(true))
+        {
+            return true;
+        }
+    }
+    // Check _prefNotification / notification preferences
+    let notif_raw = ud
+        .get("_snapshot")
+        .and_then(|s| s.get("_prefNotification"))
+        .or_else(|| ud.get("_prefNotification"));
+    if let Some(val) = notif_raw {
+        let notif_obj: Option<Value> = match val {
+            Value::String(s) => serde_json::from_str(s).ok(),
+            Value::Object(_) => Some(val.clone()),
+            _ => None,
+        };
+        if let Some(n) = notif_obj {
+            if n.get("newsletter") == Some(&json!(false))
+                || n.get("puzzle") == Some(&json!(false))
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Loads the set of unsubscribed email addresses from both the data store, disk,
+/// and pending unsubscribe requests.
 /// Contains both raw lowercased addresses and normalized forms so that
 /// variants (e.g. dotted vs non-dotted or domain aliases) match properly.
 pub(crate) fn newsletter_unsub_set(state: &AppState) -> HashSet<String> {
@@ -122,19 +194,71 @@ pub(crate) fn newsletter_unsub_set(state: &AppState) -> HashSet<String> {
                     }
                 }
             }
+        } else if let Some(obj) = val.as_object() {
+            for (k, v) in obj {
+                if k == "emails" || k == "unsub" || k == "list" {
+                    if let Some(arr) = v.as_array() {
+                        for item in arr {
+                            if let Some(s) = item.as_str() {
+                                let low = s.to_lowercase().trim().to_string();
+                                if !low.is_empty() {
+                                    set.insert(low.clone());
+                                    let norm = mitch_lib::auth::normalize_email(&low);
+                                    if !norm.is_empty() {
+                                        set.insert(norm);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else if k.contains('@') {
+                    let low = k.to_lowercase().trim().to_string();
+                    set.insert(low.clone());
+                    let norm = mitch_lib::auth::normalize_email(&low);
+                    if !norm.is_empty() {
+                        set.insert(norm);
+                    }
+                }
+            }
         }
     };
 
-    // 1. Read from store (database / disk fallback)
-    let doc = state
-        .store
-        .read_document(&state.data_dir().join("newsletter_unsub.json"), json!([]));
-    add_from_val(doc);
-
-    // 2. Also read directly from disk in case disk has changes not yet in DB
-    if let Ok(raw) = std::fs::read_to_string(state.data_dir().join("newsletter_unsub.json")) {
+    // 1. Read newsletter_unsub.json from store and disk (data_dir and base_dir/data)
+    let p1 = state.data_dir().join("newsletter_unsub.json");
+    let doc1 = state.store.read_document(&p1, json!([]));
+    add_from_val(doc1);
+    if let Ok(raw) = std::fs::read_to_string(&p1) {
         if let Ok(val) = serde_json::from_str::<Value>(&raw) {
             add_from_val(val);
+        }
+    }
+
+    let p2 = state.cfg.base_dir.join("data/newsletter_unsub.json");
+    if p2 != p1 {
+        let doc2 = state.store.read_document(&p2, json!([]));
+        add_from_val(doc2);
+        if let Ok(raw) = std::fs::read_to_string(&p2) {
+            if let Ok(val) = serde_json::from_str::<Value>(&raw) {
+                add_from_val(val);
+            }
+        }
+    }
+
+    // 2. Read unsub_requests.json (pending / submitted unsub requests)
+    let reqs_file = state.data_dir().join("unsub_requests.json");
+    let reqs = state.store.read_document(&reqs_file, json!([]));
+    if let Some(arr) = reqs.as_array() {
+        for item in arr {
+            if let Some(em) = item.get("email").and_then(|v| v.as_str()) {
+                let low = em.to_lowercase().trim().to_string();
+                if !low.is_empty() {
+                    set.insert(low.clone());
+                    let norm = mitch_lib::auth::normalize_email(&low);
+                    if !norm.is_empty() {
+                        set.insert(norm);
+                    }
+                }
+            }
         }
     }
 
@@ -142,7 +266,7 @@ pub(crate) fn newsletter_unsub_set(state: &AppState) -> HashSet<String> {
 }
 
 /// Checks whether an email address (or its delivery / canonical counterpart)
-/// is in the unsubscribed set.
+/// is in the unsubscribed set or has opt-out preferences configured in userdata.
 pub(crate) fn is_unsubscribed(state: &AppState, unsub_set: &HashSet<String>, email: &str) -> bool {
     let low = email.to_lowercase().trim().to_string();
     if low.is_empty() {
@@ -166,6 +290,19 @@ pub(crate) fn is_unsubscribed(state: &AppState, unsub_set: &HashSet<String>, ema
             return true;
         }
     }
+
+    // Check userdata preferences for opt-outs
+    let ud = userdata_for_email(state, &low);
+    if check_userdata_unsubscribed(&ud) {
+        return true;
+    }
+    if !target.is_empty() && target != low {
+        let ud_target = userdata_for_email(state, &target);
+        if check_userdata_unsubscribed(&ud_target) {
+            return true;
+        }
+    }
+
     false
 }
 
@@ -188,7 +325,17 @@ fn enrolled_users(state: &AppState) -> Vec<String> {
                 .to_lowercase()
                 .trim()
                 .to_string();
-            if email.is_empty() || seen.contains(&email) || is_unsubscribed(state, &unsub, &email) {
+            if email.is_empty()
+                || seen.contains(&email)
+                || is_unsubscribed(state, &unsub, &email)
+                || data.get("unsubscribed") == Some(&json!(true))
+                || data.get("unsub") == Some(&json!(true))
+                || data.get("newsletter") == Some(&json!(false))
+            {
+                continue;
+            }
+            let target_email = canonical_email(state, &email);
+            if !target_email.is_empty() && is_unsubscribed(state, &unsub, &target_email) {
                 continue;
             }
             if !truthy_of(data.get("claimed_domains")) && !truthy_of(data.get("used")) {
@@ -917,6 +1064,9 @@ fn dm_digest_impl(state: &Arc<AppState>) -> Result<(), String> {
         }
     }
 
+    let unsub = newsletter_unsub_set(state);
+    let day_key = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
     for (recip, (senders, latest_ts)) in unread {
         // `(recip in e2eUsers) && (e2eUsers[recip].last_seen > offlineCutoff)`.
         let online = state
@@ -931,7 +1081,34 @@ fn dm_digest_impl(state: &Arc<AppState>) -> Result<(), String> {
         if !crate::routes::dm::notif_allowed(state, &recip, "digest") {
             continue;
         }
+        let target_email = canonical_email(state, &recip);
+        if is_unsubscribed(state, &unsub, &recip) || (!target_email.is_empty() && is_unsubscribed(state, &unsub, &target_email)) {
+            continue;
+        }
+
         let ulog = log_entry(&log, &recip);
+        let ulog_target = log_entry(&log, &target_email);
+
+        // Limit DM digest to 1 maximum per person per day
+        let last_dm_sent = ulog
+            .get("dm_digest_sent_at")
+            .or_else(|| ulog_target.get("dm_digest_sent_at"))
+            .and_then(jsval::number);
+        if let Some(sent_at) = last_dm_sent {
+            if (now_ms as f64) - sent_at < 86_400_000.0 {
+                continue;
+            }
+        }
+        let last_dm_day = ulog
+            .get("dm_digest_day")
+            .or_else(|| ulog_target.get("dm_digest_day"))
+            .and_then(|v| v.as_str());
+        if let Some(day) = last_dm_day {
+            if day == day_key {
+                continue;
+            }
+        }
+
         // `if (ulog.dm_digest_ts && latestTs <= ulog.dm_digest_ts) continue;`
         if truthy_of(ulog.get("dm_digest_ts")) {
             let prev = ulog.get("dm_digest_ts").and_then(jsval::number);
@@ -942,7 +1119,6 @@ fn dm_digest_impl(state: &Arc<AppState>) -> Result<(), String> {
             }
         }
         let total = senders.values().sum::<f64>();
-        let target_email = canonical_email(state, &recip);
         // Sender display names — profiles.json is hoisted out of the JS
         // per-sender loadJson (nothing mutates it mid-run).
         let profiles = state
@@ -980,6 +1156,32 @@ fn dm_digest_impl(state: &Arc<AppState>) -> Result<(), String> {
             "dm_digest_ts",
             jsval::num_value(latest_ts),
         );
+        set_log_field(
+            &mut log,
+            &recip,
+            "dm_digest_sent_at",
+            jsval::num_value(now_ms as f64),
+        );
+        set_log_field(
+            &mut log,
+            &recip,
+            "dm_digest_day",
+            json!(day_key),
+        );
+        if &target_email != &recip {
+            set_log_field(
+                &mut log,
+                &target_email,
+                "dm_digest_sent_at",
+                jsval::num_value(now_ms as f64),
+            );
+            set_log_field(
+                &mut log,
+                &target_email,
+                "dm_digest_day",
+                json!(day_key),
+            );
+        }
         changed = true;
         tracing::info!(
             "[dm-digest] {} msgs from {} senders → {target_email}",
@@ -993,6 +1195,9 @@ fn dm_digest_impl(state: &Arc<AppState>) -> Result<(), String> {
         &state.data_dir().join("matrix_notifications.json"),
         json!({}),
     );
+    let matrix_sent_file = state.data_dir().join("matrix_email_sent.json");
+    let matrix_sent_doc = state.store.read_document(&matrix_sent_file, json!({}));
+
     if let Some(map) = matrix.as_object() {
         for (recip, notifs) in map {
             let Some(list) = notifs.as_array() else {
@@ -1035,14 +1240,41 @@ fn dm_digest_impl(state: &Arc<AppState>) -> Result<(), String> {
                 continue;
             }
 
+            if is_unsubscribed(state, &unsub, recip)
+                || is_unsubscribed(state, &unsub, &target_email)
+            {
+                continue;
+            }
+
+            let norm_recip = mitch_lib::auth::normalize_email(recip);
+            let norm_target = mitch_lib::auth::normalize_email(&target_email);
+
+            // 1. Check matrix_email_sent.json (strict 24-hour interval)
+            if let Some(mobj) = matrix_sent_doc.as_object() {
+                let sent_at = mobj
+                    .get(recip)
+                    .or_else(|| mobj.get(&target_email))
+                    .or_else(|| if !norm_recip.is_empty() { mobj.get(&norm_recip) } else { None })
+                    .or_else(|| if !norm_target.is_empty() { mobj.get(&norm_target) } else { None })
+                    .and_then(jsval::number);
+                if let Some(st) = sent_at {
+                    if (now_ms as f64) - st < 86_400_000.0 {
+                        continue;
+                    }
+                }
+            }
+
+            // 2. Check email_log.json across all key variants
             let ulog = log_entry(&log, recip);
             let ulog_target = log_entry(&log, &target_email);
+            let ulog_norm_r = if !norm_recip.is_empty() { log_entry(&log, &norm_recip) } else { json!({}) };
+            let ulog_norm_t = if !norm_target.is_empty() { log_entry(&log, &norm_target) } else { json!({}) };
 
-            // Limit unread messages email digest for matrix per day to 1 maximum per person.
-            let day_key = chrono::Utc::now().format("%Y-%m-%d").to_string();
             let last_sent = ulog
                 .get("matrix_digest_sent_at")
                 .or_else(|| ulog_target.get("matrix_digest_sent_at"))
+                .or_else(|| ulog_norm_r.get("matrix_digest_sent_at"))
+                .or_else(|| ulog_norm_t.get("matrix_digest_sent_at"))
                 .and_then(jsval::number);
             if let Some(sent_at) = last_sent {
                 if (now_ms as f64) - sent_at < 86_400_000.0 {
@@ -1052,6 +1284,8 @@ fn dm_digest_impl(state: &Arc<AppState>) -> Result<(), String> {
             let last_day = ulog
                 .get("matrix_digest_day")
                 .or_else(|| ulog_target.get("matrix_digest_day"))
+                .or_else(|| ulog_norm_r.get("matrix_digest_day"))
+                .or_else(|| ulog_norm_t.get("matrix_digest_day"))
                 .and_then(|v| v.as_str());
             if let Some(day) = last_day {
                 if day == day_key {
@@ -1121,38 +1355,47 @@ fn dm_digest_impl(state: &Arc<AppState>) -> Result<(), String> {
                 &format!("💬 {total_str} unread Matrix message{plural} on mitch.pro"),
                 &html,
             );
-            set_log_field(
-                &mut log,
-                recip,
-                "matrix_digest_ts",
-                jsval::num_value(latest),
-            );
-            set_log_field(
-                &mut log,
-                recip,
-                "matrix_digest_sent_at",
-                jsval::num_value(now_ms as f64),
-            );
-            set_log_field(
-                &mut log,
-                recip,
-                "matrix_digest_day",
-                json!(day_key),
-            );
-            if &target_email != recip {
+
+            // Record sent stamp across all persistent layers and key aliases
+            crate::routes::matrix::record_matrix_email_sent(state, recip);
+            crate::routes::matrix::record_matrix_email_sent(state, &target_email);
+            if !norm_recip.is_empty() {
+                crate::routes::matrix::record_matrix_email_sent(state, &norm_recip);
+            }
+            if !norm_target.is_empty() {
+                crate::routes::matrix::record_matrix_email_sent(state, &norm_target);
+            }
+
+            let keys_to_stamp = vec![
+                recip.to_string(),
+                target_email.clone(),
+                norm_recip.clone(),
+                norm_target.clone(),
+            ];
+            for k in keys_to_stamp {
+                if k.is_empty() {
+                    continue;
+                }
                 set_log_field(
                     &mut log,
-                    &target_email,
+                    &k,
+                    "matrix_digest_ts",
+                    jsval::num_value(latest),
+                );
+                set_log_field(
+                    &mut log,
+                    &k,
                     "matrix_digest_sent_at",
                     jsval::num_value(now_ms as f64),
                 );
                 set_log_field(
                     &mut log,
-                    &target_email,
+                    &k,
                     "matrix_digest_day",
                     json!(day_key),
                 );
             }
+
             changed = true;
             tracing::info!("[matrix-digest] {} msgs → {target_email}", total_str);
         }

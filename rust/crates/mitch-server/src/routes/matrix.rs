@@ -1561,10 +1561,15 @@ pub async fn handle_api(
     if path == "/api/matrix/moderation/ban" && method == Method::POST {
         return Some(mod_ban(state, headers, body_bytes).await);
     }
+    if path == "/api/matrix/moderation/unban" && method == Method::POST {
+        return Some(mod_unban(state, headers, body_bytes).await);
+    }
     if path == "/api/matrix/moderation/redact" && method == Method::POST {
         return Some(mod_redact(state, headers, body_bytes).await);
     }
-    if path == "/api/matrix/moderation/slowmode" && method == Method::POST {
+    if (path == "/api/matrix/moderation/slowmode" || path == "/api/matrix/moderation/user-slowmode")
+        && method == Method::POST
+    {
         return Some(mod_slowmode(state, headers, body_bytes).await);
     }
     if path == "/api/matrix/moderation/mute-user" && method == Method::POST {
@@ -2469,7 +2474,7 @@ async fn mod_overview(state: &AppState, headers: &HeaderMap) -> Response {
             url::form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>()
         ),
         Method::GET,
-        Some(req_headers),
+        Some(req_headers.clone()),
         None,
     )
     .await;
@@ -2546,6 +2551,81 @@ async fn mod_overview(state: &AppState, headers: &HeaderMap) -> Response {
         }
     }
 
+    let mut banned_users = Vec::new();
+    let mut seen_banned = std::collections::HashSet::new();
+
+    if let Some(obj) = room_settings.get("bannedUsers").and_then(|v| v.as_object()) {
+        for (m_id, entry) in obj.iter() {
+            let uid = entry.get("userId").and_then(|v| v.as_str()).unwrap_or(m_id);
+            if !uid.is_empty() && seen_banned.insert(uid.to_string()) {
+                banned_users.push(json!({
+                    "userId": uid,
+                    "reason": entry.get("reason").and_then(|v| v.as_str()).unwrap_or(""),
+                    "bannedBy": entry.get("bannedBy").and_then(|v| v.as_str()).unwrap_or(""),
+                    "bannedAt": entry.get("bannedAt").and_then(|v| v.as_i64()).unwrap_or(0),
+                }));
+            }
+        }
+    }
+
+    if let Ok((status, _, bytes)) = call_conduit(
+        &format!(
+            "/_matrix/client/v3/rooms/{}/members?membership=ban",
+            url::form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>()
+        ),
+        Method::GET,
+        Some(req_headers.clone()),
+        None,
+    )
+    .await
+    {
+        if status.is_success() {
+            if let Ok(members_data) = serde_json::from_slice::<Value>(&bytes) {
+                if let Some(chunk) = members_data.get("chunk").and_then(|v| v.as_array()) {
+                    for ev in chunk {
+                        let uid = ev.get("state_key").and_then(|v| v.as_str()).unwrap_or("");
+                        let membership = ev
+                            .get("content")
+                            .and_then(|c| c.get("membership"))
+                            .and_then(|m| m.as_str())
+                            .unwrap_or("");
+                        if membership == "ban"
+                            && !uid.is_empty()
+                            && seen_banned.insert(uid.to_string())
+                        {
+                            let reason = ev
+                                .get("content")
+                                .and_then(|c| c.get("reason"))
+                                .and_then(|r| r.as_str())
+                                .unwrap_or("");
+                            let sender = ev.get("sender").and_then(|s| s.as_str()).unwrap_or("");
+                            let ts = ev.get("origin_server_ts").and_then(|t| t.as_i64()).unwrap_or(0);
+                            banned_users.push(json!({
+                                "userId": uid,
+                                "reason": reason,
+                                "bannedBy": sender,
+                                "bannedAt": ts,
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut user_slowmodes = Vec::new();
+    if let Some(obj) = room_settings.get("userSlowmode").and_then(|v| v.as_object()) {
+        for (u_id, sec_val) in obj.iter() {
+            let sec = sec_val.as_i64().unwrap_or(0);
+            if sec > 0 {
+                user_slowmodes.push(json!({
+                    "userId": u_id,
+                    "slowmodeSeconds": sec
+                }));
+            }
+        }
+    }
+
     cors_json_response(
         200,
         json!({
@@ -2556,6 +2636,8 @@ async fn mod_overview(state: &AppState, headers: &HeaderMap) -> Response {
             "slowmodeSeconds": slowmode_seconds,
             "roomMuted": room_muted,
             "mutedUsers": active_muted_users,
+            "bannedUsers": banned_users,
+            "userSlowmodes": user_slowmodes,
             "recentReports": matrix_reports
         }),
     )
@@ -2838,6 +2920,35 @@ async fn mod_ban(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> Re
         Ok((status, _, _)) if status.is_success() => {
             let admin_actor = mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, sid)
                 .unwrap_or_else(|| "admin".to_string());
+            let settings_file = state.data_dir().join("matrix_room_settings.json");
+            let mut all = state.store.read_document(&settings_file, json!({}));
+            if let Some(map) = all.as_object_mut() {
+                let room = map.entry(room_id.clone()).or_insert_with(|| {
+                    json!({
+                        "slowmodeSeconds": 0,
+                        "roomMuted": false,
+                        "mutedUsers": {},
+                        "bannedUsers": {},
+                        "userSlowmode": {}
+                    })
+                });
+                if room.get("bannedUsers").is_none() {
+                    room["bannedUsers"] = json!({});
+                }
+                if let Some(b_map) = room.get_mut("bannedUsers").and_then(|v| v.as_object_mut()) {
+                    b_map.insert(
+                        target_user_id.clone(),
+                        json!({
+                            "userId": target_user_id,
+                            "reason": reason,
+                            "bannedBy": admin_actor,
+                            "bannedAt": now_millis()
+                        }),
+                    );
+                }
+                let _ = state.store.write_document(&settings_file, &all);
+            }
+
             mitch_lib::admin::log_admin_action(
                 &state.store,
                 &state.cfg.data_dir,
@@ -2855,6 +2966,145 @@ async fn mod_ban(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> Re
             )
         }
         _ => cors_json_response(500, json!({ "ok": false, "error": "Failed to ban user" })),
+    }
+}
+
+async fn mod_unban(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> Response {
+    let cookies = crate::routes::me::cookies_of(state, headers);
+    let sid = cookies
+        .get("studentId")
+        .filter(|s| !s.is_empty())
+        .or_else(|| cookies.get("id"))
+        .unwrap_or("");
+    if !mitch_lib::auth::is_any_admin_id(&state.store, &state.id_secret, sid, false) {
+        return cors_json_response(403, json!({ "error": "Staff access required" }));
+    }
+
+    let body_json: Value = serde_json::from_slice(body_bytes).unwrap_or(json!({}));
+    let mut target_user_id = body_json
+        .get("userId")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if target_user_id.is_empty() {
+        return cors_json_response(400, json!({ "error": "userId is required" }));
+    }
+    if !target_user_id.starts_with('@') {
+        target_user_id = format!("@{target_user_id}:mitch.pro");
+    }
+
+    let room_id = match body_json.get("roomId").and_then(|v| v.as_str()) {
+        Some(r) if !r.is_empty() => r.to_string(),
+        _ => match ensure_official_general_room(&state.id_secret).await {
+            Ok(id) => id,
+            Err(e) => return cors_json_response(500, json!({ "ok": false, "error": e })),
+        },
+    };
+
+    let admin_tok = match get_system_admin_matrix_token(&state.id_secret).await {
+        Ok(t) => t,
+        Err(e) => return cors_json_response(500, json!({ "ok": false, "error": e })),
+    };
+
+    let mut req_headers = HeaderMap::new();
+    req_headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+    if let Ok(hv) = HeaderValue::from_str(&format!("Bearer {admin_tok}")) {
+        req_headers.insert("Authorization", hv);
+    }
+
+    let unban_payload = json!({ "user_id": target_user_id });
+    let res = call_conduit(
+        &format!(
+            "/_matrix/client/v3/rooms/{}/unban",
+            url::form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>()
+        ),
+        Method::POST,
+        Some(req_headers.clone()),
+        Some(Bytes::from(
+            serde_json::to_vec(&unban_payload).unwrap_or_default(),
+        )),
+    )
+    .await;
+
+    // Clean up bannedUsers and mutedUsers in room settings
+    let settings_file = state.data_dir().join("matrix_room_settings.json");
+    let mut all = state.store.read_document(&settings_file, json!({}));
+    if let Some(room) = all.get_mut(&room_id) {
+        let uname = target_user_id
+            .trim_start_matches('@')
+            .split(':')
+            .next()
+            .unwrap_or("");
+        if let Some(b_map) = room.get_mut("bannedUsers").and_then(|v| v.as_object_mut()) {
+            b_map.remove(&target_user_id);
+            b_map.remove(uname);
+        }
+        if let Some(m_map) = room.get_mut("mutedUsers").and_then(|v| v.as_object_mut()) {
+            m_map.remove(&target_user_id);
+            m_map.remove(uname);
+        }
+        let _ = state.store.write_document(&settings_file, &all);
+    }
+
+    // Reset PL -1 in Conduit if power levels had them muted/banned
+    if let Ok((status, _, bytes)) = call_conduit(
+        &format!(
+            "/_matrix/client/v3/rooms/{}/state/m.room.power_levels",
+            url::form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>()
+        ),
+        Method::GET,
+        Some(req_headers.clone()),
+        None,
+    )
+    .await
+    {
+        if status.is_success() {
+            if let Ok(mut pl_data) = serde_json::from_slice::<Value>(&bytes) {
+                if let Some(users) = pl_data.get_mut("users").and_then(|v| v.as_object_mut()) {
+                    if users.get(&target_user_id).and_then(|v| v.as_i64()).map(|pl| pl < 0).unwrap_or(false) {
+                        users.remove(&target_user_id);
+                        let _ = call_conduit(
+                            &format!(
+                                "/_matrix/client/v3/rooms/{}/state/m.room.power_levels",
+                                url::form_urlencoded::byte_serialize(room_id.as_bytes())
+                                    .collect::<String>()
+                            ),
+                            Method::PUT,
+                            Some(req_headers),
+                            Some(Bytes::from(
+                                serde_json::to_vec(&pl_data).unwrap_or_default(),
+                            )),
+                        )
+                        .await;
+                    }
+                }
+            }
+        }
+    }
+
+    let admin_actor = mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, sid)
+        .unwrap_or_else(|| "admin".to_string());
+    mitch_lib::admin::log_admin_action(
+        &state.store,
+        &state.cfg.data_dir,
+        &admin_actor,
+        "matrix_unban_user",
+        json!({
+            "userId": target_user_id,
+            "roomId": room_id
+        }),
+    );
+
+    match res {
+        Ok((status, _, _)) if status.is_success() => cors_json_response(
+            200,
+            json!({ "ok": true, "userId": target_user_id, "unbanned": true }),
+        ),
+        _ => cors_json_response(
+            200,
+            json!({ "ok": true, "userId": target_user_id, "unbanned": true, "conduitStatus": "cleared" }),
+        ),
     }
 }
 
@@ -2953,8 +3203,8 @@ async fn mod_slowmode(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) 
         .filter(|s| !s.is_empty())
         .or_else(|| cookies.get("id"))
         .unwrap_or("");
-    if !mitch_lib::auth::is_admin_id(&state.store, &state.id_secret, sid, false) {
-        return cors_json_response(403, json!({ "error": "Admin access required" }));
+    if !mitch_lib::auth::is_any_admin_id(&state.store, &state.id_secret, sid, false) {
+        return cors_json_response(403, json!({ "error": "Staff access required" }));
     }
 
     let body_json: Value = serde_json::from_slice(body_bytes).unwrap_or(json!({}));
@@ -2965,6 +3215,11 @@ async fn mod_slowmode(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) 
             .and_then(|v| v.as_i64())
             .unwrap_or(0),
     );
+    let user_id_opt = body_json
+        .get("userId")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty());
 
     let room_id = match body_json.get("roomId").and_then(|v| v.as_str()) {
         Some(r) if !r.is_empty() => r.to_string(),
@@ -2974,22 +3229,81 @@ async fn mod_slowmode(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) 
         },
     };
 
+    let admin_actor = mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, sid)
+        .unwrap_or_else(|| "admin".to_string());
+
     let settings_file = state.data_dir().join("matrix_room_settings.json");
     let mut all = state.store.read_document(&settings_file, json!({}));
+
+    if let Some(target_uid_raw) = user_id_opt {
+        let target_user_id = if !target_uid_raw.starts_with('@') {
+            format!("@{target_uid_raw}:mitch.pro")
+        } else {
+            target_uid_raw.to_string()
+        };
+        let uname = target_user_id
+            .trim_start_matches('@')
+            .split(':')
+            .next()
+            .unwrap_or("")
+            .to_string();
+
+        if let Some(map) = all.as_object_mut() {
+            let room = map.entry(room_id.clone()).or_insert_with(|| {
+                json!({
+                    "slowmodeSeconds": 0,
+                    "roomMuted": false,
+                    "mutedUsers": {},
+                    "bannedUsers": {},
+                    "userSlowmode": {}
+                })
+            });
+            if room.get("userSlowmode").is_none() {
+                room["userSlowmode"] = json!({});
+            }
+            if let Some(us_map) = room.get_mut("userSlowmode").and_then(|v| v.as_object_mut()) {
+                if seconds > 0 {
+                    us_map.insert(target_user_id.clone(), json!(seconds));
+                } else {
+                    us_map.remove(&target_user_id);
+                    us_map.remove(&uname);
+                }
+            }
+            let _ = state.store.write_document(&settings_file, &all);
+        }
+
+        mitch_lib::admin::log_admin_action(
+            &state.store,
+            &state.cfg.data_dir,
+            &admin_actor,
+            "matrix_set_user_slowmode",
+            json!({
+                "roomId": room_id,
+                "userId": target_user_id,
+                "slowmodeSeconds": seconds
+            }),
+        );
+
+        return cors_json_response(
+            200,
+            json!({ "ok": true, "roomId": room_id, "userId": target_user_id, "slowmodeSeconds": seconds }),
+        );
+    }
+
     if let Some(map) = all.as_object_mut() {
         let room = map.entry(room_id.clone()).or_insert_with(|| {
             json!({
                 "slowmodeSeconds": 0,
                 "roomMuted": false,
-                "mutedUsers": {}
+                "mutedUsers": {},
+                "bannedUsers": {},
+                "userSlowmode": {}
             })
         });
         room["slowmodeSeconds"] = json!(seconds);
         let _ = state.store.write_document(&settings_file, &all);
     }
 
-    let admin_actor = mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, sid)
-        .unwrap_or_else(|| "admin".to_string());
     mitch_lib::admin::log_admin_action(
         &state.store,
         &state.cfg.data_dir,
@@ -4660,23 +4974,38 @@ pub async fn handle_matrix_gateway(
                         ));
                     }
 
-                    let slowmode_seconds = room_settings
+                    let mut effective_slowmode = room_settings
                         .get("slowmodeSeconds")
                         .and_then(|v| v.as_i64())
                         .unwrap_or(0);
-                    if slowmode_seconds > 0 {
+
+                    if let Some(user_slowmodes) =
+                        room_settings.get("userSlowmode").and_then(|v| v.as_object())
+                    {
+                        for sid in &sender_ids {
+                            if let Some(sec) = user_slowmodes.get(sid).and_then(|v| v.as_i64()) {
+                                effective_slowmode = std::cmp::max(effective_slowmode, sec);
+                            }
+                            let uname = sid.trim_start_matches('@').split(':').next().unwrap_or("");
+                            if let Some(sec) = user_slowmodes.get(uname).and_then(|v| v.as_i64()) {
+                                effective_slowmode = std::cmp::max(effective_slowmode, sec);
+                            }
+                        }
+                    }
+
+                    if effective_slowmode > 0 {
                         let s_key = sender_ids
                             .first()
                             .cloned()
                             .unwrap_or_else(|| "anonymous".to_string());
                         let wait_sec =
-                            check_matrix_slowmode(&target_room_id, &s_key, slowmode_seconds);
+                            check_matrix_slowmode(&target_room_id, &s_key, effective_slowmode);
                         if wait_sec > 0 {
                             let mut resp = cors_json_response(
                                 429,
                                 json!({
                                     "errcode": "M_LIMIT_EXCEEDED",
-                                    "error": format!("Slowmode is enabled ({slowmode_seconds}s). Please wait {wait_sec}s before sending another message."),
+                                    "error": format!("Slowmode is enabled ({effective_slowmode}s). Please wait {wait_sec}s before sending another message."),
                                     "retry_after_ms": wait_sec * 1000
                                 }),
                             );
@@ -5218,5 +5547,72 @@ mod tests {
         let packs = val.get("packs").unwrap().as_array().unwrap();
         assert!(!packs.is_empty());
         assert!(packs.iter().any(|p| p.get("id").unwrap() == "pepe"));
+    }
+
+    #[tokio::test]
+    async fn test_matrix_per_user_slowmode_and_unban() {
+        let (state, _dir) = test_state();
+
+        let settings_file = state.data_dir().join("matrix_room_settings.json");
+        let room_id = "!general:mitch.pro";
+
+        // 1. Set per-user slowmode
+        let initial_settings = json!({
+            room_id: {
+                "slowmodeSeconds": 0,
+                "roomMuted": false,
+                "mutedUsers": {},
+                "bannedUsers": {
+                    "@spammer:mitch.pro": {
+                        "userId": "@spammer:mitch.pro",
+                        "reason": "spam",
+                        "bannedBy": "admin@mitch.pro",
+                        "bannedAt": 123456
+                    }
+                },
+                "userSlowmode": {
+                    "@chatter:mitch.pro": 15
+                }
+            }
+        });
+        let _ = state.store.write_document(&settings_file, &initial_settings);
+
+        let loaded = load_matrix_room_settings(&state, room_id);
+        let user_slow = loaded.get("userSlowmode").and_then(|v| v.as_object()).unwrap();
+        assert_eq!(user_slow.get("@chatter:mitch.pro").and_then(|v| v.as_i64()), Some(15));
+
+        let banned = loaded.get("bannedUsers").and_then(|v| v.as_object()).unwrap();
+        assert!(banned.contains_key("@spammer:mitch.pro"));
+
+        // 2. Slowmode tracking respects individual sender
+        assert_eq!(check_matrix_slowmode(room_id, "@chatter:mitch.pro", 15), 0);
+        record_matrix_message_sent(room_id, "@chatter:mitch.pro");
+        let wait = check_matrix_slowmode(room_id, "@chatter:mitch.pro", 15);
+        assert!(wait > 0 && wait <= 15);
+
+        // Another user has 0 wait
+        assert_eq!(check_matrix_slowmode(room_id, "@innocent:mitch.pro", 15), 0);
+
+        // 3. Clear slowmode and unban
+        let mut all = state.store.read_document(&settings_file, json!({}));
+        if let Some(room) = all.get_mut(room_id) {
+            if let Some(us) = room.get_mut("userSlowmode").and_then(|v| v.as_object_mut()) {
+                us.remove("@chatter:mitch.pro");
+            }
+            if let Some(bu) = room.get_mut("bannedUsers").and_then(|v| v.as_object_mut()) {
+                bu.remove("@spammer:mitch.pro");
+            }
+            let _ = state.store.write_document(&settings_file, &all);
+        }
+
+        let updated = load_matrix_room_settings(&state, room_id);
+        assert_eq!(
+            updated.get("userSlowmode").and_then(|v| v.as_object()).unwrap().get("@chatter:mitch.pro"),
+            None
+        );
+        assert_eq!(
+            updated.get("bannedUsers").and_then(|v| v.as_object()).unwrap().get("@spammer:mitch.pro"),
+            None
+        );
     }
 }
