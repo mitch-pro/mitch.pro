@@ -69,5 +69,16 @@ pub fn spawn(state: std::sync::Arc<crate::state::AppState>) {
     // happy hour (server.js:4211-4218, 26783-26784, 26805-26807).
     crate::workers_site::spawn(state.clone());
     // Step 13 batch 4 — VM usage sampling, purge, prune, uptime enforcement, session cleanup.
-    crate::workers_vm::spawn(state);
+    crate::workers_vm::spawn(state.clone());
+
+    // Ensure all official Matrix rooms (general, tech, python-hate, rust, memory-safe, etc.) on startup.
+    {
+        let secret = state.id_secret.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            for (alias, name, topic) in crate::routes::matrix::OFFICIAL_ROOMS {
+                let _ = crate::routes::matrix::ensure_official_room(&secret, alias, name, topic).await;
+            }
+        });
+    }
 }

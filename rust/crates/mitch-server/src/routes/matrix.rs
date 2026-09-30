@@ -31,6 +31,21 @@ pub const OFFICIAL_ROOMS: &[(&str, &str, &str)] = &[
         "Technology, software development, coding, and projects",
     ),
     (
+        "python-hate",
+        "Python Hate",
+        "Discussions about Python limitations, quirks, and alternatives",
+    ),
+    (
+        "rust",
+        "Rust",
+        "Rust programming, systems programming, and performance",
+    ),
+    (
+        "memory-safe",
+        "Memory Safe",
+        "Memory safety, verified systems, and modern safe languages",
+    ),
+    (
         "biking",
         "Biking",
         "Cycling, bikes, trails, maintenance, and gear",
@@ -5402,6 +5417,15 @@ mod tests {
         let resp_opt = handle_well_known(&Method::OPTIONS, "/.well-known/matrix/client", &headers);
         assert!(resp_opt.is_some());
         assert_eq!(resp_opt.unwrap().status(), StatusCode::NO_CONTENT);
+    }
+
+    #[test]
+    fn test_official_rooms_include_default_channels() {
+        let aliases: Vec<&str> = OFFICIAL_ROOMS.iter().map(|(a, _, _)| *a).collect();
+        assert!(aliases.contains(&"general"));
+        assert!(aliases.contains(&"python-hate"));
+        assert!(aliases.contains(&"rust"));
+        assert!(aliases.contains(&"memory-safe"));
     }
 
     fn test_state() -> (Arc<AppState>, std::path::PathBuf) {

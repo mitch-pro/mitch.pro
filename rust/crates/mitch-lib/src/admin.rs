@@ -439,6 +439,7 @@ pub const MODERATOR_ACTION_LABELS: &[(&str, &str)] = &[
     ("content_featured", "Set featured game"),
     ("moderator_role", "Update moderator role"),
     ("moderator_panel", "Update moderator panel"),
+    ("admin_role", "Update administrator role"),
 ];
 
 pub fn moderator_action_label(action: &str) -> Option<&'static str> {
@@ -470,6 +471,7 @@ pub fn moderator_action_by_url(url: &str) -> &'static str {
         "/api/admin/content/featured" => "content_featured",
         "/api/admin/moderators" => "moderator_role",
         "/api/admin/moderator-panel" => "moderator_panel",
+        "/api/admin/admins" => "admin_role",
         _ => "",
     }
 }

@@ -60,6 +60,11 @@ impl AdminCtx {
     pub fn can_grant_premium(&self, state: &AppState) -> bool {
         mitch_lib::admin::can_grant_premium_id(&state.store, &state.id_secret, &self.sid)
     }
+
+    /// `isOwnerId(sid)`.
+    pub fn is_owner(&self, state: &AppState) -> bool {
+        mitch_lib::auth::is_owner_id(&state.store, &state.id_secret, &self.sid)
+    }
 }
 
 fn json_response(code: u16, obj: Value) -> Response {

@@ -90,6 +90,7 @@
     if (raw.startsWith('/img/gamems/')) return '/game-portal/icons/' + raw.slice('/img/gamems/'.length);
     if (raw.startsWith('/game-portal/icons/')) return raw;
     if (raw.startsWith('https://img.gamemonetize.com/')) return '/proxy/gm-icon/' + raw.slice('https://img.gamemonetize.com/'.length);
+    if (raw.startsWith('https://lumassets.pages.dev/')) return '/proxy/luma/' + raw.slice('https://lumassets.pages.dev/'.length);
     if (/^https:\/\//i.test(raw)) return raw;
     return '';
   }

@@ -66,13 +66,9 @@ pub fn handle(
     if let Some(resp) = mini::handle(state, method, path, headers, body, body_bytes) {
         return Some(resp);
     }
-    // NOTE: `GET /api/game-portal/status` (server.js:16319-16336) is DEAD
-    // CODE in bun-server: the handler sits inside the `if (method ===
-    // 'POST')` block spanning 13991-17779, so the GET-only endpoint can never
-    // match and every GET falls through to the static 404. Verified live on
-    // bun dev (404 HTML with a valid session). The port mirrors bun by NOT
-    // serving it. The portal frontend (webserver/game-portal/portal.js:326)
-    // still calls it and handles the 404 gracefully.
+    if path == "/api/game-portal/status" && *method == Method::GET {
+        return Some(game_portal_status(state, headers));
+    }
     None
 }
 
@@ -141,6 +137,43 @@ fn is_revoked_id(state: &AppState, sid: &str) -> bool {
         .read_document(&state.data_dir().join("revoked.json"), json!({}))
         .get(sid)
         .is_some()
+}
+
+/// `GET /api/game-portal/status` — returns authentication status, current coins,
+/// daily earned amount, daily cap, and reward per minute.
+fn game_portal_status(state: &Arc<AppState>, headers: &HeaderMap) -> axum::response::Response {
+    let email = match portal_auth(state, headers) {
+        Ok(e) => e,
+        Err(resp) => return *resp,
+    };
+    let norm = mitch_lib::auth::normalize_email(&email);
+    let now = now_millis();
+    let today = game_portal_day_key(now);
+    let stats_file = state.data_dir().join("user_stats.json");
+    let stats = state.store.read_document(&stats_file, json!({}));
+    let user = stats.get(&norm);
+    let daily_earned = if user
+        .and_then(|u| u.get("game_portal_reward_day"))
+        .and_then(|v| v.as_str())
+        == Some(today.as_str())
+    {
+        jsval::number(user.and_then(|u| u.get("game_portal_reward_today")).unwrap_or(&json!(0)))
+            .map(|n| n.max(0.0))
+            .unwrap_or(0.0)
+    } else {
+        0.0
+    };
+    let coins = mitch_lib::coins::get_coins(&state.store, &state.cfg.data_dir, &email);
+    json_resp(
+        200,
+        json!({
+            "authenticated": true,
+            "coins": coins,
+            "dailyEarned": daily_earned,
+            "dailyCap": GAME_PORTAL_DAILY_CAP,
+            "rewardPerMinute": GAME_PORTAL_REWARD_PER_MINUTE,
+        }),
+    )
 }
 
 /// Which stage of the inline `studentId || id` ladder failed. The idle/mini
@@ -542,5 +575,21 @@ mod tests {
             normalize_game_portal_title(&json!("😀".repeat(31))),
             "😀".repeat(30)
         );
+    }
+
+    #[test]
+    fn game_portal_status_unauthorized_without_cookie() {
+        let dir = std::env::temp_dir().join(format!("mitch-test-portal-status-{}", now_millis()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Arc::new(mitch_lib::data::DataStore::open(&dir, &dir).unwrap());
+        let mut cfg = crate::hosts::SiteConfig::load();
+        cfg.base_dir = dir.clone();
+        cfg.data_dir = dir.clone();
+        let state = Arc::new(AppState::new(cfg, store));
+        let headers = HeaderMap::new();
+        let resp = handle(&state, &Method::GET, "/api/game-portal/status", &headers, &json!({}), &[]);
+        assert!(resp.is_some());
+        let resp = resp.unwrap();
+        assert_eq!(resp.status(), axum::http::StatusCode::UNAUTHORIZED);
     }
 }

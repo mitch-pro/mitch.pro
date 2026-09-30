@@ -40,6 +40,25 @@ pub fn handle(
         ));
     }
 
+    // POST /api/admin/admins (owners only).
+    if path == "/api/admin/admins" && *method == Method::POST {
+        if !ctx.is_owner(state) {
+            return Some(forbidden());
+        }
+        return Some(set_admin(state, body, ctx));
+    }
+
+    // GET /api/admin/admins (owners only).
+    if path == "/api/admin/admins" && *method == Method::GET {
+        if !ctx.is_owner(state) {
+            return Some(forbidden());
+        }
+        return Some(json_response(
+            200,
+            json!({ "admins": mitch_lib::auth::admin_member_emails(&state.store) }),
+        ));
+    }
+
     // GET /api/admin/moderator-panel.
     if path == "/api/admin/moderator-panel" && *method == Method::GET {
         if !ctx.is_any_admin(state) {
@@ -435,6 +454,64 @@ fn set_moderator(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Respons
         json!({ "target": target_raw }),
     );
     json_response(200, json!({ "ok": true }))
+}
+
+/// `POST /api/admin/admins` (owners only). Updates `data/admins.json["admins"]`.
+fn set_admin(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response {
+    let admin_email = ctx.email(state);
+    let target_raw = body
+        .get("email")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if target_raw.is_empty() {
+        return json_response(400, json!({ "error": "email required" }));
+    }
+    let target = mitch_lib::auth::normalize_email(&target_raw);
+    let active = body.get("active").and_then(|v| v.as_bool()) == Some(true);
+    let admins_file = state.cfg.base_dir.join("data/admins.json");
+    let mut doc = state.store.read_document(&admins_file, json!({}));
+    let mut admins: Vec<String> = doc
+        .get("admins")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if active {
+        if !admins
+            .iter()
+            .any(|m| mitch_lib::auth::normalize_email(m) == target)
+        {
+            admins.push(target_raw.clone());
+        }
+    } else {
+        admins.retain(|m| mitch_lib::auth::normalize_email(m) != target);
+    }
+
+    if let Some(obj) = doc.as_object_mut() {
+        obj.insert("admins".to_string(), json!(admins));
+    } else {
+        doc = json!({ "admins": admins });
+    }
+
+    let _ = state.store.write_document(&admins_file, &doc);
+    mitch_lib::admin::log_admin_action(
+        &state.store,
+        &state.cfg.data_dir,
+        &admin_email,
+        if active {
+            "add_admin"
+        } else {
+            "remove_admin"
+        },
+        json!({ "target": target_raw }),
+    );
+    json_response(200, json!({ "ok": true, "admins": admins }))
 }
 
 /// `POST /api/admin/moderator-requests/resolve` — approve/reject a pending
@@ -1236,6 +1313,53 @@ pub fn execute_moderator_approved_action(
             );
             Ok(json!({ "ok": true, "moderators": mods }))
         }
+        "admin_role" => {
+            let target_raw = s("email").as_str().unwrap_or("").trim().to_string();
+            let target = mitch_lib::auth::normalize_email(&target_raw);
+            let active = s("active").as_bool() == Some(true);
+            let admins_file = state.cfg.base_dir.join("data/admins.json");
+            let mut doc = state.store.read_document(&admins_file, json!({}));
+            let mut admins: Vec<String> = doc
+                .get("admins")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(str::to_string))
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            if active {
+                if !admins
+                    .iter()
+                    .any(|m| mitch_lib::auth::normalize_email(m) == target)
+                {
+                    admins.push(target_raw.clone());
+                }
+            } else {
+                admins.retain(|m| mitch_lib::auth::normalize_email(m) != target);
+            }
+
+            if let Some(obj) = doc.as_object_mut() {
+                obj.insert("admins".to_string(), json!(admins));
+            } else {
+                doc = json!({ "admins": admins });
+            }
+
+            let _ = state.store.write_document(&admins_file, &doc);
+            mitch_lib::admin::log_admin_action(
+                &state.store,
+                &state.cfg.data_dir,
+                actor,
+                if active {
+                    "add_admin"
+                } else {
+                    "remove_admin"
+                },
+                json!({ "target": target_raw }).merge(requested_by()),
+            );
+            Ok(json!({ "ok": true, "admins": admins }))
+        }
         "moderator_panel" => {
             let links = mitch_lib::admin::sanitize_moderator_panel_links(&s("links"));
             let links_json = json!(links.clone());
@@ -1271,5 +1395,55 @@ impl MergeJson for Value {
             }
         }
         left
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_set_admin_add_and_remove() {
+        let dir = std::env::temp_dir().join(format!(
+            "mitch-test-admin-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("data")).unwrap();
+        let store = Arc::new(mitch_lib::data::DataStore::open(&dir, &dir.join("data")).unwrap());
+        let mut cfg = crate::hosts::SiteConfig::load();
+        cfg.base_dir = dir.clone();
+        cfg.data_dir = dir.join("data");
+        let state = Arc::new(AppState::new(cfg, store));
+
+        let ctx = AdminCtx {
+            cookies: mitch_lib::auth::Cookies::default(),
+            sid: "test-sid".to_string(),
+            ip: "127.0.0.1".to_string(),
+        };
+
+        // Add admin
+        let add_resp = set_admin(
+            &state,
+            &json!({ "email": "newadmin@example.com", "active": true }),
+            &ctx,
+        );
+        assert_eq!(add_resp.status(), axum::http::StatusCode::OK);
+
+        let admins = mitch_lib::auth::admin_member_emails(&state.store);
+        assert!(admins.contains(&"newadmin@example.com".to_string()));
+
+        // Remove admin
+        let remove_resp = set_admin(
+            &state,
+            &json!({ "email": "newadmin@example.com", "active": false }),
+            &ctx,
+        );
+        assert_eq!(remove_resp.status(), axum::http::StatusCode::OK);
+
+        let admins_after = mitch_lib::auth::admin_member_emails(&state.store);
+        assert!(!admins_after.contains(&"newadmin@example.com".to_string()));
     }
 }
