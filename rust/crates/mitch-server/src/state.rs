@@ -665,4 +665,5 @@ pub const CSRF_EXEMPT_PATHS: &[&str] = &[
     "/api/matrix/moderation/mute-room",
     "/api/matrix/devices/prune-stale",
     "/api/matrix/report-room",
+    "/api/matrix/gifs/send",
 ];

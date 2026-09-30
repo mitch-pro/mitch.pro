@@ -1889,6 +1889,9 @@ pub async fn handle_api(
     if path == "/api/matrix/gifs/proxy" && (method == Method::GET || method == Method::OPTIONS) {
         return Some(api_gifs_proxy(state, headers, search).await);
     }
+    if path == "/api/matrix/gifs/send" && method == Method::POST {
+        return Some(api_gifs_send(state, headers, body_bytes).await);
+    }
     if path == "/api/matrix/stickers/packs" && method == Method::GET {
         return Some(api_stickers_packs(state, headers).await);
     }
@@ -2489,6 +2492,149 @@ async fn api_gifs_proxy(_state: &AppState, _headers: &HeaderMap, search: &str) -
         builder = builder.header(hyper::header::CONTENT_TYPE, ct);
     }
     builder.body(axum::body::Body::from(bytes)).unwrap_or_else(|_| cors_json_response(500, json!({ "error": "response builder failed" })))
+}
+
+async fn api_gifs_send(_state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> Response {
+    let token = headers
+        .get("Authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .map(str::trim)
+        .unwrap_or("");
+    if token.is_empty() {
+        return cors_json_response(401, json!({ "error": "Authorization Bearer token required" }));
+    }
+
+    let payload: Value = match serde_json::from_slice(body_bytes) {
+        Ok(v) => v,
+        Err(_) => return cors_json_response(400, json!({ "error": "Invalid JSON body" })),
+    };
+
+    let room_id = payload.get("roomId").and_then(|v| v.as_str()).unwrap_or("").trim();
+    let gif_url = payload.get("url").and_then(|v| v.as_str()).unwrap_or("").trim();
+    let title = payload.get("title").and_then(|v| v.as_str()).unwrap_or("GIF");
+
+    if room_id.is_empty() || gif_url.is_empty() {
+        return cors_json_response(400, json!({ "error": "roomId and url are required" }));
+    }
+
+    let encoded_room = form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>();
+
+    // 1. Check if room is encrypted
+    let mut auth_headers = HeaderMap::new();
+    if let Ok(hv) = HeaderValue::from_str(&format!("Bearer {token}")) {
+        auth_headers.insert("Authorization", hv);
+    }
+    if let Ok((status, _, _)) = call_conduit(
+        &format!("/_matrix/client/v3/rooms/{encoded_room}/state/m.room.encryption"),
+        Method::GET,
+        Some(auth_headers.clone()),
+        None,
+    ).await {
+        if status.is_success() {
+            // Room is encrypted, tell client to use local crypto staging
+            return cors_json_response(200, json!({ "encrypted": true }));
+        }
+    }
+
+    // 2. Fetch the GIF bytes from upstream (Tenor/Giphy)
+    let Ok(parsed_url) = url::Url::parse(gif_url) else {
+        return cors_json_response(400, json!({ "error": "Invalid gif url" }));
+    };
+    if parsed_url.scheme() != "http" && parsed_url.scheme() != "https" {
+        return cors_json_response(400, json!({ "error": "Invalid scheme" }));
+    }
+
+    let Ok(client) = reqwest::Client::builder().timeout(std::time::Duration::from_secs(12)).build() else {
+        return cors_json_response(500, json!({ "error": "Client build failed" }));
+    };
+
+    let Ok(resp) = client.get(parsed_url.as_str()).send().await else {
+        return cors_json_response(502, json!({ "error": "Failed to fetch gif" }));
+    };
+
+    if !resp.status().is_success() {
+        return cors_json_response(502, json!({ "error": "Upstream gif provider returned error" }));
+    }
+
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("image/gif")
+        .to_string();
+
+    let Ok(bytes) = resp.bytes().await else {
+        return cors_json_response(502, json!({ "error": "Failed to read gif body" }));
+    };
+
+    // 3. Upload to Conduit on localhost
+    let ext = if content_type.contains("png") {
+        "png"
+    } else if content_type.contains("webp") {
+        "webp"
+    } else {
+        "gif"
+    };
+    let filename = format!("{}.{ext}", title.chars().filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-').collect::<String>());
+
+    let mut upload_headers = auth_headers.clone();
+    if let Ok(ct) = HeaderValue::from_str(&content_type) {
+        upload_headers.insert("Content-Type", ct);
+    }
+
+    let upload_res = call_conduit(
+        &format!("/_matrix/media/v3/upload?filename={filename}"),
+        Method::POST,
+        Some(upload_headers),
+        Some(bytes.clone()),
+    ).await;
+
+    let content_uri = match upload_res {
+        Ok((status, _, upload_bytes)) if status.is_success() => {
+            let data: Value = serde_json::from_slice(&upload_bytes).unwrap_or(json!({}));
+            let uri = data.get("content_uri").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            if uri.is_empty() {
+                return cors_json_response(502, json!({ "error": "No content_uri returned from media upload" }));
+            }
+            uri
+        }
+        _ => return cors_json_response(502, json!({ "error": "Media upload failed" })),
+    };
+
+    // 4. Send m.room.message
+    let txn_id = format!("mitch_gif_{}", now_millis());
+    let mut send_headers = auth_headers;
+    send_headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+
+    let send_payload = json!({
+        "msgtype": "m.image",
+        "body": title,
+        "url": content_uri,
+        "info": {
+            "mimetype": content_type,
+            "size": bytes.len()
+        }
+    });
+
+    let send_res = call_conduit(
+        &format!("/_matrix/client/v3/rooms/{encoded_room}/send/m.room.message/{txn_id}"),
+        Method::PUT,
+        Some(send_headers),
+        Some(Bytes::from(serde_json::to_vec(&send_payload).unwrap_or_default())),
+    ).await;
+
+    match send_res {
+        Ok((status, _, send_bytes)) if status.is_success() => {
+            let data: Value = serde_json::from_slice(&send_bytes).unwrap_or(json!({}));
+            cors_json_response(200, json!({ "ok": true, "eventId": data.get("event_id") }))
+        }
+        Ok((status, _, send_bytes)) => {
+            let data: Value = serde_json::from_slice(&send_bytes).unwrap_or(json!({}));
+            cors_json_response(status.as_u16(), data)
+        }
+        Err(e) => cors_json_response(502, json!({ "error": "Send failed", "details": e })),
+    }
 }
 
 async fn api_stickers_packs(_state: &AppState, _headers: &HeaderMap) -> Response {

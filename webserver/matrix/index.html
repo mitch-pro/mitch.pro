@@ -1041,6 +1041,34 @@
           const status = document.getElementById('mitch-gif-status');
           if (status) status.textContent = 'Sending…';
 
+          const token = localStorage.getItem('cinny_access_token');
+          const roomMatch = window.location.pathname.match(/room\/([^/?]+)/) || window.location.hash.match(/room\/([^/?]+)/);
+          const activeRoomId = roomMatch ? decodeURIComponent(roomMatch[1]) : '';
+
+          // 1. Instant server-side direct send (fastest: zero client download/upload wait)
+          if (token && activeRoomId) {
+            try {
+              const res = await fetch('/api/matrix/gifs/send', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                  'X-Mitch-Requested-With': '1'
+                },
+                body: JSON.stringify({ roomId: activeRoomId, url, title, format })
+              });
+              if (res.ok) {
+                const data = await res.json();
+                if (data.ok) {
+                  closePopover();
+                  if (status) status.textContent = 'Sent!';
+                  return;
+                }
+              }
+            } catch (_) {}
+          }
+
+          // 2. Fallback: Client-side fetch & single paste for encrypted rooms
           try {
             let blob;
             try {
@@ -1058,27 +1086,19 @@
             const filename = (title || 'media').toLowerCase().replace(/[^a-z0-9_-]+/g, '_') + '.' + ext;
             const file = new File([blob], filename, { type: blob.type || (ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/gif') });
 
-            let sent = false;
             const input = document.querySelector('[data-editable-name="RoomInput"]') || document.querySelector('.coabsl3') || document.querySelector('[contenteditable="true"]');
             if (input) {
               input.focus();
               try {
                 const dt = new DataTransfer();
                 dt.items.add(file);
+                // Dispatch ONLY pasteEvent (NEVER dispatch dropEvent, which loaded the GIF in twice)
                 const pasteEvent = new ClipboardEvent('paste', {
                   bubbles: true,
                   cancelable: true,
                   clipboardData: dt
                 });
                 input.dispatchEvent(pasteEvent);
-
-                const dropEvent = new DragEvent('drop', {
-                  bubbles: true,
-                  cancelable: true,
-                  dataTransfer: dt
-                });
-                input.dispatchEvent(dropEvent);
-                sent = true;
               } catch (_) {}
 
               setTimeout(() => {
@@ -1087,53 +1107,11 @@
               }, 400);
             }
 
-            const token = localStorage.getItem('cinny_access_token');
-            const roomMatch = window.location.pathname.match(/room\/([^/?]+)/) || window.location.hash.match(/room\/([^/?]+)/);
-            const activeRoomId = roomMatch ? decodeURIComponent(roomMatch[1]) : '';
-
-            if (!sent && token && activeRoomId) {
-              try {
-                const uploadRes = await fetch(`/_matrix/media/v3/upload?filename=${encodeURIComponent(filename)}`, {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': blob.type || 'image/gif'
-                  },
-                  body: blob
-                });
-                if (uploadRes.ok) {
-                  const uploadData = await uploadRes.json();
-                  if (uploadData.content_uri) {
-                    const txnId = 'mitch_media_' + Date.now();
-                    await fetch(`/_matrix/client/v3/rooms/${encodeURIComponent(activeRoomId)}/send/m.room.message/${txnId}`, {
-                      method: 'PUT',
-                      headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                      },
-                      body: JSON.stringify({
-                        msgtype: 'm.image',
-                        body: title || 'media',
-                        url: uploadData.content_uri,
-                        info: {
-                          mimetype: blob.type || 'image/gif',
-                          size: blob.size
-                        }
-                      })
-                    });
-                  }
-                }
-              } catch (e) {
-                console.warn('[Mitch GIF] Direct send error:', e);
-              }
-            }
-
             closePopover();
             if (status) status.textContent = 'Sent!';
           } catch (err) {
             console.warn('[Mitch GIF] Send failed:', err);
             if (status) status.textContent = 'Send failed';
-          }
         }
 
         function injectGifButton() {
