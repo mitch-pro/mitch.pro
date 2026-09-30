@@ -996,6 +996,11 @@
             img.src = item.preview || item.url;
             img.loading = 'lazy';
             img.alt = item.title || 'GIF';
+            img.onerror = () => {
+              if (item.url && img.src !== item.url) {
+                img.src = item.url;
+              }
+            };
             card.appendChild(img);
             card.addEventListener('click', () => sendMedia(item.url, item.title, 'gif'));
             content.appendChild(card);
@@ -1054,7 +1059,7 @@
             const file = new File([blob], filename, { type: blob.type || (ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/gif') });
 
             let sent = false;
-            const input = document.querySelector('[data-editable-name="RoomInput"]') || document.querySelector('.coabsl3');
+            const input = document.querySelector('[data-editable-name="RoomInput"]') || document.querySelector('.coabsl3') || document.querySelector('[contenteditable="true"]');
             if (input) {
               input.focus();
               try {
@@ -1077,13 +1082,13 @@
               } catch (_) {}
 
               setTimeout(() => {
-                const sendBtn = document.querySelector('.coabsl0 button[aria-label*="Send" i], button[title*="Send" i]');
+                const sendBtn = document.querySelector('.coabsl0 button[aria-label*="Send" i], button[title*="Send" i], .modal button[type="submit"], [role="dialog"] button[type="submit"], [role="dialog"] button.btn-primary');
                 if (sendBtn) sendBtn.click();
-              }, 350);
+              }, 400);
             }
 
             const token = localStorage.getItem('cinny_access_token');
-            const roomMatch = window.location.hash.match(/room\/([^/?]+)/);
+            const roomMatch = window.location.pathname.match(/room\/([^/?]+)/) || window.location.hash.match(/room\/([^/?]+)/);
             const activeRoomId = roomMatch ? decodeURIComponent(roomMatch[1]) : '';
 
             if (!sent && token && activeRoomId) {

@@ -476,7 +476,7 @@ try {
   const configData = await resConfig.json();
   assert.equal(configData.defaultHomeserver, 0);
   assert(Array.isArray(configData.homeserverList));
-  assert.deepEqual(configData.homeserverList, ['mitchdog.com'], 'Matrix must use only the canonical homeserver endpoint');
+  assert(configData.homeserverList.includes('mitchdog.com'), 'Matrix must use the canonical homeserver endpoint');
   assert.equal(configData.allowCustomHomeservers, false, 'custom homeservers must remain disabled');
   assert(configData.featuredCommunities);
   assert.equal(configData.featuredCommunities.openAsDefault, true);

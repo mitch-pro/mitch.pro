@@ -1254,16 +1254,18 @@ button[data-variant='critical'] {
   padding: 10px;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
+  grid-auto-rows: 120px;
   grid-gap: 8px;
-  align-content: start;
 }
 
 .mitch-gif-card {
   position: relative;
+  width: 100%;
+  height: 120px;
+  min-height: 120px;
   border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
-  aspect-ratio: 16 / 10;
   background: rgba(0, 0, 0, 0.3);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
@@ -1287,8 +1289,8 @@ button[data-variant='critical'] {
   padding: 10px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
+  grid-auto-rows: 80px;
   grid-gap: 8px;
-  align-content: start;
 }
 
 .mitch-sticker-card {
@@ -1296,7 +1298,9 @@ button[data-variant='critical'] {
   display: flex;
   align-items: center;
   justify-content: center;
-  aspect-ratio: 1;
+  width: 100%;
+  height: 80px;
+  min-height: 80px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.03);
   cursor: pointer;
@@ -1328,6 +1332,20 @@ button[data-variant='critical'] {
     bottom: 74px;
     width: calc(100vw - 20px);
     height: 380px;
+  }
+  .mitch-gif-grid {
+    grid-auto-rows: 105px;
+  }
+  .mitch-gif-card {
+    height: 105px;
+    min-height: 105px;
+  }
+  .mitch-sticker-grid {
+    grid-auto-rows: 65px;
+  }
+  .mitch-sticker-card {
+    height: 65px;
+    min-height: 65px;
   }
 }
 
