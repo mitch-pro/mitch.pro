@@ -1037,31 +1037,93 @@
           if (status) status.textContent = 'Sending…';
 
           try {
-            const res = await fetch(url);
-            const blob = await res.blob();
+            let blob;
+            try {
+              const res = await fetch(url);
+              if (!res.ok) throw new Error('direct fetch status ' + res.status);
+              blob = await res.blob();
+            } catch (_) {
+              const proxyUrl = `/api/matrix/gifs/proxy?url=${encodeURIComponent(url)}`;
+              const res = await fetch(proxyUrl);
+              if (!res.ok) throw new Error('proxy fetch status ' + res.status);
+              blob = await res.blob();
+            }
+
             const ext = format || 'gif';
             const filename = (title || 'media').toLowerCase().replace(/[^a-z0-9_-]+/g, '_') + '.' + ext;
             const file = new File([blob], filename, { type: blob.type || (ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/gif') });
 
+            let sent = false;
             const input = document.querySelector('[data-editable-name="RoomInput"]') || document.querySelector('.coabsl3');
             if (input) {
               input.focus();
-              const dt = new DataTransfer();
-              dt.items.add(file);
-              const pasteEvent = new ClipboardEvent('paste', {
-                bubbles: true,
-                cancelable: true,
-                clipboardData: dt
-              });
-              input.dispatchEvent(pasteEvent);
+              try {
+                const dt = new DataTransfer();
+                dt.items.add(file);
+                const pasteEvent = new ClipboardEvent('paste', {
+                  bubbles: true,
+                  cancelable: true,
+                  clipboardData: dt
+                });
+                input.dispatchEvent(pasteEvent);
 
-              closePopover();
+                const dropEvent = new DragEvent('drop', {
+                  bubbles: true,
+                  cancelable: true,
+                  dataTransfer: dt
+                });
+                input.dispatchEvent(dropEvent);
+                sent = true;
+              } catch (_) {}
 
               setTimeout(() => {
                 const sendBtn = document.querySelector('.coabsl0 button[aria-label*="Send" i], button[title*="Send" i]');
                 if (sendBtn) sendBtn.click();
               }, 350);
             }
+
+            const token = localStorage.getItem('cinny_access_token');
+            const roomMatch = window.location.hash.match(/room\/([^/?]+)/);
+            const activeRoomId = roomMatch ? decodeURIComponent(roomMatch[1]) : '';
+
+            if (!sent && token && activeRoomId) {
+              try {
+                const uploadRes = await fetch(`/_matrix/media/v3/upload?filename=${encodeURIComponent(filename)}`, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': blob.type || 'image/gif'
+                  },
+                  body: blob
+                });
+                if (uploadRes.ok) {
+                  const uploadData = await uploadRes.json();
+                  if (uploadData.content_uri) {
+                    const txnId = 'mitch_media_' + Date.now();
+                    await fetch(`/_matrix/client/v3/rooms/${encodeURIComponent(activeRoomId)}/send/m.room.message/${txnId}`, {
+                      method: 'PUT',
+                      headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({
+                        msgtype: 'm.image',
+                        body: title || 'media',
+                        url: uploadData.content_uri,
+                        info: {
+                          mimetype: blob.type || 'image/gif',
+                          size: blob.size
+                        }
+                      })
+                    });
+                  }
+                }
+              } catch (e) {
+                console.warn('[Mitch GIF] Direct send error:', e);
+              }
+            }
+
+            closePopover();
             if (status) status.textContent = 'Sent!';
           } catch (err) {
             console.warn('[Mitch GIF] Send failed:', err);

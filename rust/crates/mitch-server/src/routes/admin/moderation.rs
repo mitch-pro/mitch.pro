@@ -13,6 +13,39 @@ use axum::response::Response;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
+fn spawn_staff_sync(secret: Vec<u8>, store: Arc<mitch_lib::data::DataStore>, data_dir: std::path::PathBuf) {
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        handle.spawn(async move {
+            crate::routes::matrix::sync_staff_power_levels_to_all_official_rooms(
+                &secret,
+                &store,
+                &data_dir,
+            )
+            .await;
+        });
+    }
+}
+
+fn spawn_matrix_unban(
+    secret: Vec<u8>,
+    store: Arc<mitch_lib::data::DataStore>,
+    data_dir: std::path::PathBuf,
+    matrix_user_id: String,
+) {
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        handle.spawn(async move {
+            crate::routes::matrix::unban_matrix_user_all_rooms(
+                &secret,
+                &store,
+                &data_dir,
+                &matrix_user_id,
+            )
+            .await;
+        });
+    }
+}
+
+
 pub fn handle(
     state: &Arc<AppState>,
     method: &Method,
@@ -453,6 +486,11 @@ fn set_moderator(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Respons
         },
         json!({ "target": target_raw }),
     );
+    spawn_staff_sync(
+        state.id_secret.clone(),
+        state.store.clone(),
+        state.cfg.data_dir.clone(),
+    );
     json_response(200, json!({ "ok": true }))
 }
 
@@ -510,6 +548,11 @@ fn set_admin(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response {
             "remove_admin"
         },
         json!({ "target": target_raw }),
+    );
+    spawn_staff_sync(
+        state.id_secret.clone(),
+        state.store.clone(),
+        state.cfg.data_dir.clone(),
     );
     json_response(200, json!({ "ok": true, "admins": admins }))
 }
@@ -766,20 +809,43 @@ fn unban_account(
     }
     let bl_file = state.cfg.data_dir.join("blacklist.json");
     let mut bl = state.store.read_document(&bl_file, json!({}));
-    let existed = bl.get(target_email.as_str()).is_some();
+    let existed = bl.get(target_email.as_str()).is_some() || bl.get(email_raw.as_str()).is_some();
     if let Some(map) = bl.as_object_mut() {
         map.remove(target_email.as_str());
+        map.remove(email_raw.as_str());
     }
     let _ = state.store.write_document(&bl_file, &bl);
 
-    // Remove any IP bans associated with this email.
+    // Remove from shadow bans
+    {
+        let mut bans = state.shadow_bans.write().unwrap_or_else(|e| e.into_inner());
+        bans.remove(&target_email);
+        bans.remove(&email_raw);
+        let arr: Vec<Value> = bans.iter().map(|b| json!(b)).collect();
+        let _ = state.store.write_document(
+            &state.cfg.base_dir.join("data/shadow_bans.json"),
+            &json!(arr),
+        );
+    }
+
+    // Remove any IP bans associated with this email or last known IP
     let banned_ips_file = state.cfg.data_dir.join("banned_ips.json");
     let mut banned = state.store.read_document(&banned_ips_file, json!({}));
     if let Some(map) = banned.as_object_mut() {
+        let last_known = state
+            .store
+            .read_document(&state.cfg.data_dir.join("last_known_ips.json"), json!({}));
+        let target_ip = last_known
+            .get(target_email.as_str())
+            .or_else(|| last_known.get(email_raw.as_str()))
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
         let remove: Vec<String> = map
             .iter()
-            .filter(|(_, info)| {
+            .filter(|(ip, info)| {
                 info.get("email").and_then(|v| v.as_str()) == Some(target_email.as_str())
+                    || info.get("email").and_then(|v| v.as_str()) == Some(email_raw.as_str())
+                    || target_ip.as_deref() == Some(ip.as_str())
             })
             .map(|(ip, _)| ip.clone())
             .collect();
@@ -790,6 +856,15 @@ fn unban_account(
             let _ = state.store.write_document(&banned_ips_file, &banned);
         }
     }
+
+    let matrix_user_id =
+        crate::routes::matrix::resolve_matrix_user_id_for_email(state, &target_email);
+    spawn_matrix_unban(
+        state.id_secret.clone(),
+        state.store.clone(),
+        state.cfg.data_dir.clone(),
+        matrix_user_id,
+    );
 
     let role = if ctx.is_admin(state) {
         "admin"
@@ -808,7 +883,7 @@ fn unban_account(
             "role": role,
         }),
     );
-    json_response(200, json!({ "ok": existed }))
+    json_response(200, json!({ "ok": true, "targetEmail": target_email, "existed": existed }))
 }
 
 /// `POST /api/admin/chat-reports/resolve` — action 'delete' or resolve.
@@ -1141,14 +1216,67 @@ pub fn execute_moderator_approved_action(
             Ok(json!({ "ok": true, "targetEmail": target_email }))
         }
         "unban_account" => {
-            let target_email = mitch_lib::auth::normalize_email(s("email").as_str().unwrap_or(""));
+            let email_raw = s("email").as_str().unwrap_or("").to_lowercase().trim().to_string();
+            let target_email = mitch_lib::auth::normalize_email(&email_raw);
             let bl_file = state.cfg.data_dir.join("blacklist.json");
             let mut bl = state.store.read_document(&bl_file, json!({}));
-            let existed = bl.get(target_email.as_str()).is_some();
+            let existed = bl.get(target_email.as_str()).is_some() || bl.get(email_raw.as_str()).is_some();
             if let Some(map) = bl.as_object_mut() {
                 map.remove(target_email.as_str());
+                map.remove(email_raw.as_str());
             }
             let _ = state.store.write_document(&bl_file, &bl);
+
+            // Remove from shadow bans
+            {
+                let mut bans = state.shadow_bans.write().unwrap_or_else(|e| e.into_inner());
+                bans.remove(&target_email);
+                bans.remove(&email_raw);
+                let arr: Vec<Value> = bans.iter().map(|b| json!(b)).collect();
+                let _ = state.store.write_document(
+                    &state.cfg.base_dir.join("data/shadow_bans.json"),
+                    &json!(arr),
+                );
+            }
+
+            // Remove any IP bans
+            let banned_ips_file = state.cfg.data_dir.join("banned_ips.json");
+            let mut banned = state.store.read_document(&banned_ips_file, json!({}));
+            if let Some(map) = banned.as_object_mut() {
+                let last_known = state
+                    .store
+                    .read_document(&state.cfg.data_dir.join("last_known_ips.json"), json!({}));
+                let target_ip = last_known
+                    .get(target_email.as_str())
+                    .or_else(|| last_known.get(email_raw.as_str()))
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string);
+                let remove: Vec<String> = map
+                    .iter()
+                    .filter(|(ip, info)| {
+                        info.get("email").and_then(|v| v.as_str()) == Some(target_email.as_str())
+                            || info.get("email").and_then(|v| v.as_str()) == Some(email_raw.as_str())
+                            || target_ip.as_deref() == Some(ip.as_str())
+                    })
+                    .map(|(ip, _)| ip.clone())
+                    .collect();
+                if !remove.is_empty() {
+                    for ip in &remove {
+                        map.remove(ip);
+                    }
+                    let _ = state.store.write_document(&banned_ips_file, &banned);
+                }
+            }
+
+            let matrix_user_id =
+                crate::routes::matrix::resolve_matrix_user_id_for_email(state, &target_email);
+            spawn_matrix_unban(
+                state.id_secret.clone(),
+                state.store.clone(),
+                state.cfg.data_dir.clone(),
+                matrix_user_id,
+            );
+
             mitch_lib::admin::log_admin_action(
                 &state.store,
                 &state.cfg.data_dir,
@@ -1311,6 +1439,11 @@ pub fn execute_moderator_approved_action(
                 },
                 json!({ "target": target_raw }).merge(requested_by()),
             );
+            spawn_staff_sync(
+                state.id_secret.clone(),
+                state.store.clone(),
+                state.cfg.data_dir.clone(),
+            );
             Ok(json!({ "ok": true, "moderators": mods }))
         }
         "admin_role" => {
@@ -1357,6 +1490,11 @@ pub fn execute_moderator_approved_action(
                     "remove_admin"
                 },
                 json!({ "target": target_raw }).merge(requested_by()),
+            );
+            spawn_staff_sync(
+                state.id_secret.clone(),
+                state.store.clone(),
+                state.cfg.data_dir.clone(),
             );
             Ok(json!({ "ok": true, "admins": admins }))
         }

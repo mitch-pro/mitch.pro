@@ -71,13 +71,42 @@ pub fn spawn(state: std::sync::Arc<crate::state::AppState>) {
     // Step 13 batch 4 — VM usage sampling, purge, prune, uptime enforcement, session cleanup.
     crate::workers_vm::spawn(state.clone());
 
-    // Ensure all official Matrix rooms (general, tech, python-hate, rust, memory-safe, etc.) on startup.
+    // Ensure all official Matrix rooms on startup, sync staff roles across all rooms,
+    // and auto-join all existing users into any newly added rooms.
     {
         let secret = state.id_secret.clone();
+        let store = state.store.clone();
+        let data_dir = state.cfg.data_dir.clone();
         tokio::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             for (alias, name, topic) in crate::routes::matrix::OFFICIAL_ROOMS {
-                let _ = crate::routes::matrix::ensure_official_room(&secret, alias, name, topic).await;
+                let _ =
+                    crate::routes::matrix::ensure_official_room(&secret, alias, name, topic).await;
+            }
+            crate::routes::matrix::sync_staff_power_levels_to_all_official_rooms(
+                &secret, &store, &data_dir,
+            )
+            .await;
+            crate::routes::matrix::auto_join_all_users_to_official_rooms(&secret, &store, &data_dir)
+                .await;
+
+            // Periodic worker every 5 minutes: keeps staff roles synced and adds everyone to new rooms
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(300));
+            loop {
+                interval.tick().await;
+                for (alias, name, topic) in crate::routes::matrix::OFFICIAL_ROOMS {
+                    let _ =
+                        crate::routes::matrix::ensure_official_room(&secret, alias, name, topic)
+                            .await;
+                }
+                crate::routes::matrix::sync_staff_power_levels_to_all_official_rooms(
+                    &secret, &store, &data_dir,
+                )
+                .await;
+                crate::routes::matrix::auto_join_all_users_to_official_rooms(
+                    &secret, &store, &data_dir,
+                )
+                .await;
             }
         });
     }

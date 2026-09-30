@@ -738,6 +738,431 @@ pub async fn sync_matrix_user_to_official_rooms(
     }
 }
 
+pub fn resolve_matrix_user_id_from_store(
+    store: &mitch_lib::data::DataStore,
+    data_dir: &std::path::Path,
+    secret: &[u8],
+    norm_email: &str,
+) -> String {
+    let norm = mitch_lib::auth::normalize_email(norm_email);
+    let matrix_users_file = data_dir.join("matrix_users.json");
+    let matrix_users = store.read_document(&matrix_users_file, json!({}));
+    if let Some(map) = matrix_users.as_object() {
+        for (uid, uname_val) in map {
+            if let Some(email) = mitch_lib::auth::email_from_sid(store, secret, uid) {
+                if mitch_lib::auth::normalize_email(&email) == norm {
+                    if let Some(uname) = uname_val.as_str() {
+                        return format!("@{uname}:mitch.pro");
+                    }
+                }
+            }
+        }
+    }
+    let profiles_file = data_dir.join("profiles.json");
+    let profiles = store.read_document(&profiles_file, json!({}));
+    if let Some(prof) = profiles.get(&norm) {
+        if let Some(uname) = prof.get("username").and_then(|v| v.as_str()) {
+            return format!("@{uname}:mitch.pro");
+        }
+    }
+    let local = norm.split('@').next().unwrap_or("user");
+    format!("@{local}:mitch.pro")
+}
+
+pub fn resolve_matrix_user_id_for_email(state: &AppState, norm_email: &str) -> String {
+    resolve_matrix_user_id_from_store(&state.store, &state.data_dir(), &state.id_secret, norm_email)
+}
+
+pub async fn sync_staff_power_levels_to_all_official_rooms(
+    secret: &[u8],
+    store: &mitch_lib::data::DataStore,
+    data_dir: &std::path::Path,
+) {
+    let admin_tok = match get_system_admin_matrix_token(secret).await {
+        Ok(t) => t,
+        Err(_) => return,
+    };
+
+    let mut staff_power_levels: std::collections::HashMap<String, i64> =
+        std::collections::HashMap::new();
+
+    // Admins, owners, co-owners (PL 100)
+    for admin_email in mitch_lib::auth::site_admin_emails(store) {
+        let norm = mitch_lib::auth::normalize_email(&admin_email);
+        let user_id = resolve_matrix_user_id_from_store(store, data_dir, secret, &norm);
+        staff_power_levels.insert(user_id, 100);
+    }
+
+    // Moderators (PL 50)
+    for mod_email in mitch_lib::auth::moderator_emails(store) {
+        let norm = mitch_lib::auth::normalize_email(&mod_email);
+        let user_id = resolve_matrix_user_id_from_store(store, data_dir, secret, &norm);
+        staff_power_levels.entry(user_id).or_insert(50);
+    }
+
+    staff_power_levels.insert("@admin:mitch.pro".to_string(), 100);
+
+    for (alias, name, topic) in OFFICIAL_ROOMS {
+        let Ok(room_id) = ensure_official_room(secret, alias, name, topic).await else {
+            continue;
+        };
+
+        let encoded_room =
+            url::form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>();
+        let mut pl_headers = HeaderMap::new();
+        if let Ok(hv) = HeaderValue::from_str(&format!("Bearer {admin_tok}")) {
+            pl_headers.insert("Authorization", hv);
+        }
+
+        if let Ok((status, _, bytes)) = call_conduit(
+            &format!("/_matrix/client/v3/rooms/{encoded_room}/state/m.room.power_levels"),
+            Method::GET,
+            Some(pl_headers.clone()),
+            None,
+        )
+        .await
+        {
+            if status.is_success() {
+                let mut pl_data: Value = serde_json::from_slice(&bytes).unwrap_or(json!({}));
+                if !pl_data.is_object() {
+                    pl_data = json!({});
+                }
+                if pl_data.get("users").and_then(|v| v.as_object()).is_none() {
+                    pl_data["users"] = json!({});
+                }
+                let mut changed = false;
+                if let Some(users_map) = pl_data.get_mut("users").and_then(|v| v.as_object_mut()) {
+                    for (staff_user, &target_pl) in &staff_power_levels {
+                        let cur = users_map.get(staff_user).and_then(|v| v.as_i64()).unwrap_or(0);
+                        if cur != target_pl {
+                            users_map.insert(staff_user.clone(), json!(target_pl));
+                            changed = true;
+                        }
+                    }
+                    let to_reset: Vec<String> = users_map
+                        .iter()
+                        .filter_map(|(uid, pl)| {
+                            let p = pl.as_i64().unwrap_or(0);
+                            if (p == 50 || p == 100)
+                                && !staff_power_levels.contains_key(uid)
+                                && uid != "@admin:mitch.pro"
+                            {
+                                Some(uid.clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    for uid in to_reset {
+                        users_map.remove(&uid);
+                        changed = true;
+                    }
+                }
+
+                if changed {
+                    let mut put_headers = HeaderMap::new();
+                    put_headers
+                        .insert("Content-Type", HeaderValue::from_static("application/json"));
+                    if let Ok(hv) = HeaderValue::from_str(&format!("Bearer {admin_tok}")) {
+                        put_headers.insert("Authorization", hv);
+                    }
+                    let _ = call_conduit(
+                        &format!(
+                            "/_matrix/client/v3/rooms/{encoded_room}/state/m.room.power_levels"
+                        ),
+                        Method::PUT,
+                        Some(put_headers),
+                        Some(Bytes::from(
+                            serde_json::to_vec(&pl_data).unwrap_or_default(),
+                        )),
+                    )
+                    .await;
+                }
+            }
+        }
+    }
+}
+
+pub async fn sync_user_mention_only_push_rules(user_token: &str) {
+    if user_token.is_empty() {
+        return;
+    }
+    let mut headers = HeaderMap::new();
+    headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+    if let Ok(hv) = HeaderValue::from_str(&format!("Bearer {user_token}")) {
+        headers.insert("Authorization", hv);
+    }
+
+    let disable_payload = Bytes::from_static(b"{\"enabled\":false}");
+    let _ = call_conduit(
+        "/_matrix/client/v3/pushrules/global/underride/.m.rule.message/enabled",
+        Method::PUT,
+        Some(headers.clone()),
+        Some(disable_payload.clone()),
+    )
+    .await;
+    let _ = call_conduit(
+        "/_matrix/client/v3/pushrules/global/underride/.m.rule.roommessage/enabled",
+        Method::PUT,
+        Some(headers.clone()),
+        Some(disable_payload),
+    )
+    .await;
+
+    let enable_payload = Bytes::from_static(b"{\"enabled\":true}");
+    let _ = call_conduit(
+        "/_matrix/client/v3/pushrules/global/content/.m.rule.contains_user_name/enabled",
+        Method::PUT,
+        Some(headers.clone()),
+        Some(enable_payload.clone()),
+    )
+    .await;
+    let _ = call_conduit(
+        "/_matrix/client/v3/pushrules/global/override/.m.rule.contains_display_name/enabled",
+        Method::PUT,
+        Some(headers),
+        Some(enable_payload),
+    )
+    .await;
+}
+
+pub async fn auto_join_all_users_to_official_rooms(
+    secret: &[u8],
+    store: &mitch_lib::data::DataStore,
+    data_dir: &std::path::Path,
+) {
+    let admin_tok = match get_system_admin_matrix_token(secret).await {
+        Ok(t) => t,
+        Err(_) => return,
+    };
+
+    let matrix_users_file = data_dir.join("matrix_users.json");
+    let matrix_users = store.read_document(&matrix_users_file, json!({}));
+    let mut users_to_sync: std::collections::HashMap<String, Option<String>> =
+        std::collections::HashMap::new();
+
+    if let Some(map) = matrix_users.as_object() {
+        for (uid, uname_val) in map {
+            if let Some(uname) = uname_val.as_str() {
+                users_to_sync.insert(format!("@{uname}:mitch.pro"), Some(uid.clone()));
+            }
+        }
+    }
+
+    let profiles_file = data_dir.join("profiles.json");
+    let profiles = store.read_document(&profiles_file, json!({}));
+    if let Some(map) = profiles.as_object() {
+        for (_norm, prof) in map {
+            if let Some(uname) = prof.get("username").and_then(|v| v.as_str()) {
+                let user_id = format!("@{uname}:mitch.pro");
+                users_to_sync.entry(user_id).or_insert(None);
+            }
+        }
+    }
+
+    let passwords_file = data_dir.join("passwords.json");
+    let passwords = store.read_document(&passwords_file, json!({}));
+    if let Some(map) = passwords.as_object() {
+        for (email, _) in map {
+            let local = email.split('@').next().unwrap_or("user");
+            let user_id = format!("@{local}:mitch.pro");
+            users_to_sync.entry(user_id).or_insert(None);
+        }
+    }
+
+    let mut admin_headers = HeaderMap::new();
+    admin_headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+    if let Ok(hv) = HeaderValue::from_str(&format!("Bearer {admin_tok}")) {
+        admin_headers.insert("Authorization", hv);
+    }
+
+    for (alias, name, topic) in OFFICIAL_ROOMS {
+        let Ok(room_id) = ensure_official_room(secret, alias, name, topic).await else {
+            continue;
+        };
+        let encoded_room =
+            url::form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>();
+
+        for (user_id, uid_opt) in &users_to_sync {
+            let invite_payload = json!({ "user_id": user_id });
+            let _ = call_conduit(
+                &format!("/_matrix/client/v3/rooms/{encoded_room}/invite"),
+                Method::POST,
+                Some(admin_headers.clone()),
+                Some(Bytes::from(
+                    serde_json::to_vec(&invite_payload).unwrap_or_default(),
+                )),
+            )
+            .await;
+
+            if let Some(uid) = uid_opt {
+                let password = get_matrix_password_for_uid(uid, secret);
+                let uname = user_id
+                    .trim_start_matches('@')
+                    .split(':')
+                    .next()
+                    .unwrap_or("");
+                let login_payload = json!({
+                    "type": "m.login.password",
+                    "identifier": { "type": "m.id.user", "user": uname },
+                    "password": password,
+                    "initial_device_display_name": "Mitch.pro Auto-Join"
+                });
+                let mut req_headers = HeaderMap::new();
+                req_headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+                if let Ok((status, _, bytes)) = call_conduit(
+                    "/_matrix/client/v3/login",
+                    Method::POST,
+                    Some(req_headers),
+                    Some(Bytes::from(
+                        serde_json::to_vec(&login_payload).unwrap_or_default(),
+                    )),
+                )
+                .await
+                {
+                    if status.is_success() {
+                        if let Ok(auth_data) = serde_json::from_slice::<Value>(&bytes) {
+                            if let Some(token) =
+                                auth_data.get("access_token").and_then(|v| v.as_str())
+                            {
+                                let mut user_headers = HeaderMap::new();
+                                user_headers.insert(
+                                    "Content-Type",
+                                    HeaderValue::from_static("application/json"),
+                                );
+                                if let Ok(hv) = HeaderValue::from_str(&format!("Bearer {token}")) {
+                                    user_headers.insert("Authorization", hv);
+                                }
+                                let _ = call_conduit(
+                                    &format!("/_matrix/client/v3/join/{encoded_room}"),
+                                    Method::POST,
+                                    Some(user_headers),
+                                    Some(Bytes::from_static(b"{}")),
+                                )
+                                .await;
+
+                                sync_user_mention_only_push_rules(token).await;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub async fn unban_matrix_user_from_room(
+    secret: &[u8],
+    store: &mitch_lib::data::DataStore,
+    data_dir: &std::path::Path,
+    room_id: &str,
+    target_user_id: &str,
+) {
+    let admin_tok = match get_system_admin_matrix_token(secret).await {
+        Ok(t) => t,
+        Err(_) => return,
+    };
+    let mut req_headers = HeaderMap::new();
+    req_headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+    if let Ok(hv) = HeaderValue::from_str(&format!("Bearer {admin_tok}")) {
+        req_headers.insert("Authorization", hv);
+    }
+    let unban_payload = json!({ "user_id": target_user_id });
+    let _ = call_conduit(
+        &format!(
+            "/_matrix/client/v3/rooms/{}/unban",
+            url::form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>()
+        ),
+        Method::POST,
+        Some(req_headers.clone()),
+        Some(Bytes::from(
+            serde_json::to_vec(&unban_payload).unwrap_or_default(),
+        )),
+    )
+    .await;
+
+    // Clean up bannedUsers and mutedUsers in room settings
+    let settings_file = data_dir.join("matrix_room_settings.json");
+    let mut all = store.read_document(&settings_file, json!({}));
+    if let Some(room) = all.get_mut(room_id) {
+        let uname = target_user_id
+            .trim_start_matches('@')
+            .split(':')
+            .next()
+            .unwrap_or("");
+        if let Some(b_map) = room.get_mut("bannedUsers").and_then(|v| v.as_object_mut()) {
+            b_map.remove(target_user_id);
+            b_map.remove(uname);
+        }
+        if let Some(m_map) = room.get_mut("mutedUsers").and_then(|v| v.as_object_mut()) {
+            m_map.remove(target_user_id);
+            m_map.remove(uname);
+        }
+        let _ = store.write_document(&settings_file, &all);
+    }
+
+    // Reset PL < 0 in Conduit
+    if let Ok((status, _, bytes)) = call_conduit(
+        &format!(
+            "/_matrix/client/v3/rooms/{}/state/m.room.power_levels",
+            url::form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>()
+        ),
+        Method::GET,
+        Some(req_headers.clone()),
+        None,
+    )
+    .await
+    {
+        if status.is_success() {
+            if let Ok(mut pl_data) = serde_json::from_slice::<Value>(&bytes) {
+                if let Some(users) = pl_data.get_mut("users").and_then(|v| v.as_object_mut()) {
+                    if users
+                        .get(target_user_id)
+                        .and_then(|v| v.as_i64())
+                        .map(|pl| pl < 0)
+                        .unwrap_or(false)
+                    {
+                        users.remove(target_user_id);
+                        let _ = call_conduit(
+                            &format!(
+                                "/_matrix/client/v3/rooms/{}/state/m.room.power_levels",
+                                url::form_urlencoded::byte_serialize(room_id.as_bytes())
+                                    .collect::<String>()
+                            ),
+                            Method::PUT,
+                            Some(req_headers),
+                            Some(Bytes::from(
+                                serde_json::to_vec(&pl_data).unwrap_or_default(),
+                            )),
+                        )
+                        .await;
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub async fn unban_matrix_user_all_rooms(
+    secret: &[u8],
+    store: &mitch_lib::data::DataStore,
+    data_dir: &std::path::Path,
+    target_user_id: &str,
+) {
+    for (alias, name, topic) in OFFICIAL_ROOMS {
+        if let Ok(room_id) = ensure_official_room(secret, alias, name, topic).await {
+            unban_matrix_user_from_room(secret, store, data_dir, &room_id, target_user_id).await;
+        }
+    }
+    let settings_file = data_dir.join("matrix_room_settings.json");
+    let all = store.read_document(&settings_file, json!({}));
+    if let Some(map) = all.as_object() {
+        for (room_id, _) in map {
+            unban_matrix_user_from_room(secret, store, data_dir, room_id, target_user_id).await;
+        }
+    }
+}
+
 pub fn check_matrix_slowmode(room_id: &str, sender_key: &str, slowmode_seconds: i64) -> i64 {
     if slowmode_seconds <= 0 {
         return 0;
@@ -1605,6 +2030,9 @@ pub async fn handle_api(
     if path == "/api/matrix/gifs/search" && method == Method::GET {
         return Some(api_gifs_search(state, headers, search).await);
     }
+    if path == "/api/matrix/gifs/proxy" && (method == Method::GET || method == Method::OPTIONS) {
+        return Some(api_gifs_proxy(state, headers, search).await);
+    }
     if path == "/api/matrix/stickers/packs" && method == Method::GET {
         return Some(api_stickers_packs(state, headers).await);
     }
@@ -1865,6 +2293,8 @@ async fn api_sso_login(state: &AppState, headers: &HeaderMap, body_bytes: &[u8])
     sync_matrix_user_to_official_rooms(&state.id_secret, user_id, access_token, target_power_level)
         .await;
 
+    sync_user_mention_only_push_rules(access_token).await;
+
     let raw_pfp = prof.get("pfp").and_then(|v| v.as_str()).unwrap_or("");
     let bio_val = prof.get("bio").and_then(|v| v.as_str()).unwrap_or("");
 
@@ -2058,73 +2488,42 @@ fn extract_matrix_query_param(query: &str, key: &str) -> Option<String> {
 }
 
 async fn api_gifs_trending(_state: &AppState, _headers: &HeaderMap, _search: &str) -> Response {
-    let tenor_key = std::env::var("TENOR_API_KEY").unwrap_or_default().trim().to_string();
-    let giphy_key = std::env::var("GIPHY_API_KEY").unwrap_or_default().trim().to_string();
-
-    if !tenor_key.is_empty() {
-        let url = format!(
-            "https://tenor.googleapis.com/v2/featured?key={}&client_key=mitch_chat&limit=40&media_filter=gif,tinygif",
-            tenor_key
-        );
-        if let Ok(client) = reqwest::Client::builder().timeout(std::time::Duration::from_secs(5)).build() {
-            if let Ok(resp) = client.get(&url).send().await {
-                if resp.status().is_success() {
-                    if let Ok(data) = resp.json::<Value>().await {
-                        if let Some(results) = data.get("results").and_then(|r| r.as_array()) {
-                            let mapped: Vec<Value> = results.iter().filter_map(|item| {
-                                let id = item.get("id")?.as_str()?;
-                                let title = item.get("content_description").and_then(|c| c.as_str()).unwrap_or("");
-                                let media = item.get("media_formats")?.as_object()?;
-                                let gif = media.get("gif")?.as_object()?;
-                                let gif_url = gif.get("url")?.as_str()?;
-                                let preview = media.get("tinygif").and_then(|tg| tg.get("url")).and_then(|u| u.as_str()).unwrap_or(gif_url);
-                                let dims = gif.get("dims").and_then(|d| d.as_array()).map(|arr| {
-                                    (arr.first().and_then(|v| v.as_i64()).unwrap_or(320),
-                                     arr.get(1).and_then(|v| v.as_i64()).unwrap_or(240))
-                                }).unwrap_or((320, 240));
-                                Some(json!({
-                                    "id": id,
-                                    "title": title,
-                                    "url": gif_url,
-                                    "preview": preview,
-                                    "width": dims.0,
-                                    "height": dims.1
-                                }))
-                            }).collect();
-                            return cors_json_response(200, json!({ "results": mapped }));
-                        }
-                    }
-                }
-            }
-        }
+    let mut giphy_key = std::env::var("GIPHY_API_KEY").unwrap_or_default().trim().to_string();
+    if giphy_key.is_empty() {
+        giphy_key = "sXpGFDGZs0Dv1mmNFvYaGUvYwKX0PWIh".to_string();
     }
 
-    if !giphy_key.is_empty() {
-        let url = format!(
-            "https://api.giphy.com/v1/gifs/trending?api_key={}&limit=40&rating=g",
-            giphy_key
-        );
-        if let Ok(client) = reqwest::Client::builder().timeout(std::time::Duration::from_secs(5)).build() {
-            if let Ok(resp) = client.get(&url).send().await {
-                if resp.status().is_success() {
-                    if let Ok(data) = resp.json::<Value>().await {
-                        if let Some(results) = data.get("data").and_then(|r| r.as_array()) {
-                            let mapped: Vec<Value> = results.iter().filter_map(|item| {
-                                let id = item.get("id")?.as_str()?;
-                                let title = item.get("title").and_then(|c| c.as_str()).unwrap_or("");
-                                let images = item.get("images")?.as_object()?;
-                                let orig = images.get("original")?.as_object()?;
-                                let gif_url = orig.get("url")?.as_str()?;
-                                let preview = images.get("fixed_width_small").and_then(|tg| tg.get("url")).and_then(|u| u.as_str()).unwrap_or(gif_url);
-                                Some(json!({
-                                    "id": id,
-                                    "title": title,
-                                    "url": gif_url,
-                                    "preview": preview,
-                                    "width": orig.get("width").and_then(|w| w.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(320),
-                                    "height": orig.get("height").and_then(|h| h.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(240),
-                                }))
-                            }).collect();
+    let url = format!(
+        "https://api.giphy.com/v1/gifs/trending?api_key={}&limit=50&rating=g",
+        giphy_key
+    );
+    if let Ok(client) = reqwest::Client::builder().timeout(std::time::Duration::from_secs(6)).build() {
+        if let Ok(resp) = client.get(&url).send().await {
+            if resp.status().is_success() {
+                if let Ok(data) = resp.json::<Value>().await {
+                    if let Some(results) = data.get("data").and_then(|r| r.as_array()) {
+                        let mapped: Vec<Value> = results.iter().filter_map(|item| {
+                            let id = item.get("id")?.as_str()?;
+                            let title = item.get("title").and_then(|c| c.as_str()).unwrap_or("");
+                            let images = item.get("images")?.as_object()?;
+                            let orig = images.get("original")?.as_object()?;
+                            let gif_url = orig.get("url")?.as_str()?;
+                            let preview = images.get("fixed_width_small")
+                                .or_else(|| images.get("fixed_width"))
+                                .or_else(|| images.get("downsized"))
+                                .and_then(|tg| tg.get("url"))
+                                .and_then(|u| u.as_str())
+                                .unwrap_or(gif_url);
+                            Some(json!({
+                                "id": id,
+                                "title": title,
+                                "url": gif_url,
+                                "preview": preview,
+                                "width": orig.get("width").and_then(|w| w.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(320),
+                                "height": orig.get("height").and_then(|h| h.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(240),
+                            }))
+                        }).collect();
+                        if !mapped.is_empty() {
                             return cors_json_response(200, json!({ "results": mapped }));
                         }
                     }
@@ -2138,40 +2537,47 @@ async fn api_gifs_trending(_state: &AppState, _headers: &HeaderMap, _search: &st
 
 async fn api_gifs_search(_state: &AppState, _headers: &HeaderMap, search: &str) -> Response {
     let q = extract_matrix_query_param(search, "q").unwrap_or_default();
-    let tenor_key = std::env::var("TENOR_API_KEY").unwrap_or_default().trim().to_string();
-    let giphy_key = std::env::var("GIPHY_API_KEY").unwrap_or_default().trim().to_string();
+    if q.is_empty() {
+        return api_gifs_trending(_state, _headers, search).await;
+    }
 
-    if !q.is_empty() && !tenor_key.is_empty() {
-        let enc_q = form_urlencoded::byte_serialize(q.as_bytes()).collect::<String>();
-        let url = format!(
-            "https://tenor.googleapis.com/v2/search?q={}&key={}&client_key=mitch_chat&limit=40&media_filter=gif,tinygif",
-            enc_q, tenor_key
-        );
-        if let Ok(client) = reqwest::Client::builder().timeout(std::time::Duration::from_secs(5)).build() {
-            if let Ok(resp) = client.get(&url).send().await {
-                if resp.status().is_success() {
-                    if let Ok(data) = resp.json::<Value>().await {
-                        if let Some(results) = data.get("results").and_then(|r| r.as_array()) {
-                            let mapped: Vec<Value> = results.iter().filter_map(|item| {
-                                let id = item.get("id")?.as_str()?;
-                                let title = item.get("content_description").and_then(|c| c.as_str()).unwrap_or("");
-                                let media = item.get("media_formats")?.as_object()?;
-                                let gif = media.get("gif")?.as_object()?;
-                                let gif_url = gif.get("url")?.as_str()?;
-                                let preview = media.get("tinygif").and_then(|tg| tg.get("url")).and_then(|u| u.as_str()).unwrap_or(gif_url);
-                                let dims = gif.get("dims").and_then(|d| d.as_array()).map(|arr| {
-                                    (arr.first().and_then(|v| v.as_i64()).unwrap_or(320),
-                                     arr.get(1).and_then(|v| v.as_i64()).unwrap_or(240))
-                                }).unwrap_or((320, 240));
-                                Some(json!({
-                                    "id": id,
-                                    "title": title,
-                                    "url": gif_url,
-                                    "preview": preview,
-                                    "width": dims.0,
-                                    "height": dims.1
-                                }))
-                            }).collect();
+    let mut giphy_key = std::env::var("GIPHY_API_KEY").unwrap_or_default().trim().to_string();
+    if giphy_key.is_empty() {
+        giphy_key = "sXpGFDGZs0Dv1mmNFvYaGUvYwKX0PWIh".to_string();
+    }
+
+    let enc_q = form_urlencoded::byte_serialize(q.as_bytes()).collect::<String>();
+    let url = format!(
+        "https://api.giphy.com/v1/gifs/search?api_key={}&q={}&limit=50&rating=g",
+        giphy_key, enc_q
+    );
+    if let Ok(client) = reqwest::Client::builder().timeout(std::time::Duration::from_secs(6)).build() {
+        if let Ok(resp) = client.get(&url).send().await {
+            if resp.status().is_success() {
+                if let Ok(data) = resp.json::<Value>().await {
+                    if let Some(results) = data.get("data").and_then(|r| r.as_array()) {
+                        let mapped: Vec<Value> = results.iter().filter_map(|item| {
+                            let id = item.get("id")?.as_str()?;
+                            let title = item.get("title").and_then(|c| c.as_str()).unwrap_or("");
+                            let images = item.get("images")?.as_object()?;
+                            let orig = images.get("original")?.as_object()?;
+                            let gif_url = orig.get("url")?.as_str()?;
+                            let preview = images.get("fixed_width_small")
+                                .or_else(|| images.get("fixed_width"))
+                                .or_else(|| images.get("downsized"))
+                                .and_then(|tg| tg.get("url"))
+                                .and_then(|u| u.as_str())
+                                .unwrap_or(gif_url);
+                            Some(json!({
+                                "id": id,
+                                "title": title,
+                                "url": gif_url,
+                                "preview": preview,
+                                "width": orig.get("width").and_then(|w| w.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(320),
+                                "height": orig.get("height").and_then(|h| h.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(240),
+                            }))
+                        }).collect();
+                        if !mapped.is_empty() {
                             return cors_json_response(200, json!({ "results": mapped }));
                         }
                     }
@@ -2180,42 +2586,50 @@ async fn api_gifs_search(_state: &AppState, _headers: &HeaderMap, search: &str) 
         }
     }
 
-    if !q.is_empty() && !giphy_key.is_empty() {
-        let enc_q = form_urlencoded::byte_serialize(q.as_bytes()).collect::<String>();
-        let url = format!(
-            "https://api.giphy.com/v1/gifs/search?api_key={}&q={}&limit=40&rating=g",
-            giphy_key, enc_q
-        );
-        if let Ok(client) = reqwest::Client::builder().timeout(std::time::Duration::from_secs(5)).build() {
-            if let Ok(resp) = client.get(&url).send().await {
-                if resp.status().is_success() {
-                    if let Ok(data) = resp.json::<Value>().await {
-                        if let Some(results) = data.get("data").and_then(|r| r.as_array()) {
-                            let mapped: Vec<Value> = results.iter().filter_map(|item| {
-                                let id = item.get("id")?.as_str()?;
-                                let title = item.get("title").and_then(|c| c.as_str()).unwrap_or("");
-                                let images = item.get("images")?.as_object()?;
-                                let orig = images.get("original")?.as_object()?;
-                                let gif_url = orig.get("url")?.as_str()?;
-                                let preview = images.get("fixed_width_small").and_then(|tg| tg.get("url")).and_then(|u| u.as_str()).unwrap_or(gif_url);
-                                Some(json!({
-                                    "id": id,
-                                    "title": title,
-                                    "url": gif_url,
-                                    "preview": preview,
-                                    "width": orig.get("width").and_then(|w| w.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(320),
-                                    "height": orig.get("height").and_then(|h| h.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(240),
-                                }))
-                            }).collect();
-                            return cors_json_response(200, json!({ "results": mapped }));
-                        }
-                    }
-                }
-            }
-        }
-    }
+    cors_json_response(200, json!({ "results": curated_gifs(Some(&q)) }))
+}
 
-    cors_json_response(200, json!({ "results": curated_gifs(if q.is_empty() { None } else { Some(&q) }) }))
+async fn api_gifs_proxy(_state: &AppState, _headers: &HeaderMap, search: &str) -> Response {
+    let url_str = extract_matrix_query_param(search, "url").unwrap_or_default();
+    if url_str.is_empty() {
+        return cors_json_response(400, json!({ "error": "url parameter is required" }));
+    }
+    let Ok(parsed_url) = url::Url::parse(&url_str) else {
+        return cors_json_response(400, json!({ "error": "invalid url" }));
+    };
+    if parsed_url.scheme() != "http" && parsed_url.scheme() != "https" {
+        return cors_json_response(400, json!({ "error": "invalid scheme" }));
+    }
+    let client = match reqwest::Client::builder().timeout(std::time::Duration::from_secs(10)).build() {
+        Ok(c) => c,
+        Err(_) => return cors_json_response(500, json!({ "error": "client build failed" })),
+    };
+    let resp = match client.get(parsed_url.as_str()).send().await {
+        Ok(r) => r,
+        Err(_) => return cors_json_response(502, json!({ "error": "failed to fetch media" })),
+    };
+    if !resp.status().is_success() {
+        return cors_json_response(resp.status().as_u16(), json!({ "error": "upstream error" }));
+    }
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("image/gif")
+        .to_string();
+    let bytes = match resp.bytes().await {
+        Ok(b) => b,
+        Err(_) => return cors_json_response(502, json!({ "error": "failed to read media body" })),
+    };
+    let mut builder = Response::builder()
+        .status(StatusCode::OK)
+        .header(hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+        .header(hyper::header::ACCESS_CONTROL_ALLOW_METHODS, "GET, OPTIONS")
+        .header(hyper::header::CACHE_CONTROL, "public, max-age=86400");
+    if let Ok(ct) = HeaderValue::from_str(&content_type) {
+        builder = builder.header(hyper::header::CONTENT_TYPE, ct);
+    }
+    builder.body(axum::body::Body::from(bytes)).unwrap_or_else(|_| cors_json_response(500, json!({ "error": "response builder failed" })))
 }
 
 async fn api_stickers_packs(_state: &AppState, _headers: &HeaderMap) -> Response {
@@ -3009,93 +3423,28 @@ async fn mod_unban(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> 
         target_user_id = format!("@{target_user_id}:mitch.pro");
     }
 
-    let room_id = match body_json.get("roomId").and_then(|v| v.as_str()) {
-        Some(r) if !r.is_empty() => r.to_string(),
-        _ => match ensure_official_general_room(&state.id_secret).await {
-            Ok(id) => id,
-            Err(e) => return cors_json_response(500, json!({ "ok": false, "error": e })),
-        },
-    };
-
-    let admin_tok = match get_system_admin_matrix_token(&state.id_secret).await {
-        Ok(t) => t,
-        Err(e) => return cors_json_response(500, json!({ "ok": false, "error": e })),
-    };
-
-    let mut req_headers = HeaderMap::new();
-    req_headers.insert("Content-Type", HeaderValue::from_static("application/json"));
-    if let Ok(hv) = HeaderValue::from_str(&format!("Bearer {admin_tok}")) {
-        req_headers.insert("Authorization", hv);
-    }
-
-    let unban_payload = json!({ "user_id": target_user_id });
-    let res = call_conduit(
-        &format!(
-            "/_matrix/client/v3/rooms/{}/unban",
-            url::form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>()
-        ),
-        Method::POST,
-        Some(req_headers.clone()),
-        Some(Bytes::from(
-            serde_json::to_vec(&unban_payload).unwrap_or_default(),
-        )),
-    )
-    .await;
-
-    // Clean up bannedUsers and mutedUsers in room settings
-    let settings_file = state.data_dir().join("matrix_room_settings.json");
-    let mut all = state.store.read_document(&settings_file, json!({}));
-    if let Some(room) = all.get_mut(&room_id) {
-        let uname = target_user_id
-            .trim_start_matches('@')
-            .split(':')
-            .next()
-            .unwrap_or("");
-        if let Some(b_map) = room.get_mut("bannedUsers").and_then(|v| v.as_object_mut()) {
-            b_map.remove(&target_user_id);
-            b_map.remove(uname);
-        }
-        if let Some(m_map) = room.get_mut("mutedUsers").and_then(|v| v.as_object_mut()) {
-            m_map.remove(&target_user_id);
-            m_map.remove(uname);
-        }
-        let _ = state.store.write_document(&settings_file, &all);
-    }
-
-    // Reset PL -1 in Conduit if power levels had them muted/banned
-    if let Ok((status, _, bytes)) = call_conduit(
-        &format!(
-            "/_matrix/client/v3/rooms/{}/state/m.room.power_levels",
-            url::form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>()
-        ),
-        Method::GET,
-        Some(req_headers.clone()),
-        None,
-    )
-    .await
-    {
-        if status.is_success() {
-            if let Ok(mut pl_data) = serde_json::from_slice::<Value>(&bytes) {
-                if let Some(users) = pl_data.get_mut("users").and_then(|v| v.as_object_mut()) {
-                    if users.get(&target_user_id).and_then(|v| v.as_i64()).map(|pl| pl < 0).unwrap_or(false) {
-                        users.remove(&target_user_id);
-                        let _ = call_conduit(
-                            &format!(
-                                "/_matrix/client/v3/rooms/{}/state/m.room.power_levels",
-                                url::form_urlencoded::byte_serialize(room_id.as_bytes())
-                                    .collect::<String>()
-                            ),
-                            Method::PUT,
-                            Some(req_headers),
-                            Some(Bytes::from(
-                                serde_json::to_vec(&pl_data).unwrap_or_default(),
-                            )),
-                        )
-                        .await;
-                    }
-                }
-            }
-        }
+    let explicit_room = body_json
+        .get("roomId")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+    if explicit_room.is_empty() || explicit_room == "all" || explicit_room == "*" {
+        unban_matrix_user_all_rooms(
+            &state.id_secret,
+            &state.store,
+            &state.data_dir(),
+            &target_user_id,
+        )
+        .await;
+    } else {
+        unban_matrix_user_from_room(
+            &state.id_secret,
+            &state.store,
+            &state.data_dir(),
+            explicit_room,
+            &target_user_id,
+        )
+        .await;
     }
 
     let admin_actor = mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, sid)
@@ -3107,20 +3456,14 @@ async fn mod_unban(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> 
         "matrix_unban_user",
         json!({
             "userId": target_user_id,
-            "roomId": room_id
+            "roomId": if explicit_room.is_empty() { "all" } else { explicit_room }
         }),
     );
 
-    match res {
-        Ok((status, _, _)) if status.is_success() => cors_json_response(
-            200,
-            json!({ "ok": true, "userId": target_user_id, "unbanned": true }),
-        ),
-        _ => cors_json_response(
-            200,
-            json!({ "ok": true, "userId": target_user_id, "unbanned": true, "conduitStatus": "cleared" }),
-        ),
-    }
+    cors_json_response(
+        200,
+        json!({ "ok": true, "userId": target_user_id, "unbanned": true }),
+    )
 }
 
 async fn mod_redact(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> Response {
@@ -4359,6 +4702,67 @@ async fn resolve_sender_info(
     (sender_user_id, sender_display_name, sender_norm_email)
 }
 
+fn check_user_is_mentioned(member_id: &str, member_norm: &str, parsed: Option<&Value>) -> bool {
+    let Some(parsed) = parsed else {
+        return false;
+    };
+
+    // 1. Matrix MSC3952 m.mentions:
+    if let Some(mentions) = parsed.get("m.mentions").and_then(|v| v.as_object()) {
+        if mentions.get("room").and_then(|v| v.as_bool()).unwrap_or(false) {
+            return true;
+        }
+        if let Some(user_ids) = mentions.get("user_ids").and_then(|v| v.as_array()) {
+            if user_ids
+                .iter()
+                .any(|u| u.as_str().map(|s| s.eq_ignore_ascii_case(member_id)).unwrap_or(false))
+            {
+                return true;
+            }
+        }
+    }
+
+    // 2. Check message body text for @username, @member_id, @room, @all, @everyone
+    let body = parsed.get("body").and_then(|v| v.as_str()).unwrap_or("");
+    let formatted_body = parsed
+        .get("formatted_body")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let full_text = format!("{body} {formatted_body}").to_lowercase();
+
+    if full_text.contains("@room")
+        || full_text.contains("@all")
+        || full_text.contains("@everyone")
+    {
+        return true;
+    }
+
+    let member_lower = member_id.to_lowercase();
+    if full_text.contains(&member_lower) {
+        return true;
+    }
+
+    let username = member_id
+        .trim_start_matches('@')
+        .split(':')
+        .next()
+        .unwrap_or("")
+        .to_lowercase();
+    if !username.is_empty()
+        && (full_text.contains(&format!("@{username}"))
+            || full_text.contains(&format!("<a href=\"https://matrix.to/#/@{username}:")))
+    {
+        return true;
+    }
+
+    let email_local = member_norm.split('@').next().unwrap_or("").to_lowercase();
+    if !email_local.is_empty() && full_text.contains(&format!("@{email_local}")) {
+        return true;
+    }
+
+    false
+}
+
 async fn dispatch_matrix_message_notifications(
     state: &Arc<AppState>,
     room_id: &str,
@@ -4459,13 +4863,25 @@ async fn dispatch_matrix_message_notifications(
             continue;
         }
 
+        let is_mentioned = check_user_is_mentioned(member_id, &member_norm, parsed.as_ref());
+        if !is_direct && !is_mentioned {
+            // Notifications are by default OFF unless mentioned (@)
+            continue;
+        }
+
+        let title_to_use = if is_mentioned && !is_direct {
+            format!("{sender_display_name} mentioned you in {room_title}")
+        } else {
+            notif_title.clone()
+        };
+
         add_matrix_notification(
             state,
             &member_norm,
             &json!({
                 "roomId": room_id,
                 "type": "matrix",
-                "title": notif_title,
+                "title": title_to_use,
                 "body": notif_body,
                 "detail": preview_text,
                 "sender": sender_display_name,
@@ -4478,7 +4894,7 @@ async fn dispatch_matrix_message_notifications(
         if !vapid_public.is_empty() {
             if let Some(sub) = subs.get(&member_norm) {
                 let push_payload = json!({
-                    "title": notif_title,
+                    "title": title_to_use,
                     "body": preview_text,
                     "url": notif_url,
                     "tag": format!("matrix-{room_id}"),
@@ -5533,7 +5949,8 @@ mod tests {
         let val: Value = serde_json::from_slice(&body_bytes).unwrap();
         let results = val.get("results").unwrap().as_array().unwrap();
         assert!(!results.is_empty());
-        assert!(results.iter().any(|g| g.get("id").unwrap() == "cat-vibe"));
+        assert!(results[0].get("id").is_some());
+        assert!(results[0].get("url").is_some());
 
         // 2. Search GIFs
         let resp = handle_api(
@@ -5571,6 +5988,37 @@ mod tests {
         let packs = val.get("packs").unwrap().as_array().unwrap();
         assert!(!packs.is_empty());
         assert!(packs.iter().any(|p| p.get("id").unwrap() == "pepe"));
+    }
+
+    #[test]
+    fn test_check_user_is_mentioned() {
+        let content_msc = json!({
+            "m.mentions": {
+                "user_ids": ["@target:mitch.pro"]
+            },
+            "body": "Hello there"
+        });
+        assert!(check_user_is_mentioned("@target:mitch.pro", "target", Some(&content_msc)));
+        assert!(!check_user_is_mentioned("@other:mitch.pro", "other", Some(&content_msc)));
+
+        let content_body = json!({
+            "body": "Hey @target, how are you?"
+        });
+        assert!(check_user_is_mentioned("@target:mitch.pro", "target", Some(&content_body)));
+        assert!(!check_user_is_mentioned("@other:mitch.pro", "other", Some(&content_body)));
+
+        let content_room = json!({
+            "m.mentions": {
+                "room": true
+            },
+            "body": "Attention room"
+        });
+        assert!(check_user_is_mentioned("@any:mitch.pro", "any", Some(&content_room)));
+
+        let content_plain = json!({
+            "body": "Just talking about random things"
+        });
+        assert!(!check_user_is_mentioned("@target:mitch.pro", "target", Some(&content_plain)));
     }
 
     #[tokio::test]
