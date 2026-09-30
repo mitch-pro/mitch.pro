@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mitch-pro-cache-v46';
+const CACHE_NAME = 'mitch-pro-cache-v47';
 const ASSETS = [
   '/favicon.ico',
   '/manifest.json',
@@ -15,8 +15,10 @@ const ASSETS = [
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS);
+    caches.open(CACHE_NAME).then(async (cache) => {
+      await Promise.allSettled(
+        ASSETS.map((asset) => cache.add(asset).catch(() => {}))
+      );
     }).then(() => self.skipWaiting())
   );
 });
