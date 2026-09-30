@@ -86,21 +86,6 @@ pub fn spawn(state: std::sync::Arc<crate::state::AppState>) {
                 &secret, &store, &data_dir,
             )
             .await;
-
-            // Periodic worker every 5 minutes: keeps staff roles synced
-            let mut interval = tokio::time::interval(std::time::Duration::from_secs(300));
-            loop {
-                interval.tick().await;
-                for (alias, name, topic) in crate::routes::matrix::OFFICIAL_ROOMS {
-                    let _ =
-                        crate::routes::matrix::ensure_official_room(&secret, alias, name, topic)
-                            .await;
-                }
-                crate::routes::matrix::sync_staff_power_levels_to_all_official_rooms(
-                    &secret, &store, &data_dir,
-                )
-                .await;
-            }
         });
     }
 }

@@ -745,6 +745,15 @@ pub fn resolve_matrix_user_id_from_store(
     norm_email: &str,
 ) -> String {
     let norm = mitch_lib::auth::normalize_email(norm_email);
+    let profiles_file = data_dir.join("profiles.json");
+    let profiles = store.read_document(&profiles_file, json!({}));
+    if let Some(prof) = profiles.get(&norm) {
+        if let Some(uname) = prof.get("username").and_then(|v| v.as_str()) {
+            if !uname.is_empty() {
+                return format!("@{uname}:mitch.pro");
+            }
+        }
+    }
     let matrix_users_file = data_dir.join("matrix_users.json");
     let matrix_users = store.read_document(&matrix_users_file, json!({}));
     if let Some(map) = matrix_users.as_object() {
@@ -756,13 +765,6 @@ pub fn resolve_matrix_user_id_from_store(
                     }
                 }
             }
-        }
-    }
-    let profiles_file = data_dir.join("profiles.json");
-    let profiles = store.read_document(&profiles_file, json!({}));
-    if let Some(prof) = profiles.get(&norm) {
-        if let Some(uname) = prof.get("username").and_then(|v| v.as_str()) {
-            return format!("@{uname}:mitch.pro");
         }
     }
     let local = norm.split('@').next().unwrap_or("user");
@@ -838,24 +840,6 @@ pub async fn sync_staff_power_levels_to_all_official_rooms(
                             users_map.insert(staff_user.clone(), json!(target_pl));
                             changed = true;
                         }
-                    }
-                    let to_reset: Vec<String> = users_map
-                        .iter()
-                        .filter_map(|(uid, pl)| {
-                            let p = pl.as_i64().unwrap_or(0);
-                            if (p == 50 || p == 100)
-                                && !staff_power_levels.contains_key(uid)
-                                && uid != "@admin:mitch.pro"
-                            {
-                                Some(uid.clone())
-                            } else {
-                                None
-                            }
-                        })
-                        .collect();
-                    for uid in to_reset {
-                        users_map.remove(&uid);
-                        changed = true;
                     }
                 }
 
@@ -1744,14 +1728,10 @@ pub fn handle_cinny_config(headers: &HeaderMap) -> Response {
             "featuredCommunities": {
                 "openAsDefault": true,
                 "servers": ["mitch.pro"],
-                "rooms": [
-                    "#general:mitch.pro",
-                    "#tech:mitch.pro",
-                    "#biking:mitch.pro",
-                    "#gaming:mitch.pro",
-                    "#computers:mitch.pro",
-                    "#random:mitch.pro"
-                ],
+                "rooms": OFFICIAL_ROOMS
+                    .iter()
+                    .map(|(alias, _, _)| format!("#{alias}:mitch.pro"))
+                    .collect::<Vec<_>>(),
                 "spaces": ["#mitch.pro:mitch.pro"]
             },
             "hashRouter": {
@@ -2169,7 +2149,10 @@ async fn api_sso_login(state: &AppState, headers: &HeaderMap, body_bytes: &[u8])
     sync_matrix_user_to_official_rooms(&state.id_secret, user_id, access_token, target_power_level)
         .await;
 
-    sync_user_mention_only_push_rules(access_token).await;
+    let push_tok = access_token.to_string();
+    tokio::spawn(async move {
+        sync_user_mention_only_push_rules(&push_tok).await;
+    });
 
     let raw_pfp = prof.get("pfp").and_then(|v| v.as_str()).unwrap_or("");
     let bio_val = prof.get("bio").and_then(|v| v.as_str()).unwrap_or("");
@@ -4999,6 +4982,120 @@ async fn dispatch_matrix_call_notifications(
     }
 }
 
+/// Room summary handler for MSC3266 / Nheko Room Summary (`im.nheko.summary`).
+pub async fn handle_room_summary(state: &AppState, raw_room_id_or_alias: &str) -> Response {
+    let decoded = urlencoding_decode(raw_room_id_or_alias);
+    let trimmed = decoded.trim();
+
+    // Check official rooms
+    for (alias, name, topic) in OFFICIAL_ROOMS {
+        let full_alias = format!("#{alias}:mitch.pro");
+        let bare = trimmed.trim_start_matches('#').split(':').next().unwrap_or("");
+        let matches = trimmed.eq_ignore_ascii_case(&full_alias)
+            || trimmed.eq_ignore_ascii_case(alias)
+            || bare.eq_ignore_ascii_case(alias);
+
+        if matches {
+            let room_id = ensure_official_room(&state.id_secret, alias, name, topic)
+                .await
+                .unwrap_or_else(|_| format!("!{alias}:mitch.pro"));
+            return cors_json_response(
+                200,
+                json!({
+                    "room_id": room_id,
+                    "name": name,
+                    "topic": topic,
+                    "avatar_url": null,
+                    "canonical_alias": full_alias,
+                    "aliases": [full_alias],
+                    "world_readable": true,
+                    "guest_can_join": true,
+                    "num_joined_members": 1,
+                    "joined_member_count": 1,
+                    "membership": "leave",
+                    "room_type": null,
+                    "encryption": null,
+                    "visibility": "public"
+                }),
+            );
+        }
+    }
+
+    // Check official rooms by cached room_id
+    {
+        let cache = official_room_id_map().lock().unwrap_or_else(|e| e.into_inner());
+        for (alias, name, topic) in OFFICIAL_ROOMS {
+            if let Some(cached_id) = cache.get(*alias) {
+                if cached_id == trimmed {
+                    let full_alias = format!("#{alias}:mitch.pro");
+                    return cors_json_response(
+                        200,
+                        json!({
+                            "room_id": trimmed,
+                            "name": name,
+                            "topic": topic,
+                            "avatar_url": null,
+                            "canonical_alias": full_alias,
+                            "aliases": [full_alias],
+                            "world_readable": true,
+                            "guest_can_join": true,
+                            "num_joined_members": 1,
+                            "joined_member_count": 1,
+                            "membership": "leave",
+                            "room_type": null,
+                            "encryption": null,
+                            "visibility": "public"
+                        }),
+                    );
+                }
+            }
+        }
+    }
+
+    // Fall back to querying Conduit's directory if it looks like an alias
+    if trimmed.starts_with('#') {
+        let encoded = url::form_urlencoded::byte_serialize(trimmed.as_bytes()).collect::<String>();
+        if let Ok((status, _, bytes)) = call_conduit(
+            &format!("/_matrix/client/v3/directory/room/{encoded}"),
+            Method::GET,
+            None,
+            None,
+        )
+        .await
+        {
+            if status.is_success() {
+                let data: Value = serde_json::from_slice(&bytes).unwrap_or(json!({}));
+                if let Some(room_id) = data.get("room_id").and_then(|v| v.as_str()) {
+                    return cors_json_response(
+                        200,
+                        json!({
+                            "room_id": room_id,
+                            "canonical_alias": trimmed,
+                            "aliases": [trimmed],
+                            "world_readable": true,
+                            "guest_can_join": true,
+                            "num_joined_members": 1,
+                            "joined_member_count": 1,
+                            "membership": "leave",
+                            "room_type": null,
+                            "encryption": null,
+                            "visibility": "public"
+                        }),
+                    );
+                }
+            }
+        }
+    }
+
+    cors_json_response(
+        404,
+        json!({
+            "errcode": "M_NOT_FOUND",
+            "error": "Room not found"
+        }),
+    )
+}
+
 /// Gateway dispatcher for Matrix paths: `/_matrix/*`, `/.well-known/matrix/*`, `/matrix/config.json`.
 pub async fn handle_matrix_gateway(
     state: &Arc<AppState>,
@@ -5029,6 +5126,57 @@ pub async fn handle_matrix_gateway(
 
     if !path.starts_with("/_matrix/") {
         return None;
+    }
+
+    // MSC3266 / Nheko Room Summary
+    static ROOM_SUMMARY_RE: OnceLock<regex::Regex> = OnceLock::new();
+    let room_summary_re = ROOM_SUMMARY_RE.get_or_init(|| {
+        regex::Regex::new(
+            r"^/_matrix/client/(?:unstable/im\.nheko\.summary|unstable/org\.matrix\.msc3266|v1)/(?:summary/([^/?]+)|rooms/([^/?]+)/summary)/?$",
+        )
+        .unwrap_or_else(|_| unreachable_regex())
+    });
+    if method == Method::GET {
+        if let Some(caps) = room_summary_re.captures(path) {
+            let room_param = caps
+                .get(1)
+                .or_else(|| caps.get(2))
+                .map(|m| m.as_str())
+                .unwrap_or("");
+            return Some(handle_room_summary(state, room_param).await);
+        }
+    }
+
+    // MSC2965 OIDC Discovery endpoint stub
+    static MSC2965_RE: OnceLock<regex::Regex> = OnceLock::new();
+    let msc2965_re = MSC2965_RE.get_or_init(|| {
+        regex::Regex::new(
+            r"^/_matrix/client/unstable/org\.matrix\.msc2965/(?:auth_metadata|auth_issuer)/?$",
+        )
+        .unwrap_or_else(|_| unreachable_regex())
+    });
+    if method == Method::GET && msc2965_re.is_match(path) {
+        return Some(cors_json_response(
+            404,
+            json!({
+                "errcode": "M_UNRECOGNIZED",
+                "error": "OIDC is not supported"
+            }),
+        ));
+    }
+
+    // Room keys backup version fallback
+    if method == Method::GET
+        && (path == "/_matrix/client/v3/room_keys/version"
+            || path == "/_matrix/client/v3/room_keys/version/")
+    {
+        return Some(cors_json_response(
+            404,
+            json!({
+                "errcode": "M_NOT_FOUND",
+                "error": "No current key backup version"
+            }),
+        ));
     }
 
     // VoIP STUN/TURN Discovery
@@ -5962,5 +6110,34 @@ mod tests {
             updated.get("bannedUsers").and_then(|v| v.as_object()).unwrap().get("@spammer:mitch.pro"),
             None
         );
+    }
+
+    #[tokio::test]
+    async fn test_room_summary_resolution() {
+        let (state, dir) = test_state();
+
+        // Cache room ID for rust
+        {
+            let mut cache = official_room_id_map().lock().unwrap();
+            cache.insert("rust".to_string(), "!rust_room_id:mitch.pro".to_string());
+        }
+
+        // Test with URL encoded alias
+        let resp = handle_room_summary(&state, "%23rust%3Amitch.pro").await;
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // Test with bare alias
+        let resp2 = handle_room_summary(&state, "rust").await;
+        assert_eq!(resp2.status(), StatusCode::OK);
+
+        // Test with cached room ID
+        let resp3 = handle_room_summary(&state, "!rust_room_id:mitch.pro").await;
+        assert_eq!(resp3.status(), StatusCode::OK);
+
+        // Test with unknown room
+        let resp_unknown = handle_room_summary(&state, "nonexistent-room-xyz").await;
+        assert_eq!(resp_unknown.status(), StatusCode::NOT_FOUND);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
