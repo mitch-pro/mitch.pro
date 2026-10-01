@@ -55,7 +55,7 @@ body.home.mitch-next #site-topbar :is(#theme-btn, #sw-notif-btn) { position: sta
   body.home.mitch-design.mitch-next #site-topbar.home-masthead { padding-inline: max(24px, calc((100vw - 1280px) / 2)) !important; }
   body.home.mitch-next #member-side-rail { top: 80px !important; max-height: calc(100dvh - 92px); }
 }
-html body.mitch-design.mitch-next :is(.panel, .card, .glass-card, .cpanel, .pref-section, .stat-card, .mod-card, .action-card, .listing-item, .item-card, .member-card, .friend-card, .notif-card, .plan-card, .home-day-card, .hud-pane-aside, .profile-card, .balance-card, .rank-overview) {
+html body.mitch-design.mitch-next :is(.panel, .card, .glass-card, .cpanel, .pref-section, .stat-card, .mod-card, .action-card, .listing-item, .item-card, .member-card, .friend-card, .notif-card, .plan-card, .profile-card, .balance-card, .rank-overview) {
   border-color: var(--next-edge) !important; border-radius: max(14px, var(--t-radius)) !important;
   background: linear-gradient(145deg, color-mix(in srgb, var(--t-ac) 5%, transparent), transparent 55%), var(--next-panel) !important;
   box-shadow: var(--next-shadow) !important;
@@ -91,16 +91,12 @@ body.mitch-next.profile-page .stat-lbl { font-size: 12px; opacity: .8; letter-sp
 body.mitch-next.profile-page .stat-val { font-size: 26px; font-variant-numeric: tabular-nums; }
 body.mitch-next[data-page=vms] .sales-top { display: none; }
 body.mitch-next :is(.profile-header, .rank-hero, .balance-card) { border-radius: 20px !important; background: linear-gradient(120deg, var(--t-gls), transparent 65%), var(--next-panel) !important; }
-body.home.mitch-next .home-features { gap: 16px; }
-body.home.mitch-next .home-feature { min-height: 260px; border-radius: 24px; border: 1px solid #ffffff29; box-shadow: inset 0 1px #ffffff29, 0 16px 40px #0003; }
-body.home.mitch-next .feature-chat { background: linear-gradient(125deg, #492173, #993b83) !important; }
-body.home.mitch-next .feature-games { background: linear-gradient(125deg, #432489, #8143cd) !important; }
-body.home.mitch-next .home-feature h2 { font-weight: 850; font-size: clamp(32px, 4vw, 52px); max-width: 75%; }
-body.home.mitch-next .home-dayboard-grid { gap: 16px; }
+/* The feature tiles, dayboard, and catalog have their own complete flat
+   design in home.css (seamed hairline grid, no card chrome) — this used to
+   paint over all of it with gradients, radii, and shadows (and, for the
+   feature tiles, literal purple/magenta !important gradients that fought
+   every value home.css set). Only the compatible font-weight bump stays. */
 body.home.mitch-next :is(.home-card-head h3, .home-dayboard-sr) { font-weight: 750; }
-body.home.mitch-next :is(.home-access-link, .hub-action, .category-link) { border-radius: 14px !important; }
-body.home.mitch-next .category-grid { gap: 10px; }
-body.home.mitch-next .category-link { padding: 13px !important; background: var(--next-panel) !important; border: 1px solid var(--t-bd) !important; }
 body.mitch-next .home-perk-card { border: 1px solid var(--next-edge); border-radius: 18px; background: var(--next-panel); }
 
 /* Chat is a full-height workspace, with independently scrolling columns. */
@@ -209,19 +205,14 @@ body.mitch-design.mitch-next.encrypt-page .modal-card { background: var(--t-bg) 
   body.mitch-next.plaza-page .char-count { position: static; grid-column: 1 / -1; grid-row: 2; text-align: right; font-size: 12px; }
   body.mitch-next :is(.modal, .modal-overlay, .overlay) :is(.modal-card, .modal-content) { max-width: calc(100vw - 24px) !important; max-height: calc(100dvh - 32px); overflow: auto; }
   body.home.mitch-next #mainpage { width: calc(100% - 28px) !important; margin-inline: auto !important; padding: 22px 0 30px !important; }
-  body.home.mitch-next .home-intro { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
-  body.home.mitch-next .home-features { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  body.home.mitch-next .home-feature { min-height: 200px; padding: 24px; border-radius: 22px; }
-  body.home.mitch-next .home-feature h2 { font-size: 36px; margin-block: 20px; max-width: 70%; }
-  body.home.mitch-next :is(.feature-chat-art, .feature-game-art) { opacity: .5; right: -8px; width: 140px; }
-  body.home.mitch-next .home-dayboard-grid { grid-template-columns: minmax(0, 1fr) !important; }
-  body.home.mitch-next .hud-workspace { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  /* Feature-tile and catalog sizing on mobile is home.css's own responsive
+     rules now (its seamed hairline grid collapses differently from the old
+     gapped-card layout this used to force). */
   body.home.mitch-next .category-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  body.home.mitch-next .hub-action-rail { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  body.home.mitch-next .hud-workspace { grid-template-columns: minmax(0, 1fr); gap: 20px; }
   body.home.mitch-next #member-side-rail { bottom: calc(var(--mobile-dock-space) + 8px) !important; top: 76px !important; max-width: calc(100vw - 28px); }
   body.home.mitch-next #member-side-rail:not(.is-open) { display: none !important; }
   body.home.mitch-next .staff-access-rail { margin: 12px 14px 0 !important; width: auto !important; }
-  body.home.mitch-next .home-staff-rail { position: static !important; width: 100% !important; max-width: none !important; display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; transform: none !important; }
   body.mitch-next #site-footer { position: static !important; width: 100%; padding: 18px 16px; }
   body.mitch-next #_agree_footer { position: static !important; width: 100%; padding: 18px 16px; font-size: 12px !important; line-height: 1.6; color: var(--t-fg2) !important; }
   body.mitch-next #_agree_footer a { color: var(--t-ac) !important; text-decoration: underline !important; }
