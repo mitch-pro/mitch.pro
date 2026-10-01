@@ -115,6 +115,12 @@ pub fn inject_page(
     if !is_onboarding && !is_embedded && !raw.contains("/app.css") {
         inject_str.push_str("<link rel=\"stylesheet\" href=\"/app.css\">\n");
     }
+    // Applies the "theme" / "accent" cookies (set from preferences) as a
+    // data-theme attribute and --t-ac overrides on <html>, before first
+    // paint — not deferred, so there's no flash of the stock theme.
+    if !is_onboarding && !is_embedded && !raw.contains("/site-theme.js") {
+        inject_str.push_str("<script src=\"/site-theme.js\"></script>\n");
+    }
     if !is_embedded && !raw.contains("/app-shell.js") {
         inject_str.push_str("<script src=\"/app-shell.js\" defer></script>\n");
     }

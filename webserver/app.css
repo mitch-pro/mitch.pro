@@ -68,6 +68,42 @@
   }
 }
 
+/* Manual light/dark override (site-theme.js sets data-theme from the
+   "theme" cookie via the preferences page's Theme Preset). Both blocks sit
+   outside the media query and key off an attribute selector so they outrank
+   the query regardless of actual OS preference or source order. */
+:root[data-theme="light"] {
+  --t-bg: #ffffff;
+  --t-bg2: #faf9fb;
+  --t-bg3: #f1f0f3;
+  --t-fg: #1c1c22;
+  --t-fg2: #6e6e78;
+  --t-fg3: #a3a2ab;
+  --t-ac: #f75383;
+  --t-ac2: #e03d6c;
+  --t-ac3: #e03d6c;
+  --t-bd: #e8e7ec;
+  --t-bda: #d7d6dd;
+  --t-gl: transparent;
+  --t-gls: #fdeef3;
+  --t-gr: #f75383;
+}
+:root[data-theme="dark"] {
+  --t-bg: #17171a;
+  --t-bg2: #1e1e22;
+  --t-bg3: #262629;
+  --t-fg: #f0f0f3;
+  --t-fg2: #9b9aa4;
+  --t-fg3: #6b6a73;
+  --t-ac: #ff6f99;
+  --t-ac2: #ff8bad;
+  --t-ac3: #ff8bad;
+  --t-bd: #2b2b30;
+  --t-bda: #38383f;
+  --t-gls: #332127;
+  --t-gr: #ff6f99;
+}
+
 *, *::before, *::after { box-sizing: border-box; }
 
 html {

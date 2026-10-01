@@ -24,8 +24,8 @@ const registrationFiles = [
 
 for (const file of registrationFiles) {
   const source = readFileSync(file, 'utf8');
-  assert(source.includes('/sw.js?v=47'), `${file} must register the current service worker version`);
-  assert(!/\/sw\.js\?v=(?:11|13|37|45|46)/.test(source), `${file} must not reinstall a stale service worker URL`);
+  assert(source.includes('/sw.js?v=48'), `${file} must register the current service worker version`);
+  assert(!/\/sw\.js\?v=(?:11|13|37|45|46|47)/.test(source), `${file} must not reinstall a stale service worker URL`);
 }
 
 console.log('Service worker bypass and version consistency checks passed.');

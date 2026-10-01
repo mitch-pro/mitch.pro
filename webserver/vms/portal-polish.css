@@ -4,8 +4,8 @@ body.computer-portal {
   --computer-raised: #171c25;
   --computer-line: rgba(255, 255, 255, .065);
   --computer-muted: #a1a9b8;
-  --computer-purple: #9d80f2;
-  background: radial-gradient(800px circle at 50% 8%, rgba(105, 65, 190, .075), transparent 58%), var(--computer-page);
+  --computer-purple: #ff6f99;
+  background: radial-gradient(800px circle at 50% 8%, rgba(255, 111, 153, .08), transparent 58%), var(--computer-page);
   color: #f2f3f7;
 }
 
@@ -21,11 +21,11 @@ body.computer-portal .primary-button,
 body.computer-portal .danger-button { min-height: 42px; border-radius: 9px; font-size: 13px; font-weight: 650; transition: background .16s ease, border-color .16s ease, transform .16s ease, box-shadow .16s ease; }
 body.computer-portal .quiet-button, body.computer-portal .control-button { border-color: var(--computer-line); background: var(--computer-raised); color: #e1e4ec; box-shadow: none; }
 body.computer-portal .quiet-button:hover:not(:disabled), body.computer-portal .control-button:hover:not(:disabled) { transform: translateY(-1px); border-color: rgba(255,255,255,.16); background: #202631; }
-body.computer-portal .primary-button { border: 1px solid #a78af6; background: #9b7cf0; color: #100c1d; box-shadow: none; }
-body.computer-portal .primary-button:hover:not(:disabled) { transform: translateY(-1px); border-color: #b59df7; background: #ad93f5; box-shadow: 0 8px 20px rgba(55,30,100,.17); }
+body.computer-portal .primary-button { border: 1px solid #ff6f99 !important; background: #ff6f99 !important; color: #1c1c22 !important; box-shadow: none; }
+body.computer-portal .primary-button:hover:not(:disabled) { transform: translateY(-1px); border-color: #ff8bad !important; background: #ff8bad !important; box-shadow: none; }
 body.computer-portal .primary-button:active:not(:disabled), body.computer-portal .quiet-button:active:not(:disabled), body.computer-portal .control-button:active:not(:disabled) { transform: translateY(0); }
 body.computer-portal button:disabled { opacity: .48; cursor: not-allowed; }
-body.computer-portal :is(button, a, summary, input):focus-visible { outline: 2px solid #b9a4ff; outline-offset: 3px; }
+body.computer-portal :is(button, a, summary, input):focus-visible { outline: 2px solid #ff6f99; outline-offset: 3px; }
 body.computer-portal #refresh-button { gap: 9px; min-width: 111px; padding: 9px 13px; }
 body.computer-portal #refresh-button svg { width: 17px; height: 17px; }
 body.computer-portal #refresh-button.is-loading svg { animation: spin .8s linear infinite; }
@@ -33,7 +33,7 @@ body.computer-portal .refresh-status { margin: -10px 0 22px; font-size: 13px; li
 
 body.computer-portal .computer-grid { gap: 20px; }
 body.computer-portal .computer-card { display: grid; grid-template-columns: minmax(0, 43fr) minmax(0, 57fr); min-height: 540px; overflow: visible; border: 1px solid var(--computer-line); border-radius: 21px; background: var(--computer-surface); box-shadow: 0 20px 60px rgba(0,0,0,.3); }
-body.computer-portal .desktop-preview { min-width: 0; min-height: 0; padding: 56px 28px; overflow: hidden; border-right: 1px solid var(--computer-line); border-radius: 20px 0 0 20px; background: radial-gradient(400px circle at 50% 48%, rgba(106, 83, 163, .11), transparent 70%), #0c1017; }
+body.computer-portal .desktop-preview { min-width: 0; min-height: 0; padding: 56px 28px; overflow: hidden; border-right: 1px solid var(--computer-line); border-radius: 20px 0 0 20px; background: radial-gradient(400px circle at 50% 48%, rgba(255, 111, 153, .10), transparent 70%), #0c1017; }
 body.computer-portal .desktop-preview::before { background-size: 40px 40px; opacity: .55; }
 body.computer-portal .desktop-preview::after { opacity: .45; }
 body.computer-portal .desktop-window { width: min(530px, 100%); border-color: rgba(255,255,255,.14); border-radius: 15px; box-shadow: 0 24px 50px rgba(0,0,0,.48); transform: none; }
@@ -68,8 +68,8 @@ body.computer-portal .info-stat dt { color: var(--computer-muted); font-size: 11
 body.computer-portal .info-stat dd { margin: 4px 0 0; overflow: hidden; color: #eef0f5; font-size: 13px; font-weight: 660; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
 body.computer-portal .info-stat small { display: block; margin-top: 2px; color: #d6bd8c; font-size: 10px; }
 body.computer-portal .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-body.computer-portal .text-button { min-height: 26px; padding: 0; border: 0; background: transparent; color: #b7a4f7; font-size: 12px; font-weight: 650; cursor: pointer; }
-body.computer-portal .text-button:hover { color: #d0c3ff; text-decoration: underline; text-underline-offset: 3px; }
+body.computer-portal .text-button { min-height: 26px; padding: 0; border: 0; background: transparent; color: #ff6f99; font-size: 12px; font-weight: 650; cursor: pointer; }
+body.computer-portal .text-button:hover { color: #ff8bad; text-decoration: underline; text-underline-offset: 3px; }
 body.computer-portal .resource-grid { display: grid; gap: 10px; margin-top: 10px; }
 body.computer-portal .resource-meter { min-width: 0; }
 body.computer-portal .resource-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; font-size: 12px; }
@@ -109,7 +109,7 @@ body.computer-portal .confirm-dialog, body.computer-portal .upgrade-dialog { bor
 body.computer-portal .danger-button { border-color: rgba(221,106,115,.32); background: #8e313c; color: #fff; }
 body.computer-portal .danger-button:hover:not(:disabled) { background: #a13a46; transform: translateY(-1px); }
 body.computer-portal .computer-shell ~ #_agree_footer, body.computer-portal #_agree_footer { position: static !important; display: block; max-width: 1220px; margin: 0 auto; padding: 0 32px 24px; color: #969ca9 !important; font-size: 12px !important; line-height: 1.6; text-align: left !important; pointer-events: auto !important; }
-body.computer-portal #_agree_footer a { color: #b9a4ff !important; }
+body.computer-portal #_agree_footer a { color: #ff6f99 !important; }
 
 @media (min-width: 1000px) {
   body.computer-portal .computer-grid:has(>.computer-card:nth-child(2)) { grid-template-columns: 1fr; }
@@ -160,16 +160,16 @@ body.computer-portal #_agree_footer a { color: #b9a4ff !important; }
 }
 
 /* The shared site theme applies important button colors; keep portal actions semantic. */
-body.computer-portal #computer-grid#computer-grid#computer-grid#computer-grid .primary-button.main-action { min-height: 42px !important; border-color: #a78af6 !important; border-radius: 9px !important; background: #9b7cf0 !important; color: #100c1d !important; }
-body.computer-portal #computer-grid#computer-grid#computer-grid#computer-grid .primary-button.main-action:hover:not(:disabled) { border-color: #b59df7 !important; background: #ad93f5 !important; color: #100c1d !important; transform: translateY(-1px) !important; }
+body.computer-portal #computer-grid#computer-grid#computer-grid#computer-grid .primary-button.main-action { min-height: 42px !important; border-color: #ff6f99 !important; border-radius: 9px !important; background: #ff6f99 !important; color: #1c1c22 !important; }
+body.computer-portal #computer-grid#computer-grid#computer-grid#computer-grid .primary-button.main-action:hover:not(:disabled) { border-color: #ff8bad !important; background: #ff8bad !important; color: #1c1c22 !important; transform: translateY(-1px) !important; }
 body.computer-portal #computer-grid#computer-grid#computer-grid#computer-grid .quiet-button,
 body.computer-portal #computer-grid#computer-grid#computer-grid#computer-grid .control-button,
 body.computer-portal #refresh-button#refresh-button#refresh-button#refresh-button { min-height: 40px !important; border-color: var(--computer-line) !important; border-radius: 9px !important; background: var(--computer-raised) !important; color: #e1e4ec !important; }
 body.computer-portal #computer-grid#computer-grid#computer-grid#computer-grid .quiet-button:hover:not(:disabled),
 body.computer-portal #computer-grid#computer-grid#computer-grid#computer-grid .control-button:hover:not(:disabled),
 body.computer-portal #refresh-button#refresh-button#refresh-button#refresh-button:hover:not(:disabled) { border-color: rgba(255,255,255,.16) !important; background: #202631 !important; color: #fff !important; transform: translateY(-1px) !important; }
-body.computer-portal #computer-grid#computer-grid#computer-grid#computer-grid .text-button { min-height: 26px !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; color: #b7a4f7 !important; box-shadow: none !important; }
-body.computer-portal #computer-grid#computer-grid#computer-grid#computer-grid .text-button:hover { background: transparent !important; color: #d0c3ff !important; transform: none !important; }
+body.computer-portal #computer-grid#computer-grid#computer-grid#computer-grid .text-button { min-height: 26px !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; color: #ff6f99 !important; box-shadow: none !important; }
+body.computer-portal #computer-grid#computer-grid#computer-grid#computer-grid .text-button:hover { background: transparent !important; color: #ff8bad !important; transform: none !important; }
 body.computer-portal #computer-grid#computer-grid#computer-grid#computer-grid .menu-panel button { min-height: 36px !important; border: 0 !important; border-radius: 6px !important; background: transparent !important; color: #e8eaf0 !important; }
 body.computer-portal #computer-grid#computer-grid#computer-grid#computer-grid .menu-panel button:hover:not(:disabled) { background: rgba(255,255,255,.07) !important; }
 body.computer-portal #computer-grid#computer-grid#computer-grid#computer-grid .menu-panel .danger-menu-action { color: #f0a1a7 !important; }

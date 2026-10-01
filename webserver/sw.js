@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mitch-pro-cache-v49';
+const CACHE_NAME = 'mitch-pro-cache-v50';
 const ASSETS = [
   '/favicon.ico',
   '/manifest.json',
@@ -9,7 +9,8 @@ const ASSETS = [
   '/app.css',
   '/home.css?v=6',
   '/popup.js',
-  '/pwa-install.js'
+  '/pwa-install.js',
+  '/site-theme.js'
 ];
 
 self.addEventListener('install', (e) => {

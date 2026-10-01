@@ -53,6 +53,37 @@
   }
 }
 
+/* Manual light/dark override (site-theme.js, driven from the preferences
+   page's Theme Preset) — this page keeps its own --mh-* palette instead of
+   reading app.css's --t-* tokens, so the override has to be mirrored here
+   too or the homepage would just ignore the preset. */
+:root[data-theme="light"] {
+  --mh-bg: #ffffff;
+  --mh-bg-soft: #faf9fb;
+  --mh-ink: #1c1c22;
+  --mh-ink-soft: #6e6e78;
+  --mh-ink-faint: #a3a2ab;
+  --mh-border: #e8e7ec;
+  --mh-border-strong: #d7d6dd;
+  --mh-accent: #f75383;
+  --mh-accent-hover: #e03d6c;
+  --mh-accent-soft: #fdeef3;
+  --mh-accent-ink: #ffffff;
+}
+:root[data-theme="dark"] {
+  --mh-bg: #17171a;
+  --mh-bg-soft: #1e1e22;
+  --mh-ink: #f0f0f3;
+  --mh-ink-soft: #9b9aa4;
+  --mh-ink-faint: #6b6a73;
+  --mh-border: #2b2b30;
+  --mh-border-strong: #38383f;
+  --mh-accent: #ff6f99;
+  --mh-accent-hover: #ff8bad;
+  --mh-accent-soft: #332127;
+  --mh-accent-ink: #1c1c22;
+}
+
 /* app.css AND portal-redesign.css both declare sitewide --t-* tokens (their
    own dark-purple-galaxy defaults, normally overwritten at runtime by
    theme.js) — and portal-redesign.css additionally forces every `.mitch-design`

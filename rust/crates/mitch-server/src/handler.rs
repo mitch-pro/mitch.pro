@@ -84,6 +84,7 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/cookie-consent.js",
     "/api.js",
     "/app-shell.js",
+    "/site-theme.js",
     "/mitch-coins.js",
     "/mitch-coins.css",
     "/mitchcoin.png",
