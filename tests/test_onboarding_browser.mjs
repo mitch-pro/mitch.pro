@@ -32,11 +32,14 @@ try {
     await delay(150);
   }
   assert(ready, 'Build the local Rust server before running this test');
-  for (const path of ['/faq/', '/faq.html', '/faq/index.html', '/privacy/', '/privacy.html', '/use-agreement/', '/use-agreement.html', '/onboarding.css?v=1', '/onboarding.js?v=1', '/media/site-tour-poster-v1.webp']) {
+  for (const path of ['/faq/', '/faq.html', '/faq/index.html', '/privacy/', '/privacy.html', '/use-agreement/', '/use-agreement.html', '/onboarding.css?v=3', '/onboarding.js?v=3', '/media/site-tour-poster-v1.webp', '/rjuhsd-assets/pathways-logo.png', '/rjuhsd-assets/rosevilleadult-logo.png', '/rjuhsd-assets/district-logo.png']) {
     const response = await fetch(base + path);
     assert.equal(response.status, 200, `${path} should be public`);
     assert(!response.url.includes('/enroll/'), `${path} must not redirect to login`);
   }
+  const helpAlias = await fetch(base + '/faq/', { redirect: 'manual' });
+  assert.equal(helpAlias.status, 302);
+  assert.equal(helpAlias.headers.get('location'), '/#help');
   for (const path of ['/members/', '/vms/', '/api/vm/computers']) {
     const response = await fetch(base + path, { redirect: 'manual' });
     assert([302, 401, 403].includes(response.status), `${path} must remain protected`);
@@ -99,6 +102,22 @@ try {
     }
   }
   await page.goto(base + '/');
+  assert.match(await page.locator('.ob-hero-copy').innerText(), /RJUHSD STUDENTS/);
+  assert.equal(await page.locator('.ob-school-card').count(), 8);
+  assert.equal(await page.locator('[data-school-games-link]').getAttribute('href'), 'https://mitchdog.com/game-portal/');
+  assert.equal(await page.locator('.ob-school-site-brand').getAttribute('href'), 'https://rjuhsd.school/');
+  for (const mark of await page.locator('.ob-school-card img').all()) {
+    await mark.scrollIntoViewIfNeeded();
+    await mark.evaluate(img => img.complete && img.naturalWidth > 0 || new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; }));
+    assert(await mark.evaluate(img => img.naturalWidth > 0), 'Every school logo must load');
+  }
+  assert.equal(await page.locator('.ob-campus-sticker').first().evaluate(el => getComputedStyle(el).animationName), 'none');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto(base + '/');
+  assert.equal(await page.locator('.ob-campus-sticker').first().evaluate(el => getComputedStyle(el).animationName), 'ob-logo-float');
+  await page.locator('.ob-school-games').scrollIntoViewIfNeeded();
+  await page.waitForFunction(() => !document.querySelector('.ob-school-games').classList.contains('ob-reveal-pending'));
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   assert.equal(await page.locator('#site-tour').getAttribute('preload'), 'metadata');
   await page.locator('[data-tour-time="20"]').click();
   await page.waitForFunction(() => { const v = document.getElementById('site-tour'); return !v.paused && v.currentTime >= 20 && v.readyState >= 2; });
@@ -110,6 +129,8 @@ try {
   assert(await page.locator('.ob-faq details').first().getAttribute('open') !== null);
 
   await page.goto(base + '/enroll/?mode=signup');
+  assert.equal(await page.locator('.ob-auth-campus-marks img').count(), 8);
+  assert.equal(await page.locator('.ob-auth-school-site').getAttribute('href'), 'https://rjuhsd.school/');
   await page.clock.install();
   assert(await page.locator('#pane-invite').isVisible());
   assert(await page.locator('#btn').isDisabled());

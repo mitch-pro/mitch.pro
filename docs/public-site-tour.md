@@ -1,6 +1,6 @@
 # Public site and recorded tour
 
-The public homepage, enrollment page, and help page share `webserver/onboarding.css`, `onboarding-theme.js`, and `onboarding.js`. Their `data-presentation="onboarding"` marker keeps the account shell's injected styles and navigation from interfering with these pages. The theme toggle uses the site's existing theme cookie.
+The public homepage and enrollment page share `webserver/onboarding.css`, `onboarding-theme.js`, and `onboarding.js`. Help lives on the homepage at `/#help`; old `/faq` links redirect there. Their `data-presentation="onboarding"` marker keeps the account shell's injected styles and navigation from interfering with these pages. The theme toggle uses the site's existing theme cookie.
 
 The tour is `webserver/media/site-tour-v1.mp4`. It has native controls, an original instrumental soundtrack, and chapter shortcuts. Playback starts only when the visitor requests it; only video metadata preloads. The Rust server explicitly allows the two tour assets and supports single byte ranges for seeking. Account pages and VM endpoints retain their access checks.
 
@@ -24,3 +24,7 @@ node tests/test_onboarding_browser.mjs
 The browser test requires the project's Node dependencies. It starts an isolated local server, verifies public and protected routes and video ranges, checks responsive layouts and theme switching, and exercises signup, verification, resend, login, two-factor prompts, reset, and keyboard navigation using mocked account responses. It never creates production accounts. Screenshots are written to the ignored `artifacts/ui-review/onboarding` directory.
 
 The copy describes computers as free, with availability governed by account access and capacity. Optional hardware and session upgrades use earned MitchCoins. It does not change VM eligibility, prices in virtual coins, or backend account policies.
+
+The RJUHSD introduction uses the six existing high-school logos plus Roseville Pathways and Roseville Adult School, matching the [district school directory](https://www.rjuhsd.us/). The additional logos and district emblem come from the official [Roseville Pathways](https://pathways.rjuhsd.us/), [Roseville Adult School](https://rosevilleadult.rjuhsd.us/), and [RJUHSD](https://www.rjuhsd.us/) website headers, downloaded as 256-pixel PNGs.
+
+The school games button opens `https://mitchdog.com/game-portal/`. The homepage and signup page also promote `https://rjuhsd.school/` for bell schedules and school tools. Logo animation and scroll reveals honor reduced motion; content stays visible without JavaScript.

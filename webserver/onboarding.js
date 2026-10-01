@@ -1,4 +1,19 @@
 (() => {
+  if ('IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    document.body.classList.add('ob-motion-ready');
+    const reveal = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.remove('ob-reveal-pending');
+        reveal.unobserve(entry.target);
+      });
+    }, { threshold: 0.08 });
+    document.querySelectorAll('.ob-reveal').forEach(element => {
+      if (element.getBoundingClientRect().top < innerHeight) return;
+      element.classList.add('ob-reveal-pending');
+      reveal.observe(element);
+    });
+  }
   const video = document.getElementById('site-tour');
   const status = document.getElementById('tour-status');
   if (video) {

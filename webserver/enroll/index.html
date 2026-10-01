@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Join or log in — mitch.pro</title>
-<meta name="description" content="Create your free mitch.pro account for cloud Linux, games, Matrix chat, friends, and school tools. Verify your email and make yourself at home.">
+<meta name="description" content="Join the free student community for RJUHSD: games, friends, cloud Linux, Matrix chat, and school tools.">
 <meta name="keywords" content="mitch.pro signup, mitch.pro login, free cloud Linux, games, Matrix chat">
 <link rel="canonical" href="https://mitchdog.com/enroll/" />
 
@@ -15,7 +15,7 @@
 <meta property="og:description" content="Join mitch.pro for free cloud Linux computers, games, Matrix chat, and community. No invitation needed." />
 <meta property="og:image" content="https://mitch.pro/icon-512.png" />
 
-<link rel="stylesheet" href="/onboarding.css?v=1">
+<link rel="stylesheet" href="/onboarding.css?v=3">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Space+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
@@ -23,13 +23,13 @@
 <script src="/api.js"></script>
 <script src="/vendor/simplewebauthn.browser.min.js?v=1" defer></script>
 
-<script src="/onboarding.js?v=2" defer></script>
+<script src="/onboarding.js?v=3" defer></script>
 <script src="/app-shell.js?v=18" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/zxcvbn/4.4.2/zxcvbn.js" defer></script>
 </head>
 <body class="enroll-page onboarding-page mitch-design" data-shell="off">
   <a class="ob-skip" href="#account-access">Skip to account access</a>
-  <header class="ob-nav ob-width"><a class="ob-brand" href="/" aria-label="mitch.pro home"><img src="/icon-192.png" width="32" height="32" alt=""><span>mitch<span class="ob-brand-dot">.pro</span></span></a><nav class="ob-nav-links" aria-label="Main navigation"><a href="/#explore">Explore</a><a href="/#tour">Watch the tour</a><a href="/faq/">Help</a></nav><div class="ob-nav-actions"><button class="ob-theme-toggle" type="button" data-theme-toggle aria-label="Switch to light mode" aria-pressed="false">◐</button><a class="ob-text-link" href="/">Back home ↗</a></div></header>
+  <header class="ob-nav ob-width"><a class="ob-brand" href="/" aria-label="mitch.pro home"><img src="/icon-192.png" width="32" height="32" alt=""><span>mitch<span class="ob-brand-dot">.pro</span></span></a><nav class="ob-nav-links" aria-label="Main navigation"><a href="/#schools">Your school</a><a href="https://rjuhsd.school/">RJUHSD.school ↗</a><a href="/#help">Help</a></nav><div class="ob-nav-actions"><button class="ob-theme-toggle" type="button" data-theme-toggle aria-label="Switch to light mode" aria-pressed="false">◐</button><a class="ob-text-link" href="/">Back home ↗</a></div></header>
 <div class="dev-test-access" id="dev-test-access" hidden>
     <button id="dev-test-btn" type="button" onclick="activateDevTestAccess()">
       <span class="dev-test-dot" aria-hidden="true"></span>
@@ -40,9 +40,11 @@
   </div>
   <main class="ob-auth-layout ob-width">
     <aside class="ob-auth-story" aria-labelledby="join-title">
-      <span class="ob-eyebrow">ONE ACCOUNT. A LITTLE BIT OF EVERYTHING.</span>
-      <h1 id="join-title">A place for<br>your <span>next thing.</span></h1>
-      <p>Play, build, catch up, or just look around. Your mitch.pro account is free. Make it yours.</p>
+      <span class="ob-eyebrow ob-join-district"><img src="/rjuhsd-assets/district-logo.png" alt="" width="42" height="42">FOR RJUHSD STUDENTS</span>
+      <h1 id="join-title">Your school.<br>Your <span>people.</span></h1>
+      <p>Join students across RJUHSD for games, friends, school tools, and a free cloud computer.</p>
+      <div class="ob-auth-campus-marks" aria-label="RJUHSD schools"><img src="/rjuhsd-assets/woodcreek-logo.png" alt="Woodcreek" width="38" height="38"><img src="/rjuhsd-assets/roseville-logo.png" alt="Roseville" width="38" height="38"><img src="/rjuhsd-assets/granitebay-logo.png" alt="Granite Bay" width="38" height="38"><img src="/rjuhsd-assets/antelope-logo.png" alt="Antelope" width="38" height="38"><img src="/rjuhsd-assets/westpark-logo.png" alt="West Park" width="38" height="38"><img src="/rjuhsd-assets/oakmont-logo.png" alt="Oakmont" width="38" height="38"><img src="/rjuhsd-assets/pathways-logo.png" alt="Roseville Pathways" width="38" height="38"><img src="/rjuhsd-assets/rosevilleadult-logo.png" alt="Roseville Adult School" width="38" height="38"></div>
+      <a class="ob-auth-school-site" href="https://rjuhsd.school/"><img src="/rjuhsd-assets/icon-192.png" alt="" width="42" height="42"><span><b>RJUHSD.school</b><small>Bell schedules, live countdowns &amp; school tools.</small></span><span aria-hidden="true">↗</span></a>
       <ul class="ob-auth-benefits">
         <li><span>01</span><div><b>Free cloud Linux</b><small>A desktop and terminal in your browser. No payment required.</small></div></li>
         <li><span>02</span><div><b>Games, friends, and Matrix chat</b><small>Your next game and your people, together.</small></div></li>
@@ -243,7 +245,7 @@
     </section>
   </main>
 
-  <footer class="ob-footer ob-width"><a class="ob-brand" href="/">mitch<span class="ob-brand-dot">.pro</span></a><span>© 2026 · Your little corner of the internet.</span><nav aria-label="Footer"><a href="/faq/">Help</a><a href="/privacy/">Privacy</a><a href="/use-agreement/">Site rules</a></nav></footer>
+  <footer class="ob-footer ob-width"><a class="ob-brand" href="/">mitch<span class="ob-brand-dot">.pro</span></a><span>© 2026 mitch.pro</span><nav aria-label="Footer"><a href="/#help">Help</a><a href="/privacy/">Privacy</a><a href="/use-agreement/">Site rules</a></nav></footer>
 
 <script>
 var _attempts = [], _LIMIT = 3, _WINDOW = 60000;
