@@ -37,7 +37,6 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
     <!-- Mitch.pro Global Theme Engine -->
-    <script src="/theme.js?v=13"></script>
 
     <!-- UI hygiene: hide floating theme button & prevent rogue root scrollbars -->
     <style>
@@ -635,7 +634,7 @@
 
             let reg = await navigator.serviceWorker.getRegistration('/');
             if (!reg) {
-              reg = await navigator.serviceWorker.register('/sw.js?v=46', { scope: '/', updateViaCache: 'none' });
+              reg = await navigator.serviceWorker.register('/sw.js?v=47', { scope: '/', updateViaCache: 'none' });
             }
             await navigator.serviceWorker.ready;
 
@@ -689,7 +688,7 @@
 
         // Register Service Worker on / scope
         if ('serviceWorker' in navigator && window.isSecureContext) {
-          navigator.serviceWorker.register('/sw.js?v=46', { scope: '/', updateViaCache: 'none' }).catch(() => {});
+          navigator.serviceWorker.register('/sw.js?v=47', { scope: '/', updateViaCache: 'none' }).catch(() => {});
         }
 
         // Auto-sync if notification permission is already granted

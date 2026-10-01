@@ -6,22 +6,18 @@
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js?v=46', { updateViaCache: 'none' }).catch(err => console.warn('SW register failed: ', err));
+      navigator.serviceWorker.register('/sw.js?v=47', { updateViaCache: 'none' }).catch(err => console.warn('SW register failed: ', err));
     });
   }
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>The Brine Cellar — Sexy Pickle Club</title>
-<script src="/theme.js?v=11"></script>
 <link rel="stylesheet" href="/app.css">
-<link rel="stylesheet" href="/site-galaxy.css?v=9">
 <script src="/api.js"></script>
 <script src="/app-shell.js" defer></script>
 <script src="/broadcast.js?v=4"></script>
 <!-- Pickle pages bypass the server's site-wide head injection; link the same
      shared shell stylesheets the mitch.pro encrypt page gets automatically. -->
-<link rel="stylesheet" href="/relaunch.css">
-<link rel="stylesheet" href="/portal-redesign.css?v=10">
 <script src="/popup.js?v=3"></script>
 <style>
 /* Encrypt chrome — tokens from theme.js; fonts from app.css. Crypto/E2E logic untouched. */

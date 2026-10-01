@@ -43,28 +43,13 @@ pub fn recaptcha_loader_str(recaptcha_host: &str, rc_key: &str) -> String {
     )
 }
 
-/// `shouldInjectReadability(urlPath)`.
-pub fn should_inject_readability(url_path: &str) -> bool {
-    let path = url_path.split('?').next().unwrap_or("/");
-    if path.starts_with("/games/") && path != "/games/" && path != "/games/index.html" {
-        return false;
-    }
-    if path.starts_with("/ttygames/") {
-        return false;
-    }
-    true
-}
-
-/// `injectReadability(html, urlPath)`.
-pub fn inject_readability(html: &str, url_path: &str) -> String {
-    if !should_inject_readability(url_path) || html.contains("/readability.css") {
-        return html.to_string();
-    }
-    let tag = "<link rel=\"stylesheet\" href=\"/readability.css\">";
-    match html.rfind("</head>") {
-        Some(i) => format!("{}{}{}", &html[..i], tag, &html[i..]),
-        None => format!("{tag}{html}"),
-    }
+/// readability.css's rules (line-height, min tap targets, focus rings) are
+/// now part of app.css's consolidated stylesheet, so this no longer injects
+/// a separate <link> — kept as a passthrough rather than removed outright
+/// since both call sites (the /team route, and every static HTML serve)
+/// still call it unconditionally.
+pub fn inject_readability(html: &str, _url_path: &str) -> String {
+    html.to_string()
 }
 
 /// `injectBroadcast(html)`.
@@ -132,12 +117,9 @@ mod tests {
     }
 
     #[test]
-    fn readability_goes_before_last_head() {
+    fn readability_is_a_passthrough_now_that_its_merged_into_app_css() {
         let html = "<html><head></head></html>";
-        assert_eq!(
-            inject_readability(html, "/"),
-            "<html><head><link rel=\"stylesheet\" href=\"/readability.css\"></head></html>"
-        );
+        assert_eq!(inject_readability(html, "/"), html);
         assert_eq!(inject_readability(html, "/games/chess/"), html);
     }
 }

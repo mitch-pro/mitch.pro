@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mitch-pro-cache-v48';
+const CACHE_NAME = 'mitch-pro-cache-v49';
 const ASSETS = [
   '/favicon.ico',
   '/manifest.json',
@@ -6,9 +6,8 @@ const ASSETS = [
   '/icon-192.png',
   '/icon-512.png',
   '/cookie-consent.js',
-  '/relaunch.css',
-  '/portal-redesign.css?v=16',
-  '/home.css?v=5',
+  '/app.css',
+  '/home.css?v=6',
   '/popup.js',
   '/pwa-install.js'
 ];
@@ -113,7 +112,7 @@ const isThemeJs = requestUrl.pathname === '/theme.js';
     );
   } else {
     const pathname = requestUrl.pathname;
-    const isCode = /\.(css|js|mjs|json)(\?|$)/.test(pathname) || pathname === '/readability.css';
+    const isCode = /\.(css|js|mjs|json)(\?|$)/.test(pathname);
     if (isCode) {
       // Network-first for code assets: never serve stale CSS/JS when online,
       // fall back to the cache only when offline.

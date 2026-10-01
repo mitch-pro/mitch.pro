@@ -6,15 +6,13 @@
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js?v=46', { updateViaCache: 'none' }).catch(err => console.warn('SW register failed: ', err));
+      navigator.serviceWorker.register('/sw.js?v=47', { updateViaCache: 'none' }).catch(err => console.warn('SW register failed: ', err));
     });
   }
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>Encrypted Chat — mitch.pro</title>
-<script src="/theme.js?v=13"></script>
 <link rel="stylesheet" href="/app.css">
-<link rel="stylesheet" href="/site-galaxy.css?v=9">
 <script src="/api.js"></script>
 <script src="/app-shell.js" defer></script>
 <script src="/broadcast.js?v=4"></script>

@@ -20,7 +20,7 @@
       try { sessionStorage.setItem('sw-scripts', JSON.stringify(seenSW)); } catch (_) {}
       location.reload();
     });
-    navigator.serviceWorker.register('/sw.js?v=46', { scope: '/', updateViaCache: 'none' })
+    navigator.serviceWorker.register('/sw.js?v=47', { scope: '/', updateViaCache: 'none' })
       .then(function (reg) {
         try { reg.update(); } catch (_) {}
         setInterval(function () { try { reg.update(); } catch (_) {} }, 30 * 60 * 1000);
@@ -70,23 +70,6 @@
     catch (_) { refreshProfileSurfaces({}); }
   });
 
-  function ensureRelaunchStyles() {
-    if (document.getElementById('mitch-relaunch') || document.querySelector('link[href="/relaunch.css"], link[href^="/relaunch.css?"]')) return;
-    var link = document.createElement('link');
-    link.id = 'mitch-relaunch';
-    link.rel = 'stylesheet';
-    link.href = '/relaunch.css';
-    (document.head || document.getElementsByTagName('head')[0]).appendChild(link);
-  }
-
-  function ensurePortalStyles() {
-    if (document.querySelector('link[href="/portal-redesign.css"], link[href^="/portal-redesign.css?"]')) return;
-    var link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = '/portal-redesign.css?v=17';
-    (document.head || document.getElementsByTagName('head')[0]).appendChild(link);
-  }
-
   function enhanceMobileShell() {
     if (IS_RJUHSD || location.pathname.indexOf('/rjuhsd/') === 0 || document.getElementById('mobile-dock')) return;
     document.body.classList.add('mitch-next');
@@ -104,10 +87,6 @@
       homeBar.id = 'site-topbar';
       ['theme-btn', 'sw-notif-wrap'].forEach(function (id) { var control = document.getElementById(id); if (control) homeBar.appendChild(control); });
     }
-    var style = document.createElement('link');
-    style.rel = 'stylesheet';
-    style.href = '/mitch-ui.css?v=3';
-    document.head.appendChild(style);
     var paths = {
       home: '<path d="m3 10 9-7 9 7v10H3Z"/><path d="M9 20v-7h6v7"/>',
       games: '<path d="M7 7h10c3 0 5 11 3 12-2 1-5-3-5-3H9s-3 4-5 3C2 18 4 7 7 7Z"/><path d="M7 10v5m-2-2h4m6-2h.01M18 14h.01"/>',
@@ -345,8 +324,6 @@
     ensureViewport();
     ensureInstallMetadata();
     ensureFonts();
-    ensureRelaunchStyles();
-    ensurePortalStyles();
     enhanceMobileShell();
     enhanceInterface();
     if (!IS_RJUHSD && !document.querySelector('script[src^="/mitch-coins.js"]')) {

@@ -64,7 +64,6 @@ pub const PROTECTED_FILES: &[&str] = &["senpai-cafe.webp", "adrian-lopez.webp"];
 
 /// `PUBLIC_ASSETS` allowlist.
 pub const PUBLIC_ASSETS: &[&str] = &[
-    "/community-refresh.css",
     "/guest-preview.js",
     "/home-friends.js",
     "/home.css",
@@ -82,10 +81,6 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/mitchcoin.png",
     "/mitchcoin.webp",
     "/app.css",
-    "/relaunch.css",
-    "/site-galaxy.css",
-    "/portal-redesign.css",
-    "/mitch-ui.css",
     "/auth-liquid.css",
     "/encrypt-galaxy.css",
     "/vendor/simplewebauthn.browser.min.js",
@@ -94,7 +89,8 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/rjuhsd-assets/styles.css",
     "/rjuhsd-assets/reference-theme.css",
     "/rjuhsd-assets/redesign.css",
-    "/preferences-school.css",
+    "/preferences/preferences-school.css",
+    "/preferences/preferences-galaxy.css",
     "/rjuhsd-assets/woodcreek.png",
     "/rjuhsd-assets/calendar.js",
     "/rjuhsd-assets/woodcreek-logo.png",
@@ -111,7 +107,6 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/liquid-glass.js",
     "/jsmpeg.min.js",
     "/open.css",
-    "/readability.css",
     "/theme.js",
     "/sw.js",
     "/popup.js",

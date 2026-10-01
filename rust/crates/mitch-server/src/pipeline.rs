@@ -85,7 +85,6 @@ pub fn inject_page(
     let is_pickle = crate::hosts::is_pickle_host(headers);
 
     if !is_sales_page && !is_rjuhsd && !is_pickle && (!is_embedded || is_standalone_game_portal) {
-        inject_str.push_str("<link rel=\"stylesheet\" href=\"/community-refresh.css?v=4\">\n");
         if !is_authenticated_html {
             inject_str.push_str("<script src=\"/guest-preview.js?v=1\" defer></script>\n");
         }
@@ -97,15 +96,16 @@ pub fn inject_page(
         raw = strip_broadcast(&raw);
     }
 
-    // Enhancement CSS layers (async media=print swap).
-    if !is_embedded && !raw.contains("/relaunch.css") {
-        inject_str.push_str("<link rel=\"stylesheet\" href=\"/relaunch.css\" media=\"print\" onload=\"this.media='all'\"><noscript><link rel=\"stylesheet\" href=\"/relaunch.css\"></noscript>\n");
-    }
-    if !is_embedded && !raw.contains("/site-galaxy.css") {
-        inject_str.push_str("<link rel=\"stylesheet\" href=\"/site-galaxy.css\" media=\"print\" onload=\"this.media='all'\"><noscript><link rel=\"stylesheet\" href=\"/site-galaxy.css\"></noscript>\n");
-    }
-    if !is_embedded && !raw.contains("/portal-redesign.css") {
-        inject_str.push_str("<link rel=\"stylesheet\" href=\"/portal-redesign.css?v=16\" media=\"print\" onload=\"this.media='all'\"><noscript><link rel=\"stylesheet\" href=\"/portal-redesign.css?v=16\"></noscript>\n");
+    // community-refresh.css, relaunch.css, site-galaxy.css, and
+    // portal-redesign.css used to each be injected here — four competing
+    // "shared chrome" stylesheets layered on every page. All four are now
+    // consolidated into app.css. A large number of pages never carried their
+    // own static <link> to any shared stylesheet at all — they relied
+    // entirely on this injection point for base styling — so app.css itself
+    // gets the same "inject if the page doesn't already have it" treatment
+    // app-shell.js gets below, instead of assuming every page already links it.
+    if !is_embedded && !raw.contains("/app.css") {
+        inject_str.push_str("<link rel=\"stylesheet\" href=\"/app.css\">\n");
     }
     if !is_embedded && !raw.contains("/app-shell.js") {
         inject_str.push_str("<script src=\"/app-shell.js\" defer></script>\n");
