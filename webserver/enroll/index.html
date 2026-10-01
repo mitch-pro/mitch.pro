@@ -1,550 +1,36 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-presentation="onboarding">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Login & Registration — mitch.pro</title>
-<meta name="description" content="Request access or log into mitch.pro, the secure student portal. Access live Woodcreek High School bell schedules, custom games, cloud-sync, and encrypted social channels.">
-<meta name="keywords" content="mitch.pro login, mitch pro enroll, student login, woodcreek high login, secure student portal">
-<link rel="canonical" href="https://mitch.pro/enroll/" />
+<title>Join or log in — mitch.pro</title>
+<meta name="description" content="Create your free mitch.pro account for cloud Linux, games, Matrix chat, friends, and school tools. Verify your email and make yourself at home.">
+<meta name="keywords" content="mitch.pro signup, mitch.pro login, free cloud Linux, games, Matrix chat">
+<link rel="canonical" href="https://mitchdog.com/enroll/" />
 
 <!-- Open Graph / Facebook -->
 <meta property="og:type" content="website" />
-<meta property="og:url" content="https://mitch.pro/enroll/" />
-<meta property="og:title" content="Login & Registration — mitch.pro" />
-<meta property="og:description" content="Log into or request access for mitch.pro. High-performance gaming, live High School block schedule tracker, and encrypted communications." />
+<meta property="og:url" content="https://mitchdog.com/enroll/" />
+<meta property="og:title" content="Join or log in — mitch.pro" />
+<meta property="og:description" content="Join mitch.pro for free cloud Linux computers, games, Matrix chat, and community. No invitation needed." />
 <meta property="og:image" content="https://mitch.pro/icon-512.png" />
 
-<link rel="stylesheet" href="/app.css">
-<link rel="stylesheet" href="/site-galaxy.css?v=9">
+<link rel="stylesheet" href="/onboarding.css?v=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,400..800&amp;family=DM+Sans:opsz,wght@9..40,400..700&amp;family=IBM+Plex+Mono:wght@500;600&amp;display=swap" rel="stylesheet">
-<script src="/theme.js?v=11"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Space+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<script src="/onboarding-theme.js?v=1"></script>
 <script src="/api.js"></script>
 <script src="/vendor/simplewebauthn.browser.min.js?v=1" defer></script>
 
-<style>
-  /* Enroll-only layout — tokens from theme.js (--t-*) */
-  .enroll-page {
-    position: relative;
-    isolation: isolate;
-    overflow-x: clip;
-  }
-
-  .enroll-page::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    background:
-      radial-gradient(ellipse 70% 50% at 50% -10%, color-mix(in srgb, var(--t-ac) 16%, transparent), transparent 70%),
-      radial-gradient(ellipse 50% 40% at 100% 100%, color-mix(in srgb, var(--t-ac2, var(--t-ac)) 8%, transparent), transparent 65%),
-      var(--t-bgr, none);
-  }
-
-  .enroll-main {
-    flex: 1 1 auto;
-    width: min(980px, 100%);
-    margin: 0 auto;
-    padding:
-      clamp(2rem, 7vh, 4rem)
-      clamp(1rem, 4vw, 1.5rem)
-      2.5rem;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 400px);
-    gap: clamp(1.5rem, 5vw, 4rem);
-    align-items: start;
-    min-height: 0;
-  }
-
-  .enroll-hero {
-    text-align: left;
-    margin-bottom: 0;
-    position: sticky;
-    top: 2rem;
-  }
-
-  .enroll-brand {
-    display: inline-block;
-    font-family: inherit;
-    font-size: clamp(2.2rem, 6vw, 3rem);
-    font-weight: 700;
-    font-style: normal;
-    letter-spacing: -0.04em;
-    line-height: 1;
-    color: var(--t-fg);
-    text-decoration: none;
-    margin-bottom: 1.25rem;
-  }
-
-  .enroll-brand:hover {
-    color: var(--t-fg);
-    opacity: 0.88;
-  }
-
-  .enroll-brand:active {
-    transform: scale(0.98);
-  }
-
-  .enroll-hero h1 {
-    margin: 0 0 0.55rem;
-    font-size: clamp(1.35rem, 3vw, 1.7rem);
-    font-weight: 700;
-    font-style: normal;
-    letter-spacing: -0.04em;
-    line-height: 0.95;
-  }
-
-  .enroll-hero p {
-    margin: 0;
-    max-width: 28ch;
-    color: var(--t-fg2);
-    font-size: 1.02rem;
-    line-height: 1.5;
-  }
-
-  .enroll-links {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-start;
-    gap: 0.15rem 0.35rem;
-    margin-top: 1rem;
-  }
-
-  .enroll-links a {
-    display: inline-flex;
-    align-items: center;
-    min-height: 2rem;
-    padding: 0.25rem 0.55rem;
-    border-radius: calc(var(--t-radius, 8px) - 2px);
-    color: var(--t-fg2);
-    font-size: 0.78rem;
-    font-weight: 600;
-  }
-
-  .enroll-links a:hover {
-    color: var(--t-fg);
-    background: var(--t-bg2);
-  }
-
-  .auth-panel {
-    width: 100%;
-    padding: clamp(1.15rem, 3vw, 1.5rem);
-    animation: app-fade-in 0.55s ease 0.06s both;
-  }
-
-  /* Underline tabs. Kept !important: theme.js injects a late button rule with
-     ID-heavy :not() specificity that would otherwise box every tab. */
-  .auth-tabs {
-    display: flex;
-    gap: 1.1rem;
-    margin-bottom: 1.5rem !important;
-    padding: 0 0 0.7rem !important;
-    border: 0 !important;
-    border-bottom: 1px solid var(--t-bd) !important;
-    border-radius: 0 !important;
-    background: transparent !important;
-    box-shadow: none !important;
-  }
-
-  .auth-tab-btn {
-    flex: 0 1 auto;
-    appearance: none;
-    min-height: 2.1rem !important;
-    padding: 0.25rem 0.1rem !important;
-    border: 0 !important;
-    border-radius: 0 !important;
-    background: transparent !important;
-    color: var(--t-fg2) !important;
-    font-family: inherit !important;
-    font-weight: 700;
-    font-size: 0.84rem;
-    letter-spacing: 0.01em;
-    box-shadow: none !important;
-    cursor: pointer;
-    transition: color var(--t-motion, 0.15s) ease;
-  }
-
-  .auth-tab-btn span {
-    display: none;
-  }
-
-  .auth-tab-btn:hover {
-    color: var(--t-fg) !important;
-    transform: none !important;
-  }
-
-  .auth-tab-btn.active {
-    color: var(--t-fg) !important;
-    background: transparent !important;
-    box-shadow: inset 0 -2px var(--t-ac) !important;
-  }
-
-  .tab-pane {
-    display: none;
-  }
-
-  .tab-pane.active {
-    display: block;
-    animation: app-fade-in 0.35s ease both;
-  }
-
-  .panel-head {
-    margin-bottom: 1.15rem;
-  }
-
-  .panel-head h2 {
-    margin: 0;
-    font-size: 1.1rem;
-  }
-
-  .panel-head p {
-    margin: 0.3rem 0 0;
-    color: var(--t-fg2);
-    font-size: 0.84rem;
-    line-height: 1.4;
-  }
-
-  .auth-panel .field-label {
-    letter-spacing: 0.02em;
-  }
-
-  .auth-panel input:not([type="checkbox"]),
-  .auth-panel select,
-  .auth-panel textarea {
-    margin-bottom: 0.95rem;
-  }
-
-  .auth-panel .btn,
-  .auth-panel .btn-primary,
-  .auth-panel .btn-ghost {
-    width: 100%;
-    min-height: 2.65rem;
-  }
-
-  .forgot-link {
-    display: block;
-    text-align: right;
-    margin: -0.35rem 0 1rem;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: var(--t-ac);
-  }
-
-  .forgot-link:hover {
-    color: var(--t-ac2, var(--t-ac));
-  }
-
-  .agree-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.7rem;
-    margin-bottom: 1.1rem;
-    padding: 0.85rem 0.95rem;
-    border: 1px solid var(--t-bd);
-    border-radius: var(--t-radius, 8px);
-    background: color-mix(in srgb, var(--t-bg2) 80%, transparent);
-  }
-
-  .agree-row input {
-    width: auto;
-    min-height: 0;
-    margin: 0.2rem 0 0;
-    flex-shrink: 0;
-    accent-color: var(--t-ac);
-    cursor: pointer;
-  }
-
-  .agree-row label {
-    margin: 0;
-    color: var(--t-fg2);
-    font-size: 0.8rem;
-    line-height: 1.45;
-    cursor: pointer;
-    font-weight: 500;
-  }
-
-  .agree-row a {
-    font-weight: 700;
-  }
-
-  .warning-alert {
-    display: flex;
-    gap: 0.7rem;
-    margin-bottom: 1.1rem;
-    padding: 0.85rem 0.95rem;
-    border: 1px solid color-mix(in srgb, var(--t-err, #f87171) 35%, var(--t-bd));
-    border-radius: var(--t-radius, 8px);
-    background: color-mix(in srgb, var(--t-err, #f87171) 8%, transparent);
-    align-items: flex-start;
-  }
-
-  .warning-alert svg {
-    flex-shrink: 0;
-    color: var(--t-err, #f87171);
-    margin-top: 0.1rem;
-  }
-
-  .warning-alert span {
-    color: var(--t-fg2);
-    font-size: 0.8rem;
-    line-height: 1.45;
-  }
-
-  #login-2fa-panel {
-    margin-top: 1rem;
-    padding: 0.95rem;
-    border: 1px solid var(--t-bd);
-    border-radius: var(--t-radius, 8px);
-    background: color-mix(in srgb, var(--t-bg) 55%, var(--t-bg2));
-  }
-
-  #login-2fa-panel .btn-primary {
-    margin-top: 0.35rem;
-  }
-
-  #support-actions {
-    margin-top: 1rem;
-    text-align: center;
-  }
-
-  #support-actions .btn {
-    min-height: 2.35rem;
-    font-size: 0.82rem;
-    margin-bottom: 0.55rem;
-  }
-
-  #no-email-link {
-    display: none;
-    color: var(--t-err, #f87171);
-    font-size: 0.78rem;
-    font-weight: 700;
-  }
-
-  #no-email-form {
-    margin-top: 1.15rem;
-    padding: 1rem;
-    border: 1px solid color-mix(in srgb, var(--t-err, #f87171) 28%, var(--t-bd));
-    border-radius: var(--t-radius, 8px);
-    background: color-mix(in srgb, var(--t-err, #f87171) 6%, transparent);
-  }
-
-  #no-email-form h3 {
-    margin: 0 0 0.4rem;
-    font-size: 0.95rem;
-  }
-
-  #no-email-form > p {
-    margin: 0 0 0.75rem;
-    font-size: 0.78rem;
-    color: var(--t-fg2);
-  }
-
-  #no-email-reason {
-    min-height: 4rem;
-    margin-bottom: 0.75rem;
-  }
-
-  /* Optional profile details, collapsed by default */
-  .optional-details {
-    margin: 0.2rem 0 1rem;
-    border: 1px solid var(--t-bd);
-    border-radius: var(--t-radius, 8px);
-    background: color-mix(in srgb, var(--t-fg) 3%, transparent);
-  }
-
-  .optional-details summary {
-    display: flex;
-    align-items: center;
-    gap: 0.55rem;
-    padding: 0.8rem 0.95rem;
-    font-size: 0.84rem;
-    font-weight: 700;
-    color: var(--t-fg2);
-    cursor: pointer;
-    user-select: none;
-    list-style: none;
-  }
-
-  .optional-details summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .optional-details summary::before {
-    content: '+';
-    width: 1.35rem;
-    height: 1.35rem;
-    display: grid;
-    place-items: center;
-    flex: 0 0 1.35rem;
-    border-radius: 50%;
-    border: 1px solid var(--t-bd);
-    font-size: 0.95rem;
-    font-weight: 800;
-    color: var(--t-ac);
-    transition: transform var(--t-motion, 0.2s) ease;
-  }
-
-  .optional-details[open] summary::before {
-    content: '\2212';
-  }
-
-  .optional-details summary small {
-    font-weight: 600;
-    opacity: 0.65;
-  }
-
-  .optional-details summary:hover {
-    color: var(--t-fg);
-  }
-
-  .optional-body {
-    padding: 0.35rem 0.95rem 0.35rem;
-  }
-
-  .field-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0 0.7rem;
-  }
-
-  /* Verification codes: centered, mono, spaced out */
-  .code-input {
-    text-align: center;
-    font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 1.25rem;
-    letter-spacing: 0.4em;
-  }
-
-  .pw-strength {
-    margin: -0.45rem 0 0.85rem;
-    display: none;
-  }
-
-  .pw-strength-bars {
-    display: flex;
-    gap: 0.25rem;
-    height: 0.25rem;
-    border-radius: 2px;
-    overflow: hidden;
-    background: color-mix(in srgb, var(--t-fg) 6%, transparent);
-  }
-
-  .pw-strength-bars > div {
-    flex: 1;
-    height: 100%;
-    transition: background-color var(--t-motion, 0.2s) ease;
-  }
-
-  .pw-strength-text {
-    font-size: 0.72rem;
-    margin-top: 0.3rem;
-    font-weight: 600;
-    text-align: right;
-    color: var(--t-fg2);
-  }
-
-  #msg,
-  #tmsg,
-  #rtmsg,
-  #login-msg {
-    min-height: 1.35rem;
-    margin-top: 0.75rem;
-    font-size: 0.84rem;
-    text-align: center;
-    font-weight: 600;
-  }
-
-  .ok { color: var(--t-ok, #4ade80); }
-  .err { color: var(--t-err, #f87171); }
-
-  .invite-banner {
-    background: color-mix(in srgb, var(--t-ac) 12%, transparent);
-    border: 1px solid color-mix(in srgb, var(--t-ac) 35%, var(--t-bd));
-    border-radius: var(--t-radius, 8px);
-    padding: 0.65rem 0.85rem;
-    margin-bottom: 0.85rem;
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: var(--t-ac);
-  }
-
-  .enroll-foot {
-    margin-top: auto;
-  }
-
-  .enroll-foot a {
-    color: var(--t-fg2);
-    font-weight: 600;
-  }
-
-  .enroll-foot a:hover {
-    color: var(--t-ac);
-  }
-
-  @media (max-width: 860px) {
-    .enroll-main {
-      width: min(440px, 100%);
-      display: flex;
-      flex-direction: column;
-      padding-top: clamp(1.5rem, 6vh, 2.5rem);
-    }
-
-    .enroll-hero {
-      position: static;
-      text-align: left;
-      margin-bottom: 1.5rem;
-    }
-
-    .auth-panel {
-      padding: 1rem 0.95rem;
-    }
-
-    .auth-tab-btn {
-      font-size: 0.78rem;
-      min-height: 2.25rem;
-    }
-  }
-
-  @media (min-resolution: 2dppx) {
-    .auth-tabs,
-    .agree-row,
-    .warning-alert,
-    #login-2fa-panel,
-    #no-email-form {
-      border-width: 0.5px;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .enroll-hero,
-    .auth-panel,
-    .tab-pane.active {
-      animation: none !important;
-      opacity: 1 !important;
-      transform: none !important;
-    }
-  }
-
-  .theme-no-motion .enroll-hero,
-  .theme-no-motion .auth-panel,
-  .theme-no-motion .tab-pane.active,
-  .theme-no-motion .auth-tab-btn {
-    animation: none !important;
-    transition: none !important;
-  }
-</style>
-<link rel="stylesheet" href="/auth-liquid.css">
+<script src="/onboarding.js?v=1" defer></script>
+<script src="/app-shell.js?v=18" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/zxcvbn/4.4.2/zxcvbn.js" defer></script>
 </head>
-<body class="app-shell enroll-page">
-  <div class="auth-aurora" aria-hidden="true">
-    <span class="auth-orb one"></span>
-    <span class="auth-orb two"></span>
-  </div>
-  <div class="dev-test-access" id="dev-test-access" hidden>
+<body class="enroll-page onboarding-page mitch-design" data-shell="off">
+  <a class="ob-skip" href="#account-access">Skip to account access</a>
+  <header class="ob-nav ob-width"><a class="ob-brand" href="/" aria-label="mitch.pro home"><img src="/icon-192.png" width="32" height="32" alt=""><span>mitch<span class="ob-brand-dot">.pro</span></span></a><nav class="ob-nav-links" aria-label="Main navigation"><a href="/#explore">Explore</a><a href="/#tour">Watch the tour</a><a href="/faq/">Help</a></nav><div class="ob-nav-actions"><button class="ob-theme-toggle" type="button" data-theme-toggle aria-label="Switch to light mode" aria-pressed="false">◐</button><a class="ob-text-link" href="/">Back home ↗</a></div></header>
+<div class="dev-test-access" id="dev-test-access" hidden>
     <button id="dev-test-btn" type="button" onclick="activateDevTestAccess()">
       <span class="dev-test-dot" aria-hidden="true"></span>
       <span>Test Mitch.pro</span>
@@ -552,24 +38,24 @@
     </button>
     <div id="dev-test-msg" role="status" aria-live="polite"></div>
   </div>
-  <main class="enroll-main">
-    <header class="enroll-hero">
-      <a class="enroll-brand" href="/" aria-label="mitch.pro home"><img src="/icon-192.png" alt="mitch.pro"></a>
-      <span class="auth-eyebrow">mitch.pro</span>
-      <h1>Welcome to <br>mitch.pro</h1>
-      <p>One free account. Games, friends, and Mitch Coins in one place.</p>
-      <nav class="enroll-links" aria-label="Help links">
-        <a href="/faq.html">FAQ</a>
-        <a href="/use-agreement.html">Use Agreement</a>
-        <a href="/privacy/">Privacy</a>
-      </nav>
-    </header>
+  <main class="ob-auth-layout ob-width">
+    <aside class="ob-auth-story" aria-labelledby="join-title">
+      <span class="ob-eyebrow">ONE ACCOUNT. A LITTLE BIT OF EVERYTHING.</span>
+      <h1 id="join-title">A place for<br>your <span>next thing.</span></h1>
+      <p>Play, build, catch up, or just look around. Your mitch.pro account is free. Make it yours.</p>
+      <ul class="ob-auth-benefits">
+        <li><span>01</span><div><b>Free cloud Linux</b><small>A desktop and terminal in your browser. No payment required.</small></div></li>
+        <li><span>02</span><div><b>Games, friends, and Matrix chat</b><small>Your next game and your people, together.</small></div></li>
+        <li><span>03</span><div><b>Your settings. Your style.</b><small>Profile cosmetics, themes, rewards, and supported progress sync.</small></div></li>
+      </ul>
+      <a class="ob-auth-tour" href="/#tour"><img src="/media/site-tour-poster-v1.webp" alt="The mitch.pro dashboard with cloud Linux, games, and chat" width="1440" height="726" loading="lazy"><span>See what’s inside <b>Watch the tour ↗</b></span></a>
+    </aside>
 
-    <section class="panel auth-panel" aria-label="Account access">
-      <div class="auth-tabs" role="tablist">
+    <section class="auth-panel" id="account-access" aria-label="Account access">
+      <div class="auth-tabs" role="tablist" aria-label="Choose account action">
         <button class="auth-tab-btn active" id="tab-login" onclick="switchTab('login')" role="tab" aria-selected="true" aria-controls="pane-login" type="button">Sign in</button>
         <button class="auth-tab-btn" id="tab-invite" onclick="switchTab('invite')" role="tab" aria-selected="false" aria-controls="pane-invite" type="button">Create account</button>
-        <button class="auth-tab-btn" id="tab-reset" onclick="switchTab('reset')" role="tab" aria-selected="false" aria-controls="pane-reset" type="button">Reset</button>
+        <button class="auth-tab-btn" id="tab-reset" onclick="switchTab('reset')" role="tab" aria-selected="false" aria-controls="pane-reset" type="button">Reset password</button>
       </div>
 
       <!-- Tab Pane: Log In -->
@@ -582,13 +68,13 @@
         <input id="login-email" type="text" autocomplete="username" placeholder="your@email.com or username">
 
         <label class="field-label" for="login-password">Password</label>
-        <input id="login-password" type="password" autocomplete="current-password" placeholder="••••••••">
+        <div class="ob-password-wrap"><input id="login-password" type="password" autocomplete="current-password" placeholder="••••••••"><button class="ob-password-toggle" type="button" aria-controls="login-password" aria-label="Show password" aria-pressed="false">Show</button></div>
 
         <a class="forgot-link" href="javascript:void(0)" onclick="switchTab('reset')">Forgot password?</a>
 
         <button id="login-btn" class="btn-primary" type="button" onclick="login()">Log In</button>
         <button id="passkey-btn" class="btn-primary" type="button" onclick="loginWithPasskey()" style="margin-top:10px;">Use a passkey instead</button>
-        <div id="login-msg"></div>
+        <div id="login-msg" role="status" aria-live="polite" aria-atomic="true"></div>
         <div id="login-2fa-panel" style="display:none;">
           <label class="field-label" id="login-2fa-label" for="login-2fa-code">Verification Code</label>
           <input id="login-2fa-code" class="code-input" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" maxlength="6">
@@ -600,14 +86,14 @@
       <div class="tab-pane" id="pane-invite" role="tabpanel" aria-labelledby="tab-invite">
         <div id="invite-step-1">
           <div class="panel-head">
-            <h2 id="invite-title">Create account</h2>
-            <p id="invite-desc">Enter your email and choose a secure password.</p>
+            <h2 id="invite-title">Make yourself at home.</h2>
+            <p id="invite-desc">Start with your email and a password. We’ll send a code to verify it. No invitation needed.</p>
           </div>
           <label class="field-label" for="email">Email Address</label>
           <input id="email" type="email" autocomplete="email" placeholder="your@email.com">
 
-          <label class="field-label" for="signup-password">Choose Password (min 8 chars)</label>
-          <input id="signup-password" type="password" autocomplete="new-password" placeholder="••••••••">
+          <label class="field-label" for="signup-password">Password · 8 characters or more</label>
+          <div class="ob-password-wrap"><input id="signup-password" type="password" autocomplete="new-password" placeholder="••••••••"><button class="ob-password-toggle" type="button" aria-controls="signup-password" aria-label="Show password" aria-pressed="false">Show</button></div>
 
           <div id="signup-password-strength-container" class="pw-strength">
             <div class="pw-strength-bars">
@@ -619,8 +105,8 @@
             <div id="signup-strength-text" class="pw-strength-text"></div>
           </div>
 
-          <label class="field-label" for="signup-confirm-password">Confirm Password</label>
-          <input id="signup-confirm-password" type="password" autocomplete="new-password" placeholder="••••••••">
+          <label class="field-label" for="signup-confirm-password">Confirm password</label>
+          <div class="ob-password-wrap"><input id="signup-confirm-password" type="password" autocomplete="new-password" placeholder="••••••••"><button class="ob-password-toggle" type="button" aria-controls="signup-confirm-password" aria-label="Show password" aria-pressed="false">Show</button></div>
 
           <details class="optional-details">
             <summary>Add profile details <small>(optional)</small></summary>
@@ -666,12 +152,13 @@
             <input type="checkbox" id="agree" onchange="updateBtn()">
             <label for="agree">
               I am 13 or older and I agree to the
-              <a href="/use-agreement.html" target="_blank" onclick="event.stopPropagation()">Use Agreement</a> and
+              <a href="/use-agreement/" target="_blank" onclick="event.stopPropagation()">Use Agreement</a> and
               <a href="/privacy/" target="_blank" onclick="event.stopPropagation()">Privacy Policy</a>.
             </label>
           </div>
 
-          <button id="btn" class="btn-primary" type="button" onclick="submit()">Create Account</button>
+          <button id="btn" class="btn-primary" type="button" onclick="submit()" disabled>Create free account</button>
+          <p class="ob-form-note">No payment details. Profile details are optional.</p>
 
           <div id="support-actions" style="display:none;">
             <button id="resend-btn" class="btn" type="button" onclick="submit(true)">Didn't get email? (Wait 30s)</button>
@@ -694,17 +181,17 @@
           </div>
           <div class="warning-alert">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            <span><strong>Time sensitive:</strong> This code expires in 30 minutes. If it expires, you will need to sign up again.</span>
+            <span><strong>Time sensitive:</strong> Your code expires in 30 minutes. Check your spam folder, or use Resend below for a new code.</span>
           </div>
 
           <label class="field-label" for="token">6-Digit Verification Code</label>
           <input id="token" class="code-input" type="text" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]*" placeholder="123456" maxlength="6">
 
           <button id="tbtn" class="btn-primary" type="button" onclick="verifySignup()">Complete Sign Up</button>
-          <div id="tmsg"></div>
+          <div id="tmsg" role="status" aria-live="polite" aria-atomic="true"></div>
         </div>
 
-        <div id="msg"></div>
+        <div id="msg" role="status" aria-live="polite" aria-atomic="true"></div>
       </div>
 
       <!-- Tab Pane: Reset Password -->
@@ -734,7 +221,7 @@
           <input id="reset-token" class="code-input" type="text" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]*" placeholder="123456" maxlength="6">
 
           <label class="field-label" for="reset-password">New Password (min 8 chars)</label>
-          <input id="reset-password" type="password" autocomplete="new-password" placeholder="••••••••">
+          <div class="ob-password-wrap"><input id="reset-password" type="password" autocomplete="new-password" placeholder="••••••••"><button class="ob-password-toggle" type="button" aria-controls="reset-password" aria-label="Show password" aria-pressed="false">Show</button></div>
 
           <div id="reset-password-strength-container" class="pw-strength">
             <div class="pw-strength-bars">
@@ -747,18 +234,16 @@
           </div>
 
           <label class="field-label" for="reset-confirm-password">Confirm New Password</label>
-          <input id="reset-confirm-password" type="password" autocomplete="new-password" placeholder="••••••••">
+          <div class="ob-password-wrap"><input id="reset-confirm-password" type="password" autocomplete="new-password" placeholder="••••••••"><button class="ob-password-toggle" type="button" aria-controls="reset-confirm-password" aria-label="Show password" aria-pressed="false">Show</button></div>
 
           <button id="rbtn" class="btn-primary" type="button" onclick="claimToken('reset')">Reset Password</button>
         </div>
-        <div id="rtmsg"></div>
+        <div id="rtmsg" role="status" aria-live="polite" aria-atomic="true"></div>
       </div>
     </section>
   </main>
 
-  <footer class="app-footer enroll-foot">
-    &copy; 2026 mitch.pro &middot; <a href="/faq.html">FAQ</a>
-  </footer>
+  <footer class="ob-footer ob-width"><a class="ob-brand" href="/">mitch<span class="ob-brand-dot">.pro</span></a><span>© 2026 · Your little corner of the internet.</span><nav aria-label="Footer"><a href="/faq/">Help</a><a href="/privacy/">Privacy</a><a href="/use-agreement/">Site rules</a></nav></footer>
 
 <script>
 var _attempts = [], _LIMIT = 3, _WINDOW = 60000;
@@ -1117,6 +602,7 @@ function resetCaptcha() {}
     var rp = document.getElementById('reset-password');
     if (rp) rp.addEventListener('input', function(e) { updatePasswordStrength(e.target.value, 'reset'); });
     populateGradYears();
+    updateBtn();
   });
 
 function populateGradYears() {
@@ -1149,7 +635,7 @@ async function submit(isResend = false) {
   var msg = document.getElementById('msg');
   var support = document.getElementById('support-actions');
   var resendBtn = document.getElementById('resend-btn');
-  if (!email) { msg.className = 'err'; msg.textContent = 'Enter your email first.'; return; }
+  if (!email || !document.getElementById('email').checkValidity()) { msg.className = 'err'; msg.textContent = 'Enter a valid email address.'; document.getElementById('email').focus(); return; }
   if (!password || password.length < 8) { msg.className = 'err'; msg.textContent = 'Choose a password (min 8 chars).'; return; }
   if (password !== confirm) { msg.className = 'err'; msg.textContent = 'Passwords do not match.'; return; }
   if (username && !/^[a-z0-9._-]{2,40}$/.test(username)) { msg.className = 'err'; msg.textContent = 'Username must use lowercase letters, numbers, ".", "_", or "-".'; return; }
@@ -1177,7 +663,7 @@ async function submit(isResend = false) {
       msg.className = 'ok';
       msg.textContent = 'Sign up started. Check your email for a 6-digit code.';
       support.style.display = 'block';
-      if (!isResend) startResendTimer();
+      startResendTimer();
       resetCaptcha();
       
       document.getElementById('invite-step-1').style.display = 'none';
@@ -1289,17 +775,20 @@ async function requestReset() {
   }
 }
 
+var resendInterval;
 function startResendTimer() {
+  clearInterval(resendInterval);
   const resendBtn = document.getElementById('resend-btn');
   const link = document.getElementById('no-email-link');
   let left = 30;
+  const availableAt = Date.now() + 30000;
   resendBtn.disabled = true;
   resendBtn.textContent = `Resend available in ${left}s`;
   
-  const inv = setInterval(() => {
-    left--;
+  resendInterval = setInterval(() => {
+    left = Math.max(0, Math.ceil((availableAt - Date.now()) / 1000));
     if (left <= 0) {
-      clearInterval(inv);
+      clearInterval(resendInterval);
       resendBtn.disabled = false;
       resendBtn.textContent = "Didn't get email? Resend";
       link.style.display = 'inline-block';
@@ -1669,5 +1158,5 @@ async function activateDevTestAccess() {
 }
 </script>
 <script src="/cookie-consent.js" defer></script>
-<script src="/sync.js" defer></script><script src="/broadcast.js" defer></script><div id="_agree_footer" style="position:fixed;bottom:5px;left:0;right:0;text-align:center;pointer-events:none;z-index:2147483647;font-size:.65rem;color:rgba(255,255,255,.15);font-family:system-ui,sans-serif;letter-spacing:.01em;">By using mitch.pro you agree to the <a href="/use-agreement.html" style="color:rgba(255,255,255,.15);pointer-events:all;" target="_blank">use agreement</a> and <a href="/privacy/" style="color:rgba(255,255,255,.15);pointer-events:all;" target="_blank">privacy policy</a> · <a href="https://discord.gg/nrBCnK7KM5" style="color:rgba(255,255,255,.15);pointer-events:all;" target="_blank" rel="noopener">Discord</a>.</div></body>
+<script src="/broadcast.js" defer></script></body>
 </html>

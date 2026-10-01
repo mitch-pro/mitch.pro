@@ -1,285 +1,62 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-presentation="onboarding">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FAQ & Help Center — mitch.pro</title>
-<meta name="description" content="Find answers to frequently asked questions about mitch.pro accounts, enrollment, usernames, preferences, games, chat, privacy, and site tools.">
-<meta name="keywords" content="mitch.pro faq, help center, mitch.pro enrollment, mitch.pro username, mitchcoin, preferences">
-<link rel="canonical" href="https://mitch.pro/faq/" />
-<link rel="stylesheet" href="/open.css">
-<script src="/theme.js?v=11"></script>
-<style>
-  :root {
-    --ac: #00ff88;
-    --ac-dim: rgba(0, 255, 136, 0.15);
-  }
-  .faq-section {
-    margin-bottom: 14px;
-    scroll-margin-top: 140px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
-    background: rgba(255, 255, 255, 0.02);
-    overflow: hidden;
-  }
-  .faq-section h2 {
-    font-family: 'Syne', sans-serif;
-    font-size: 1.5rem;
-    font-weight: 800;
-    color: var(--ac);
-    margin: 0;
-    min-height: 62px;
-    padding: 0 20px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    cursor: pointer;
-    user-select: none;
-  }
-  .faq-section h2::after {
-    content: '+';
-    width: 30px;
-    height: 30px;
-    flex: 0 0 auto;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid rgba(255,255,255,.12);
-    border-radius: 8px;
-    background: rgba(255,255,255,.05);
-    color: var(--fg-dim);
-    font-size: 1rem;
-  }
-  .faq-section.open h2::after { content: '-'; }
-  .faq-section:not(.open) > :not(h2) { display: none; }
-  .q-box {
-    margin: 0 20px 20px;
-    padding: 20px;
-    background: rgba(255, 255, 255, 0.02);
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    transition: transform 0.2s ease, border-color 0.2s ease;
-  }
-  .q-box:hover {
-    border-color: rgba(0, 255, 136, 0.2);
-    background: rgba(255, 255, 255, 0.03);
-  }
-  .q-box h3 {
-    font-family: 'Syne', sans-serif;
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: #fff;
-    margin-bottom: 12px;
-    display: flex;
-    gap: 12px;
-    align-items: flex-start;
-  }
-  .q-box h3::before {
-    content: "Q";
-    color: var(--ac);
-    font-family: 'Syne', sans-serif;
-    font-weight: 800;
-    background: var(--ac-dim);
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 6px;
-    font-size: 0.75rem;
-    flex-shrink: 0;
-    margin-top: 2px;
-  }
-  .q-box p {
-    padding-left: 36px;
-    color: var(--fg-dim);
-    font-size: 0.95rem;
-    line-height: 1.6;
-  }
-  .q-box strong {
-    color: #fff;
-  }
-  @media (max-width: 600px) {
-    .faq-section h2 { font-size: 1.25rem; }
-    .q-box p { padding-left: 0; }
-    .q-box h3::before { display: none; }
-  }
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>A little help — mitch.pro</title>
+  <meta name="description" content="Help with free cloud Linux computers, signup, games, Matrix chat, MitchCoins, account security, and progress sync on mitch.pro.">
+  <link rel="canonical" href="https://mitchdog.com/faq/">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="/onboarding-theme.js?v=1"></script>
+  <link rel="stylesheet" href="/onboarding.css?v=1">
+  <script src="/app-shell.js?v=18" defer></script>
 </head>
-<body>
-  <main class="enroll-shell">
-    <nav class="topbar">
-      <a class="brand" href="/">
-        <img src="/icon-192.png" alt="">
-        <span>mitch.pro</span>
-      </a>
-      <div class="top-links">
-        <a href="/enroll/">Enroll</a>
-        <a href="/apply.html">Join the Team</a>
-        <a href="/use-agreement.html">Use Agreement</a>
-        <a href="/privacy/">Privacy</a>
+<body class="onboarding-page mitch-design" data-shell="off">
+  <a class="ob-skip" href="#help">Skip to help</a>
+  <header class="ob-nav ob-width"><a class="ob-brand" href="/"><img src="/icon-192.png" width="32" height="32" alt=""><span>mitch<span class="ob-brand-dot">.pro</span></span></a><nav class="ob-nav-links" aria-label="Main navigation"><a href="/#explore">Explore</a><a href="/#tour">Watch the tour</a><a href="/faq/" aria-current="page">Help</a></nav><div class="ob-nav-actions"><button class="ob-theme-toggle" type="button" data-theme-toggle aria-label="Switch to light mode" aria-pressed="false">◐</button><a class="ob-button ob-button-small" href="/enroll/?mode=signup">Join for free ↗</a></div></header>
+  <main class="ob-width" id="help">
+    <header class="ob-help-head"><span class="ob-eyebrow">THE HELP CENTER</span><h1>A little help.<br>A lot to explore.</h1><p>The current essentials: making an account, opening your free cloud computer, playing games, and finding your people.</p></header>
+    <div class="ob-help-content">
+      <nav class="ob-help-nav" aria-label="Help topics"><a href="#start">Getting started</a><a href="#computers">Free cloud computers</a><a href="#play">Games &amp; MitchCoins</a><a href="#connect">Chat &amp; community</a><a href="#account">Your account</a><a href="#support">Need a hand?</a></nav>
+      <div>
+        <section class="ob-help-group" id="start"><h2>Getting started</h2><div class="ob-faq-list">
+          <details open><summary>What is mitch.pro?</summary><p>A browser-based community with free cloud Linux, a games library, Matrix chat, friends and profiles, school schedules, a shared canvas, virtual rewards, and customization. Your account connects the things you do across the site.</p></details>
+          <details><summary>How do I create an account?</summary><p>Open <a href="/enroll/?mode=signup">Create account</a>, enter an email and password, accept the site rules, and verify the six-digit code sent to your inbox. You must be 13 or older. An invitation is not required, and profile details are optional.</p></details>
+          <details><summary>Can I try it before signing up?</summary><p><a href="/?trial=1">Try It Out</a> opens a timed guest preview. An account keeps your profile, rewards, and supported progress, and is required for private account features and your cloud computer.</p></details>
+          <details><summary>Why does mitch.pro open mitchdog.com?</summary><p>mitch.pro currently redirects to mitchdog.com, where the site is hosted. The mitch.pro name and community are the same.</p></details>
+        </div></section>
+        <section class="ob-help-group" id="computers"><h2>Free cloud computers</h2><div class="ob-faq-list">
+          <details open><summary>Do I have to pay for a VM?</summary><p>No. Your cloud Linux computer is free. You do not need to purchase a VM plan to use an assigned computer. <a href="/vms/">VM Lab</a> checks your account’s access and available capacity before creating a desktop. If your account cannot create one directly, an administrator can assign one.</p></details>
+          <details><summary>What can I do with it?</summary><p>Open a Linux desktop and terminal from your browser, install development tools, and work on projects. You can manage your computer and open its desktop from VM Lab. The hardware shown on your computer card is the specification assigned to you.</p></details>
+          <details><summary>What are the upgrades?</summary><p>Optional CPU, memory, storage, and session upgrades use earned MitchCoins, not real money. The catalog shows the available options and their virtual coin cost. Hardware upgrades stay with your account; session extensions last for the period selected. You can use your computer without buying an upgrade.</p></details>
+          <details><summary>Will my files stay there?</summary><p>Your assigned desktop keeps files between sessions. Back up important work: resetting or recreating a computer deletes its files, and a temporary sandbox is not permanent storage. Read the confirmation before choosing a reset or recreate action.</p></details>
+          <details><summary>Why is my desktop unavailable?</summary><p>Check whether the computer is stopped and start it if needed. A new desktop may need time to boot. VM Lab reports availability and status; contact an administrator if you need a computer assigned or a connection issue persists.</p></details>
+        </div></section>
+        <section class="ob-help-group" id="play"><h2>Games &amp; MitchCoins</h2><div class="ob-faq-list">
+          <details><summary>Where are the games?</summary><p>The <a href="/game-portal/">game room</a> has search, categories, saved games, and recently played titles. Supported games can earn account rewards. Titles and availability change, so the live library is the best place to browse.</p></details>
+          <details><summary>Are MitchCoins real money?</summary><p>No. MitchCoins are virtual currency earned through supported games, daily rewards, and community activities. They have no cash value. Use them for enabled shop items, profile cosmetics, marketplace features, and optional computer upgrades.</p></details>
+          <details><summary>Does every game save across devices?</summary><p>Only supported progress and settings sync with your account. Some embedded games keep their own local saves. Check a game’s behavior before relying on a save from another device.</p></details>
+          <details><summary>What does Premium mean?</summary><p>Premium is an account perk status for enabled cosmetics, rewards, and community areas. It is not a paid VM plan or a requirement to use a computer that has been assigned to you. Check the <a href="/shop/">shop</a> for current perks.</p></details>
+        </div></section>
+        <section class="ob-help-group" id="connect"><h2>Chat &amp; community</h2><div class="ob-faq-list">
+          <details><summary>Where do I chat?</summary><p><a href="/matrix/">Matrix chat</a> connects to your mitch.pro account and supports community rooms, direct messages, and voice/video features. The separate <a href="/encrypt/">Secure Chat</a> tool provides encrypted messaging as well.</p></details>
+          <details><summary>Is every conversation private?</summary><p>No. Public rooms are shared community spaces. Encryption and access depend on the chat and room settings. Check those settings before sharing anything sensitive, and follow the <a href="/use-agreement/">site rules</a>.</p></details>
+          <details><summary>How do I find friends or customize my profile?</summary><p>Visit <a href="/members/">People</a> to find members, <a href="/friends/">Friends</a> to manage connections, and <a href="/preferences/#account">Preferences</a> for your profile, display, privacy, and account settings. The <a href="/canvas/">canvas</a>, <a href="/shop/">shop</a>, and <a href="/marketplace/">marketplace</a> are other ways to join in.</p></details>
+        </div></section>
+        <section class="ob-help-group" id="account"><h2>Your account</h2><div class="ob-faq-list">
+          <details><summary>How do I log in?</summary><p>Use your email or username and password on the <a href="/enroll/">login page</a>. If you have set up a passkey, choose Use a passkey instead. Accounts with two-factor authentication also require their verification code.</p></details>
+          <details><summary>What if the verification email doesn’t arrive?</summary><p>Check spam and confirm the email address. After the resend timer ends, request a fresh code. If email delivery keeps failing, the signup page offers a manual account request for staff review.</p></details>
+          <details><summary>How do I reset my password?</summary><p>Choose Reset password on the <a href="/enroll/">account page</a>, then enter the emailed code and your new password. Resetting your password may make earlier password-protected Secure Chat messages unreadable; read the notice before continuing.</p></details>
+          <details><summary>What is MitchSync?</summary><p>MitchSync keeps supported browser settings and game progress attached to your account. Sync controls, themes, motion, background, and privacy settings are in <a href="/preferences/">Preferences</a>.</p></details>
+          <details><summary>Can I install the site as an app?</summary><p>Use your browser’s Install or Add to Home Screen option when available. Online features such as chat and cloud desktops still need a connection.</p></details>
+        </div></section>
+        <section class="ob-help-group" id="support"><h2>Need a hand?</h2><div class="ob-faq-list"><details open><summary>How do I report a problem?</summary><p>Use <a href="/feedback/">Feedback</a> or the relevant report tool. Include the page, what you were trying to do, and what happened. For account access or computer assignments, ask an administrator. Read the <a href="/privacy/">privacy policy</a> for information about your data.</p></details></div></section>
       </div>
-    </nav>
-    
-    <div class="container" style="max-width: 900px; padding: 0 16px;">
-      <div class="glass-card" style="margin-top: 40px;">
-        <div class="badge">Support</div>
-        <h1>Help & Documentation</h1>
-        <p style="margin-bottom: 32px; font-size: 1.05rem; opacity: 0.8;">Answers for accounts, enrollment, profiles, preferences, games, chat, coins, privacy, and site tools.</p>
-        
-        <section id="basics" class="faq-section">
-          <h2>Getting Started</h2>
-          
-          <div class="q-box">
-            <h3>What is mitch.pro?</h3>
-            <p>mitch.pro is a student-focused web portal with games, chat, profiles, friends, a shared canvas, leaderboards, MitchCoin, account customization, and utility pages. Most features require an account so progress, preferences, and profile settings stay attached to you.</p>
-          </div>
-
-          <div class="q-box">
-            <h3>How do I sign up or log in?</h3>
-            <p>Use <a href="/enroll/">/enroll/</a>. New users enter their email, username, nickname, graduation year, gender, referral information, and password. Existing users can log in with either their email or username.</p>
-          </div>
-
-          <div class="q-box">
-            <h3>Why does enrollment ask for profile details?</h3>
-            <p>The site now stores more profile metadata up front so usernames, display names, class year, and referral information are ready immediately. You can change most of those fields later from your profile or preferences pages.</p>
-          </div>
-        </section>
-
-        <section id="account" class="faq-section">
-          <h2>Account & Security</h2>
-
-          <div class="q-box">
-            <h3>What is my username?</h3>
-            <p>Your username is the public login handle connected to your account. If you already had an account before usernames existed, the site derives a starter username from your email and keeps it editable from <a href="/preferences/#account">/preferences/</a>.</p>
-          </div>
-
-          <div class="q-box">
-            <h3>Can I change my email, username, or profile info?</h3>
-            <p>Yes. Use <a href="/preferences/#account">/preferences/</a> for profile fields such as username, nickname, class year, gender, referral source, bio, public links, site behavior, display, privacy, homepage, sync, 2FA, and account controls.</p>
-          </div>
-
-          <div class="q-box">
-            <h3>Does mitch.pro support two-factor authentication?</h3>
-            <p>Yes. Account security supports email verification codes and optional authenticator-app TOTP setup. If two-factor authentication is enabled, login pauses until the second factor is verified.</p>
-          </div>
-
-          <div class="q-box">
-            <h3>How do I reset access if I cannot log in?</h3>
-            <p>Start from <a href="/enroll/">/enroll/</a> and use your email or username. If you lost email access or the verification flow fails, contact an admin with enough information to verify the account safely.</p>
-          </div>
-        </section>
-
-        <section id="profile" class="faq-section">
-          <h2>Profile & Preferences</h2>
-
-          <div class="q-box">
-            <h3>What is the difference between profile and preferences?</h3>
-            <p><a href="/profile/">/profile/</a> is the public view of a profile. Editing profile details and account settings now happens from <a href="/preferences/#account">/preferences/</a>.</p>
-          </div>
-
-          <div class="q-box">
-            <h3>Why are preferences split into closed sections?</h3>
-            <p>The preferences page has a lot of controls, so sections start closed as accordions. Click a section header to open only the settings you need.</p>
-          </div>
-
-          <div class="q-box">
-            <h3>Where do theme and display settings apply?</h3>
-            <p>Most pages load the shared theme system, so theme, motion, density, background, and quick-access settings can follow you across the site. Some games or embedded tools may keep their own styling.</p>
-          </div>
-        </section>
-
-        <section id="features" class="faq-section">
-          <h2>Games, Tools & Coins</h2>
-
-          <div class="q-box">
-            <h3>What are MitchCoins?</h3>
-            <p>MitchCoins are the site's virtual currency for games, shop items, profile cosmetics, rewards, and community features. They are part of the site economy only and do not have real-world cash value.</p>
-          </div>
-
-          <div class="q-box">
-            <h3>What can I do on the home page?</h3>
-            <p>The home page groups links into categories such as games, entertainment, social/chat, account/market, utilities, and admin tools when available. Search filters the visible links, and popular or frequent items can appear near the top.</p>
-          </div>
-
-          <div class="q-box">
-            <h3>What are launch modes?</h3>
-            <p>Some links can open normally, in a new tab, in an iframe, in a popup, or through about:blank mode depending on the link and your display preferences. You can adjust launch behavior from <a href="/preferences/">/preferences/</a>.</p>
-          </div>
-        </section>
-
-        <section id="community" class="faq-section">
-          <h2>Friends, Chat & Community</h2>
-
-          <div class="q-box">
-            <h3>How do friends work?</h3>
-            <p>Use the friends page to find people, send requests, accept requests, and see friend-related activity. Privacy preferences can reduce what others see about your online status.</p>
-          </div>
-
-          <div class="q-box">
-            <h3>What chat options exist?</h3>
-            <p>The site includes public/community chat, premium chat areas when available, and encrypted chat tools. Chat availability can depend on account status, moderation state, and page-specific rules.</p>
-          </div>
-
-          <div class="q-box">
-            <h3>What is premium?</h3>
-            <p>Premium is a site status used for extra features, cosmetics, or member-only areas where enabled. Premium details can change as the shop, marketplace, and account systems evolve.</p>
-          </div>
-        </section>
-
-        <section id="privacy" class="faq-section">
-          <h2>Privacy, Data & Moderation</h2>
-
-          <div class="q-box">
-            <h3>Is my email public?</h3>
-            <p>No. Public views prefer username, nickname, or display name. Admin and moderation views may show more account information when needed for support, safety, or abuse handling.</p>
-          </div>
-
-          <div class="q-box">
-            <h3>Why did the site move away from JSON data files?</h3>
-            <p>Mutable site data is being stored in SQLite so signup codes, users, referrals, friends, and similar state are not scattered across writable JSON files. Some flat files still exist for static config, catalogs, lists, and assets that are better kept as files.</p>
-          </div>
-
-          <div class="q-box">
-            <h3>How do I report a bug, bad content, or an account issue?</h3>
-            <p>Use the relevant report or feedback page when available, or contact staff with the page, username, time, and a short description. Admin and moderator tools are used to review reports and enforce site rules.</p>
-          </div>
-
-          <div class="q-box">
-            <h3>Does the site work as an installable app?</h3>
-            <p>Yes. mitch.pro includes Progressive Web App support. Use your browser's install or add-to-home-screen option if you want a standalone app-style shortcut.</p>
-          </div>
-        </section>
-
-      </div>
-    </div>
-
-    <div class="footer">
-      &copy; 2026 mitch.pro &middot; <a href="/enroll/">Join Now</a> &middot; <a href="/privacy/">Privacy</a>
     </div>
   </main>
-  
-  <script>
-    document.querySelectorAll('.faq-section').forEach(section => {
-      const heading = section.querySelector('h2');
-      if (!heading) return;
-      heading.setAttribute('role', 'button');
-      heading.setAttribute('tabindex', '0');
-      heading.setAttribute('aria-expanded', 'false');
-      const toggle = () => {
-        const open = section.classList.toggle('open');
-        heading.setAttribute('aria-expanded', open ? 'true' : 'false');
-      };
-      heading.addEventListener('click', toggle);
-      heading.addEventListener('keydown', e => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          toggle();
-        }
-      });
-    });
-  </script>
-<script src="/cookie-consent.js" defer></script>
+  <footer class="ob-footer ob-width"><a class="ob-brand" href="/">mitch<span class="ob-brand-dot">.pro</span></a><span>© 2026 · Your little corner of the internet.</span><nav aria-label="Footer"><a href="/enroll/?mode=signup">Join for free</a><a href="/privacy/">Privacy</a><a href="/use-agreement/">Site rules</a></nav></footer>
 </body>
 </html>

@@ -770,7 +770,7 @@
         <!-- VM Requests & Soft-Delete Restore Actions -->
         <div class="action-card" style="width: 100%;">
           <h2>Active & Pending VM Requests</h2>
-          <p>Shows student subscriptions, VMs, and their operational statuses. Deleted VMs can be restored up to 7 days after soft-deletion.</p>
+          <p>Shows assigned computers, VM requests, and their operational statuses. Deleted VMs can be restored up to 7 days after soft-deletion.</p>
           
           <div style="overflow-x: auto; margin-top: 15px;">
             <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.82rem;">
@@ -2943,7 +2943,7 @@
               <div style="font-size:0.7rem; color:var(--t-fg2); font-weight:normal;">Applied: ${dateStr}</div>
             </td>
             <td style="padding: 10px 8px; text-transform: capitalize;">
-              ${app.tier === 'paid' ? 'Dedicated VM' : 'Premium Container'}
+              ${app.tier === 'paid' ? 'Dedicated VM' : 'Linux container'}
               ${app.priceUsd === 0 ? '<div style="margin-top:3px; color:#53e6a5; font-size:0.7rem; font-weight:800;">NO-COST ENTITLEMENT</div>' : ''}
             </td>
             <td style="padding: 10px 8px; max-width: 320px; white-space: normal; overflow-wrap: break-word;">${app.note || 'None'}</td>

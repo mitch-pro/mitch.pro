@@ -344,6 +344,12 @@
     document.body.dataset.page = currentPath().split('/')[1] || 'home';
     ensureViewport();
     ensureInstallMetadata();
+    // Public onboarding owns its navigation and presentation. Do not add
+    // the account shell, wallet fallback bar, or older CSS enhancement layers.
+    if (document.documentElement.dataset.presentation === 'onboarding') {
+      window.MitchShell = { ready: true, injected: false };
+      return;
+    }
     ensureFonts();
     ensureRelaunchStyles();
     ensurePortalStyles();

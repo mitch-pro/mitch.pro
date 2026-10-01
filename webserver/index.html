@@ -1787,7 +1787,7 @@ async function pollVmStatus() {
       indicator.style.color = '#ffaf3f';
       dot.style.background = '#ffaf3f';
       indicator.innerHTML = `<span id="vm-dashboard-status-dot" style="width:8px; height:8px; border-radius:50%; background:#ffaf3f; display:inline-block; margin-right:4px;"></span>Pending Approval`;
-      info.textContent = `Your ${data.tier === 'paid' ? 'Dedicated VM' : 'Premium Container'} application is pending Mitch's review.`;
+      info.textContent = `Your ${data.tier === 'paid' ? 'Dedicated VM' : 'Linux container'} application is pending Mitch's review.`;
       powerBtn.style.display = 'none';
       sshBtn.style.display = 'none';
       vncBtn.style.display = 'none';
@@ -1801,7 +1801,7 @@ async function pollVmStatus() {
       indicator.innerHTML = `<span id="vm-dashboard-status-dot" style="width:8px; height:8px; border-radius:50%; background:#8b5cf6; display:inline-block; margin-right:4px; box-shadow: 0 0 8px #8b5cf6;"></span>Running`;
       
       const ipText = data.ip ? `IP Address: <strong>${data.ip}</strong>` : 'IP Address: <em>Obtaining network link...</em>';
-      info.innerHTML = `${ipText} &middot; Tier: ${data.tier === 'paid' ? 'KVM VM' : 'Premium LXC'}`;
+      info.innerHTML = `${ipText} &middot; Tier: ${data.tier === 'paid' ? 'KVM VM' : 'Linux container'}`;
       
       powerBtn.textContent = 'Power Off';
       powerBtn.style.background = 'rgba(239, 68, 68, 0.1)';
@@ -3507,7 +3507,7 @@ if (document.readyState === 'loading') {
   <div class="home-section-heading"><span>01 / PICK UP HERE</span><p>Everything you use most</p></div>
   <section class="home-features" aria-label="Start here">
     <a class="home-feature feature-vms" href="/vms/" onclick="openHomeHref(event, '/vms/');">
-      <span class="feature-eyebrow">01 / VM LAB · FREE FOR STUDENTS</span>
+      <span class="feature-eyebrow">01 / VM LAB · FREE CLOUD LINUX</span>
       <h2>Cloud Linux</h2>
       <span class="feature-bottom">Full in-browser GUI desktop with root access &amp; persistent storage <b aria-hidden="true">↗</b></span>
       <div class="feature-vm-art" aria-hidden="true">
@@ -3593,7 +3593,7 @@ if (document.readyState === 'loading') {
         <div class="vm-spotlight-content">
           <div class="vm-spotlight-badges">
             <span class="vm-badge-chip live"><i></i> In-Browser Linux</span>
-            <span class="vm-badge-chip free">100% Free for Students &amp; Premium</span>
+            <span class="vm-badge-chip free">Free computer · No payment required</span>
           </div>
           <h3>VM Lab: Your Personal Cloud Computer</h3>
           <p class="vm-spotlight-lead">
@@ -3610,7 +3610,7 @@ if (document.readyState === 'loading') {
             </div>
             <div class="vm-perk-item">
               <span class="vm-perk-icon">💾</span>
-              <div><b>Persistent Storage</b><small>Files and projects stay saved forever</small></div>
+              <div><b>Persistent Storage</b><small>Keep your projects between sessions; back up before a reset</small></div>
             </div>
             <div class="vm-perk-item">
               <span class="vm-perk-icon">🪙</span>
