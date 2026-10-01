@@ -118,7 +118,19 @@ pub fn hash_session_token(token: &str) -> String {
 /// `devTestAccessEnabled()` — server.js:2683.
 pub fn dev_test_access_enabled() -> bool {
     std::env::var("NODE_ENV").unwrap_or_default() != "production"
-        && std::env::var("DEV_TEST_ACCESS").unwrap_or_default() == "1"
+        && (std::env::var("DEV_TEST_ACCESS").unwrap_or_default() == "1" || god_mode_enabled())
+}
+
+/// `GOD_MODE` — explicit, local-dev-only opt-in. When set, every request that
+/// doesn't already carry its own valid session is auto-logged-in as the dev
+/// admin account ([`DEV_TEST_EMAIL`]) with full owner/admin/moderator/premium
+/// privileges — no login, click, or cookie required. This can never fire by
+/// accident: it requires BOTH `NODE_ENV` to not be `"production"` AND
+/// `GOD_MODE=1` to be set explicitly, mirroring [`dev_test_access_enabled`].
+/// Never set this in a production environment.
+pub fn god_mode_enabled() -> bool {
+    std::env::var("NODE_ENV").unwrap_or_default() != "production"
+        && std::env::var("GOD_MODE").unwrap_or_default() == "1"
 }
 
 /// Parsed cookie jar — mirrors the JS getCookies() return value.
@@ -199,6 +211,33 @@ pub fn get_cookies_from_header_value(
                     .insert("_authSession".into(), session.serialize());
             }
         }
+    }
+
+    // GOD_MODE: nothing above resolved a real session for this request — log
+    // it in as the dev admin automatically. A request that already carries
+    // its own valid session (someone deliberately logged in as themselves)
+    // is left alone.
+    if god_mode_enabled() && cookies.get("studentId").map(str::is_empty).unwrap_or(true) {
+        let gen = current_session_generation(store, DEV_TEST_EMAIL);
+        let sid = issue_login_session(store, id_secret, DEV_TEST_EMAIL, DEV_TEST_EMAIL);
+        let now = now_millis();
+        let session = AuthSession {
+            email: DEV_TEST_EMAIL.to_string(),
+            norm_email: DEV_TEST_EMAIL.to_string(),
+            sid: sid.clone(),
+            gen,
+            created_at: now,
+            last_seen: now,
+            expires_at: now + AUTH_SESSION_TTL_MS,
+            user_agent: String::new(),
+            ip: String::new(),
+            dev_superuser: true,
+        };
+        cookies.map.insert("studentId".into(), sid.clone());
+        cookies.map.insert("id".into(), sid);
+        cookies
+            .map
+            .insert("_authSession".into(), session.serialize());
     }
     cookies
 }

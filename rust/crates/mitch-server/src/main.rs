@@ -46,6 +46,13 @@ async fn main() {
         )
         .init();
 
+    if mitch_lib::auth::god_mode_enabled() {
+        let bar = "=".repeat(60);
+        tracing::warn!(
+            "\n{bar}\n  GOD_MODE=1 is active — EVERY visitor, logged in or not,\n  is auto-logged-in as admin@mitch.pro with full\n  owner/admin/moderator privileges. LOCAL DEV ONLY.\n  Refuses to activate when NODE_ENV=production.\n{bar}"
+        );
+    }
+
     let cfg = hosts::SiteConfig::load();
     let store = Arc::new(
         mitch_lib::data::DataStore::open(&cfg.base_dir, &cfg.data_dir)
