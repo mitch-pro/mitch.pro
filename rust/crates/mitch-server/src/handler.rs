@@ -111,6 +111,9 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/rjuhsd-assets/antelope-logo.png",
     "/rjuhsd-assets/westpark-logo.png",
     "/rjuhsd-assets/oakmont-logo.png",
+    "/rjuhsd-assets/pathways-logo.png",
+    "/rjuhsd-assets/rosevilleadult-logo.png",
+    "/rjuhsd-assets/district-logo.png",
     "/rjuhsd-assets/icon-192.png",
     "/rjuhsd-assets/icon-512.png",
     "/rjuhsd-assets/maskable-512.png",
@@ -1337,6 +1340,10 @@ pub async fn handle(
     }
     if method != Method::GET {
         return err_resp(405, None, None);
+    }
+
+    if public_help_base == "/faq" && !is_rjuhsd_host(headers) && !is_pickle_host(headers) {
+        return redirect("/#help", 302);
     }
 
     // 5. /team route (GET) — injectReadability of the team page.
