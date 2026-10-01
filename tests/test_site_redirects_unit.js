@@ -42,10 +42,10 @@ for (const destination of ['/game-portal/', '/matrix/', '/vms/', '/members/', '/
 for (const id of ['home-search', 'links', 'daily-login-widget', 'member-side-rail', 'vm-workspace-panel']) {
   assert(home.includes(`id="${id}"`), `Homepage must preserve the ${id} integration`);
 }
-assert(home.includes('/home.css?v=5') && home.includes('/home-friends.js?v=3'), 'Homepage assets need cache-busted URLs');
+assert(home.includes('/home.css?v=6') && home.includes('/home-friends.js?v=3'), 'Homepage assets need cache-busted URLs');
 assert(home.includes('Blooket Bot currently blocked :('), 'Homepage hotbar must show the requested Blooket status');
 assert(homeFriends.includes("hero.after(section)"), 'Friends activity should live inside the dashboard');
-assert(homeCss.includes('prefers-reduced-motion') && homeCss.includes('var(--t-ac)'), 'Homepage styles must respect motion and theme preferences');
+assert(homeCss.includes('prefers-reduced-motion') && homeCss.includes('prefers-color-scheme'), 'Homepage styles must respect motion and theme preferences');
 const location = { href: 'https://mitch.pro/' };
 const context = vm.createContext({ URL, location, window: { location }, localStorage: { getItem() { throw new Error('School links must bypass game launch preferences'); } } });
 vm.runInContext(home.slice(home.indexOf('function launchSite('), home.indexOf('function openInNewTab(')), context);
@@ -57,7 +57,7 @@ assert.equal(location.href, 'https://woodcreek.site/?pin=123456', 'Blooket Bot m
 // Installed Mitch PWAs require a same-origin shortcut; the server redirects it.
 const shortcut = JSON.parse(readFileSync('webserver/manifest.json', 'utf8')).shortcuts.find(item => item.name === 'Bell Schedule');
 assert.equal(bellScheduleRedirect(new URL(shortcut.url, 'https://mitch.pro')), RJUHSD_ORIGIN + '/?utm_source=pwa-shortcut');
-for (const file of ['webserver/app-shell.js', 'webserver/index.html', 'webserver/index-sales.html', 'data/sites']) {
+for (const file of ['webserver/app-shell.js', 'webserver/index.html', 'data/sites']) {
   assert(readFileSync(file, 'utf8').includes('https://woodcreek.site/'), `${file} must point Blooket Bot to woodcreek.site`);
 }
 assert(readFileSync('webserver/app-shell.js', 'utf8').includes("label: 'Blooket Bot currently blocked :('"), 'Blooket status must be in the shared top navigation');
@@ -69,7 +69,7 @@ const rjuhsdApp = readFileSync('webserver/rjuhsd-assets/app.js', 'utf8');
 const preferencesHtml = readFileSync('webserver/preferences/index.html', 'utf8');
 const preferencesSchoolCss = readFileSync('webserver/preferences/preferences-school.css', 'utf8');
 assert(rjuhsdHtml.includes('<a class="brand" href="/" aria-label="rjuhsd.school home"><span class="brand-logo"><img class="site-logo" src="/icon-192.png"'), 'rjuhsd top left brand must use mitch.pro logo');
-assert(rjuhsdHtml.includes('/rjuhsd-assets/redesign.css?v=2'), 'rjuhsd must load the schedule-first redesign');
+assert(rjuhsdHtml.includes('/rjuhsd-assets/redesign.css?v=3'), 'rjuhsd must load the schedule-first redesign');
 assert(rjuhsdHtml.includes('/rjuhsd-assets/reference-theme.css?v=10'), 'rjuhsd must load updated reference-theme.css?v=10');
 const referenceThemeCss = readFileSync('webserver/rjuhsd-assets/reference-theme.css', 'utf8');
 assert(referenceThemeCss.includes('.calendar-days>button:hover:not(.today)'), 'dark calendar date hover must be styled without white box');
@@ -82,7 +82,8 @@ assert(preferencesHtml.includes("classList.add('school-preferences')"), 'prefere
 assert(preferencesSchoolCss.includes('background: linear-gradient(110deg'), 'school preferences header must reveal the active background');
 assert(preferencesSchoolCss.includes('.school-preferences.theme-light') || preferencesSchoolCss.includes(':is(.school-preferences.theme-light'), 'school preferences must support light mode');
 assert(preferencesSchoolCss.includes('.prefs-page .page-head h1') && preferencesSchoolCss.includes('var(--t-fg'), 'school preferences light mode header must use readable ink color');
-assert(readFileSync('server.js', 'utf8').includes("'/rjuhsd-assets/redesign.css', '/preferences-school.css'"), 'school redesign stylesheets must remain public assets');
+const handlerRs = readFileSync('rust/crates/mitch-server/src/handler.rs', 'utf8');
+assert(handlerRs.includes('"/rjuhsd-assets/redesign.css"') && handlerRs.includes('"/preferences/preferences-school.css"'), 'school redesign stylesheets must remain public assets');
 assert(!/<a class="brand"[^>]*><span class="brand-logo"><img[^>]*src="\/rjuhsd-assets\//.test(rjuhsdHtml), 'rjuhsd brand must not use school-based logo');
 
 // Favicon on rjuhsd.school must use mitch.pro favicon (/favicon.ico)

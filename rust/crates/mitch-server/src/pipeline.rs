@@ -21,6 +21,7 @@ pub fn inject_page(
 ) -> String {
     let cfg: &SiteConfig = &state.cfg;
     let mut raw = std::mem::take(html);
+    let is_onboarding = raw.contains("data-presentation=\"onboarding\"");
 
     let mut inject_str = String::new();
     let rc_key = std::env::var("RECAPTCHA_SITE_KEY")
@@ -84,7 +85,12 @@ pub fn inject_page(
     let is_rjuhsd = crate::hosts::is_rjuhsd_host(headers);
     let is_pickle = crate::hosts::is_pickle_host(headers);
 
-    if !is_sales_page && !is_rjuhsd && !is_pickle && (!is_embedded || is_standalone_game_portal) {
+    if !is_onboarding
+        && !is_sales_page
+        && !is_rjuhsd
+        && !is_pickle
+        && (!is_embedded || is_standalone_game_portal)
+    {
         if !is_authenticated_html {
             inject_str.push_str("<script src=\"/guest-preview.js?v=1\" defer></script>\n");
         }
@@ -104,7 +110,9 @@ pub fn inject_page(
     // entirely on this injection point for base styling — so app.css itself
     // gets the same "inject if the page doesn't already have it" treatment
     // app-shell.js gets below, instead of assuming every page already links it.
-    if !is_embedded && !raw.contains("/app.css") {
+    // Public onboarding pages own their own presentation end to end and skip
+    // this (and app-shell.js) entirely — see app-shell.js's early return.
+    if !is_onboarding && !is_embedded && !raw.contains("/app.css") {
         inject_str.push_str("<link rel=\"stylesheet\" href=\"/app.css\">\n");
     }
     if !is_embedded && !raw.contains("/app-shell.js") {
@@ -204,7 +212,7 @@ pub fn inject_page(
     let is_rjuhsd = is_host(req_host_name, "rjuhsd.school");
     let is_encrypt_app_page =
         path == "/encrypt" || path == "/encrypt/" || path == "/encrypt/index.html";
-    if !raw.contains("_agree_footer") && !(is_encrypt_app_page && !is_rjuhsd) {
+    if !is_onboarding && !raw.contains("_agree_footer") && !(is_encrypt_app_page && !is_rjuhsd) {
         let agree = "<div id=\"_agree_footer\" style=\"position:fixed;bottom:5px;left:0;right:0;text-align:center;pointer-events:none;z-index:2147483647;font-size:.65rem;color:rgba(255,255,255,.15);font-family:system-ui,sans-serif;letter-spacing:.01em;\">By using mitch.pro you agree to the <a href=\"/use-agreement.html\" style=\"color:rgba(255,255,255,.15);pointer-events:all;\" target=\"_blank\">use agreement</a> and <a href=\"/privacy.html\" style=\"color:rgba(255,255,255,.15);pointer-events:all;\" target=\"_blank\">privacy policy</a>.</div>";
         match raw.rfind("</body>") {
             Some(i) => raw = format!("{}{}{}", &raw[..i], agree, &raw[i..]),
@@ -222,7 +230,11 @@ pub fn serve_static_html(
     path: &str,
     html: String,
 ) -> String {
-    let mut html = inject_readability(&html, path);
+    let mut html = if html.contains("data-presentation=\"onboarding\"") {
+        html
+    } else {
+        inject_readability(&html, path)
+    };
     let is_authenticated = state.check_password_cookie(headers, None);
     let is_embedded = is_embedded_game_runtime(path);
     if is_authenticated && !is_embedded {

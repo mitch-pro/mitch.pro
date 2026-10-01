@@ -16,9 +16,9 @@ assert(admin.includes('/staff-command-v2.css?v=1'), 'Admin must load the redesig
 assert(moderator.includes('/staff-command-v2.css?v=1'), 'Moderator must load the redesigned staff system');
 assert(moderator.includes('class="moderator-hero"'), 'Moderator must have its dedicated workspace hero');
 assert(home.match(/class="staff-access-copy"/g)?.length === 3, 'All homepage staff buttons need labels and descriptions');
-assert(home.includes('/home.css?v=5'), 'Homepage must load its consolidated stylesheet');
-assert(homeCss.includes('.feature-chat { grid-column: 2; grid-row: 1 / 3; }'), 'Matrix Chat must stay the featured (larger) tile');
-assert(homeCss.includes('.feature-vms { grid-column: 1; grid-row: 1; }') && homeCss.includes('.feature-games { grid-column: 1; grid-row: 2; }'), 'VM Lab and Play Games must stack as the two compact tiles beside the featured one');
+assert(home.includes('/home.css?v=6'), 'Homepage must load its consolidated stylesheet');
+assert(homeCss.includes('.home-features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }'), 'VM Lab, Matrix Chat, and Play Games must stay three equal-width tiles');
+assert(home.match(/class="home-feature feature-(vms|chat|games)"/g)?.length === 3, 'Homepage must keep all three start-here tiles');
 assert(homeCss.includes('body.home:is(.is-staff, .is-admin) .staff-access-rail'), 'Staff rail must only appear for staff');
 assert(homeCss.includes('.staff-access-rail:focus-within'), 'Staff rail must expand for keyboard users');
 assert(staffCss.includes('#command-center #owner-tools'), 'Owner tools need their own visual treatment');

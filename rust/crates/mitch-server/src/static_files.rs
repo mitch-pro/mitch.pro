@@ -21,6 +21,94 @@ use axum::response::Response;
 use crate::errors::err_resp;
 
 pub const STATIC_CACHE_REVALIDATE_MS: u128 = 30 * 60 * 1000;
+pub const SITE_TOUR_PATH: &str = "/media/site-tour-v1.mp4";
+
+/// Single byte ranges for the public tour; unsupported range units and
+/// multipart requests are ignored, while unsatisfiable byte ranges are 416.
+fn video_byte_range(raw: &str, size: usize) -> Result<Option<(usize, usize)>, ()> {
+    let Some(bytes) = raw.strip_prefix("bytes=") else {
+        return Ok(None);
+    };
+    if bytes.contains(',') {
+        return Ok(None);
+    }
+    let (first, last) = bytes.split_once('-').ok_or(())?;
+    if size == 0 {
+        return Err(());
+    }
+    if first.is_empty() {
+        let suffix = last.parse::<usize>().map_err(|_| ())?;
+        if suffix == 0 {
+            return Err(());
+        }
+        return Ok(Some((size.saturating_sub(suffix), size - 1)));
+    }
+    let start = first.parse::<usize>().map_err(|_| ())?;
+    let end = if last.is_empty() {
+        size - 1
+    } else {
+        last.parse::<usize>().map_err(|_| ())?.min(size - 1)
+    };
+    if start >= size || start > end {
+        return Err(());
+    }
+    Ok(Some((start, end)))
+}
+
+/// Only the explicitly public tour uses this range-aware path. Other static
+/// files and their access policies retain the existing behavior.
+pub fn serve_tour_video(
+    cache: &StaticCache,
+    webroot: &Path,
+    headers: &axum::http::HeaderMap,
+    head: bool,
+) -> Response {
+    let Some(file) = safe_webroot_path(webroot, SITE_TOUR_PATH) else {
+        return err_resp(403, None, None);
+    };
+    let Some(entry) = cache.get(&file) else {
+        return err_resp(404, None, None);
+    };
+    let size = entry.size;
+    let range = if head {
+        Ok(None)
+    } else {
+        headers
+            .get(header::RANGE)
+            .and_then(|v| v.to_str().ok())
+            .map(|v| video_byte_range(v, size))
+            .unwrap_or(Ok(None))
+    };
+    let mut response = Response::builder()
+        .header(header::CONTENT_TYPE, "video/mp4")
+        .header(header::ACCEPT_RANGES, "bytes")
+        .header(header::CACHE_CONTROL, "public, max-age=31536000, immutable");
+    match range {
+        Err(()) => response
+            .status(416)
+            .header(header::CONTENT_RANGE, format!("bytes */{size}"))
+            .header(header::CONTENT_LENGTH, "0")
+            .body(axum::body::Body::empty())
+            .expect("video range response"),
+        Ok(Some((start, end))) => response
+            .status(206)
+            .header(header::CONTENT_RANGE, format!("bytes {start}-{end}/{size}"))
+            .header(header::CONTENT_LENGTH, (end - start + 1).to_string())
+            .body(axum::body::Body::from(entry.data[start..=end].to_vec()))
+            .expect("video response"),
+        Ok(None) => {
+            response = response
+                .status(200)
+                .header(header::CONTENT_LENGTH, size.to_string());
+            let body = if head {
+                axum::body::Body::empty()
+            } else {
+                axum::body::Body::from(entry.data.as_ref().clone())
+            };
+            response.body(body).expect("video response")
+        }
+    }
+}
 
 /// Default ceiling for the in-RAM cache (16 GiB in bun; configurable because
 /// the dev box is not the VPS). Env: MITCH_STATIC_CACHE_MB.
@@ -485,6 +573,21 @@ pub fn pickle_asset_response(webroot: &std::path::Path, path: &str) -> Option<Re
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn video_ranges_cover_browser_seeking_and_invalid_offsets() {
+        assert_eq!(video_byte_range("bytes=0-1", 100), Ok(Some((0, 1))));
+        assert_eq!(video_byte_range("bytes=75-", 100), Ok(Some((75, 99))));
+        assert_eq!(video_byte_range("bytes=-25", 100), Ok(Some((75, 99))));
+        assert_eq!(video_byte_range("bytes=-200", 100), Ok(Some((0, 99))));
+        assert_eq!(video_byte_range("bytes=90-200", 100), Ok(Some((90, 99))));
+        for invalid in ["bytes=100-", "bytes=5-3", "bytes=-0", "bytes=nope-2"] {
+            assert_eq!(video_byte_range(invalid, 100), Err(()));
+        }
+        assert_eq!(video_byte_range("bytes=0-", 0), Err(()));
+        assert_eq!(video_byte_range("items=0-1", 100), Ok(None));
+        assert_eq!(video_byte_range("bytes=0-1,4-5", 100), Ok(None));
+    }
 
     #[test]
     fn safe_webroot_blocks_traversal() {

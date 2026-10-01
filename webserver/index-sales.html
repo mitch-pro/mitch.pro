@@ -1,509 +1,98 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-presentation="onboarding">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>mitch.pro — High-Performance Student Portal & Private Gaming Community</title>
-  <meta name="description" content="Welcome to mitch.pro, the ultimate private student community and high-performance gaming hub. Access real-time school bell schedules, E2E encrypted chat, and 25,000+ unblocked games with custom progress syncing.">
-  <meta name="keywords" content="mitch.pro, mitch pro, woodcreek high school, whs bell schedule, student gaming portal, unblocked games, school bell schedule, private student community">
-  <link rel="canonical" href="https://mitch.pro/" />
-
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://mitch.pro/" />
-  <meta property="og:title" content="mitch.pro — High-Performance Student Portal & Private Gaming Community" />
-  <meta property="og:description" content="Access live Woodcreek High School bell schedules, 25,000+ unblocked games, secure E2E encrypted chat, and cloud-sync gameplay profiles." />
-  <meta property="og:image" content="https://mitch.pro/icon-512.png" />
-
-  <meta property="twitter:card" content="summary_large_image" />
-  <meta property="twitter:url" content="https://mitch.pro/" />
-  <meta property="twitter:title" content="mitch.pro — High-Performance Student Portal & Private Gaming Community" />
-  <meta property="twitter:description" content="Access live Woodcreek High School bell schedules, 25,000+ unblocked games, secure E2E encrypted chat, and cloud-sync gameplay profiles." />
-  <meta property="twitter:image" content="https://mitch.pro/icon-512.png" />
-
-  <link rel="stylesheet" href="/app.css">
-  <link rel="stylesheet" href="/welcome.css?v=2">
-  <script src="/app-shell.js" defer></script>
-  <script src="/api.js" defer></script>
-
-  <style>
-    /* Burning cherry wallpaper — painted (and blurred) by theme.js's shared
-       html::before layer. Heavily faint: an ambient wash the transparent
-       browser window breathes through. */
-    html body.sales-page {
-      --t-bgr: url(/home-burning-cherry.webp) center / cover no-repeat;
-      --t-bg-layer-opacity: 0.45;
-    }
-    /* Light mode: the cherry photo is a dark print — use the light theme's wash */
-    html.theme-light body.sales-page {
-      --t-bgr: linear-gradient(160deg, #f3f5fa, #e9edf6);
-    }
-    /* Light mode: pale wash over the wallpaper so ink text keeps contrast */
-    html.theme-light body.sales-page::after {
-      content: "";
-      position: fixed;
-      inset: 0;
-      z-index: -1;
-      background: linear-gradient(180deg, rgba(242,244,250,0.72), rgba(236,238,247,0.8));
-      pointer-events: none;
-    }
-    /* Translucent readability boxes on the non-solid controls */
-    body.sales-page {
-      --sales-btn-bg: color-mix(in srgb, var(--t-bg) 62%, transparent);
-      --sales-btn-bg-hover: color-mix(in srgb, var(--t-bg) 82%, transparent);
-    }
-    body.sales-page .btn-ghost:not(.btn-primary):not(#nov-1):not(#nov-2):not(#nov-3):not(#nov-4):not(#nov-5):not(#nov-6):not(#nov-7):not(#nov-8):not(#nov-9):not(#nov-10) {
-      background: var(--sales-btn-bg) !important;
-      border: 1px solid var(--t-bd) !important;
-      border-radius: 8px !important;
-    }
-    body.sales-page .btn-ghost:not(.btn-primary):not(#nov-1):not(#nov-2):not(#nov-3):not(#nov-4):not(#nov-5):not(#nov-6):not(#nov-7):not(#nov-8):not(#nov-9):not(#nov-10):hover {
-      background: var(--sales-btn-bg-hover) !important;
-    }
-    /* Footer links: accent + underline so they don't rely on color alone (a11y). */
-    .sales-foot a {
-      color: var(--t-ac);
-      text-decoration: underline;
-    }
-    .sales-foot a:hover {
-      color: var(--t-ac2);
-    }
-  </style>
-
-  <style>
-    body.sales-page {
-      overflow-x: clip;
-    }
-
-    .sales-page::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      z-index: -1;
-      pointer-events: none;
-      background:
-        radial-gradient(ellipse 80% 55% at 50% -15%, color-mix(in srgb, var(--t-ac) 22%, transparent), transparent 70%),
-        radial-gradient(ellipse 45% 40% at 100% 80%, color-mix(in srgb, var(--t-ac2, var(--t-ac)) 10%, transparent), transparent 65%);
-    }
-
-    .sales-top {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      width: min(1080px, 100%);
-      margin: 0 auto;
-      padding: 1.15rem clamp(1rem, 4vw, 1.5rem);
-    }
-
-    .sales-top .brand {
-      font-family: Outfit, system-ui, sans-serif;
-      font-weight: 800;
-      font-size: 1.2rem;
-      letter-spacing: -0.03em;
-      color: var(--t-fg);
-      text-decoration: none;
-    }
-
-    .sales-top .brand:hover { color: var(--t-fg); opacity: 0.9; }
-
-    .sales-hero {
-      width: min(720px, 100%);
-      margin: 0 auto;
-      padding:
-        clamp(3.5rem, 12vh, 7rem)
-        clamp(1rem, 4vw, 1.5rem)
-        clamp(3rem, 8vh, 5rem);
-      text-align: center;
-      animation: app-fade-in 0.55s ease both;
-    }
-
-    .sales-hero .brand-hero {
-      display: block;
-      font-family: Outfit, system-ui, sans-serif;
-      font-size: clamp(3rem, 11vw, 5.25rem);
-      font-weight: 800;
-      letter-spacing: -0.05em;
-      line-height: 0.95;
-      color: var(--t-fg);
-      margin: 0 0 1.15rem;
-    }
-
-    .sales-hero h1 {
-      margin: 0 0 0.85rem;
-      font-size: clamp(1.35rem, 3.5vw, 1.85rem);
-      font-weight: 700;
-      letter-spacing: -0.03em;
-    }
-
-    .sales-hero .lede {
-      margin: 0 auto 1.75rem;
-      max-width: 38ch;
-      color: var(--t-fg2);
-      font-size: clamp(1rem, 2.4vw, 1.15rem);
-      line-height: 1.55;
-    }
-
-    .sales-cta-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.65rem;
-      justify-content: center;
-    }
-
-    .sales-cta-row .btn-primary,
-    .sales-cta-row .btn-ghost {
-      min-height: 2.85rem;
-      padding: 0.7rem 1.35rem;
-      font-weight: 700;
-    }
-
-    .btn-try-it-out {
-      min-height: 3.35rem;
-      padding: 0.85rem 2.25rem;
-      font-family: Outfit, system-ui, sans-serif;
-      font-size: 1.15rem;
-      font-weight: 800;
-      letter-spacing: -0.01em;
-      border-radius: 14px;
-      background: linear-gradient(135deg, #7c3aed 0%, #a855f7 50%, #ec4899 100%);
-      color: #ffffff !important;
-      border: 1px solid rgba(255, 255, 255, 0.4);
-      box-shadow: 0 4px 22px rgba(124, 58, 237, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.45);
-      display: inline-flex;
-      align-items: center;
-      gap: 0.6rem;
-      text-decoration: none;
-      cursor: pointer;
-      transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
-    }
-    .btn-try-it-out:hover {
-      transform: translateY(-2px) scale(1.03);
-      box-shadow: 0 8px 32px rgba(168, 85, 247, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.6);
-      filter: brightness(1.12);
-      color: #ffffff !important;
-    }
-    .btn-try-it-out:active {
-      transform: translateY(0) scale(0.98);
-    }
-    .btn-try-it-out-sm {
-      padding: 0.5rem 1.1rem;
-      font-family: Outfit, system-ui, sans-serif;
-      font-size: 0.88rem;
-      font-weight: 800;
-      border-radius: 999px;
-      background: linear-gradient(135deg, #7c3aed, #ec4899);
-      color: #ffffff !important;
-      border: 1px solid rgba(255, 255, 255, 0.35);
-      box-shadow: 0 2px 12px rgba(124, 58, 237, 0.4);
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      transition: transform 0.15s ease, box-shadow 0.15s ease;
-    }
-    .btn-try-it-out-sm:hover {
-      transform: translateY(-1px) scale(1.03);
-      box-shadow: 0 4px 18px rgba(168, 85, 247, 0.55);
-      color: #ffffff !important;
-    }
-
-    .sales-section {
-      width: min(920px, 100%);
-      margin: 0 auto;
-      padding: clamp(2.5rem, 7vh, 4rem) clamp(1rem, 4vw, 1.5rem);
-    }
-
-    .sales-section h2 {
-      margin: 0 0 0.55rem;
-      font-size: clamp(1.45rem, 3vw, 1.85rem);
-      text-align: center;
-    }
-
-    .sales-section > .sub {
-      margin: 0 auto 1.75rem;
-      max-width: 42ch;
-      text-align: center;
-      color: var(--t-fg2);
-      font-size: 0.95rem;
-      line-height: 1.5;
-    }
-
-    .feature-list {
-      display: grid;
-      gap: 0.85rem;
-    }
-
-    @media (min-width: 720px) {
-      .feature-list { grid-template-columns: 1fr 1fr; }
-    }
-
-    .feature-item {
-      padding: 1.15rem 1.2rem;
-      border: 1px solid var(--t-bd);
-      border-radius: calc(var(--t-radius, 8px) + 2px);
-      background: color-mix(in srgb, var(--t-bg2) 88%, transparent);
-      animation: app-fade-in 0.5s ease both;
-    }
-
-    .feature-item:nth-child(2) { animation-delay: 0.05s; }
-    .feature-item:nth-child(3) { animation-delay: 0.1s; }
-    .feature-item:nth-child(4) { animation-delay: 0.15s; }
-
-    .feature-item h3 {
-      margin: 0 0 0.35rem;
-      font-size: 1.02rem;
-    }
-
-    .feature-item p {
-      margin: 0;
-      color: var(--t-fg2);
-      font-size: 0.88rem;
-      line-height: 1.5;
-    }
-
-    .faq-list {
-      display: grid;
-      gap: 0.55rem;
-      max-width: 40rem;
-      margin: 0 auto;
-    }
-
-    .faq-list details {
-      border: 1px solid var(--t-bd);
-      border-radius: var(--t-radius, 8px);
-      background: color-mix(in srgb, var(--t-bg2) 85%, transparent);
-      padding: 0.15rem 0;
-      transition: border-color var(--t-motion, 0.15s) ease;
-    }
-
-    .faq-list details[open] {
-      border-color: color-mix(in srgb, var(--t-ac) 40%, var(--t-bd));
-    }
-
-    .faq-list summary {
-      cursor: pointer;
-      list-style: none;
-      padding: 0.95rem 1.1rem;
-      font-family: Outfit, system-ui, sans-serif;
-      font-weight: 700;
-      font-size: 0.95rem;
-    }
-
-    .faq-list summary::-webkit-details-marker { display: none; }
-
-    .faq-list .faq-content {
-      padding: 0 1.1rem 1rem;
-      color: var(--t-fg2);
-      font-size: 0.88rem;
-      line-height: 1.55;
-    }
-
-    .sales-bottom {
-      width: min(560px, 100%);
-      margin: 0 auto 2rem;
-      padding: 2rem 1.25rem;
-      text-align: center;
-    }
-
-    .sales-bottom h2 {
-      margin: 0 0 0.45rem;
-      font-size: 1.55rem;
-    }
-
-    .sales-bottom p {
-      margin: 0 0 1.25rem;
-      color: var(--t-fg2);
-      font-size: 0.95rem;
-    }
-
-    .sales-foot {
-      text-align: center;
-      padding: 1.5rem 1rem 2.5rem;
-      color: var(--t-fg2);
-      font-size: 0.8rem;
-    }
-
-    .sales-foot a { font-weight: 600; }
-
-    @media (prefers-reduced-motion: reduce) {
-      .sales-hero,
-      .feature-item {
-        animation: none !important;
-      }
-    }
-
-    .theme-no-motion .sales-hero,
-    .theme-no-motion .feature-item {
-      animation: none !important;
-    }
-  </style>
+  <title>mitch.pro — Games, friends & free computers for RJUHSD students</title>
+  <meta name="description" content="Games, friends, free cloud Linux, and school tools for RJUHSD students. Find your school and join mitch.pro for free.">
+  <link rel="canonical" href="https://mitchdog.com/">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://mitchdog.com/">
+  <meta property="og:title" content="mitch.pro — Games, friends & free computers for RJUHSD students">
+  <meta property="og:description" content="Your school. Your friends. Your next game. A free student community for RJUHSD.">
+  <meta property="og:image" content="https://mitchdog.com/media/site-tour-poster-v1.webp">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="mitch.pro — Games, friends & free computers for RJUHSD students">
+  <meta name="twitter:description" content="Games, school tools, free cloud Linux, and friends for RJUHSD students.">
+  <meta name="twitter:image" content="https://mitchdog.com/media/site-tour-poster-v1.webp">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="/onboarding-theme.js?v=2"></script>
+  <link rel="stylesheet" href="/onboarding.css?v=3">
+  <script src="/app-shell.js?v=18" defer></script>
+  <script src="/onboarding.js?v=3" defer></script>
 </head>
-<body class="app-shell sales-page" data-shell="off">
-  <header class="sales-top">
-    <a class="brand" href="/" id="nav-logo" aria-label="mitch.pro home"><img class="site-logo" src="/icon-192.png" alt="" width="35" height="35"> mitch.pro</a>
-    <nav aria-label="Explore">
-      <a href="#features">What’s here</a>
-      <a href="https://woodcreek.site/">Blooket Bot</a>
-      <a href="https://rjuhsd.school/">Bell schedule</a>
-      <a href="https://github.com/Mitch-Fogler/mitch.pro" target="_blank" rel="noopener" style="display:inline-flex; align-items:center; gap:5px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg> Open Source</a>
-      <a href="/faq/">Help</a>
-    </nav>
-    <div style="display:flex; align-items:center; gap:8px;">
-      <a class="btn-try-it-out-sm" href="/?trial=1" id="nav-try-it-out">⚡ Try It Out</a>
-      <a class="btn-ghost" href="/enroll/" id="nav-login">Log In</a>
-    </div>
+<body class="sales-page onboarding-page mitch-design" data-shell="off">
+  <a class="ob-skip" href="#main">Skip to content</a>
+  <header class="ob-nav ob-width">
+    <a class="ob-brand" href="/" aria-label="mitch.pro home"><img src="/icon-192.png" width="32" height="32" alt=""><span>mitch<span class="ob-brand-dot">.pro</span></span></a>
+    <nav class="ob-nav-links" aria-label="Main navigation"><a href="#schools">Your school</a><a href="#school-games">Games</a><a href="#help">Help</a></nav>
+    <div class="ob-nav-actions"><button class="ob-theme-toggle" type="button" data-theme-toggle aria-label="Switch to light mode" aria-pressed="false">◐</button><a class="ob-login" href="/enroll/">Log in</a><a class="ob-button ob-button-small" href="/enroll/?mode=signup">Join for free <span aria-hidden="true">↗</span></a></div>
   </header>
-
-  <main>
-    <section class="sales-hero" aria-label="Welcome">
-      <a href="https://github.com/Mitch-Fogler/mitch.pro" target="_blank" rel="noopener" style="display:inline-flex; align-items:center; gap:8px; padding:6px 16px; margin-bottom:1.15rem; border-radius:999px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.18); font-size:0.84rem; font-weight:700; color:var(--t-fg); text-decoration:none; backdrop-filter:blur(10px); box-shadow:0 4px 20px rgba(0,0,0,0.15); transition:transform 0.15s ease, border-color 0.15s ease;">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="opacity:0.95;"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
-        <span>100% Free &amp; Open Source</span>
-        <span style="padding:2px 8px; border-radius:10px; background:rgba(0,230,118,0.18); border:1px solid rgba(0,230,118,0.35); color:#00e676; font-size:0.72rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em;">Public GitHub</span>
-        <span style="opacity:0.6; font-size:0.8rem;">↗</span>
-      </a>
-      <div class="brand-hero" id="hero-title">GAMES &amp; CHAT</div>
-      <h1>mitch.pro</h1>
-      <p class="lede" id="hero-desc">Free, open-source games, end-to-end encrypted chat, and community progress.</p>
-      <div class="sales-cta-row">
-        <a class="btn-try-it-out" href="/?trial=1" id="hero-try-it-out" aria-label="Try it out with instant guest preview">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-          <span>Try It Out</span>
-        </a>
-        <a class="btn-ghost" href="/enroll/" id="hero-cta">Request access</a>
-        <a class="btn-ghost" href="https://github.com/Mitch-Fogler/mitch.pro" target="_blank" rel="noopener" style="display:inline-flex; align-items:center; gap:6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg> View on GitHub</a>
-        <a class="btn-ghost" href="https://rjuhsd.school/">Bell schedule</a>
+  <main id="main">
+    <section class="ob-hero ob-student-hero ob-width" aria-labelledby="hero-title">
+      <div class="ob-hero-copy">
+        <div class="ob-eyebrow"><span class="ob-status-dot" aria-hidden="true"></span> FOR RJUHSD STUDENTS</div>
+        <h1 id="hero-title">Your school.<br><span>Your people.</span></h1>
+        <p class="ob-student-intro">Games, friends, and a free cloud computer.<br>One place for your life beyond the bell.</p>
+        <div class="ob-hero-actions"><a class="ob-button" href="#school-games">Find your next game <span aria-hidden="true">↗</span></a><a class="ob-text-link" href="/enroll/?mode=signup">Join for free →</a><small>Free account · No invitation needed</small></div>
       </div>
-      <aside class="welcome-directory" aria-label="Discover mitch.pro">
-        <span class="welcome-directory-label">QUICK LINKS</span>
-        <a href="/matrix/"><span>01</span><div><strong>Matrix chat</strong><small>End-to-end encrypted messages</small></div><b aria-hidden="true">↗</b></a>
-        <a href="/game-portal/"><span>02</span><div><strong>Games</strong><small>Arcade, strategy &amp; multiplayer</small></div><b aria-hidden="true">↗</b></a>
-        <a href="https://rjuhsd.school/"><span>03</span><div><strong>Bell schedule</strong><small>Your school’s bell schedule</small></div><b aria-hidden="true">↗</b></a>
-        <a href="/members/"><span>04</span><div><strong>Members</strong><small>Friends &amp; community</small></div><b aria-hidden="true">↗</b></a>
-        
-      </aside>
+      <div class="ob-campus-orbit" aria-hidden="true"><div class="ob-orbit-ring ob-ring-outer"></div><div class="ob-orbit-ring ob-ring-inner"></div><div class="ob-orbit-core"><img src="/icon-192.png" alt="" width="96" height="96"><span>mitch<span>.pro</span></span><small>ALL YOUR PEOPLE. ONE PLACE.</small></div><span class="ob-campus-sticker ob-sticker-1"><img src="/rjuhsd-assets/woodcreek-logo.png" alt="" width="80" height="80"></span><span class="ob-campus-sticker ob-sticker-2"><img src="/rjuhsd-assets/roseville-logo.png" alt="" width="80" height="80"></span><span class="ob-campus-sticker ob-sticker-3"><img src="/rjuhsd-assets/granitebay-logo.png" alt="" width="80" height="80"></span><span class="ob-campus-sticker ob-sticker-4"><img src="/rjuhsd-assets/antelope-logo.png" alt="" width="80" height="80"></span><span class="ob-campus-sticker ob-sticker-5"><img src="/rjuhsd-assets/westpark-logo.png" alt="" width="80" height="80"></span><span class="ob-campus-sticker ob-sticker-6"><img src="/rjuhsd-assets/oakmont-logo.png" alt="" width="80" height="80"></span><span class="ob-orbit-label">RJUHSD / EVERY CAMPUS</span></div>
     </section>
-
-    <section class="sales-section" id="features" aria-labelledby="features-heading">
-      <h2 id="features-heading">Features</h2>
-      <p class="sub">Games, chat, and account sync.</p>
-      <div class="feature-list">
-        <article class="feature-item" id="feat-games">
-          <h3>Games catalog</h3>
-          <p>Thousands of playable titles plus MitchCoin originals with cloud progress sync.</p>
-        </article>
-        <article class="feature-item" id="feat-chat">
-          <h3>Encrypted chat</h3>
-          <p>Private messages for your conversations. Public rooms for the whole community.</p>
-        </article>
-        <article class="feature-item" id="feat-hub">
-          <h3>Campus tools</h3>
-          <p>Woodcreek bell tracker, members directory, canvas, and invite flows in one place.</p>
-        </article>
-        <article class="feature-item" id="feat-sync">
-          <h3>MitchSync</h3>
-          <p>Settings, stats, and game state follow your session across devices.</p>
-        </article>
+    <section class="ob-schools ob-width" id="schools" aria-labelledby="schools-title">
+      <div class="ob-schools-heading"><div><span class="ob-eyebrow">REP YOUR SCHOOL</span><h2 id="schools-title">Different campuses. Same community.</h2></div><span class="ob-district-mark"><img src="/rjuhsd-assets/district-logo.png" alt="Roseville Joint Union High School District" width="54" height="54" loading="lazy"></span></div>
+      <div class="ob-school-grid">
+        <a class="ob-school-card ob-reveal" href="https://woodcreek.rjuhsd.us/" target="_blank" rel="noopener"><span class="ob-school-mark"><img src="/rjuhsd-assets/woodcreek-logo.png" alt="" width="72" height="72" loading="lazy"></span><span>Woodcreek<small>High School</small></span><span class="ob-school-arrow" aria-hidden="true">↗</span></a>
+        <a class="ob-school-card ob-reveal" href="https://roseville.rjuhsd.us/" target="_blank" rel="noopener"><span class="ob-school-mark"><img src="/rjuhsd-assets/roseville-logo.png" alt="" width="72" height="72" loading="lazy"></span><span>Roseville<small>High School</small></span><span class="ob-school-arrow" aria-hidden="true">↗</span></a>
+        <a class="ob-school-card ob-reveal" href="https://granitebay.rjuhsd.us/" target="_blank" rel="noopener"><span class="ob-school-mark"><img src="/rjuhsd-assets/granitebay-logo.png" alt="" width="72" height="72" loading="lazy"></span><span>Granite Bay<small>High School</small></span><span class="ob-school-arrow" aria-hidden="true">↗</span></a>
+        <a class="ob-school-card ob-reveal" href="https://antelope.rjuhsd.us/" target="_blank" rel="noopener"><span class="ob-school-mark"><img src="/rjuhsd-assets/antelope-logo.png" alt="" width="72" height="72" loading="lazy"></span><span>Antelope<small>High School</small></span><span class="ob-school-arrow" aria-hidden="true">↗</span></a>
+        <a class="ob-school-card ob-reveal" href="https://westpark.rjuhsd.us/" target="_blank" rel="noopener"><span class="ob-school-mark"><img src="/rjuhsd-assets/westpark-logo.png" alt="" width="72" height="72" loading="lazy"></span><span>West Park<small>High School</small></span><span class="ob-school-arrow" aria-hidden="true">↗</span></a>
+        <a class="ob-school-card ob-reveal" href="https://oakmont.rjuhsd.us/" target="_blank" rel="noopener"><span class="ob-school-mark"><img src="/rjuhsd-assets/oakmont-logo.png" alt="" width="72" height="72" loading="lazy"></span><span>Oakmont<small>High School</small></span><span class="ob-school-arrow" aria-hidden="true">↗</span></a>
+        <a class="ob-school-card ob-reveal" href="https://pathways.rjuhsd.us/" target="_blank" rel="noopener"><span class="ob-school-mark"><img src="/rjuhsd-assets/pathways-logo.png" alt="" width="72" height="72" loading="lazy"></span><span>Roseville Pathways<small>RJUHSD</small></span><span class="ob-school-arrow" aria-hidden="true">↗</span></a>
+        <a class="ob-school-card ob-reveal" href="https://rosevilleadult.rjuhsd.us/" target="_blank" rel="noopener"><span class="ob-school-mark"><img src="/rjuhsd-assets/rosevilleadult-logo.png" alt="" width="72" height="72" loading="lazy"></span><span>Roseville Adult School<small>RJUHSD</small></span><span class="ob-school-arrow" aria-hidden="true">↗</span></a>
       </div>
     </section>
-
-    <section class="sales-section" id="cloud-vms" aria-labelledby="vms-heading">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-        <span style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;background:rgba(56,189,248,.18);border:1px solid rgba(56,189,248,.4);color:#38bdf8;">⚡ IN-BROWSER CLOUD LINUX</span>
-        <span style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;background:rgba(74,222,128,.16);border:1px solid rgba(74,222,128,.35);color:#4ade80;">FREE FOR STUDENTS &amp; PREMIUM</span>
+    <section class="ob-school-site ob-width ob-reveal" aria-label="RJUHSD.school">
+      <a class="ob-school-site-brand" href="https://rjuhsd.school/"><img src="/rjuhsd-assets/icon-192.png" alt="" width="54" height="54"><span>RJUHSD<span>.school</span><small>YOUR SCHOOL DAY, AT A GLANCE</small></span></a>
+      <p>Today’s bell schedule. Live period countdowns.<br>School tools for your campus.</p><a class="ob-button ob-button-small" href="https://rjuhsd.school/">Open RJUHSD.school <span aria-hidden="true">↗</span></a>
+    </section>
+    <section class="ob-school-games ob-width ob-reveal" id="school-games" aria-labelledby="school-games-title">
+      <div class="ob-games-copy"><span class="ob-eyebrow">RJUHSD STUDENT GAMES</span><h2 id="school-games-title">Your next game.<br><span>Your school crew.</span></h2><p>Built for RJUHSD students. Find something to play, save your favorites, and come back with friends.</p><a class="ob-button" data-school-games-link href="https://mitchdog.com/game-portal/">Open school games <span aria-hidden="true">↗</span></a><a class="ob-text-link ob-school-tools" href="https://rjuhsd.school/">Bell schedules &amp; school tools ↗</a></div>
+      <div class="ob-games-art" aria-hidden="true"><div class="ob-arcade-label"><img src="/rjuhsd-assets/icon-192.png" alt="" width="36" height="36"><span>RJUHSD / AFTER THE BELL</span><i></i></div><div class="ob-controller"><svg viewBox="0 0 240 160" fill="none"><path d="M67 38h106c20 0 29 20 33 40l11 47c4 24-16 34-32 19l-29-27H84l-29 27c-16 15-36 5-32-19l11-47c4-20 13-40 33-40Z" fill="currentColor" fill-opacity=".08" stroke="currentColor" stroke-width="5"/><path d="M59 78h34m-17-17v34" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="164" cy="68" r="8" fill="#d9f395"/><circle cx="184" cy="88" r="8" fill="#c1a7f8"/><path d="M109 94h22" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg></div><div class="ob-game-tokens"><span>PLAY</span><span>FAVORITES</span><span>FRIENDS</span></div><div class="ob-game-campus-marks"><img src="/rjuhsd-assets/woodcreek-logo.png" alt="" width="44" height="44" loading="lazy"><img src="/rjuhsd-assets/roseville-logo.png" alt="" width="44" height="44" loading="lazy"><img src="/rjuhsd-assets/granitebay-logo.png" alt="" width="44" height="44" loading="lazy"><img src="/rjuhsd-assets/antelope-logo.png" alt="" width="44" height="44" loading="lazy"><img src="/rjuhsd-assets/westpark-logo.png" alt="" width="44" height="44" loading="lazy"><img src="/rjuhsd-assets/oakmont-logo.png" alt="" width="44" height="44" loading="lazy"></div></div>
+    </section>
+    <section class="ob-tour ob-width ob-reveal" id="tour" aria-labelledby="tour-title">
+      <div class="ob-section-line"><h2 id="tour-title">A look around.</h2><span>03:45</span></div>
+      <div class="ob-video-frame">
+        <div class="ob-video-bar"><span class="ob-video-lights" aria-hidden="true"><i></i><i></i><i></i></span><span>mitch.pro / your student space</span><span class="ob-video-tag">SITE TOUR</span></div>
+        <video id="site-tour" controls playsinline preload="metadata" poster="/media/site-tour-poster-v1.webp" aria-label="A tour of mitch.pro" aria-describedby="tour-description"><source src="/media/site-tour-v1.mp4?v=2" type="video/mp4"><p>Your browser cannot play this video. <a href="/media/site-tour-v1.mp4?v=2">Download the site tour</a>.</p></video>
       </div>
-      <h2 id="vms-heading">VM Lab: Your Personal Cloud Computer</h2>
-      <p class="sub">A real, high-performance Linux desktop streamed directly inside your browser. Run anything on school Chromebooks with zero installs and instant root access.</p>
-      <div class="feature-list">
-        <article class="feature-item" style="border-color: rgba(56, 189, 248, 0.4); box-shadow: 0 0 20px rgba(56, 189, 248, 0.15);">
-          <h3>Personal Cloud Desktop (Linux VM)</h3>
-          <p style="color:#4ade80; font-weight:800; font-size:1.1rem; margin-bottom: 6px;">Included FREE with Student Email or Premium</p>
-          <p>Get a full Linux graphical desktop and terminal right in your web browser. Includes root/sudo access, 64GB persistent storage, and pre-installed developer tools. Zero downloads needed.</p>
-          <ul style="margin: 10px 0 14px 18px; padding: 0; font-size: 0.82rem; color: var(--t-fg2); line-height: 1.6;">
-            <li>Full GUI desktop streamed to any device (Chromebooks, iPad, phone)</li>
-            <li>Root &amp; sudo access — install any packages via apt</li>
-            <li>Persistent storage keeps your files, code, and configurations safe</li>
-            <li>Upgrade hardware up to 6 cores &amp; 16 GB RAM using MitchCoins</li>
-          </ul>
-          <a href="/vms/" class="btn-primary" style="display:inline-block; font-size: 0.85rem; text-decoration:none; padding: 8px 16px; border-radius: 10px;">Launch VM Lab ↗</a>
-        </article>
-
-        <article class="feature-item" style="border-color: var(--t-bda); box-shadow: 0 0 15px var(--t-gls);">
-          <h3>High-Performance Dedicated Compute</h3>
-          <p style="color:var(--cyan); font-weight:800; font-size:1.1rem; margin-bottom: 6px;">Custom Fleet &amp; Extended Instances</p>
-          <p>For intensive workloads, bots, self-hosted web servers, and 24/7 background tasks. Dedicated compute cores with custom network ports and SSH gateway access.</p>
-          <ul style="margin: 10px 0 14px 18px; padding: 0; font-size: 0.82rem; color: var(--t-fg2); line-height: 1.6;">
-            <li>Up to 6 CPU cores, 16 GB RAM, and 128 GB storage</li>
-            <li>SSH gateway access for direct VS Code Remote &amp; terminal usage</li>
-            <li>30-day session extension passes available in VM Lab</li>
-          </ul>
-          <a href="/vms/" class="btn-primary" style="display:inline-block; font-size: 0.85rem; text-decoration:none; padding: 8px 16px; border-radius: 10px;">View Specs &amp; Plans ↗</a>
-        </article>
+      <div class="ob-tour-caption"><p id="tour-description">Explore Cloud Linux, games, Matrix chat, and the community.</p><a class="ob-text-link" href="/media/site-tour-v1.mp4?v=2" download>Keep the tour <span aria-hidden="true">↓</span></a></div>
+      <nav class="ob-chapters" aria-label="Video chapters"><button type="button" data-tour-time="0"><span>00:00</span> Profiles</button><button type="button" data-tour-time="20"><span>00:20</span> Cloud Linux</button><button type="button" data-tour-time="50"><span>00:50</span> Dashboard</button><button type="button" data-tour-time="55"><span>00:55</span> Games</button><button type="button" data-tour-time="120"><span>02:00</span> Matrix chat</button><button type="button" data-tour-time="140"><span>02:20</span> Community</button></nav>
+      <p id="tour-status" class="ob-video-status" role="status" aria-live="polite"></p>
+    </section>
+    <section class="ob-explore ob-width" id="explore" aria-labelledby="explore-title">
+      <div class="ob-section-intro"><span class="ob-eyebrow">ONE STUDENT SPACE</span><h2 id="explore-title">Play. Build. Stay connected.</h2><p>Games, a free computer, chat, and school tools.</p></div>
+      <div class="ob-feature-grid">
+        <article class="ob-feature ob-feature-vm ob-reveal"><div class="ob-feature-top"><span>01 / COMPUTE</span><span class="ob-free">FREE VMs</span></div><div class="ob-terminal" aria-hidden="true"><span class="ob-terminal-title">your-cloud-computer ~</span><p><b>~ $</b> make something</p><p class="ob-terminal-faint">a desktop. a terminal. your workspace.</p><span class="ob-terminal-cursor">▌</span></div><h3>A real computer.<br>Right in your browser.</h3><p>Open a Linux desktop, use a terminal, install tools, and work on your projects. The computer is free—no payment required. Check VM Lab for your account’s access and available capacity.</p><a class="ob-text-link" href="/vms/">Explore VM Lab <span aria-hidden="true">↗</span></a><small>Optional hardware and session upgrades use earned MitchCoins, not money.</small></article>
+        <article class="ob-feature ob-reveal"><div class="ob-feature-top"><span>02 / PLAY</span><span aria-hidden="true">↗</span></div><div class="ob-feature-symbol ob-symbol-games ob-product-mark" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 15h20c5 0 7 5 8 10l2 10c1 5-4 7-7 4l-6-6H17l-6 6c-3 3-8 1-7-4l2-10c1-5 3-10 8-10Z"/><path d="M12 23h10m-5-5v10"/><circle cx="32" cy="21" r="2"/><circle cx="37" cy="26" r="2"/></svg></div><h3>Games for<br>your free time.</h3><p>Find your next game, save your favorites, jump back into recently played titles, and earn MitchCoins through supported games.</p><a class="ob-text-link" href="#school-games">Find a game <span aria-hidden="true">↗</span></a></article>
+        <article class="ob-feature ob-reveal"><div class="ob-feature-top"><span>03 / CONNECT</span><span aria-hidden="true">↗</span></div><div class="ob-chat-art ob-product-mark" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M8 8h32v25H23L12 41v-8H8Z"/><path d="M15 17h18M15 24h12"/></svg><span class="ob-matrix-wordmark">[matrix]</span></div><h3>Your friends.<br>Your conversations.</h3><p>Meet the community in Matrix rooms, send direct messages, and use voice or video. Find friends and make your profile your own.</p><a class="ob-text-link" href="/matrix/">Head to chat <span aria-hidden="true">↗</span></a></article>
+        <article class="ob-feature ob-reveal"><div class="ob-feature-top"><span>04 / EVERYDAY</span><span aria-hidden="true">↗</span></div><div class="ob-feature-symbol ob-symbol-tools ob-product-mark" aria-hidden="true"><img src="/rjuhsd-assets/icon-192.png" alt="" width="64" height="64"></div><h3>Your school day,<br>in one place.</h3><p>Check school bell schedules, see friends from your dashboard, customize your theme, and keep supported settings and progress synced.</p><a class="ob-text-link" href="https://rjuhsd.school/">Check the schedule <span aria-hidden="true">↗</span></a></article>
       </div>
     </section>
-
-    <section class="sales-section" aria-labelledby="faq-heading">
-      <h2 id="faq-heading">FAQ</h2>
-      <p class="sub">Accounts, privacy, and virtual coins.</p>
-      <div class="faq-list">
-        <details id="faq-privacy">
-          <summary>Is chat activity private?</summary>
-          <div class="faq-content">
-            Direct messages use end-to-end encryption in the browser. Public and premium rooms are moderated community spaces — treat them like any shared chat.
-          </div>
-        </details>
-        <details id="faq-mitchsync">
-          <summary>What is MitchSync?</summary>
-          <div class="faq-content">
-            MitchSync syncs browser preferences and supported game progress to your account so settings and scores travel with you.
-          </div>
-        </details>
-        <details id="faq-coins">
-          <summary>What are Mitch Coins?</summary>
-          <div class="faq-content">
-            Site-wide virtual currency earned through games, canvas, and events. They have <strong>zero real-world value</strong> and cannot be bought with real money.
-          </div>
-        </details>
-        <details id="faq-premium">
-          <summary>What is Premium?</summary>
-          <div class="faq-content">
-            A cosmetic and perk upgrade: canvas protection options, name styles, badges, and access to the premium chat lounge.
-          </div>
-        </details>
-        <details id="faq-e2e">
-          <summary>How does E2E encryption work?</summary>
-          <div class="faq-content">
-            Direct DMs scramble messages on your device with the Web Crypto API (AES-GCM). Only the recipient can decrypt them.
-          </div>
-        </details>
-      </div>
-    </section>
-
-    <section class="sales-bottom" id="enroll-cta-card">
-      <h2>Ready to try it?</h2>
-      <p>Launch the live guest preview instantly, or request an invite to create a permanent account.</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center; align-items:center;">
-        <a class="btn-try-it-out" href="/?trial=1" id="cta-try-it-out">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-          <span>Try It Out</span>
-        </a>
-        <a class="btn-ghost" href="/enroll/" id="cta-enroll-button">Request invitation</a>
-      </div>
-    </section>
+    <section class="ob-faq ob-width" id="help" aria-labelledby="faq-title"><div><span class="ob-eyebrow">BEFORE YOU JUMP IN</span><h2 id="faq-title">Need a hand?</h2><a class="ob-text-link" id="hero-try-it-out" href="/?trial=1">Try the student hub →</a></div><div class="ob-faq-list">
+      <details><summary>Do I have to pay for a VM?</summary><p>No. The cloud computer is free. VM Lab shows whether your account can create one or needs an administrator’s assignment, plus current availability. Optional hardware and session upgrades use earned MitchCoins; you do not need to buy a plan to use an assigned computer.</p></details>
+      <details><summary>How do I join?</summary><p>Create an account with your email and a password, agree to the site rules, and enter the verification code sent to your inbox. Profile details are optional. You must be 13 or older. An invitation is not required.</p></details>
+      <details><summary>Can I look around first?</summary><p>Yes. Try It Out opens a timed guest preview. Create an account to keep your profile, rewards, and supported progress. Your cloud computer and private account features require sign-in.</p></details>
+      <details><summary>Is every chat private?</summary><p>Community rooms are shared spaces. Matrix supports encrypted conversations, and the separate Secure Chat tool also provides encrypted messaging. Follow each room’s privacy and encryption settings rather than assuming every conversation is private.</p></details>
+      <details><summary>Where are the RJUHSD games and school tools?</summary><p>Use <a href="#school-games">Open school games</a> above for the games library. <a href="https://rjuhsd.school/">RJUHSD.school</a> has bell schedules, period countdowns, and school tools for the six comprehensive high schools.</p></details>
+      <details><summary>Can students at any RJUHSD school join?</summary><p>Yes. This community is for students across RJUHSD, including Roseville Pathways. A free account does not require an invitation. You must be 13 or older and follow the <a href="/use-agreement/">site rules</a>.</p></details>
+      <details><summary>How do I reset my password?</summary><p>Open <a href="/enroll/?mode=reset">account access</a>, choose Reset password, and enter the code sent to your email. An old encrypted chat backup may still need your previous password.</p></details>
+      <details><summary>What can I save on my account?</summary><p>Your profile, friends, favorites, supported game progress, themes, and virtual rewards. Keep backups of important VM files before a reset.</p></details>
+    </div></section>
+    <section class="ob-final ob-width"><span class="ob-eyebrow">YOUR SCHOOL. YOUR PEOPLE.</span><h2>Bring your crew.</h2><a class="ob-button" href="/enroll/?mode=signup">Create your free account <span aria-hidden="true">↗</span></a><a class="ob-text-link" href="/enroll/">Already here? Log in →</a></section>
   </main>
-
-  <footer class="sales-foot">
-    <p>&copy; 2026 mitch.pro &middot; <a href="/faq.html" id="footer-faq">FAQ</a> &middot; <a href="/privacy/" id="footer-privacy">Privacy</a> &middot; <a href="/use-agreement.html">Use Agreement</a> &middot; <a href="https://github.com/Mitch-Fogler/mitch.pro" target="_blank" rel="noopener" title="mitch.pro is open source — view the code yourself">Open source</a></p>
-  </footer>
-
-  <script>
-    (function() {
-      document.querySelectorAll('.btn-try-it-out, .btn-try-it-out-sm').forEach(function(el) {
-        el.addEventListener('click', function() {
-          document.cookie = 'mitch_trial=1; path=/; max-age=86400; SameSite=Lax';
-        });
-      });
-    })();
-  </script>
+  <footer class="ob-footer ob-width"><a class="ob-brand" href="/">mitch<span class="ob-brand-dot">.pro</span></a><span>Independent student community for RJUHSD. © 2026</span><nav aria-label="Footer"><a href="#help">Help</a><a href="/privacy/">Privacy</a><a href="/use-agreement/">Site rules</a><a href="https://github.com/Mitch-Fogler/bun-server" target="_blank" rel="noopener">Source ↗</a></nav></footer>
 </body>
 </html>

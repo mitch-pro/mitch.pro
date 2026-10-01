@@ -29,8 +29,11 @@ pub const HTML_OPEN: &[&str] = &[
     "/unsubscribe",
     "/admin",
     "/faq",
+    "/faq/index",
     "/use-agreement",
+    "/use-agreement/index",
     "/privacy",
+    "/privacy/index",
     "/bell",
     "/bell/index",
     "/preferences",
@@ -64,6 +67,11 @@ pub const PROTECTED_FILES: &[&str] = &["senpai-cafe.webp", "adrian-lopez.webp"];
 
 /// `PUBLIC_ASSETS` allowlist.
 pub const PUBLIC_ASSETS: &[&str] = &[
+    "/onboarding.css",
+    "/onboarding.js",
+    "/onboarding-theme.js",
+    "/media/site-tour-v1.mp4",
+    "/media/site-tour-poster-v1.webp",
     "/guest-preview.js",
     "/home-friends.js",
     "/home.css",
@@ -84,7 +92,6 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/auth-liquid.css",
     "/encrypt-galaxy.css",
     "/vendor/simplewebauthn.browser.min.js",
-    "/welcome.css",
     "/rjuhsd-assets/app.js",
     "/rjuhsd-assets/styles.css",
     "/rjuhsd-assets/reference-theme.css",
@@ -99,6 +106,9 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/rjuhsd-assets/antelope-logo.png",
     "/rjuhsd-assets/westpark-logo.png",
     "/rjuhsd-assets/oakmont-logo.png",
+    "/rjuhsd-assets/pathways-logo.png",
+    "/rjuhsd-assets/rosevilleadult-logo.png",
+    "/rjuhsd-assets/district-logo.png",
     "/rjuhsd-assets/icon-192.png",
     "/rjuhsd-assets/icon-512.png",
     "/rjuhsd-assets/maskable-512.png",
@@ -713,8 +723,6 @@ pub async fn handle(
         return crate::routes::madlibs::handle(&state, &method, &path, &search);
     }
 
-
-
     // Direct .onion URL or /tor/<url> navigation
     if path.contains(".onion") {
         let clean = path.trim_start_matches('/');
@@ -911,7 +919,13 @@ pub async fn handle(
             path.clone()
         }
     };
-    let is_exempt = clean_path == "/enroll"
+    // Help and consent documents must be readable before account creation.
+    let public_help_base = clean_path.strip_suffix(".html").unwrap_or(&clean_path);
+    let public_help_base = public_help_base
+        .strip_suffix("/index")
+        .unwrap_or(public_help_base);
+    let is_exempt = matches!(public_help_base, "/faq" | "/privacy" | "/use-agreement")
+        || clean_path == "/enroll"
         || clean_path == "/api/me/coins"
         || clean_path == "/larp"
         || clean_path == "/larp/rezero"
@@ -1271,7 +1285,8 @@ pub async fn handle(
         // daily-login group (server.js:19279, 21081).
         if path.starts_with("/api/daily-login/") {
             if let Some(resp) =
-                crate::routes::daily_login::handle(&state, &method, &path, headers, body_bytes).await
+                crate::routes::daily_login::handle(&state, &method, &path, headers, body_bytes)
+                    .await
             {
                 return resp;
             }
@@ -1309,8 +1324,20 @@ pub async fn handle(
     // errResp(405). Everything before this point — CSRF, rate limits, ban
     // gates, the password gate — applies to every method, which is why a
     // CSRF-exempt upload POST surfaces the password gate in dev, not 405.
+    if method == Method::HEAD && path == crate::static_files::SITE_TOUR_PATH {
+        return crate::static_files::serve_tour_video(
+            &state.static_cache,
+            &state.cfg.webroot,
+            headers,
+            true,
+        );
+    }
     if method != Method::GET {
         return err_resp(405, None, None);
+    }
+
+    if public_help_base == "/faq" && !is_rjuhsd_host(headers) && !is_pickle_host(headers) {
+        return redirect("/#help", 302);
     }
 
     // 5. /team route (GET) — injectReadability of the team page.
@@ -1520,7 +1547,10 @@ pub async fn handle(
             if let Ok(content) = std::fs::read(&candidate) {
                 return Response::builder()
                     .status(StatusCode::OK)
-                    .header(axum::http::header::CONTENT_TYPE, "text/plain; charset=utf-8")
+                    .header(
+                        axum::http::header::CONTENT_TYPE,
+                        "text/plain; charset=utf-8",
+                    )
                     .body(axum::body::Body::from(content))
                     .expect("static file response");
             }
@@ -1727,6 +1757,17 @@ pub async fn handle(
             return banned_response(reason, by);
         }
         return redirect("/enroll/", 302);
+    }
+
+    // The tour supports byte ranges so native video controls and chapters
+    // can seek without downloading the entire recording first.
+    if path == crate::static_files::SITE_TOUR_PATH {
+        return crate::static_files::serve_tour_video(
+            &state.static_cache,
+            &webroot,
+            headers,
+            false,
+        );
     }
 
     // 14. Static.

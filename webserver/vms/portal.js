@@ -286,7 +286,7 @@
     upDialog.showModal();
     try {
       const res = await fetch('/api/vm/upgrades', { credentials: 'same-origin', cache: 'no-store' });
-      if (res.status === 401) throw new Error('Please sign in to view and purchase VM hardware upgrades.');
+      if (res.status === 401) throw new Error('Please sign in to view optional VM upgrades using earned MitchCoins.');
       if (!res.ok) throw new Error('Could not load upgrade catalog.');
       upgradeData = await res.json();
       if ($('upgrade-coin-balance')) {

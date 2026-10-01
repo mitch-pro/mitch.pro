@@ -5,7 +5,7 @@ const server = readFileSync('server.js', 'utf8');
 const admin = readFileSync('webserver/admin/index.html', 'utf8');
 const vmAdmin = readFileSync('webserver/admin/vms/admin-vms.js', 'utf8');
 const shell = readFileSync('webserver/app-shell.js', 'utf8');
-const shellCss = readFileSync('webserver/mitch-ui.css', 'utf8');
+const shellCss = readFileSync('webserver/app.css', 'utf8');
 const tester = readFileSync('webserver/tester/index.html', 'utf8');
 const testerCss = readFileSync('webserver/tester/tester-workbench.css', 'utf8');
 
@@ -29,7 +29,7 @@ for (const label of ['Home', 'VM Lab', 'Chat', 'Games', 'People', 'Schedule']) {
 }
 assert(shell.includes("label: 'Blooket Bot currently blocked :('"), 'shared masthead must show the requested Blooket status');
 assert.match(shell, /unified-masthead/, 'home and interior mastheads must share one class');
-assert.match(shellCss, /Shared homepage masthead across every mitch\.pro page/, 'shared masthead styling must be global');
+assert.match(shellCss, /Shared masthead/, 'shared masthead styling must be global');
 assert.match(tester, /tester-workbench\.css\?v=2/, 'tester page must load its custom design');
 assert.match(testerCss, /home-burning-cherry\.webp/, 'tester colors must be designed around its actual background');
 assert.doesNotMatch(testerCss, /BREAK THINGS|deliberately|imperfect/i, 'tester design must not include gimmicky generated comments');
