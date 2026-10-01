@@ -1,4 +1,3 @@
-// Optional enhancements. Links and the native video player work without JS.
 (() => {
   const video = document.getElementById('site-tour');
   const status = document.getElementById('tour-status');

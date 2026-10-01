@@ -1,4 +1,3 @@
-// Keep the site's light/dark preference without its account wallpaper or UI.
 (() => {
   const light = /(?:^|;\s*)theme=light(?:;|$)/.test(document.cookie);
   const apply = value => {

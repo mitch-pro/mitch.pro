@@ -8,7 +8,7 @@
 <meta name="keywords" content="mitch.pro signup, mitch.pro login, free cloud Linux, games, Matrix chat">
 <link rel="canonical" href="https://mitchdog.com/enroll/" />
 
-<!-- Open Graph / Facebook -->
+
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://mitchdog.com/enroll/" />
 <meta property="og:title" content="Join or log in — mitch.pro" />
@@ -19,11 +19,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Space+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
-<script src="/onboarding-theme.js?v=1"></script>
+<script src="/onboarding-theme.js?v=2"></script>
 <script src="/api.js"></script>
 <script src="/vendor/simplewebauthn.browser.min.js?v=1" defer></script>
 
-<script src="/onboarding.js?v=1" defer></script>
+<script src="/onboarding.js?v=2" defer></script>
 <script src="/app-shell.js?v=18" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/zxcvbn/4.4.2/zxcvbn.js" defer></script>
 </head>
@@ -58,7 +58,7 @@
         <button class="auth-tab-btn" id="tab-reset" onclick="switchTab('reset')" role="tab" aria-selected="false" aria-controls="pane-reset" type="button">Reset password</button>
       </div>
 
-      <!-- Tab Pane: Log In -->
+
       <div class="tab-pane active" id="pane-login" role="tabpanel" aria-labelledby="tab-login">
         <div class="panel-head">
           <h2>Welcome back</h2>
@@ -82,7 +82,7 @@
         </div>
       </div>
 
-      <!-- Tab Pane: Sign Up -->
+
       <div class="tab-pane" id="pane-invite" role="tabpanel" aria-labelledby="tab-invite">
         <div id="invite-step-1">
           <div class="panel-head">
@@ -194,7 +194,7 @@
         <div id="msg" role="status" aria-live="polite" aria-atomic="true"></div>
       </div>
 
-      <!-- Tab Pane: Reset Password -->
+
       <div class="tab-pane" id="pane-reset" role="tabpanel" aria-labelledby="tab-reset">
         <div id="reset-step-1">
           <div class="panel-head">
@@ -493,27 +493,27 @@ function resetCaptcha() {}
     var container = document.getElementById(prefix + '-password-strength-container');
     var text = document.getElementById(prefix + '-strength-text');
     if (!container || !text) return;
-    
+
     if (!val) {
       container.style.display = 'none';
       return;
     }
-    
+
     container.style.display = 'block';
-    
+
     // 1. Check local bad list
     if (badPasswords.includes(val.toLowerCase())) {
       setStrengthUI(prefix, 0, 'Insecure (Too Common)', '#ef4444');
       return;
     }
-    
+
     // 2. Try using zxcvbn if available
     if (typeof zxcvbn === 'function') {
       var result = zxcvbn(val);
       var score = result.score;
       var label = 'Weak';
       var color = '#ef4444';
-      
+
       if (val.length < 8) {
         score = Math.min(score, 1);
         label = 'Too Short (Min 8 chars)';
@@ -533,37 +533,37 @@ function resetCaptcha() {}
         label = 'Strong';
         color = '#4ade80';
       }
-      
+
       if (result.feedback && result.feedback.warning && score < 3) {
         label = result.feedback.warning;
       }
-      
+
       setStrengthUI(prefix, score, label, color);
       return;
     }
-    
+
     // 3. Fallback standard check
     if (val.length < 8) {
       setStrengthUI(prefix, 1, 'Too Short (Min 8 chars)', '#ef4444');
       return;
     }
-    
+
     var score = 1;
     if (val.length >= 12) score++;
-    
+
     var hasUpper = /[A-Z]/.test(val);
     var hasLower = /[a-z]/.test(val);
     var hasDigit = /[0-9]/.test(val);
     var hasSpecial = /[^A-Za-z0-9]/.test(val);
-    
+
     var complexity = 0;
     if (hasUpper && hasLower) complexity++;
     if (hasDigit) complexity++;
     if (hasSpecial) complexity++;
-    
+
     score += complexity;
     if (score > 4) score = 4;
-    
+
     var label = 'Weak';
     var color = '#f87171';
     if (score === 2) {
@@ -576,7 +576,7 @@ function resetCaptcha() {}
       label = 'Strong';
       color = '#4ade80';
     }
-    
+
     setStrengthUI(prefix, score, label, color);
   }
 
@@ -584,7 +584,7 @@ function resetCaptcha() {}
     var text = document.getElementById(prefix + '-strength-text');
     text.textContent = label;
     text.style.color = color;
-    
+
     for (var i = 1; i <= 4; i++) {
       var bar = document.getElementById(prefix + '-strength-bar-' + i);
       if (!bar) continue;
@@ -665,7 +665,7 @@ async function submit(isResend = false) {
       support.style.display = 'block';
       startResendTimer();
       resetCaptcha();
-      
+
       document.getElementById('invite-step-1').style.display = 'none';
       document.getElementById('invite-step-2').style.display = 'block';
       document.getElementById('invite-step-2').appendChild(support);
@@ -784,7 +784,7 @@ function startResendTimer() {
   const availableAt = Date.now() + 30000;
   resendBtn.disabled = true;
   resendBtn.textContent = `Resend available in ${left}s`;
-  
+
   resendInterval = setInterval(() => {
     left = Math.max(0, Math.ceil((availableAt - Date.now()) / 1000));
     if (left <= 0) {
@@ -1028,7 +1028,7 @@ async function claimToken(mode) {
   var password = document.getElementById(isReset ? 'reset-password' : 'claim-password').value;
   var confirm = document.getElementById(isReset ? 'reset-confirm-password' : 'claim-confirm-password').value;
   var tmsg = document.getElementById(msgField);
-  
+
   if (!tok) { tmsg.className = 'err'; tmsg.textContent = 'Enter your 6-digit code.'; return; }
   if (!password || password.length < 8) { tmsg.className = 'err'; tmsg.textContent = 'Password must be at least 8 characters.'; return; }
   if (password !== confirm) { tmsg.className = 'err'; tmsg.textContent = 'Passwords do not match.'; return; }

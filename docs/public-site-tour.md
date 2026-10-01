@@ -2,7 +2,7 @@
 
 The public homepage, enrollment page, and help page share `webserver/onboarding.css`, `onboarding-theme.js`, and `onboarding.js`. Their `data-presentation="onboarding"` marker keeps the account shell's injected styles and navigation from interfering with these pages. The theme toggle uses the site's existing theme cookie.
 
-The tour is `webserver/media/site-tour-v1.mp4`. It has native controls, an original instrumental soundtrack, and chapter shortcuts. Playback starts only when the visitor requests it; the video does not preload. The Rust server explicitly allows the two tour assets and supports single byte ranges for seeking. Account pages and VM endpoints retain their access checks.
+The tour is `webserver/media/site-tour-v1.mp4`. It has native controls, an original instrumental soundtrack, and chapter shortcuts. Playback starts only when the visitor requests it; only video metadata preloads. The Rust server explicitly allows the two tour assets and supports single byte ranges for seeking. Account pages and VM endpoints retain their access checks.
 
 To generate the tour from the original recording, install Python, numpy, and ffmpeg, then run:
 

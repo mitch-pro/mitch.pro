@@ -99,7 +99,7 @@ try {
     }
   }
   await page.goto(base + '/');
-  assert.equal(await page.locator('#site-tour').getAttribute('preload'), 'none');
+  assert.equal(await page.locator('#site-tour').getAttribute('preload'), 'metadata');
   await page.locator('[data-tour-time="20"]').click();
   await page.waitForFunction(() => { const v = document.getElementById('site-tour'); return !v.paused && v.currentTime >= 20 && v.readyState >= 2; });
   assert(await page.locator('#site-tour').evaluate(v => v.videoWidth > 0 && !v.muted));
