@@ -276,7 +276,6 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--t-font); font-weight: 700; line-heig
 .app-nav a:hover { color: var(--t-fg); }
 .app-nav a[aria-current="page"] { color: var(--t-fg); }
 .app-nav a[aria-current="page"]::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--t-ac); }
-.app-nav .nav-blooket-status { flex: 0 0 132px; max-width: 132px; font-size: 10px !important; line-height: 1.2; white-space: normal !important; overflow-wrap: break-word; }
 .nav-pill-free { display: inline-block; margin-left: 6px; padding: 1px 6px; border: 1px solid color-mix(in srgb, var(--t-ac) 55%, var(--t-bd)); border-radius: 999px; color: var(--t-ac); font-size: 9px; font-weight: 800; letter-spacing: 0.06em; vertical-align: middle; }
 
 .app-account-link {

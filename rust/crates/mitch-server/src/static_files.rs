@@ -599,6 +599,20 @@ mod tests {
     }
 
     #[test]
+    fn safe_webroot_path_contains_public_overlay_requests() {
+        // handler.rs resolves webserver/public/<path> the same way, with
+        // `webroot.join("public")` standing in for the real webroot — a
+        // request still can't escape that subdirectory via traversal.
+        let public_root = std::path::Path::new("/srv/webroot/public");
+        assert_eq!(
+            safe_webroot_path(public_root, "/foo.html"),
+            Some(std::path::PathBuf::from("/srv/webroot/public/foo.html"))
+        );
+        assert_eq!(safe_webroot_path(public_root, "../index.html"), None);
+        assert_eq!(safe_webroot_path(public_root, "../../etc/passwd"), None);
+    }
+
+    #[test]
     fn cache_control_classes_match_js() {
         assert_eq!(
             cache_control_for("html", "text/html; charset=utf-8", "/index.html")[0].1,

@@ -38,7 +38,6 @@
     { href: '/vms/', label: 'VM Lab', badge: 'FREE', icon: '▣', match: function (p) { return p.indexOf('/vms') === 0; } },
     { href: '/matrix/', label: 'Chat', icon: '◉', match: function (p) { return p.indexOf('/matrix') === 0 || p.indexOf('/encrypt') === 0 || p.indexOf('/public-chat') === 0; } },
     { href: '/game-portal/', label: 'Games', icon: '◆', match: function (p) { return p.indexOf('/games') === 0 || p.indexOf('/game-portal') === 0; } },
-    { href: 'https://woodcreek.site/', label: 'Blooket Bot currently blocked :(', icon: '▣', match: function () { return false; } },
     { href: '/members/', label: 'People', icon: '●', match: function (p) { return p.indexOf('/members') === 0 || p.indexOf('/friends') === 0 || p.indexOf('/profile') === 0; } },
     { href: 'https://rjuhsd.school/', label: 'Schedule', icon: '◷', match: function () { return false; } }
   ];

@@ -22,7 +22,7 @@
   <link rel="icon" href="/favicon.ico"><link rel="icon" sizes="192x192" href="/icon-192.png"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#0c0809">
-  <script src="/theme.js?v=13"></script>
+  <script src="/theme.js?v=13" defer></script>
   <link rel="stylesheet" href="/rjuhsd-assets/styles.css?v=5"><link rel="stylesheet" href="/rjuhsd-assets/reference-theme.css?v=10"><link rel="stylesheet" href="/rjuhsd-assets/redesign.css?v=3"><style>.countdown-details{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.countdown-details>span,.countdown-details small,.countdown-details strong{display:block;text-align:center}.header-portal-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;font-size:13px;font-weight:700;border-radius:999px;background:var(--school-primary, #6366f1);color:#fff!important;text-decoration:none;border:1px solid rgba(255,255,255,0.18);box-shadow:0 2px 10px rgba(0,0,0,0.3);transition:all .15s ease;}.header-portal-btn:hover{filter:brightness(1.18);transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,0.4);}.nav-mitchpro{color:var(--school-primary,#818cf8)!important;font-weight:700!important;}</style>
   <script>
     if ('serviceWorker' in navigator) {
@@ -37,6 +37,40 @@
   {
     "@context": "https://schema.org",
     "@graph": [
+      {
+        "@type": "EducationalOrganization",
+        "@id": "https://rjuhsd.school/#woodcreek",
+        "name": "Woodcreek High School",
+        "alternateName": "Woodcreek High School Timberwolves",
+        "url": "https://rjuhsd.school/",
+        "parentOrganization": {
+          "@type": "EducationalOrganization",
+          "name": "Roseville Joint Union High School District (RJUHSD)",
+          "url": "https://www.rjuhsd.us"
+        },
+        "openingHoursSpecification": {
+          "@type": "OpeningHoursSpecification",
+          "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+          "opens": "08:30",
+          "closes": "15:20"
+        }
+      },
+      {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "RJUHSD Hub",
+            "item": "https://rjuhsd.school/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Woodcreek High School Bell Schedule"
+          }
+        ]
+      },
       {
         "@type": "WebSite",
         "@id": "https://rjuhsd.school/#website",

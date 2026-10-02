@@ -43,7 +43,6 @@ for (const id of ['home-search', 'links', 'daily-login-widget', 'member-side-rai
   assert(home.includes(`id="${id}"`), `Homepage must preserve the ${id} integration`);
 }
 assert(home.includes('/home.css?v=6') && home.includes('/home-friends.js?v=3'), 'Homepage assets need cache-busted URLs');
-assert(home.includes('Blooket Bot currently blocked :('), 'Homepage hotbar must show the requested Blooket status');
 assert(homeFriends.includes("hero.after(section)"), 'Friends activity should live inside the dashboard');
 assert(homeCss.includes('prefers-reduced-motion') && homeCss.includes('prefers-color-scheme'), 'Homepage styles must respect motion and theme preferences');
 const location = { href: 'https://mitch.pro/' };
@@ -57,10 +56,7 @@ assert.equal(location.href, 'https://woodcreek.site/?pin=123456', 'Blooket Bot m
 // Installed Mitch PWAs require a same-origin shortcut; the server redirects it.
 const shortcut = JSON.parse(readFileSync('webserver/manifest.json', 'utf8')).shortcuts.find(item => item.name === 'Bell Schedule');
 assert.equal(bellScheduleRedirect(new URL(shortcut.url, 'https://mitch.pro')), RJUHSD_ORIGIN + '/?utm_source=pwa-shortcut');
-for (const file of ['webserver/app-shell.js', 'webserver/index.html', 'data/sites']) {
-  assert(readFileSync(file, 'utf8').includes('https://woodcreek.site/'), `${file} must point Blooket Bot to woodcreek.site`);
-}
-assert(readFileSync('webserver/app-shell.js', 'utf8').includes("label: 'Blooket Bot currently blocked :('"), 'Blooket status must be in the shared top navigation');
+assert(readFileSync('data/sites', 'utf8').includes('https://woodcreek.site/'), 'data/sites must still point Blooket Bot to woodcreek.site');
 
 // Top-left brand logo on rjuhsd.school must use mitch.pro logo (/icon-192.png)
 const rjuhsdHtml = readFileSync('webserver/rjuhsd/index.html', 'utf8');
@@ -120,9 +116,13 @@ assert(rjuhsdHtml.includes('id="faq"'), 'rjuhsd/index.html must have #faq sectio
 
 const sitemap = readFileSync('webserver/sitemap.xml', 'utf8');
 assert(sitemap.includes('https://rjuhsd.school/'), 'sitemap.xml must include rjuhsd.school');
-for (const s of schools) {
+// Woodcreek's schedule is the default content at the bare URL, so it
+// canonicalizes there instead of getting its own ?school=woodcreek entry —
+// listing both would contradict the canonical and confuse indexing.
+for (const s of schools.filter((school) => school !== 'woodcreek')) {
   assert(sitemap.includes(`https://rjuhsd.school/?school=${s}`), `sitemap.xml must include ${s}`);
 }
+assert(!sitemap.includes('https://rjuhsd.school/?school=woodcreek'), 'sitemap.xml must not list a separate woodcreek URL that duplicates the bare canonical');
 
 const robots = readFileSync('webserver/robots.txt', 'utf8');
 assert(robots.includes('Allow: /?school=*'), 'robots.txt must allow school queries');

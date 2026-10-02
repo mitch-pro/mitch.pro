@@ -229,14 +229,27 @@ pub fn prepare_rjuhsd_html(
         }
     }
 
-    // SEO & School personalization for server-rendered HTML
+    // SEO & School personalization for server-rendered HTML. The bare URL
+    // (no ?school=) renders Woodcreek's schedule by default — it always
+    // has, per the raw HTML's own hero/H1 content — so it needs to be
+    // treated as "woodcreek" here too, or the title/description Google
+    // actually indexes for that URL stays the generic multi-school copy
+    // while the page itself is Woodcreek-specific. That mismatch is bad
+    // for CTR and relevance on exactly the query this is meant to rank
+    // for ("woodcreek bell schedule").
     let req_school = query(search)
         .into_iter()
         .find(|(k, _)| k == "school")
         .map(|(_, v)| v.to_lowercase().trim().to_string())
         .unwrap_or_default();
+    let effective_school = if req_school.is_empty() {
+        "woodcreek"
+    } else {
+        req_school.as_str()
+    };
+    let is_default_school_view = req_school.is_empty() || req_school == "woodcreek";
 
-    let school_meta = match req_school.as_str() {
+    let school_meta = match effective_school {
         "woodcreek" => Some(("Woodcreek High School", "Woodcreek", "Timberwolves")),
         "roseville" => Some(("Roseville High School", "Roseville", "Tigers")),
         "granitebay" => Some(("Granite Bay High School", "Granite Bay", "Grizzlies")),
@@ -249,7 +262,14 @@ pub fn prepare_rjuhsd_html(
     if let Some((name, short, mascot)) = school_meta {
         let school_title = format!("{name} Bell Schedule | RJUHSD Hub");
         let school_desc = format!("Live {name} bell schedule, period countdowns, daily times, and calendar for the {mascot} in Roseville Joint Union High School District (RJUHSD).");
-        let school_canonical = format!("https://{req_host_str}{back_path}?school={req_school}");
+        // Woodcreek's schedule lives at the bare URL too, so both must
+        // canonicalize to the same clean URL instead of splitting ranking
+        // signal between "/" and "/?school=woodcreek".
+        let school_canonical = if is_default_school_view {
+            format!("https://{req_host_str}{back_path}")
+        } else {
+            format!("https://{req_host_str}{back_path}?school={effective_school}")
+        };
 
         static TITLE_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
         let title_re = TITLE_RE
@@ -908,6 +928,39 @@ pub async fn handle(
 
     let cfg = &state.cfg;
     let webroot = cfg.webroot.clone();
+
+    // 4a2. Public overlay directory: anything dropped in webserver/public/
+    // is served at the site root with no login required — a file at
+    // webserver/public/foo.html becomes reachable, unauthenticated, at
+    // /foo.html. Checked ahead of the password gate below (so it can
+    // actually bypass it) and falls through to the normal, possibly
+    // auth-gated, webroot lookup when nothing matches under public/. "/"
+    // itself is excluded — public/ always exists as a directory, which
+    // would otherwise shadow the real homepage; a directory only counts
+    // as a match when it actually has an index.html/.htm to serve, so an
+    // empty or partial public/<dir>/ doesn't shadow the real one either.
+    let public_root = webroot.join("public");
+    if path != "/" {
+        if let Some(public_candidate) = safe_webroot_path(&public_root, &path) {
+            let matches = std::fs::metadata(&public_candidate)
+                .map(|m| {
+                    m.is_file()
+                        || (m.is_dir()
+                            && (public_candidate.join("index.html").is_file()
+                                || public_candidate.join("index.htm").is_file()))
+                })
+                .unwrap_or(false);
+            if matches {
+                return serve_static(
+                    &state.static_cache,
+                    &public_root,
+                    &path,
+                    Some(headers),
+                    |html| crate::pipeline::serve_static_html(&state, headers, &path, html),
+                );
+            }
+        }
+    }
 
     // 4b. Password Enforcement (Unified) — server.js ~8300-8330 (merged
     // tree: games/matrix/game-portal/msn-games/rjuhsd/sexypickleclub are

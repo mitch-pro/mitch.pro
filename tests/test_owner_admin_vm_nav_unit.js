@@ -27,7 +27,6 @@ assert.match(vmAdmin, /Set new login/, 'owners must be able to replace credentia
 for (const label of ['Home', 'VM Lab', 'Chat', 'Games', 'People', 'Schedule']) {
   assert(shell.includes(`label: '${label}'`), `shared masthead must include ${label}`);
 }
-assert(shell.includes("label: 'Blooket Bot currently blocked :('"), 'shared masthead must show the requested Blooket status');
 assert.match(shell, /unified-masthead/, 'home and interior mastheads must share one class');
 assert.match(shellCss, /Shared masthead/, 'shared masthead styling must be global');
 assert.match(tester, /tester-workbench\.css\?v=2/, 'tester page must load its custom design');
