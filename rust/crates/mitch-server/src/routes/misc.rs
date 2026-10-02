@@ -15,6 +15,7 @@
 //! `/api/weather|school-calendar|school-info` (external fetches),
 //! `/api/content` (complex injection ladder).
 
+use crate::errors::json_resp;
 use crate::state::AppState;
 use axum::http::{HeaderMap, Method, StatusCode};
 use axum::response::Response;
