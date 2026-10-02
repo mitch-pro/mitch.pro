@@ -104,6 +104,77 @@
   --t-gr: #ff6f99;
 }
 
+/* High contrast mode (Preferences → Appearance, or OS "increase contrast").
+   Darkens/lightens text and borders well past the normal palette and swaps
+   the accent for a more AA-compliant shade; background tokens are left
+   alone since text/border contrast is what actually hurts readability. */
+:root[data-contrast="high"] {
+  --t-fg: #000000;
+  --t-fg2: #1a1a1a;
+  --t-fg3: #000000;
+  --t-bd: #3d3d42;
+  --t-bda: #19191c;
+  --t-ac: #c81855;
+  --t-ac2: #a10f43;
+  --t-ac3: #a10f43;
+}
+@media (prefers-contrast: more) {
+  :root {
+    --t-fg: #000000;
+    --t-fg2: #1a1a1a;
+    --t-fg3: #000000;
+    --t-bd: #3d3d42;
+    --t-bda: #19191c;
+    --t-ac: #c81855;
+    --t-ac2: #a10f43;
+    --t-ac3: #a10f43;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-contrast="high"] {
+    --t-fg: #ffffff;
+    --t-fg2: #f0f0f0;
+    --t-fg3: #ffffff;
+    --t-bd: #9a9aa0;
+    --t-bda: #c7c7cc;
+    --t-ac: #ffb3c9;
+    --t-ac2: #ffd1df;
+    --t-ac3: #ffd1df;
+  }
+  @media (prefers-contrast: more) {
+    :root {
+      --t-fg: #ffffff;
+      --t-fg2: #f0f0f0;
+      --t-fg3: #ffffff;
+      --t-bd: #9a9aa0;
+      --t-bda: #c7c7cc;
+      --t-ac: #ffb3c9;
+      --t-ac2: #ffd1df;
+      --t-ac3: #ffd1df;
+    }
+  }
+}
+:root[data-theme="light"][data-contrast="high"] {
+  --t-fg: #000000;
+  --t-fg2: #1a1a1a;
+  --t-fg3: #000000;
+  --t-bd: #3d3d42;
+  --t-bda: #19191c;
+  --t-ac: #c81855;
+  --t-ac2: #a10f43;
+  --t-ac3: #a10f43;
+}
+:root[data-theme="dark"][data-contrast="high"] {
+  --t-fg: #ffffff;
+  --t-fg2: #f0f0f0;
+  --t-fg3: #ffffff;
+  --t-bd: #9a9aa0;
+  --t-bda: #c7c7cc;
+  --t-ac: #ffb3c9;
+  --t-ac2: #ffd1df;
+  --t-ac3: #ffd1df;
+}
+
 *, *::before, *::after { box-sizing: border-box; }
 
 html {

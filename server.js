@@ -5,6 +5,8 @@
 // Policy references:
 // const MATRIX_MESSAGE_ALERT_COOLDOWN_MS = 5 * 60 * 1000;
 // const MATRIX_MESSAGE_ALERT_DELAY_MS = 15 * 1000;
+// const MATRIX_MESSAGE_EMAIL_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
+// const MATRIX_MESSAGE_EMAIL_DELAY_MS = 10 * 60 * 1000;
 // if (Date.now() - lastSeen < MATRIX_ACTIVE_WINDOW_MS) return;
 // queueMatrixMessageAlert(memberNorm);
 

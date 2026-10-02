@@ -49,7 +49,7 @@
     bgimg: '/backgrounds/wallhaven-black-mountain.webp',
     bgblur: '8', accent: '', adapt: 'on', dim: '0.50', bgmode: 'cover', bgpos: 'center'
   };
-  var SCHOOL_BACKGROUND_DEFAULT = '/backgrounds/wallhaven-ghost-of-tsushima.webp';
+  var SCHOOL_BACKGROUND_DEFAULT = '/backgrounds/wallhaven-black-mountain.webp';
 
   function usesSchoolDefaults() {
     return /(^|\.)rjuhsd\.school$/.test(location.hostname) || /^\/rjuhsd(?:\/|$)/.test(location.pathname);
@@ -237,7 +237,6 @@
   // this manifest is only the offline fallback.
   var THEME_BGS = [
     { id: 'starfield', name: 'Starfield', url: 'effect:starfield', effect: 'starfield', script: '/backgrounds/starfield.js?v=1', preview: 'radial-gradient(circle at 18% 28%,#d8e8ff 0 1px,transparent 2px),radial-gradient(circle at 72% 24%,#c5bcff 0 1.5px,transparent 3px),radial-gradient(circle at 43% 75%,#d8e8ff 0 1px,transparent 2px),radial-gradient(circle at 85% 68%,#d8e8ff 0 1px,transparent 2px),radial-gradient(ellipse at 65% 25%,#17213f,#030713)' },
-    { id: 'wallhaven-ghost-of-tsushima', name: 'Ghost of Tsushima', url: SCHOOL_BACKGROUND_DEFAULT, thumbUrl: '/backgrounds/thumbs/wallhaven-ghost-of-tsushima.webp' },
     { id: 'wallhaven-black-mountain', name: 'Wallhaven Black Mountain', url: '/backgrounds/wallhaven-black-mountain.webp', thumbUrl: '/backgrounds/thumbs/wallhaven-black-mountain.webp' },
     { id: 'burning-cherry', name: 'Burning Cherry', url: '/backgrounds/bg-burning-cherry.webp', thumbUrl: '/backgrounds/thumbs/bg-burning-cherry.webp' },
     { id: 'aurora', name: 'Aurora', url: '/backgrounds/bg-aurora-mesh.webp', thumbUrl: '/backgrounds/thumbs/bg-aurora-mesh.webp' },

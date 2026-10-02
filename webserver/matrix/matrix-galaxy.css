@@ -313,13 +313,13 @@ html:not([data-bglayer]) body::after { display: none !important; }
   min-height: 0;
   height: auto;
   width: auto;
-  margin: 16px max(24px, calc((100vw - 1600px) / 2));
+  margin: 0;
   display: flex !important;
   overflow: hidden !important;
   background: var(--t-bg2) !important;
-  border: 1px solid var(--t-bd);
-  border-radius: 20px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 #root,
@@ -433,9 +433,9 @@ html:not([data-bglayer]) body::after { display: none !important; }
 ._1t5i6nr1 button,
 .ty6xms1 button,
 ._1v145rl1 button {
-  color: rgba(255, 255, 255, 0.86) !important;
-  background: rgba(255, 255, 255, 0.08) !important;
-  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: color-mix(in srgb, var(--t-fg) 86%, transparent) !important;
+  background: color-mix(in srgb, var(--t-fg) 8%, transparent) !important;
+  border-color: color-mix(in srgb, var(--t-fg) 12%, transparent) !important;
 }
 
 .hru6be0 button:hover,
@@ -444,8 +444,8 @@ html:not([data-bglayer]) body::after { display: none !important; }
 ._1t5i6nr1 button:hover,
 .ty6xms1 button:hover,
 ._1v145rl1 button:hover {
-  color: #fff !important;
-  background: rgba(255, 255, 255, 0.15) !important;
+  color: var(--t-fg) !important;
+  background: color-mix(in srgb, var(--t-fg) 12%, transparent) !important;
 }
 
 ._161nxveo {
@@ -1113,7 +1113,7 @@ button[data-variant='critical'] {
 }
 .mitch-gif-btn:hover {
   background: color-mix(in srgb, var(--t-ac) 30%, transparent) !important;
-  color: #fff !important;
+  color: var(--t-fg) !important;
   transform: translateY(-1px);
 }
 .mitch-gif-btn.active {
@@ -1244,7 +1244,7 @@ button[data-variant='critical'] {
 }
 .mitch-gif-pill:hover,
 .mitch-gif-pill.active {
-  color: #fff;
+  color: var(--t-fg);
   background: color-mix(in srgb, var(--t-ac) 25%, transparent);
   border-color: color-mix(in srgb, var(--t-ac) 45%, transparent);
 }

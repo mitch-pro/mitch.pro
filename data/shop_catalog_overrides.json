@@ -275,61 +275,6 @@
     "desc": "A darker midnight accent for the site."
   },
   {
-    "id": "sarcastic_mentor",
-    "name": "Sarcastic Mentor AI",
-    "section": "AI Personalities",
-    "type": "ai",
-    "costType": "ai_personality",
-    "cost": 20000,
-    "desc": "Unlock a witty assistant personality."
-  },
-  {
-    "id": "hacker_persona",
-    "name": "Hacker Persona AI",
-    "section": "AI Personalities",
-    "type": "ai",
-    "costType": "ai_personality",
-    "cost": 20000,
-    "desc": "A movie-hacker flavored assistant voice."
-  },
-  {
-    "id": "study_coach",
-    "name": "Study Coach AI",
-    "section": "AI Personalities",
-    "type": "ai",
-    "costType": "ai_personality",
-    "cost": 18000,
-    "desc": "A calmer helper for homework and studying."
-  },
-  {
-    "id": "debug_helper",
-    "name": "Debug Helper AI",
-    "section": "AI Personalities",
-    "type": "ai",
-    "costType": "ai_personality",
-    "cost": 22000,
-    "desc": "A coding-focused assistant personality."
-  },
-  {
-    "id": "story_mode",
-    "name": "Story Mode AI",
-    "section": "AI Personalities",
-    "type": "ai",
-    "costType": "ai_personality",
-    "cost": 18000,
-    "desc": "A more creative writing personality."
-  },
-  {
-    "id": "speedrun_ai",
-    "name": "Speedrun AI",
-    "section": "AI Personalities",
-    "type": "ai",
-    "costType": "ai_personality",
-    "cost": 24000,
-    "premiumOnly": true,
-    "desc": "A premium fast-answer assistant personality."
-  },
-  {
     "id": "vip_pass",
     "name": "Casino VIP Pass (24h)",
     "section": "Passes",

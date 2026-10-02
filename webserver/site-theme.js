@@ -44,6 +44,9 @@
       root.removeAttribute('data-theme');
     }
     root.style.colorScheme = isDarkMode(mode) ? 'dark' : 'light';
+    // Legacy event name a couple of pages (Matrix) still listen for to
+    // react live instead of only reading the mode on load.
+    window.dispatchEvent(new CustomEvent('themechange', { detail: isDarkMode(mode) ? 'dark' : 'light' }));
   }
 
   function applyAccent(hex) {
@@ -68,9 +71,19 @@
     root.style.setProperty('--mh-accent-soft', shade(hex, dark ? -0.82 : 0.9));
   }
 
+  function applyContrast(level) {
+    var root = document.documentElement;
+    if (level === 'high') {
+      root.setAttribute('data-contrast', 'high');
+    } else {
+      root.removeAttribute('data-contrast');
+    }
+  }
+
   function apply() {
     applyMode(readCookie('theme'));
     applyAccent(readCookie('accent'));
+    applyContrast(readCookie('contrast'));
   }
 
   apply();
@@ -84,6 +97,11 @@
     getAccent: function () { return readCookie('accent'); },
     setAccent: function (hex) {
       writeCookie('accent', hex && /^#[0-9a-f]{6}$/i.test(hex) ? hex.toLowerCase() : '');
+      apply();
+    },
+    getContrast: function () { return readCookie('contrast'); },
+    setContrast: function (level) {
+      writeCookie('contrast', level === 'high' ? 'high' : '');
       apply();
     }
   };

@@ -162,10 +162,13 @@
               return 'dark';
             }
           } catch (_) {}
-          if (window.__theme && typeof window.__theme.get === 'function') {
-            return window.__theme.get() === 'light' ? 'light' : 'dark';
-          }
-          return document.documentElement.classList.contains('theme-light') ? 'light' : 'dark';
+          // No explicit "theme" cookie set (Preferences' Theme Preset is on
+          // System) — follow the OS preference instead of defaulting to dark.
+          if (document.documentElement.classList.contains('theme-light')) return 'light';
+          if (document.documentElement.getAttribute('data-theme') === 'light') return 'light';
+          if (document.documentElement.getAttribute('data-theme') === 'dark') return 'dark';
+          if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) return 'light';
+          return 'dark';
         }
 
         function primeCinnySettings(mode) {

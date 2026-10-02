@@ -19,6 +19,10 @@ use std::sync::{Arc, Mutex, OnceLock};
 use crate::hosts::request_host;
 use crate::state::AppState;
 
+/// Browser-like UA for fetching GIFs/stickers from Tenor/Giphy — their CDNs
+/// hotlink-block or throttle reqwest's default "reqwest/x.y.z" UA.
+const GIF_FETCH_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36";
+
 pub const OFFICIAL_ROOMS: &[(&str, &str, &str)] = &[
     (
         "general",
@@ -2466,7 +2470,16 @@ async fn api_gifs_proxy(_state: &AppState, _headers: &HeaderMap, search: &str) -
         Ok(c) => c,
         Err(_) => return cors_json_response(500, json!({ "error": "client build failed" })),
     };
-    let resp = match client.get(parsed_url.as_str()).send().await {
+    // Tenor/Giphy's CDNs hotlink-block or throttle requests that don't look
+    // like a browser; reqwest's default UA ("reqwest/x.y.z") gets a 403/429
+    // from them often enough that GIF sends silently failed.
+    let resp = match client
+        .get(parsed_url.as_str())
+        .header(reqwest::header::USER_AGENT, GIF_FETCH_USER_AGENT)
+        .header(reqwest::header::ACCEPT, "image/*,*/*;q=0.8")
+        .send()
+        .await
+    {
         Ok(r) => r,
         Err(_) => return cors_json_response(502, json!({ "error": "failed to fetch media" })),
     };
@@ -2549,7 +2562,17 @@ async fn api_gifs_send(_state: &AppState, headers: &HeaderMap, body_bytes: &[u8]
         return cors_json_response(500, json!({ "error": "Client build failed" }));
     };
 
-    let Ok(resp) = client.get(parsed_url.as_str()).send().await else {
+    // Same hotlink-protection issue as api_gifs_proxy below — without a
+    // browser-like User-Agent, Tenor/Giphy intermittently 403/429 this
+    // fetch, which made the "instant" send path fail and silently fall
+    // back to the client-side paste flow (or just show as a failed send).
+    let Ok(resp) = client
+        .get(parsed_url.as_str())
+        .header(reqwest::header::USER_AGENT, GIF_FETCH_USER_AGENT)
+        .header(reqwest::header::ACCEPT, "image/*,*/*;q=0.8")
+        .send()
+        .await
+    else {
         return cors_json_response(502, json!({ "error": "Failed to fetch gif" }));
     };
 

@@ -84,6 +84,46 @@
   --mh-accent-ink: #1c1c22;
 }
 
+/* High contrast mode — mirrors app.css's :root[data-contrast="high"]. */
+:root[data-contrast="high"] {
+  --mh-ink: #000000;
+  --mh-ink-soft: #1a1a1a;
+  --mh-ink-faint: #000000;
+  --mh-border: #3d3d42;
+  --mh-border-strong: #19191c;
+  --mh-accent: #c81855;
+  --mh-accent-hover: #a10f43;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-contrast="high"] {
+    --mh-ink: #ffffff;
+    --mh-ink-soft: #f0f0f0;
+    --mh-ink-faint: #ffffff;
+    --mh-border: #9a9aa0;
+    --mh-border-strong: #c7c7cc;
+    --mh-accent: #ffb3c9;
+    --mh-accent-hover: #ffd1df;
+  }
+}
+:root[data-theme="light"][data-contrast="high"] {
+  --mh-ink: #000000;
+  --mh-ink-soft: #1a1a1a;
+  --mh-ink-faint: #000000;
+  --mh-border: #3d3d42;
+  --mh-border-strong: #19191c;
+  --mh-accent: #c81855;
+  --mh-accent-hover: #a10f43;
+}
+:root[data-theme="dark"][data-contrast="high"] {
+  --mh-ink: #ffffff;
+  --mh-ink-soft: #f0f0f0;
+  --mh-ink-faint: #ffffff;
+  --mh-border: #9a9aa0;
+  --mh-border-strong: #c7c7cc;
+  --mh-accent: #ffb3c9;
+  --mh-accent-hover: #ffd1df;
+}
+
 /* app.css AND portal-redesign.css both declare sitewide --t-* tokens (their
    own dark-purple-galaxy defaults, normally overwritten at runtime by
    theme.js) — and portal-redesign.css additionally forces every `.mitch-design`

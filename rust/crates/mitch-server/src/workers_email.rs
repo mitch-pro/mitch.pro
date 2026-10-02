@@ -1191,6 +1191,10 @@ fn dm_digest_impl(state: &Arc<AppState>) -> Result<(), String> {
     }
 
     // ── Matrix Chat Unread Messages Digest (server.js:5020-5055) ────────────
+    // Policy: MATRIX_MESSAGE_EMAIL_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000 — a
+    // once-stuck-unread recipient who never comes back should get reminded
+    // weekly, not every single day forever.
+    const MATRIX_MESSAGE_EMAIL_INTERVAL_MS: f64 = 7.0 * 86_400_000.0;
     let matrix = state.store.read_document(
         &state.data_dir().join("matrix_notifications.json"),
         json!({}),
@@ -1258,7 +1262,7 @@ fn dm_digest_impl(state: &Arc<AppState>) -> Result<(), String> {
                     .or_else(|| if !norm_target.is_empty() { mobj.get(&norm_target) } else { None })
                     .and_then(jsval::number);
                 if let Some(st) = sent_at {
-                    if (now_ms as f64) - st < 86_400_000.0 {
+                    if (now_ms as f64) - st < MATRIX_MESSAGE_EMAIL_INTERVAL_MS {
                         continue;
                     }
                 }
@@ -1277,7 +1281,7 @@ fn dm_digest_impl(state: &Arc<AppState>) -> Result<(), String> {
                 .or_else(|| ulog_norm_t.get("matrix_digest_sent_at"))
                 .and_then(jsval::number);
             if let Some(sent_at) = last_sent {
-                if (now_ms as f64) - sent_at < 86_400_000.0 {
+                if (now_ms as f64) - sent_at < MATRIX_MESSAGE_EMAIL_INTERVAL_MS {
                     continue;
                 }
             }

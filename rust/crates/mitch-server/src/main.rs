@@ -112,6 +112,12 @@ async fn get_any(
     let cap = match uri.path() {
         "/api/dm/attachment/upload" => crate::routes::dm::upload_body_cap(),
         "/api/dm/send" => mitch_lib::dm::max_chat_json_body_bytes(),
+        // Matrix media uploads (photos, GIFs, short videos posted in chat)
+        // proxy straight through to Conduit — without a path-specific cap
+        // here they fell into the 256KB default below and got silently
+        // truncated to cap+1 zero bytes, which Conduit then stored as a
+        // corrupt file that always failed to load.
+        p if p.starts_with("/_matrix/media/") => 100 * 1024 * 1024,
         _ => 256 * 1024,
     };
     let body_bytes = match axum::body::to_bytes(body, cap).await {

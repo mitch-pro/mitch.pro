@@ -56,12 +56,6 @@ pub fn default_shop_catalog() -> Value {
       { "id": "focus_theme", "name": "Focus Theme", "section": "Site Themes", "type": "cosmetic", "costType": "site_theme", "cost": 700, "desc": "A calm, low-distraction site accent." },
       { "id": "arcade_theme", "name": "Arcade Theme", "section": "Site Themes", "type": "cosmetic", "costType": "site_theme", "cost": 900, "desc": "A brighter arcade-style site accent." },
       { "id": "midnight_theme", "name": "Midnight Theme", "section": "Site Themes", "type": "cosmetic", "costType": "site_theme", "cost": 900, "desc": "A darker midnight accent for the site." },
-      { "id": "sarcastic_mentor", "name": "Sarcastic Mentor AI", "section": "AI Personalities", "type": "ai", "costType": "ai_personality", "cost": 2000, "desc": "Unlock a witty assistant personality." },
-      { "id": "hacker_persona", "name": "Hacker Persona AI", "section": "AI Personalities", "type": "ai", "costType": "ai_personality", "cost": 2000, "desc": "A movie-hacker flavored assistant voice." },
-      { "id": "study_coach", "name": "Study Coach AI", "section": "AI Personalities", "type": "ai", "costType": "ai_personality", "cost": 1800, "desc": "A calmer helper for homework and studying." },
-      { "id": "debug_helper", "name": "Debug Helper AI", "section": "AI Personalities", "type": "ai", "costType": "ai_personality", "cost": 2200, "desc": "A coding-focused assistant personality." },
-      { "id": "story_mode", "name": "Story Mode AI", "section": "AI Personalities", "type": "ai", "costType": "ai_personality", "cost": 1800, "desc": "A more creative writing personality." },
-      { "id": "speedrun_ai", "name": "Speedrun AI", "section": "AI Personalities", "type": "ai", "costType": "ai_personality", "cost": 2400, "premiumOnly": true, "desc": "A premium fast-answer assistant personality." },
       { "id": "vip_pass", "name": "VIP Casino Pass (24h)", "section": "Passes", "type": "pass", "costType": "vip_casino_pass", "cost": 250, "desc": "Unlocks unlimited max bet amount in all casino games for 24 hours." },
       { "id": "canvas_lock_pass", "name": "Canvas Lock Pass", "section": "Passes", "type": "cosmetic", "costType": "canvas_tool", "cost": 1200, "desc": "Unlocks a saved canvas-tool preference toggle." },
       { "id": "quick_access_pass", "name": "Quick Access Pass", "section": "Passes", "type": "cosmetic", "costType": "canvas_tool", "cost": 800, "desc": "Unlocks a quick-access preference toggle." },
@@ -118,18 +112,14 @@ pub fn shop_tier_for(item: &Value) -> &'static str {
     if premium_only
         || matches!(
             id,
-            "rainbow_name"
-                | "speedrun_ai"
-                | "profile_gold_frame"
-                | "profile_neon_frame"
-                | "chat_prism"
+            "rainbow_name" | "profile_gold_frame" | "profile_neon_frame" | "chat_prism"
         )
     {
         return "elite";
     }
     if matches!(
         id,
-        "lucky_badge" | "chat_wave" | "debug_helper" | "daily_bonus_plus" | "profile_stars"
+        "lucky_badge" | "chat_wave" | "daily_bonus_plus" | "profile_stars"
     ) {
         return "rare";
     }
@@ -173,11 +163,6 @@ pub fn shop_perk_for(item: &Value) -> String {
             "profile_neon_frame",
             "Bright neon profile frame with stronger profile presence.",
         ),
-        ("speedrun_ai", "Fast-response premium AI personality."),
-        (
-            "debug_helper",
-            "Stronger coding-focused assistant personality.",
-        ),
         ("vip_pass", "24 hours of unlimited casino max bets."),
         ("daily_bonus_plus", "Premium daily-bonus preference toggle."),
         (
@@ -220,8 +205,6 @@ pub fn shop_base_cost_for(item: &Value) -> i64 {
         ("chat_prism", 2.35),
         ("profile_gold_frame", 2.35),
         ("profile_neon_frame", 2.35),
-        ("debug_helper", 2.55),
-        ("speedrun_ai", 2.7),
         ("daily_bonus_plus", 2.5),
     ];
     let mult = item
@@ -281,8 +264,6 @@ pub fn premium_discount_for(item: &Value) -> f64 {
         ("chat_prism", 0.09),
         ("profile_gold_frame", 0.07),
         ("profile_neon_frame", 0.07),
-        ("speedrun_ai", 0.05),
-        ("debug_helper", 0.08),
         ("vip_pass", 0.04),
         ("daily_bonus_plus", 0.06),
         ("focus_theme", 0.20),

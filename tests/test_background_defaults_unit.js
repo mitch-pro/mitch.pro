@@ -46,11 +46,11 @@ for (const [host, path] of [['rjuhsd.school', '/'], ['woodcreek.rjuhsd.school', 
   school.applyBackgroundDefaults();
   assert.equal(school.values.has('theme_backgroundDefaults'), false);
   assert.equal(school.cookies.get('theme'), 'light');
-  assert.equal(school.values.get('theme_bgimg'), '/backgrounds/wallhaven-ghost-of-tsushima.webp');
+  assert.equal(school.values.get('theme_bgimg'), '/backgrounds/wallhaven-black-mountain.webp');
   assert.equal(school.values.get('theme_bgblur'), '8');
-  assert.equal(decodeURIComponent(school.cookies.get('bgimg')), '/backgrounds/wallhaven-ghost-of-tsushima.webp');
+  assert.equal(decodeURIComponent(school.cookies.get('bgimg')), '/backgrounds/wallhaven-black-mountain.webp');
   const snap = { theme_bgimg: 'school.webp' };
   assert.equal(school.preparePreferenceSnapshot(snap), snap);
-  assert.equal(school.preparePreferenceSnapshot({}).theme_bgimg, '/backgrounds/wallhaven-ghost-of-tsushima.webp');
+  assert.equal(school.preparePreferenceSnapshot({}).theme_bgimg, '/backgrounds/wallhaven-black-mountain.webp');
 }
 console.log('Background defaults: rollout, blur, colors, cookie, later choices, account restore, and school wallpaper passed.');

@@ -789,6 +789,14 @@
           <button class="soft-btn" type="button" id="accentClear">Clear</button>
         </div>
       </div>
+
+      <div class="field">
+        <label>High Contrast</label>
+        <div class="inline-row">
+          <button class="soft-btn" type="button" id="contrastToggle">Off</button>
+          <small style="color: var(--t-fg2); font-size: .78rem;">Stronger text and border contrast for readability.</small>
+        </div>
+      </div>
     </div>
 
     <div class="control-grid three">
@@ -2006,6 +2014,24 @@ function setupAppearanceControls() {
     applyAppearanceLive('Accent cleared.');
   };
 
+  var contrastBtn = document.getElementById('contrastToggle');
+  if (contrastBtn) {
+    var syncContrast = function() {
+      var on = getCookieValue('contrast', '') === 'high';
+      contrastBtn.textContent = on ? 'On' : 'Off';
+      contrastBtn.classList.toggle('active', on);
+    };
+    contrastBtn.onclick = function() {
+      var next = getCookieValue('contrast', '') === 'high' ? '' : 'high';
+      setCookieValue('contrast', next);
+      if (window.__siteTheme) window.__siteTheme.setContrast(next);
+      syncContrast();
+      applyAppearanceLive(next ? 'High contrast enabled.' : 'High contrast disabled.');
+      saveAll();
+    };
+    syncContrast();
+  }
+
   ['densitySelect','radiusSelect','fontSelect','motionSelect','materialSelect'].forEach(function(id) {
     var node = document.getElementById(id);
     if (!node) return;
@@ -2036,6 +2062,9 @@ function setupAppearanceControls() {
   document.getElementById('resetAppearanceBtn').onclick = function() {
     THEME_PREF_KEYS.forEach(function(k) { setThemePref(k, ''); });
     setCookieValue('theme', '');
+    setCookieValue('contrast', '');
+    if (window.__siteTheme) window.__siteTheme.setContrast('');
+    if (contrastBtn) syncContrast();
     syncAppearanceControls();
     applyAppearanceLive('Appearance reset.');
     saveAll();
