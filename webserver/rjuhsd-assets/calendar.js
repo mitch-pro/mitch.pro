@@ -8,9 +8,16 @@ const district={start:'2026-08-06',end:'2027-05-27',source:'https://www.rjuhsd.u
  ['2027-03-22','2027-03-29','Spring break']
 ]};
 const labels={regular:'Regular schedule',late:'Late start',pack3:'Late start · Period 3 Pack',pack4:'Late start · Period 4 Pack',nonpack:'Non-Pack day',minimum:'Minimum day',rally:'Rally schedule',exams:'Exam schedule'};
-function resolve(school,date,events=[],mode='auto',period0=false){
+function resolve(school,date,events=[],mode='auto',period0=false,override=null){
  const schoolData=g.RJUHSD_SCHOOL_DATA[school];
  if(!schoolData)throw Error('Unknown school');
+ if(mode==='auto'&&override&&override.date===date&&(!override.school||override.school===school||school==='woodcreek')&&override.schedule){
+  const l1=(override.schedule.lunch1||[]).filter(p=>period0||p.name!=='Period 0');
+  const l2=(override.schedule.lunch2||l1).filter(p=>period0||p.name!=='Period 0');
+  const name=override.name||'Special schedule';
+  const evt=override.special_event||name;
+  return {date,type:'special',title:name,event:evt,blurb:override.special_event?`${name} · ${override.special_event}`:`${name} schedule active.`,inSession:l1.length>0,unavailable:false,manual:false,oneLunch:JSON.stringify(l1)===JSON.stringify(l2),lunch1:l1,lunch2:l2,source:'Special override'};
+ }
  const day=new Date(date+'T12:00:00Z').getUTCDay(),descriptions=events.filter(e=>e.date===date).map(e=>String(e.text||e.title||''));
  const closed=district.closures.find(([a,b])=>date>=a&&date<=b);
  const eventClosure=descriptions.find(t=>/\bno school\b|\bnon.student day\b|\bschool closed\b/i.test(t));

@@ -76,6 +76,13 @@ pub async fn handle(
         };
         return Some(crate::routes::dayboard::school_info(&school_key).await);
     }
+    if path == "/api/bell/override" && *method == Method::GET {
+        let override_val = state.store.read_document(
+            &state.data_dir().join("bell_overrides.json"),
+            Value::Null,
+        );
+        return Some(json_resp(200, serde_json::json!({ "override": override_val })));
+    }
     if path == "/api/bad-passwords" && *method == Method::GET {
         return Some(bad_passwords(state));
     }

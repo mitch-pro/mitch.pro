@@ -1,46 +1,94 @@
 {
-  "date": "2026-05-28",
-  "name": "Finals",
+  "date": "2026-10-02",
+  "name": "Rally Day",
   "special_event": null,
   "schedule": {
     "lunch1": [
       {
-        "name": "Period 1/3",
+        "name": "Rally",
         "start": "08:30",
-        "end": "10:30",
-        "duration": 120
+        "end": "09:27",
+        "duration": 57
       },
       {
-        "name": "Break / Lunch",
-        "start": "10:30",
-        "end": "10:42",
-        "duration": 12
+        "name": "Period 1",
+        "start": "09:35",
+        "end": "10:41",
+        "duration": 66
       },
       {
-        "name": "Period 2/4",
-        "start": "10:50",
-        "end": "12:50",
-        "duration": 120
+        "name": "Pack",
+        "start": "10:41",
+        "end": "11:08",
+        "duration": 27
+      },
+      {
+        "name": "Period 2",
+        "start": "11:16",
+        "end": "12:22",
+        "duration": 66
+      },
+      {
+        "name": "Lunch",
+        "start": "12:22",
+        "end": "12:52",
+        "duration": 30
+      },
+      {
+        "name": "Period 3",
+        "start": "13:00",
+        "end": "14:06",
+        "duration": 66
+      },
+      {
+        "name": "Period 4",
+        "start": "14:14",
+        "end": "15:20",
+        "duration": 66
       }
     ],
     "lunch2": [
       {
-        "name": "Period 1/3",
+        "name": "Rally",
         "start": "08:30",
-        "end": "10:30",
-        "duration": 120
+        "end": "09:27",
+        "duration": 57
       },
       {
-        "name": "Break / Lunch",
-        "start": "10:30",
-        "end": "10:42",
-        "duration": 12
+        "name": "Period 1",
+        "start": "09:35",
+        "end": "10:41",
+        "duration": 66
       },
       {
-        "name": "Period 2/4",
-        "start": "10:50",
-        "end": "12:50",
-        "duration": 120
+        "name": "Pack",
+        "start": "10:41",
+        "end": "11:08",
+        "duration": 27
+      },
+      {
+        "name": "Period 2",
+        "start": "11:16",
+        "end": "12:22",
+        "duration": 66
+      },
+      {
+        "name": "Lunch",
+        "start": "12:22",
+        "end": "12:52",
+        "duration": 30
+      },
+      {
+        "name": "Period 3",
+        "start": "13:00",
+        "end": "14:06",
+        "duration": 66
+      },
+      {
+        "name": "Period 4",
+        "start": "14:14",
+        "end": "15:20",
+        "duration": 66
       }
     ]
   }

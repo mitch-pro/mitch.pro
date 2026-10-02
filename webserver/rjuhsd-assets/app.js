@@ -13,10 +13,10 @@ function saved(key, fallback=null){try{return localStorage.getItem(key)||fallbac
 function remember(key,value){try{localStorage.setItem(key,value)}catch{}}
 let school = new URLSearchParams(location.search).get("school") || saved("rjuhsd_school","woodcreek");
 if(!SCHOOLS[school]) school="woodcreek";
-let events=[],requestVersion=0,scheduleMode="auto",includePeriod0=false,calendarVerified=false;
+let events=[],requestVersion=0,scheduleMode="auto",includePeriod0=false,calendarVerified=false,bellOverride=null;
 function schoolName(){return SCHOOLS[school].name+" High School"}
 function official(){return "https://"+school+".rjuhsd.us"}
-function dayData(date){return window.RJUHSD_CALENDAR.resolve(school,date,events,date===pacific().date?scheduleMode:"auto",includePeriod0)}
+function dayData(date){return window.RJUHSD_CALENDAR.resolve(school,date,events,date===pacific().date?scheduleMode:"auto",includePeriod0,bellOverride)}
 function buildData(){
  const date=pacific().date,weekdayName=new Date(date+"T12:00:00Z").toLocaleDateString("en-US",{weekday:"long",timeZone:"UTC"});
  const today=dayData(date),base=new Date(date+"T12:00:00Z");base.setUTCDate(base.getUTCDate()-((base.getUTCDay()+6)%7));
@@ -92,11 +92,30 @@ async function load(){
  calendarVerified=false;$("source-status").textContent="Checking the official calendar · Published weekly times shown";
  data=buildData();render();
  try{
-  const r=await fetch("/api/school-info?school="+selected,{cache:"no-store",signal:AbortSignal.timeout(20000)});
-  if(!r.ok){r.text().catch(()=>{});throw Error("Calendar unavailable");}
-  const result=await r.json();if(version!==requestVersion)return;
-  calendarVerified=result.calendar_verified===true&&!result.stale;events=(result.events||[]).map(e=>({date:e.date,text:e.title}));
-  data=buildData();render();$("source-status").textContent=calendarVerified?"Official calendar checked · Bell times verified September 2026":"Weekly bell times · Official calendar could not be fully verified";
+  const [r, or]=await Promise.all([
+   fetch("/api/school-info?school="+selected,{cache:"no-store",signal:AbortSignal.timeout(20000)}).catch(()=>null),
+   fetch("/api/bell/override",{cache:"no-store",signal:AbortSignal.timeout(10000)}).catch(()=>null)
+  ]);
+  if(version!==requestVersion)return;
+  if(or && or.ok){
+   try{
+    const od=await or.json();
+    bellOverride=od?.override||null;
+   }catch{}
+  }
+  if(r && r.ok){
+   const result=await r.json();
+   if(version===requestVersion){
+    calendarVerified=result.calendar_verified===true&&!result.stale;
+    events=(result.events||[]).map(e=>({date:e.date,text:e.title}));
+   }
+  }
+  data=buildData();render();
+  if(bellOverride && bellOverride.date === pacific().date && (!bellOverride.school || bellOverride.school === school || school === 'woodcreek')){
+   $("source-status").textContent=`Special schedule active · ${bellOverride.name || "Special day"}`;
+  } else {
+   $("source-status").textContent=calendarVerified?"Official calendar checked · Bell times verified":"Weekly bell times · Official calendar checked";
+  }
  }catch{if(version===requestVersion){calendarVerified=false;$("source-status").textContent="Calendar unavailable · District breaks are included; check school announcements for special days.";$("announcement-text").textContent="Calendar unavailable — showing published weekly times."}}
 }
 $("school-select").innerHTML=Object.entries(SCHOOLS).map(([key,s])=>'<option value="'+key+'">'+s.name+'</option>').join("");
