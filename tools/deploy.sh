@@ -154,8 +154,34 @@ OLD_COMMIT=$(run_git rev-parse HEAD 2>/dev/null || echo "")
 run_git checkout -- caddy/Caddyfile 2>/dev/null || true
 CURRENT_BRANCH=$(run_git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "master")
 [ "$CURRENT_BRANCH" = "HEAD" ] && CURRENT_BRANCH="master"
+# Safeguard admins.json before git pull so untracking it never deletes production configuration
+ADMINS_BACKUP=""
+if [ -f "$PROJECT_DIR/data/admins.json" ]; then
+    ADMINS_BACKUP="/tmp/admins.json.deploy.bak"
+    cp -p "$PROJECT_DIR/data/admins.json" "$ADMINS_BACKUP" 2>/dev/null || true
+    mkdir -p "$PROJECT_DIR/data_backup" 2>/dev/null || true
+    cp -p "$PROJECT_DIR/data/admins.json" "$PROJECT_DIR/data_backup/admins.json" 2>/dev/null || true
+fi
+
 echo "[deploy] Pulling latest code from GitHub ($CURRENT_BRANCH)..."
 run_git pull origin "$CURRENT_BRANCH" || git -C "$PROJECT_DIR" pull origin "$CURRENT_BRANCH" || true
+
+# Restore admins.json if git untracking or deletion removed it from disk
+if [ ! -f "$PROJECT_DIR/data/admins.json" ]; then
+    if [ -n "$ADMINS_BACKUP" ] && [ -f "$ADMINS_BACKUP" ]; then
+        echo "[deploy] Restoring untracked data/admins.json from backup..."
+        cp -p "$ADMINS_BACKUP" "$PROJECT_DIR/data/admins.json"
+    elif [ -f "$PROJECT_DIR/data_backup/admins.json" ]; then
+        echo "[deploy] Restoring untracked data/admins.json from data_backup..."
+        cp -p "$PROJECT_DIR/data_backup/admins.json" "$PROJECT_DIR/data/admins.json"
+    elif [ -f "$PROJECT_DIR/data/admins.json.example" ]; then
+        echo "[deploy] Initializing data/admins.json from example template..."
+        cp -p "$PROJECT_DIR/data/admins.json.example" "$PROJECT_DIR/data/admins.json"
+    fi
+    if [ "$(id -u)" -eq 0 ] && [ "$REPO_OWNER" != "root" ]; then
+        chown "$REPO_OWNER:$REPO_OWNER" "$PROJECT_DIR/data/admins.json" 2>/dev/null || true
+    fi
+fi
 NEW_COMMIT=$(run_git rev-parse HEAD 2>/dev/null || echo "")
 
 # 2b. Fast path: check if this update only modifies static webroot files or docs

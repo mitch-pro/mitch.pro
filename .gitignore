@@ -29,7 +29,8 @@ data/*
 !data/bad_words.json
 !data/bell_overrides.json
 !data/prox_blocklist.json
-!data/admins.json
+!data/admins.json.example
+data/admins.json
 !data/moderators.json
 !data/madlibs.json
 logs/

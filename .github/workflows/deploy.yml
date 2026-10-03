@@ -95,10 +95,33 @@ jobs:
           command_timeout: 30m
           script: |
             set -e
+            # Pre-flight: safeguard untracked admins.json so git pull never deletes it on server
+            if [ -f /home/mitch/server/bun/data/admins.json ]; then
+              cp -p /home/mitch/server/bun/data/admins.json /tmp/admins.json.ci.bak
+              mkdir -p /home/mitch/server/bun/data_backup
+              cp -p /home/mitch/server/bun/data/admins.json /home/mitch/server/bun/data_backup/admins.json
+            fi
+
+            restore_admins_guard() {
+              if [ ! -f /home/mitch/server/bun/data/admins.json ]; then
+                if [ -f /tmp/admins.json.ci.bak ]; then
+                  echo "[deploy-ci] Restoring untracked data/admins.json from /tmp backup..."
+                  cp -p /tmp/admins.json.ci.bak /home/mitch/server/bun/data/admins.json
+                elif [ -f /home/mitch/server/bun/data_backup/admins.json ]; then
+                  echo "[deploy-ci] Restoring untracked data/admins.json from data_backup..."
+                  cp -p /home/mitch/server/bun/data_backup/admins.json /home/mitch/server/bun/data/admins.json
+                elif [ -f /home/mitch/server/bun/data/admins.json.example ]; then
+                  echo "[deploy-ci] Initializing data/admins.json from example template..."
+                  cp -p /home/mitch/server/bun/data/admins.json.example /home/mitch/server/bun/data/admins.json
+                fi
+              fi
+            }
+
             if [ "${{ needs.test.outputs.only_static }}" = "true" ]; then
               echo "[deploy-ci] Push contains ONLY static changes. Running fast static deploy..."
               git -C /home/mitch/server/bun checkout -- caddy/Caddyfile 2>/dev/null || true
               git -C /home/mitch/server/bun pull origin master
+              restore_admins_guard
 
               SECRET_KEY=""
               if [ -f /home/mitch/server/bun/.env ]; then
@@ -128,3 +151,4 @@ jobs:
 
             echo "[deploy-ci] Running full blue-green deployment..."
             sudo /usr/local/bin/deploy.sh
+            restore_admins_guard
