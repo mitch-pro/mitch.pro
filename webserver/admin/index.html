@@ -885,6 +885,16 @@
         <p>Real-time page visits.</p>
         <div id="traffic-feed" class="live-feed"></div>
       </div>
+      <div class="action-card" id="mod-profile-card" style="grid-column: 1 / -1;">
+        <h2 style="margin:0 0 6px;">Unified User Moderation Profile</h2>
+        <p style="margin-top:0; color:var(--t-fg2); font-size:0.82rem;">Look up a student by email or Matrix ID to see every room, power level, ban/mute state, and global ban/shadow-ban status in one place, then restore their account with a single click.</p>
+        <form onsubmit="lookupModerationProfile(event)" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+          <input id="mod-profile-query" type="text" placeholder="user@school.edu or @user:mitch.pro" required style="flex:1; min-width:220px;">
+          <button type="submit">Look up</button>
+        </form>
+        <div id="mod-profile-status" class="form-status"></div>
+        <div id="mod-profile-results" style="margin-top:10px;"></div>
+      </div>
       <div class="action-card" id="matrix-moderation-card" style="grid-column: 1 / -1;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
           <h2 style="margin: 0; display: flex; align-items: center; gap: 8px;">
@@ -978,6 +988,15 @@
             <button type="submit" class="warn" style="font-size:0.82rem; padding:8px;">Redact Message</button>
             <div id="matrix-redact-status" class="form-status"></div>
           </form>
+        </div>
+      </div>
+      <div class="action-card" id="conduit-health-card" style="grid-column: 1 / -1;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+          <h2 style="margin:0;">Conduit Engine &amp; Federation Diagnostics</h2>
+          <button type="button" class="mini" onclick="loadConduitHealth()">Refresh</button>
+        </div>
+        <div id="conduit-health-body" style="margin-top:10px; display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:10px;">
+          <span class="muted">Loading…</span>
         </div>
       </div>
       <div class="action-card warning" id="soft-maintenance-card" style="display: none;">
@@ -1258,6 +1277,15 @@
         <div class="section-head">
           <h2>Admin Activity Log</h2>
           <span class="tag">privileged changes</span>
+        </div>
+        <div class="toolbar" style="margin-bottom:10px;">
+          <select id="auditActorFilter"><option value="">All actors</option></select>
+          <select id="auditActionFilter"><option value="">All action types</option></select>
+          <select id="auditDateFilter">
+            <option value="all">All time</option>
+            <option value="today">Today</option>
+            <option value="7d">Past 7 days</option>
+          </select>
         </div>
         <div class="table-wrap"><table id="adminActions-table"></table></div>
       </section>
@@ -1593,9 +1621,39 @@
       } catch (err) { setStatus('coowner-role-status', err.message, 'err'); }
     }
 
-    async function revertAdminAction(id, actionName) {
+    function describeRevertDiff(action, d) {
+      d = d || {};
+      switch (action) {
+        case 'ban_account':
+          return `This will UNBAN ${d.targetEmail || d.email || '(unknown)'}.\n\nCurrent state:  banned${d.reason ? ' — reason: ' + d.reason : ''}\nAfter revert:   not banned`;
+        case 'unban_account':
+          return `This will RE-BAN ${d.targetEmail || d.email || '(unknown)'}.\n\nCurrent state:  not banned\nAfter revert:   banned — reason: "Reverted unban action"`;
+        case 'add_admin':
+          return `This will REMOVE admin access from ${d.target || '(unknown)'}.\n\nCurrent state:  admin\nAfter revert:   not admin`;
+        case 'remove_admin':
+          return `This will RESTORE admin access for ${d.target || '(unknown)'}.\n\nCurrent state:  not admin\nAfter revert:   admin`;
+        case 'add_co_owner':
+          return `This will REMOVE co-owner access from ${d.target || '(unknown)'}.\n\nCurrent state:  co-owner\nAfter revert:   not co-owner`;
+        case 'remove_co_owner':
+          return `This will RESTORE co-owner access for ${d.target || '(unknown)'}.\n\nCurrent state:  not co-owner\nAfter revert:   co-owner`;
+        case 'add_moderator':
+          return `This will REMOVE moderator access from ${d.target || '(unknown)'}.\n\nCurrent state:  moderator\nAfter revert:   not moderator`;
+        case 'remove_moderator':
+          return `This will RESTORE moderator access for ${d.target || '(unknown)'}.\n\nCurrent state:  not moderator\nAfter revert:   moderator`;
+        case 'shadow_ban':
+          return `This will UN-SHADOW-BAN ${d.targetEmail || d.target || d.email || '(unknown)'}.\n\nCurrent state:  shadow-banned\nAfter revert:   not shadow-banned`;
+        case 'add_coins':
+        case 'gift_coins':
+          return `This will DEDUCT ${d.amount != null ? d.amount : '(unknown)'} coins from ${d.targetEmail || d.email || '(unknown)'}.\n\nCurrent state:  coins credited\nAfter revert:   coins deducted back`;
+        default:
+          return `No automatic preview is available for "${action}". The server will report whether this action type can be reverted.`;
+      }
+    }
+
+    async function revertAdminAction(id, actionName, details) {
       if (!id) return;
-      if (!(await customConfirm('Revert Admin Action', `Are you sure you want to reverse this action (${actionName})?`))) return;
+      const diff = describeRevertDiff(actionName, details);
+      if (!(await customConfirm('Revert Admin Action', `${diff}\n\nReverse this action (${actionName})?`))) return;
       try {
         const resp = await postAdmin('/api/admin/audit/revert', { id });
         if (resp && resp.ok) {
@@ -1849,6 +1907,87 @@
         loadData();
       } catch (err) {
         setStatus('ban-status', err.message, 'err');
+      }
+    }
+
+    async function lookupModerationProfile(e) {
+      e.preventDefault();
+      const q = document.getElementById('mod-profile-query').value.trim();
+      if (!q) return;
+      setStatus('mod-profile-status', 'Looking up…', '');
+      document.getElementById('mod-profile-results').innerHTML = '';
+      try {
+        const res = await fetch('/api/admin/moderation/lookup?q=' + encodeURIComponent(q), {
+          credentials: 'include', cache: 'no-store', headers: getAdminHeaders(),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Lookup failed.');
+        setStatus('mod-profile-status', '', '');
+        renderModerationProfile(data);
+      } catch (err) {
+        setStatus('mod-profile-status', err.message, 'err');
+      }
+    }
+
+    function renderModerationProfile(data) {
+      const el = document.getElementById('mod-profile-results');
+      const statusPills = [
+        data.accountBanned ? `<span class="pill" style="color:#f87171; border-color:rgba(239,68,68,0.25); background:rgba(239,68,68,0.08);">Account banned${data.banReason ? ': ' + esc(data.banReason) : ''}</span>` : `<span class="pill" style="color:#4ade80; border-color:rgba(74,222,128,0.25); background:rgba(74,222,128,0.08);">Not banned</span>`,
+        data.shadowBanned ? `<span class="pill" style="color:#f87171; border-color:rgba(239,68,68,0.25); background:rgba(239,68,68,0.08);">Shadow-banned</span>` : '',
+      ].filter(Boolean).join(' ');
+      const matrixIdsStr = (data.matrixUserIds || []).join(', ') || '(no Matrix account found)';
+      const rooms = data.rooms || [];
+      const roomRows = rooms.length
+        ? rooms.map(r => `<tr>
+            <td>${esc(r.alias ? '#' + r.alias + ':mitch.pro' : r.roomId)}</td>
+            <td>${esc(r.membership)}</td>
+            <td>${esc(r.powerLevel)}</td>
+            <td>${r.bannedInSettings ? '🚫 Banned' : (r.mutedInSettings ? '🔇 Muted' : '—')}</td>
+          </tr>`).join('')
+        : '<tr><td colspan="4" class="empty">No room relationship found (or Matrix is unreachable).</td></tr>';
+      const canRestore = data.accountBanned || data.shadowBanned || rooms.some(r => r.bannedInSettings || r.mutedInSettings || r.membership === 'ban');
+      el.innerHTML = `
+        <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:8px;">
+          <strong>${esc(data.email)}</strong>
+          <span class="muted" style="font-size:0.78rem;">${esc(matrixIdsStr)}</span>
+          ${statusPills}
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Room</th><th>Membership</th><th>Power level</th><th>Local status</th></tr></thead>
+          <tbody>${roomRows}</tbody>
+        </table></div>
+        ${canRestore ? `<button type="button" class="mini warn" style="margin-top:10px;" onclick='restoreFromModProfile(${JSON.stringify(data.email)})'>Restore account (unban + unmute everywhere)</button>` : ''}
+      `;
+    }
+
+    async function restoreFromModProfile(email) {
+      if (!(await customConfirm('Full Account Restore', `Unban ${email} everywhere: account ban, shadow-ban, IP bans, and all Matrix room bans/mutes/negative power levels will be cleared. Continue?`))) return;
+      try {
+        const d = await postAdmin('/api/admin/unban-account', { email });
+        await customAlert('Account Restored', (d.existed ? 'Unbanned ' : 'No account ban existed for ') + d.targetEmail + '. Matrix room state is being restored in the background.');
+        lookupModerationProfile({ preventDefault() {} });
+      } catch (err) {
+        await customAlert('Restore Failed', err.message || 'Could not restore account.');
+      }
+    }
+
+    async function loadConduitHealth() {
+      const el = document.getElementById('conduit-health-body');
+      if (!el) return;
+      try {
+        const res = await fetch('/api/admin/matrix/health', { credentials: 'include', cache: 'no-store', headers: getAdminHeaders() });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.error || 'Could not reach Conduit health check.');
+        const gb = (d.dbSizeBytes / 1073741824).toFixed(2);
+        el.innerHTML = `
+          <div><div class="muted" style="font-size:0.72rem; text-transform:uppercase;">Status</div><div style="font-weight:700; color:${d.reachable ? '#4ade80' : '#f87171'};">${d.reachable ? 'Online' : 'Unreachable'}</div></div>
+          <div><div class="muted" style="font-size:0.72rem; text-transform:uppercase;">Latency</div><div style="font-weight:700;">${esc(d.latencyMs)} ms</div></div>
+          <div><div class="muted" style="font-size:0.72rem; text-transform:uppercase;">Database size</div><div style="font-weight:700;">${gb} GB (${esc(d.dbFileCount)} files)</div></div>
+          <div><div class="muted" style="font-size:0.72rem; text-transform:uppercase;">Tracked rooms</div><div style="font-weight:700;">${esc(d.trackedRooms)} + ${esc(d.officialRoomCount)} official</div></div>
+          <div><div class="muted" style="font-size:0.72rem; text-transform:uppercase;">Federation</div><div style="font-weight:700;">${d.federationAllowed ? 'Allowed' : 'Disabled'}</div></div>
+        `;
+      } catch (err) {
+        el.innerHTML = `<span class="pill" style="color:#f87171;">${esc(err.message)}</span>`;
       }
     }
 
@@ -2174,13 +2313,41 @@
     }
     setTimeout(drawResourceChart, 200);
 
+    function populateAuditFilters() {
+      if (!rawData) return;
+      const rows = rawData.adminActions || [];
+      const actorSel = document.getElementById('auditActorFilter');
+      const actionSel = document.getElementById('auditActionFilter');
+      if (!actorSel || !actionSel) return;
+      const actors = [...new Set(rows.map(r => r.actor).filter(Boolean))].sort();
+      const actions = [...new Set(rows.map(r => r.action).filter(Boolean))].sort();
+      const prevActor = actorSel.value, prevAction = actionSel.value;
+      actorSel.innerHTML = '<option value="">All actors</option>' + actors.map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join('');
+      actionSel.innerHTML = '<option value="">All action types</option>' + actions.map(a => `<option value="${esc(a)}">${esc(a.replaceAll('_', ' '))}</option>`).join('');
+      if (actors.includes(prevActor)) actorSel.value = prevActor;
+      if (actions.includes(prevAction)) actionSel.value = prevAction;
+    }
+
     function applyFilter() {
       if (!rawData) return;
       const q = document.getElementById('search').value.trim().toLowerCase();
       const view = document.getElementById('view').value;
+      const actorFilter = document.getElementById('auditActorFilter')?.value || '';
+      const actionFilter = document.getElementById('auditActionFilter')?.value || '';
+      const dateFilter = document.getElementById('auditDateFilter')?.value || 'all';
+      const now = Date.now(), dayMs = 24 * 60 * 60 * 1000;
       filtered = {};
       ['adminActions','sentNotifications','bannedAccounts','activeUsers','searchIntent','profileReports','chatReports','cheatLogs'].forEach(key => {
-        filtered[key] = (rawData[key] || []).filter(row => !q || textOf(row).toLowerCase().includes(q));
+        filtered[key] = (rawData[key] || []).filter(row => {
+          if (q && !textOf(row).toLowerCase().includes(q)) return false;
+          if (key === 'adminActions') {
+            if (actorFilter && row.actor !== actorFilter) return false;
+            if (actionFilter && row.action !== actionFilter) return false;
+            if (dateFilter === 'today' && now - row.ts > dayMs) return false;
+            if (dateFilter === '7d' && now - row.ts > 7 * dayMs) return false;
+          }
+          return true;
+        });
         const el = document.getElementById(key + '-section');
         if (!el) return;
         // Retired mitch.prox search UI — keep data plumbing, never show the section
@@ -2241,7 +2408,7 @@
 
         const canRevert = ['ban_account', 'unban_account', 'add_admin', 'remove_admin', 'add_co_owner', 'remove_co_owner', 'add_moderator', 'remove_moderator', 'shadow_ban', 'add_coins', 'gift_coins'].includes(r.action);
         const revertBtn = canRevert && r.action !== 'revert_action'
-          ? `<button type="button" class="mini warn" onclick='revertAdminAction(${JSON.stringify(r.id)}, ${JSON.stringify(r.action)})' style="padding:3px 7px;font-size:0.7rem;cursor:pointer;">Revert</button>`
+          ? `<button type="button" class="mini warn" onclick='revertAdminAction(${JSON.stringify(r.id)}, ${JSON.stringify(r.action)}, ${JSON.stringify(d).replace(/'/g, "&apos;")})' style="padding:3px 7px;font-size:0.7rem;cursor:pointer;">Revert</button>`
           : '<span class="muted">-</span>';
 
         return '<tr>' +
@@ -3275,6 +3442,7 @@
       await loadModeratorRequests();
       document.getElementById('access-status').textContent = currentUser.isCoOwner ? 'Co-owner verified' : (currentUser.isAdmin ? 'Admin verified' : 'Moderator review mode');
       renderCards();
+      populateAuditFilters();
       applyFilter();
 
       // Premium Dashboard initializers
@@ -3282,6 +3450,7 @@
       await loadSoftMaintenanceStatus();
       await loadShopCatalog();
       await loadMatrixModeration();
+      loadConduitHealth();
       if (currentUser.isAdmin && location.hash === '#logs-tools') {
         loadAppLogs();
       }
@@ -3704,6 +3873,9 @@
 
     document.getElementById('search').addEventListener('input', applyFilter);
     document.getElementById('view').addEventListener('change', applyFilter);
+    document.getElementById('auditActorFilter').addEventListener('change', applyFilter);
+    document.getElementById('auditActionFilter').addEventListener('change', applyFilter);
+    document.getElementById('auditDateFilter').addEventListener('change', applyFilter);
     setupToolNavigation();
     attachDomainButtons();
     syncNotifMode();

@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0e1116">
   <title>Computer Admin · mitch.pro</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="/admin/vms/admin-vms.css?v=3">
+  <link rel="stylesheet" href="/admin/vms/admin-vms.css?v=4">
 </head>
 <body class="computer-admin">
   <main class="admin-shell">
@@ -122,6 +122,20 @@
 
     <section class="panel fleet-panel">
       <div class="panel-head"><div><p class="eyebrow">Customers</p><h2>Assigned computers</h2></div><button id="refresh-button">Refresh</button></div>
+      <div class="fleet-toolbar">
+        <div class="fleet-filters" id="fleet-filters" role="group" aria-label="Filter by status">
+          <button type="button" class="fleet-filter active" data-filter="all">All</button>
+          <button type="button" class="fleet-filter" data-filter="running">Running</button>
+          <button type="button" class="fleet-filter" data-filter="stopped">Stopped</button>
+          <button type="button" class="fleet-filter" data-filter="provisioning">Provisioning</button>
+          <button type="button" class="fleet-filter" data-filter="failed">Failed</button>
+        </div>
+        <input type="search" id="fleet-search" class="fleet-search" placeholder="Search by ID, hostname, or owner email…">
+        <div class="fleet-bulk-actions">
+          <button type="button" id="bulk-reboot">Reboot selected</button>
+          <button type="button" id="bulk-shutdown-inactive">Shut down all inactive</button>
+        </div>
+      </div>
       <div class="fleet-list" id="fleet-list"><p class="empty">Loading computers…</p></div>
       <p class="form-status" id="fleet-status" role="status"></p>
     </section>
@@ -131,6 +145,6 @@
       <div class="audit-list" id="audit-list"><p class="empty">No activity yet.</p></div>
     </section>
   </main>
-  <script src="/admin/vms/admin-vms.js?v=3" defer></script>
+  <script src="/admin/vms/admin-vms.js?v=4" defer></script>
 </body>
 </html>

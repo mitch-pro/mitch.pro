@@ -1448,6 +1448,32 @@ pub async fn unban_matrix_user_from_room(
     }
 }
 
+/// Re-invites a user to a room using the system admin's Matrix token, so the
+/// room reappears in their client without them having to search for its
+/// alias. Fire-and-forget — invite failures (already joined, no such room,
+/// insufficient power) are not actionable here and are silently ignored.
+pub async fn invite_matrix_user_to_room(secret: &[u8], room_id: &str, target_user_id: &str) {
+    let Ok(admin_tok) = get_system_admin_matrix_token(secret).await else {
+        return;
+    };
+    let mut headers = HeaderMap::new();
+    headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+    if let Ok(hv) = HeaderValue::from_str(&format!("Bearer {admin_tok}")) {
+        headers.insert("Authorization", hv);
+    }
+    let payload = json!({ "user_id": target_user_id });
+    let _ = call_conduit(
+        &format!(
+            "/_matrix/client/v3/rooms/{}/invite",
+            url::form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>()
+        ),
+        Method::POST,
+        Some(headers),
+        Some(Bytes::from(serde_json::to_vec(&payload).unwrap_or_default())),
+    )
+    .await;
+}
+
 pub async fn unban_matrix_user_all_rooms(
     secret: &[u8],
     store: &mitch_lib::data::DataStore,
@@ -1466,9 +1492,13 @@ pub async fn unban_matrix_user_all_rooms(
     };
 
     for target_user_id in &targets {
+        // Default/official channels: unban, then re-invite so the room
+        // reappears in Cinny/Element without the user having to rediscover
+        // or search for its alias.
         for (alias, name, topic) in OFFICIAL_ROOMS {
             if let Ok(room_id) = ensure_official_room(secret, alias, name, topic).await {
                 unban_matrix_user_from_room(secret, store, data_dir, &room_id, target_user_id).await;
+                invite_matrix_user_to_room(secret, &room_id, target_user_id).await;
             }
         }
         let settings_file = data_dir.join("matrix_room_settings.json");
@@ -6512,6 +6542,75 @@ pub async fn handle_matrix_gateway(
             ))
         }
     }
+}
+
+/// Recursively sums file sizes and counts under `path` — used to report the
+/// Conduit RocksDB/SQLite data directory size. Best-effort: unreadable
+/// entries are skipped rather than failing the whole health check.
+fn dir_size_and_count(path: &std::path::Path) -> (u64, u64) {
+    let mut total = 0u64;
+    let mut count = 0u64;
+    let Ok(entries) = std::fs::read_dir(path) else {
+        return (0, 0);
+    };
+    for entry in entries.flatten() {
+        let entry_path = entry.path();
+        if entry_path.is_dir() {
+            let (sub_total, sub_count) = dir_size_and_count(&entry_path);
+            total += sub_total;
+            count += sub_count;
+        } else if let Ok(meta) = entry.metadata() {
+            total += meta.len();
+            count += 1;
+        }
+    }
+    (total, count)
+}
+
+/// `GET /api/admin/matrix/health` — a lightweight Conduit diagnostics
+/// widget: reachability + round-trip latency via an unauthenticated
+/// `/_matrix/client/versions` call, the on-disk size of Conduit's data
+/// directory (shared with this container via the `./data/conduit` volume —
+/// see docker-compose.yml), and how many rooms this app is actively
+/// tracking settings for. Conduit does not expose a federation-queue or
+/// live-connection-count admin API, so those are intentionally omitted
+/// rather than faked.
+pub async fn admin_conduit_health(state: &Arc<AppState>) -> Response {
+    let started = std::time::Instant::now();
+    let reachable = matches!(
+        call_conduit_with_timeout(
+            "/_matrix/client/versions",
+            Method::GET,
+            None,
+            None,
+            Some(std::time::Duration::from_secs(5)),
+        )
+        .await,
+        Ok((status, _, _)) if status.is_success()
+    );
+    let latency_ms = started.elapsed().as_millis() as u64;
+
+    let db_dir = state.cfg.data_dir.join("conduit");
+    let (db_size_bytes, db_file_count) = dir_size_and_count(&db_dir);
+
+    let settings_file = state.cfg.data_dir.join("matrix_room_settings.json");
+    let settings_all = state.store.read_document(&settings_file, json!({}));
+    let tracked_rooms = settings_all.as_object().map(|m| m.len()).unwrap_or(0);
+
+    crate::errors::json_resp(
+        200,
+        json!({
+            "reachable": reachable,
+            "latencyMs": latency_ms,
+            "dbSizeBytes": db_size_bytes,
+            "dbFileCount": db_file_count,
+            "trackedRooms": tracked_rooms,
+            "officialRoomCount": OFFICIAL_ROOMS.len(),
+            "federationAllowed": std::env::var("CONDUIT_ALLOW_FEDERATION")
+                .map(|v| v == "true")
+                .unwrap_or(false),
+        }),
+    )
 }
 
 #[cfg(test)]

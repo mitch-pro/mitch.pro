@@ -1842,6 +1842,175 @@ impl MergeJson for Value {
     }
 }
 
+/// `GET /api/admin/moderation/lookup?q=<email or Matrix ID>` — the unified
+/// moderation profile card: resolves the query to every known Matrix user id
+/// for that person, then aggregates account-level ban/shadow-ban state with
+/// per-room membership, power level, and local ban/mute settings across the
+/// official rooms plus every room tracked in matrix_room_settings.json.
+pub async fn lookup_profile(state: &Arc<AppState>, search: &str) -> Response {
+    let query_map = crate::handler::query(search);
+    let raw = query_map
+        .get("q")
+        .cloned()
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if raw.is_empty() {
+        return json_response(
+            400,
+            json!({ "error": "q (email or Matrix user ID) is required" }),
+        );
+    }
+
+    let norm_email = mitch_lib::auth::normalize_email(&raw);
+    let mut matrix_ids = crate::routes::matrix::resolve_all_matrix_user_ids_for_target(state, &raw);
+    if matrix_ids.is_empty() {
+        let resolved = crate::routes::matrix::resolve_matrix_user_id_for_email(state, &norm_email);
+        if !resolved.is_empty() {
+            matrix_ids.push(resolved);
+        } else if raw.starts_with('@') {
+            matrix_ids.push(raw.clone());
+        }
+    }
+
+    let blacklist = state
+        .store
+        .read_document(&state.cfg.data_dir.join("blacklist.json"), json!({}));
+    let ban_entry = blacklist.get(norm_email.as_str()).cloned();
+    let shadow_banned = state
+        .shadow_bans
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .contains(&norm_email);
+
+    let settings_file = state.cfg.data_dir.join("matrix_room_settings.json");
+    let settings_all = state.store.read_document(&settings_file, json!({}));
+
+    let mut room_ids: Vec<(String, Option<&'static str>)> = Vec::new();
+    for (alias, name, topic) in crate::routes::matrix::OFFICIAL_ROOMS {
+        if let Ok(room_id) =
+            crate::routes::matrix::ensure_official_room(&state.id_secret, alias, name, topic).await
+        {
+            room_ids.push((room_id, Some(*alias)));
+        }
+    }
+    if let Some(map) = settings_all.as_object() {
+        for room_id in map.keys() {
+            if !room_ids.iter().any(|(id, _)| id == room_id) {
+                room_ids.push((room_id.clone(), None));
+            }
+        }
+    }
+
+    let admin_tok = crate::routes::matrix::get_system_admin_matrix_token(&state.id_secret)
+        .await
+        .ok();
+
+    let mut rooms_out: Vec<Value> = Vec::new();
+    if !matrix_ids.is_empty() {
+        for (room_id, alias) in &room_ids {
+            let room_settings = settings_all.get(room_id).cloned().unwrap_or(json!({}));
+            let banned_in_settings = room_settings
+                .get("bannedUsers")
+                .and_then(|v| v.as_object())
+                .map(|m| matrix_ids.iter().any(|uid| m.contains_key(uid)))
+                .unwrap_or(false);
+            let muted_in_settings = room_settings
+                .get("mutedUsers")
+                .and_then(|v| v.as_object())
+                .map(|m| matrix_ids.iter().any(|uid| m.contains_key(uid)))
+                .unwrap_or(false);
+
+            let mut membership = "unknown".to_string();
+            let mut power_level: i64 = 0;
+
+            if let Some(tok) = &admin_tok {
+                let mut headers = HeaderMap::new();
+                if let Ok(hv) = axum::http::HeaderValue::from_str(&format!("Bearer {tok}")) {
+                    headers.insert("Authorization", hv);
+                }
+                let encoded_room =
+                    url::form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>();
+                for uid in &matrix_ids {
+                    let encoded_uid =
+                        url::form_urlencoded::byte_serialize(uid.as_bytes()).collect::<String>();
+                    if let Ok((status, _, bytes)) = crate::routes::matrix::call_conduit(
+                        &format!(
+                            "/_matrix/client/v3/rooms/{encoded_room}/state/m.room.member/{encoded_uid}"
+                        ),
+                        Method::GET,
+                        Some(headers.clone()),
+                        None,
+                    )
+                    .await
+                    {
+                        if status.is_success() {
+                            if let Ok(member) = serde_json::from_slice::<Value>(&bytes) {
+                                if let Some(m) = member.get("membership").and_then(|v| v.as_str()) {
+                                    membership = m.to_string();
+                                }
+                            }
+                        }
+                    }
+                }
+                if let Ok((status, _, bytes)) = crate::routes::matrix::call_conduit(
+                    &format!(
+                        "/_matrix/client/v3/rooms/{encoded_room}/state/m.room.power_levels"
+                    ),
+                    Method::GET,
+                    Some(headers),
+                    None,
+                )
+                .await
+                {
+                    if status.is_success() {
+                        if let Ok(pl) = serde_json::from_slice::<Value>(&bytes) {
+                            if let Some(users) = pl.get("users").and_then(|v| v.as_object()) {
+                                for uid in &matrix_ids {
+                                    if let Some(lvl) = users.get(uid).and_then(|v| v.as_i64()) {
+                                        power_level = lvl;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if membership == "unknown"
+                && !banned_in_settings
+                && !muted_in_settings
+                && power_level == 0
+            {
+                continue;
+            }
+
+            rooms_out.push(json!({
+                "roomId": room_id,
+                "alias": alias,
+                "membership": membership,
+                "powerLevel": power_level,
+                "bannedInSettings": banned_in_settings,
+                "mutedInSettings": muted_in_settings,
+            }));
+        }
+    }
+
+    json_response(
+        200,
+        json!({
+            "query": raw,
+            "email": norm_email,
+            "matrixUserIds": matrix_ids,
+            "accountBanned": ban_entry.is_some(),
+            "banReason": ban_entry.as_ref().and_then(|e| e.get("reason")).cloned().unwrap_or(Value::Null),
+            "bannedAt": ban_entry.as_ref().and_then(|e| e.get("banned_at")).cloned().unwrap_or(Value::Null),
+            "shadowBanned": shadow_banned,
+            "rooms": rooms_out,
+        }),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

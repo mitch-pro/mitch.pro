@@ -188,6 +188,22 @@ pub async fn handle(
         return Some(resp);
     }
 
+    // ── Moderation profile lookup (async: aggregates live Matrix room state) ──
+    if path == "/api/admin/moderation/lookup" && *method == Method::GET {
+        if !ctx.is_any_admin(state) {
+            return Some(forbidden());
+        }
+        return Some(moderation::lookup_profile(state, search).await);
+    }
+
+    // ── Conduit health/diagnostics widget (async: pings Conduit) ──
+    if path == "/api/admin/matrix/health" && *method == Method::GET {
+        if !ctx.is_any_admin(state) {
+            return Some(forbidden());
+        }
+        return Some(crate::routes::matrix::admin_conduit_health(state).await);
+    }
+
     // ── Moderation + staff tools ──
     if let Some(resp) = moderation::handle(state, method, path, headers, body, &ctx) {
         return Some(resp);

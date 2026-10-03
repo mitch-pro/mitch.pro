@@ -437,7 +437,7 @@ pub(crate) fn friendly_vm_error(error: &VmError) -> (u16, String, String) {
                 let status = if e.status == 0 { 502 } else { e.status };
                 (
                     status,
-                    "Your computer could not be reached.".to_string(),
+                    or_default(&e.message, "Your computer could not be reached."),
                     "computer_unreachable".to_string(),
                 )
             }
@@ -5452,7 +5452,7 @@ pub(crate) async fn handle(
                                     Some(&rec_clone),
                                     action_tag,
                                     false,
-                                    Some(&json!({ "code": e.code })),
+                                    Some(&json!({ "code": e.code, "message": e.message })),
                                 );
                             }
                         }
@@ -5494,7 +5494,7 @@ pub(crate) async fn handle(
                         Some(&record),
                         action_tag,
                         false,
-                        Some(&json!({ "code": err.code })),
+                        Some(&json!({ "code": err.code, "message": err.message })),
                     );
                     let friendly = friendly_vm_error(&VmError::Service(err));
                     return Some(json_response(

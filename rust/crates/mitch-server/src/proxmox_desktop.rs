@@ -614,9 +614,33 @@ impl ProxmoxDesktopService {
             } else {
                 status
             };
+            // Proxmox puts the real diagnostic (e.g. "VM is locked (backup)",
+            // "unable to open file - No space left on device") in `message`,
+            // or per-field detail in `errors` — surface it instead of a
+            // generic string so admins can see why a power action failed.
+            let detail = payload
+                .get("message")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+                .or_else(|| {
+                    payload.get("errors").and_then(|errors| {
+                        errors.as_object().and_then(|obj| {
+                            obj.values()
+                                .next()
+                                .and_then(Value::as_str)
+                                .map(str::to_string)
+                        })
+                    })
+                });
+            let message = match detail {
+                Some(d) => format!("The computer service rejected the request: {d}"),
+                None => "The computer service rejected the request.".to_string(),
+            };
             return Err(ProxmoxServiceError::new(
                 "UPSTREAM_REJECTED",
-                "The computer service rejected the request.",
+                message,
                 mapped,
             ));
         }
@@ -1143,7 +1167,7 @@ exit 0
                 if !exitstatus.is_empty() && exitstatus != "OK" {
                     return Err(ProxmoxServiceError::new(
                         "TASK_FAILED",
-                        "The computer could not be prepared.",
+                        format!("The computer could not be prepared. Proxmox said: {exitstatus}"),
                         502,
                     ));
                 }

@@ -5,8 +5,9 @@
   const esc = value => String(value ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const bytes = value => Number(value) ? `${(Number(value) / 1073741824).toLocaleString(undefined, { maximumFractionDigits: 1 })} GB` : '\u2014';
   const pct = (used, total) => total ? Math.max(0, Math.min(100, Math.round(used / total * 100))) : 0;
-  const pending = new Set(), failedDeletes = new Set();
+  const pending = new Set(), failedDeletes = new Set(), selectedForBulk = new Set();
   let overview = null, loading = false, creating = false, assigning = false;
+  let fleetFilter = 'all', fleetSearch = '';
   function getAdminHeaders(extra = {}) {
     const h = { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1', ...extra };
     const pass = sessionStorage.getItem('admin_passphrase');
@@ -99,8 +100,36 @@
     $('create-button').disabled = creating || !overview.serviceAvailable || !$('create-user').value || !$('create-template').value;
     $('assign-button').disabled = assigning || !overview.serviceAvailable || !$('assign-vm').value || !$('assign-user').value;
   }
+  function matchesFleetFilter(vm) {
+    if (fleetFilter === 'all') return true;
+    if (fleetFilter === 'running') return vm.status === 'running';
+    if (fleetFilter === 'stopped') return vm.status === 'stopped';
+    if (fleetFilter === 'provisioning') return vm.status === 'provisioning';
+    if (fleetFilter === 'failed') return vm.status === 'provisioning-failed' || failedDeletes.has(vm.id);
+    return true;
+  }
+  function matchesFleetSearch(vm) {
+    if (!fleetSearch) return true;
+    const q = fleetSearch.toLowerCase();
+    return [vm.id, vm.hostname, vm.ownerEmail, vm.name].some(v => String(v || '').toLowerCase().includes(q));
+  }
+  function lastVmPowerError(vmId) {
+    const rows = overview.audit || [];
+    for (const row of rows) {
+      if (row.vmRecordId !== vmId || row.success !== false || !String(row.action || '').startsWith('VM_')) continue;
+      if (Date.now() - new Date(row.ts).getTime() > 10 * 60 * 1000) return null;
+      try {
+        const detail = JSON.parse(row.details || '{}');
+        if (detail.message) return detail.message;
+      } catch (_) { /* ignore malformed detail */ }
+      return null;
+    }
+    return null;
+  }
   function renderFleet() {
-    const rows = (overview.computers || []).filter(vm => vm.assignmentStatus !== 'unassigned');
+    const allRows = (overview.computers || []).filter(vm => vm.assignmentStatus !== 'unassigned');
+    for (const id of [...selectedForBulk]) if (!allRows.some(vm => vm.id === id && vm.status === 'running')) selectedForBulk.delete(id);
+    const rows = allRows.filter(vm => matchesFleetFilter(vm) && matchesFleetSearch(vm));
     $('fleet-list').innerHTML = rows.length ? rows.map(vm => {
       const running = vm.status === 'running', busy = pending.has(vm.id), stopped = vm.status === 'stopped';
       const hasFailedDelete = failedDeletes.has(vm.id);
@@ -113,8 +142,14 @@
       const powerButtons = canAccess
         ? `<button data-power="restart" ${busy || !running ? 'disabled' : ''}>Restart</button><button data-power="shutdown" ${busy || !running ? 'disabled' : ''}>Shut Down</button><button data-power="force-stop" class="danger" ${busy || !running ? 'disabled' : ''}>Force Stop</button>`
         : '';
-      return `<article class="fleet-item" data-id="${esc(vm.id)}"><div class="fleet-identity"><strong>${esc(vm.name)}</strong><small>${esc(vm.operatingSystem || 'Linux desktop')}</small></div><div class="fleet-owner"><strong title="${esc(vm.ownerEmail)}">${esc(vm.ownerEmail)}</strong><small>${esc(vm.hostname || 'No hostname')}</small></div><span class="fleet-state ${running ? 'running' : ''}">${busy ? 'Updating...' : running ? 'Running' : stopped ? 'Offline' : esc(vm.status)}</span>${inUse ? `<span class="fleet-in-use" style="background:#15803d; color:#f0fdf4; font-size:0.75rem; font-weight:700; padding:2px 8px; border-radius:999px; margin-left:4px;" title="Active desktop session">👤 In Use (${esc(activeUserLabel)})</span>` : ''}<span class="fleet-resources">${esc(vm.cpuCores)} CPU &middot; ${bytes(vm.memoryTotal)}<small>${bytes(vm.diskTotal)} disk</small></span><span class="fleet-address">${esc(vm.ipAddress || 'No IP yet')}</span><div class="fleet-actions">${openDesktopAction}${powerButtons}<button data-unassign class="unassign" ${busy ? 'disabled' : ''}>Unassign</button><button data-delete class="danger" ${busy ? 'disabled' : ''}>Delete</button>${hasFailedDelete ? `<button data-force-delete class="danger" style="background:#ef4444; color:#fff; border-color:#ef4444; font-weight:700;" ${busy ? 'disabled' : ''}>⚠️ Force Delete</button>` : ''}</div></article>`;
-    }).join('') : '<p class="empty">No customer computers are assigned.</p>';
+      const selectBox = canAccess ? `<label class="fleet-select" title="Select for bulk reboot"><input type="checkbox" class="fleet-select-box" data-select="${esc(vm.id)}" ${running ? '' : 'disabled'}${selectedForBulk.has(vm.id) ? ' checked' : ''}> Select</label>` : '';
+      const powerError = !busy ? lastVmPowerError(vm.id) : null;
+      const errorBanner = powerError
+        ? `<div class="fleet-power-error" style="grid-column:1/-1;color:#ffb3b3;font-size:.76rem;padding-top:4px;">⚠️ ${esc(powerError)} ${canAccess ? `<button data-retry-force-stop style="margin-left:6px;">Retry Force Stop</button>` : ''}</div>`
+        : '';
+      return `<article class="fleet-item" data-id="${esc(vm.id)}"><div class="fleet-identity"><strong>${esc(vm.name)}</strong><small>${esc(vm.operatingSystem || 'Linux desktop')}</small></div><div class="fleet-owner"><strong title="${esc(vm.ownerEmail)}">${esc(vm.ownerEmail)}</strong><small>${esc(vm.hostname || 'No hostname')}</small></div><span class="fleet-state ${running ? 'running' : ''}">${busy ? 'Updating...' : running ? 'Running' : stopped ? 'Offline' : esc(vm.status)}</span>${inUse ? `<span class="fleet-in-use" style="background:#15803d; color:#f0fdf4; font-size:0.75rem; font-weight:700; padding:2px 8px; border-radius:999px; margin-left:4px;" title="Active desktop session">👤 In Use (${esc(activeUserLabel)})</span>` : ''}<span class="fleet-resources">${esc(vm.cpuCores)} CPU &middot; ${bytes(vm.memoryTotal)}<small>${bytes(vm.diskTotal)} disk</small></span><span class="fleet-address">${esc(vm.ipAddress || 'No IP yet')}</span><div class="fleet-actions">${selectBox}${openDesktopAction}${powerButtons}<button data-unassign class="unassign" ${busy ? 'disabled' : ''}>Unassign</button><button data-delete class="danger" ${busy ? 'disabled' : ''}>Delete</button>${hasFailedDelete ? `<button data-force-delete class="danger" style="background:#ef4444; color:#fff; border-color:#ef4444; font-weight:700;" ${busy ? 'disabled' : ''}>⚠️ Force Delete</button>` : ''}</div>${errorBanner}</article>`;
+    }).join('') : '<p class="empty">No customer computers match.</p>';
+    $('bulk-reboot').disabled = selectedForBulk.size === 0;
     if (overview.viewerIsOwner) {
       rows.forEach(vm => {
         const item = $('fleet-list').querySelector(`[data-id="${CSS.escape(vm.id)}"]`);
@@ -172,9 +207,19 @@
       });
     }
   }
+  function auditErrorDetail(row) {
+    if (row.success) return '';
+    try {
+      const detail = JSON.parse(row.details || '{}');
+      return detail.message || '';
+    } catch (_) { return ''; }
+  }
   function renderAudit() {
     const rows = overview.audit || [];
-    $('audit-list').innerHTML = rows.length ? rows.map(row => `<div class="audit-row"><time>${esc(new Date(row.ts).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' }))}</time><strong>${esc(String(row.action || '').replaceAll('_', ' '))}</strong><span>${esc(row.actorEmail)}${row.ownerEmail ? ` &rarr; ${esc(row.ownerEmail)}` : ''}</span><span class="${row.success ? '' : 'failed'}">${row.success ? 'Success' : 'Failed'}</span></div>`).join('') : '<p class="empty">No activity yet.</p>';
+    $('audit-list').innerHTML = rows.length ? rows.map(row => {
+      const detail = auditErrorDetail(row);
+      return `<div class="audit-row${detail ? ' has-detail' : ''}"><time>${esc(new Date(row.ts).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' }))}</time><strong>${esc(String(row.action || '').replaceAll('_', ' '))}</strong><span>${esc(row.actorEmail)}${row.ownerEmail ? ` &rarr; ${esc(row.ownerEmail)}` : ''}</span><span class="${row.success ? '' : 'failed'}">${row.success ? 'Success' : 'Failed'}</span>${detail ? `<div class="audit-detail">${esc(detail)}</div>` : ''}</div>`;
+    }).join('') : '<p class="empty">No activity yet.</p>';
   }
 
   let activeHoverHour = -1;
@@ -473,10 +518,44 @@
     catch (error) { status('assign-status', error.message, 'error'); }
     finally { assigning = false; if (overview) renderForms(); }
   });
+  const DESIRED_STATUS_AFTER_ACTION = { start: 'running', restart: 'running', shutdown: 'stopped', 'force-stop': 'stopped' };
+  async function pollUntilSettled(vmId, desiredStatus) {
+    const deadline = Date.now() + 15000;
+    while (Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      await load();
+      const vm = overview?.computers?.find(row => row.id === vmId);
+      if (!vm || vm.status === desiredStatus) break;
+    }
+    pending.delete(vmId);
+    renderFleet();
+  }
+  async function runPowerAction(vmId, action) {
+    pending.add(vmId); renderFleet(); status('fleet-status', 'Updating computer...');
+    try {
+      const res = await api(`/api/vm/computers/${encodeURIComponent(vmId)}/power`, { action });
+      status('fleet-status', res.message || 'Request accepted.', 'success');
+      await pollUntilSettled(vmId, DESIRED_STATUS_AFTER_ACTION[action]);
+    } catch (error) {
+      pending.delete(vmId); renderFleet(); status('fleet-status', error.message, 'error');
+    }
+  }
   $('fleet-list').addEventListener('click', async event => {
     const button = event.target.closest('button'), item = button?.closest('[data-id]');
     if (!item || button.disabled || pending.has(item.dataset.id)) return;
     const vm = overview?.computers.find(row => row.id === item.dataset.id); if (!vm) return;
+    if (button.hasAttribute('data-retry-force-stop')) {
+      if (!confirm(`Retry force stop on ${vm.name}? This immediately cuts power and may damage unsaved files.`)) return;
+      await runPowerAction(vm.id, 'force-stop');
+      return;
+    }
+    if (button.dataset.power) {
+      const action = button.dataset.power;
+      const labels = { restart: 'Restart', shutdown: 'Shut down', 'force-stop': 'Force stop' };
+      if (action !== 'start' && !confirm(`${labels[action]} ${vm.name}? ${action === 'force-stop' ? 'This immediately cuts power and may damage unsaved files.' : 'Save any open work first.'}`)) return;
+      await runPowerAction(vm.id, action);
+      return;
+    }
     let url, body;
     if (button.hasAttribute('data-delete')) {
       if (!confirm(`Permanently delete computer "${vm.name}" (${vm.vmid})? This will destroy the VM on Proxmox and remove it from the system.`)) return;
@@ -488,10 +567,7 @@
       if (!confirm(`Unassign ${vm.name} from ${vm.ownerEmail}? Their open desktop will disconnect. The computer and its files will remain on the server.`)) return;
       url = '/api/admin/vms/unassign'; body = { id: vm.id };
     } else {
-      const action = button.dataset.power;
-      const labels = { restart: 'Restart', shutdown: 'Shut down', 'force-stop': 'Force stop' };
-      if (action !== 'start' && !confirm(`${labels[action]} ${vm.name}? ${action === 'force-stop' ? 'This immediately cuts power and may damage unsaved files.' : 'Save any open work first.'}`)) return;
-      url = `/api/vm/computers/${encodeURIComponent(vm.id)}/power`; body = { action };
+      return;
     }
     const isDeleteAction = button.hasAttribute('data-delete') || button.hasAttribute('data-force-delete');
     pending.add(vm.id); renderFleet(); status('fleet-status', isDeleteAction ? 'Deleting computer...' : 'Updating computer...');
@@ -501,7 +577,7 @@
         failedDeletes.delete(vm.id);
       }
       status('fleet-status', res.message || 'Request accepted.', 'success');
-      setTimeout(() => { pending.delete(vm.id); load(); }, isDeleteAction ? 1000 : 6000);
+      setTimeout(() => { pending.delete(vm.id); load(); }, 1000);
     }
     catch (error) {
       if (button.hasAttribute('data-delete')) {
@@ -509,6 +585,45 @@
       }
       pending.delete(vm.id); renderFleet(); status('fleet-status', error.message, 'error');
     }
+  });
+  $('fleet-list').addEventListener('change', event => {
+    const box = event.target.closest('.fleet-select-box');
+    if (!box) return;
+    if (box.checked) selectedForBulk.add(box.dataset.select);
+    else selectedForBulk.delete(box.dataset.select);
+    $('bulk-reboot').disabled = selectedForBulk.size === 0;
+  });
+  $('fleet-filters').addEventListener('click', event => {
+    const button = event.target.closest('.fleet-filter');
+    if (!button) return;
+    fleetFilter = button.dataset.filter;
+    [...$('fleet-filters').children].forEach(b => b.classList.toggle('active', b === button));
+    if (overview) renderFleet();
+  });
+  $('fleet-search').addEventListener('input', event => {
+    fleetSearch = event.target.value.trim();
+    if (overview) renderFleet();
+  });
+  $('bulk-reboot').addEventListener('click', async () => {
+    const ids = [...selectedForBulk];
+    if (!ids.length || !confirm(`Restart ${ids.length} selected computer${ids.length === 1 ? '' : 's'}? Save any open work first.`)) return;
+    status('fleet-status', `Restarting ${ids.length} computer${ids.length === 1 ? '' : 's'}...`);
+    selectedForBulk.clear();
+    await Promise.all(ids.map(id => runPowerAction(id, 'restart')));
+    status('fleet-status', 'Bulk restart complete.', 'success');
+  });
+  $('bulk-shutdown-inactive').addEventListener('click', async () => {
+    const inactive = (overview?.computers || []).filter(vm =>
+      vm.assignmentStatus !== 'unassigned' && vm.status === 'running' && !(Array.isArray(vm.activeUsers) && vm.activeUsers.length) && !pending.has(vm.id));
+    if (!inactive.length) { status('fleet-status', 'No inactive running computers to shut down.'); return; }
+    if (!confirm(`Shut down ${inactive.length} running computer${inactive.length === 1 ? '' : 's'} with no active desktop session?`)) return;
+    status('fleet-status', `Shutting down ${inactive.length} inactive computer${inactive.length === 1 ? '' : 's'}...`);
+    await Promise.all(inactive.map(vm => runPowerAction(vm.id, 'shutdown')));
+    status('fleet-status', 'Inactive computers shut down.', 'success');
+  });
+  $('audit-list').addEventListener('click', event => {
+    const row = event.target.closest('.audit-row.has-detail');
+    if (row) row.classList.toggle('expanded');
   });
   $('refresh-button').addEventListener('click', load);
   setupChartInteraction();
