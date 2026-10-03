@@ -142,6 +142,42 @@ jobs:
       pull-requests: write
       models: read
     steps:
+      - name: Notify via ntfy (new PR opened)
+        if: (github.event.action == 'opened' || github.event.action == 'reopened') && github.event.pull_request.user.login != 'Mitch-Fogler'
+        continue-on-error: true
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_USER: ${{ secrets.NTFY_USER }}
+          NTFY_PASS: ${{ secrets.NTFY_PASS }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NTFY_TOPIC:-}" ]; then
+            echo "NTFY_TOPIC secret not set, skipping push notification."
+            exit 0
+          fi
+          case "$NTFY_TOPIC" in
+            http://*|https://*) URL="$NTFY_TOPIC" ;;
+            *) URL="https://ntfy.sh/${NTFY_TOPIC#/}" ;;
+          esac
+
+          # PR_TITLE/PR_AUTHOR come from the pull request itself and are
+          # attacker-controlled — they arrive here as env vars (never
+          # interpolated into this script directly) and get sanitized again
+          # before use as HTTP header values, to rule out header injection.
+          SAFE_TITLE=$(printf '%s' "$PR_TITLE" | tr -d '\r\n' | cut -c1-200)
+          SAFE_AUTHOR=$(printf '%s' "$PR_AUTHOR" | tr -d '\r\n' | cut -c1-80)
+
+          curl -sS -o /dev/null -w 'ntfy response: %{http_code}\n' \
+            -u "${NTFY_USER}:${NTFY_PASS}" \
+            -H "Title: New PR: ${SAFE_TITLE}" \
+            -H "Priority: high" \
+            -H "Click: ${PR_URL}" \
+            --data-raw "Opened by ${SAFE_AUTHOR}. Tap to review." \
+            "$URL"
+
       - name: Checkout PR
         uses: actions/checkout@v4
         with:
