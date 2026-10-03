@@ -1,9 +1,12 @@
 {
   "owners": [
-    "admin@mitch.pro"
+    "admin@mitch.pro",
+    "mitchell.fogler@student.rjuhsd.us"
+  ],
+  "coOwners": [
+    "tyler.thompson1@student.rjuhsd.us"
   ],
   "admins": [
-    "tyler.thompson1@student.rjuhsd.us",
     "lillian.loaiza@student.rjuhsd.us",
     "keegan.mccarthy@student.rjuhsd.us",
     "gdees113981@iemschools.org"

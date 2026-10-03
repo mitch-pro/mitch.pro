@@ -1420,8 +1420,8 @@ mod tests {
             .write_document(
                 &base.join("data/admins.json"),
                 &json!({
-                    "owners": ["owner@mitch.pro", "co-owner@mitch.pro"],
-                    "coOwners": ["configured-coowner@mitch.pro"],
+                    "owners": ["owner@mitch.pro"],
+                    "coOwners": ["co-owner@mitch.pro", "configured-coowner@mitch.pro"],
                     "admins": ["admin@mitch.pro"],
                 }),
             )
