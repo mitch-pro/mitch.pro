@@ -1,7 +1,7 @@
 # mitch.pro
 
 [![Deploy](https://github.com/mitch-pro/mitch.pro/actions/workflows/deploy.yml/badge.svg)](https://github.com/mitch-pro/mitch.pro/actions/workflows/deploy.yml)
-[![License: Apache-2.0 with Commons Clause](https://img.shields.io/badge/license-Apache--2.0%20%2B%20Commons%20Clause-blue.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 High-performance, self-hosted web platform and student community built in **Rust**. Serves multi-tenant virtual hosting, End-to-End Encrypted (E2EE) chat over a federated Matrix homeserver, Proxmox LXC cloud desktops, real-time WebSockets, and a small arcade of browser games — all from one Axum-based binary with SQLite persistence.
 
@@ -125,4 +125,6 @@ Please report vulnerabilities privately. See [SECURITY.md](SECURITY.md) for the 
 
 ## License
 
-Apache License 2.0 with a Commons Clause restriction — see [LICENSE](LICENSE) for the full text.
+Apache License 2.0 — see [LICENSE](LICENSE) for the full text. The license
+covers the code only; the mitch.pro name and branding are not covered — see
+[TRADEMARK.md](TRADEMARK.md).
