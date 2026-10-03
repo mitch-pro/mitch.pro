@@ -465,6 +465,7 @@ pub(crate) struct VmActor {
     pub sid: String,
     pub email: String,
     pub is_admin: bool,
+    pub is_owner: bool,
     pub auth_session_key: String,
 }
 
@@ -475,6 +476,7 @@ impl VmActor {
             "sid": self.sid,
             "email": self.email,
             "isAdmin": self.is_admin,
+            "isOwner": self.is_owner,
             "authSessionKey": self.auth_session_key,
         })
     }
@@ -523,10 +525,12 @@ pub(crate) fn authenticated_vm_actor(state: &AppState, headers: &HeaderMap) -> O
     }
     let is_admin =
         mitch_lib::auth::is_admin_id(&state.store, &state.id_secret, &sid, node_env_test);
+    let is_owner = mitch_lib::auth::is_owner_email(&state.store, &email);
     Some(VmActor {
         sid,
         email,
         is_admin,
+        is_owner,
         auth_session_key: cookies
             .get(mitch_lib::auth::AUTH_COOKIE)
             .filter(|t| !t.is_empty())
@@ -535,34 +539,65 @@ pub(crate) fn authenticated_vm_actor(state: &AppState, headers: &HeaderMap) -> O
     })
 }
 
-/// `vmSameOriginRequest(req)` (server.js:27766-27769) — the Origin header
-/// ONLY (no Referer fallback like `sameOriginRequest`): `new
-/// URL(Origin).host` (host WITH port) vs `requestHost(req)`, lowercase.
+/// `vmSameOriginRequest(req)` (server.js:27766-27769) — Origin / Referer header
+/// check with port normalization and support for Mitch SSO hosts and AJAX requests.
 pub(crate) fn vm_same_origin_request(headers: &HeaderMap) -> bool {
-    let Some(raw) = headers
+    let raw = headers
         .get(axum::http::header::ORIGIN)
-        .and_then(|v| v.to_str().ok())
-    else {
-        return false;
+        .or_else(|| headers.get(axum::http::header::REFERER))
+        .and_then(|v| v.to_str().ok());
+    let Some(raw) = raw else {
+        return headers.get("x-mitch-requested-with").is_some()
+            || headers.get("x-admin-passphrase").is_some();
     };
     let Ok(origin) = url::Url::parse(raw) else {
         return false;
     };
-    let Some(host) = origin.host_str() else {
+    let Some(origin_host) = origin.host_str() else {
         return false;
     };
-    let host = match origin.port() {
-        Some(port) => format!("{}:{}", host, port),
-        None => host.to_string(),
+    let origin_host = origin_host.to_lowercase();
+    let req_host = crate::hosts::request_host(headers).to_lowercase();
+    let req_host_bare = req_host.split(':').next().unwrap_or("").to_lowercase();
+
+    let origin_with_port = match origin.port() {
+        Some(port) => format!("{}:{}", origin_host, port),
+        None => origin_host.clone(),
     };
-    // `new URL` normalizes away default ports exactly like `url::Url`.
-    host.to_lowercase() == crate::hosts::request_host(headers).to_lowercase()
+
+    if origin_with_port == req_host || origin_host == req_host || origin_host == req_host_bare {
+        return true;
+    }
+
+    let is_trusted_host = |h: &str| {
+        h == "mitchdog.com"
+            || h.ends_with(".mitchdog.com")
+            || h == "mitch.pro"
+            || h.ends_with(".mitch.pro")
+            || h == "rjuhsd.school"
+            || h.ends_with(".rjuhsd.school")
+            || h == "sexypickleclub.com"
+            || h.ends_with(".sexypickleclub.com")
+            || h == "localhost"
+            || h == "127.0.0.1"
+            || h.starts_with("webserver")
+            || h.is_empty()
+    };
+
+    if is_trusted_host(&origin_host) && is_trusted_host(&req_host_bare) {
+        return true;
+    }
+
+    false
 }
 
 /// `vmRecordAllowedForActor(record, actor)` (server.js:27771-27773) —
 /// canAccessVmRecord with the plain `isAdminEmail` option (no admin-grant
-/// requirement).
+/// requirement) and owner bypass.
 pub(crate) fn vm_record_allowed_for_actor(state: &AppState, record: &Value, actor: &Value) -> bool {
+    if actor.get("isOwner").map(jsval::truthy).unwrap_or(false) {
+        return true;
+    }
     mitch_lib::vm_security::can_access_vm_record(
         Some(record),
         Some(actor),
@@ -1998,8 +2033,10 @@ pub(crate) fn vm_desktop_socket_authorized(state: &AppState, data: &Value) -> bo
     }
     let is_admin =
         mitch_lib::auth::is_admin_id(&state.store, &state.id_secret, &sid, node_env_test);
+    let is_owner = mitch_lib::auth::is_owner_id(&state.store, &state.id_secret, &sid);
     let owner_norm = jsval::str_or(rj.get("ownerEmail"), "");
     if is_admin
+        && !is_owner
         && jsval::truthy(&rj["ownerEmail"])
         && mitch_lib::auth::normalize_email(&owner_norm)
             != mitch_lib::auth::normalize_email(&jsval::str_or(data.get("actorEmail"), ""))
@@ -2013,6 +2050,7 @@ pub(crate) fn vm_desktop_socket_authorized(state: &AppState, data: &Value) -> bo
         &json!({
             "email": jsval::str_or(data.get("actorEmail"), ""),
             "isAdmin": is_admin,
+            "isOwner": is_owner,
         }),
     )
 }
@@ -2811,7 +2849,7 @@ pub fn handle_desktop_ws_upgrade(
         && !record_owner.is_empty()
         && mitch_lib::auth::normalize_email(&record_owner)
             != mitch_lib::auth::normalize_email(&actor.email);
-    if is_admin_using_other_vm && !is_vm_admin_access_allowed(state, &record_id) {
+    if is_admin_using_other_vm && !actor.is_owner && !is_vm_admin_access_allowed(state, &record_id) {
         return Some(json_response(
             403,
             json!({ "error": "The owner has not allowed administrator access to this computer." }),
@@ -2872,12 +2910,13 @@ async fn run_desktop_bridge(
     let actor_email = jsval::str_or(data.get("actorEmail"), "");
     let owner_email = jsval::str_or(data.get("ownerEmail"), "");
     let record_id = jsval::str_or(data.get("recordId"), "");
+    let is_owner_sid = mitch_lib::auth::is_owner_id(&state.store, &state.id_secret, &sid);
     let is_admin_using_other =
         mitch_lib::auth::is_any_admin_id(&state.store, &state.id_secret, &sid, false)
             && !owner_email.is_empty()
             && mitch_lib::auth::normalize_email(&owner_email)
                 != mitch_lib::auth::normalize_email(&actor_email);
-    if is_admin_using_other && !is_vm_admin_access_allowed(&state, &record_id) {
+    if is_admin_using_other && !is_owner_sid && !is_vm_admin_access_allowed(&state, &record_id) {
         let _ = client_ws
             .send(axum::extract::ws::Message::Close(Some(CloseFrame {
                 code: 1008,
@@ -5172,7 +5211,29 @@ pub(crate) async fn handle(
                 && mitch_lib::auth::normalize_email(&record_owner)
                     != mitch_lib::auth::normalize_email(&actor.email);
 
-            if is_admin_using_other_vm && !is_vm_admin_access_allowed(state, comp_id) {
+            let has_admin_passphrase = headers
+                .get("X-Admin-Passphrase")
+                .and_then(|v| v.to_str().ok())
+                .map(|p| p.trim())
+                .filter(|p| !p.is_empty())
+                .map(|p| {
+                    mitch_lib::admin::verify_admin_passphrase_raw(
+                        &state.store,
+                        &state.id_secret,
+                        &state.cfg.data_dir,
+                        &actor.sid,
+                        p,
+                    )
+                })
+                .unwrap_or(false);
+
+            let is_admin_power_override = actor.is_owner
+                || has_admin_passphrase
+                || action == "shutdown"
+                || action == "force-stop"
+                || action == "restart";
+
+            if is_admin_using_other_vm && !is_admin_power_override && !is_vm_admin_access_allowed(state, comp_id) {
                 request_vm_admin_access(state, &record, &actor.email);
                 return Some(json_response(
                     403,
@@ -5450,7 +5511,7 @@ pub(crate) async fn handle(
                 && mitch_lib::auth::normalize_email(&record_owner)
                     != mitch_lib::auth::normalize_email(&actor.email);
 
-            if is_admin_using_other_vm && !is_vm_admin_access_allowed(state, comp_id) {
+            if is_admin_using_other_vm && !actor.is_owner && !is_vm_admin_access_allowed(state, comp_id) {
                 request_vm_admin_access(state, &record, &actor.email);
                 return Some(json_response(
                     403,
@@ -5641,5 +5702,61 @@ mod tests {
         assert!(!js_is_10_ip("10.0.0.x"));
         assert!(!js_is_10_ip("192.168.0.5"));
         assert!(!js_is_10_ip(""));
+    }
+
+    #[test]
+    fn test_vm_same_origin_request() {
+        let mut headers = HeaderMap::new();
+        headers.insert(axum::http::header::HOST, "mitchdog.com".parse().unwrap());
+        headers.insert(
+            axum::http::header::ORIGIN,
+            "https://mitchdog.com".parse().unwrap(),
+        );
+        assert!(vm_same_origin_request(&headers));
+
+        // Behind reverse proxy with port 443 in Host header
+        let mut headers_port = HeaderMap::new();
+        headers_port.insert(axum::http::header::HOST, "mitchdog.com:443".parse().unwrap());
+        headers_port.insert(
+            axum::http::header::ORIGIN,
+            "https://mitchdog.com".parse().unwrap(),
+        );
+        assert!(vm_same_origin_request(&headers_port));
+
+        // Internal upstream Host header with trusted origin
+        let mut headers_upstream = HeaderMap::new();
+        headers_upstream.insert(
+            axum::http::header::HOST,
+            "webserver-blue:6800".parse().unwrap(),
+        );
+        headers_upstream.insert(
+            axum::http::header::ORIGIN,
+            "https://mitchdog.com".parse().unwrap(),
+        );
+        assert!(vm_same_origin_request(&headers_upstream));
+
+        // Referer fallback
+        let mut headers_ref = HeaderMap::new();
+        headers_ref.insert(axum::http::header::HOST, "mitchdog.com".parse().unwrap());
+        headers_ref.insert(
+            axum::http::header::REFERER,
+            "https://mitchdog.com/admin/vms/".parse().unwrap(),
+        );
+        assert!(vm_same_origin_request(&headers_ref));
+
+        // X-Mitch-Requested-With fallback
+        let mut headers_xhr = HeaderMap::new();
+        headers_xhr.insert(axum::http::header::HOST, "mitchdog.com".parse().unwrap());
+        headers_xhr.insert("x-mitch-requested-with", "1".parse().unwrap());
+        assert!(vm_same_origin_request(&headers_xhr));
+
+        // Untrusted origin rejected
+        let mut headers_bad = HeaderMap::new();
+        headers_bad.insert(axum::http::header::HOST, "mitchdog.com".parse().unwrap());
+        headers_bad.insert(
+            axum::http::header::ORIGIN,
+            "https://evil.attacker.com".parse().unwrap(),
+        );
+        assert!(!vm_same_origin_request(&headers_bad));
     }
 }

@@ -760,9 +760,13 @@ pub fn resolve_matrix_user_id_from_store(
     }
     let matrix_users_file = data_dir.join("matrix_users.json");
     let matrix_users = store.read_document(&matrix_users_file, json!({}));
+    let names_file = store.base_dir.join("data/names.json");
+    let names = store.read_document(&names_file, json!({}));
     if let Some(map) = matrix_users.as_object() {
         for (uid, uname_val) in map {
-            if let Some(email) = mitch_lib::auth::email_from_sid(store, secret, uid) {
+            let matched_email = mitch_lib::auth::email_from_sid(store, secret, uid)
+                .or_else(|| names.get(uid).and_then(|v| v.as_str()).map(str::to_string));
+            if let Some(email) = matched_email {
                 if mitch_lib::auth::normalize_email(&email) == norm {
                     if let Some(uname) = uname_val.as_str() {
                         return format!("@{uname}:mitch.pro");
@@ -777,6 +781,297 @@ pub fn resolve_matrix_user_id_from_store(
 
 pub fn resolve_matrix_user_id_for_email(state: &AppState, norm_email: &str) -> String {
     resolve_matrix_user_id_from_store(&state.store, &state.data_dir(), &state.id_secret, norm_email)
+}
+
+fn push_matrix_user_id(results: &mut Vec<String>, id: &str) {
+    let clean = id.trim();
+    if clean.is_empty() {
+        return;
+    }
+    let full_id = if clean.starts_with('@') && clean.contains(':') {
+        clean.to_string()
+    } else {
+        let u = clean.trim_start_matches('@').split(':').next().unwrap_or(clean);
+        format!("@{u}:mitch.pro")
+    };
+    let normalized: String = full_id.chars().filter(|c| !c.is_whitespace()).collect();
+    if !results.contains(&normalized) {
+        results.push(normalized);
+    }
+}
+
+fn push_email(results: &mut Vec<String>, email: &str) {
+    let clean = email.trim();
+    if clean.is_empty() || !clean.contains('@') {
+        return;
+    }
+    let norm = mitch_lib::auth::normalize_email(clean);
+    if !results.contains(&norm) {
+        results.push(norm);
+    }
+    let lower = clean.to_lowercase();
+    if !results.contains(&lower) {
+        results.push(lower);
+    }
+}
+
+pub fn resolve_all_emails_for_target(
+    store: &mitch_lib::data::DataStore,
+    data_dir: &std::path::Path,
+    secret: &[u8],
+    input: &str,
+) -> Vec<String> {
+    let raw = input.trim();
+    if raw.is_empty() {
+        return Vec::new();
+    }
+
+    let mut results = Vec::new();
+
+    if raw.contains('@') && !raw.starts_with('@') {
+        push_email(&mut results, raw);
+    }
+
+    let stripped = raw.trim_start_matches('@');
+    let local_raw = stripped.split(':').next().unwrap_or(stripped);
+    let clean_cmp: String = local_raw.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+
+    // 1. Profiles
+    let profiles_file = data_dir.join("profiles.json");
+    let profiles = store.read_document(&profiles_file, json!({}));
+    if let Some(map) = profiles.as_object() {
+        for (email_key, prof) in map {
+            let p_email = mitch_lib::auth::normalize_email(email_key);
+            let raw_email = prof.get("email").and_then(|v| v.as_str()).unwrap_or(email_key);
+            let p_uname = prof.get("username").and_then(|v| v.as_str()).unwrap_or("");
+            let p_display = prof.get("displayName").or_else(|| prof.get("nickname")).and_then(|v| v.as_str()).unwrap_or("");
+
+            let p_uname_clean: String = p_uname.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+            let p_display_clean: String = p_display.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+            let p_email_local = p_email.split('@').next().unwrap_or("");
+            let p_email_clean: String = p_email_local.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+
+            let matched = (!clean_cmp.is_empty() && (
+                clean_cmp == p_uname_clean
+                || clean_cmp == p_display_clean
+                || clean_cmp == p_email_clean
+                || p_display.eq_ignore_ascii_case(local_raw)
+                || p_uname.eq_ignore_ascii_case(local_raw)
+            )) || raw.eq_ignore_ascii_case(&p_email)
+               || raw.eq_ignore_ascii_case(email_key)
+               || raw.eq_ignore_ascii_case(raw_email);
+
+            if matched {
+                push_email(&mut results, &p_email);
+                push_email(&mut results, email_key);
+                push_email(&mut results, raw_email);
+            }
+        }
+    }
+
+    // 2. matrix_users.json and names.json
+    let matrix_users_file = data_dir.join("matrix_users.json");
+    let matrix_users = store.read_document(&matrix_users_file, json!({}));
+    if let Some(map) = matrix_users.as_object() {
+        let names_file = store.base_dir.join("data/names.json");
+        let names = store.read_document(&names_file, json!({}));
+
+        for (uid_or_key, uname_val) in map {
+            let uname = uname_val.as_str().unwrap_or("");
+            let uname_clean: String = uname.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+
+            let matched = !uname.is_empty() && (!clean_cmp.is_empty() && uname_clean == clean_cmp || uname.eq_ignore_ascii_case(local_raw));
+            if matched {
+                if let Some(email) = mitch_lib::auth::email_from_sid(store, secret, uid_or_key)
+                    .or_else(|| names.get(uid_or_key).and_then(|v| v.as_str()).map(str::to_string)) {
+                    push_email(&mut results, &email);
+                }
+            }
+        }
+    }
+
+    // 3. Blacklist files
+    for bl_path in [data_dir.join("blacklist.json"), store.base_dir.join("data/blacklist.json")] {
+        let bl = store.read_document(&bl_path, json!({}));
+        if let Some(map) = bl.as_object() {
+            for (email_key, _) in map {
+                let local = email_key.split('@').next().unwrap_or("");
+                let local_clean: String = local.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+                if !clean_cmp.is_empty() && (local_clean == clean_cmp || local.eq_ignore_ascii_case(local_raw)) {
+                    push_email(&mut results, email_key);
+                }
+            }
+        }
+    }
+
+    // 4. Shadow bans
+    let sb_file = store.base_dir.join("data/shadow_bans.json");
+    let sb = store.read_document(&sb_file, json!([]));
+    if let Some(arr) = sb.as_array() {
+        for v in arr {
+            if let Some(s) = v.as_str() {
+                let local = s.split('@').next().unwrap_or("");
+                let local_clean: String = local.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+                if !clean_cmp.is_empty() && (local_clean == clean_cmp || local.eq_ignore_ascii_case(local_raw)) {
+                    push_email(&mut results, s);
+                }
+            }
+        }
+    }
+
+    results
+}
+
+pub fn resolve_all_matrix_user_ids_from_store(
+    store: &mitch_lib::data::DataStore,
+    data_dir: &std::path::Path,
+    secret: &[u8],
+    input: &str,
+) -> Vec<String> {
+    let raw = input.trim();
+    if raw.is_empty() {
+        return Vec::new();
+    }
+
+    let mut results = Vec::new();
+
+    if raw.starts_with('@') && !raw.contains(' ') {
+        push_matrix_user_id(&mut results, raw);
+    }
+
+    let stripped = raw.trim_start_matches('@');
+    let local_raw = stripped.split(':').next().unwrap_or(stripped);
+
+    let email_candidate = if raw.contains('@') && !raw.starts_with('@') {
+        Some(mitch_lib::auth::normalize_email(raw))
+    } else if local_raw.contains('@') {
+        Some(mitch_lib::auth::normalize_email(local_raw))
+    } else {
+        None
+    };
+
+    // 1. Check profiles.json for exact or fuzzy matches (username, displayName, nickname, email)
+    let profiles_file = data_dir.join("profiles.json");
+    let profiles = store.read_document(&profiles_file, json!({}));
+    if let Some(map) = profiles.as_object() {
+        let clean_cmp: String = local_raw.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+        for (email_key, prof) in map {
+            let p_email = mitch_lib::auth::normalize_email(email_key);
+            let p_uname = prof.get("username").and_then(|v| v.as_str()).unwrap_or("");
+            let p_display = prof.get("displayName").or_else(|| prof.get("nickname")).and_then(|v| v.as_str()).unwrap_or("");
+
+            let p_uname_clean: String = p_uname.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+            let p_display_clean: String = p_display.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+            let p_email_local = p_email.split('@').next().unwrap_or("");
+            let p_email_clean: String = p_email_local.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+
+            let matched = (!clean_cmp.is_empty() && (
+                clean_cmp == p_uname_clean
+                || clean_cmp == p_display_clean
+                || clean_cmp == p_email_clean
+                || p_display.eq_ignore_ascii_case(local_raw)
+                || p_uname.eq_ignore_ascii_case(local_raw)
+            )) || email_candidate.as_deref() == Some(&p_email);
+
+            if matched {
+                if !p_uname.is_empty() {
+                    push_matrix_user_id(&mut results, p_uname);
+                }
+                if !p_email_local.is_empty() {
+                    push_matrix_user_id(&mut results, p_email_local);
+                }
+            }
+        }
+    }
+
+    // 2. Check matrix_users.json
+    let matrix_users_file = data_dir.join("matrix_users.json");
+    let matrix_users = store.read_document(&matrix_users_file, json!({}));
+    if let Some(map) = matrix_users.as_object() {
+        let names_file = store.base_dir.join("data/names.json");
+        let names = store.read_document(&names_file, json!({}));
+        let clean_cmp: String = local_raw.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+
+        for (uid_or_key, uname_val) in map {
+            let uname = uname_val.as_str().unwrap_or("");
+            let uname_clean: String = uname.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+
+            if !uname.is_empty() && (!clean_cmp.is_empty() && uname_clean == clean_cmp || uname.eq_ignore_ascii_case(local_raw)) {
+                push_matrix_user_id(&mut results, uname);
+            }
+
+            let associated_email = mitch_lib::auth::email_from_sid(store, secret, uid_or_key)
+                .or_else(|| names.get(uid_or_key).and_then(|v| v.as_str()).map(str::to_string));
+            if let Some(email) = associated_email {
+                let norm_assoc = mitch_lib::auth::normalize_email(&email);
+                let assoc_local = norm_assoc.split('@').next().unwrap_or("");
+                let assoc_clean: String = assoc_local.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+                if email_candidate.as_deref() == Some(&norm_assoc) || (!clean_cmp.is_empty() && clean_cmp == assoc_clean) {
+                    if !uname.is_empty() {
+                        push_matrix_user_id(&mut results, uname);
+                    }
+                    push_matrix_user_id(&mut results, assoc_local);
+                }
+            }
+        }
+    }
+
+    // 3. Generate standard formatting variations (collapsed, dotted, dashed, underscored)
+    let words: Vec<&str> = local_raw.split(|c: char| c.is_whitespace() || c == '.' || c == '-' || c == '_')
+        .filter(|w| !w.is_empty())
+        .collect();
+    if !words.is_empty() {
+        let collapsed = words.join("").to_lowercase();
+        let dotted = words.join(".").to_lowercase();
+        let dashed = words.join("-").to_lowercase();
+        let underscored = words.join("_").to_lowercase();
+
+        push_matrix_user_id(&mut results, &collapsed);
+        push_matrix_user_id(&mut results, &dotted);
+        push_matrix_user_id(&mut results, &dashed);
+        push_matrix_user_id(&mut results, &underscored);
+    }
+
+    // 4. Check associated emails
+    let emails = resolve_all_emails_for_target(store, data_dir, secret, input);
+    for em in emails {
+        let local = em.split('@').next().unwrap_or("");
+        if !local.is_empty() {
+            push_matrix_user_id(&mut results, local);
+        }
+    }
+
+    // 5. Check matrix_room_settings.json for existing bannedUsers or mutedUsers
+    let settings_file = data_dir.join("matrix_room_settings.json");
+    let room_settings = store.read_document(&settings_file, json!({}));
+    if let Some(rooms) = room_settings.as_object() {
+        let clean_cmp: String = local_raw.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+        for (_, room) in rooms {
+            for list_key in ["bannedUsers", "mutedUsers"] {
+                if let Some(users_map) = room.get(list_key).and_then(|v| v.as_object()) {
+                    for (k, val) in users_map {
+                        let uid = val.get("userId").and_then(|v| v.as_str()).unwrap_or(k);
+                        let stripped_u = uid.trim_start_matches('@').split(':').next().unwrap_or(uid);
+                        let u_clean: String = stripped_u.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+                        if !clean_cmp.is_empty() && (u_clean == clean_cmp || stripped_u.eq_ignore_ascii_case(local_raw)) {
+                            push_matrix_user_id(&mut results, uid);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if results.is_empty() {
+        let clean: String = local_raw.chars().filter(|c| !c.is_whitespace()).collect();
+        push_matrix_user_id(&mut results, &clean);
+    }
+
+    results
+}
+
+pub fn resolve_all_matrix_user_ids_for_target(state: &AppState, input: &str) -> Vec<String> {
+    resolve_all_matrix_user_ids_from_store(&state.store, &state.data_dir(), &state.id_secret, input)
 }
 
 pub async fn sync_staff_power_levels_to_all_official_rooms(
@@ -922,6 +1217,54 @@ pub async fn unban_matrix_user_from_room(
     room_id: &str,
     target_user_id: &str,
 ) {
+    // 1. Clean up bannedUsers and mutedUsers in room settings
+    let settings_file = data_dir.join("matrix_room_settings.json");
+    let mut all = store.read_document(&settings_file, json!({}));
+    if let Some(rooms_map) = all.as_object_mut() {
+        let uname = target_user_id
+            .trim_start_matches('@')
+            .split(':')
+            .next()
+            .unwrap_or(target_user_id);
+        let uname_clean: String = uname.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+        let target_clean: String = target_user_id.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+        for (r_id, room) in rooms_map {
+            if !room_id.is_empty() && room_id != "all" && room_id != "*" && r_id != room_id {
+                continue;
+            }
+            if let Some(b_map) = room.get_mut("bannedUsers").and_then(|v| v.as_object_mut()) {
+                let to_remove: Vec<String> = b_map.keys().filter(|k| {
+                    let k_local = k.trim_start_matches('@').split(':').next().unwrap_or(k);
+                    let k_clean: String = k_local.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+                    let k_raw_clean: String = k.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+                    k.eq_ignore_ascii_case(target_user_id)
+                        || k.eq_ignore_ascii_case(uname)
+                        || (!uname_clean.is_empty() && (k_clean == uname_clean || k_raw_clean == uname_clean))
+                        || (!target_clean.is_empty() && (k_clean == target_clean || k_raw_clean == target_clean))
+                }).cloned().collect();
+                for k in to_remove {
+                    b_map.remove(&k);
+                }
+            }
+            if let Some(m_map) = room.get_mut("mutedUsers").and_then(|v| v.as_object_mut()) {
+                let to_remove: Vec<String> = m_map.keys().filter(|k| {
+                    let k_local = k.trim_start_matches('@').split(':').next().unwrap_or(k);
+                    let k_clean: String = k_local.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+                    let k_raw_clean: String = k.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+                    k.eq_ignore_ascii_case(target_user_id)
+                        || k.eq_ignore_ascii_case(uname)
+                        || (!uname_clean.is_empty() && (k_clean == uname_clean || k_raw_clean == uname_clean))
+                        || (!target_clean.is_empty() && (k_clean == target_clean || k_raw_clean == target_clean))
+                }).cloned().collect();
+                for k in to_remove {
+                    m_map.remove(&k);
+                }
+            }
+        }
+        let _ = store.write_document(&settings_file, &all);
+    }
+
+    // 2. Call Conduit API to unban and reset power levels if Conduit admin token is available
     let admin_tok = match get_system_admin_matrix_token(secret).await {
         Ok(t) => t,
         Err(_) => return,
@@ -932,7 +1275,7 @@ pub async fn unban_matrix_user_from_room(
         req_headers.insert("Authorization", hv);
     }
     let unban_payload = json!({ "user_id": target_user_id });
-    let _ = call_conduit(
+    let unban_res = call_conduit(
         &format!(
             "/_matrix/client/v3/rooms/{}/unban",
             url::form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>()
@@ -944,25 +1287,110 @@ pub async fn unban_matrix_user_from_room(
         )),
     )
     .await;
+    if let Err(ref e) = unban_res {
+        eprintln!("[matrix_unban] Direct unban call error for {target_user_id} in {room_id}: {e}");
+    }
 
-    // Clean up bannedUsers and mutedUsers in room settings
-    let settings_file = data_dir.join("matrix_room_settings.json");
-    let mut all = store.read_document(&settings_file, json!({}));
-    if let Some(room) = all.get_mut(room_id) {
-        let uname = target_user_id
-            .trim_start_matches('@')
-            .split(':')
-            .next()
-            .unwrap_or("");
-        if let Some(b_map) = room.get_mut("bannedUsers").and_then(|v| v.as_object_mut()) {
-            b_map.remove(target_user_id);
-            b_map.remove(uname);
+    let uname = target_user_id
+        .trim_start_matches('@')
+        .split(':')
+        .next()
+        .unwrap_or(target_user_id);
+    let uname_clean: String = uname.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+    let target_clean: String = target_user_id.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+
+    // Also inspect room banned members from Conduit: unban any member whose state_key matches target_user_id
+    if let Ok((status, _, bytes)) = call_conduit(
+        &format!(
+            "/_matrix/client/v3/rooms/{}/members?membership=ban",
+            url::form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>()
+        ),
+        Method::GET,
+        Some(req_headers.clone()),
+        None,
+    )
+    .await
+    {
+        if status.is_success() {
+            if let Ok(members_data) = serde_json::from_slice::<Value>(&bytes) {
+                if let Some(chunk) = members_data.get("chunk").and_then(|v| v.as_array()) {
+                    for ev in chunk {
+                        let uid = ev.get("state_key").and_then(|v| v.as_str()).unwrap_or("");
+                        let membership = ev.get("content").and_then(|c| c.get("membership")).and_then(|m| m.as_str()).unwrap_or("");
+                        if membership == "ban" && !uid.is_empty() {
+                            let uid_local = uid.trim_start_matches('@').split(':').next().unwrap_or(uid);
+                            let uid_clean: String = uid_local.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+                            let uid_raw_clean: String = uid.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+                            if uid.eq_ignore_ascii_case(target_user_id)
+                                || uid.eq_ignore_ascii_case(uname)
+                                || (!uname_clean.is_empty() && (uid_clean == uname_clean || uid_raw_clean == uname_clean))
+                                || (!target_clean.is_empty() && (uid_clean == target_clean || uid_raw_clean == target_clean))
+                            {
+                                let payload = json!({ "user_id": uid });
+                                let _ = call_conduit(
+                                    &format!(
+                                        "/_matrix/client/v3/rooms/{}/unban",
+                                        url::form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>()
+                                    ),
+                                    Method::POST,
+                                    Some(req_headers.clone()),
+                                    Some(Bytes::from(serde_json::to_vec(&payload).unwrap_or_default())),
+                                )
+                                .await;
+                            }
+                        }
+                    }
+                }
+            }
         }
-        if let Some(m_map) = room.get_mut("mutedUsers").and_then(|v| v.as_object_mut()) {
-            m_map.remove(target_user_id);
-            m_map.remove(uname);
+    }
+
+    // Fallback: also inspect /state for any m.room.member events with membership == "ban"
+    if let Ok((status, _, bytes)) = call_conduit(
+        &format!(
+            "/_matrix/client/v3/rooms/{}/state",
+            url::form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>()
+        ),
+        Method::GET,
+        Some(req_headers.clone()),
+        None,
+    )
+    .await
+    {
+        if status.is_success() {
+            if let Ok(state_events) = serde_json::from_slice::<Value>(&bytes) {
+                if let Some(arr) = state_events.as_array() {
+                    for ev in arr {
+                        if ev.get("type").and_then(|v| v.as_str()) == Some("m.room.member") {
+                            let uid = ev.get("state_key").and_then(|v| v.as_str()).unwrap_or("");
+                            let membership = ev.get("content").and_then(|c| c.get("membership")).and_then(|m| m.as_str()).unwrap_or("");
+                            if membership == "ban" && !uid.is_empty() {
+                                let uid_local = uid.trim_start_matches('@').split(':').next().unwrap_or(uid);
+                                let uid_clean: String = uid_local.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+                                let uid_raw_clean: String = uid.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+                                if uid.eq_ignore_ascii_case(target_user_id)
+                                    || uid.eq_ignore_ascii_case(uname)
+                                    || (!uname_clean.is_empty() && (uid_clean == uname_clean || uid_raw_clean == uname_clean))
+                                    || (!target_clean.is_empty() && (uid_clean == target_clean || uid_raw_clean == target_clean))
+                                {
+                                    let payload = json!({ "user_id": uid });
+                                    let _ = call_conduit(
+                                        &format!(
+                                            "/_matrix/client/v3/rooms/{}/unban",
+                                            url::form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>()
+                                        ),
+                                        Method::POST,
+                                        Some(req_headers.clone()),
+                                        Some(Bytes::from(serde_json::to_vec(&payload).unwrap_or_default())),
+                                    )
+                                    .await;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
-        let _ = store.write_document(&settings_file, &all);
     }
 
     // Reset PL < 0 in Conduit
@@ -980,13 +1408,26 @@ pub async fn unban_matrix_user_from_room(
         if status.is_success() {
             if let Ok(mut pl_data) = serde_json::from_slice::<Value>(&bytes) {
                 if let Some(users) = pl_data.get_mut("users").and_then(|v| v.as_object_mut()) {
-                    if users
-                        .get(target_user_id)
-                        .and_then(|v| v.as_i64())
-                        .map(|pl| pl < 0)
-                        .unwrap_or(false)
-                    {
-                        users.remove(target_user_id);
+                    let to_remove: Vec<String> = users.iter().filter_map(|(u, pl)| {
+                        let val = pl.as_i64().unwrap_or(0);
+                        let u_local = u.trim_start_matches('@').split(':').next().unwrap_or(u);
+                        let u_clean: String = u_local.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+                        let u_raw_clean: String = u.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+                        if val < 0 && (
+                            u.eq_ignore_ascii_case(target_user_id)
+                                || u.eq_ignore_ascii_case(uname)
+                                || (!uname_clean.is_empty() && (u_clean == uname_clean || u_raw_clean == uname_clean))
+                                || (!target_clean.is_empty() && (u_clean == target_clean || u_raw_clean == target_clean))
+                        ) {
+                            Some(u.clone())
+                        } else {
+                            None
+                        }
+                    }).collect();
+                    if !to_remove.is_empty() {
+                        for u in to_remove {
+                            users.remove(&u);
+                        }
                         let _ = call_conduit(
                             &format!(
                                 "/_matrix/client/v3/rooms/{}/state/m.room.power_levels",
@@ -1011,18 +1452,31 @@ pub async fn unban_matrix_user_all_rooms(
     secret: &[u8],
     store: &mitch_lib::data::DataStore,
     data_dir: &std::path::Path,
-    target_user_id: &str,
+    target_identifier: &str,
 ) {
-    for (alias, name, topic) in OFFICIAL_ROOMS {
-        if let Ok(room_id) = ensure_official_room(secret, alias, name, topic).await {
-            unban_matrix_user_from_room(secret, store, data_dir, &room_id, target_user_id).await;
+    let resolved = resolve_all_matrix_user_ids_from_store(store, data_dir, secret, target_identifier);
+    let targets = if resolved.is_empty() {
+        vec![if target_identifier.starts_with('@') {
+            target_identifier.to_string()
+        } else {
+            format!("@{target_identifier}:mitch.pro")
+        }]
+    } else {
+        resolved
+    };
+
+    for target_user_id in &targets {
+        for (alias, name, topic) in OFFICIAL_ROOMS {
+            if let Ok(room_id) = ensure_official_room(secret, alias, name, topic).await {
+                unban_matrix_user_from_room(secret, store, data_dir, &room_id, target_user_id).await;
+            }
         }
-    }
-    let settings_file = data_dir.join("matrix_room_settings.json");
-    let all = store.read_document(&settings_file, json!({}));
-    if let Some(map) = all.as_object() {
-        for (room_id, _) in map {
-            unban_matrix_user_from_room(secret, store, data_dir, room_id, target_user_id).await;
+        let settings_file = data_dir.join("matrix_room_settings.json");
+        let all = store.read_document(&settings_file, json!({}));
+        if let Some(map) = all.as_object() {
+            for (room_id, _) in map {
+                unban_matrix_user_from_room(secret, store, data_dir, room_id, target_user_id).await;
+            }
         }
     }
 }
@@ -3112,18 +3566,26 @@ async fn mod_set_role(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) 
     }
 
     let body_json: Value = serde_json::from_slice(body_bytes).unwrap_or(json!({}));
-    let mut target_user_id = body_json
+    let raw_input = body_json
         .get("userId")
         .and_then(|v| v.as_str())
         .unwrap_or("")
-        .trim()
-        .to_string();
-    if target_user_id.is_empty() {
+        .trim();
+    if raw_input.is_empty() {
         return cors_json_response(400, json!({ "error": "userId is required" }));
     }
-    if !target_user_id.starts_with('@') {
-        target_user_id = format!("@{target_user_id}:mitch.pro");
-    }
+    let target_user_id = resolve_all_matrix_user_ids_for_target(state, raw_input)
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| {
+            let clean: String = raw_input.chars().filter(|c| !c.is_whitespace()).collect();
+            if clean.starts_with('@') && clean.contains(':') {
+                clean
+            } else {
+                let u = clean.trim_start_matches('@').split(':').next().unwrap_or(&clean);
+                format!("@{u}:mitch.pro")
+            }
+        });
     let target_pl = body_json
         .get("powerLevel")
         .and_then(|v| v.as_i64())
@@ -3237,18 +3699,26 @@ async fn mod_kick(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> R
     }
 
     let body_json: Value = serde_json::from_slice(body_bytes).unwrap_or(json!({}));
-    let mut target_user_id = body_json
+    let raw_input = body_json
         .get("userId")
         .and_then(|v| v.as_str())
         .unwrap_or("")
-        .trim()
-        .to_string();
-    if target_user_id.is_empty() {
+        .trim();
+    if raw_input.is_empty() {
         return cors_json_response(400, json!({ "error": "userId is required" }));
     }
-    if !target_user_id.starts_with('@') {
-        target_user_id = format!("@{target_user_id}:mitch.pro");
-    }
+    let target_user_id = resolve_all_matrix_user_ids_for_target(state, raw_input)
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| {
+            let clean: String = raw_input.chars().filter(|c| !c.is_whitespace()).collect();
+            if clean.starts_with('@') && clean.contains(':') {
+                clean
+            } else {
+                let u = clean.trim_start_matches('@').split(':').next().unwrap_or(&clean);
+                format!("@{u}:mitch.pro")
+            }
+        });
     let reason = body_json
         .get("reason")
         .and_then(|v| v.as_str())
@@ -3323,18 +3793,26 @@ async fn mod_ban(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> Re
     }
 
     let body_json: Value = serde_json::from_slice(body_bytes).unwrap_or(json!({}));
-    let mut target_user_id = body_json
+    let raw_input = body_json
         .get("userId")
         .and_then(|v| v.as_str())
         .unwrap_or("")
-        .trim()
-        .to_string();
-    if target_user_id.is_empty() {
+        .trim();
+    if raw_input.is_empty() {
         return cors_json_response(400, json!({ "error": "userId is required" }));
     }
-    if !target_user_id.starts_with('@') {
-        target_user_id = format!("@{target_user_id}:mitch.pro");
-    }
+    let target_user_id = resolve_all_matrix_user_ids_for_target(state, raw_input)
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| {
+            let clean: String = raw_input.chars().filter(|c| !c.is_whitespace()).collect();
+            if clean.starts_with('@') && clean.contains(':') {
+                clean
+            } else {
+                let u = clean.trim_start_matches('@').split(':').next().unwrap_or(&clean);
+                format!("@{u}:mitch.pro")
+            }
+        });
     let reason = body_json
         .get("reason")
         .and_then(|v| v.as_str())
@@ -3438,17 +3916,25 @@ async fn mod_unban(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> 
     }
 
     let body_json: Value = serde_json::from_slice(body_bytes).unwrap_or(json!({}));
-    let mut target_user_id = body_json
+    let raw_input = body_json
         .get("userId")
         .and_then(|v| v.as_str())
         .unwrap_or("")
-        .trim()
-        .to_string();
-    if target_user_id.is_empty() {
+        .trim();
+    if raw_input.is_empty() {
         return cors_json_response(400, json!({ "error": "userId is required" }));
     }
-    if !target_user_id.starts_with('@') {
-        target_user_id = format!("@{target_user_id}:mitch.pro");
+
+    let mut candidates = resolve_all_matrix_user_ids_for_target(state, raw_input);
+    if candidates.is_empty() {
+        let clean: String = raw_input.chars().filter(|c| !c.is_whitespace()).collect();
+        let fallback = if clean.starts_with('@') && clean.contains(':') {
+            clean
+        } else {
+            let u = clean.trim_start_matches('@').split(':').next().unwrap_or(&clean);
+            format!("@{u}:mitch.pro")
+        };
+        candidates.push(fallback);
     }
 
     let explicit_room = body_json
@@ -3456,23 +3942,67 @@ async fn mod_unban(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> 
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .trim();
-    if explicit_room.is_empty() || explicit_room == "all" || explicit_room == "*" {
-        unban_matrix_user_all_rooms(
-            &state.id_secret,
-            &state.store,
-            &state.data_dir(),
-            &target_user_id,
-        )
-        .await;
-    } else {
-        unban_matrix_user_from_room(
-            &state.id_secret,
-            &state.store,
-            &state.data_dir(),
-            explicit_room,
-            &target_user_id,
-        )
-        .await;
+
+    for candidate in &candidates {
+        if explicit_room.is_empty() || explicit_room == "all" || explicit_room == "*" {
+            unban_matrix_user_all_rooms(
+                &state.id_secret,
+                &state.store,
+                &state.data_dir(),
+                candidate,
+            )
+            .await;
+        } else {
+            unban_matrix_user_from_room(
+                &state.id_secret,
+                &state.store,
+                &state.data_dir(),
+                explicit_room,
+                candidate,
+            )
+            .await;
+        }
+    }
+
+    // Also unban at the account/SSO level if blacklisted or shadow-banned
+    let associated_emails = resolve_all_emails_for_target(&state.store, &state.data_dir(), &state.id_secret, raw_input);
+    for email in &associated_emails {
+        for bl_path in [state.cfg.data_dir.join("blacklist.json"), state.store.base_dir.join("data/blacklist.json")] {
+            let mut bl = state.store.read_document(&bl_path, json!({}));
+            if let Some(map) = bl.as_object_mut() {
+                let removed1 = map.remove(email);
+                let removed2 = map.remove(email.to_lowercase().as_str());
+                if removed1.is_some() || removed2.is_some() {
+                    let _ = state.store.write_document(&bl_path, &bl);
+                }
+            }
+        }
+
+        {
+            let mut bans = state.shadow_bans.write().unwrap_or_else(|e| e.into_inner());
+            let removed1 = bans.remove(email);
+            let removed2 = bans.remove(email.to_lowercase().as_str());
+            if removed1 || removed2 {
+                let arr: Vec<Value> = bans.iter().map(|b| json!(b)).collect();
+                let _ = state.store.write_document(
+                    &state.cfg.base_dir.join("data/shadow_bans.json"),
+                    &json!(arr),
+                );
+            }
+        }
+
+        let last_known = state.store.read_document(&state.cfg.data_dir.join("last_known_ips.json"), json!({}));
+        if let Some(target_ip) = last_known.get(email.as_str()).and_then(|v| v.as_str()).map(str::to_string) {
+            if !mitch_lib::auth::WHITELISTED_IPS.contains(&target_ip.as_str()) {
+                let banned_ips_file = state.cfg.data_dir.join("banned_ips.json");
+                let mut banned = state.store.read_document(&banned_ips_file, json!({}));
+                if let Some(map) = banned.as_object_mut() {
+                    if map.remove(&target_ip).is_some() {
+                        let _ = state.store.write_document(&banned_ips_file, &banned);
+                    }
+                }
+            }
+        }
     }
 
     let admin_actor = mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, sid)
@@ -3483,14 +4013,22 @@ async fn mod_unban(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> 
         &admin_actor,
         "matrix_unban_user",
         json!({
-            "userId": target_user_id,
+            "userId": raw_input,
+            "resolvedCandidates": candidates,
+            "associatedEmails": associated_emails,
             "roomId": if explicit_room.is_empty() { "all" } else { explicit_room }
         }),
     );
 
     cors_json_response(
         200,
-        json!({ "ok": true, "userId": target_user_id, "unbanned": true }),
+        json!({
+            "ok": true,
+            "userId": raw_input,
+            "unbannedUserIds": candidates,
+            "unbannedEmails": associated_emails,
+            "unbanned": true
+        }),
     )
 }
 
@@ -3622,11 +4160,18 @@ async fn mod_slowmode(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) 
     let mut all = state.store.read_document(&settings_file, json!({}));
 
     if let Some(target_uid_raw) = user_id_opt {
-        let target_user_id = if !target_uid_raw.starts_with('@') {
-            format!("@{target_uid_raw}:mitch.pro")
-        } else {
-            target_uid_raw.to_string()
-        };
+        let target_user_id = resolve_all_matrix_user_ids_for_target(state, target_uid_raw)
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| {
+                let clean: String = target_uid_raw.chars().filter(|c| !c.is_whitespace()).collect();
+                if clean.starts_with('@') && clean.contains(':') {
+                    clean
+                } else {
+                    let u = clean.trim_start_matches('@').split(':').next().unwrap_or(&clean);
+                    format!("@{u}:mitch.pro")
+                }
+            });
         let uname = target_user_id
             .trim_start_matches('@')
             .split(':')
@@ -3719,18 +4264,26 @@ async fn mod_mute_user(state: &AppState, headers: &HeaderMap, body_bytes: &[u8])
     }
 
     let body_json: Value = serde_json::from_slice(body_bytes).unwrap_or(json!({}));
-    let mut target_user_id = body_json
+    let raw_input = body_json
         .get("userId")
         .and_then(|v| v.as_str())
         .unwrap_or("")
-        .trim()
-        .to_string();
-    if target_user_id.is_empty() {
+        .trim();
+    if raw_input.is_empty() {
         return cors_json_response(400, json!({ "error": "userId is required" }));
     }
-    if !target_user_id.starts_with('@') {
-        target_user_id = format!("@{target_user_id}:mitch.pro");
-    }
+    let target_user_id = resolve_all_matrix_user_ids_for_target(state, raw_input)
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| {
+            let clean: String = raw_input.chars().filter(|c| !c.is_whitespace()).collect();
+            if clean.starts_with('@') && clean.contains(':') {
+                clean
+            } else {
+                let u = clean.trim_start_matches('@').split(':').next().unwrap_or(&clean);
+                format!("@{u}:mitch.pro")
+            }
+        });
 
     let duration_seconds = std::cmp::max(
         0,
@@ -6306,6 +6859,95 @@ mod tests {
         // Test with unknown room
         let resp_unknown = handle_room_summary(&state, "nonexistent-room-xyz").await;
         assert_eq!(resp_unknown.status(), StatusCode::NOT_FOUND);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn test_matrix_unban_fuzzy_resolution_and_blacklist_cleanup() {
+        let (state, dir) = test_state();
+
+        // 1. Populate profiles.json with Long Tran
+        let profiles_file = state.data_dir().join("profiles.json");
+        let profiles = json!({
+            "long.tran@student.rjuhsd.us": {
+                "email": "long.tran@student.rjuhsd.us",
+                "username": "longtran",
+                "displayName": "Long Tran",
+                "nickname": "Long"
+            }
+        });
+        let _ = state.store.write_document(&profiles_file, &profiles);
+
+        // 2. Resolve candidates for "Long Tran"
+        let resolved = resolve_all_matrix_user_ids_for_target(&state, "Long Tran");
+        assert!(resolved.contains(&"@longtran:mitch.pro".to_string()));
+        assert!(resolved.contains(&"@long.tran:mitch.pro".to_string()));
+
+        let resolved_emails = resolve_all_emails_for_target(&state.store, &state.data_dir(), &state.id_secret, "Long Tran");
+        assert!(resolved_emails.contains(&"long.tran@student.rjuhsd.us".to_string()));
+
+        // 3. Populate matrix_room_settings.json with banned entry under "Long Tran" and "@longtran:mitch.pro"
+        let settings_file = state.data_dir().join("matrix_room_settings.json");
+        let settings = json!({
+            "!general:mitch.pro": {
+                "bannedUsers": {
+                    "Long Tran": { "userId": "Long Tran", "reason": "test" },
+                    "@longtran:mitch.pro": { "userId": "@longtran:mitch.pro", "reason": "test" }
+                },
+                "mutedUsers": {
+                    "@longtran:mitch.pro": { "userId": "@longtran:mitch.pro" }
+                }
+            }
+        });
+        let _ = state.store.write_document(&settings_file, &settings);
+
+        // Also put them in blacklist.json
+        let bl_file = state.cfg.data_dir.join("blacklist.json");
+        let bl = json!({
+            "long.tran@student.rjuhsd.us": { "reason": "banned" }
+        });
+        let _ = state.store.write_document(&bl_file, &bl);
+
+        // 4. Perform unban
+        unban_matrix_user_from_room(&state.id_secret, &state.store, &state.data_dir(), "!general:mitch.pro", "@longtran:mitch.pro").await;
+
+        let loaded_settings = state.store.read_document(&settings_file, json!({}));
+        let room = loaded_settings.get("!general:mitch.pro").unwrap();
+        let banned_users = room.get("bannedUsers").and_then(|v| v.as_object()).unwrap();
+        assert!(banned_users.is_empty(), "bannedUsers should be cleaned: {banned_users:?}");
+
+        // 5. Test mod_unban HTTP handler with staff authentication
+        let admins_file = state.store.base_dir.join("data/admins.json");
+        let admins = json!({
+            "owner": "admin@mitch.pro",
+            "admins": ["admin@mitch.pro"]
+        });
+        let _ = state.store.write_document(&admins_file, &admins);
+
+        let sid = mitch_lib::auth::issue_login_session(
+            &state.store,
+            &state.id_secret,
+            "admin@mitch.pro",
+            "admin@mitch.pro",
+        );
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "Cookie",
+            HeaderValue::from_str(&format!("studentId={sid}")).unwrap(),
+        );
+
+        let unban_body = serde_json::to_vec(&json!({
+            "userId": "Long Tran",
+            "roomId": "all"
+        })).unwrap();
+
+        let resp = mod_unban(&state, &headers, &unban_body).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let loaded_bl = state.store.read_document(&bl_file, json!({}));
+        assert!(loaded_bl.get("long.tran@student.rjuhsd.us").is_none(), "Blacklist must be lifted");
+        assert!(loaded_bl.get("longtran@student.rjuhsd.us").is_none(), "Blacklist must be lifted");
 
         let _ = std::fs::remove_dir_all(&dir);
     }

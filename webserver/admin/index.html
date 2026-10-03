@@ -2698,8 +2698,9 @@
           statusEl.textContent = `User ${userId} was banned`;
           statusEl.className = 'form-status ok';
         } else if (action === 'unban') {
-          await matrixUnbanUser(userId, true);
-          statusEl.textContent = `User ${userId} was unbanned`;
+          const res = await matrixUnbanUser(userId, true);
+          const details = (res && res.unbannedUserIds && res.unbannedUserIds.length) ? ` (${res.unbannedUserIds.join(', ')})` : '';
+          statusEl.textContent = `User ${userId} was unbanned${details}`;
           statusEl.className = 'form-status ok';
         } else if (action.startsWith('slowmode_')) {
           const sec = action === 'slowmode_off' ? 0 : parseInt(action.replace('slowmode_', '').replace('s', ''), 10);
@@ -2791,8 +2792,10 @@
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || 'Failed to unban user');
-      if (!skipConfirm) alert(`User ${userId} was unbanned.`);
+      const details = (d.unbannedUserIds && d.unbannedUserIds.length) ? ` (${d.unbannedUserIds.join(', ')})` : '';
+      if (!skipConfirm) alert(`User ${userId} was unbanned${details}.`);
       loadMatrixModeration();
+      return d;
     }
 
     async function matrixSetUserSlowmode(userId, seconds) {

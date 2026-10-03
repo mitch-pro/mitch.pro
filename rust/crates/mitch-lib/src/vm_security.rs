@@ -27,6 +27,9 @@ pub fn can_access_vm_record(
     let (Some(record), Some(actor)) = (record, actor) else {
         return false;
     };
+    if actor.get("isOwner").map(jsval::truthy).unwrap_or(false) {
+        return true;
+    }
     let owner = jsval::string(&jsval::or(record.get("ownerEmail"), json!("")))
         .trim()
         .to_lowercase();
@@ -545,6 +548,16 @@ mod tests {
         assert!(!can_access_vm_record(
             Some(&record("admin@mitch.pro", "assigned")),
             Some(&actor("admin2@mitch.pro", true)),
+            IS_ADMIN,
+            false,
+            None,
+        ));
+        // System owner allowed even on an admin-owned record.
+        let mut owner_actor = actor("owner@mitch.pro", true);
+        owner_actor["isOwner"] = json!(true);
+        assert!(can_access_vm_record(
+            Some(&record("admin@mitch.pro", "assigned")),
+            Some(&owner_actor),
             IS_ADMIN,
             false,
             None,
