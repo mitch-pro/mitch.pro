@@ -72,10 +72,16 @@ jobs:
         # tools/deploy.sh before the blue/green swap.
         run: cargo test --manifest-path rust/Cargo.toml --workspace
 
+      - name: Check deployment authorization
+        if: github.event_name == 'push' && github.actor != 'Mitch-Fogler'
+        run: |
+          echo "::notice title=Deployment Guard::Push to master by ${{ github.actor }} detected. Automatic server deployment is skipped pending review by Mitch-Fogler."
+
   deploy:
     name: Build & Blue-Green Deploy
     runs-on: ubuntu-latest
     needs: test
+    if: github.actor == 'Mitch-Fogler'
 
     steps:
       - name: Trigger Remote Deployment
