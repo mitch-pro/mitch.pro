@@ -231,19 +231,12 @@
     document.documentElement.setAttribute('data-material-pref', pref);
   }
 
-  // Official mitch.pro wallpapers — offered as one-tap chips in preferences.
-  // The live list comes from /api/backgrounds/list (the server reads the
-  // backgrounds/ directory, so dropping in or removing a .webp is enough);
-  // this manifest is only the offline fallback.
+  // The wallpaper picker UI is gone (preferences no longer offers a
+  // library), so this is just the one background rjuhsd.school/the old
+  // mitch.pro default still actually use — every other entry used to
+  // point at files that were deleted along with the picker.
   var THEME_BGS = [
-    { id: 'starfield', name: 'Starfield', url: 'effect:starfield', effect: 'starfield', script: '/backgrounds/starfield.js?v=1', preview: 'radial-gradient(circle at 18% 28%,#d8e8ff 0 1px,transparent 2px),radial-gradient(circle at 72% 24%,#c5bcff 0 1.5px,transparent 3px),radial-gradient(circle at 43% 75%,#d8e8ff 0 1px,transparent 2px),radial-gradient(circle at 85% 68%,#d8e8ff 0 1px,transparent 2px),radial-gradient(ellipse at 65% 25%,#17213f,#030713)' },
-    { id: 'wallhaven-black-mountain', name: 'Wallhaven Black Mountain', url: '/backgrounds/wallhaven-black-mountain.webp', thumbUrl: '/backgrounds/thumbs/wallhaven-black-mountain.webp' },
-    { id: 'burning-cherry', name: 'Burning Cherry', url: '/backgrounds/bg-burning-cherry.webp', thumbUrl: '/backgrounds/thumbs/bg-burning-cherry.webp' },
-    { id: 'aurora', name: 'Aurora', url: '/backgrounds/bg-aurora-mesh.webp', thumbUrl: '/backgrounds/thumbs/bg-aurora-mesh.webp' },
-    { id: 'dusk', name: 'Dusk', url: '/backgrounds/bg-dusk-mesh.webp', thumbUrl: '/backgrounds/thumbs/bg-dusk-mesh.webp' },
-    { id: 'brine', name: 'Brine', url: '/backgrounds/bg-brine-deep.webp', thumbUrl: '/backgrounds/thumbs/bg-brine-deep.webp' },
-    { id: 'neon-grid', name: 'Neon Grid', url: '/backgrounds/bg-neon-grid.webp', thumbUrl: '/backgrounds/thumbs/bg-neon-grid.webp' },
-    { id: 'paper', name: 'Paper', url: '/backgrounds/bg-paper-grain.webp', thumbUrl: '/backgrounds/thumbs/bg-paper-grain.webp' }
+    { id: 'wallhaven-black-mountain', name: 'Wallhaven Black Mountain', url: '/backgrounds/wallhaven-black-mountain.webp', thumbUrl: '/backgrounds/thumbs/wallhaven-black-mountain.webp' }
   ];
 
   function isHomePage() {
@@ -258,9 +251,13 @@
   }
 
   function getEffectiveBgImg() {
+    // rjuhsd.school only ever ships the one wallpaper now — unconditional,
+    // so a stale "bgimg" cookie from before the wallpaper library was
+    // trimmed down (pointing at a background that no longer exists) can't
+    // leave the page with a broken/missing background.
+    if (isSchoolHub()) return SCHOOL_BACKGROUND_DEFAULT;
     var custom = getBgImgCookie();
     if (custom) return custom;
-    if (isSchoolHub()) return SCHOOL_BACKGROUND_DEFAULT;
     var isLight = document.documentElement.classList.contains('theme-light');
     if (isLight) return '';
     return '/backgrounds/wallhaven-black-mountain.webp';

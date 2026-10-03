@@ -1,15 +1,10 @@
 # proxy
 
-To install dependencies:
+Node.js + Xvfb stream proxy (`stream_server.cjs`) used for browser-stream
+relaying — built via `Dockerfile.proxy` and run as the `proxy` service in
+the root `docker-compose.yml` (port 8081).
 
 ```bash
-bun install
+npm install
+node stream_server.cjs
 ```
-
-To run:
-
-```bash
-bun run index.ts
-```
-
-This project was created using `bun init` in bun v1.3.13. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
