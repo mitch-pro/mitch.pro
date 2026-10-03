@@ -1107,12 +1107,12 @@ pub fn check_rate_limit(
 // Port of server.js:6160-6260. Shape (corrected by exploring the live data):
 // admins.json is a LIST OF EMAILS PER ROLE — `{owners: string[], admins:
 // string[], coOwners?: string[]}` — NOT `{email: {rank}}`. moderators.json is
-// a plain JSON array of emails. The hierarchy is flat, not cumulative:
-// `isAdminEmail` covers owners+co-owners+config-admins; moderators are a
-// DISJOINT set. `isOwnerEmail` grants co-owners full owner privileges.
-
-/// `SITE_CO_OWNER_EMAILS` (server.js:6215) — hardcoded, not data-driven.
-pub const SITE_CO_OWNER_EMAIL: &str = "tyler.thompson1@student.rjuhsd.us";
+// admins.json is a LIST OF EMAILS PER ROLE — `{owners: string[], admins:
+// string[], coOwners?: string[]}`. Moderators live in moderators.json,
+// a plain JSON array of emails. The hierarchy is:
+// Owner (highest authority) > Co-Owner > Admin > Moderator.
+// Co-owners receive broad administrative capabilities, but only true Owners
+// have root privileges (e.g. adding/deleting co-owners and admins).
 
 /// `loadAdminConfig()` (server.js:6211) — `{owners, admins, coOwners?}` with
 /// the JS defaults applied when a key is missing. Re-read on every call.
@@ -1151,16 +1151,15 @@ pub fn owner_member_emails(store: &DataStore) -> Vec<String> {
     load_admin_config(store).owners
 }
 
-/// `coOwnerMemberEmails()` (6227) — hardcoded set ∪ configured, deduped.
+/// `coOwnerMemberEmails()` — loaded dynamically from data/admins.json["coOwners"].
 pub fn co_owner_member_emails(store: &DataStore) -> Vec<String> {
-    let mut out = vec![SITE_CO_OWNER_EMAIL.to_owned()];
-    out.extend(
+    dedup_normalized(
         load_admin_config(store)
             .co_owners
             .into_iter()
-            .filter(|e| !e.is_empty()),
-    );
-    dedup_normalized(out)
+            .filter(|e| !e.is_empty())
+            .collect(),
+    )
 }
 
 /// `moderatorEmails()` (6160) — `loadJson(MODERATORS_FILE, [])`, a bare array.
@@ -1206,16 +1205,16 @@ pub fn is_co_owner_email(store: &DataStore, email: &str) -> bool {
     co_owner_member_emails(store).contains(&norm)
 }
 
-/// `isOwnerEmail(email)` (6236) — co-owners get full owner privileges.
+/// `isOwnerEmail(email)` — strictly checks primary owners from data/admins.json.
+/// Co-owners and admins do NOT receive root owner privileges.
 pub fn is_owner_email(store: &DataStore, email: &str) -> bool {
     if email.is_empty() {
         return false;
     }
     let norm = normalize_email(email);
-    is_co_owner_email(store, &norm)
-        || owner_member_emails(store)
-            .iter()
-            .any(|o| normalize_email(o) == norm)
+    owner_member_emails(store)
+        .iter()
+        .any(|o| normalize_email(o) == norm)
 }
 
 /// `isAdminEmail(email)` (6246) — dev-test backdoor, then site-admin membership.
@@ -1434,14 +1433,11 @@ mod tests {
             )
             .unwrap();
 
-        // Co-owners get full owner privileges (isOwnerEmail includes isCoOwnerEmail).
-        assert!(is_owner_email(&store, "co-owner@mitch.pro"));
+        // Co-owners get broad admin access, but true owner is strictly for owners.
+        assert!(is_co_owner_email(&store, "co-owner@mitch.pro"));
         assert!(is_co_owner_email(&store, "configured-coowner@mitch.pro"));
-        assert!(
-            is_co_owner_email(&store, SITE_CO_OWNER_EMAIL),
-            "hardcoded co-owner"
-        );
-        assert!(is_owner_email(&store, "configured-coowner@mitch.pro"));
+        assert!(!is_owner_email(&store, "co-owner@mitch.pro"));
+        assert!(!is_owner_email(&store, "configured-coowner@mitch.pro"));
         assert!(is_owner_email(&store, "owner@mitch.pro"));
         // Plain config admins: admin yes, owner no.
         assert!(is_admin_email(&store, "admin@mitch.pro"));
@@ -1456,7 +1452,6 @@ mod tests {
             "owner@mitch.pro",
             "co-owner@mitch.pro",
             "configured-coowner@mitch.pro",
-            SITE_CO_OWNER_EMAIL,
             "admin@mitch.pro",
         ] {
             assert!(site.contains(&normalize_email(email)), "{email} missing");

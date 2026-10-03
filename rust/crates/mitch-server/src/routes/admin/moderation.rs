@@ -92,6 +92,33 @@ pub fn handle(
         ));
     }
 
+    // POST /api/admin/co-owners (owners only).
+    if path == "/api/admin/co-owners" && *method == Method::POST {
+        if !ctx.is_owner(state) {
+            return Some(forbidden());
+        }
+        return Some(set_co_owner(state, body, ctx));
+    }
+
+    // GET /api/admin/co-owners (owners only).
+    if path == "/api/admin/co-owners" && *method == Method::GET {
+        if !ctx.is_owner(state) {
+            return Some(forbidden());
+        }
+        return Some(json_response(
+            200,
+            json!({ "coOwners": mitch_lib::auth::co_owner_member_emails(&state.store) }),
+        ));
+    }
+
+    // POST /api/admin/audit/revert (admins and owners).
+    if path == "/api/admin/audit/revert" && *method == Method::POST {
+        if !ctx.is_admin(state) {
+            return Some(forbidden());
+        }
+        return Some(revert_admin_action(state, body, ctx, headers));
+    }
+
     // GET /api/admin/moderator-panel.
     if path == "/api/admin/moderator-panel" && *method == Method::GET {
         if !ctx.is_any_admin(state) {
@@ -508,6 +535,9 @@ fn set_admin(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response {
     }
     let target = mitch_lib::auth::normalize_email(&target_raw);
     let active = body.get("active").and_then(|v| v.as_bool()) == Some(true);
+    if !active && mitch_lib::auth::is_owner_email(&state.store, &target) {
+        return json_response(403, json!({ "error": "Cannot delete or demote the owner" }));
+    }
     let admins_file = state.cfg.base_dir.join("data/admins.json");
     let mut doc = state.store.read_document(&admins_file, json!({}));
     let mut admins: Vec<String> = doc
@@ -555,6 +585,282 @@ fn set_admin(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response {
         state.cfg.data_dir.clone(),
     );
     json_response(200, json!({ "ok": true, "admins": admins }))
+}
+
+/// `POST /api/admin/co-owners` (owners only). Updates `data/admins.json["coOwners"]`.
+fn set_co_owner(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response {
+    let admin_email = ctx.email(state);
+    let target_raw = body
+        .get("email")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if target_raw.is_empty() {
+        return json_response(400, json!({ "error": "email required" }));
+    }
+    let target = mitch_lib::auth::normalize_email(&target_raw);
+    if mitch_lib::auth::is_owner_email(&state.store, &target) {
+        return json_response(403, json!({ "error": "Owner cannot be modified as a co-owner" }));
+    }
+    let active = body.get("active").and_then(|v| v.as_bool()) == Some(true);
+    let admins_file = state.cfg.base_dir.join("data/admins.json");
+    let mut doc = state.store.read_document(&admins_file, json!({}));
+    let mut co_owners: Vec<String> = doc
+        .get("coOwners")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if active {
+        if !co_owners
+            .iter()
+            .any(|m| mitch_lib::auth::normalize_email(m) == target)
+        {
+            co_owners.push(target_raw.clone());
+        }
+    } else {
+        co_owners.retain(|m| mitch_lib::auth::normalize_email(m) != target);
+    }
+
+    if let Some(obj) = doc.as_object_mut() {
+        obj.insert("coOwners".to_string(), json!(co_owners));
+    } else {
+        doc = json!({ "coOwners": co_owners });
+    }
+
+    let _ = state.store.write_document(&admins_file, &doc);
+    mitch_lib::admin::log_admin_action(
+        &state.store,
+        &state.cfg.data_dir,
+        &admin_email,
+        if active {
+            "add_co_owner"
+        } else {
+            "remove_co_owner"
+        },
+        json!({ "target": target_raw }),
+    );
+    spawn_staff_sync(
+        state.id_secret.clone(),
+        state.store.clone(),
+        state.cfg.data_dir.clone(),
+    );
+    json_response(200, json!({ "ok": true, "coOwners": co_owners }))
+}
+
+/// `POST /api/admin/audit/revert` — reverts a logged admin action from admin_actions.json.
+fn revert_admin_action(
+    state: &Arc<AppState>,
+    body: &Value,
+    ctx: &AdminCtx,
+    headers: &HeaderMap,
+) -> Response {
+    let admin_email = ctx.email(state);
+    let action_id = body
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+    if action_id.is_empty() {
+        return json_response(400, json!({ "error": "Action id required" }));
+    }
+
+    let actions_file = state.cfg.data_dir.join("admin_actions.json");
+    let actions = state
+        .store
+        .read_document(&actions_file, json!([]))
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+
+    let target_action = actions.iter().find(|a| {
+        a.get("id").and_then(|v| v.as_str()).unwrap_or("") == action_id
+    });
+
+    let Some(action_obj) = target_action else {
+        return json_response(404, json!({ "error": "Action not found in audit log" }));
+    };
+
+    let action_name = action_obj.get("action").and_then(|v| v.as_str()).unwrap_or("");
+    let details = action_obj.get("details").unwrap_or(&Value::Null);
+
+    let revert_result: Result<String, String> = match action_name {
+        "ban_account" => {
+            let email = details
+                .get("targetEmail")
+                .or_else(|| details.get("email"))
+                .or_else(|| details.get("target"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if email.is_empty() {
+                Err("Missing target email in action log".into())
+            } else {
+                let resp = unban_account(state, &json!({ "email": email }), ctx, headers);
+                if resp.status().is_success() {
+                    Ok(format!("Unbanned {}", email))
+                } else {
+                    Err("Failed to unban account".into())
+                }
+            }
+        }
+        "unban_account" => {
+            let email = details
+                .get("targetEmail")
+                .or_else(|| details.get("email"))
+                .or_else(|| details.get("target"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if email.is_empty() {
+                Err("Missing target email in action log".into())
+            } else {
+                let resp = ban_account(state, &json!({ "email": email, "reason": "Reverted unban action" }), ctx, headers);
+                if resp.status().is_success() {
+                    Ok(format!("Banned {}", email))
+                } else {
+                    Err("Failed to re-ban account".into())
+                }
+            }
+        }
+        "add_admin" => {
+            if !ctx.is_owner(state) {
+                return forbidden();
+            }
+            let target = details.get("target").and_then(|v| v.as_str()).unwrap_or("");
+            if target.is_empty() {
+                Err("Missing target in action log".into())
+            } else {
+                let resp = set_admin(state, &json!({ "email": target, "active": false }), ctx);
+                if resp.status().is_success() {
+                    Ok(format!("Removed admin {}", target))
+                } else {
+                    Err("Failed to remove admin".into())
+                }
+            }
+        }
+        "remove_admin" => {
+            if !ctx.is_owner(state) {
+                return forbidden();
+            }
+            let target = details.get("target").and_then(|v| v.as_str()).unwrap_or("");
+            if target.is_empty() {
+                Err("Missing target in action log".into())
+            } else {
+                let resp = set_admin(state, &json!({ "email": target, "active": true }), ctx);
+                if resp.status().is_success() {
+                    Ok(format!("Restored admin {}", target))
+                } else {
+                    Err("Failed to restore admin".into())
+                }
+            }
+        }
+        "add_co_owner" => {
+            if !ctx.is_owner(state) {
+                return forbidden();
+            }
+            let target = details.get("target").and_then(|v| v.as_str()).unwrap_or("");
+            if target.is_empty() {
+                Err("Missing target in action log".into())
+            } else {
+                let resp = set_co_owner(state, &json!({ "email": target, "active": false }), ctx);
+                if resp.status().is_success() {
+                    Ok(format!("Removed co-owner {}", target))
+                } else {
+                    Err("Failed to remove co-owner".into())
+                }
+            }
+        }
+        "remove_co_owner" => {
+            if !ctx.is_owner(state) {
+                return forbidden();
+            }
+            let target = details.get("target").and_then(|v| v.as_str()).unwrap_or("");
+            if target.is_empty() {
+                Err("Missing target in action log".into())
+            } else {
+                let resp = set_co_owner(state, &json!({ "email": target, "active": true }), ctx);
+                if resp.status().is_success() {
+                    Ok(format!("Restored co-owner {}", target))
+                } else {
+                    Err("Failed to restore co-owner".into())
+                }
+            }
+        }
+        "add_moderator" => {
+            let target = details.get("target").and_then(|v| v.as_str()).unwrap_or("");
+            if target.is_empty() {
+                Err("Missing target in action log".into())
+            } else {
+                let resp = set_moderator(state, &json!({ "email": target, "active": false }), ctx);
+                if resp.status().is_success() {
+                    Ok(format!("Removed moderator {}", target))
+                } else {
+                    Err("Failed to remove moderator".into())
+                }
+            }
+        }
+        "remove_moderator" => {
+            let target = details.get("target").and_then(|v| v.as_str()).unwrap_or("");
+            if target.is_empty() {
+                Err("Missing target in action log".into())
+            } else {
+                let resp = set_moderator(state, &json!({ "email": target, "active": true }), ctx);
+                if resp.status().is_success() {
+                    Ok(format!("Restored moderator {}", target))
+                } else {
+                    Err("Failed to restore moderator".into())
+                }
+            }
+        }
+        "shadow_ban" => {
+            let email = details.get("targetEmail").or_else(|| details.get("email")).and_then(|v| v.as_str()).unwrap_or("");
+            if email.is_empty() {
+                Err("Missing target email".into())
+            } else {
+                let sb_file = state.cfg.data_dir.join("shadow_bans.json");
+                let mut sb = state.store.read_document(&sb_file, json!([]));
+                let norm = mitch_lib::auth::normalize_email(email);
+                if let Some(arr) = sb.as_array_mut() {
+                    arr.retain(|x| mitch_lib::auth::normalize_email(x.as_str().unwrap_or("")) != norm);
+                    let _ = state.store.write_document(&sb_file, &sb);
+                }
+                Ok(format!("Unshadow-banned {}", email))
+            }
+        }
+        "add_coins" | "gift_coins" => {
+            let email = details.get("targetEmail").or_else(|| details.get("email")).and_then(|v| v.as_str()).unwrap_or("");
+            let amount = details.get("amount").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            if email.is_empty() || amount <= 0.0 {
+                Err("Missing target email or positive amount in action log".into())
+            } else {
+                mitch_lib::coins::add_coins(&state.store, &state.cfg.data_dir, email, -amount, 1.0, "reverted admin action");
+                Ok(format!("Deducted {} coins from {}", amount, email))
+            }
+        }
+        other => Err(format!("Action '{}' cannot be automatically reverted", other)),
+    };
+
+    match revert_result {
+        Ok(msg) => {
+            mitch_lib::admin::log_admin_action(
+                &state.store,
+                &state.cfg.data_dir,
+                &admin_email,
+                "revert_action",
+                json!({
+                    "revertedActionId": action_id,
+                    "originalAction": action_name,
+                    "message": msg,
+                }),
+            );
+            json_response(200, json!({ "ok": true, "message": msg, "reverted": action_name }))
+        }
+        Err(err) => json_response(400, json!({ "error": err })),
+    }
 }
 
 /// `POST /api/admin/moderator-requests/resolve` — approve/reject a pending

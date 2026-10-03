@@ -635,6 +635,16 @@
     <section class="tool-group" id="owner-tools">
       <div class="section-head"><h2>Site operations</h2><span class="tag">Owner access</span></div>
       <div class="actions-panel" id="owner-operations"></div>
+      <section class="action-card" id="coowner-role-card" hidden style="border-color:#38bdf8;background:rgba(14,165,233,.12);margin-bottom:18px;">
+        <h2>Co-Owner Access</h2>
+        <p>Co-owners have elevated administrative privileges across the site, but remain subordinate to the primary Owner. Co-owners cannot add, remove, or modify the Owner, and only the Owner can delete co-owners or admins.</p>
+        <div id="coowner-role-list" style="font-size:.78rem;margin-bottom:10px;"></div>
+        <form onsubmit="addCoOwner(event)" style="display:flex;gap:7px;flex-wrap:wrap;">
+          <input id="coowner-role-email" type="email" placeholder="existing-user@email.com" required style="flex:1;min-width:220px">
+          <button type="submit" style="width:auto;background:#0284c7;color:#fff;border-color:#0284c7;">Grant Co-Owner</button>
+        </form>
+        <div id="coowner-role-status" class="form-status" role="status"></div>
+      </section>
       <section class="action-card" id="admin-role-card" hidden style="border-color:#ef4444;background:rgba(127,29,29,.16);margin-bottom:18px;">
         <h2>Full Administrator Access</h2>
         <p><strong>Danger zone.</strong> Administrators have broad control over accounts, moderation, content, coins, and site operations. Owner changes here apply immediately with no approval step.</p>
@@ -1541,6 +1551,64 @@
       } catch (e) {}
     }
 
+    async function loadCoOwners() {
+      const list = document.getElementById('coowner-role-list');
+      if (!list || !currentUser?.isOwner) return;
+      try {
+        const r = await fetch('/api/admin/co-owners', { credentials: 'include', cache: 'no-store', headers: getAdminHeaders() });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || 'Could not load co-owners.');
+        list.innerHTML = (d.coOwners || []).map(email => `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;padding:7px 9px;border:1px solid rgba(56,189,248,.3);border-radius:8px;">
+            <span>${esc(email)}</span>
+            <button type="button" data-danger onclick='removeCoOwner(${JSON.stringify(email)})' style="padding:4px 8px;font-size:11px;width:auto;">Remove Co-Owner</button>
+          </div>
+        `).join('') || '<div class="muted">No co-owners configured.</div>';
+      } catch (err) {
+        setStatus('coowner-role-status', err.message, 'err');
+      }
+    }
+
+    async function addCoOwner(event) {
+      event.preventDefault();
+      const input = document.getElementById('coowner-role-email');
+      const email = input.value.trim();
+      if (!email || !(await customConfirm('Grant Co-Owner access', `${email} will receive co-owner administrative access across the website. Continue?`))) return;
+      setStatus('coowner-role-status', 'Granting access...', '');
+      try {
+        await postAdmin('/api/admin/co-owners', { email, active: true });
+        input.value = '';
+        setStatus('coowner-role-status', 'Co-Owner access granted immediately.', 'ok');
+        await loadCoOwners();
+      } catch (err) { setStatus('coowner-role-status', err.message, 'err'); }
+    }
+
+    async function removeCoOwner(email) {
+      if (!(await customConfirm('Remove Co-Owner access', `Remove co-owner access from ${email}?`))) return;
+      setStatus('coowner-role-status', 'Removing access...', '');
+      try {
+        await postAdmin('/api/admin/co-owners', { email, active: false });
+        setStatus('coowner-role-status', 'Co-Owner access removed.', 'ok');
+        await loadCoOwners();
+      } catch (err) { setStatus('coowner-role-status', err.message, 'err'); }
+    }
+
+    async function revertAdminAction(id, actionName) {
+      if (!id) return;
+      if (!(await customConfirm('Revert Admin Action', `Are you sure you want to reverse this action (${actionName})?`))) return;
+      try {
+        const resp = await postAdmin('/api/admin/audit/revert', { id });
+        if (resp && resp.ok) {
+          await customAlert('Action Reverted', resp.message || 'Action reverted successfully.');
+          await loadData();
+        } else {
+          throw new Error(resp?.error || 'Revert failed.');
+        }
+      } catch (err) {
+        await customAlert('Revert Failed', err.message || 'Could not revert action.');
+      }
+    }
+
     async function loadAdministrators() {
       const list = document.getElementById('admin-role-list');
       if (!list || !currentUser?.isOwner) return;
@@ -2153,7 +2221,7 @@
     }
 
     function renderTables() {
-      table('adminActions-table', ['Time', 'Actor', 'Role', 'Action', 'Parameters', 'IP / Metadata'], filtered.adminActions, r => {
+      table('adminActions-table', ['Time', 'Actor', 'Role', 'Action', 'Parameters', 'IP / Metadata', 'Action'], filtered.adminActions, r => {
         const d = r.details || {};
         const role = d.role || (r.actor.includes('admin') || r.actor === 'owner' ? 'admin' : 'moderator');
         const ip = d.ip || '';
@@ -2171,6 +2239,11 @@
 
         const metaStr = ip ? `<span class="pill" style="font-family:monospace; font-size:0.68rem;" title="${esc(ua)}">${esc(ip)}</span>` : '<span class="muted">-</span>';
 
+        const canRevert = ['ban_account', 'unban_account', 'add_admin', 'remove_admin', 'add_co_owner', 'remove_co_owner', 'add_moderator', 'remove_moderator', 'shadow_ban', 'add_coins', 'gift_coins'].includes(r.action);
+        const revertBtn = canRevert && r.action !== 'revert_action'
+          ? `<button type="button" class="mini warn" onclick='revertAdminAction(${JSON.stringify(r.id)}, ${JSON.stringify(r.action)})' style="padding:3px 7px;font-size:0.7rem;cursor:pointer;">Revert</button>`
+          : '<span class="muted">-</span>';
+
         return '<tr>' +
           '<td>' + esc(fmtTime(r.ts)) + '</td>' +
           '<td>' + esc(r.actor) + '</td>' +
@@ -2178,6 +2251,7 @@
           '<td><span class="pill ok">' + esc(r.action) + '</span></td>' +
           '<td class="muted">' + esc(JSON.stringify(params)) + '</td>' +
           '<td>' + metaStr + '</td>' +
+          '<td>' + revertBtn + '</td>' +
           '</tr>';
       });
       table('sentNotifications-table', ['Time', 'Target', 'Title', 'Source', 'Status', 'Action'], filtered.sentNotifications, r =>
@@ -3133,15 +3207,19 @@
       document.querySelector('.owner-nav').hidden = !currentUser.isOwner;
       if (currentUser.isOwner) {
         document.getElementById('owner-operations').appendChild(document.getElementById('soft-maintenance-card'));
+        document.getElementById('coowner-role-card').hidden = false;
         document.getElementById('admin-role-card').hidden = false;
+        loadCoOwners();
         loadAdministrators();
       }
       if (location.hash === '#owner-tools' && !currentUser.isOwner) activateToolGroup('approval-tools');
       const eyebrow = document.querySelector('.staff-eyebrow');
       if (eyebrow && currentUser.isCoOwner) eyebrow.textContent = 'mitch.pro / co-owner systems';
       document.body.classList.toggle('moderator-mode', !!(currentUser.isModerator && !currentUser.isAdmin));
-      document.getElementById('role-note').textContent = currentUser.isCoOwner
-        ? 'Co-owner mode: full owner access is active. Operational and account changes apply immediately and are logged.'
+      document.getElementById('role-note').textContent = currentUser.isOwner
+        ? 'Owner mode: full unrestricted root control of site, accounts, co-owners, and administrators.'
+        : currentUser.isCoOwner
+        ? 'Co-owner mode: elevated administrative access is active. Modifying admins and co-owners requires primary Owner access.'
         : currentUser.isAdmin
         ? 'Admin mode: changes apply immediately and every privileged action is logged.'
         : (currentUser.isModerator

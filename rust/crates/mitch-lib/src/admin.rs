@@ -732,19 +732,17 @@ pub fn create_moderator_action_request(
 
 // ── Premium granting ─────────────────────────────────────────────────────────
 
-/// `premiumGrantAdminEmails()` — hardcoded (server.js:7008).
-pub const PREMIUM_GRANT_ADMIN_EMAILS: &[&str] =
-    &["admin@mitch.pro", "tyler.thompson1@student.rjuhsd.us"];
-
-/// `canGrantPremiumEmail(email)` — narrower than admin.
+/// `can_grant_premium_email(email)` — checks whether an email is an authorized owner, co-owner, or admin.
 pub fn can_grant_premium_email(store: &DataStore, email: &str) -> bool {
     if email.is_empty() || !crate::auth::is_admin_email(store, email) {
         return false;
     }
     let norm = normalize_email(email);
-    PREMIUM_GRANT_ADMIN_EMAILS
-        .iter()
-        .any(|a| normalize_email(a) == norm)
+    crate::auth::is_owner_email(store, &norm)
+        || crate::auth::is_co_owner_email(store, &norm)
+        || crate::auth::admin_member_emails(store)
+            .iter()
+            .any(|a| normalize_email(a) == norm)
 }
 
 /// `canGrantPremiumId(sid)`.

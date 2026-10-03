@@ -1,0 +1,135 @@
+name: PR Security Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  security-audit:
+    name: Security & Privilege Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Analyze PR Diff & Permissions
+        id: audit
+        run: |
+          set -euo pipefail
+
+          AUTHOR="${{ github.event.pull_request.user.login }}"
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          echo "Auditing PR by $AUTHOR ($BASE_SHA..$HEAD_SHA)..."
+
+          CHANGED_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" || true)
+          DIFF_CONTENT=$(git diff -U1 "$BASE_SHA" "$HEAD_SHA" || true)
+
+          ONLY_STATIC=true
+          TOUCHES_ADMIN=false
+          TOUCHES_WORKFLOWS=false
+          SUSPICIOUS=false
+          FINDINGS=""
+
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            case "$file" in
+              webserver/*.css|webserver/rjuhsd-assets/*|docs/*|*.md|LICENSE|*.txt)
+                ;;
+              data/admins.json|data/moderators.json)
+                ONLY_STATIC=false
+                TOUCHES_ADMIN=true
+                FINDINGS="${FINDINGS}\n- ⚠️ **Admin/Moderator file modified**: \`$file\` (Privilege escalation risk)"
+                ;;
+              .github/workflows/*)
+                ONLY_STATIC=false
+                TOUCHES_WORKFLOWS=true
+                FINDINGS="${FINDINGS}\n- ⚠️ **CI/CD Workflow modified**: \`$file\`"
+                ;;
+              *)
+                ONLY_STATIC=false
+                ;;
+            esac
+          done <<< "$CHANGED_FILES"
+
+          if echo "$DIFF_CONTENT" | grep -Ei '^\+.*(SITE_CO_OWNER|is_owner|eval\(|exec\(|child_process|curl.*\|.*sh|chmod \+x)' >/dev/null; then
+            SUSPICIOUS=true
+            FINDINGS="${FINDINGS}\n- ⚠️ **Privilege or Execution Pattern**: Detected addition of privileged keywords (\`is_owner\`, \`eval\`, or shell execution)."
+          fi
+
+          if echo "$DIFF_CONTENT" | grep -Ei '^\+.*(BEGIN PRIVATE KEY|admin\.key|secret_key|ghp_[A-Za-z0-9]+|CLOUDFLARE_API_TOKEN=[a-zA-Z0-9]+)' >/dev/null; then
+            SUSPICIOUS=true
+            FINDINGS="${FINDINGS}\n- 🚨 **Potential Secret or Token**: Detected possible hardcoded token or private key string."
+          fi
+
+          if echo "$DIFF_CONTENT" | grep -Ei '^\+.*(jumpscare|admin-jumpscare)' >/dev/null; then
+            SUSPICIOUS=true
+            FINDINGS="${FINDINGS}\n- ⚠️ **Jumpscare/Broadcast Alert**: Diff references jumpscare assets or broadcasts."
+          fi
+
+          {
+            echo "### 🛡️ Automated PR Security Screener Report"
+            echo ""
+            echo "| Metric | Evaluation |"
+            echo "| :--- | :--- |"
+            echo "| **PR Author** | \`$AUTHOR\` |"
+            echo "| **Static UI Only** | \`$ONLY_STATIC\` |"
+            echo "| **Privilege Risk** | \`$TOUCHES_ADMIN\` |"
+            echo "| **Workflow Risk** | \`$TOUCHES_WORKFLOWS\` |"
+            echo ""
+            if [ "$SUSPICIOUS" = "true" ] || [ "$TOUCHES_ADMIN" = "true" ]; then
+              echo "#### 🚨 Security Alert: Review Flagged"
+              echo "This PR contains changes that modify privileges, workflows, or sensitive logic:"
+              echo -e "$FINDINGS"
+              echo ""
+              echo "**Action Required:** Mitch-Fogler must thoroughly review this diff before approving."
+            elif [ "$ONLY_STATIC" = "true" ]; then
+              echo "#### ✅ Low Risk: Static Changes Only"
+              echo "This PR touches only static styles, documentation, or public assets. No backend code, execution paths, or privilege sets were modified."
+            else
+              echo "#### ℹ️ Code Review Required"
+              echo "This PR modifies application code (\`.rs\` or \`.js\`). It must be reviewed and approved by Mitch-Fogler before deployment to the server."
+            fi
+          } > pr_report.md
+
+      - name: Post PR Review Comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('pr_report.md', 'utf8');
+            const { owner, repo, number: issue_number } = context.issue;
+
+            const comments = await github.rest.issues.listComments({
+              owner,
+              repo,
+              issue_number
+            });
+
+            const botComment = comments.data.find(comment => 
+              comment.user.login === 'github-actions[bot]' && 
+              comment.body.includes('Automated PR Security Screener Report')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: botComment.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body
+              });
+            }

@@ -458,7 +458,6 @@ fn admin_members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let cosmetics = state
         .store
         .read_document(&data_file(state, "cosmetics.json"), json!({}));
-    let developer_norm = auth::normalize_email("tyler.thompson1@student.rjuhsd.us");
     let members: Vec<Value> = auth::admin_member_emails(&state.store)
         .iter()
         .filter(|e| e.as_str() != TEST_ACCOUNT_EMAIL && !auth::is_owner_email(&state.store, e))
@@ -473,10 +472,15 @@ fn admin_members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
                 Some(&prof),
                 Some(&viewer_email),
             );
+            let role = if auth::is_co_owner_email(&state.store, &norm) {
+                "Co-owner"
+            } else {
+                "Admin"
+            };
             json!({
                 "displayName": processed.get("displayName").cloned().unwrap_or(Value::Null),
                 "email": processed.get("email").cloned().unwrap_or(Value::Null),
-                "role": if norm == developer_norm { "Admin/developer." } else { "Admin" },
+                "role": role,
                 "color": shop::public_active_color(&state.store, email, cosm.get("activeColor").unwrap_or(&Value::Null))
                     .map(|c| json!(c))
                     .unwrap_or(Value::Null),
