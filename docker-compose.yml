@@ -323,36 +323,16 @@ services:
     image: livekit/livekit-server:latest
     container_name: mitch-livekit
     restart: unless-stopped
-    # Only ports 443/80 are forwarded on the router (home DMZ, dynamic IP) —
-    # 7881 (TCP) and 7882 (UDP) below are NOT reachable from outside the LAN,
-    # and even on-LAN they can fail (VPNs, restrictive wifi). Direct UDP/TCP
-    # is still attempted first (free, lower latency when it works), but
-    # turn_servers below gives every client a TURN-over-TLS:443 fallback
-    # through a third-party relay, which rides over the same port already
-    # used for HTTPS and gets through almost any network, including school
-    # wifi. See TURN_RELAY_HOST/TURN_RELAY_SECRET in .env.example.
-    environment:
-      LIVEKIT_CONFIG: |
-        port: 7880
-        bind_addresses:
-          - "0.0.0.0"
-        keys:
-          mitchlivekit: mitch-secret-livekit-matrix-key-2026
-        rtc:
-          udp_port: 7882
-          tcp_port: 7881
-          use_external_ip: true
-          turn_servers:
-            # Defaults below are inert placeholders, not real credentials.
-            # livekit-server refuses to start if a turn_servers entry has an
-            # empty secret, so until TURN_RELAY_HOST/TURN_RELAY_SECRET are
-            # set for real, this entry just fails to gather that one ICE
-            # candidate at runtime — same no-TURN behavior as before, but
-            # the server still boots either way.
-            - host: ${TURN_RELAY_HOST:-turn.invalid}
-              port: 443
-              protocol: tls
-              secret: ${TURN_RELAY_SECRET:-unconfigured}
+    command:
+      - --keys
+      - "mitchlivekit: mitch-secret-livekit-matrix-key-2026"
+      - --bind
+      - 0.0.0.0
+      - --udp-port
+      - "7882"
+      - --rtc.tcp_port
+      - "7881"
+      - --rtc.use_external_ip
     ports:
       - "127.0.0.1:7880:7880"
       - "7881:7881"
