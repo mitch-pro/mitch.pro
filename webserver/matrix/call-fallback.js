@@ -113,7 +113,7 @@
     ws = new WebSocket(relayUrl(roomId));
     ws.binaryType = 'arraybuffer';
     ws.addEventListener('open', () => {
-      setStatus('live (fallback)');
+      setStatus('live');
       startRecorder();
     });
     ws.addEventListener('message', (ev) => {
@@ -183,8 +183,8 @@
       'position:fixed;left:12px;bottom:12px;z-index:9999;display:flex;' +
       'align-items:center;gap:8px;font:12px system-ui,sans-serif;';
     const btn = document.createElement('button');
-    btn.textContent = '☎️ Fallback call';
-    btn.title = 'Audio call over WebSocket — use if the normal call has no sound';
+    btn.textContent = '☎️ Call';
+    btn.title = 'Start an audio call';
     btn.style.cssText =
       'padding:6px 10px;border-radius:6px;border:1px solid #444;' +
       'background:#1a1a1a;color:#eee;cursor:pointer;';
@@ -194,7 +194,7 @@
     btn.addEventListener('click', () => {
       if (joined) {
         leave();
-        btn.textContent = '☎️ Fallback call';
+        btn.textContent = '☎️ Call';
         return;
       }
       const roomId = typeof window.mitchGetActiveRoomIdentifier === 'function'
@@ -206,7 +206,7 @@
         return;
       }
       join(roomId);
-      btn.textContent = '☎️ End fallback call';
+      btn.textContent = '☎️ End call';
     });
     wrap.appendChild(btn);
     wrap.appendChild(statusEl);
