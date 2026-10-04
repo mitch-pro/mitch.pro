@@ -104,6 +104,48 @@
     });
   }
 
+  // Cinny also sets img.srcset for some images (repairImage() above already
+  // strips it post-repair, confirming it's used) — a raw, unauthenticated
+  // srcset candidate the browser picks before the .src blob swap lands would
+  // 401 exactly the same way. srcset's value is a comma-separated list of
+  // "url descriptor" pairs, not a single URL, so it isn't resolved/replaced
+  // like src is — it's just suppressed whenever it looks like matrix media,
+  // since the (now-authenticated) src alone is enough to display the image.
+  const imgSrcsetDescriptor = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'srcset');
+  if (imgSrcsetDescriptor && imgSrcsetDescriptor.set) {
+    Object.defineProperty(HTMLImageElement.prototype, 'srcset', {
+      configurable: true,
+      enumerable: imgSrcsetDescriptor.enumerable,
+      get: imgSrcsetDescriptor.get,
+      set(value) {
+        if (typeof value === 'string' && (mediaPath.test(value) || value.includes('mxc://'))) {
+          return;
+        }
+        imgSrcsetDescriptor.set.call(this, value);
+      }
+    });
+  }
+
+  // Belt-and-suspenders: if anything sets src/srcset via setAttribute()
+  // instead of the property (React usually uses the property for these, but
+  // "usually" isn't "always"), route it through the same two interceptors
+  // above rather than letting it reach the DOM unauthenticated.
+  const nativeSetAttribute = Element.prototype.setAttribute;
+  Element.prototype.setAttribute = function (name, value) {
+    if (this instanceof HTMLImageElement) {
+      const lower = typeof name === 'string' ? name.toLowerCase() : '';
+      if (lower === 'src') {
+        this.src = value;
+        return;
+      }
+      if (lower === 'srcset') {
+        this.srcset = value;
+        return;
+      }
+    }
+    return nativeSetAttribute.call(this, name, value);
+  };
+
   new MutationObserver(mutations => {
     for (const mutation of mutations) {
       if (mutation.type === 'attributes') repair(mutation.target);

@@ -568,6 +568,14 @@ pub async fn handle(
     let is_compatibility_endpoint = path.starts_with("/api/")
         || path.starts_with("/_matrix/")
         || path.starts_with("/.well-known/matrix/")
+        // LiveKit calls (token endpoints, the SDK's /rtc/.../validate
+        // reachability check, the /rtc WS signaling proxy) are a backend API
+        // surface, not a page to canonicalize — the call widget is given
+        // "https://mitch.pro/livekit" as its focus URL regardless of which
+        // mitch.pro-family domain it's embedded in, so redirecting those
+        // requests to mitchdog.com just turns them into a cross-origin
+        // redirect with no CORS headers, which the browser blocks outright.
+        || path.starts_with("/livekit/")
         || path == "/ws"
         || path == "/health"
         || path == "/healthz";
