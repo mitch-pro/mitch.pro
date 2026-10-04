@@ -12,6 +12,7 @@ pub mod backgrounds;
 pub mod battleship;
 pub mod blog;
 pub mod blooket;
+pub mod call_relay;
 pub mod canvas;
 pub mod casino;
 pub mod chess_vs;

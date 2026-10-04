@@ -98,6 +98,19 @@ pub struct AppState {
     /// The fan-out channel standing in for the JS per-socket `ws.send` loop;
     /// every connected broadcast socket subscribes.
     pub ws_tx: tokio::sync::broadcast::Sender<Arc<crate::ws::WsEnvelope>>,
+    /// `/calls/ws/{room_id}` binary relay rooms — the WebSocket/MediaRecorder
+    /// calling fallback for when WebRTC/TURN can't get through. Keyed by
+    /// room id; each room maps connection id → that participant's sender.
+    /// Not a mixer — every binary frame a participant sends is relayed
+    /// verbatim to every other participant currently in the room.
+    pub call_relay_rooms: std::sync::Mutex<
+        std::collections::HashMap<
+            String,
+            std::collections::HashMap<u64, tokio::sync::mpsc::UnboundedSender<axum::extract::ws::Message>>,
+        >,
+    >,
+    /// Connection id allocator for `call_relay_rooms`.
+    pub call_relay_next_id: std::sync::atomic::AtomicU64,
     /// `cvOnline` (server.js:881) — chess-vs online map; `touchUserPresence`
     /// writes under both the raw email and the normalized key. Consumers land
     /// with Step 12 (chess-vs).
@@ -402,6 +415,8 @@ impl AppState {
             // 1024-slot queue: per-socket delivery is lossless under normal
             // load; a lagged receiver skips forward like a slow JS client.
             ws_tx: tokio::sync::broadcast::channel(1024).0,
+            call_relay_rooms: std::sync::Mutex::new(std::collections::HashMap::new()),
+            call_relay_next_id: std::sync::atomic::AtomicU64::new(1),
             cv_online: std::sync::Mutex::new(std::collections::HashMap::new()),
             game_portal_sessions: std::sync::Mutex::new(std::collections::HashMap::new()),
             // Idle/mini-game session maps: clicker/typing/logic/richard are
