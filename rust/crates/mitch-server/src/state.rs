@@ -354,6 +354,7 @@ impl AppState {
         let richard_map = Self::load_session_map(&store, &cfg.data_dir, "richard_sessions.json");
         let logic_dictionary = Self::load_logic_dictionary(&cfg.data_dir);
         let cv_games_map = Self::load_cv_games(&store, &cfg.data_dir);
+        let jeopardy_lobbies = crate::routes::jeopardy::load_lobbies(&store, &cfg.data_dir);
         Self {
             cfg,
             static_cache: StaticCache::new(),
@@ -416,7 +417,7 @@ impl AppState {
             bj_games: std::sync::Mutex::new(std::collections::HashMap::new()),
             casino_history: std::sync::Mutex::new(std::collections::HashMap::new()),
             betting_feed: std::sync::Mutex::new(Vec::new()),
-            jeopardy_lobbies: std::sync::Mutex::new(Vec::new()),
+            jeopardy_lobbies: std::sync::Mutex::new(jeopardy_lobbies),
             jeopardy_clues: std::sync::Mutex::new(crate::routes::jeopardy::ClueCache::default()),
             bs_challenges: std::sync::Mutex::new(indexmap::IndexMap::new()),
             bs_games: std::sync::Mutex::new(indexmap::IndexMap::new()),

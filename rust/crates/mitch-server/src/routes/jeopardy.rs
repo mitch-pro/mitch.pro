@@ -18,6 +18,7 @@
 
 use axum::http::{HeaderMap, Method};
 use indexmap::IndexMap;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::sync::Arc;
 
@@ -113,9 +114,28 @@ fn load_clues(state: &AppState) -> Vec<JeopardyClue> {
     cache.clues.clone()
 }
 
+/// Round-trip-safe `f64` NaN <-> JSON `null` mapping for `ActiveClue.wager`'s
+/// NaN-as-unset sentinel, used only for on-disk persistence.
+mod nan_as_null {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(value: &f64, s: S) -> Result<S::Ok, S::Error> {
+        if value.is_nan() {
+            s.serialize_none()
+        } else {
+            s.serialize_some(value)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
+        Ok(Option::<f64>::deserialize(d)?.unwrap_or(f64::NAN))
+    }
+}
+
 // ── Lobby state model ────────────────────────────────────────────────────────
 
 /// One board cell (server.js:1024-1031).
+#[derive(Clone, Serialize, Deserialize)]
 pub struct BoardClue {
     pub value: i64,
     pub clue: String,
@@ -129,6 +149,7 @@ pub struct BoardClue {
 /// null/unset sentinel — the only falsy semantics the code relies on is
 /// `activeClue.wager || val` (null, 0 and NaN all fall back to the clue's
 /// value), so a NaN flag covers every construction site.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ActiveClue {
     pub cat: String,
     pub val: f64,
@@ -142,6 +163,12 @@ pub struct ActiveClue {
     pub answer_deadline: Option<i64>,
     pub buzzed_by: Option<String>,
     pub buzzer: Option<i64>,
+    // Persisted as JSON null when NaN (see `nan_as_null`) — serde_json's
+    // Value conversion already turns a NaN f64 into null on the way out,
+    // but deserializing null back into a plain f64 field errors without
+    // this, which would otherwise fail every lobby with a daily-double in
+    // flight when reloading data/jeopardy_lobbies.json after a restart.
+    #[serde(with = "nan_as_null")]
     pub wager: f64,
     pub wager_by: Option<String>,
     pub tab_penalty_for: Vec<String>,
@@ -152,6 +179,7 @@ pub struct ActiveClue {
 }
 
 /// One `finalJeopardy.revealedAnswers[p]` entry (server.js:21025-21031).
+#[derive(Clone, Serialize, Deserialize)]
 pub struct RevealedAnswer {
     pub answer: String,
     pub correct: bool,
@@ -160,6 +188,7 @@ pub struct RevealedAnswer {
 }
 
 /// The final-jeopardy round (server.js:21493-21502).
+#[derive(Clone, Serialize, Deserialize)]
 pub struct FinalJeopardy {
     pub cat: String,
     pub clue: String,
@@ -177,6 +206,12 @@ pub struct FinalJeopardy {
 /// One `jeopardyLobbies[gameId]` (server.js:21252-21259). The keyed maps use
 /// serde_json `Map` (insertion-ordered under the workspace's
 /// `preserve_order` feature) so `Object.entries` order matches.
+///
+/// Persisted in full (unmasked) to `data/jeopardy_lobbies.json` after every
+/// mutating request — see `persist_lobbies`/`load_lobbies` — so a server
+/// restart, including a blue-green deploy swap, resumes in-progress games
+/// instead of resetting them.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct JeopardyLobby {
     pub id: String,
     pub join_code: String,
@@ -307,7 +342,38 @@ fn route(
         "/api/jeopardy/final/answer" => final_answer(&mut lobbies, body, my_norm),
         _ => unreachable!(),
     };
+    persist_lobbies(state, &lobbies);
     Some(out)
+}
+
+const JEOPARDY_LOBBIES_FILE: &str = "jeopardy_lobbies.json";
+
+/// Snapshots every lobby, full fidelity and unmasked, to disk. Called after
+/// every request that can mutate `jeopardy_lobbies` so a server restart —
+/// including a blue-green deploy swap — resumes in-progress games instead of
+/// silently resetting them (the previous behavior: lobbies lived in-memory
+/// only and vanished on every deploy). Cheap: this feature only ever sees a
+/// handful of concurrent games, so a full-snapshot write per request is
+/// simpler and less error-prone than diffing or hooking every mutation site.
+fn persist_lobbies(state: &AppState, lobbies: &[JeopardyLobby]) {
+    if let Ok(value) = serde_json::to_value(lobbies) {
+        let _ = state
+            .store
+            .write_document(&state.data_dir().join(JEOPARDY_LOBBIES_FILE), &value);
+    }
+}
+
+/// Loads lobbies left over from before a restart (see `persist_lobbies`).
+/// Finished games are dropped on load — nothing left to resume. Malformed
+/// data (e.g. a hand-edited file) falls back to an empty list rather than
+/// failing startup.
+pub(crate) fn load_lobbies(
+    store: &mitch_lib::data::DataStore,
+    data_dir: &std::path::Path,
+) -> Vec<JeopardyLobby> {
+    let raw = store.read_document(&data_dir.join(JEOPARDY_LOBBIES_FILE), json!([]));
+    let lobbies: Vec<JeopardyLobby> = serde_json::from_value(raw).unwrap_or_default();
+    lobbies.into_iter().filter(|l| l.status != "over").collect()
 }
 
 /// `String(body.x || '')` — the JS `|| ''` first, then the String coercion.
@@ -1057,6 +1123,11 @@ fn state_ep(
             obj.remove("joinCode");
         }
     }
+    // check_timeouts() above can mutate lobby state (phase transitions,
+    // final-jeopardy evaluation) purely from the passage of time, with no
+    // player action — persist here too, not just on the explicit action
+    // endpoints below.
+    persist_lobbies(state, &lobbies);
     resp(200, &out)
 }
 
@@ -1823,5 +1894,122 @@ mod tests {
         assert_eq!(effective_wager(&ac, 400.0), 400.0);
         ac.wager = 1200.0;
         assert_eq!(effective_wager(&ac, 400.0), 1200.0);
+    }
+
+    fn temp_data_dir(label: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "mitch-test-jeopardy-{label}-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("data")).unwrap();
+        dir
+    }
+
+    /// A lobby mid-daily-double (NaN wager, a board, a buzzed-in player) —
+    /// the exact shape that previously vanished on every restart/deploy.
+    fn sample_lobby() -> JeopardyLobby {
+        let mut scores = IndexMap::new();
+        scores.insert("alice@school.edu".to_string(), 600);
+        scores.insert("bob@school.edu".to_string(), 200);
+        let mut board = IndexMap::new();
+        board.insert(
+            "History".to_string(),
+            vec![BoardClue {
+                value: 400,
+                clue: "c".into(),
+                answer: "a".into(),
+                answered: false,
+                daily_double: true,
+                answered_by: None,
+            }],
+        );
+        JeopardyLobby {
+            id: "game1".into(),
+            join_code: "ABC".into(),
+            host: "alice@school.edu".into(),
+            players: vec!["alice@school.edu".into(), "bob@school.edu".into()],
+            max_players: 10,
+            status: "active".into(),
+            scores,
+            categories: Some(vec!["History".into()]),
+            board: Some(board),
+            active_clue: Some(ActiveClue {
+                cat: "History".into(),
+                val: 400.0,
+                clue: "c".into(),
+                answer: "a".into(),
+                is_daily_double: true,
+                phase: "wagering".into(),
+                buzz_open_at: None,
+                wager_open_at: Some(1000),
+                answer_deadline: None,
+                buzzed_by: Some("alice@school.edu".into()),
+                buzzer: Some(1000),
+                wager: f64::NAN,
+                wager_by: None,
+                tab_penalty_for: Vec::new(),
+                wrong_players: Vec::new(),
+                revealed_correct: None,
+                reveal_close_at: None,
+            }),
+            turn: "alice@school.edu".into(),
+            created_at: 1000,
+            tab_hidden: IndexMap::new(),
+            round_over: false,
+            final_score: None,
+            final_jeopardy: None,
+        }
+    }
+
+    #[test]
+    fn persisted_lobby_survives_a_restart_including_nan_wager() {
+        let dir = temp_data_dir("roundtrip");
+        let store = mitch_lib::data::DataStore::open(&dir, &dir.join("data")).unwrap();
+        let data_dir = dir.join("data");
+
+        let lobbies = vec![sample_lobby()];
+        let value = serde_json::to_value(&lobbies).unwrap();
+        store
+            .write_document(&data_dir.join(JEOPARDY_LOBBIES_FILE), &value)
+            .unwrap();
+
+        let loaded = load_lobbies(&store, &data_dir);
+        assert_eq!(loaded.len(), 1);
+        let lobby = &loaded[0];
+        assert_eq!(lobby.id, "game1");
+        assert_eq!(lobby.scores.get("alice@school.edu"), Some(&600));
+        assert_eq!(lobby.players, vec!["alice@school.edu", "bob@school.edu"]);
+        let ac = lobby.active_clue.as_ref().unwrap();
+        assert!(ac.wager.is_nan(), "NaN wager must round-trip as NaN, not fail or become 0");
+        assert_eq!(ac.buzzed_by.as_deref(), Some("alice@school.edu"));
+        let board = lobby.board.as_ref().unwrap();
+        assert_eq!(board.get("History").unwrap()[0].value, 400);
+    }
+
+    #[test]
+    fn finished_games_are_not_reloaded() {
+        let dir = temp_data_dir("finished");
+        let store = mitch_lib::data::DataStore::open(&dir, &dir.join("data")).unwrap();
+        let data_dir = dir.join("data");
+
+        let mut finished = sample_lobby();
+        finished.status = "over".to_string();
+        finished.active_clue = None;
+        let value = serde_json::to_value(vec![finished]).unwrap();
+        store
+            .write_document(&data_dir.join(JEOPARDY_LOBBIES_FILE), &value)
+            .unwrap();
+
+        assert!(load_lobbies(&store, &data_dir).is_empty());
+    }
+
+    #[test]
+    fn missing_lobbies_file_loads_empty_without_panicking() {
+        let dir = temp_data_dir("missing");
+        let store = mitch_lib::data::DataStore::open(&dir, &dir.join("data")).unwrap();
+        assert!(load_lobbies(&store, &dir.join("data")).is_empty());
     }
 }

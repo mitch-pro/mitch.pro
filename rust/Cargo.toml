@@ -22,7 +22,7 @@ serde_json = { version = "1", features = ["preserve_order"] }
 # Insertion-ordered typed maps (jeopardy scores/board/fj maps iterate in JS
 # Object.entries order; serde_json::Map<K, V> is generic in 1.0.151 but only
 # Map<String, Value> carries the map API).
-indexmap = "2"
+indexmap = { version = "2", features = ["serde"] }
 axum = { version = "0.8", features = ["ws", "macros"] }
 # axum::extract::ws re-exports hyper's upgrade half as hyper::upgrade::OnUpgrade.
 hyper = { version = "1", features = ["http1"] }

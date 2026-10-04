@@ -233,7 +233,20 @@ send_notification "Rebuilding and starting webserver-$INACTIVE_SLOT (Port $INACT
 # 3. Build and boot the inactive slot container, SSH gateway, conduit, LiveKit SFU, mail-rs, and tor-browser
 echo "[deploy] Rebuilding and starting webserver-$INACTIVE_SLOT, ssh-gateway, conduit, livekit, mail-rs, and tor-browser..."
 run_docker_compose --progress=plain up -d --build "webserver-$INACTIVE_SLOT" ssh-gateway conduit livekit mail-rs tor-browser
-run_docker_compose restart conduit 2>/dev/null || true
+
+# Conduit does not hot-reload conduit.toml (federation/trusted-server config
+# changes need a process restart to take effect), which is why this used to
+# force `restart conduit` on every single deploy. But that meant every
+# deploy — even a pure webserver/UI change with nothing to do with Matrix —
+# caused a few seconds of 502s on every Matrix-proxied request while conduit
+# bounced. Only force the restart when something that actually affects
+# Conduit changed in this push (or when explicitly requested).
+if echo "$CHANGED_FILES" | grep -qE '^(conduit\.toml|docker-compose\.yml)$' || [ "${FORCE_FULL_DEPLOY:-0}" = "1" ]; then
+    echo "[deploy] conduit.toml or docker-compose.yml changed — restarting conduit to pick up the new config..."
+    run_docker_compose restart conduit 2>/dev/null || true
+else
+    echo "[deploy] No conduit-affecting config changed — leaving the running conduit container untouched (no Matrix downtime this deploy)."
+fi
 
 # 4. Poll the inactive container's health check until it is fully ready
 echo "[deploy] Waiting for webserver-$INACTIVE_SLOT to be fully started and responsive..."
