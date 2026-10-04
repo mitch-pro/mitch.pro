@@ -2843,52 +2843,102 @@ fn extract_matrix_query_param(query: &str, key: &str) -> Option<String> {
         .map(|(_, v)| v.into_owned())
 }
 
-async fn api_gifs_trending(_state: &AppState, _headers: &HeaderMap, _search: &str) -> Response {
+const GIF_PAGE_SIZE: i64 = 25;
+
+/// Giphy trending/search, one page.
+async fn fetch_giphy_gifs(query: Option<&str>, offset: i64) -> Vec<Value> {
     let mut giphy_key = std::env::var("GIPHY_API_KEY").unwrap_or_default().trim().to_string();
     if giphy_key.is_empty() {
         giphy_key = "sXpGFDGZs0Dv1mmNFvYaGUvYwKX0PWIh".to_string();
     }
-
-    let url = format!(
-        "https://api.giphy.com/v1/gifs/trending?api_key={}&limit=50&rating=g",
-        giphy_key
-    );
-    if let Ok(client) = reqwest::Client::builder().timeout(std::time::Duration::from_secs(6)).build() {
-        if let Ok(resp) = client.get(&url).send().await {
-            if resp.status().is_success() {
-                if let Ok(data) = resp.json::<Value>().await {
-                    if let Some(results) = data.get("data").and_then(|r| r.as_array()) {
-                        let mapped: Vec<Value> = results.iter().filter_map(|item| {
-                            let id = item.get("id")?.as_str()?;
-                            let title = item.get("title").and_then(|c| c.as_str()).unwrap_or("");
-                            let images = item.get("images")?.as_object()?;
-                            let orig = images.get("original")?.as_object()?;
-                            let gif_url = orig.get("url")?.as_str()?;
-                            let preview = images.get("fixed_width_small")
-                                .or_else(|| images.get("fixed_width"))
-                                .or_else(|| images.get("downsized"))
-                                .and_then(|tg| tg.get("url"))
-                                .and_then(|u| u.as_str())
-                                .unwrap_or(gif_url);
-                            Some(json!({
-                                "id": id,
-                                "title": title,
-                                "url": gif_url,
-                                "preview": preview,
-                                "width": orig.get("width").and_then(|w| w.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(320),
-                                "height": orig.get("height").and_then(|h| h.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(240),
-                            }))
-                        }).collect();
-                        if !mapped.is_empty() {
-                            return cors_json_response(200, json!({ "results": mapped }));
-                        }
-                    }
-                }
-            }
+    let url = match query {
+        Some(q) => {
+            let enc_q = form_urlencoded::byte_serialize(q.as_bytes()).collect::<String>();
+            format!(
+                "https://api.giphy.com/v1/gifs/search?api_key={giphy_key}&q={enc_q}&limit={GIF_PAGE_SIZE}&offset={offset}&rating=g"
+            )
         }
+        None => format!(
+            "https://api.giphy.com/v1/gifs/trending?api_key={giphy_key}&limit={GIF_PAGE_SIZE}&offset={offset}&rating=g"
+        ),
+    };
+    let Ok(client) = reqwest::Client::builder().timeout(std::time::Duration::from_secs(6)).build() else {
+        return Vec::new();
+    };
+    let Ok(resp) = client.get(&url).send().await else {
+        return Vec::new();
+    };
+    if !resp.status().is_success() {
+        return Vec::new();
+    }
+    let Ok(data) = resp.json::<Value>().await else {
+        return Vec::new();
+    };
+    let Some(results) = data.get("data").and_then(|r| r.as_array()) else {
+        return Vec::new();
+    };
+    results
+        .iter()
+        .filter_map(|item| {
+            let id = item.get("id")?.as_str()?;
+            let title = item.get("title").and_then(|c| c.as_str()).unwrap_or("");
+            let images = item.get("images")?.as_object()?;
+            let orig = images.get("original")?.as_object()?;
+            let gif_url = orig.get("url")?.as_str()?;
+            let preview = images
+                .get("fixed_width_small")
+                .or_else(|| images.get("fixed_width"))
+                .or_else(|| images.get("downsized"))
+                .and_then(|tg| tg.get("url"))
+                .and_then(|u| u.as_str())
+                .unwrap_or(gif_url);
+            Some(json!({
+                "id": id,
+                "title": title,
+                "url": gif_url,
+                "preview": preview,
+                "width": orig.get("width").and_then(|w| w.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(320),
+                "height": orig.get("height").and_then(|h| h.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(240),
+            }))
+        })
+        .collect()
+}
+
+/// Fetches one Giphy page and shapes it for the client's infinite scroll:
+/// `giphyOffset` is the offset to request next, `hasMore` tells the client
+/// whether to bother. Falls back to the small curated list only on a first
+/// page that comes back empty (key missing/rate-limited/offline) — a later
+/// empty page just means "no more," not a fallback trigger.
+async fn fetch_gif_page(query: Option<&str>, giphy_offset: i64) -> Response {
+    let items = fetch_giphy_gifs(query, giphy_offset).await;
+
+    if items.is_empty() && giphy_offset == 0 {
+        return cors_json_response(
+            200,
+            json!({
+                "results": curated_gifs(query),
+                "giphyOffset": 0,
+                "hasMore": false,
+            }),
+        );
     }
 
-    cors_json_response(200, json!({ "results": curated_gifs(None) }))
+    let count = items.len() as i64;
+    cors_json_response(
+        200,
+        json!({
+            "results": items,
+            "giphyOffset": giphy_offset + count,
+            "hasMore": count >= GIF_PAGE_SIZE,
+        }),
+    )
+}
+
+async fn api_gifs_trending(_state: &AppState, _headers: &HeaderMap, search: &str) -> Response {
+    let giphy_offset = extract_matrix_query_param(search, "giphyOffset")
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(0);
+    fetch_gif_page(None, giphy_offset).await
 }
 
 async fn api_gifs_search(_state: &AppState, _headers: &HeaderMap, search: &str) -> Response {
@@ -2896,53 +2946,10 @@ async fn api_gifs_search(_state: &AppState, _headers: &HeaderMap, search: &str) 
     if q.is_empty() {
         return api_gifs_trending(_state, _headers, search).await;
     }
-
-    let mut giphy_key = std::env::var("GIPHY_API_KEY").unwrap_or_default().trim().to_string();
-    if giphy_key.is_empty() {
-        giphy_key = "sXpGFDGZs0Dv1mmNFvYaGUvYwKX0PWIh".to_string();
-    }
-
-    let enc_q = form_urlencoded::byte_serialize(q.as_bytes()).collect::<String>();
-    let url = format!(
-        "https://api.giphy.com/v1/gifs/search?api_key={}&q={}&limit=50&rating=g",
-        giphy_key, enc_q
-    );
-    if let Ok(client) = reqwest::Client::builder().timeout(std::time::Duration::from_secs(6)).build() {
-        if let Ok(resp) = client.get(&url).send().await {
-            if resp.status().is_success() {
-                if let Ok(data) = resp.json::<Value>().await {
-                    if let Some(results) = data.get("data").and_then(|r| r.as_array()) {
-                        let mapped: Vec<Value> = results.iter().filter_map(|item| {
-                            let id = item.get("id")?.as_str()?;
-                            let title = item.get("title").and_then(|c| c.as_str()).unwrap_or("");
-                            let images = item.get("images")?.as_object()?;
-                            let orig = images.get("original")?.as_object()?;
-                            let gif_url = orig.get("url")?.as_str()?;
-                            let preview = images.get("fixed_width_small")
-                                .or_else(|| images.get("fixed_width"))
-                                .or_else(|| images.get("downsized"))
-                                .and_then(|tg| tg.get("url"))
-                                .and_then(|u| u.as_str())
-                                .unwrap_or(gif_url);
-                            Some(json!({
-                                "id": id,
-                                "title": title,
-                                "url": gif_url,
-                                "preview": preview,
-                                "width": orig.get("width").and_then(|w| w.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(320),
-                                "height": orig.get("height").and_then(|h| h.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(240),
-                            }))
-                        }).collect();
-                        if !mapped.is_empty() {
-                            return cors_json_response(200, json!({ "results": mapped }));
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    cors_json_response(200, json!({ "results": curated_gifs(Some(&q)) }))
+    let giphy_offset = extract_matrix_query_param(search, "giphyOffset")
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(0);
+    fetch_gif_page(Some(&q), giphy_offset).await
 }
 
 async fn api_gifs_proxy(_state: &AppState, _headers: &HeaderMap, search: &str) -> Response {

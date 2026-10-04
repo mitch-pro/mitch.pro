@@ -793,6 +793,10 @@
         let searchTimeout = null;
         let favoriteIds = new Set();
         const FAVORITES_SENTINEL = '__favorites__';
+        let currentGifQuery = '';
+        let gifGiphyOffset = 0;
+        let gifHasMore = false;
+        let loadingMoreGifs = false;
 
         function getOrCreatePopover() {
           let popover = document.getElementById('mitch-gif-popover');
@@ -808,18 +812,30 @@
                 <button type="button" class="mitch-gif-tab" data-tab="stickers">Stickers</button>
               </div>
               <div class="mitch-gif-search-box">
-                <input type="text" placeholder="Search Tenor & Giphy..." aria-label="Search GIFs and Stickers" id="mitch-gif-search-input" autocomplete="off" />
+                <input type="text" placeholder="Search Giphy..." aria-label="Search GIFs and Stickers" id="mitch-gif-search-input" autocomplete="off" />
               </div>
               <button type="button" class="mitch-gif-close-btn" aria-label="Close" id="mitch-gif-close">&times;</button>
             </div>
             <div class="mitch-gif-categories" id="mitch-gif-categories"></div>
             <div id="mitch-gif-content" class="mitch-gif-grid"></div>
             <div class="mitch-gif-footer">
-              <span>Tenor &amp; Giphy • Mitch.pro</span>
+              <span id="mitch-gif-attribution">Powered by GIPHY</span>
               <span id="mitch-gif-status">Ready</span>
             </div>
           `;
           document.body.appendChild(popover);
+
+          // Infinite scroll — fetch the next page once the grid is scrolled
+          // near the bottom (favorites/stickers have no pagination, so this
+          // is a no-op outside the gifs tab via the gifHasMore/currentGifQuery guard).
+          const gifContent = document.getElementById('mitch-gif-content');
+          if (gifContent) {
+            gifContent.addEventListener('scroll', () => {
+              if (gifContent.scrollTop + gifContent.clientHeight >= gifContent.scrollHeight - 150) {
+                loadMoreGifs();
+              }
+            });
+          }
 
           // Tab click handlers
           popover.querySelectorAll('.mitch-gif-tab').forEach(tabBtn => {
@@ -830,8 +846,10 @@
               const input = document.getElementById('mitch-gif-search-input');
               if (input) {
                 input.value = '';
-                input.placeholder = activeTab === 'gifs' ? 'Search Tenor & Giphy...' : 'Search stickers...';
+                input.placeholder = activeTab === 'gifs' ? 'Search Giphy...' : 'Search stickers...';
               }
+              const attribution = document.getElementById('mitch-gif-attribution');
+              if (attribution) attribution.textContent = activeTab === 'gifs' ? 'Powered by GIPHY' : 'Mitch.pro Stickers';
               renderCategories();
               loadContent('');
             });
@@ -899,11 +917,14 @@
           container.innerHTML = '';
 
           if (activeTab === 'gifs') {
-            const gifCats = ['Trending', 'Laugh', 'Excited', 'Cat', 'Doge', 'Anime', 'Dance', 'Sad', 'Facepalm', 'Cheers', 'Confused', 'Thumbs Up', 'Favorites'];
-            gifCats.forEach((cat, idx) => {
+            const gifCats = ['Favorites', 'Trending', 'Laugh', 'Excited', 'Cat', 'Doge', 'Anime', 'Dance', 'Sad', 'Facepalm', 'Cheers', 'Confused', 'Thumbs Up'];
+            gifCats.forEach((cat) => {
               const pill = document.createElement('button');
               pill.type = 'button';
-              pill.className = 'mitch-gif-pill' + (idx === 0 ? ' active' : '');
+              // Trending is the actual default content (loadContent('') on
+              // open) regardless of where it sits in this list, so the
+              // active pill must key off the category, not its position.
+              pill.className = 'mitch-gif-pill' + (cat === 'Trending' ? ' active' : '');
               pill.textContent = cat === 'Favorites' ? '★ Favorites' : cat;
               pill.addEventListener('click', () => {
                 container.querySelectorAll('.mitch-gif-pill').forEach(p => p.classList.remove('active'));
@@ -946,6 +967,9 @@
             }
             if (status) status.textContent = 'Loading…';
             content.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 30px; color: var(--t-fg3); font-size: 13px;">Searching GIFs…</div>';
+            currentGifQuery = query;
+            gifGiphyOffset = 0;
+            gifHasMore = false;
 
             try {
               const endpoint = query
@@ -956,6 +980,8 @@
               const data = await res.json();
               const items = data.results || [];
               cachedGifs = items;
+              gifGiphyOffset = data.giphyOffset || 0;
+              gifHasMore = !!data.hasMore;
               renderGifs(items);
               if (status) status.textContent = `${items.length} GIFs`;
             } catch (e) {
@@ -987,11 +1013,15 @@
         }
 
         function renderGifs(items) {
+          renderGifCards(items, false);
+        }
+
+        function renderGifCards(items, append) {
           const content = document.getElementById('mitch-gif-content');
           if (!content) return;
-          content.innerHTML = '';
+          if (!append) content.innerHTML = '';
 
-          if (items.length === 0) {
+          if (!append && items.length === 0) {
             content.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 30px; color: var(--t-fg3); font-size: 13px;">No GIFs found</div>';
             return;
           }
@@ -1111,6 +1141,35 @@
           } catch (e) {
             content.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 30px; color: #ff6b6b; font-size: 13px;">Could not load favorites</div>';
             if (status) status.textContent = 'Offline';
+          }
+        }
+
+        async function loadMoreGifs() {
+          if (activeTab !== 'gifs' || currentGifQuery === FAVORITES_SENTINEL) return;
+          if (loadingMoreGifs || !gifHasMore) return;
+          loadingMoreGifs = true;
+          const status = document.getElementById('mitch-gif-status');
+          if (status) status.textContent = 'Loading more…';
+          try {
+            const params = new URLSearchParams();
+            if (currentGifQuery) params.set('q', currentGifQuery);
+            params.set('giphyOffset', String(gifGiphyOffset));
+            const endpoint = currentGifQuery
+              ? `/api/matrix/gifs/search?${params}`
+              : `/api/matrix/gifs/trending?${params}`;
+            const res = await fetch(endpoint, { credentials: 'same-origin' });
+            if (!res.ok) throw new Error('Failed to load more GIFs');
+            const data = await res.json();
+            const items = data.results || [];
+            cachedGifs = cachedGifs.concat(items);
+            gifGiphyOffset = data.giphyOffset || gifGiphyOffset;
+            gifHasMore = !!data.hasMore;
+            renderGifCards(items, true);
+            if (status) status.textContent = `${cachedGifs.length} GIFs`;
+          } catch (e) {
+            if (status) status.textContent = 'Could not load more';
+          } finally {
+            loadingMoreGifs = false;
           }
         }
 
