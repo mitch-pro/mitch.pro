@@ -148,6 +148,21 @@ pub fn handle_http(
     None
 }
 
+/// Called only when `handle_http` returned `None` for a `/livekit/*` path
+/// and the request is not a WebSocket upgrade (that case is handled by
+/// `handle_rtc_upgrade` instead) — see `handle_http_passthrough`.
+pub async fn handle_http_fallback(
+    method: &Method,
+    path: &str,
+    search: &str,
+    body_bytes: &[u8],
+) -> Option<Response> {
+    if !path.starts_with("/livekit") {
+        return None;
+    }
+    Some(handle_http_passthrough(method, path, search, body_bytes).await)
+}
+
 fn token_endpoint(
     state: &Arc<AppState>,
     method: &Method,
@@ -337,8 +352,8 @@ pub fn handle_rtc_upgrade(
     }))
 }
 
-async fn run_rtc_proxy(client: WebSocket, search: String) {
-    // server.js:24934 — env host, else the docker detection.
+/// server.js:24934 — env host, else the docker detection.
+fn livekit_upstream_addr() -> (String, String) {
     let livekit_host = std::env::var("LIVEKIT_HOST").unwrap_or_else(|_| {
         if std::env::var("DOCKER_ENV").as_deref() == Ok("1")
             || std::path::Path::new("/.dockerenv").exists()
@@ -349,6 +364,96 @@ async fn run_rtc_proxy(client: WebSocket, search: String) {
         }
     });
     let livekit_port = std::env::var("LIVEKIT_PORT").unwrap_or_else(|_| "7880".to_string());
+    (livekit_host, livekit_port)
+}
+
+/// Plain-HTTP passthrough for any `/livekit/*` request that isn't a token
+/// endpoint or a WebSocket upgrade — e.g. the LiveKit client SDK's
+/// `/rtc/.../validate` pre-flight reachability check. Without this, those
+/// requests fell through to the generic 404 handler, which adds no CORS
+/// headers — harmless same-origin, but it silently breaks every call made
+/// from a different mitch.pro-family domain (mitchdog.com, rjuhsd.school,
+/// sexypickleclub.com) than the one LiveKit itself is reachable on, since
+/// the browser blocks the cross-origin fetch outright before it ever
+/// reaches this server.
+pub async fn handle_http_passthrough(
+    method: &Method,
+    path: &str,
+    search: &str,
+    body_bytes: &[u8],
+) -> Response {
+    let (livekit_host, livekit_port) = livekit_upstream_addr();
+    let Some(suffix) = path.strip_prefix("/livekit") else {
+        return json_with_cors(StatusCode::NOT_FOUND.as_u16(), json!({ "error": "not found" }), false);
+    };
+    let query_part = if search.is_empty() {
+        String::new()
+    } else if search.starts_with('?') {
+        search.to_string()
+    } else {
+        format!("?{search}")
+    };
+    let upstream_url = format!("http://{livekit_host}:{livekit_port}{suffix}{query_part}");
+
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => {
+            return json_with_cors(
+                StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+                json!({ "error": "client build failed" }),
+                false,
+            )
+        }
+    };
+    let reqwest_method =
+        reqwest::Method::from_bytes(method.as_str().as_bytes()).unwrap_or(reqwest::Method::GET);
+    let mut req = client.request(reqwest_method, &upstream_url);
+    if !body_bytes.is_empty() {
+        req = req.body(body_bytes.to_vec());
+    }
+    let upstream_resp = match req.send().await {
+        Ok(r) => r,
+        Err(_) => {
+            return json_with_cors(
+                StatusCode::BAD_GATEWAY.as_u16(),
+                json!({ "error": "LiveKit upstream unreachable" }),
+                false,
+            )
+        }
+    };
+    let status = upstream_resp.status().as_u16();
+    let content_type = upstream_resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream")
+        .to_string();
+    let bytes = upstream_resp.bytes().await.unwrap_or_default();
+    let mut builder = Response::builder().status(status);
+    if let Some(headers) = builder.headers_mut() {
+        if let Ok(ct) = HeaderValue::from_str(&content_type) {
+            headers.insert(axum::http::header::CONTENT_TYPE, ct);
+        }
+        for (k, v) in cors_headers() {
+            headers.insert(k, v);
+        }
+    }
+    builder
+        .body(axum::body::Body::from(bytes))
+        .unwrap_or_else(|_| {
+            json_with_cors(
+                StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+                json!({ "error": "response build failed" }),
+                false,
+            )
+        })
+}
+
+async fn run_rtc_proxy(client: WebSocket, search: String) {
+    let (livekit_host, livekit_port) = livekit_upstream_addr();
     let query_part = if search.is_empty() {
         String::new()
     } else if search.starts_with('?') {

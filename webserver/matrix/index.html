@@ -69,7 +69,7 @@
     <!-- Cinny Stylesheet & Mitch.pro chat overrides -->
     <link rel="stylesheet" crossorigin href="/matrix/assets/index-DmaX6Xe5.css" />
     <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=7" />
-    <script defer src="/matrix/media-auth.js?v=1"></script>
+    <script defer src="/matrix/media-auth.js?v=2"></script>
   </head>
   <body id="appBody">
     <header id="matrix-site-bar">
@@ -731,11 +731,23 @@
           }
         }
 
+        // Cinny's real routing is /matrix/<space-or-"home">/<room-id-or-alias>
+        // (e.g. /matrix/home/%23voice%3Amitch.pro), not hash-based /#/room/<id>
+        // — shared by every feature here that needs "what room is open right now".
+        // On window, not a local const, because this file is split across
+        // several independent top-level IIFEs (the GIF picker is a separate
+        // one from this notification-bell sync code).
+        window.mitchGetActiveRoomIdentifier = function getActiveRoomIdentifier() {
+          const lastSegment = decodeURIComponent(
+            (window.location.pathname.split('/').filter(Boolean).pop()) || ''
+          );
+          return (lastSegment.startsWith('!') || lastSegment.startsWith('#')) ? lastSegment : '';
+        };
+
         // Synchronize Matrix room reads to Mitch.pro notification bell
         function markCurrentRoomRead() {
-          const m = location.hash.match(/#\/room\/([^/?]+)/);
-          if (m && m[1]) {
-            const roomId = decodeURIComponent(m[1]);
+          const roomId = window.mitchGetActiveRoomIdentifier();
+          if (roomId) {
             fetch('/api/matrix/notifications/read', {
               method: 'POST',
               credentials: 'same-origin',
@@ -1208,8 +1220,7 @@
           if (status) status.textContent = 'Sending…';
 
           const token = localStorage.getItem('cinny_access_token');
-          const roomMatch = window.location.pathname.match(/room\/([^/?]+)/) || window.location.hash.match(/room\/([^/?]+)/);
-          const activeRoomId = roomMatch ? decodeURIComponent(roomMatch[1]) : '';
+          const activeRoomId = window.mitchGetActiveRoomIdentifier();
 
           // 1. Instant server-side direct send (fastest: zero client download/upload wait)
           if (token && activeRoomId) {

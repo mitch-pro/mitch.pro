@@ -74,6 +74,36 @@
     });
   }
 
+  // Cinny sets img.src directly to the raw /_matrix/media endpoint, which
+  // the browser's native <img> loader has no way to attach an Authorization
+  // header to — that request always 401s. Without this, every piece of
+  // authenticated media (including every GIF already in a room's timeline)
+  // briefly shows broken/failed, and Cinny's own retry-button UI reacts to
+  // that failed load, before the MutationObserver-based repair() below
+  // swaps in the authenticated blob URL a moment later. This intercepts the
+  // assignment before the browser ever issues that doomed request, instead
+  // of racing it after the fact.
+  const imgSrcDescriptor = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+  if (imgSrcDescriptor && imgSrcDescriptor.set) {
+    Object.defineProperty(HTMLImageElement.prototype, 'src', {
+      configurable: true,
+      enumerable: imgSrcDescriptor.enumerable,
+      get: imgSrcDescriptor.get,
+      set(value) {
+        if (authenticatedMediaUrl(value)) {
+          this.dataset.mitchMediaSource = value;
+          loadMedia(value).then(replacement => {
+            if (replacement && this.isConnected && this.dataset.mitchMediaSource === value) {
+              imgSrcDescriptor.set.call(this, replacement);
+            }
+          });
+          return;
+        }
+        imgSrcDescriptor.set.call(this, value);
+      }
+    });
+  }
+
   new MutationObserver(mutations => {
     for (const mutation of mutations) {
       if (mutation.type === 'attributes') repair(mutation.target);

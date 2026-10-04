@@ -3020,13 +3020,38 @@ async fn api_gifs_send(_state: &AppState, headers: &HeaderMap, body_bytes: &[u8]
         Err(_) => return cors_json_response(400, json!({ "error": "Invalid JSON body" })),
     };
 
-    let room_id = payload.get("roomId").and_then(|v| v.as_str()).unwrap_or("").trim();
+    let room_id = payload.get("roomId").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
     let gif_url = payload.get("url").and_then(|v| v.as_str()).unwrap_or("").trim();
     let title = payload.get("title").and_then(|v| v.as_str()).unwrap_or("GIF");
 
     if room_id.is_empty() || gif_url.is_empty() {
         return cors_json_response(400, json!({ "error": "roomId and url are required" }));
     }
+
+    // The client sends whatever identifier is in the current URL, which is
+    // often a room alias (e.g. "#voice:mitch.pro") rather than a real room
+    // ID — the state/media/send endpoints below require a real !-prefixed
+    // ID, so resolve it first. Directory lookups are a public, unauthenticated
+    // Matrix endpoint (same pattern used in sync_matrix_user_to_official_rooms).
+    let room_id = if room_id.starts_with('#') {
+        let encoded_alias = form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>();
+        match call_conduit(
+            &format!("/_matrix/client/v3/directory/room/{encoded_alias}"),
+            Method::GET,
+            None,
+            None,
+        )
+        .await
+        {
+            Ok((status, _, bytes)) if status.is_success() => serde_json::from_slice::<Value>(&bytes)
+                .ok()
+                .and_then(|data| data.get("room_id").and_then(|v| v.as_str()).map(str::to_string))
+                .unwrap_or(room_id),
+            _ => room_id,
+        }
+    } else {
+        room_id
+    };
 
     let encoded_room = form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>();
 

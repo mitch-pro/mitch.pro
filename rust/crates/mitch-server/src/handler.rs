@@ -652,6 +652,26 @@ pub async fn handle(
         ) {
             return resp;
         }
+        // Anything else under /livekit that isn't a WebSocket upgrade (that
+        // case is handled later, post-gate, by handle_rtc_upgrade) — e.g.
+        // the LiveKit client SDK's /rtc/.../validate reachability check.
+        // Proxied here, pre-gate and with CORS headers, so it works the
+        // same for anonymous visitors and across the mitch.pro-family
+        // domains that all share this one LiveKit instance.
+        let is_upgrade = headers
+            .get("upgrade")
+            .and_then(|v| v.to_str().ok())
+            .map(|v| v.eq_ignore_ascii_case("websocket"))
+            .unwrap_or(false);
+        if !is_upgrade {
+            if let Some(resp) = crate::routes::livekit::handle_http_fallback(
+                &method, &path, &search, body_bytes,
+            )
+            .await
+            {
+                return resp;
+            }
+        }
     }
 
     // Matrix client/server discovery, Conduit reverse-proxy, and Cinny config
