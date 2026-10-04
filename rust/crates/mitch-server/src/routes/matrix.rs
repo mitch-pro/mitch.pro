@@ -2380,6 +2380,12 @@ pub async fn handle_api(
     if path == "/api/matrix/gifs/send" && method == Method::POST {
         return Some(api_gifs_send(state, headers, body_bytes).await);
     }
+    if path == "/api/matrix/gifs/favorites" && method == Method::GET {
+        return Some(api_gifs_favorites_get(state, headers).await);
+    }
+    if path == "/api/matrix/gifs/favorites" && method == Method::POST {
+        return Some(api_gifs_favorites_post(state, headers, body_bytes).await);
+    }
     if path == "/api/matrix/stickers/packs" && method == Method::GET {
         return Some(api_stickers_packs(state, headers).await);
     }
@@ -3142,6 +3148,110 @@ async fn api_gifs_send(_state: &AppState, headers: &HeaderMap, body_bytes: &[u8]
         }
         Err(e) => cors_json_response(502, json!({ "error": "Send failed", "details": e })),
     }
+}
+
+const GIF_FAVORITES_FILE: &str = "gif_favorites.json";
+const MAX_GIF_FAVORITES: usize = 200;
+
+/// Applies one add/remove action to a user's favorites list in place.
+/// Dedupes by id first (so re-adding an already-favorited GIF moves it to
+/// the front instead of duplicating it), caps the list at
+/// `MAX_GIF_FAVORITES`, newest first. Pure and synchronous — no network or
+/// store access — so it's unit-testable without a running Conduit.
+fn apply_gif_favorite_action(
+    list: &mut Vec<Value>,
+    gif_id: &str,
+    action: &str,
+    gif: Option<&Value>,
+) -> Result<(), &'static str> {
+    list.retain(|g| g.get("id").and_then(|v| v.as_str()) != Some(gif_id));
+    if action == "add" {
+        let g = gif.ok_or("gif object is required to add a favorite")?;
+        let url = g.get("url").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        if url.is_empty() {
+            return Err("gif.url is required to favorite a GIF");
+        }
+        list.insert(
+            0,
+            json!({
+                "id": gif_id,
+                "title": g.get("title").and_then(|v| v.as_str()).unwrap_or(""),
+                "url": url,
+                "preview": g.get("preview").and_then(|v| v.as_str()).unwrap_or(""),
+                "width": g.get("width").and_then(Value::as_i64).unwrap_or(320),
+                "height": g.get("height").and_then(Value::as_i64).unwrap_or(240),
+            }),
+        );
+        list.truncate(MAX_GIF_FAVORITES);
+    }
+    Ok(())
+}
+
+/// `GET /api/matrix/gifs/favorites` — the signed-in user's saved GIFs, in
+/// the same `{id,title,url,preview,width,height}` shape trending/search
+/// return, so the client renders them with the exact same `renderGifs()`.
+async fn api_gifs_favorites_get(state: &AppState, headers: &HeaderMap) -> Response {
+    let Some(account) = resolve_matrix_account(state, headers, None).await else {
+        return cors_json_response(401, json!({ "error": "Sign in required" }));
+    };
+    let all = state
+        .store
+        .read_document(&state.data_dir().join(GIF_FAVORITES_FILE), json!({}));
+    let results = all.get(&account.norm_email).cloned().unwrap_or(json!([]));
+    cors_json_response(200, json!({ "results": results }))
+}
+
+/// `POST /api/matrix/gifs/favorites` — `{action: "add"|"remove", gif: {...}}`.
+/// Favorites are keyed by the account's normalized email (same identity key
+/// used everywhere else in this codebase), capped at `MAX_GIF_FAVORITES` per
+/// user, newest first.
+async fn api_gifs_favorites_post(
+    state: &AppState,
+    headers: &HeaderMap,
+    body_bytes: &[u8],
+) -> Response {
+    let Some(account) = resolve_matrix_account(state, headers, None).await else {
+        return cors_json_response(401, json!({ "error": "Sign in required" }));
+    };
+    let payload: Value = match serde_json::from_slice(body_bytes) {
+        Ok(v) => v,
+        Err(_) => return cors_json_response(400, json!({ "error": "Invalid JSON body" })),
+    };
+    let action = payload.get("action").and_then(|v| v.as_str()).unwrap_or("");
+    let gif = payload.get("gif");
+    let gif_id = gif
+        .and_then(|g| g.get("id"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if gif_id.is_empty() || (action != "add" && action != "remove") {
+        return cors_json_response(
+            400,
+            json!({ "error": "gif.id and a valid action ('add' or 'remove') are required" }),
+        );
+    }
+
+    let file = state.data_dir().join(GIF_FAVORITES_FILE);
+    let mut all = state.store.read_document(&file, json!({}));
+    let mut list: Vec<Value> = all
+        .get(&account.norm_email)
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    if let Err(msg) = apply_gif_favorite_action(&mut list, &gif_id, action, gif) {
+        return cors_json_response(400, json!({ "error": msg }));
+    }
+
+    if let Some(obj) = all.as_object_mut() {
+        obj.insert(account.norm_email.clone(), json!(list));
+    } else {
+        all = json!({ account.norm_email.clone(): list });
+    }
+    let _ = state.store.write_document(&file, &all);
+
+    cors_json_response(200, json!({ "ok": true, "results": list }))
 }
 
 async fn api_stickers_packs(_state: &AppState, _headers: &HeaderMap) -> Response {
@@ -7049,5 +7159,89 @@ mod tests {
         assert!(loaded_bl.get("longtran@student.rjuhsd.us").is_none(), "Blacklist must be lifted");
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn sample_gif(id: &str) -> Value {
+        json!({
+            "id": id,
+            "title": format!("gif {id}"),
+            "url": format!("https://example.com/{id}.gif"),
+            "preview": format!("https://example.com/{id}-preview.gif"),
+            "width": 320,
+            "height": 240,
+        })
+    }
+
+    #[test]
+    fn favorite_add_then_remove() {
+        let mut list: Vec<Value> = Vec::new();
+        let gif = sample_gif("abc");
+        apply_gif_favorite_action(&mut list, "abc", "add", Some(&gif)).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].get("url").unwrap().as_str().unwrap(), "https://example.com/abc.gif");
+
+        apply_gif_favorite_action(&mut list, "abc", "remove", None).unwrap();
+        assert!(list.is_empty());
+    }
+
+    #[test]
+    fn favorite_re_add_moves_to_front_without_duplicating() {
+        let mut list: Vec<Value> = Vec::new();
+        apply_gif_favorite_action(&mut list, "a", "add", Some(&sample_gif("a"))).unwrap();
+        apply_gif_favorite_action(&mut list, "b", "add", Some(&sample_gif("b"))).unwrap();
+        assert_eq!(list.len(), 2);
+        // Re-favoriting "a" should move it back to the front, not duplicate it.
+        apply_gif_favorite_action(&mut list, "a", "add", Some(&sample_gif("a"))).unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].get("id").unwrap().as_str().unwrap(), "a");
+        assert_eq!(list[1].get("id").unwrap().as_str().unwrap(), "b");
+    }
+
+    #[test]
+    fn favorite_add_requires_gif_with_url() {
+        let mut list: Vec<Value> = Vec::new();
+        assert!(apply_gif_favorite_action(&mut list, "a", "add", None).is_err());
+        let no_url = json!({ "id": "a", "title": "no url" });
+        assert!(apply_gif_favorite_action(&mut list, "a", "add", Some(&no_url)).is_err());
+        assert!(list.is_empty());
+    }
+
+    #[test]
+    fn favorite_list_caps_at_max() {
+        let mut list: Vec<Value> = Vec::new();
+        for i in 0..(MAX_GIF_FAVORITES + 10) {
+            let id = format!("g{i}");
+            apply_gif_favorite_action(&mut list, &id, "add", Some(&sample_gif(&id))).unwrap();
+        }
+        assert_eq!(list.len(), MAX_GIF_FAVORITES);
+        // Most recently added stays at the front.
+        assert_eq!(
+            list[0].get("id").unwrap().as_str().unwrap(),
+            format!("g{}", MAX_GIF_FAVORITES + 9)
+        );
+    }
+
+    #[tokio::test]
+    async fn gifs_favorites_requires_auth() {
+        let (state, _dir) = test_state();
+        let headers = HeaderMap::new();
+
+        let resp = handle_api(&state, &Method::GET, "/api/matrix/gifs/favorites", &headers, "", &[])
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+
+        let body = serde_json::to_vec(&json!({ "action": "add", "gif": sample_gif("x") })).unwrap();
+        let resp = handle_api(
+            &state,
+            &Method::POST,
+            "/api/matrix/gifs/favorites",
+            &headers,
+            "",
+            &body,
+        )
+        .await
+        .unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 }

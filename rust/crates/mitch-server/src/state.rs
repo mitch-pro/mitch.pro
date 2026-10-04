@@ -668,4 +668,7 @@ pub const CSRF_EXEMPT_PATHS: &[&str] = &[
     "/api/matrix/devices/prune-stale",
     "/api/matrix/report-room",
     "/api/matrix/gifs/send",
+    // Not from the original server.js port — new, Bearer-token-authed (not
+    // cookie-authed) like gifs/send just above, same exemption reasoning.
+    "/api/matrix/gifs/favorites",
 ];

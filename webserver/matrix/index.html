@@ -68,7 +68,7 @@
 
     <!-- Cinny Stylesheet & Mitch.pro chat overrides -->
     <link rel="stylesheet" crossorigin href="/matrix/assets/index-DmaX6Xe5.css" />
-    <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=6" />
+    <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=7" />
     <script defer src="/matrix/media-auth.js?v=1"></script>
   </head>
   <body id="appBody">
@@ -791,6 +791,8 @@
         let cachedPacks = [];
         let currentPackId = '';
         let searchTimeout = null;
+        let favoriteIds = new Set();
+        const FAVORITES_SENTINEL = '__favorites__';
 
         function getOrCreatePopover() {
           let popover = document.getElementById('mitch-gif-popover');
@@ -868,6 +870,7 @@
           if (btn) btn.classList.add('active');
           renderCategories();
           loadContent('');
+          loadFavoriteIds();
           const input = document.getElementById('mitch-gif-search-input');
           if (input) {
             setTimeout(() => input.focus(), 80);
@@ -896,18 +899,18 @@
           container.innerHTML = '';
 
           if (activeTab === 'gifs') {
-            const gifCats = ['Trending', 'Laugh', 'Excited', 'Cat', 'Doge', 'Anime', 'Dance', 'Sad', 'Facepalm', 'Cheers', 'Confused', 'Thumbs Up'];
+            const gifCats = ['Trending', 'Laugh', 'Excited', 'Cat', 'Doge', 'Anime', 'Dance', 'Sad', 'Facepalm', 'Cheers', 'Confused', 'Thumbs Up', 'Favorites'];
             gifCats.forEach((cat, idx) => {
               const pill = document.createElement('button');
               pill.type = 'button';
               pill.className = 'mitch-gif-pill' + (idx === 0 ? ' active' : '');
-              pill.textContent = cat;
+              pill.textContent = cat === 'Favorites' ? '★ Favorites' : cat;
               pill.addEventListener('click', () => {
                 container.querySelectorAll('.mitch-gif-pill').forEach(p => p.classList.remove('active'));
                 pill.classList.add('active');
-                const query = cat === 'Trending' ? '' : cat;
+                const query = cat === 'Trending' ? '' : cat === 'Favorites' ? FAVORITES_SENTINEL : cat;
                 const input = document.getElementById('mitch-gif-search-input');
-                if (input) input.value = query;
+                if (input) input.value = cat === 'Favorites' ? '' : query;
                 loadContent(query);
               });
               container.appendChild(pill);
@@ -938,6 +941,9 @@
 
           if (activeTab === 'gifs') {
             content.className = 'mitch-gif-grid';
+            if (query === FAVORITES_SENTINEL) {
+              return loadFavoritesTab();
+            }
             if (status) status.textContent = 'Loading…';
             content.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 30px; color: var(--t-fg3); font-size: 13px;">Searching GIFs…</div>';
 
@@ -1004,9 +1010,108 @@
               }
             };
             card.appendChild(img);
+            const isFav = favoriteIds.has(item.id);
+            const favBtn = document.createElement('button');
+            favBtn.type = 'button';
+            favBtn.className = 'mitch-gif-favorite-btn' + (isFav ? ' active' : '');
+            favBtn.dataset.gifId = item.id;
+            favBtn.title = isFav ? 'Remove from favorites' : 'Add to favorites';
+            favBtn.textContent = '★';
+            favBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              toggleFavorite(item, favBtn);
+            });
+            card.appendChild(favBtn);
             card.addEventListener('click', () => sendMedia(item.url, item.title, 'gif'));
             content.appendChild(card);
           });
+        }
+
+        async function loadFavoriteIds() {
+          const token = localStorage.getItem('cinny_access_token');
+          if (!token) return;
+          try {
+            const res = await fetch('/api/matrix/gifs/favorites', {
+              credentials: 'same-origin',
+              headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            favoriteIds = new Set((data.results || []).map(g => g.id));
+            refreshFavoriteStars();
+          } catch (e) { /* best-effort; stars just won't pre-fill */ }
+        }
+
+        function refreshFavoriteStars() {
+          document.querySelectorAll('.mitch-gif-favorite-btn').forEach(btn => {
+            const isFav = favoriteIds.has(btn.dataset.gifId);
+            btn.classList.toggle('active', isFav);
+            btn.title = isFav ? 'Remove from favorites' : 'Add to favorites';
+          });
+        }
+
+        async function toggleFavorite(item, btn) {
+          const token = localStorage.getItem('cinny_access_token');
+          if (!token) return;
+          const wasFav = favoriteIds.has(item.id);
+          const action = wasFav ? 'remove' : 'add';
+          // Optimistic UI — flip immediately, reconcile silently if the request fails.
+          if (wasFav) {
+            favoriteIds.delete(item.id);
+          } else {
+            favoriteIds.add(item.id);
+          }
+          refreshFavoriteStars();
+          const activePill = document.querySelector('.mitch-gif-pill.active');
+          if (action === 'remove' && activePill && activePill.textContent === '★ Favorites') {
+            btn.closest('.mitch-gif-card')?.remove();
+          }
+          try {
+            const res = await fetch('/api/matrix/gifs/favorites', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({ action, gif: item }),
+            });
+            if (!res.ok) throw new Error('favorite request failed');
+          } catch (e) {
+            // Roll back the optimistic update.
+            if (wasFav) favoriteIds.add(item.id); else favoriteIds.delete(item.id);
+            refreshFavoriteStars();
+          }
+        }
+
+        async function loadFavoritesTab() {
+          const status = document.getElementById('mitch-gif-status');
+          const content = document.getElementById('mitch-gif-content');
+          if (!content) return;
+          const token = localStorage.getItem('cinny_access_token');
+          if (!token) {
+            content.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 30px; color: var(--t-fg3); font-size: 13px;">Sign in to use favorites</div>';
+            if (status) status.textContent = 'Sign in required';
+            return;
+          }
+          if (status) status.textContent = 'Loading…';
+          content.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 30px; color: var(--t-fg3); font-size: 13px;">Loading favorites…</div>';
+          try {
+            const res = await fetch('/api/matrix/gifs/favorites', {
+              credentials: 'same-origin',
+              headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error('Failed to load favorites');
+            const data = await res.json();
+            const items = data.results || [];
+            favoriteIds = new Set(items.map(g => g.id));
+            cachedGifs = items;
+            renderGifs(items);
+            if (status) status.textContent = items.length ? `${items.length} favorite${items.length === 1 ? '' : 's'}` : 'No favorites yet';
+            if (items.length === 0) {
+              content.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 30px; color: var(--t-fg3); font-size: 13px;">Star a GIF to save it here</div>';
+            }
+          } catch (e) {
+            content.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 30px; color: #ff6b6b; font-size: 13px;">Could not load favorites</div>';
+            if (status) status.textContent = 'Offline';
+          }
         }
 
         function renderStickerPack(pack, filterQuery) {

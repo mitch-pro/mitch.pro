@@ -1284,6 +1284,38 @@ button[data-variant='critical'] {
   display: block;
 }
 
+.mitch-gif-favorite-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 3;
+  width: 22px;
+  height: 22px;
+  line-height: 22px;
+  text-align: center;
+  padding: 0;
+  font-size: 13px;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+}
+.mitch-gif-card:hover .mitch-gif-favorite-btn,
+.mitch-gif-favorite-btn.active {
+  opacity: 1;
+}
+.mitch-gif-favorite-btn.active {
+  color: #ffd54a;
+  background: rgba(0, 0, 0, 0.55);
+}
+.mitch-gif-favorite-btn:hover {
+  transform: scale(1.15);
+  color: #ffd54a;
+}
+
 .mitch-sticker-grid {
   flex: 1;
   overflow-y: auto;
