@@ -323,16 +323,35 @@ services:
     image: livekit/livekit-server:latest
     container_name: mitch-livekit
     restart: unless-stopped
-    command:
-      - --keys
-      - "mitchlivekit: mitch-secret-livekit-matrix-key-2026"
-      - --bind
-      - 0.0.0.0
-      - --udp-port
-      - "7882"
-      - --rtc.tcp_port
-      - "7881"
-      - --rtc.use_external_ip
+    # Only ports 443/80 are forwarded on the router (home DMZ, dynamic IP) —
+    # 7881 (TCP) and 7882 (UDP) below are NOT reachable from outside the LAN,
+    # and even on-LAN they can fail (VPNs, restrictive wifi). Direct UDP/TCP
+    # is still attempted first (free, lower latency when it works), but
+    # turn_servers below gives every client a TURN-over-TLS:443 fallback —
+    # the Open Relay Project's free, public, no-signup static-auth TURN
+    # relay (the same host/secret documented for self-hosted Matrix/Synapse
+    # deployments — https://www.metered.ca/tools/openrelay/), which rides
+    # over the same port already used for HTTPS and gets through almost any
+    # network, including school wifi. Override via TURN_RELAY_HOST/
+    # TURN_RELAY_SECRET (e.g. a private dynamic-credential relay) if the
+    # shared public pool ever isn't enough; the defaults work with nothing
+    # else configured.
+    environment:
+      LIVEKIT_CONFIG: |
+        port: 7880
+        bind_addresses:
+          - "0.0.0.0"
+        keys:
+          mitchlivekit: mitch-secret-livekit-matrix-key-2026
+        rtc:
+          udp_port: 7882
+          tcp_port: 7881
+          use_external_ip: true
+          turn_servers:
+            - host: ${TURN_RELAY_HOST:-staticauth.openrelay.metered.ca}
+              port: 443
+              protocol: tls
+              secret: ${TURN_RELAY_SECRET:-openrelayprojectsecret}
     ports:
       - "127.0.0.1:7880:7880"
       - "7881:7881"
