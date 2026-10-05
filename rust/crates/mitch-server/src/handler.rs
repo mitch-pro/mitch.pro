@@ -1024,7 +1024,6 @@ pub async fn handle(
         || clean_path.starts_with("/api/matrix/")
         || clean_path == "/livekit"
         || clean_path.starts_with("/livekit/")
-        || clean_path.starts_with("/calls/")
         || clean_path.starts_with("/game-portal")
         || clean_path.starts_with("/msn-games")
         || clean_path == "/rjuhsd"
@@ -1089,12 +1088,6 @@ pub async fn handle(
     if is_upgrade && path.starts_with("/livekit/rtc") {
         if let Some(resp) =
             crate::routes::livekit::handle_rtc_upgrade(&state, &path, &search, ws_upgrade)
-        {
-            return resp;
-        }
-    } else if is_upgrade && path.starts_with("/calls/ws/") {
-        if let Some(resp) =
-            crate::routes::call_relay::handle_ws_upgrade(&state, &path, headers, ws_upgrade)
         {
             return resp;
         }
