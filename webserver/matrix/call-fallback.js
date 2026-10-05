@@ -1,12 +1,22 @@
-// Fallback voice calling over a plain WebSocket, for when LiveKit's WebRTC
-// (direct UDP/TCP, or the TURN/TLS fallback) can't get through at all —
-// restrictive wifi, a VPN, networks where even TURN:443 is blocked. This
-// rides over the exact same WebSocket transport the site already proves
-// reliable everywhere, at the cost of being more sensitive to packet loss
-// than real WebRTC (TCP head-of-line blocking vs. RTP's graceful drop) and
-// audio-only for now. It's independent of Cinny's own UI (which is a
-// vendored, prebuilt bundle not meant to be hand-edited) — a small floating
-// button injected on top.
+// Voice calling over a plain WebSocket, replacing Cinny's native LiveKit
+// call button rather than adding a second one next to it. LiveKit's WebRTC
+// path (direct UDP/TCP, or a TURN/TLS fallback) needs some UDP- or
+// TURN-reachable path to work at all, and that's been failing on the
+// networks actually being tested from — so this rides over the exact same
+// plain WebSocket/TCP connection the site already reaches everywhere, at
+// the cost of being more sensitive to packet loss than real WebRTC (TCP
+// head-of-line blocking vs. RTP's graceful frame drop), and audio-only.
+//
+// Cinny's own call button lives inside its vendored, prebuilt JS bundle —
+// not something safe to hand-edit or reliably call into. Instead this
+// intercepts clicks on it at the document level, in the capture phase
+// (runs before React's own bubble-phase listener ever sees the event, so
+// `stopImmediatePropagation` here reliably stops Cinny's own handler —
+// and therefore the broken Element Call iframe — from firing at all), and
+// substitutes this module's join/leave instead. The button itself has no
+// stable aria-label/class (CSS-in-JS hashes change per build), so it's
+// identified by its SVG icon path data, which only changes if Cinny's own
+// call icon artwork does.
 //
 // Protocol: client -> server frames are raw MediaRecorder output chunks
 // (audio/webm;codecs=opus), sent as-is. Server -> client frames are the same
@@ -34,6 +44,9 @@
   let recorder = null;
   let restartTimer = null;
   let joined = false;
+  let epoch = 0; // bumped on every join/leave so a stale async join() from
+  // before a fast leave() (e.g. clicked again while the mic-permission
+  // prompt was still up) can tell it's been superseded and bail out.
   const peers = new Map(); // senderId (string) -> { mediaSource, sourceBuffer, audioEl, queue }
 
   function relayUrl(roomId) {
@@ -102,14 +115,25 @@
   async function join(roomId) {
     if (joined) return;
     joined = true;
+    const myEpoch = ++epoch;
     setStatus('connecting…');
+    let mic;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mic = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (err) {
-      setStatus('mic denied');
-      joined = false;
+      if (myEpoch === epoch) {
+        setStatus('mic denied');
+        joined = false;
+      }
       return;
     }
+    if (myEpoch !== epoch) {
+      // Superseded by a leave() (or another join()) while the permission
+      // prompt was up — this join lost the race, so just release the mic.
+      mic.getTracks().forEach((t) => t.stop());
+      return;
+    }
+    stream = mic;
     ws = new WebSocket(relayUrl(roomId));
     ws.binaryType = 'arraybuffer';
     ws.addEventListener('open', () => {
@@ -149,6 +173,7 @@
   function leave() {
     if (!joined) return;
     joined = false;
+    epoch++; // invalidate any in-flight join() past its getUserMedia await
     clearInterval(restartTimer);
     restartTimer = null;
     try { recorder && recorder.stop(); } catch (_) {}
@@ -165,57 +190,59 @@
     setStatus(null);
   }
 
-  // ── minimal floating UI ───────────────────────────────────────────────
-  let statusEl = null;
+  // ── wiring into Cinny's own call button ─────────────────────────────────
+  // Fingerprint: the first path segment of Cinny's call-icon SVG. Confirmed
+  // live against the deployed build (room header, tooltip reads "Call").
+  const CALL_ICON_FINGERPRINT = 'M3.5 17L2 17L2 7L3.5 7L3.5 17';
+  const LIVE_BG = '#dc2626';
+
+  function findCallButton() {
+    return Array.from(document.querySelectorAll('button')).find((b) => {
+      const svg = b.querySelector('svg');
+      return svg && svg.innerHTML.includes(CALL_ICON_FINGERPRINT);
+    }) || null;
+  }
+
   function setStatus(text) {
-    if (!statusEl) return;
+    const btn = findCallButton();
+    if (!btn) return;
     if (text) {
-      statusEl.textContent = text;
-      statusEl.hidden = false;
+      btn.title = text;
+      btn.style.setProperty('background-color', LIVE_BG, 'important');
     } else {
-      statusEl.hidden = true;
+      btn.title = '';
+      btn.style.removeProperty('background-color');
     }
   }
 
-  function mount() {
-    const wrap = document.createElement('div');
-    wrap.style.cssText =
-      'position:fixed;left:12px;bottom:12px;z-index:9999;display:flex;' +
-      'align-items:center;gap:8px;font:12px system-ui,sans-serif;';
-    const btn = document.createElement('button');
-    btn.textContent = '☎️ Call';
-    btn.title = 'Start an audio call';
-    btn.style.cssText =
-      'padding:6px 10px;border-radius:6px;border:1px solid #444;' +
-      'background:#1a1a1a;color:#eee;cursor:pointer;';
-    statusEl = document.createElement('span');
-    statusEl.hidden = true;
-    statusEl.style.cssText = 'color:#9ca3af;';
-    btn.addEventListener('click', () => {
+  document.addEventListener(
+    'click',
+    (event) => {
+      const btn = event.target.closest('button');
+      if (!btn) return;
+      const svg = btn.querySelector('svg');
+      if (!svg || !svg.innerHTML.includes(CALL_ICON_FINGERPRINT)) return;
+      // Capture phase, ahead of React's own bubble-phase listener —
+      // this reliably keeps Cinny's native handler (and the LiveKit/
+      // Element Call iframe it would open) from ever running.
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      event.stopPropagation();
+
       if (joined) {
         leave();
-        btn.textContent = '☎️ Call';
         return;
       }
       const roomId = typeof window.mitchGetActiveRoomIdentifier === 'function'
         ? window.mitchGetActiveRoomIdentifier()
         : '';
       if (!roomId) {
-        setStatus('open a room first');
+        setStatus('Open a room first');
         setTimeout(() => setStatus(null), 2000);
         return;
       }
       join(roomId);
-      btn.textContent = '☎️ End call';
-    });
-    wrap.appendChild(btn);
-    wrap.appendChild(statusEl);
-    document.body.appendChild(wrap);
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', mount, { once: true });
-  } else {
-    mount();
-  }
+    },
+    true,
+  );
 })();
