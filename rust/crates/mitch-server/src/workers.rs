@@ -1,7 +1,10 @@
 //! Background interval workers (plan Steps 6-13).
 //! Replaces the ~20 `setInterval` timers in server.js with tokio tasks on the
 //! same schedule. Live so far:
-//! - `saveCanvasPixels` 30s flush (server.js:4544-4545)
+//! - `saveCanvasPixels` 60s flush-if-dirty (server.js, post the 2026-09-18
+//!   "Eliminate 30s lag spikes" fix — was an unconditional 30s clone+
+//!   serialize+write of the full pixel map; the Rust port originally carried
+//!   that unfixed 30s/always-write version verbatim)
 //! - `canvasHeatmap` hourly 24h sweep (server.js:4788-4793)
 //!
 //! The presence sweep, weekly digest, daily puzzle, chess-clock warning, DM
@@ -10,11 +13,11 @@
 
 /// Starts every live worker task. Call once from `main` after the state build.
 pub fn spawn(state: std::sync::Arc<crate::state::AppState>) {
-    // saveCanvasPixels — every 30s (server.js:4545).
+    // saveCanvasPixels — every 60s, skipped when nothing's dirty.
     {
         let state = state.clone();
         tokio::spawn(async move {
-            let mut tick = tokio::time::interval(std::time::Duration::from_secs(30));
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
             loop {
                 tick.tick().await;
                 state.canvas.flush_pixels(&state.store, state.data_dir());

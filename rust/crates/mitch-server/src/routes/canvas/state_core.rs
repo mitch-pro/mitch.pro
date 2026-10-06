@@ -71,6 +71,11 @@ pub struct CanvasState {
     pub zone_pixels: std::sync::Mutex<std::collections::HashMap<String, Map<String, Value>>>,
     /// `zoneChunksMap` (server.js:4373) — zoneId -> chunk map cache.
     pub zone_chunks: std::sync::Mutex<std::collections::HashMap<String, Map<String, Value>>>,
+    /// `canvasPixelsDirty` (server.js, added by the 2026-09-18 "Eliminate 30s
+    /// lag spikes" fix) — set on every pixel write/delete, cleared by
+    /// `flush_pixels`, which skips the (potentially huge) clone+serialize+
+    /// disk write entirely when nothing changed since the last flush.
+    pub pixels_dirty: std::sync::atomic::AtomicBool,
 }
 
 pub fn canvas_pixels_file(data_dir: &Path) -> PathBuf {
@@ -198,6 +203,7 @@ impl CanvasState {
             heatmap: std::sync::Mutex::new(Vec::new()),
             zone_pixels: std::sync::Mutex::new(std::collections::HashMap::new()),
             zone_chunks: std::sync::Mutex::new(std::collections::HashMap::new()),
+            pixels_dirty: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -265,6 +271,8 @@ impl CanvasState {
             None => {
                 let mut pixels = self.pixels.write().unwrap_or_else(|e| e.into_inner());
                 pixels.insert(key.clone(), data.clone());
+                self.pixels_dirty
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
                 let mut chunks = self.chunks.write().unwrap_or_else(|e| e.into_inner());
                 if !chunks.contains_key(&ck) {
                     chunks.insert(ck.clone(), json!({}));
@@ -366,6 +374,8 @@ impl CanvasState {
                     let mut pixels = self.pixels.write().unwrap_or_else(|e| e.into_inner());
                     pixels.remove(key);
                 }
+                self.pixels_dirty
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
                 let mut chunks = self.chunks.write().unwrap_or_else(|e| e.into_inner());
                 if let Some(chunk) = chunks.get_mut(ck).and_then(|v| v.as_object_mut()) {
                     chunk.remove(key);
@@ -420,6 +430,16 @@ impl CanvasState {
     /// `saveCanvasPixels` (server.js:4544) — the 30s flush writes the whole
     /// in-memory map through the DB layer.
     pub fn flush_pixels(&self, store: &DataStore, data_dir: &Path) {
+        // `if (!canvasPixelsDirty) return;` — skip the clone+serialize+disk
+        // write entirely when nothing changed since the last flush. Without
+        // this, every tick clones and writes the full pixel map (can be a
+        // large JSON blob) regardless of whether anything changed.
+        let was_dirty = self
+            .pixels_dirty
+            .swap(false, std::sync::atomic::Ordering::Relaxed);
+        if !was_dirty {
+            return;
+        }
         let pixels = self
             .pixels
             .read()
@@ -656,5 +676,53 @@ mod tests {
         st.sweep_heatmap(300 + 86_400_000);
         let kept: Vec<String> = st.heatmap_object().keys().cloned().collect();
         assert_eq!(kept, ["1,1"]);
+    }
+
+    #[test]
+    fn flush_pixels_skips_disk_write_when_not_dirty() {
+        use std::sync::atomic::Ordering;
+
+        let dir = std::env::temp_dir().join(format!("canvas-dirty-test-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let data_dir = dir.join("data");
+        let store = DataStore::open(&dir, &data_dir).expect("open store");
+        let st = CanvasState::load(&store, &data_dir);
+
+        assert!(!st.pixels_dirty.load(Ordering::Relaxed));
+
+        // canvas_pixels.json is DB-backed (DataStore routes data_dir/*.json
+        // into the json_documents table), so "was it written" is checked
+        // through the store, not a literal filesystem path.
+        let doc = || {
+            store
+                .read_document_raw(&canvas_pixels_file(&data_dir))
+                .unwrap()
+        };
+
+        // A fresh flush with nothing dirty must not write anything at all —
+        // proves the write is actually skipped, not just a no-op rewrite.
+        st.flush_pixels(&store, &data_dir);
+        assert!(doc().is_none());
+
+        st.set_pixel(&store, &data_dir, 1.0, 1.0, json!({"color": "#abcabc"}), None);
+        assert!(st.pixels_dirty.load(Ordering::Relaxed));
+
+        st.flush_pixels(&store, &data_dir);
+        assert!(!st.pixels_dirty.load(Ordering::Relaxed));
+        let after_first_flush = doc().expect("flush writes once dirty");
+        assert!(after_first_flush.contains("abcabc"));
+
+        // Zone writes must never touch the global dirty flag or document.
+        st.set_pixel(
+            &store,
+            &data_dir,
+            2.0,
+            2.0,
+            json!({"color": "#def"}),
+            Some("some-zone"),
+        );
+        assert!(!st.pixels_dirty.load(Ordering::Relaxed));
+        st.flush_pixels(&store, &data_dir);
+        assert_eq!(doc(), Some(after_first_flush));
     }
 }
