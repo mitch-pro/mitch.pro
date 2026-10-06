@@ -107,117 +107,56 @@ pub(crate) fn get_vm_type_by_vmid(state: &AppState, vmid: f64) -> &'static str {
 }
 
 /// `getUserVmStatus` (server.js:25851-25907) — returns the JS shape:
-/// `{success:true, status, ip}` or `{success:false, error}`. `None` would be
-/// the JS null-from-deadline case; the JS folds timeouts into the error
-/// objects shown below, which is what we return too.
+/// `{success:true, status, ip}` or `{success:false, error}`.
+///
+/// This used to hand-roll its own `status/current` + guest-agent
+/// `network-get-interfaces` calls, uncached, on every invocation. That was
+/// never actually fixed in the original JS either — only the OTHER guest-IP
+/// lookup (`ProxmoxDesktopService.getStatus`, used by `/api/vm/computers`)
+/// got the 2026-09-18 throttle-and-cache fix (lib/proxmox_desktop.js
+/// `guestIpCache`/`guestAgentLastAttempt`, "Fix VM desktop freeze"). But
+/// `webserver/index.html` polls `/api/vm/status` — which calls this
+/// function — every 10 seconds whenever the homepage is open, so an
+/// unthrottled guest-agent query fired that often is exactly the periodic
+/// QEMU Big Lock stall (briefly freezes the VM, including its live VNC
+/// framebuffer) that fix was written to prevent. Delegating to
+/// `ProxmoxDesktopService::get_status`, which shares its cache across every
+/// caller process-wide, closes that gap instead of duplicating the cache.
 pub(crate) async fn get_user_vm_status(state: &AppState, vmid: f64) -> Value {
-    let token = pve_token();
-    if token.is_empty() {
+    if !crate::proxmox_desktop::desktop().configured() {
         return json!({ "success": false, "error": "Proxmox token not configured." });
     }
-    let vmid_int = if vmid >= 0.0 && vmid.fract() == 0.0 {
-        vmid as i64
-    } else {
+    if !(vmid >= 0.0 && vmid.fract() == 0.0) {
         return json!({ "success": false, "error": "invalid vmid" });
-    };
-    let type_ = get_vm_type_by_vmid(state, vmid);
-    let url = format!(
-        "{}/nodes/{}/{type_}/{vmid_int}/status/current",
-        pve_url(),
-        pve_node()
-    );
-    let res = match pve_client(5000)
-        .get(&url)
-        .header("Authorization", &token)
-        .send()
-        .await
-    {
-        Ok(r) => r,
-        Err(_) => {
-            // fetchWithDeadline null → 'Proxmox status fetch timed out'.
-            return json!({ "success": false, "error": "Proxmox status fetch timed out" });
-        }
-    };
-    if !res.status().is_success() {
-        return json!({
-            "success": false,
-            "error": format!("Failed to fetch status: {}", res.status().as_u16())
-        });
     }
-    let data = match res.json::<Value>().await {
-        Ok(v) => v,
-        Err(e) => {
-            return json!({ "success": false, "error": e.to_string() });
-        }
-    };
-
-    let mut ip = String::new();
-    if type_ == "lxc" {
-        let suffix = if vmid >= 300.0 { vmid - 200.0 } else { vmid } as i64;
-        ip = format!("10.0.0.{suffix}");
-    } else if data
-        .get("data")
-        .and_then(|d| d.get("status"))
-        .and_then(|s| s.as_str())
-        == Some("running")
-    {
-        // QEMU guest agent IP probe (3s deadline).
-        let agent_url = format!(
-            "{}/nodes/{}/qemu/{vmid_int}/agent/network-get-interfaces",
-            pve_url(),
-            pve_node()
-        );
-        if let Ok(agent_res) = pve_client(3000)
-            .get(&agent_url)
-            .header("Authorization", &token)
-            .send()
-            .await
-        {
-            if agent_res.status().is_success() {
-                if let Ok(agent_data) = agent_res.json::<Value>().await {
-                    let result = agent_data
-                        .get("data")
-                        .and_then(|d| d.get("result"))
-                        .and_then(|r| r.as_array())
-                        .cloned()
-                        .unwrap_or_default();
-                    'outer: for iface in result {
-                        let addrs = iface
-                            .get("ip-addresses")
-                            .and_then(|a| a.as_array())
-                            .cloned()
-                            .unwrap_or_default();
-                        for addr in addrs {
-                            let is_v4 = addr.get("ip-address-type").and_then(|t| t.as_str())
-                                == Some("ipv4");
-                            let ip_str = addr
-                                .get("ip-address")
-                                .and_then(|i| i.as_str())
-                                .unwrap_or("");
-                            if is_v4 && ip_str.starts_with("10.0.0.") {
-                                ip = ip_str.to_string();
-                                break 'outer;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     let suffix = if vmid >= 300.0 { vmid - 200.0 } else { vmid } as i64;
     let fallback_ip = format!("10.0.0.{suffix}");
-    let status = data
-        .get("data")
-        .and_then(|d| d.get("status"))
-        .and_then(|s| s.as_str())
-        .map(str::to_string)
-        .unwrap_or_else(|| "unknown".to_string());
-    json!({
-        "success": true,
-        "status": status,
-        "ip": if ip.is_empty() { fallback_ip } else { ip }
-    })
+    let record = vmlib::get_virtual_machine_by_vmid(&state.store, vmid)
+        .map(|r| r.to_json())
+        .unwrap_or_else(|| {
+            json!({
+                "vmid": vmid,
+                "node": pve_node(),
+                "guestType": get_vm_type_by_vmid(state, vmid),
+            })
+        });
+    match crate::proxmox_desktop::desktop().get_status(&record).await {
+        Ok(rt) => {
+            let status = jsval::str_or(rt.get("state"), "unknown");
+            // LXC guests keep the deterministic fallback — the agent is
+            // never queried for them (see ProxmoxDesktopService::get_status),
+            // matching the original's `type === 'lxc'` short-circuit.
+            let guest_type = jsval::str_or(record.get("guestType"), "qemu");
+            let found_ip = jsval::str_or(rt.get("ipAddress"), "");
+            let ip = if guest_type != "lxc" && !found_ip.is_empty() {
+                found_ip
+            } else {
+                fallback_ip
+            };
+            json!({ "success": true, "status": status, "ip": ip })
+        }
+        Err(e) => json!({ "success": false, "error": e.message }),
+    }
 }
 
 /// `getVmConnectionIpForEmail` (server.js:25908-25927) — resolves the SSH/VNC
