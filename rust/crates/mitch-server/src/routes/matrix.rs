@@ -2506,6 +2506,13 @@ async fn api_sso_login(state: &AppState, headers: &HeaderMap, body_bytes: &[u8])
             .unwrap_or(""),
     );
 
+    // Serializes the whole read-login/register-write sequence below so two
+    // concurrent calls for the same account (two devices, or mitch.pro/
+    // mitchdog.com open in separate tabs) can't both race into registering
+    // a new Matrix account and minting a `-2`/`-3`-suffixed duplicate — see
+    // matrix_sso_login_lock's doc comment in state.rs.
+    let _sso_login_guard = state.matrix_sso_login_lock.lock().await;
+
     let matrix_users_file = state.data_dir().join("matrix_users.json");
     let mut matrix_users = state.store.read_document(&matrix_users_file, json!({}));
     let assigned_user = matrix_users
@@ -2606,6 +2613,7 @@ async fn api_sso_login(state: &AppState, headers: &HeaderMap, body_bytes: &[u8])
                 .write_document(&matrix_users_file, &matrix_users);
         }
     }
+    drop(_sso_login_guard);
 
     let user_id = auth_data
         .get("user_id")

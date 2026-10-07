@@ -98,6 +98,19 @@ pub struct AppState {
     /// The fan-out channel standing in for the JS per-socket `ws.send` loop;
     /// every connected broadcast socket subscribes.
     pub ws_tx: tokio::sync::broadcast::Sender<Arc<crate::ws::WsEnvelope>>,
+    /// Serializes `api_sso_login`'s login-or-register-and-persist sequence.
+    /// Without this, two concurrent calls for the same account (two devices
+    /// logging in around the same time, or mitch.pro/mitchdog.com open in
+    /// separate tabs — different origins, so the client-side
+    /// `navigator.locks` guard in matrix/index.html doesn't cover it) both
+    /// read matrix_users.json before either writes back, both find no
+    /// working login, and both race into registering a new Matrix account —
+    /// the loser hits Conduit's M_USER_IN_USE and falls back to a
+    /// `name-2`/`name-3`-suffixed duplicate instead of just logging into the
+    /// account the other request just created. A single global lock is fine
+    /// here: this endpoint fires once per session per user, never a hot
+    /// path, so serializing it site-wide costs nothing observable.
+    pub matrix_sso_login_lock: tokio::sync::Mutex<()>,
     /// `cvOnline` (server.js:881) — chess-vs online map; `touchUserPresence`
     /// writes under both the raw email and the normalized key. Consumers land
     /// with Step 12 (chess-vs).
@@ -402,6 +415,7 @@ impl AppState {
             // 1024-slot queue: per-socket delivery is lossless under normal
             // load; a lagged receiver skips forward like a slow JS client.
             ws_tx: tokio::sync::broadcast::channel(1024).0,
+            matrix_sso_login_lock: tokio::sync::Mutex::new(()),
             cv_online: std::sync::Mutex::new(std::collections::HashMap::new()),
             game_portal_sessions: std::sync::Mutex::new(std::collections::HashMap::new()),
             // Idle/mini-game session maps: clicker/typing/logic/richard are
