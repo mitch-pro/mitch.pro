@@ -1006,7 +1006,10 @@ pub async fn handle(
     let public_help_base = public_help_base
         .strip_suffix("/index")
         .unwrap_or(public_help_base);
-    let is_exempt = matches!(public_help_base, "/faq" | "/privacy" | "/use-agreement")
+    let is_exempt = matches!(
+        public_help_base,
+        "/faq" | "/privacy" | "/use-agreement" | "/cookies" | "/copyright"
+    )
         || clean_path == "/enroll"
         || clean_path == "/api/me/coins"
         || clean_path == "/larp"
