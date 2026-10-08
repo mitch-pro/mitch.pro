@@ -452,7 +452,13 @@ pub(crate) async fn handle(
         // path's "Delete & Recreate" does. This lets BYO-OS create double as
         // "replace my computer with a fresh one from a newly uploaded ISO"
         // instead of requiring a separate delete step through the template UI.
-        for old_rec in vmlib::get_virtual_machines_for_owner(&state.store, &actor.email) {
+        let old_records = vmlib::get_virtual_machines_for_owner(&state.store, &actor.email);
+        tracing::warn!(
+            "[byo-os create] delete-loop found {} existing record(s) for {}",
+            old_records.len(),
+            actor.email
+        );
+        for old_rec in old_records {
             let old = old_rec.to_json();
             let old_id = jsval::str_or(old.get("id"), "");
             if let Err(err) = crate::proxmox_desktop::desktop()
@@ -461,7 +467,8 @@ pub(crate) async fn handle(
             {
                 tracing::warn!("[byo-os create] Note: Proxmox delete for {old_id} returned: {err:?}");
             }
-            vmlib::delete_virtual_machine(&state.store, &old_id);
+            let deleted = vmlib::delete_virtual_machine(&state.store, &old_id);
+            tracing::warn!("[byo-os create] local delete_virtual_machine({old_id}) -> {deleted}");
             crate::routes::vm::revoke_vm_desktop_connections(state, &old_id);
             crate::routes::vm::clear_vm_lease(state, &old_id);
             state
