@@ -150,28 +150,56 @@ pub fn reserve_virtual_machine(store: &DataStore, record: &Value) -> Option<VmRe
     let vmid = record.get("vmid").and_then(Value::as_f64)?;
     {
         let conn = store.conn();
-        if conn.execute_batch("BEGIN IMMEDIATE").is_err() {
+        if let Err(e) = conn.execute_batch("BEGIN IMMEDIATE") {
+            tracing::warn!("[reserve_virtual_machine] BEGIN IMMEDIATE failed for vmid {vmid}: {e}");
             return None;
         }
-        let exists = conn
+        let blocker: Option<(String, String, String)> = conn
             .query_row(
-                "SELECT 1 FROM virtual_machines WHERE proxmox_vmid = ?1",
+                "SELECT id, owner_email, status FROM virtual_machines WHERE proxmox_vmid = ?1",
                 rusqlite::params![vmid],
-                |_| Ok(()),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )
-            .is_ok();
+            .ok();
+        let exists = blocker.is_some();
         let outcome = if exists {
             None
         } else {
             match upsert_values(record) {
-                Some(values) if write_upsert(&conn, &values).is_ok() => Some(()),
-                _ => None,
+                Some(values) => match write_upsert(&conn, &values) {
+                    Ok(_) => Some(()),
+                    Err(e) => {
+                        tracing::warn!(
+                            "[reserve_virtual_machine] write_upsert failed for vmid {vmid}: {e}"
+                        );
+                        None
+                    }
+                },
+                None => {
+                    tracing::warn!("[reserve_virtual_machine] upsert_values rejected the record for vmid {vmid}");
+                    None
+                }
             }
         };
-        let _ = conn.execute_batch("COMMIT");
-        outcome?;
+        if let Err(e) = conn.execute_batch("COMMIT") {
+            tracing::warn!("[reserve_virtual_machine] COMMIT failed for vmid {vmid}: {e}");
+        }
+        if outcome.is_none() {
+            if let Some((id, owner_email, status)) = blocker {
+                tracing::warn!(
+                    "[reserve_virtual_machine] vmid {vmid} already occupied by id={id} owner={owner_email} status={status}"
+                );
+            }
+            return None;
+        }
     }
-    get_virtual_machine_by_vmid(store, vmid)
+    let readback = get_virtual_machine_by_vmid(store, vmid);
+    if readback.is_none() {
+        tracing::warn!(
+            "[reserve_virtual_machine] insert for vmid {vmid} committed but the readback found nothing"
+        );
+    }
+    readback
 }
 
 /// `upsertVirtualMachine(record)` (data_store.js:261-296) — INSERT … ON
