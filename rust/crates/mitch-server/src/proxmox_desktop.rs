@@ -1910,6 +1910,11 @@ exit 0
         let mut body = Map::new();
         body.insert("vmid".to_string(), jsval::num_value(vmid as f64));
         body.insert("name".to_string(), json!(clean_host));
+        // Same pool clone_desktop puts every template VM into — the API
+        // token's permissions are scoped to this pool, so a VM created
+        // outside it is invisible to the token for status/power/audit
+        // calls even though creation itself succeeds.
+        body.insert("pool".to_string(), json!("sandboxes"));
         body.insert("cores".to_string(), jsval::num_value(cpu_cores));
         body.insert("sockets".to_string(), json!(1));
         body.insert("memory".to_string(), jsval::num_value(memory_mb));
