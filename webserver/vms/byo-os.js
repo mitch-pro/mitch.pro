@@ -178,12 +178,36 @@
     }
   }
 
+  // Unlike uploadFile, there's no chunking/progress here — the server
+  // relays the download straight into Proxmox in one request, so this is
+  // just a single long-running fetch from the browser's perspective.
+  async function fetchFromUrl(rawUrl) {
+    const urlBtn = $('byo-os-url-btn');
+    urlBtn.disabled = true;
+    setStatus('Fetching that ISO and handing it to the computer service… large files can take a while here.');
+    try {
+      await api('/api/vm/byo-os/iso/from-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
+        body: JSON.stringify({ url: rawUrl }),
+      });
+      setStatus('ISO fetched.');
+      await refreshIsoState();
+    } catch (e) {
+      setStatus(e.message, true);
+    } finally {
+      urlBtn.disabled = !$('byo-os-url-input').value.trim();
+    }
+  }
+
   function init() {
     const openBtns = [$('byo-os-open-btn'), $('byo-os-open-btn-header')].filter(Boolean);
     if (!openBtns.length || !dialog()) return;
     const closeBtn = $('byo-os-close-btn');
     const fileInput = $('byo-os-file-input');
     const uploadBtn = $('byo-os-upload-btn');
+    const urlInput = $('byo-os-url-input');
+    const urlBtn = $('byo-os-url-btn');
     const deleteBtn = $('byo-os-delete-btn');
     const createBtn = $('byo-os-create-btn');
 
@@ -204,6 +228,13 @@
     uploadBtn.addEventListener('click', () => {
       const file = fileInput.files && fileInput.files[0];
       if (file) uploadFile(file);
+    });
+    urlInput.addEventListener('input', () => {
+      urlBtn.disabled = !urlInput.value.trim();
+    });
+    urlBtn.addEventListener('click', () => {
+      const rawUrl = urlInput.value.trim();
+      if (rawUrl) fetchFromUrl(rawUrl);
     });
     deleteBtn.addEventListener('click', async () => {
       if (!confirm('Remove your stored ISO? You will need to upload (and pay) again to use BYO-OS.')) return;

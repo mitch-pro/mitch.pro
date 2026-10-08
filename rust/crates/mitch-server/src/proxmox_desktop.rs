@@ -1857,6 +1857,181 @@ exit 0
         }))
     }
 
+    /// Fetches an ISO from an arbitrary URL and relays it straight into
+    /// Proxmox's storage upload API — the download and the upload run as
+    /// one streamed pass-through (bytes flow source → this process → Proxmox
+    /// in bounded chunks), so nothing is ever written to this box's disk and
+    /// the whole file is never held in memory at once, no matter its size.
+    /// There's no size cap here (unlike `upload_iso`, which has to hold the
+    /// already-fully-assembled browser upload in one local file) — the
+    /// caller bills based on the returned byte count instead. Returns the
+    /// Proxmox-side filename and the total bytes transferred.
+    pub async fn upload_iso_from_url(&self, source_url: &str) -> Result<(String, u64), ProxmoxServiceError> {
+        self.assert_configured()?;
+        let upload_url = if self.verify_tls && !self.tls_server_name.is_empty() {
+            format!(
+                "https://{}:{}/api2/json/nodes/{}/storage/{}/upload",
+                self.tls_server_name,
+                self.port,
+                encode_uri_component(&self.node),
+                encode_uri_component(&self.iso_storage)
+            )
+        } else {
+            format!(
+                "{}/nodes/{}/storage/{}/upload",
+                self.base_url,
+                encode_uri_component(&self.node),
+                encode_uri_component(&self.iso_storage)
+            )
+        };
+
+        const MAX_ATTEMPTS: u32 = 3;
+        let mut last_err: Option<ProxmoxServiceError> = None;
+        let mut prev_filename: Option<String> = None;
+        for attempt in 1..=MAX_ATTEMPTS {
+            if let Some(prev) = prev_filename.take() {
+                let _ = self.delete_iso(&prev).await;
+            }
+
+            let download = match self
+                .client
+                .get(source_url)
+                .timeout(Duration::from_secs(30))
+                .send()
+                .await
+            {
+                Ok(r) => r,
+                Err(error) => {
+                    tracing::warn!(
+                        "[proxmox] ISO link fetch attempt {attempt}/{MAX_ATTEMPTS} failed to connect: {error}"
+                    );
+                    last_err = Some(ProxmoxServiceError::new(
+                        "FETCH_FAILED",
+                        "Could not reach that link.",
+                        502,
+                    ));
+                    if attempt == MAX_ATTEMPTS {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_secs(3 * attempt as u64)).await;
+                    continue;
+                }
+            };
+            if !download.status().is_success() {
+                return Err(ProxmoxServiceError::new(
+                    "FETCH_REJECTED",
+                    format!("That link returned HTTP {} — check the URL.", download.status().as_u16()),
+                    400,
+                ));
+            }
+
+            let transferred = Arc::new(std::sync::atomic::AtomicU64::new(0));
+            let transferred_counter = transferred.clone();
+            let byte_stream = futures_util::StreamExt::inspect(download.bytes_stream(), move |chunk| {
+                if let Ok(bytes) = chunk {
+                    transferred_counter.fetch_add(bytes.len() as u64, std::sync::atomic::Ordering::Relaxed);
+                }
+            });
+            let body = reqwest::Body::wrap_stream(byte_stream);
+            let remote_filename = format!("{}.iso", mitch_lib::crypto::random_bytes_hex(12));
+            // No stream_with_length here — the source's size isn't known
+            // upfront, so this goes out chunked (Proxmox's upload endpoint,
+            // same as any standards-compliant HTTP/1.1 server, accepts a
+            // chunked request body fine).
+            let part = reqwest::multipart::Part::stream(body)
+                .file_name(remote_filename.clone())
+                .mime_str("application/octet-stream")
+                .unwrap_or_else(|_| reqwest::multipart::Part::bytes(Vec::new()));
+            let form = reqwest::multipart::Form::new()
+                .text("content", "iso")
+                .part("filename", part);
+
+            let response = match self
+                .client
+                .post(&upload_url)
+                .header("Authorization", &self.authorization)
+                .multipart(form)
+                .timeout(Duration::from_secs(3600))
+                .send()
+                .await
+            {
+                Ok(r) => r,
+                Err(error) => {
+                    let is_timeout = error.is_timeout();
+                    tracing::warn!(
+                        "[proxmox] ISO link relay attempt {attempt}/{MAX_ATTEMPTS} failed: {error}"
+                    );
+                    last_err = Some(if is_timeout {
+                        ProxmoxServiceError::new(
+                            "TIMEOUT",
+                            "Fetching and uploading that ISO timed out.",
+                            504,
+                        )
+                    } else {
+                        ProxmoxServiceError::new(
+                            "UNREACHABLE",
+                            "The computer service is unreachable.",
+                            502,
+                        )
+                    });
+                    prev_filename = Some(remote_filename);
+                    if is_timeout || attempt == MAX_ATTEMPTS {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_secs(3 * attempt as u64)).await;
+                    continue;
+                }
+            };
+
+            let status = response.status().as_u16();
+            if response.status().is_redirection() || !(200..300).contains(&status) {
+                let body_text = response.text().await.unwrap_or_default();
+                tracing::warn!(
+                    "[proxmox] ISO link relay attempt {attempt}/{MAX_ATTEMPTS} rejected (HTTP {status}): {body_text}"
+                );
+                let mapped = if status == 401 || status == 403 { 503 } else { status };
+                let payload: Value = serde_json::from_str(&body_text).unwrap_or(Value::Null);
+                let detail = payload
+                    .get("message")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+                    .or_else(|| {
+                        let trimmed = body_text.trim();
+                        (!trimmed.is_empty() && trimmed.len() < 200).then(|| trimmed.to_string())
+                    });
+                let message = match detail {
+                    Some(d) => format!("The computer service rejected the request: {d}"),
+                    None => "Uploading the ISO to the hypervisor failed.".to_string(),
+                };
+                last_err = Some(ProxmoxServiceError::new("UPSTREAM_REJECTED", message, mapped));
+                if status != 400 || attempt == MAX_ATTEMPTS {
+                    break;
+                }
+                prev_filename = None;
+                tokio::time::sleep(Duration::from_secs(3 * attempt as u64)).await;
+                continue;
+            }
+
+            let envelope: Value = response
+                .text()
+                .await
+                .ok()
+                .and_then(|text| serde_json::from_str(&text).ok())
+                .unwrap_or(Value::Null);
+            let upid = envelope.get("data").cloned().unwrap_or(Value::Null);
+            // A huge ISO over a slow link can legitimately take a long
+            // while for Proxmox's own copy/validate task to finish.
+            self.wait_for_task(&self.node, Some(&upid), 1_800_000).await?;
+            return Ok((remote_filename, transferred.load(std::sync::atomic::Ordering::Relaxed)));
+        }
+
+        Err(last_err.unwrap_or_else(|| {
+            ProxmoxServiceError::new("UNREACHABLE", "The computer service is unreachable.", 502)
+        }))
+    }
+
     /// Removes an ISO from `iso_storage` — the BYO-OS counterpart to
     /// `upload_iso`, used when a user replaces or deletes their stored ISO
     /// (enforcing the "1 ISO max" rule doesn't leave orphaned files behind

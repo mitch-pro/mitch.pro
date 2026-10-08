@@ -43,6 +43,30 @@ const MAX_ISO_BYTES: u64 = 6 * 1024 * 1024 * 1024;
 /// to 16MB chunks; this leaves headroom.
 const MAX_CHUNK_BYTES: u64 = 24 * 1024 * 1024;
 
+/// Link-based ISOs (`/iso/from-url`) have no size cap — the download is
+/// relayed straight into Proxmox without this server ever holding the
+/// whole file, so there's no local-disk reason to cap it. Size is billed
+/// instead: BYO_OS_COST_COINS covers up to this many GB...
+const LINK_ISO_INCLUDED_GB: f64 = 6.0;
+/// ...a per-GB surcharge applies above that...
+const LINK_ISO_SURCHARGE_PER_GB: f64 = 100.0;
+/// ...which itself stops scaling at this many GB, so there's a ceiling on
+/// total cost even for an arbitrarily large ISO.
+const LINK_ISO_SURCHARGE_CAP_GB: f64 = 12.0;
+
+/// `BYO_OS_COST_COINS` plus a per-GB surcharge for anything over
+/// `LINK_ISO_INCLUDED_GB`, capped at `LINK_ISO_SURCHARGE_CAP_GB`.
+fn link_iso_cost_coins(size_bytes: u64) -> f64 {
+    let size_gb = size_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+    let billable_overage_gb =
+        (size_gb - LINK_ISO_INCLUDED_GB).clamp(0.0, LINK_ISO_SURCHARGE_CAP_GB - LINK_ISO_INCLUDED_GB);
+    BYO_OS_COST_COINS + billable_overage_gb * LINK_ISO_SURCHARGE_PER_GB
+}
+
+fn fmt_gb(size_bytes: u64) -> String {
+    format!("{:.1}GB", size_bytes as f64 / (1024.0 * 1024.0 * 1024.0))
+}
+
 // Only byo_os_uploads/ exists on this box now — a scratch area used for the
 // brief reassemble-then-hand-off-to-Proxmox window in /iso/complete. There
 // is deliberately no persistent byo_os_isos/ directory: once upload
@@ -405,6 +429,135 @@ pub(crate) async fn handle(
         ));
     }
 
+    // POST /api/vm/byo-os/iso/from-url — fetch an ISO from a link instead of
+    // uploading a file. Proxmox's own download-url API needs a Sys.Modify
+    // grant on "/" (a much bigger privilege than this feature should need),
+    // so instead this server relays the download itself: the file streams
+    // source → us → Proxmox in one pass, never touching disk here and never
+    // fully buffered in memory, so there's no size cap — see
+    // link_iso_cost_coins for how a bigger file costs more instead.
+    if path == "/api/vm/byo-os/iso/from-url" && *method == Method::POST {
+        if is_vm_banned(state, &actor.email) {
+            return Some(json_response(403, json!({ "error": "VM access is restricted on this account." })));
+        }
+        if is_byo_os_banned(state, &actor.email) {
+            return Some(json_response(403, json!({ "error": "BYO-OS is restricted on this account." })));
+        }
+        let body: Value = serde_json::from_slice(body_bytes).unwrap_or(json!({}));
+        let raw_url = jsval::str_or(body.get("url"), "").trim().to_string();
+        if raw_url.len() > 2000 {
+            return Some(json_response(400, json!({ "error": "That link is too long." })));
+        }
+        let parsed = url::Url::parse(&raw_url)
+            .ok()
+            .filter(|u| matches!(u.scheme(), "http" | "https"));
+        let Some(parsed) = parsed else {
+            return Some(json_response(
+                400,
+                json!({ "error": "Enter a valid http:// or https:// link to an ISO file." }),
+            ));
+        };
+
+        // The real, size-adjusted cost isn't known until the download
+        // finishes — this just filters out accounts that can't even cover
+        // the minimum before any work starts.
+        let balance = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &actor.email);
+        if balance < BYO_OS_COST_COINS {
+            return Some(json_response(
+                402,
+                json!({
+                    "error": format!("BYO-OS costs at least {BYO_OS_COST_COINS:.0} coins. You have {balance:.2}."),
+                    "code": "insufficient_coins",
+                }),
+            ));
+        }
+        if !crate::proxmox_desktop::desktop().configured() {
+            return Some(json_response(503, json!({ "error": "Computer service is not configured." })));
+        }
+
+        let display_filename = parsed
+            .path_segments()
+            .and_then(|mut segs| segs.next_back())
+            .map(safe_iso_filename)
+            .unwrap_or_else(|| "custom.iso".to_string());
+
+        let (proxmox_filename, size_bytes) = match crate::proxmox_desktop::desktop()
+            .upload_iso_from_url(&raw_url)
+            .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                let friendly = crate::routes::vm::friendly_vm_error(&e.into());
+                return Some(json_response(
+                    friendly.0,
+                    json!({ "error": format!("Fetching that ISO failed: {}", friendly.1) }),
+                ));
+            }
+        };
+
+        let total_cost = link_iso_cost_coins(size_bytes);
+        let current_balance = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &actor.email);
+        if current_balance < total_cost {
+            let _ = crate::proxmox_desktop::desktop().delete_iso(&proxmox_filename).await;
+            return Some(json_response(
+                402,
+                json!({
+                    "error": format!(
+                        "That ISO is {} and costs {total_cost:.0} coins total. You have {current_balance:.2} — nothing was charged.",
+                        fmt_gb(size_bytes)
+                    ),
+                    "code": "insufficient_coins",
+                }),
+            ));
+        }
+
+        let mut iso_manifest = state.store.read_document(&isos_manifest_file(state), json!({}));
+        if let Some(prev) = iso_manifest.get(&actor.email).cloned() {
+            let prev_filename = jsval::str_or(prev.get("proxmoxFilename"), "");
+            if !prev_filename.is_empty() && prev_filename != proxmox_filename {
+                let _ = crate::proxmox_desktop::desktop().delete_iso(&prev_filename).await;
+            }
+        }
+
+        mitch_lib::coins::add_coins(
+            &state.store,
+            state.data_dir(),
+            &actor.email,
+            -total_cost,
+            1.0,
+            "byo_os_iso_upload",
+        );
+
+        let entry = json!({
+            "filename": display_filename,
+            "proxmoxFilename": proxmox_filename,
+            "sizeBytes": size_bytes,
+            "uploadedAt": mitch_lib::school::now_millis(),
+        });
+        if let Some(map) = iso_manifest.as_object_mut() {
+            map.insert(actor.email.clone(), entry.clone());
+        }
+        let _ = state.store.write_document(&isos_manifest_file(state), &iso_manifest);
+
+        vm_audit(
+            state,
+            &actor.email,
+            None,
+            "BYO_OS_ISO_UPLOADED",
+            true,
+            Some(&json!({ "filename": display_filename, "sizeBytes": size_bytes, "sourceUrl": raw_url, "costCoins": total_cost })),
+        );
+
+        return Some(json_response(
+            200,
+            json!({
+                "ok": true,
+                "iso": entry,
+                "coins": mitch_lib::coins::get_coins(&state.store, state.data_dir(), &actor.email),
+            }),
+        ));
+    }
+
     // POST /api/vm/byo-os/create — boot a from-scratch VM from the ISO
     // already sitting on Proxmox's storage (uploaded at /iso/complete time).
     if path == "/api/vm/byo-os/create" && *method == Method::POST {
@@ -651,5 +804,19 @@ mod tests {
         assert_eq!((16u64).div_ceil(16), 1);
         assert_eq!((17u64).div_ceil(16), 2);
         assert_eq!(MAX_ISO_BYTES.div_ceil(16 * 1024 * 1024), 384);
+    }
+
+    #[test]
+    fn link_iso_cost_scales_then_caps() {
+        const GB: u64 = 1024 * 1024 * 1024;
+        // At or under the included 6GB: flat base fee, no surcharge.
+        assert_eq!(link_iso_cost_coins(0), BYO_OS_COST_COINS);
+        assert_eq!(link_iso_cost_coins(6 * GB), BYO_OS_COST_COINS);
+        // Between 6 and 12GB: base + 100/GB for the overage.
+        assert_eq!(link_iso_cost_coins(9 * GB), BYO_OS_COST_COINS + 300.0);
+        assert_eq!(link_iso_cost_coins(12 * GB), BYO_OS_COST_COINS + 600.0);
+        // Past 12GB the surcharge stops scaling — same price as exactly 12GB.
+        assert_eq!(link_iso_cost_coins(50 * GB), BYO_OS_COST_COINS + 600.0);
+        assert_eq!(link_iso_cost_coins(500 * GB), link_iso_cost_coins(12 * GB));
     }
 }
