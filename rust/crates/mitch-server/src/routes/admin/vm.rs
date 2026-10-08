@@ -846,6 +846,96 @@ pub async fn handle(
         return Some(json_response(200, json!({ "success": true, "message": msg })));
     }
 
+    // POST /api/admin/vms/downgrade-specs — admin override of a computer's
+    // cpu/memory/disk, independent of the user's own paid-upgrade path.
+    // Reuses update_hardware, the same Proxmox resize call the paid upgrade
+    // flow uses (routes/vm.rs's /api/vm/my-computer/upgrade handler) — cores
+    // and memory move freely in either direction; disk only ever grows (a
+    // live virtual disk can't be safely shrunk without guest cooperation,
+    // so update_hardware already no-ops a smaller disk request rather than
+    // risk data loss).
+    if path == "/api/admin/vms/downgrade-specs" && *method == Method::POST {
+        if let Some((code, msg)) = state.rate_limit_check(&ctx.ip, "anon", "/api/admin/vms") {
+            return Some(json_response(code, json!({ "error": msg })));
+        }
+        let actor = match crate::routes::vm::authenticated_vm_actor(state, headers) {
+            Some(a) => a,
+            None => return Some(json_response(401, json!({ "error": "Sign in required." }))),
+        };
+        if !actor.is_admin {
+            return Some(json_response(403, json!({ "error": "Admin access required." })));
+        }
+
+        let vmid_fallback = jsval::str_or(body.get("vmid"), "");
+        let id_str = jsval::str_or(body.get("id"), &vmid_fallback);
+        let record = vmlib::get_virtual_machine_by_id(&state.store, &id_str).or_else(|| {
+            id_str
+                .parse::<f64>()
+                .ok()
+                .and_then(|v| vmlib::get_virtual_machine_by_vmid(&state.store, v))
+        });
+        let Some(record) = record else {
+            return Some(json_response(404, json!({ "error": "Computer not found." })));
+        };
+
+        let cpu_opt = body.get("cpuCores").and_then(jsval::number);
+        let mem_opt = body.get("memoryMb").and_then(jsval::number);
+        let disk_opt = body.get("diskGb").and_then(jsval::number);
+        if cpu_opt.is_none() && mem_opt.is_none() && disk_opt.is_none() {
+            return Some(json_response(
+                400,
+                json!({ "error": "Provide at least one of cpuCores, memoryMb, diskGb." }),
+            ));
+        }
+
+        let mut rec_json = record.to_json();
+        vmlib::update_virtual_machine_specs(&state.store, &record.id, cpu_opt, mem_opt, disk_opt);
+        if let Some(c) = cpu_opt {
+            rec_json["cpuCores"] = json!(c);
+        }
+        if let Some(m) = mem_opt {
+            rec_json["memoryMb"] = json!(m);
+        }
+        if let Some(d) = disk_opt {
+            rec_json["diskGb"] = json!(d);
+        }
+
+        let mut proxmox_error = None;
+        if crate::proxmox_desktop::desktop().configured() {
+            if let Err(e) = crate::proxmox_desktop::desktop()
+                .update_hardware(&rec_json, cpu_opt, mem_opt, disk_opt)
+                .await
+            {
+                proxmox_error = Some(crate::routes::vm::friendly_vm_error(&e.into()).1);
+            }
+        }
+
+        crate::routes::vm::vm_audit(
+            state,
+            &actor.email,
+            Some(&rec_json),
+            "VM_ADMIN_SPEC_OVERRIDE",
+            proxmox_error.is_none(),
+            Some(&json!({
+                "cpuCores": cpu_opt,
+                "memoryMb": mem_opt,
+                "diskGb": disk_opt,
+                "proxmoxError": proxmox_error,
+            })),
+        );
+
+        return Some(json_response(
+            200,
+            json!({
+                "success": true,
+                "message": match &proxmox_error {
+                    Some(e) => format!("Specs updated in the system; the running VM may need a restart to pick up the change ({e})."),
+                    None => "Specs updated.".to_string(),
+                },
+            }),
+        ));
+    }
+
     // GET /api/admin/vm-requests (admins only).
     if path == "/api/admin/vm-requests" && *method == Method::GET {
         if state.rate_limit_check(&ctx.ip, "anon", path).is_some() {

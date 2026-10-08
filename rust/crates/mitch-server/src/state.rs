@@ -31,6 +31,12 @@ pub struct AppState {
     pub casino_payout: std::sync::atomic::AtomicU64,
     /// `shadowBans` (server.js:1174) — loaded from data/shadow_bans.json.
     pub shadow_bans: std::sync::RwLock<std::collections::HashSet<String>>,
+    /// Users banned from the BYO-OS custom-ISO feature specifically (can
+    /// still use normal template VMs). Loaded from data/byo_os_bans.json.
+    pub byo_os_bans: std::sync::RwLock<std::collections::HashSet<String>>,
+    /// Users banned from VMs entirely (templates and BYO-OS both). Loaded
+    /// from data/vm_bans.json.
+    pub vm_bans: std::sync::RwLock<std::collections::HashSet<String>>,
     /// `proxBlocklist` (server.js:1179).
     pub prox_blocklist: std::sync::RwLock<std::collections::HashSet<String>>,
     /// `featuredGameHref` (server.js:1181).
@@ -339,6 +345,19 @@ impl AppState {
                     .collect()
             })
             .unwrap_or_default();
+        let load_ban_set = |file: &str| -> std::collections::HashSet<String> {
+            store
+                .read_document(&cfg.base_dir.join(file), serde_json::json!([]))
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(str::to_string))
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        let byo_os_bans = load_ban_set("data/byo_os_bans.json");
+        let vm_bans = load_ban_set("data/vm_bans.json");
         let prox_blocklist: std::collections::HashSet<String> = store
             .read_document(
                 &cfg.base_dir.join("data/prox_blocklist.json"),
@@ -394,6 +413,8 @@ impl AppState {
                     .to_bits(),
             ),
             shadow_bans: std::sync::RwLock::new(shadow_bans),
+            byo_os_bans: std::sync::RwLock::new(byo_os_bans),
+            vm_bans: std::sync::RwLock::new(vm_bans),
             prox_blocklist: std::sync::RwLock::new(prox_blocklist),
             featured_game_href: std::sync::RwLock::new(String::new()),
             pickle_presence: std::sync::Mutex::new(Vec::new()),

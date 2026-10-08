@@ -147,7 +147,7 @@
       const errorBanner = powerError
         ? `<div class="fleet-power-error" style="grid-column:1/-1;color:#ffb3b3;font-size:.76rem;padding-top:4px;">⚠️ ${esc(powerError)} ${canAccess ? `<button data-retry-force-stop style="margin-left:6px;">Retry Force Stop</button>` : ''}</div>`
         : '';
-      return `<article class="fleet-item" data-id="${esc(vm.id)}"><div class="fleet-identity"><strong>${esc(vm.name)}</strong><small>${esc(vm.operatingSystem || 'Linux desktop')}</small></div><div class="fleet-owner"><strong title="${esc(vm.ownerEmail)}">${esc(vm.ownerEmail)}</strong><small>${esc(vm.hostname || 'No hostname')}</small></div><span class="fleet-state ${running ? 'running' : ''}">${busy ? 'Updating...' : running ? 'Running' : stopped ? 'Offline' : esc(vm.status)}</span>${inUse ? `<span class="fleet-in-use" style="background:#15803d; color:#f0fdf4; font-size:0.75rem; font-weight:700; padding:2px 8px; border-radius:999px; margin-left:4px;" title="Active desktop session">👤 In Use (${esc(activeUserLabel)})</span>` : ''}<span class="fleet-resources">${esc(vm.cpuCores)} CPU &middot; ${bytes(vm.memoryTotal)}<small>${bytes(vm.diskTotal)} disk</small></span><span class="fleet-address">${esc(vm.ipAddress || 'No IP yet')}</span><div class="fleet-actions">${selectBox}${openDesktopAction}${powerButtons}<button data-unassign class="unassign" ${busy ? 'disabled' : ''}>Unassign</button><button data-delete class="danger" ${busy ? 'disabled' : ''}>Delete</button>${hasFailedDelete ? `<button data-force-delete class="danger" style="background:#ef4444; color:#fff; border-color:#ef4444; font-weight:700;" ${busy ? 'disabled' : ''}>⚠️ Force Delete</button>` : ''}</div>${errorBanner}</article>`;
+      return `<article class="fleet-item" data-id="${esc(vm.id)}"><div class="fleet-identity"><strong>${esc(vm.name)}</strong><small>${esc(vm.operatingSystem || 'Linux desktop')}</small></div><div class="fleet-owner"><strong title="${esc(vm.ownerEmail)}">${esc(vm.ownerEmail)}</strong><small>${esc(vm.hostname || 'No hostname')}</small></div><span class="fleet-state ${running ? 'running' : ''}">${busy ? 'Updating...' : running ? 'Running' : stopped ? 'Offline' : esc(vm.status)}</span>${inUse ? `<span class="fleet-in-use" style="background:#15803d; color:#f0fdf4; font-size:0.75rem; font-weight:700; padding:2px 8px; border-radius:999px; margin-left:4px;" title="Active desktop session">👤 In Use (${esc(activeUserLabel)})</span>` : ''}<span class="fleet-resources">${esc(vm.cpuCores)} CPU &middot; ${bytes(vm.memoryTotal)}<small>${bytes(vm.diskTotal)} disk</small></span><span class="fleet-address">${esc(vm.ipAddress || 'No IP yet')}</span><div class="fleet-actions">${selectBox}${openDesktopAction}${powerButtons}<button data-unassign class="unassign" ${busy ? 'disabled' : ''}>Unassign</button><button data-downgrade-specs ${busy ? 'disabled' : ''}>Downgrade specs</button><button data-vm-ban ${busy ? 'disabled' : ''}>Ban owner (VMs)</button><button data-byo-ban ${busy ? 'disabled' : ''}>Ban owner (BYO-OS)</button><button data-delete class="danger" ${busy ? 'disabled' : ''}>Delete</button>${hasFailedDelete ? `<button data-force-delete class="danger" style="background:#ef4444; color:#fff; border-color:#ef4444; font-weight:700;" ${busy ? 'disabled' : ''}>⚠️ Force Delete</button>` : ''}</div>${errorBanner}</article>`;
     }).join('') : '<p class="empty">No customer computers match.</p>';
     $('bulk-reboot').disabled = selectedForBulk.size === 0;
     if (overview.viewerIsOwner) {
@@ -566,6 +566,23 @@
     } else if (button.hasAttribute('data-unassign')) {
       if (!confirm(`Unassign ${vm.name} from ${vm.ownerEmail}? Their open desktop will disconnect. The computer and its files will remain on the server.`)) return;
       url = '/api/admin/vms/unassign'; body = { id: vm.id };
+    } else if (button.hasAttribute('data-downgrade-specs')) {
+      const cpuRaw = prompt(`New CPU cores for ${vm.name} (currently ${vm.cpuCores}). Leave blank to leave unchanged.`, '');
+      const memRaw = prompt(`New RAM in MB for ${vm.name} (currently ${Math.round(vm.memoryTotal / (1024 * 1024))}). Leave blank to leave unchanged.`, '');
+      const diskRaw = prompt(`New disk in GB for ${vm.name} (currently ${Math.round(vm.diskTotal / (1024 * 1024 * 1024))}). Shrinking has no effect — a live disk can't be safely shrunk. Leave blank to leave unchanged.`, '');
+      const specBody = { id: vm.id };
+      if (cpuRaw && cpuRaw.trim()) specBody.cpuCores = Number(cpuRaw);
+      if (memRaw && memRaw.trim()) specBody.memoryMb = Number(memRaw);
+      if (diskRaw && diskRaw.trim()) specBody.diskGb = Number(diskRaw);
+      if (!('cpuCores' in specBody) && !('memoryMb' in specBody) && !('diskGb' in specBody)) return;
+      if (!confirm(`Apply these spec changes to ${vm.name} now?`)) return;
+      url = '/api/admin/vms/downgrade-specs'; body = specBody;
+    } else if (button.hasAttribute('data-vm-ban')) {
+      if (!confirm(`Toggle "banned from all VMs" for ${vm.ownerEmail}? This blocks both template and BYO-OS VM features for that account.`)) return;
+      url = '/api/admin/vm-ban'; body = { email: vm.ownerEmail };
+    } else if (button.hasAttribute('data-byo-ban')) {
+      if (!confirm(`Toggle "banned from BYO-OS" for ${vm.ownerEmail}? Normal template VMs still work for that account.`)) return;
+      url = '/api/admin/byo-os-ban'; body = { email: vm.ownerEmail };
     } else {
       return;
     }
