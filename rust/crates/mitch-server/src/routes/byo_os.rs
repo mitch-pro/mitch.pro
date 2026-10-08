@@ -402,131 +402,6 @@ pub(crate) async fn handle(
         ));
     }
 
-    // POST /api/vm/byo-os/iso/from-url — have Proxmox fetch the ISO directly
-    // from a link instead of uploading it through this server. Goes through
-    // download_iso_from_url's plain form-encoded request (see its doc
-    // comment) rather than upload_iso's bespoke multipart client use, so
-    // this path doesn't depend on whatever large-streamed-body issue that
-    // one can hit — a straightforward alternative when a direct upload
-    // isn't working, not just a convenience for not having the file locally.
-    if path == "/api/vm/byo-os/iso/from-url" && *method == Method::POST {
-        if is_vm_banned(state, &actor.email) {
-            return Some(json_response(403, json!({ "error": "VM access is restricted on this account." })));
-        }
-        if is_byo_os_banned(state, &actor.email) {
-            return Some(json_response(403, json!({ "error": "BYO-OS is restricted on this account." })));
-        }
-        let body: Value = serde_json::from_slice(body_bytes).unwrap_or(json!({}));
-        let raw_url = jsval::str_or(body.get("url"), "").trim().to_string();
-        if raw_url.len() > 2000 {
-            return Some(json_response(400, json!({ "error": "That link is too long." })));
-        }
-        let parsed = url::Url::parse(&raw_url)
-            .ok()
-            .filter(|u| matches!(u.scheme(), "http" | "https"));
-        let Some(parsed) = parsed else {
-            return Some(json_response(
-                400,
-                json!({ "error": "Enter a valid http:// or https:// link to an ISO file." }),
-            ));
-        };
-
-        let balance = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &actor.email);
-        if balance < BYO_OS_COST_COINS {
-            return Some(json_response(
-                402,
-                json!({
-                    "error": format!("BYO-OS costs {BYO_OS_COST_COINS:.0} coins. You have {balance:.2}."),
-                    "code": "insufficient_coins",
-                }),
-            ));
-        }
-        if !crate::proxmox_desktop::desktop().configured() {
-            return Some(json_response(503, json!({ "error": "Computer service is not configured." })));
-        }
-
-        let display_filename = parsed
-            .path_segments()
-            .and_then(|mut segs| segs.next_back())
-            .map(safe_iso_filename)
-            .unwrap_or_else(|| "custom.iso".to_string());
-        let proxmox_filename = format!("{}.iso", mitch_lib::crypto::random_bytes_hex(12));
-
-        if let Err(e) = crate::proxmox_desktop::desktop()
-            .download_iso_from_url(&raw_url, &proxmox_filename)
-            .await
-        {
-            let friendly = crate::routes::vm::friendly_vm_error(&e.into());
-            return Some(json_response(
-                friendly.0,
-                json!({ "error": format!("Fetching that ISO failed: {}", friendly.1) }),
-            ));
-        }
-
-        // The size wasn't known up front (Proxmox fetched it, not us) — now
-        // enforce the same 6GB cap the chunked-upload path checks before
-        // ever starting. Best-effort: if the lookup itself fails, don't
-        // punish the user for our own inability to verify it.
-        let size_bytes = crate::proxmox_desktop::desktop()
-            .get_iso_size(&proxmox_filename)
-            .await;
-        if let Some(size) = size_bytes {
-            if size > MAX_ISO_BYTES {
-                let _ = crate::proxmox_desktop::desktop().delete_iso(&proxmox_filename).await;
-                return Some(json_response(
-                    400,
-                    json!({ "error": "That ISO is larger than the 6GB limit — it was not kept." }),
-                ));
-            }
-        }
-
-        let mut iso_manifest = state.store.read_document(&isos_manifest_file(state), json!({}));
-        if let Some(prev) = iso_manifest.get(&actor.email).cloned() {
-            let prev_filename = jsval::str_or(prev.get("proxmoxFilename"), "");
-            if !prev_filename.is_empty() && prev_filename != proxmox_filename {
-                let _ = crate::proxmox_desktop::desktop().delete_iso(&prev_filename).await;
-            }
-        }
-
-        mitch_lib::coins::add_coins(
-            &state.store,
-            state.data_dir(),
-            &actor.email,
-            -BYO_OS_COST_COINS,
-            1.0,
-            "byo_os_iso_upload",
-        );
-
-        let entry = json!({
-            "filename": display_filename,
-            "proxmoxFilename": proxmox_filename,
-            "sizeBytes": size_bytes,
-            "uploadedAt": mitch_lib::school::now_millis(),
-        });
-        if let Some(map) = iso_manifest.as_object_mut() {
-            map.insert(actor.email.clone(), entry.clone());
-        }
-        let _ = state.store.write_document(&isos_manifest_file(state), &iso_manifest);
-
-        vm_audit(
-            state,
-            &actor.email,
-            None,
-            "BYO_OS_ISO_UPLOADED",
-            true,
-            Some(&json!({ "filename": display_filename, "sizeBytes": size_bytes, "sourceUrl": raw_url })),
-        );
-
-        return Some(json_response(
-            200,
-            json!({
-                "ok": true,
-                "iso": entry,
-                "coins": mitch_lib::coins::get_coins(&state.store, state.data_dir(), &actor.email),
-            }),
-        ));
-    }
-
     // POST /api/vm/byo-os/create — boot a from-scratch VM from the ISO
     // already sitting on Proxmox's storage (uploaded at /iso/complete time).
     if path == "/api/vm/byo-os/create" && *method == Method::POST {
@@ -612,45 +487,69 @@ pub(crate) async fn handle(
             .or_else(|| user_upgrades.get("diskGb").and_then(jsval::number))
             .unwrap_or(64.0);
 
-        let all_records = vmlib::list_virtual_machines(&state.store, true);
-        let existing_vmids: Vec<f64> = all_records.iter().map(|r| r.vmid).collect();
-        let vmid = match crate::proxmox_desktop::desktop()
-            .next_available_vmid(100.0, 999_999_999.0, &existing_vmids)
-            .await
-        {
-            Ok(v) => v as f64,
-            Err(e) => {
-                state.vm_power_requests.lock().unwrap_or_else(|e| e.into_inner()).remove(&lock_key);
-                let friendly = crate::routes::vm::friendly_vm_error(&e.into());
-                return Some(json_response(friendly.0, json!({ "error": friendly.1, "code": friendly.2 })));
+        // next_available_vmid only checks Proxmox's own live guest list plus
+        // whatever vmids this request already knows about — a vmid it hands
+        // back can still collide with another row already in our local
+        // table (e.g. a stale leftover from an earlier failed attempt by a
+        // different user/flow) by the time reserve_virtual_machine's own
+        // existence check runs. Retry a couple of times with a freshly
+        // recomputed vmid rather than failing outright on that race.
+        const MAX_RESERVE_ATTEMPTS: u32 = 3;
+        let mut pending_record: Option<Value> = None;
+        let mut vmid: f64 = 0.0;
+        let mut hostname = String::new();
+        for attempt in 1..=MAX_RESERVE_ATTEMPTS {
+            let all_records = vmlib::list_virtual_machines(&state.store, true);
+            let existing_vmids: Vec<f64> = all_records.iter().map(|r| r.vmid).collect();
+            let candidate_vmid = match crate::proxmox_desktop::desktop()
+                .next_available_vmid(100.0, 999_999_999.0, &existing_vmids)
+                .await
+            {
+                Ok(v) => v as f64,
+                Err(e) => {
+                    state.vm_power_requests.lock().unwrap_or_else(|e| e.into_inner()).remove(&lock_key);
+                    let friendly = crate::routes::vm::friendly_vm_error(&e.into());
+                    return Some(json_response(friendly.0, json!({ "error": friendly.1, "code": friendly.2 })));
+                }
+            };
+            let candidate_hostname = format!("byo-os-{}", candidate_vmid as i64);
+            let reserved = vmlib::reserve_virtual_machine(
+                &state.store,
+                &json!({
+                    "id": format!("vm-{}", candidate_vmid as i64),
+                    "ownerEmail": actor.email,
+                    "ownerUserId": mitch_lib::profile::get_uid_for_email(&state.store, &state.id_secret, &actor.email).unwrap_or_default(),
+                    "vmid": candidate_vmid,
+                    "node": crate::proxmox_desktop::desktop().node(),
+                    "guestType": "qemu",
+                    "friendlyName": "My Computer (BYO-OS)",
+                    "hostname": candidate_hostname,
+                    "operatingSystem": format!("Custom ({iso_filename})"),
+                    "templateVmid": Value::Null,
+                    "cpuCores": cpu_cores,
+                    "memoryMb": memory_mb,
+                    "diskGb": disk_gb,
+                    "status": "provisioning",
+                    "createdAt": mitch_lib::school::now_millis() as f64,
+                }),
+            )
+            .map(|r| r.to_json());
+            if let Some(rec) = reserved {
+                pending_record = Some(rec);
+                vmid = candidate_vmid;
+                hostname = candidate_hostname;
+                break;
             }
-        };
-        let hostname = format!("byo-os-{}", vmid as i64);
-
-        let pending_record = vmlib::reserve_virtual_machine(
-            &state.store,
-            &json!({
-                "id": format!("vm-{}", vmid as i64),
-                "ownerEmail": actor.email,
-                "ownerUserId": mitch_lib::profile::get_uid_for_email(&state.store, &state.id_secret, &actor.email).unwrap_or_default(),
-                "vmid": vmid,
-                "node": crate::proxmox_desktop::desktop().node(),
-                "guestType": "qemu",
-                "friendlyName": "My Computer (BYO-OS)",
-                "hostname": hostname,
-                "operatingSystem": format!("Custom ({iso_filename})"),
-                "templateVmid": Value::Null,
-                "cpuCores": cpu_cores,
-                "memoryMb": memory_mb,
-                "diskGb": disk_gb,
-                "status": "provisioning",
-                "createdAt": mitch_lib::school::now_millis() as f64,
-            }),
-        )
-        .map(|r| r.to_json());
+            tracing::warn!(
+                "[byo-os create] reserve_virtual_machine attempt {attempt}/{MAX_RESERVE_ATTEMPTS} collided on vmid {candidate_vmid}"
+            );
+        }
         let Some(pending_record) = pending_record else {
             state.vm_power_requests.lock().unwrap_or_else(|e| e.into_inner()).remove(&lock_key);
-            return Some(json_response(500, json!({ "error": "Could not reserve a computer slot." })));
+            return Some(json_response(
+                500,
+                json!({ "error": "Could not reserve a computer slot. Please try again." }),
+            ));
         };
 
         // The ISO is already on Proxmox's storage (uploaded at /iso/complete

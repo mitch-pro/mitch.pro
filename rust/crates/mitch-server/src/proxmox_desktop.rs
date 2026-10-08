@@ -1878,67 +1878,6 @@ exit 0
         Ok(())
     }
 
-    /// Has Proxmox itself fetch an ISO from a URL straight into
-    /// `iso_storage`, via `/storage/{storage}/download-url` — the BYO-OS
-    /// counterpart to `upload_iso` for a user who gives a link instead of a
-    /// file. This goes through the plain form-encoded `request()` helper
-    /// (small body, no multipart streaming), the same path every other
-    /// Proxmox call already uses reliably, rather than `upload_iso`'s
-    /// bespoke multipart client use — deliberately, since this sidesteps
-    /// whatever large-streamed-body issue that path can hit.
-    pub async fn download_iso_from_url(
-        &self,
-        url: &str,
-        remote_filename: &str,
-    ) -> Result<(), ProxmoxServiceError> {
-        let upid = self
-            .request(
-                "POST",
-                &format!(
-                    "/nodes/{}/storage/{}/download-url",
-                    encode_uri_component(&self.node),
-                    encode_uri_component(&self.iso_storage)
-                ),
-                Some(&json!({
-                    "content": "iso",
-                    "filename": remote_filename,
-                    "url": url,
-                    "verify-certificates": 1,
-                })),
-                30_000,
-            )
-            .await?;
-        self.wait_for_task(&self.node, Some(&upid), 600_000).await
-    }
-
-    /// Looks up a stored ISO's size on `iso_storage` by listing storage
-    /// content — used after `download_iso_from_url` to enforce the same
-    /// 6GB cap the chunked-upload path enforces up front (a URL download's
-    /// size isn't known until Proxmox has already fetched it).
-    pub async fn get_iso_size(&self, remote_filename: &str) -> Option<u64> {
-        let result = self
-            .request(
-                "GET",
-                &format!(
-                    "/nodes/{}/storage/{}/content",
-                    encode_uri_component(&self.node),
-                    encode_uri_component(&self.iso_storage)
-                ),
-                None,
-                15_000,
-            )
-            .await
-            .ok()?;
-        let target_volid = format!("{}:iso/{}", self.iso_storage, remote_filename);
-        result.as_array()?.iter().find_map(|item| {
-            if jsval::str_or(item.get("volid"), "") == target_volid {
-                item.get("size").and_then(jsval::number).map(|n| n as u64)
-            } else {
-                None
-            }
-        })
-    }
-
     /// Creates a from-scratch VM (no clone, no cloud-init — the user is
     /// installing their own OS by hand) booting from an ISO already present
     /// on `iso_storage`, and starts it. Mirrors `clone_desktop`'s
