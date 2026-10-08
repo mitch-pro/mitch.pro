@@ -17,7 +17,10 @@
 //!   per-tier cpu/memory/disk the template-clone path already enforces.
 
 use crate::routes::me::json_response;
-use crate::routes::vm::{authenticated_vm_actor, get_user_vm_upgrades, vm_audit, vm_same_origin_request};
+use crate::routes::vm::{
+    authenticated_vm_actor, get_user_vm_upgrades, vm_audit, vm_same_origin_request, PVE_VMID_MAX,
+    PVE_VMID_MIN,
+};
 use crate::state::AppState;
 use axum::http::{HeaderMap, Method};
 use axum::response::Response;
@@ -506,7 +509,7 @@ pub(crate) async fn handle(
             let mut existing_vmids: Vec<f64> = all_records.iter().map(|r| r.vmid).collect();
             existing_vmids.extend_from_slice(&excluded_vmids);
             let candidate_vmid = match crate::proxmox_desktop::desktop()
-                .next_available_vmid(100.0, 999_999_999.0, &existing_vmids)
+                .next_available_vmid(PVE_VMID_MIN, PVE_VMID_MAX, &existing_vmids)
                 .await
             {
                 Ok(v) => v as f64,
