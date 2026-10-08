@@ -1795,11 +1795,34 @@ exit 0
                     "[proxmox] ISO upload attempt {attempt}/{MAX_ATTEMPTS} rejected (HTTP {status}): {body_text}"
                 );
                 let mapped = if status == 401 || status == 403 { 503 } else { status };
-                last_err = Some(ProxmoxServiceError::new(
-                    "UPSTREAM_REJECTED",
-                    "Uploading the ISO to the hypervisor failed.",
-                    mapped,
-                ));
+                // Same message-surfacing as request() — show Proxmox's own
+                // diagnostic (e.g. a permission error) instead of a generic
+                // string, falling back to the raw body text (pveproxy's own
+                // early rejections, like a permission check before the body
+                // is even read, come back as plain text, not JSON).
+                let payload: Value = serde_json::from_str(&body_text).unwrap_or(Value::Null);
+                let detail = payload
+                    .get("message")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+                    .or_else(|| {
+                        payload.get("errors").and_then(|errors| {
+                            errors.as_object().and_then(|obj| {
+                                obj.values().next().and_then(Value::as_str).map(str::to_string)
+                            })
+                        })
+                    })
+                    .or_else(|| {
+                        let trimmed = body_text.trim();
+                        (!trimmed.is_empty() && trimmed.len() < 200).then(|| trimmed.to_string())
+                    });
+                let message = match detail {
+                    Some(d) => format!("The computer service rejected the request: {d}"),
+                    None => "Uploading the ISO to the hypervisor failed.".to_string(),
+                };
+                last_err = Some(ProxmoxServiceError::new("UPSTREAM_REJECTED", message, mapped));
                 // Only a plain 400 gets retried with a fresh name — the
                 // duplicate-filename-collision case. Auth/storage-full/etc
                 // errors won't be fixed by trying again.
@@ -1813,13 +1836,18 @@ exit 0
             // The upload response is itself a UPID for Proxmox's background
             // copy/validate task — wait for that to finish the same way
             // clone/resize/start do, instead of treating "upload accepted" as
-            // "file is ready to attach to a VM".
-            let upid: Value = response
+            // "file is ready to attach to a VM". Proxmox wraps it as
+            // `{"data": "UPID:..."}`; unwrap to the inner string the way
+            // request() does for every other call — passing the whole
+            // envelope to wait_for_task stringifies it as "[object Object]"
+            // and gets baked straight into the task-status URL.
+            let envelope: Value = response
                 .text()
                 .await
                 .ok()
                 .and_then(|text| serde_json::from_str(&text).ok())
                 .unwrap_or(Value::Null);
+            let upid = envelope.get("data").cloned().unwrap_or(Value::Null);
             self.wait_for_task(&self.node, Some(&upid), 300_000).await?;
             return Ok(remote_filename);
         }
