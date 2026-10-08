@@ -101,6 +101,9 @@ services:
       - PROXMOX_VERIFY_TLS
       - PROXMOX_TLS_SERVERNAME
       - PROXMOX_DESKTOP_TEMPLATES
+      - PROXMOX_ISO_STORAGE
+      - PROXMOX_VM_STORAGE
+      - PROXMOX_VM_BRIDGE
       - HIDE_VM_FEATURES
 
   # Production Slot B: Green Webserver
@@ -185,6 +188,9 @@ services:
       - PROXMOX_VERIFY_TLS
       - PROXMOX_TLS_SERVERNAME
       - PROXMOX_DESKTOP_TEMPLATES
+      - PROXMOX_ISO_STORAGE
+      - PROXMOX_VM_STORAGE
+      - PROXMOX_VM_BRIDGE
       - HIDE_VM_FEATURES
 
   # SSH Gateway sidecar (internal only — admin SSH via WebSocket)

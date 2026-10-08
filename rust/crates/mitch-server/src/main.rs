@@ -118,6 +118,11 @@ async fn get_any(
         // truncated to cap+1 zero bytes, which Conduit then stored as a
         // corrupt file that always failed to load.
         p if p.starts_with("/_matrix/media/") => 100 * 1024 * 1024,
+        // BYO-OS ISO chunks — the client slices a large file into chunks
+        // (default 16MB) specifically so no single request needs a huge
+        // cap; this just needs headroom above the server-side per-chunk
+        // ceiling in routes/byo_os.rs (MAX_CHUNK_BYTES, 24MB).
+        "/api/vm/byo-os/iso/chunk" => 25 * 1024 * 1024,
         _ => 256 * 1024,
     };
     let body_bytes = match axum::body::to_bytes(body, cap).await {

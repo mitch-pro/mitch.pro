@@ -270,6 +270,21 @@ pub struct ProxmoxDesktopService {
     template_vmids: Vec<i64>,
     client: reqwest::Client,
     caches: Arc<Mutex<Caches>>,
+    /// Storage ID ISOs get uploaded to for BYO-OS (must have the "iso"
+    /// content type enabled in Proxmox) — `PROXMOX_ISO_STORAGE`, default
+    /// `"local"` (Proxmox's usual default ISO storage).
+    iso_storage: String,
+    /// Storage ID a BYO-OS VM's blank disk gets created on —
+    /// `PROXMOX_VM_STORAGE`, default `"local-lvm"` (Proxmox's usual default
+    /// thin-provisioned VM storage; override if this host uses ZFS or
+    /// something else).
+    vm_disk_storage: String,
+    /// Bridge a BYO-OS VM's NIC attaches to — `PROXMOX_VM_BRIDGE`, default
+    /// `"vmbr0"` (Proxmox's usual default bridge). The template-clone path
+    /// doesn't need this: it inherits whatever bridge the template's own
+    /// net0 already uses. A from-scratch VM has no template to inherit
+    /// from, so this needs its own setting.
+    vm_bridge: String,
 }
 
 /// Constructor inputs (`{ host, port, node, tokenId, tokenSecret, legacyToken,
@@ -284,6 +299,9 @@ pub struct ProxmoxOptions {
     pub verify_tls: Option<String>,
     pub tls_server_name: Option<String>,
     pub template_vmids: Vec<f64>,
+    pub iso_storage: Option<String>,
+    pub vm_disk_storage: Option<String>,
+    pub vm_bridge: Option<String>,
 }
 
 impl Default for ProxmoxOptions {
@@ -298,6 +316,9 @@ impl Default for ProxmoxOptions {
             verify_tls: None,
             tls_server_name: None,
             template_vmids: vec![9010.0],
+            iso_storage: None,
+            vm_disk_storage: None,
+            vm_bridge: None,
         }
     }
 }
@@ -313,6 +334,19 @@ pub struct CloneDesktopParams {
     pub disk_gb: Option<f64>,
     pub desktop_username: String,
     pub desktop_password: String,
+}
+
+/// `createFromIso({ ... })` inputs — the BYO-OS parallel to
+/// `CloneDesktopParams`. No desktop username/password: there's no
+/// cloud-init image to seed, the user sets up login themselves during
+/// their own OS install.
+pub struct CreateFromIsoParams {
+    pub vmid: Option<f64>,
+    pub hostname: String,
+    pub cpu_cores: Option<f64>,
+    pub memory_mb: Option<f64>,
+    pub disk_gb: Option<f64>,
+    pub iso_filename: String,
 }
 
 /// Module-level accessor for the process-wide Proxmox desktop service.
@@ -412,6 +446,30 @@ impl ProxmoxDesktopService {
             template_vmids,
             client,
             caches: Arc::new(Mutex::new(Caches::default())),
+            iso_storage: {
+                let v = options.iso_storage.unwrap_or_default();
+                if v.trim().is_empty() {
+                    "local".to_string()
+                } else {
+                    v.trim().to_string()
+                }
+            },
+            vm_disk_storage: {
+                let v = options.vm_disk_storage.unwrap_or_default();
+                if v.trim().is_empty() {
+                    "local-lvm".to_string()
+                } else {
+                    v.trim().to_string()
+                }
+            },
+            vm_bridge: {
+                let v = options.vm_bridge.unwrap_or_default();
+                if v.trim().is_empty() {
+                    "vmbr0".to_string()
+                } else {
+                    v.trim().to_string()
+                }
+            },
         }
     }
 
@@ -471,6 +529,9 @@ impl ProxmoxDesktopService {
             verify_tls: env("PROXMOX_VERIFY_TLS"),
             tls_server_name: env("PROXMOX_TLS_SERVERNAME"),
             template_vmids,
+            iso_storage: env("PROXMOX_ISO_STORAGE"),
+            vm_disk_storage: env("PROXMOX_VM_STORAGE"),
+            vm_bridge: env("PROXMOX_VM_BRIDGE"),
         })
     }
 
@@ -1612,6 +1673,198 @@ exit 0
             "cpuCores": jsval::num_value(cpu_cores),
             "memoryMb": jsval::num_value(memory_mb),
             "diskGb": jsval::num_value(current_disk_gb.max(requested_disk_gb)),
+        }))
+    }
+
+    /// Streams a local file straight into Proxmox's storage upload API
+    /// (`POST /nodes/{node}/storage/{storage}/upload`) without reading it
+    /// into memory — by the time this runs, the file is already fully
+    /// assembled on our own disk (the chunked browser-upload endpoint wrote
+    /// it there), so this is a server-to-Proxmox transfer on the local
+    /// network, not a browser upload, and can safely stream the whole thing
+    /// in one request.
+    pub async fn upload_iso(
+        &self,
+        local_path: &std::path::Path,
+        remote_filename: &str,
+    ) -> Result<(), ProxmoxServiceError> {
+        self.assert_configured()?;
+        let file = tokio::fs::File::open(local_path).await.map_err(|_| {
+            ProxmoxServiceError::new("ISO_READ_FAILED", "Could not read the uploaded ISO.", 500)
+        })?;
+        let file_len = file.metadata().await.map(|m| m.len()).unwrap_or(0);
+        let stream = tokio_util::io::ReaderStream::new(file);
+        let body = reqwest::Body::wrap_stream(stream);
+        let part = reqwest::multipart::Part::stream_with_length(body, file_len)
+            .file_name(remote_filename.to_string())
+            .mime_str("application/octet-stream")
+            .unwrap_or_else(|_| reqwest::multipart::Part::bytes(Vec::new()));
+        let form = reqwest::multipart::Form::new()
+            .text("content", "iso")
+            .part("filename", part);
+        let url = if self.verify_tls && !self.tls_server_name.is_empty() {
+            format!(
+                "https://{}:{}/api2/json/nodes/{}/storage/{}/upload",
+                self.tls_server_name,
+                self.port,
+                encode_uri_component(&self.node),
+                encode_uri_component(&self.iso_storage)
+            )
+        } else {
+            format!(
+                "{}/nodes/{}/storage/{}/upload",
+                self.base_url,
+                encode_uri_component(&self.node),
+                encode_uri_component(&self.iso_storage)
+            )
+        };
+        let response = self
+            .client
+            .post(url)
+            .header("Authorization", &self.authorization)
+            .multipart(form)
+            .timeout(Duration::from_secs(600))
+            .send()
+            .await
+            .map_err(|error| {
+                if error.is_timeout() {
+                    ProxmoxServiceError::new(
+                        "TIMEOUT",
+                        "Uploading the ISO to the hypervisor timed out.",
+                        504,
+                    )
+                } else {
+                    ProxmoxServiceError::new(
+                        "UNREACHABLE",
+                        "The computer service is unreachable.",
+                        502,
+                    )
+                }
+            })?;
+        let status = response.status().as_u16();
+        if response.status().is_redirection() || !(200..300).contains(&status) {
+            let mapped = if status == 401 || status == 403 { 503 } else { status };
+            return Err(ProxmoxServiceError::new(
+                "UPSTREAM_REJECTED",
+                "Uploading the ISO to the hypervisor failed.",
+                mapped,
+            ));
+        }
+        // The upload response is itself a UPID for Proxmox's background
+        // copy/validate task — wait for that to finish the same way
+        // clone/resize/start do, instead of treating "upload accepted" as
+        // "file is ready to attach to a VM".
+        let upid: Value = response
+            .text()
+            .await
+            .ok()
+            .and_then(|text| serde_json::from_str(&text).ok())
+            .unwrap_or(Value::Null);
+        self.wait_for_task(&self.node, Some(&upid), 300_000).await
+    }
+
+    /// Creates a from-scratch VM (no clone, no cloud-init — the user is
+    /// installing their own OS by hand) booting from an ISO already present
+    /// on `iso_storage`, and starts it. Mirrors `clone_desktop`'s
+    /// cores/memory/disk handling but has no template to read a network
+    /// bridge or VGA config from, so those come from `vm_bridge` and a
+    /// fixed default instead.
+    pub async fn create_from_iso(
+        &self,
+        params: &CreateFromIsoParams,
+    ) -> Result<Value, ProxmoxServiceError> {
+        let vmid = self.assert_vmid(params.vmid)?;
+        let cpu_input = match params.cpu_cores {
+            Some(raw) if !raw.is_nan() && raw != 0.0 => raw,
+            _ => 2.0,
+        };
+        let cpu_cores = clamp_js(cpu_input.round(), 2.0, 16.0);
+        let mem_input = match params.memory_mb {
+            Some(raw) if !raw.is_nan() && raw != 0.0 => raw,
+            _ => 4096.0,
+        };
+        let memory_mb = clamp_js(mem_input.round(), 2048.0, 65536.0);
+        let disk_input = match params.disk_gb {
+            Some(raw) if !raw.is_nan() && raw != 0.0 => raw,
+            _ => 64.0,
+        };
+        let disk_gb = clamp_js(disk_input.round(), 40.0, 256.0);
+        let balloon = clamp_js((memory_mb / 4.0).floor(), 1024.0, 4096.0);
+        let clean_host = clean_hostname(&params.hostname, vmid);
+
+        let mut body = Map::new();
+        body.insert("vmid".to_string(), jsval::num_value(vmid as f64));
+        body.insert("name".to_string(), json!(clean_host));
+        body.insert("cores".to_string(), jsval::num_value(cpu_cores));
+        body.insert("sockets".to_string(), json!(1));
+        body.insert("memory".to_string(), jsval::num_value(memory_mb));
+        body.insert("balloon".to_string(), jsval::num_value(balloon));
+        body.insert("cpu".to_string(), json!("host"));
+        body.insert("rng0".to_string(), json!("source=/dev/urandom"));
+        body.insert("vga".to_string(), json!("std,memory=64"));
+        body.insert("agent".to_string(), json!(1));
+        body.insert("scsihw".to_string(), json!("virtio-scsi-pci"));
+        body.insert(
+            "net0".to_string(),
+            json!(format!("virtio,bridge={}", self.vm_bridge)),
+        );
+        body.insert(
+            "scsi0".to_string(),
+            json!(format!(
+                "{}:{}",
+                self.vm_disk_storage,
+                jsval::num_value(disk_gb)
+            )),
+        );
+        body.insert(
+            "ide2".to_string(),
+            json!(format!(
+                "{}:iso/{},media=cdrom",
+                self.iso_storage, params.iso_filename
+            )),
+        );
+        body.insert("boot".to_string(), json!("order=ide2;scsi0"));
+        // "other" rather than a specific guest hint — we don't know what
+        // the user is installing, and an inaccurate ostype can make Proxmox
+        // apply guest-specific quirks (e.g. Windows-only defaults) that
+        // don't fit.
+        body.insert("ostype".to_string(), json!("other"));
+
+        let create_upid = self
+            .request(
+                "POST",
+                &format!("/nodes/{}/qemu", encode_uri_component(&self.node)),
+                Some(&Value::Object(body)),
+                30_000,
+            )
+            .await?;
+        self.wait_for_task(&self.node, Some(&create_upid), 120_000)
+            .await?;
+
+        let start_upid = self
+            .request(
+                "POST",
+                &format!(
+                    "/nodes/{}/qemu/{}/status/start",
+                    encode_uri_component(&self.node),
+                    vmid
+                ),
+                Some(&json!({})),
+                DEFAULT_TIMEOUT_MS,
+            )
+            .await?;
+        if jsval::truthy(&start_upid) {
+            self.wait_for_task(&self.node, Some(&start_upid), 120_000)
+                .await?;
+        }
+
+        Ok(json!({
+            "vmid": jsval::num_value(vmid as f64),
+            "node": self.node,
+            "hostname": clean_host,
+            "cpuCores": jsval::num_value(cpu_cores),
+            "memoryMb": jsval::num_value(memory_mb),
+            "diskGb": jsval::num_value(disk_gb),
         }))
     }
 

@@ -3159,6 +3159,14 @@ pub(crate) async fn handle(
         return None;
     }
 
+    if path.starts_with("/api/vm/byo-os/") {
+        if let Some(resp) =
+            crate::routes::byo_os::handle(state, method, path, headers, body_bytes, _search).await
+        {
+            return Some(resp);
+        }
+    }
+
     // POST /api/vm/free/launch — launch or connect to the ephemeral free VM (server.js:18849-18939)
     if path == "/api/vm/free/launch" && *method == Method::POST {
         let cookies = crate::routes::me::cookies_of(state, headers);

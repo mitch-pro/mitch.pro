@@ -57,6 +57,7 @@
         </div>
 
         <button type="button" id="create-vm-btn" class="primary-button" style="margin-top: 18px; font-size: 0.96rem; padding: 12px 24px;">Set Password &amp; Create Computer →</button>
+        <button type="button" id="byo-os-open-btn" class="quiet-button" style="margin-top: 10px; font-size: 0.88rem;">Bring your own OS instead (1000 🪙) →</button>
       </div>
       <div id="empty-unauthorized-box" class="is-hidden">
         <strong>No computer assigned yet</strong>
@@ -124,6 +125,47 @@
     </form>
   </dialog>
 
+  <dialog id="byo-os-dialog" class="confirm-dialog">
+    <form id="byo-os-form" method="dialog">
+      <p class="eyebrow">Bring Your Own OS</p>
+      <h2>Custom ISO Computer</h2>
+      <p style="font-size: 0.85rem; color: #94a3b8; text-align: left; margin: 0 0 14px 0;">
+        Upload your own install ISO (max 6GB, one stored at a time) and boot a blank computer from it instead of the standard template. You install and configure the OS yourself through the same desktop console — nothing is pre-set up. Costs 1000 MitchCoins per ISO uploaded; recreating a computer from the same stored ISO afterward is free.
+      </p>
+
+      <div id="byo-os-no-iso">
+        <label style="display:flex; flex-direction:column; gap:6px; text-align:left; font-size:0.85rem; color:#94a3b8;">
+          <span>Install ISO (.iso, max 6GB)</span>
+          <input type="file" id="byo-os-file-input" accept=".iso">
+        </label>
+        <div id="byo-os-progress-wrap" class="is-hidden" style="margin-top:12px;">
+          <div style="height:8px; border-radius:999px; background:#1e293b; overflow:hidden;">
+            <div id="byo-os-progress-bar" style="height:100%; width:0%; background:#6366f1; transition:width .2s;"></div>
+          </div>
+          <p id="byo-os-progress-text" style="font-size:0.8rem; color:#94a3b8; margin:6px 0 0 0;"></p>
+        </div>
+        <button type="button" id="byo-os-upload-btn" class="primary-button" style="margin-top:14px;" disabled>Upload ISO (1000 🪙)</button>
+      </div>
+
+      <div id="byo-os-has-iso" class="is-hidden" style="text-align:left;">
+        <div style="background:#0f172a; border:1px solid #334155; border-radius:8px; padding:12px; margin-bottom:12px;">
+          <strong id="byo-os-iso-name" style="word-break:break-all;"></strong>
+          <p id="byo-os-iso-meta" style="font-size:0.8rem; color:#94a3b8; margin:4px 0 0 0;"></p>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button type="button" id="byo-os-create-btn" class="primary-button">Create computer from this ISO →</button>
+          <button type="button" id="byo-os-delete-btn" class="quiet-button">Remove ISO</button>
+        </div>
+      </div>
+
+      <p id="byo-os-status" class="form-status" style="font-size: 0.85rem; margin: 12px 0 0 0; min-height: 1.2em;" role="status"></p>
+
+      <div class="dialog-actions">
+        <button type="button" id="byo-os-close-btn" class="quiet-button">Close</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="upgrade-dialog" class="upgrade-dialog">
     <div class="upgrade-dialog-content">
       <div class="upgrade-header">
@@ -161,5 +203,6 @@
 
   <script src="/app-shell.js?v=17" defer></script>
   <script src="/vms/portal.js?v=6" defer></script>
+  <script src="/vms/byo-os.js?v=1" defer></script>
 </body>
 </html>

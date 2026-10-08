@@ -35,6 +35,9 @@ rustls-pki-types = "1"
 # /livekit JWT base64url segments (JS Buffer.toString('base64url')).
 base64 = { workspace = true }
 reqwest = { workspace = true }
+# Streams a BYO-OS ISO from disk straight into the multipart upload to
+# Proxmox's storage API, instead of reading the whole file into memory first.
+tokio-util = { version = "0.7", features = ["io"] }
 aes-gcm = { workspace = true }
 web-push = "0.10"
 rand = { workspace = true }
