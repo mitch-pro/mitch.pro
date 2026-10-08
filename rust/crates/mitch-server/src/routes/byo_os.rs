@@ -490,17 +490,21 @@ pub(crate) async fn handle(
         // next_available_vmid only checks Proxmox's own live guest list plus
         // whatever vmids this request already knows about — a vmid it hands
         // back can still collide with another row already in our local
-        // table (e.g. a stale leftover from an earlier failed attempt by a
-        // different user/flow) by the time reserve_virtual_machine's own
-        // existence check runs. Retry a couple of times with a freshly
-        // recomputed vmid rather than failing outright on that race.
-        const MAX_RESERVE_ATTEMPTS: u32 = 3;
+        // table (e.g. a row next_available_vmid can't see at all, such as
+        // one belonging to a guest type it doesn't poll) by the time
+        // reserve_virtual_machine's own existence check runs. Re-asking it
+        // the exact same question would just hand back the exact same vmid
+        // again — explicitly exclude every vmid that already collided this
+        // request so each retry is forced to a genuinely new one.
+        const MAX_RESERVE_ATTEMPTS: u32 = 5;
         let mut pending_record: Option<Value> = None;
         let mut vmid: f64 = 0.0;
         let mut hostname = String::new();
+        let mut excluded_vmids: Vec<f64> = Vec::new();
         for attempt in 1..=MAX_RESERVE_ATTEMPTS {
             let all_records = vmlib::list_virtual_machines(&state.store, true);
-            let existing_vmids: Vec<f64> = all_records.iter().map(|r| r.vmid).collect();
+            let mut existing_vmids: Vec<f64> = all_records.iter().map(|r| r.vmid).collect();
+            existing_vmids.extend_from_slice(&excluded_vmids);
             let candidate_vmid = match crate::proxmox_desktop::desktop()
                 .next_available_vmid(100.0, 999_999_999.0, &existing_vmids)
                 .await
@@ -543,6 +547,7 @@ pub(crate) async fn handle(
             tracing::warn!(
                 "[byo-os create] reserve_virtual_machine attempt {attempt}/{MAX_RESERVE_ATTEMPTS} collided on vmid {candidate_vmid}"
             );
+            excluded_vmids.push(candidate_vmid);
         }
         let Some(pending_record) = pending_record else {
             state.vm_power_requests.lock().unwrap_or_else(|e| e.into_inner()).remove(&lock_key);
