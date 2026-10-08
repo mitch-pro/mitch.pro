@@ -1689,19 +1689,6 @@ exit 0
         remote_filename: &str,
     ) -> Result<(), ProxmoxServiceError> {
         self.assert_configured()?;
-        let file = tokio::fs::File::open(local_path).await.map_err(|_| {
-            ProxmoxServiceError::new("ISO_READ_FAILED", "Could not read the uploaded ISO.", 500)
-        })?;
-        let file_len = file.metadata().await.map(|m| m.len()).unwrap_or(0);
-        let stream = tokio_util::io::ReaderStream::new(file);
-        let body = reqwest::Body::wrap_stream(stream);
-        let part = reqwest::multipart::Part::stream_with_length(body, file_len)
-            .file_name(remote_filename.to_string())
-            .mime_str("application/octet-stream")
-            .unwrap_or_else(|_| reqwest::multipart::Part::bytes(Vec::new()));
-        let form = reqwest::multipart::Form::new()
-            .text("content", "iso")
-            .part("filename", part);
         let url = if self.verify_tls && !self.tls_server_name.is_empty() {
             format!(
                 "https://{}:{}/api2/json/nodes/{}/storage/{}/upload",
@@ -1718,49 +1705,96 @@ exit 0
                 encode_uri_component(&self.iso_storage)
             )
         };
-        let response = self
-            .client
-            .post(url)
-            .header("Authorization", &self.authorization)
-            .multipart(form)
-            .timeout(Duration::from_secs(600))
-            .send()
-            .await
-            .map_err(|error| {
-                if error.is_timeout() {
-                    ProxmoxServiceError::new(
-                        "TIMEOUT",
-                        "Uploading the ISO to the hypervisor timed out.",
-                        504,
-                    )
-                } else {
-                    ProxmoxServiceError::new(
-                        "UNREACHABLE",
-                        "The computer service is unreachable.",
-                        502,
-                    )
-                }
+
+        // A multi-GB streamed upload held open for minutes is more exposed
+        // to a transient mid-transfer connection reset (a stale pooled
+        // keep-alive connection, a brief blip on the local network) than the
+        // short JSON calls this client otherwise makes — that has nothing to
+        // do with Proxmox actually being down. Retry connection-level
+        // failures a couple of times, rebuilding the file stream each time
+        // since a consumed stream can't be resent, rather than forcing the
+        // user to re-upload the whole file from their browser over one blip.
+        const MAX_ATTEMPTS: u32 = 3;
+        let mut last_err: Option<ProxmoxServiceError> = None;
+        for attempt in 1..=MAX_ATTEMPTS {
+            let file = tokio::fs::File::open(local_path).await.map_err(|_| {
+                ProxmoxServiceError::new("ISO_READ_FAILED", "Could not read the uploaded ISO.", 500)
             })?;
-        let status = response.status().as_u16();
-        if response.status().is_redirection() || !(200..300).contains(&status) {
-            let mapped = if status == 401 || status == 403 { 503 } else { status };
-            return Err(ProxmoxServiceError::new(
-                "UPSTREAM_REJECTED",
-                "Uploading the ISO to the hypervisor failed.",
-                mapped,
-            ));
+            let file_len = file.metadata().await.map(|m| m.len()).unwrap_or(0);
+            let stream = tokio_util::io::ReaderStream::new(file);
+            let body = reqwest::Body::wrap_stream(stream);
+            let part = reqwest::multipart::Part::stream_with_length(body, file_len)
+                .file_name(remote_filename.to_string())
+                .mime_str("application/octet-stream")
+                .unwrap_or_else(|_| reqwest::multipart::Part::bytes(Vec::new()));
+            let form = reqwest::multipart::Form::new()
+                .text("content", "iso")
+                .part("filename", part);
+
+            let response = match self
+                .client
+                .post(&url)
+                .header("Authorization", &self.authorization)
+                .multipart(form)
+                .timeout(Duration::from_secs(600))
+                .send()
+                .await
+            {
+                Ok(r) => r,
+                Err(error) => {
+                    let is_timeout = error.is_timeout();
+                    tracing::warn!(
+                        "[proxmox] ISO upload attempt {attempt}/{MAX_ATTEMPTS} failed: {error}"
+                    );
+                    last_err = Some(if is_timeout {
+                        ProxmoxServiceError::new(
+                            "TIMEOUT",
+                            "Uploading the ISO to the hypervisor timed out.",
+                            504,
+                        )
+                    } else {
+                        ProxmoxServiceError::new(
+                            "UNREACHABLE",
+                            "The computer service is unreachable.",
+                            502,
+                        )
+                    });
+                    // A timeout means it was actively transferring and just
+                    // slow — retrying won't help. A connection-level error is
+                    // the transient-blip case a fresh connection fixes.
+                    if is_timeout || attempt == MAX_ATTEMPTS {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_secs(3 * attempt as u64)).await;
+                    continue;
+                }
+            };
+
+            let status = response.status().as_u16();
+            if response.status().is_redirection() || !(200..300).contains(&status) {
+                let mapped = if status == 401 || status == 403 { 503 } else { status };
+                return Err(ProxmoxServiceError::new(
+                    "UPSTREAM_REJECTED",
+                    "Uploading the ISO to the hypervisor failed.",
+                    mapped,
+                ));
+            }
+            // The upload response is itself a UPID for Proxmox's background
+            // copy/validate task — wait for that to finish the same way
+            // clone/resize/start do, instead of treating "upload accepted" as
+            // "file is ready to attach to a VM".
+            let upid: Value = response
+                .text()
+                .await
+                .ok()
+                .and_then(|text| serde_json::from_str(&text).ok())
+                .unwrap_or(Value::Null);
+            return self.wait_for_task(&self.node, Some(&upid), 300_000).await;
         }
-        // The upload response is itself a UPID for Proxmox's background
-        // copy/validate task — wait for that to finish the same way
-        // clone/resize/start do, instead of treating "upload accepted" as
-        // "file is ready to attach to a VM".
-        let upid: Value = response
-            .text()
-            .await
-            .ok()
-            .and_then(|text| serde_json::from_str(&text).ok())
-            .unwrap_or(Value::Null);
-        self.wait_for_task(&self.node, Some(&upid), 300_000).await
+
+        Err(last_err.unwrap_or_else(|| {
+            ProxmoxServiceError::new("UNREACHABLE", "The computer service is unreachable.", 502)
+        }))
     }
 
     /// Removes an ISO from `iso_storage` — the BYO-OS counterpart to
