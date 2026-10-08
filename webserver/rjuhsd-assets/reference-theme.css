@@ -706,6 +706,7 @@ nav[aria-label="Primary navigation"] a svg { display: inline-block; vertical-ali
   }
   .header-actions .header-chat-btn,
   .header-actions .header-signin-btn,
+  .header-actions .header-portal-btn,
   .header-actions .lunch-status { display: none !important; }
   .school-choice { display: flex; align-items: center; font-size: 0; gap: 0; }
   .school-choice select { max-width: 125px; height: 32px; padding: 4px 8px; font-size: 11px; }

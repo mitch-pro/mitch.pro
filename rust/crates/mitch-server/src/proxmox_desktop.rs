@@ -1763,6 +1763,27 @@ exit 0
         self.wait_for_task(&self.node, Some(&upid), 300_000).await
     }
 
+    /// Removes an ISO from `iso_storage` — the BYO-OS counterpart to
+    /// `upload_iso`, used when a user replaces or deletes their stored ISO
+    /// (enforcing the "1 ISO max" rule doesn't leave orphaned files behind
+    /// on the hypervisor either, not just off this box's own disk).
+    pub async fn delete_iso(&self, remote_filename: &str) -> Result<(), ProxmoxServiceError> {
+        self.request(
+            "DELETE",
+            &format!(
+                "/nodes/{}/storage/{}/content/{}:iso/{}",
+                encode_uri_component(&self.node),
+                encode_uri_component(&self.iso_storage),
+                self.iso_storage,
+                remote_filename
+            ),
+            None,
+            DEFAULT_TIMEOUT_MS,
+        )
+        .await?;
+        Ok(())
+    }
+
     /// Creates a from-scratch VM (no clone, no cloud-init — the user is
     /// installing their own OS by hand) booting from an ISO already present
     /// on `iso_storage`, and starts it. Mirrors `clone_desktop`'s

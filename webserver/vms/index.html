@@ -17,7 +17,10 @@
         <h1>My Computer</h1>
         <p>Manage, access, and monitor your personal desktop.</p>
       </div>
-      <button class="quiet-button" id="refresh-button" type="button" aria-label="Refresh computer status"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5M4 18v-5h5"/><path d="M18.5 9A7 7 0 0 0 6.2 6.2L4 8m16 8-2.2 2.2A7 7 0 0 1 5.5 15"/></svg><span>Refresh</span></button>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="quiet-button" id="byo-os-open-btn-header" type="button">Bring your own OS</button>
+        <button class="quiet-button" id="refresh-button" type="button" aria-label="Refresh computer status"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5M4 18v-5h5"/><path d="M18.5 9A7 7 0 0 0 6.2 6.2L4 8m16 8-2.2 2.2A7 7 0 0 1 5.5 15"/></svg><span>Refresh</span></button>
+      </div>
     </header>
     <p id="refresh-status" class="refresh-status" role="status"></p>
 

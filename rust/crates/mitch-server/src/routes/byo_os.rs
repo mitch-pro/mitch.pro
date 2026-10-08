@@ -40,11 +40,13 @@ const MAX_ISO_BYTES: u64 = 6 * 1024 * 1024 * 1024;
 /// to 16MB chunks; this leaves headroom.
 const MAX_CHUNK_BYTES: u64 = 24 * 1024 * 1024;
 
+// Only byo_os_uploads/ exists on this box now — a scratch area used for the
+// brief reassemble-then-hand-off-to-Proxmox window in /iso/complete. There
+// is deliberately no persistent byo_os_isos/ directory: once upload
+// completes the ISO lives on Proxmox's own storage, not here, so it's never
+// part of this app's own backups.
 fn uploads_dir(state: &AppState) -> PathBuf {
     state.data_dir().join("byo_os_uploads")
-}
-fn isos_dir(state: &AppState) -> PathBuf {
-    state.data_dir().join("byo_os_isos")
 }
 fn isos_manifest_file(state: &AppState) -> PathBuf {
     state.data_dir().join("byo_os_isos.json")
@@ -117,12 +119,16 @@ pub(crate) async fn handle(
     }
 
     // POST /api/vm/byo-os/iso/delete — free the "1 ISO" slot. No refund.
+    // The ISO lives on Proxmox's own storage (never this box's disk once
+    // upload completes — see /iso/complete), so this deletes it there.
     if path == "/api/vm/byo-os/iso/delete" && *method == Method::POST {
         let mut manifest = state.store.read_document(&isos_manifest_file(state), json!({}));
         if let Some(entry) = manifest.get(&actor.email).cloned() {
-            let disk_name = jsval::str_or(entry.get("diskFilename"), "");
-            if !disk_name.is_empty() {
-                let _ = std::fs::remove_file(isos_dir(state).join(&disk_name));
+            let proxmox_filename = jsval::str_or(entry.get("proxmoxFilename"), "");
+            if !proxmox_filename.is_empty() {
+                let _ = crate::proxmox_desktop::desktop()
+                    .delete_iso(&proxmox_filename)
+                    .await;
             }
             if let Some(map) = manifest.as_object_mut() {
                 map.remove(&actor.email);
@@ -280,13 +286,19 @@ pub(crate) async fn handle(
                 }),
             ));
         }
+        if !crate::proxmox_desktop::desktop().configured() {
+            return Some(json_response(503, json!({ "error": "Computer service is not configured." })));
+        }
 
-        let _ = std::fs::create_dir_all(isos_dir(state));
-        let disk_filename = format!("{}.iso", mitch_lib::crypto::random_bytes_hex(12));
-        let final_path = isos_dir(state).join(&disk_filename);
+        // Reassembled only in a scratch spot and only for as long as it
+        // takes to hand off to Proxmox — this box's own disk (and its
+        // backups) never holds a finished ISO. local_path is removed on
+        // every exit path below, success or failure.
+        let _ = std::fs::create_dir_all(uploads_dir(state));
+        let local_path = dir.join("assembled.iso");
         let assembled = (|| -> std::io::Result<u64> {
             use std::io::Write;
-            let mut out = std::fs::File::create(&final_path)?;
+            let mut out = std::fs::File::create(&local_path)?;
             let mut written: u64 = 0;
             for i in 0..total_chunks {
                 let chunk_path = dir.join(format!("{i}.chunk"));
@@ -305,24 +317,44 @@ pub(crate) async fn handle(
         let written = match assembled {
             Ok(w) => w,
             Err(_) => {
-                let _ = std::fs::remove_file(&final_path);
+                let _ = std::fs::remove_file(&local_path);
                 return Some(json_response(500, json!({ "error": "Could not assemble the uploaded ISO." })));
             }
         };
         if written != declared_size {
-            let _ = std::fs::remove_file(&final_path);
+            let _ = std::fs::remove_file(&local_path);
             return Some(json_response(
                 400,
                 json!({ "error": "Assembled file size didn't match what was declared — re-upload." }),
             ));
         }
 
-        // Enforce "1 ISO max": drop whatever was stored before.
+        // Push to Proxmox's own storage immediately, then drop the local
+        // copy — from here on the ISO lives on the hypervisor, not on this
+        // box. Coins are only charged once this actually succeeds.
+        let proxmox_filename = format!("{}.iso", mitch_lib::crypto::random_bytes_hex(12));
+        let upload_result = crate::proxmox_desktop::desktop()
+            .upload_iso(&local_path, &proxmox_filename)
+            .await;
+        let _ = std::fs::remove_file(&local_path);
+        let _ = std::fs::remove_dir(&dir);
+        if let Err(e) = upload_result {
+            let friendly = crate::routes::vm::friendly_vm_error(&e.into());
+            return Some(json_response(
+                friendly.0,
+                json!({ "error": format!("Uploaded, but handing off to the computer service failed: {} Re-upload to try again.", friendly.1) }),
+            ));
+        }
+
+        // Enforce "1 ISO max": drop whatever Proxmox-side ISO was stored
+        // before (best-effort — Proxmox's own ISO storage, not this box).
         let mut iso_manifest = state.store.read_document(&isos_manifest_file(state), json!({}));
         if let Some(prev) = iso_manifest.get(&actor.email).cloned() {
-            let prev_disk = jsval::str_or(prev.get("diskFilename"), "");
-            if !prev_disk.is_empty() && prev_disk != disk_filename {
-                let _ = std::fs::remove_file(isos_dir(state).join(&prev_disk));
+            let prev_filename = jsval::str_or(prev.get("proxmoxFilename"), "");
+            if !prev_filename.is_empty() && prev_filename != proxmox_filename {
+                let _ = crate::proxmox_desktop::desktop()
+                    .delete_iso(&prev_filename)
+                    .await;
             }
         }
 
@@ -337,7 +369,7 @@ pub(crate) async fn handle(
 
         let entry = json!({
             "filename": filename,
-            "diskFilename": disk_filename,
+            "proxmoxFilename": proxmox_filename,
             "sizeBytes": written,
             "uploadedAt": mitch_lib::school::now_millis(),
         });
@@ -368,8 +400,8 @@ pub(crate) async fn handle(
         ));
     }
 
-    // POST /api/vm/byo-os/create — push the stored ISO to Proxmox and boot
-    // a from-scratch VM from it.
+    // POST /api/vm/byo-os/create — boot a from-scratch VM from the ISO
+    // already sitting on Proxmox's storage (uploaded at /iso/complete time).
     if path == "/api/vm/byo-os/create" && *method == Method::POST {
         if is_vm_banned(state, &actor.email) {
             return Some(json_response(403, json!({ "error": "VM access is restricted on this account." })));
@@ -385,25 +417,54 @@ pub(crate) async fn handle(
             ));
         };
         let iso_filename = jsval::str_or(iso_entry.get("filename"), "custom.iso");
-        let disk_filename = jsval::str_or(iso_entry.get("diskFilename"), "");
-        let local_path = isos_dir(state).join(&disk_filename);
-        if disk_filename.is_empty() || !local_path.exists() {
+        let proxmox_filename = jsval::str_or(iso_entry.get("proxmoxFilename"), "");
+        if proxmox_filename.is_empty() {
             return Some(json_response(
                 410,
                 json!({ "error": "Stored ISO is missing — re-upload it." }),
             ));
         }
 
-        let existing: Vec<Value> = vmlib::get_virtual_machines_for_owner(&state.store, &actor.email)
-            .into_iter()
-            .map(|r| r.to_json())
-            .filter(|r| jsval::str_or(r.get("status"), "") != "unassigned")
-            .collect();
-        if !existing.is_empty() {
-            return Some(json_response(
-                409,
-                json!({ "error": "You already have a computer assigned. Delete it first to use BYO-OS." }),
-            ));
+        // Same lock namespace the template path's create/recreate use — a
+        // user can only have one computer-provisioning operation in flight
+        // at a time, regardless of which path (template or BYO-OS) started it.
+        let lock_key = format!("byo-os-create-{}", actor.email);
+        {
+            let mut requests = state.vm_power_requests.lock().unwrap_or_else(|e| e.into_inner());
+            if requests.contains_key(&lock_key)
+                || requests.contains_key(&format!("create-{}", actor.email))
+                || requests.contains_key(&format!("recreate-{}", actor.email))
+            {
+                return Some(json_response(
+                    409,
+                    json!({ "error": "A computer operation is already in progress for your account." }),
+                ));
+            }
+            requests.insert(lock_key.clone(), json!({ "startedAt": mitch_lib::school::now_millis() as f64 }));
+        }
+
+        // Delete any existing computer(s) first — same as the template
+        // path's "Delete & Recreate" does. This lets BYO-OS create double as
+        // "replace my computer with a fresh one from a newly uploaded ISO"
+        // instead of requiring a separate delete step through the template UI.
+        for old_rec in vmlib::get_virtual_machines_for_owner(&state.store, &actor.email) {
+            let old = old_rec.to_json();
+            let old_id = jsval::str_or(old.get("id"), "");
+            if let Err(err) = crate::proxmox_desktop::desktop()
+                .delete_guest(&old, true)
+                .await
+            {
+                tracing::warn!("[byo-os create] Note: Proxmox delete for {old_id} returned: {err:?}");
+            }
+            vmlib::delete_virtual_machine(&state.store, &old_id);
+            crate::routes::vm::revoke_vm_desktop_connections(state, &old_id);
+            crate::routes::vm::clear_vm_lease(state, &old_id);
+            state
+                .vm_page_presence
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&old_id);
+            vm_audit(state, &actor.email, Some(&old), "VM_DELETED_FOR_RECREATE", true, None);
         }
 
         let body: Value = serde_json::from_slice(body_bytes).unwrap_or(json!({}));
@@ -432,6 +493,7 @@ pub(crate) async fn handle(
         {
             Ok(v) => v as f64,
             Err(e) => {
+                state.vm_power_requests.lock().unwrap_or_else(|e| e.into_inner()).remove(&lock_key);
                 let friendly = crate::routes::vm::friendly_vm_error(&e.into());
                 return Some(json_response(friendly.0, json!({ "error": friendly.1, "code": friendly.2 })));
             }
@@ -460,29 +522,23 @@ pub(crate) async fn handle(
         )
         .map(|r| r.to_json());
         let Some(pending_record) = pending_record else {
+            state.vm_power_requests.lock().unwrap_or_else(|e| e.into_inner()).remove(&lock_key);
             return Some(json_response(500, json!({ "error": "Could not reserve a computer slot." })));
         };
 
-        // Upload (server -> Proxmox, local network, can stream the whole
-        // thing) then create the VM. Both can fail independently; either
-        // failure marks the reservation provisioning-failed rather than
-        // leaving a half-built record around.
-        let result: Result<Value, crate::proxmox_desktop::ProxmoxServiceError> = async {
-            crate::proxmox_desktop::desktop()
-                .upload_iso(&local_path, &iso_filename)
-                .await?;
-            crate::proxmox_desktop::desktop()
-                .create_from_iso(&crate::proxmox_desktop::CreateFromIsoParams {
-                    vmid: Some(vmid),
-                    hostname: hostname.clone(),
-                    cpu_cores: Some(cpu_cores),
-                    memory_mb: Some(memory_mb),
-                    disk_gb: Some(disk_gb),
-                    iso_filename: iso_filename.clone(),
-                })
-                .await
-        }
-        .await;
+        // The ISO is already on Proxmox's storage (uploaded at /iso/complete
+        // time) — this just builds the VM against it.
+        let result = crate::proxmox_desktop::desktop()
+            .create_from_iso(&crate::proxmox_desktop::CreateFromIsoParams {
+                vmid: Some(vmid),
+                hostname: hostname.clone(),
+                cpu_cores: Some(cpu_cores),
+                memory_mb: Some(memory_mb),
+                disk_gb: Some(disk_gb),
+                iso_filename: proxmox_filename.clone(),
+            })
+            .await;
+        state.vm_power_requests.lock().unwrap_or_else(|e| e.into_inner()).remove(&lock_key);
 
         match result {
             Ok(created) => {

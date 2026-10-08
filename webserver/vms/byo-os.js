@@ -45,16 +45,34 @@
     return data;
   }
 
+  // Tracked so the create button can warn before permanently deleting an
+  // existing computer — /api/vm/byo-os/create itself now deletes whatever
+  // computer the user already has (template or BYO-OS) before building the
+  // new one, the same way the template path's "Delete & Recreate" does.
+  let hasExistingComputer = false;
+
   async function refreshIsoState() {
     try {
-      const data = await api('/api/vm/byo-os/iso', { method: 'GET' });
-      const has = data && data.iso;
+      const [isoData, computersData] = await Promise.all([
+        api('/api/vm/byo-os/iso', { method: 'GET' }),
+        api('/api/vm/computers', { method: 'GET' }).catch(() => null),
+      ]);
+      const has = isoData && isoData.iso;
       $('byo-os-no-iso').classList.toggle('is-hidden', !!has);
       $('byo-os-has-iso').classList.toggle('is-hidden', !has);
       if (has) {
-        $('byo-os-iso-name').textContent = data.iso.filename;
+        $('byo-os-iso-name').textContent = isoData.iso.filename;
         $('byo-os-iso-meta').textContent =
-          `${fmtBytes(data.iso.sizeBytes)} · uploaded ${new Date(data.iso.uploadedAt).toLocaleString()}`;
+          `${fmtBytes(isoData.iso.sizeBytes)} · uploaded ${new Date(isoData.iso.uploadedAt).toLocaleString()}`;
+      }
+      hasExistingComputer = !!(
+        computersData && Array.isArray(computersData.computers) && computersData.computers.length > 0
+      );
+      const createBtn = $('byo-os-create-btn');
+      if (createBtn) {
+        createBtn.textContent = hasExistingComputer
+          ? 'Delete current computer & create from this ISO →'
+          : 'Create computer from this ISO →';
       }
     } catch (e) {
       setStatus(e.message, true);
@@ -142,7 +160,7 @@
           `Uploading… ${pct}% (${fmtBytes(Math.min((i + 1) * CHUNK_SIZE, file.size))} / ${fmtBytes(file.size)})`;
       }
 
-      setStatus('Finishing up…');
+      setStatus('Handing off to the computer service… large ISOs can take a minute or two here.');
       await api('/api/vm/byo-os/iso/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
@@ -161,18 +179,20 @@
   }
 
   function init() {
-    const openBtn = $('byo-os-open-btn');
-    if (!openBtn || !dialog()) return;
+    const openBtns = [$('byo-os-open-btn'), $('byo-os-open-btn-header')].filter(Boolean);
+    if (!openBtns.length || !dialog()) return;
     const closeBtn = $('byo-os-close-btn');
     const fileInput = $('byo-os-file-input');
     const uploadBtn = $('byo-os-upload-btn');
     const deleteBtn = $('byo-os-delete-btn');
     const createBtn = $('byo-os-create-btn');
 
-    openBtn.addEventListener('click', () => {
-      setStatus('');
-      refreshIsoState();
-      dialog().showModal();
+    openBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        setStatus('');
+        refreshIsoState();
+        dialog().showModal();
+      });
     });
     closeBtn.addEventListener('click', () => {
       cancelRequested = true;
@@ -199,8 +219,18 @@
       }
     });
     createBtn.addEventListener('click', async () => {
+      if (hasExistingComputer) {
+        const ok = confirm(
+          'This will permanently delete your current computer and all its files, then create a new one from this ISO. This cannot be undone. Continue?',
+        );
+        if (!ok) return;
+      }
       createBtn.disabled = true;
-      setStatus('Creating your computer… this can take a few minutes (uploading the ISO to the hypervisor first).');
+      setStatus(
+        hasExistingComputer
+          ? 'Deleting your current computer and creating a new one… this can take a minute.'
+          : 'Creating your computer… this can take a minute.',
+      );
       try {
         await api('/api/vm/byo-os/create', {
           method: 'POST',
