@@ -237,6 +237,18 @@ impl DataStore {
         };
         init_tables(&conn)?;
 
+        // Repairs rows written before upsert_values' INSERT started
+        // wrapping template_vmid in NULLIF(?, '') — a record with no
+        // template (BYO-OS) stored '' (empty TEXT) in this INTEGER column
+        // instead of real NULL, which made every row.get::<_, Option<f64>>
+        // read of that column fail, silently dropping the whole row out of
+        // every listing/lookup function while it still held its vmid via
+        // the UNIQUE constraint. Idempotent — a no-op once rows are fixed.
+        let _ = conn.execute(
+            "UPDATE virtual_machines SET template_vmid = NULL WHERE template_vmid = ''",
+            [],
+        );
+
         conn.execute(
             "INSERT OR REPLACE INTO metadata (key, value, updated_at) VALUES ('schema_version', '1', ?)",
             rusqlite::params![now_millis()],

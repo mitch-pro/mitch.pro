@@ -221,7 +221,7 @@ fn write_upsert(conn: &rusqlite::Connection, values: &[String]) -> Result<usize,
             id, owner_email, owner_user_id, proxmox_vmid, proxmox_node, guest_type,
             friendly_name, hostname, operating_system, template_vmid, cpu_cores,
             memory_mb, disk_gb, ip_address, status, created_at, updated_at
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, NULLIF(?10, ''), ?11, ?12, ?13, ?14, ?15, ?16, ?17)
         ON CONFLICT(proxmox_vmid) DO UPDATE SET
             id=excluded.id, owner_email=excluded.owner_email, owner_user_id=excluded.owner_user_id,
             proxmox_node=excluded.proxmox_node, guest_type=excluded.guest_type,
@@ -899,6 +899,45 @@ mod tests {
             reserve_virtual_machine(&store, &sample("vm-2", 201.0)).is_none(),
             "vmid already reserved → null"
         );
+    }
+
+    #[test]
+    fn null_template_vmid_survives_readback() {
+        // BYO-OS records have no template (Value::Null, not a number) —
+        // upsert_values previously fell back to an empty string for this
+        // INTEGER column, which stored as literal TEXT "" instead of SQL
+        // NULL. row.get::<_, Option<f64>> then failed to parse it, which
+        // made vm_row_to_record fail for the whole row, which made every
+        // listing/lookup function (via .filter_map(|r| r.ok())) silently
+        // drop it — while the row still physically occupied its vmid.
+        let (_dir, store) = test_store();
+        let mut rec = sample("vm-byo-os", 300.0);
+        rec["templateVmid"] = Value::Null;
+        let reserved = reserve_virtual_machine(&store, &rec);
+        assert!(reserved.is_some(), "reservation with a null template should succeed");
+        assert_eq!(reserved.unwrap().template_vmid, None);
+
+        assert!(
+            get_virtual_machine_by_id(&store, "vm-byo-os").is_some(),
+            "row must be readable by id"
+        );
+        assert!(
+            get_virtual_machine_by_vmid(&store, 300.0).is_some(),
+            "row must be readable by vmid"
+        );
+        assert_eq!(
+            list_virtual_machines(&store, true).len(),
+            1,
+            "row must not be silently dropped from the full listing"
+        );
+        assert_eq!(
+            get_virtual_machines_for_owner(&store, "owner@mitch.pro").len(),
+            1,
+            "row must not be silently dropped from the owner listing"
+        );
+        // And the vmid must be seen as taken — a second reservation attempt
+        // at the same vmid must fail, not silently succeed as if it were free.
+        assert!(reserve_virtual_machine(&store, &sample("vm-other", 300.0)).is_none());
     }
 
     #[test]
