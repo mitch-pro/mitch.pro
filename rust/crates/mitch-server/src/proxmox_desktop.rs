@@ -1686,8 +1686,7 @@ exit 0
     pub async fn upload_iso(
         &self,
         local_path: &std::path::Path,
-        remote_filename: &str,
-    ) -> Result<(), ProxmoxServiceError> {
+    ) -> Result<String, ProxmoxServiceError> {
         self.assert_configured()?;
         let url = if self.verify_tls && !self.tls_server_name.is_empty() {
             format!(
@@ -1710,13 +1709,24 @@ exit 0
         // to a transient mid-transfer connection reset (a stale pooled
         // keep-alive connection, a brief blip on the local network) than the
         // short JSON calls this client otherwise makes — that has nothing to
-        // do with Proxmox actually being down. Retry connection-level
-        // failures a couple of times, rebuilding the file stream each time
-        // since a consumed stream can't be resent, rather than forcing the
-        // user to re-upload the whole file from their browser over one blip.
+        // do with Proxmox actually being down. Retry both connection-level
+        // failures AND a 400 response a couple of times: a 400 here is
+        // consistent with an earlier attempt's upload actually having landed
+        // on Proxmox's side even though the client saw its connection drop
+        // (the response just never made it back) — Proxmox then rejects the
+        // retry as a duplicate filename. A fresh random destination name
+        // each attempt sidesteps that collision either way; any previous
+        // attempt's filename is cleaned up best-effort before moving on, so
+        // a secretly-successful earlier attempt doesn't orphan storage.
         const MAX_ATTEMPTS: u32 = 3;
         let mut last_err: Option<ProxmoxServiceError> = None;
+        let mut prev_filename: Option<String> = None;
         for attempt in 1..=MAX_ATTEMPTS {
+            if let Some(prev) = prev_filename.take() {
+                let _ = self.delete_iso(&prev).await;
+            }
+            let remote_filename = format!("{}.iso", mitch_lib::crypto::random_bytes_hex(12));
+
             let file = tokio::fs::File::open(local_path).await.map_err(|_| {
                 ProxmoxServiceError::new("ISO_READ_FAILED", "Could not read the uploaded ISO.", 500)
             })?;
@@ -1724,7 +1734,7 @@ exit 0
             let stream = tokio_util::io::ReaderStream::new(file);
             let body = reqwest::Body::wrap_stream(stream);
             let part = reqwest::multipart::Part::stream_with_length(body, file_len)
-                .file_name(remote_filename.to_string())
+                .file_name(remote_filename.clone())
                 .mime_str("application/octet-stream")
                 .unwrap_or_else(|_| reqwest::multipart::Part::bytes(Vec::new()));
             let form = reqwest::multipart::Form::new()
@@ -1761,7 +1771,9 @@ exit 0
                     });
                     // A timeout means it was actively transferring and just
                     // slow — retrying won't help. A connection-level error is
-                    // the transient-blip case a fresh connection fixes.
+                    // the transient-blip case a fresh connection fixes. Keep
+                    // this attempt's filename in case it actually landed.
+                    prev_filename = Some(remote_filename);
                     if is_timeout || attempt == MAX_ATTEMPTS {
                         break;
                     }
@@ -1772,12 +1784,25 @@ exit 0
 
             let status = response.status().as_u16();
             if response.status().is_redirection() || !(200..300).contains(&status) {
+                let body_text = response.text().await.unwrap_or_default();
+                tracing::warn!(
+                    "[proxmox] ISO upload attempt {attempt}/{MAX_ATTEMPTS} rejected (HTTP {status}): {body_text}"
+                );
                 let mapped = if status == 401 || status == 403 { 503 } else { status };
-                return Err(ProxmoxServiceError::new(
+                last_err = Some(ProxmoxServiceError::new(
                     "UPSTREAM_REJECTED",
                     "Uploading the ISO to the hypervisor failed.",
                     mapped,
                 ));
+                // Only a plain 400 gets retried with a fresh name — the
+                // duplicate-filename-collision case. Auth/storage-full/etc
+                // errors won't be fixed by trying again.
+                if status != 400 || attempt == MAX_ATTEMPTS {
+                    break;
+                }
+                prev_filename = None; // this attempt's name was rejected outright, not silently claimed
+                tokio::time::sleep(Duration::from_secs(3 * attempt as u64)).await;
+                continue;
             }
             // The upload response is itself a UPID for Proxmox's background
             // copy/validate task — wait for that to finish the same way
@@ -1789,7 +1814,8 @@ exit 0
                 .ok()
                 .and_then(|text| serde_json::from_str(&text).ok())
                 .unwrap_or(Value::Null);
-            return self.wait_for_task(&self.node, Some(&upid), 300_000).await;
+            self.wait_for_task(&self.node, Some(&upid), 300_000).await?;
+            return Ok(remote_filename);
         }
 
         Err(last_err.unwrap_or_else(|| {
