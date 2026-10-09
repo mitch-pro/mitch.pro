@@ -42,6 +42,15 @@
     const diskTotal = vm.diskTotal || (vm.upgrades?.diskGb ? vm.upgrades.diskGb * 1073741824 : 0);
     const memoryLoad = percent(vm.memoryUsed, memoryTotal);
     const diskLoad = percent(vm.diskUsed, diskTotal);
+    const isByoOs = /^Custom \(/.test(vm.operatingSystem || '');
+    const recentlyCreated = Number(vm.createdAt) > 0 && Date.now() - Number(vm.createdAt) < 15 * 60 * 1000;
+    // Proxmox reports the VM "running" as soon as QEMU itself starts — long
+    // before cloud-init finishes installing/configuring the guest OS inside,
+    // which is what actually makes first boot slow. People see "Online" and
+    // assume it's ready, then think a slow/blank desktop means it's broken.
+    // Doesn't apply to BYO-OS: that boots straight into an installer, not
+    // cloud-init, so there's no equivalent first-boot wait.
+    const firstBootNotice = !isByoOs && recentlyCreated && (vm.status === 'starting' || running);
     const isExempt = Boolean(vm.lease?.isExempt);
     const remSeconds = vm.lease?.remainingSeconds != null ? vm.lease.remainingSeconds : null;
     const dailyUsed = Boolean(vm.lease?.dailyExtensionUsed);
@@ -79,6 +88,7 @@
           <div><h2>${esc(vm.name || 'My Computer')}</h2><p>${esc(distro)}</p></div>
           <span class="status-pill ${statusTone}">${esc(status)}</span>
         </div>
+        ${firstBootNotice ? `<div class="first-boot-banner"><span aria-hidden="true">⏳</span><p>First boot can take several minutes while your computer finishes setting up — this is normal, not a problem.</p></div>` : ''}
         <section class="detail-section connection-section" aria-label="Connection">
           <h3>Connection</h3>
           <dl class="machine-facts">
@@ -106,6 +116,7 @@
           ${canExtend ? '<button type="button" class="control-button" data-action="extend">Extend 30m</button>' : running && dailyUsed ? '<button type="button" class="control-button" disabled title="Only one 30-minute extension is allowed per day">Extension used</button>' : ''}
           <details class="more-menu"><summary aria-label="More computer actions"><span aria-hidden="true">···</span> More</summary><div class="menu-panel" role="group" aria-label="Computer power and reset">
             ${running ? `<button type="button" data-action="restart" ${busy ? 'disabled' : ''}>Restart</button><button type="button" data-action="shutdown" ${busy ? 'disabled' : ''}>Shut Down</button><span class="menu-divider"></span>` : ''}
+            ${isByoOs ? `<button type="button" data-action="detach-iso" ${busy ? 'disabled' : ''} title="Once your OS is installed, eject the install ISO so the next boot goes straight to disk">Finished installing — detach ISO</button><span class="menu-divider"></span>` : ''}
             <button type="button" class="danger-menu-action" data-action="recreate" ${busy ? 'disabled' : ''}>Delete &amp; Recreate Computer</button>
           </div></details>
         </div>
@@ -161,6 +172,18 @@
     if (!vm || pending.has(id)) return;
     if (action === 'recreate') {
       openProvisionModal('recreate');
+      return;
+    }
+    if (action === 'detach-iso') {
+      if (!confirm('Detach the install ISO? Only do this once your OS is fully installed — restart your computer afterward to boot from disk.')) return;
+      pending.set(id, 'Detaching ISO...'); render();
+      try {
+        const response = await fetch('/api/vm/byo-os/detach-iso', { method: 'POST', credentials: 'same-origin', headers, body: '{}' });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Could not detach the ISO.');
+        $('refresh-status').textContent = data.message || 'ISO detached — restart your computer to boot from disk.';
+        pending.delete(id); render();
+      } catch (error) { pending.delete(id); render(); $('refresh-status').textContent = error.message; }
       return;
     }
     if (!await confirmPower(action, vm.name || 'your computer') || pending.has(id)) return;

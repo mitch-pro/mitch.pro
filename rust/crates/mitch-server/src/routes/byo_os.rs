@@ -770,6 +770,38 @@ pub(crate) async fn handle(
         }
     }
 
+    // POST /api/vm/byo-os/detach-iso — once the OS is installed, eject the
+    // install ISO and drop it from the boot order so the next boot goes
+    // straight to disk instead of back into the installer. Only meaningful
+    // for a BYO-OS computer (templateVmid is null — a template-cloned one
+    // never had an ISO attached in the first place).
+    if path == "/api/vm/byo-os/detach-iso" && *method == Method::POST {
+        if is_vm_banned(state, &actor.email) {
+            return Some(json_response(403, json!({ "error": "VM access is restricted on this account." })));
+        }
+        let records = vmlib::get_virtual_machines_for_owner(&state.store, &actor.email);
+        let Some(record) = records.into_iter().find(|r| r.template_vmid.is_none()) else {
+            return Some(json_response(
+                404,
+                json!({ "error": "No BYO-OS computer found on your account." }),
+            ));
+        };
+        let record_json = record.to_json();
+        let node = jsval::str_or(record_json.get("node"), crate::proxmox_desktop::desktop().node());
+        if let Err(e) = crate::proxmox_desktop::desktop()
+            .detach_iso(&node, record.vmid as i64)
+            .await
+        {
+            let friendly = crate::routes::vm::friendly_vm_error(&e.into());
+            return Some(json_response(friendly.0, json!({ "error": friendly.1 })));
+        }
+        vm_audit(state, &actor.email, Some(&record_json), "BYO_OS_ISO_DETACHED", true, None);
+        return Some(json_response(
+            200,
+            json!({ "ok": true, "message": "ISO detached — restart your computer to boot from disk." }),
+        ));
+    }
+
     None
 }
 

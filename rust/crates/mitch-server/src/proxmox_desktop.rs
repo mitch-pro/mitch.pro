@@ -2163,6 +2163,25 @@ exit 0
         }))
     }
 
+    /// Ejects the install ISO from a BYO-OS VM's virtual CD-ROM (ide2) and
+    /// drops it from the boot order, so a subsequent boot goes straight to
+    /// the installed OS on disk instead of back into the installer — the
+    /// counterpart to `create_from_iso`'s `ide2`/`boot` setup. Takes effect
+    /// on the VM's next boot; doesn't restart it itself.
+    pub async fn detach_iso(&self, node: &str, vmid: i64) -> Result<(), ProxmoxServiceError> {
+        self.request(
+            "PUT",
+            &format!("/nodes/{}/qemu/{}/config", encode_uri_component(node), vmid),
+            Some(&json!({
+                "ide2": "none,media=cdrom",
+                "boot": "order=scsi0",
+            })),
+            DEFAULT_TIMEOUT_MS,
+        )
+        .await?;
+        Ok(())
+    }
+
     /// `updateHardware(record, { cpuCores, memoryMb, diskGb })`
     /// (lib/proxmox_desktop.js:506-534). The numbers are already
     /// `Number()`-coerced by the caller.

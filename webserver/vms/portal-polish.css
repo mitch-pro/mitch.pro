@@ -88,6 +88,9 @@ body.computer-portal .access-row p { margin: 2px 0 0; color: var(--computer-mute
 body.computer-portal .access-row .quiet-button { min-height: 34px; padding: 7px 10px; font-size: 11px; white-space: nowrap; }
 body.computer-portal .admin-request-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 9px; padding: 10px 12px; border-radius: 8px; background: rgba(193,139,55,.09); color: #ebca96; font-size: 11px; }
 body.computer-portal .admin-request-banner button { flex: 0 0 auto; min-height: 32px; padding: 6px 10px; font-size: 11px; }
+body.computer-portal .first-boot-banner { display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: rgba(99,102,241,.1); color: #c7d2fe; font-size: 11px; line-height: 1.4; }
+body.computer-portal .first-boot-banner span { flex: 0 0 auto; font-size: 13px; line-height: 1.4; }
+body.computer-portal .first-boot-banner p { margin: 0; }
 body.computer-portal .computer-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 17px; border-top: 1px solid var(--computer-line); }
 body.computer-portal .computer-actions .main-action { min-width: 172px; min-height: 42px; margin-right: 0; padding: 9px 15px; }
 body.computer-portal .computer-actions > .control-button { min-height: 42px; }
