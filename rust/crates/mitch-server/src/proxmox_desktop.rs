@@ -247,6 +247,19 @@ fn clean_hostname(hostname: &str, vmid: i64) -> String {
     }
 }
 
+/// Rewrites a Proxmox `netN` config value (e.g. `"virtio=AA:BB:CC:DD:EE:FF,
+/// bridge=vmbr1,firewall=1"`) to drop whatever MAC the source NIC has and
+/// use a bare `virtio` instead, keeping every other segment (`bridge=`,
+/// `firewall=`, `tag=`, ...) unchanged — copying a MAC verbatim from one VM
+/// into another would put two NICs with the same address on the same
+/// bridge.
+fn net0_with_fresh_mac(net0: &str) -> String {
+    match net0.split_once(',') {
+        Some((_model, rest)) => format!("virtio,{rest}"),
+        None => "virtio".to_string(),
+    }
+}
+
 /// The four module-level caches, behind one shared lock.
 #[derive(Default)]
 struct Caches {
@@ -2143,6 +2156,46 @@ exit 0
         let balloon = clamp_js((memory_mb / 4.0).floor(), 1024.0, 4096.0);
         let clean_host = clean_hostname(&params.hostname, vmid);
 
+        // clone_desktop never sets net0 explicitly — a cloned VM just
+        // inherits whatever network config the template already has, which
+        // is how every template-based "My Computer" ends up on the right
+        // bridge (a VPN/sandboxed one, not a bare default). A from-scratch
+        // VM has no template to clone from, so without this it would fall
+        // back to vm_bridge's own independently-configured default and can
+        // silently end up on the wrong network entirely. Read the same
+        // template's current net0 and reuse it verbatim instead of
+        // maintaining a second, separately-configured bridge setting that
+        // can drift out of sync with reality.
+        let net0 = match self.template_vmids().first() {
+            Some(&template_vmid) => {
+                match self
+                    .get_config(&json!({ "vmid": template_vmid as f64, "node": self.node, "guestType": "qemu" }))
+                    .await
+                {
+                    Ok(template_config) => {
+                        let value = jsval::str_or(template_config.get("net0"), "");
+                        if value.is_empty() {
+                            tracing::warn!(
+                                "[proxmox] BYO-OS: template {template_vmid} has no net0 — falling back to vm_bridge={}",
+                                self.vm_bridge
+                            );
+                            format!("virtio,bridge={}", self.vm_bridge)
+                        } else {
+                            net0_with_fresh_mac(&value)
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "[proxmox] BYO-OS: could not read template {template_vmid}'s network config ({e:?}) — falling back to vm_bridge={}",
+                            self.vm_bridge
+                        );
+                        format!("virtio,bridge={}", self.vm_bridge)
+                    }
+                }
+            }
+            None => format!("virtio,bridge={}", self.vm_bridge),
+        };
+
         let mut body = Map::new();
         body.insert("vmid".to_string(), jsval::num_value(vmid as f64));
         body.insert("name".to_string(), json!(clean_host));
@@ -2160,10 +2213,7 @@ exit 0
         body.insert("vga".to_string(), json!("std,memory=64"));
         body.insert("agent".to_string(), json!(1));
         body.insert("scsihw".to_string(), json!("virtio-scsi-pci"));
-        body.insert(
-            "net0".to_string(),
-            json!(format!("virtio,bridge={}", self.vm_bridge)),
-        );
+        body.insert("net0".to_string(), json!(net0));
         body.insert(
             "scsi0".to_string(),
             json!(format!(
@@ -2431,6 +2481,23 @@ mod tests {
         assert!(service
             .validate_desktop_login("fogler", "temporary-validation-only")
             .is_ok());
+    }
+
+    #[test]
+    fn net0_with_fresh_mac_drops_only_the_mac() {
+        assert_eq!(
+            net0_with_fresh_mac("virtio=AA:BB:CC:DD:EE:FF,bridge=vmbr1,firewall=1"),
+            "virtio,bridge=vmbr1,firewall=1"
+        );
+        assert_eq!(
+            net0_with_fresh_mac("e1000=11:22:33:44:55:66,bridge=vmbr0"),
+            "virtio,bridge=vmbr0"
+        );
+        // No MAC segment at all (template already bare) — passes through
+        // as the same bridge, no trailing comma artifact.
+        assert_eq!(net0_with_fresh_mac("virtio,bridge=vmbr2,tag=50"), "virtio,bridge=vmbr2,tag=50");
+        // Degenerate case: no comma at all.
+        assert_eq!(net0_with_fresh_mac("virtio"), "virtio");
     }
 
     #[test]
