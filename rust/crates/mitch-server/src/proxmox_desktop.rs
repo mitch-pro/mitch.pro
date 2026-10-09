@@ -1928,10 +1928,17 @@ exit 0
                 let _ = self.delete_iso(&prev).await;
             }
 
+            // reqwest's per-request timeout covers the whole request, body
+            // read included — and this body gets held open and streamed
+            // out for as long as the relay to Proxmox takes (minutes, for
+            // a large ISO), not just the time to get headers back. A short
+            // timeout here kills the source stream mid-relay, which then
+            // surfaces as a failure on the *upload* POST, since that body
+            // is this one.
             let download = match self
                 .client
                 .get(source_url)
-                .timeout(Duration::from_secs(30))
+                .timeout(Duration::from_secs(3600))
                 .send()
                 .await
             {
