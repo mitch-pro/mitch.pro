@@ -1857,16 +1857,51 @@ exit 0
         }))
     }
 
-    /// Fetches an ISO from an arbitrary URL and relays it straight into
-    /// Proxmox's storage upload API — the download and the upload run as
-    /// one streamed pass-through (bytes flow source → this process → Proxmox
-    /// in bounded chunks), so nothing is ever written to this box's disk and
-    /// the whole file is never held in memory at once, no matter its size.
-    /// There's no size cap here (unlike `upload_iso`, which has to hold the
-    /// already-fully-assembled browser upload in one local file) — the
-    /// caller bills based on the returned byte count instead. Returns the
-    /// Proxmox-side filename and the total bytes transferred.
-    pub async fn upload_iso_from_url(&self, source_url: &str) -> Result<(String, u64), ProxmoxServiceError> {
+    /// Drains an HTTP response body into a local file, returning the byte
+    /// count written — used only when the source doesn't advertise a size
+    /// (see `upload_iso_from_url`), so this is a brief, deleted-right-after
+    /// scratch file, not persistent storage.
+    async fn drain_response_to_file(
+        mut response: reqwest::Response,
+        path: &std::path::Path,
+    ) -> Result<u64, ProxmoxServiceError> {
+        use tokio::io::AsyncWriteExt;
+        let mut file = tokio::fs::File::create(path).await.map_err(|_| {
+            ProxmoxServiceError::new("ISO_WRITE_FAILED", "Could not stage that download.", 500)
+        })?;
+        let mut written: u64 = 0;
+        loop {
+            let chunk = response.chunk().await.map_err(|_| {
+                ProxmoxServiceError::new("FETCH_FAILED", "That link's response was interrupted.", 502)
+            })?;
+            let Some(chunk) = chunk else { break };
+            file.write_all(&chunk).await.map_err(|_| {
+                ProxmoxServiceError::new("ISO_WRITE_FAILED", "Could not stage that download.", 500)
+            })?;
+            written += chunk.len() as u64;
+        }
+        file.flush().await.ok();
+        Ok(written)
+    }
+
+    /// Fetches an ISO from an arbitrary URL and relays it into Proxmox's
+    /// storage upload API. Proxmox's upload endpoint flatly rejects a
+    /// chunked (length-unknown) request body ("chunked transfer encoding
+    /// not supported"), so this only streams straight through — source →
+    /// this process → Proxmox, never buffered or written to disk — when the
+    /// source reports a `Content-Length`. When it doesn't, there's no way
+    /// to declare a length upfront, so this falls back to a brief local
+    /// scratch file (deleted right after, same transient pattern
+    /// `/iso/complete` already uses for the chunked browser-upload path)
+    /// purely to learn the real size, then hands off to `upload_iso`'s own
+    /// proven, already-retrying local-file path. Either way there's no
+    /// size cap — the caller bills based on the returned byte count.
+    /// Returns the Proxmox-side filename and the total bytes transferred.
+    pub async fn upload_iso_from_url(
+        &self,
+        source_url: &str,
+        scratch_dir: &std::path::Path,
+    ) -> Result<(String, u64), ProxmoxServiceError> {
         self.assert_configured()?;
         let upload_url = if self.verify_tls && !self.tls_server_name.is_empty() {
             format!(
@@ -1925,20 +1960,39 @@ exit 0
                 ));
             }
 
-            let transferred = Arc::new(std::sync::atomic::AtomicU64::new(0));
-            let transferred_counter = transferred.clone();
-            let byte_stream = futures_util::StreamExt::inspect(download.bytes_stream(), move |chunk| {
-                if let Ok(bytes) = chunk {
-                    transferred_counter.fetch_add(bytes.len() as u64, std::sync::atomic::Ordering::Relaxed);
-                }
-            });
-            let body = reqwest::Body::wrap_stream(byte_stream);
+            let known_len = download.content_length().filter(|&l| l > 0);
+
+            let Some(size) = known_len else {
+                // No Content-Length — stage to a scratch file to learn the
+                // real size, then delegate to upload_iso's own local-file
+                // path (which already retries and surfaces errors) rather
+                // than duplicating that here.
+                let _ = tokio::fs::create_dir_all(scratch_dir).await;
+                let temp_path =
+                    scratch_dir.join(format!("link-{}.iso", mitch_lib::crypto::random_bytes_hex(8)));
+                let written = match Self::drain_response_to_file(download, &temp_path).await {
+                    Ok(w) => w,
+                    Err(error) => {
+                        let _ = tokio::fs::remove_file(&temp_path).await;
+                        tracing::warn!(
+                            "[proxmox] ISO link download attempt {attempt}/{MAX_ATTEMPTS} failed mid-transfer: {error:?}"
+                        );
+                        last_err = Some(error);
+                        if attempt == MAX_ATTEMPTS {
+                            break;
+                        }
+                        tokio::time::sleep(Duration::from_secs(3 * attempt as u64)).await;
+                        continue;
+                    }
+                };
+                let result = self.upload_iso(&temp_path).await;
+                let _ = tokio::fs::remove_file(&temp_path).await;
+                return result.map(|filename| (filename, written));
+            };
+
             let remote_filename = format!("{}.iso", mitch_lib::crypto::random_bytes_hex(12));
-            // No stream_with_length here — the source's size isn't known
-            // upfront, so this goes out chunked (Proxmox's upload endpoint,
-            // same as any standards-compliant HTTP/1.1 server, accepts a
-            // chunked request body fine).
-            let part = reqwest::multipart::Part::stream(body)
+            let body = reqwest::Body::wrap_stream(download.bytes_stream());
+            let part = reqwest::multipart::Part::stream_with_length(body, size)
                 .file_name(remote_filename.clone())
                 .mime_str("application/octet-stream")
                 .unwrap_or_else(|_| reqwest::multipart::Part::bytes(Vec::new()));
@@ -2024,7 +2078,7 @@ exit 0
             // A huge ISO over a slow link can legitimately take a long
             // while for Proxmox's own copy/validate task to finish.
             self.wait_for_task(&self.node, Some(&upid), 1_800_000).await?;
-            return Ok((remote_filename, transferred.load(std::sync::atomic::Ordering::Relaxed)));
+            return Ok((remote_filename, size));
         }
 
         Err(last_err.unwrap_or_else(|| {

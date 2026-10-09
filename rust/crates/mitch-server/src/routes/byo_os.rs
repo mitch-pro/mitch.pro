@@ -482,7 +482,7 @@ pub(crate) async fn handle(
             .unwrap_or_else(|| "custom.iso".to_string());
 
         let (proxmox_filename, size_bytes) = match crate::proxmox_desktop::desktop()
-            .upload_iso_from_url(&raw_url)
+            .upload_iso_from_url(&raw_url, &uploads_dir(state))
             .await
         {
             Ok(v) => v,

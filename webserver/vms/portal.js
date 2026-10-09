@@ -113,10 +113,10 @@
         </section>
         <div class="computer-actions">
           ${primaryAction}
+          ${isByoOs ? `<button type="button" class="control-button" data-action="detach-iso" ${busy ? 'disabled' : ''} title="Once your OS is installed, eject the install ISO so the next boot goes straight to disk">Detach ISO</button>` : ''}
           ${canExtend ? '<button type="button" class="control-button" data-action="extend">Extend 30m</button>' : running && dailyUsed ? '<button type="button" class="control-button" disabled title="Only one 30-minute extension is allowed per day">Extension used</button>' : ''}
           <details class="more-menu"><summary aria-label="More computer actions"><span aria-hidden="true">···</span> More</summary><div class="menu-panel" role="group" aria-label="Computer power and reset">
             ${running ? `<button type="button" data-action="restart" ${busy ? 'disabled' : ''}>Restart</button><button type="button" data-action="shutdown" ${busy ? 'disabled' : ''}>Shut Down</button><span class="menu-divider"></span>` : ''}
-            ${isByoOs ? `<button type="button" data-action="detach-iso" ${busy ? 'disabled' : ''} title="Once your OS is installed, eject the install ISO so the next boot goes straight to disk">Finished installing — detach ISO</button><span class="menu-divider"></span>` : ''}
             <button type="button" class="danger-menu-action" data-action="recreate" ${busy ? 'disabled' : ''}>Delete &amp; Recreate Computer</button>
           </div></details>
         </div>
