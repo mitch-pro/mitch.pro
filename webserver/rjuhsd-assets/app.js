@@ -135,7 +135,7 @@ function switchSchool(s){
  render();
  load();
  loadWeather();
- try{const url=new URL(location.href);url.search="";url.pathname="/"+school+"/";history.replaceState(null,"",url)}catch{}
+ try{const url=new URL(location.href);url.search="";url.pathname=school==="woodcreek"?"/":"/"+school+"/";history.replaceState(null,"",url)}catch{}
 }
 $("school-select").addEventListener("change",()=>switchSchool($("school-select").value));
 document.addEventListener("click",e=>{const b=e.target.closest("[data-switch-school]");if(b){const s=b.dataset.switchSchool;if(s){switchSchool(s)}}});

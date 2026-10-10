@@ -261,16 +261,21 @@ pub fn prepare_rjuhsd_html(
     if let Some((name, short, mascot)) = school_meta {
         let school_title = format!("{name} Bell Schedule | RJUHSD Hub");
         let school_desc = format!("Live {name} bell schedule, period countdowns, daily times, and calendar for the {mascot} in Roseville Joint Union High School District (RJUHSD).");
-        // Every school (including the bare-URL default, Woodcreek) now
-        // canonicalizes to its own clean path (/woodcreek/, /roseville/,
-        // ...) instead of a query-string variant — query params rank worse
-        // and read worse in search results than a real path segment, and
-        // splitting ranking signal between "/" and "/?school=woodcreek" was
-        // actively hurting "woodcreek bell schedule" specifically. Scoped
+        // Every non-Woodcreek school canonicalizes to its own clean path
+        // (/roseville/, /granitebay/, ...) instead of a query-string
+        // variant — query params rank worse and read worse in search
+        // results than a real path segment. Woodcreek is the exception:
+        // it already lives at the bare "/" by default, and the bare root
+        // naturally outranks a deeper path for a domain's flagship
+        // content, so "/" (not /woodcreek/) is its real canonical. Scoped
         // to the real host: the mitch.pro preview mirror has no per-school
         // path routed, so it keeps canonicalizing to its own bare URL.
         let school_canonical = if is_rjuhsd {
-            format!("https://{req_host_str}/{effective_school}/")
+            if effective_school == "woodcreek" {
+                format!("https://{req_host_str}/")
+            } else {
+                format!("https://{req_host_str}/{effective_school}/")
+            }
         } else {
             format!("https://{req_host_str}{back_path}")
         };
@@ -1450,6 +1455,21 @@ pub async fn handle(
         }
     }
 
+    // A sitemap's URLs must be on the same site it's served from — a
+    // single shared sitemap.xml listing both rjuhsd.school and mitch.pro
+    // URLs means whichever half doesn't match the host that served it is
+    // liable to be ignored. Serve a dedicated one on the real host;
+    // mitch.pro (and everything else) falls through to the static default.
+    if path == "/sitemap.xml" && rjuhsd_host {
+        if let Ok(xml) = std::fs::read_to_string(webroot.join("rjuhsd").join("sitemap.xml")) {
+            return Response::builder()
+                .status(StatusCode::OK)
+                .header(axum::http::header::CONTENT_TYPE, "application/xml; charset=utf-8")
+                .body(axum::body::Body::from(xml))
+                .unwrap_or_else(|_| crate::errors::err_resp(500, None, None));
+        }
+    }
+
     // 7. Site hubs and previews.
     let pickle_hub_html = || -> Option<String> {
         std::fs::read_to_string(webroot.join("sexypickleclub").join("index.html"))
@@ -1473,17 +1493,27 @@ pub async fn handle(
             return html_response(html);
         }
     }
-    // Clean per-school paths (/woodcreek/, /roseville/, ...) — the real,
+    // Clean per-school paths (/roseville/, /granitebay/, ...) — the real,
     // indexable URL for each school's schedule. A query-string variant
     // (?school=X) ranks worse and reads worse in search results than a
     // path segment, so old links get a permanent redirect onto the clean
     // path instead of being served directly. Scoped to the real host —
     // not routed on the mitch.pro preview mirror.
+    //
+    // Woodcreek is the deliberate exception: it already lives at the bare
+    // "/" by default, and the bare root of a domain naturally outranks a
+    // deeper path for a site's flagship content — there's no reason to
+    // split authority onto /woodcreek/ when "/" already has it. So "/"
+    // IS Woodcreek's real canonical URL, and /woodcreek/ (and
+    // ?school=woodcreek) redirect to it instead of the reverse.
     const RJUHSD_SCHOOL_SLUGS: &[&str] =
         &["woodcreek", "roseville", "granitebay", "antelope", "westpark", "oakmont"];
     if rjuhsd_host && (path == "/" || path == "/index.html") {
         if let Some((_, raw_school)) = query(&search).into_iter().find(|(k, _)| k == "school") {
             let slug = raw_school.to_lowercase();
+            if slug == "woodcreek" {
+                return redirect(&format!("https://{req_host}/"), 301);
+            }
             if RJUHSD_SCHOOL_SLUGS.contains(&slug.as_str()) {
                 return redirect(&format!("https://{req_host}/{slug}/"), 301);
             }
@@ -1491,9 +1521,13 @@ pub async fn handle(
     }
     if rjuhsd_host {
         let trimmed = path.trim_end_matches('/');
+        if trimmed == "/woodcreek" {
+            return redirect(&format!("https://{req_host}/"), 301);
+        }
         if let Some(slug) = RJUHSD_SCHOOL_SLUGS
             .iter()
             .copied()
+            .filter(|s| *s != "woodcreek")
             .find(|s| trimmed == format!("/{s}"))
         {
             if let Some(html) =
@@ -2434,13 +2468,22 @@ mod rjuhsd_school_url_tests {
     }
 
     #[test]
-    fn default_school_canonicalizes_to_its_own_clean_path_not_root() {
+    fn woodcreek_canonicalizes_to_the_bare_root() {
         let cfg = SiteConfig::load();
-        let html = prepare_rjuhsd_html(&fixture(), Some("rjuhsd.school"), true, "", &cfg);
-        // The bare URL (no ?school=, default Woodcreek content) must point
-        // its canonical at /woodcreek/, not at itself — splitting ranking
-        // signal between "/" and a query-string variant was the bug.
-        assert_eq!(canonical_of(&html), "https://rjuhsd.school/woodcreek/");
+        // Both the bare URL and the explicit ?school=woodcreek variant
+        // must canonicalize to "/" itself — the bare root outranks a
+        // deeper /woodcreek/ path for a domain's flagship content, so
+        // there's no reason to split authority onto one.
+        let html_default = prepare_rjuhsd_html(&fixture(), Some("rjuhsd.school"), true, "", &cfg);
+        assert_eq!(canonical_of(&html_default), "https://rjuhsd.school/");
+        let html_explicit = prepare_rjuhsd_html(
+            &fixture(),
+            Some("rjuhsd.school"),
+            true,
+            "school=woodcreek",
+            &cfg,
+        );
+        assert_eq!(canonical_of(&html_explicit), "https://rjuhsd.school/");
     }
 
     #[test]

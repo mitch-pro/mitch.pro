@@ -1,18 +1,20 @@
 User-agent: *
 
-# High priority: Allow crawling and indexing of RJUHSD high school bell schedules
+# High priority: Allow crawling and indexing of RJUHSD high school bell schedules.
+# Woodcreek lives at the bare "/" (the site's default) — no separate
+# /woodcreek/ path to list, it 301s to "/".
 Allow: /bell/
 Allow: /bell/index.html
 Allow: /rjuhsd/
-Allow: /woodcreek/
 Allow: /roseville/
 Allow: /granitebay/
 Allow: /antelope/
 Allow: /westpark/
 Allow: /oakmont/
-# Legacy URL — now 301s to the matching /<school>/ path above. Still
-# crawlable (not disallowed) so that redirect gets followed and indexed
-# link equity consolidates onto the new canonical instead of being lost.
+# Legacy URL — now 301s to "/" (woodcreek) or the matching /<school>/ path
+# above. Still crawlable (not disallowed) so that redirect gets followed
+# and indexed link equity consolidates onto the new canonical instead of
+# being lost.
 Allow: /?school=*
 Allow: /sitemap.xml
 
