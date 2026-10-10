@@ -76,6 +76,20 @@ fn now_millis() -> i64 {
         .unwrap_or(0)
 }
 
+/// Legacy ban timestamps were written in milliseconds by most code paths
+/// but in seconds by at least one (`routes/admin/data.rs`'s blacklist
+/// action). A millisecond "now" is ~1.7e12; a second "now" is ~1.7e9 — well
+/// under 1e12 either way for any date this app has existed, so this
+/// threshold cleanly tells the two apart regardless of which field name the
+/// value came from.
+fn normalize_legacy_ts(v: f64) -> i64 {
+    if v > 0.0 && v < 1e12 {
+        (v * 1000.0) as i64
+    } else {
+        v as i64
+    }
+}
+
 #[allow(dead_code)] // used by the 30-min revalidation in later steps
 fn mtime_of(md: &std::fs::Metadata) -> u128 {
     md.modified()
@@ -210,13 +224,28 @@ impl DataStore {
                         lifetime_earned REAL NOT NULL DEFAULT 0,
                         updated_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS blacklist (
+                        email TEXT PRIMARY KEY,
+                        reason TEXT NOT NULL DEFAULT 'Banned by admin',
+                        banned_at INTEGER NOT NULL,
+                        banned_by TEXT NOT NULL DEFAULT 'admin'
+                    );
+                    CREATE TABLE IF NOT EXISTS banned_ips (
+                        ip TEXT PRIMARY KEY,
+                        reason TEXT NOT NULL DEFAULT 'This IP address is banned from the website.',
+                        banned_at INTEGER NOT NULL,
+                        banned_by TEXT NOT NULL DEFAULT 'site admin',
+                        email TEXT NOT NULL DEFAULT ''
+                    );
                     CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs (ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_level ON app_logs (level, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_category ON app_logs (category, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_virtual_machines_owner ON virtual_machines (owner_email, status);
                     CREATE INDEX IF NOT EXISTS idx_vm_audit_logs_ts ON vm_audit_logs (ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_vm_audit_logs_vm ON vm_audit_logs (vm_record_id, ts DESC);
-                    CREATE INDEX IF NOT EXISTS idx_coins_balance ON coins (balance DESC);",
+                    CREATE INDEX IF NOT EXISTS idx_coins_balance ON coins (balance DESC);
+                    CREATE INDEX IF NOT EXISTS idx_blacklist_banned_at ON blacklist (banned_at DESC);
+                    CREATE INDEX IF NOT EXISTS idx_banned_ips_email ON banned_ips (email);",
                 );
                 match result {
                     Ok(()) => return Ok(()),
@@ -268,6 +297,8 @@ impl DataStore {
             app_log_writes: std::sync::atomic::AtomicUsize::new(0),
         };
         store.backfill_coins_table_from_json();
+        store.backfill_blacklist_table_from_json();
+        store.backfill_banned_ips_table_from_json();
         Ok(store)
     }
 
@@ -300,6 +331,88 @@ impl DataStore {
             let _ = conn.execute(
                 "INSERT OR IGNORE INTO coins (email, balance, lifetime_earned, updated_at) VALUES (?1, ?2, ?3, ?4)",
                 rusqlite::params![email, balance, lifetime_earned, now],
+            );
+        }
+    }
+
+    /// One-time (idempotent) backfill from blacklist.json into the real
+    /// `blacklist` table. Legacy entries were written by at least two code
+    /// paths that disagreed on field names (`banned_at` vs `blacklisted_at`,
+    /// `by` vs `admin`) and units (`banned_at` was always milliseconds, but
+    /// one `blacklisted_at` writer used seconds) — `normalize_legacy_ts`
+    /// below resolves both.
+    fn backfill_blacklist_table_from_json(&self) {
+        let bl = self.read_document(&self.base_dir.join("data/blacklist.json"), Value::Null);
+        let Some(map) = bl.as_object() else {
+            return;
+        };
+        if map.is_empty() {
+            return;
+        }
+        let now = now_millis();
+        let conn = self.conn();
+        for (email, info) in map {
+            let reason = info
+                .get("reason")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Banned by admin")
+                .to_string();
+            let banned_at = info
+                .get("banned_at")
+                .or_else(|| info.get("blacklisted_at"))
+                .and_then(|v| v.as_f64())
+                .map(normalize_legacy_ts)
+                .unwrap_or(now);
+            let banned_by = info
+                .get("by")
+                .or_else(|| info.get("admin"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("admin")
+                .to_string();
+            let _ = conn.execute(
+                "INSERT OR IGNORE INTO blacklist (email, reason, banned_at, banned_by) VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![email, reason, banned_at, banned_by],
+            );
+        }
+    }
+
+    /// One-time (idempotent) backfill from banned_ips.json into the real
+    /// `banned_ips` table. See `backfill_blacklist_table_from_json` for why
+    /// timestamps go through `normalize_legacy_ts`.
+    fn backfill_banned_ips_table_from_json(&self) {
+        let ips = self.read_document(&self.base_dir.join("data/banned_ips.json"), Value::Null);
+        let Some(map) = ips.as_object() else {
+            return;
+        };
+        if map.is_empty() {
+            return;
+        }
+        let now = now_millis();
+        let conn = self.conn();
+        for (ip, info) in map {
+            let reason = info
+                .get("reason")
+                .and_then(|v| v.as_str())
+                .unwrap_or("This IP address is banned from the website.")
+                .to_string();
+            let banned_at = info
+                .get("banned_at")
+                .and_then(|v| v.as_f64())
+                .map(normalize_legacy_ts)
+                .unwrap_or(now);
+            let banned_by = info
+                .get("by")
+                .and_then(|v| v.as_str())
+                .unwrap_or("site admin")
+                .to_string();
+            let email = info
+                .get("email")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let _ = conn.execute(
+                "INSERT OR IGNORE INTO banned_ips (ip, reason, banned_at, banned_by, email) VALUES (?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params![ip, reason, banned_at, banned_by, email],
             );
         }
     }

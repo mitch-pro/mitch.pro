@@ -1117,15 +1117,7 @@ fn ban_account(
             json!({ "error": "cannot ban admins or owners from this panel" }),
         );
     }
-    let bl_file = state.cfg.data_dir.join("blacklist.json");
-    let mut bl = state.store.read_document(&bl_file, json!({}));
-    if let Some(map) = bl.as_object_mut() {
-        map.insert(
-            target_email.clone(),
-            json!({ "reason": reason, "banned_at": now_millis(), "by": admin_email }),
-        );
-    }
-    let _ = state.store.write_document(&bl_file, &bl);
+    mitch_lib::bans::blacklist_insert(&state.store, &target_email, &reason, &admin_email);
 
     // If their last known IP isn't whitelisted, IP-ban them too.
     let last_known = state
@@ -1137,20 +1129,13 @@ fn ban_account(
         .map(str::to_string)
     {
         if !mitch_lib::auth::WHITELISTED_IPS.contains(&target_ip.as_str()) {
-            let banned_ips_file = state.cfg.data_dir.join("banned_ips.json");
-            let mut banned = state.store.read_document(&banned_ips_file, json!({}));
-            if let Some(map) = banned.as_object_mut() {
-                map.insert(
-                    target_ip.clone(),
-                    json!({
-                        "reason": format!("IP associated with banned account {target_email}. Reason: {reason}"),
-                        "banned_at": now_millis(),
-                        "by": admin_email,
-                        "email": target_email,
-                    }),
-                );
-            }
-            let _ = state.store.write_document(&banned_ips_file, &banned);
+            mitch_lib::bans::banned_ips_insert(
+                &state.store,
+                &target_ip,
+                &format!("IP associated with banned account {target_email}. Reason: {reason}"),
+                &admin_email,
+                &target_email,
+            );
         }
     }
 
@@ -1205,14 +1190,7 @@ fn unban_account(
     if !valid_email(&email_raw) {
         return json_response(400, json!({ "error": "valid email required" }));
     }
-    let bl_file = state.cfg.data_dir.join("blacklist.json");
-    let mut bl = state.store.read_document(&bl_file, json!({}));
-    let existed = bl.get(target_email.as_str()).is_some() || bl.get(email_raw.as_str()).is_some();
-    if let Some(map) = bl.as_object_mut() {
-        map.remove(target_email.as_str());
-        map.remove(email_raw.as_str());
-    }
-    let _ = state.store.write_document(&bl_file, &bl);
+    let existed = mitch_lib::bans::blacklist_remove(&state.store, &target_email, &email_raw);
 
     // Remove from shadow bans
     {
@@ -1227,33 +1205,19 @@ fn unban_account(
     }
 
     // Remove any IP bans associated with this email or last known IP
-    let banned_ips_file = state.cfg.data_dir.join("banned_ips.json");
-    let mut banned = state.store.read_document(&banned_ips_file, json!({}));
-    if let Some(map) = banned.as_object_mut() {
-        let last_known = state
-            .store
-            .read_document(&state.cfg.data_dir.join("last_known_ips.json"), json!({}));
-        let target_ip = last_known
-            .get(target_email.as_str())
-            .or_else(|| last_known.get(email_raw.as_str()))
-            .and_then(|v| v.as_str())
-            .map(str::to_string);
-        let remove: Vec<String> = map
-            .iter()
-            .filter(|(ip, info)| {
-                info.get("email").and_then(|v| v.as_str()) == Some(target_email.as_str())
-                    || info.get("email").and_then(|v| v.as_str()) == Some(email_raw.as_str())
-                    || target_ip.as_deref() == Some(ip.as_str())
-            })
-            .map(|(ip, _)| ip.clone())
-            .collect();
-        if !remove.is_empty() {
-            for ip in &remove {
-                map.remove(ip);
-            }
-            let _ = state.store.write_document(&banned_ips_file, &banned);
-        }
-    }
+    let last_known = state
+        .store
+        .read_document(&state.cfg.data_dir.join("last_known_ips.json"), json!({}));
+    let target_ip = last_known
+        .get(target_email.as_str())
+        .or_else(|| last_known.get(email_raw.as_str()))
+        .and_then(|v| v.as_str());
+    mitch_lib::bans::banned_ips_remove_for_account(
+        &state.store,
+        &target_email,
+        &email_raw,
+        target_ip,
+    );
 
     let matrix_user_id =
         crate::routes::matrix::resolve_matrix_user_id_for_email(state, &target_email);
@@ -1585,15 +1549,7 @@ pub fn execute_moderator_approved_action(
                 .as_str()
                 .unwrap_or("Banned by admin")
                 .to_string();
-            let bl_file = state.cfg.data_dir.join("blacklist.json");
-            let mut bl = state.store.read_document(&bl_file, json!({}));
-            if let Some(map) = bl.as_object_mut() {
-                map.insert(
-                    target_email.clone(),
-                    json!({ "reason": reason, "banned_at": now_millis(), "by": actor }),
-                );
-            }
-            let _ = state.store.write_document(&bl_file, &bl);
+            mitch_lib::bans::blacklist_insert(&state.store, &target_email, &reason, actor);
             mitch_lib::coins::add_admin_notification(
                 &state.store,
                 &state.cfg.data_dir,
@@ -1616,14 +1572,7 @@ pub fn execute_moderator_approved_action(
         "unban_account" => {
             let email_raw = s("email").as_str().unwrap_or("").to_lowercase().trim().to_string();
             let target_email = mitch_lib::auth::normalize_email(&email_raw);
-            let bl_file = state.cfg.data_dir.join("blacklist.json");
-            let mut bl = state.store.read_document(&bl_file, json!({}));
-            let existed = bl.get(target_email.as_str()).is_some() || bl.get(email_raw.as_str()).is_some();
-            if let Some(map) = bl.as_object_mut() {
-                map.remove(target_email.as_str());
-                map.remove(email_raw.as_str());
-            }
-            let _ = state.store.write_document(&bl_file, &bl);
+            let existed = mitch_lib::bans::blacklist_remove(&state.store, &target_email, &email_raw);
 
             // Remove from shadow bans
             {
@@ -1638,33 +1587,19 @@ pub fn execute_moderator_approved_action(
             }
 
             // Remove any IP bans
-            let banned_ips_file = state.cfg.data_dir.join("banned_ips.json");
-            let mut banned = state.store.read_document(&banned_ips_file, json!({}));
-            if let Some(map) = banned.as_object_mut() {
-                let last_known = state
-                    .store
-                    .read_document(&state.cfg.data_dir.join("last_known_ips.json"), json!({}));
-                let target_ip = last_known
-                    .get(target_email.as_str())
-                    .or_else(|| last_known.get(email_raw.as_str()))
-                    .and_then(|v| v.as_str())
-                    .map(str::to_string);
-                let remove: Vec<String> = map
-                    .iter()
-                    .filter(|(ip, info)| {
-                        info.get("email").and_then(|v| v.as_str()) == Some(target_email.as_str())
-                            || info.get("email").and_then(|v| v.as_str()) == Some(email_raw.as_str())
-                            || target_ip.as_deref() == Some(ip.as_str())
-                    })
-                    .map(|(ip, _)| ip.clone())
-                    .collect();
-                if !remove.is_empty() {
-                    for ip in &remove {
-                        map.remove(ip);
-                    }
-                    let _ = state.store.write_document(&banned_ips_file, &banned);
-                }
-            }
+            let last_known = state
+                .store
+                .read_document(&state.cfg.data_dir.join("last_known_ips.json"), json!({}));
+            let target_ip = last_known
+                .get(target_email.as_str())
+                .or_else(|| last_known.get(email_raw.as_str()))
+                .and_then(|v| v.as_str());
+            mitch_lib::bans::banned_ips_remove_for_account(
+                &state.store,
+                &target_email,
+                &email_raw,
+                target_ip,
+            );
 
             let matrix_user_id =
                 crate::routes::matrix::resolve_matrix_user_id_for_email(state, &target_email);
@@ -1965,10 +1900,7 @@ pub async fn lookup_profile(state: &Arc<AppState>, search: &str) -> Response {
         }
     }
 
-    let blacklist = state
-        .store
-        .read_document(&state.cfg.data_dir.join("blacklist.json"), json!({}));
-    let ban_entry = blacklist.get(norm_email.as_str()).cloned();
+    let ban_entry = mitch_lib::bans::blacklist_get(&state.store, &norm_email, &raw.to_lowercase());
     let shadow_banned = state
         .shadow_bans
         .read()

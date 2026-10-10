@@ -417,19 +417,13 @@ pub fn auth_session_from_token(
     Some(session)
 }
 
-/// `bannedInfoForEmail(email)` — blacklist.json lookup.
+/// `bannedInfoForEmail(email)` — blacklist lookup (`blacklist` table).
 pub fn banned_info_for_email(store: &DataStore, email: &str) -> Option<Value> {
     if email.is_empty() {
         return None;
     }
-    let bl = store.read_document(
-        &store.base_dir.join("data/blacklist.json"),
-        serde_json::json!({}),
-    );
     let norm = normalize_email(email);
-    bl.get(&norm)
-        .or_else(|| bl.get(email.to_lowercase().as_str()))
-        .cloned()
+    crate::bans::blacklist_get(store, &norm, &email.to_lowercase())
 }
 
 /// `bannedInfoForSid(sid)` — sid -> email -> blacklist.
@@ -441,16 +435,12 @@ pub fn banned_info_for_sid(store: &DataStore, id_secret: &[u8], sid: &str) -> Op
     email.and_then(|e| banned_info_for_email(store, &e))
 }
 
-/// `bannedInfoForIp(ip)` — banned_ips.json lookup.
+/// `bannedInfoForIp(ip)` — IP ban lookup (`banned_ips` table).
 pub fn banned_info_for_ip(store: &DataStore, ip: &str) -> Option<Value> {
     if ip.is_empty() {
         return None;
     }
-    let ips = store.read_document(
-        &store.base_dir.join("data/banned_ips.json"),
-        serde_json::json!({}),
-    );
-    ips.get(ip).cloned()
+    crate::bans::banned_ips_get(store, ip)
 }
 
 /// `emailFromSid(sid)` — names.json first, then tokens.json (incl. infinite

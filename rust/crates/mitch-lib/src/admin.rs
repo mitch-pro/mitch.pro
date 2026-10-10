@@ -282,22 +282,7 @@ pub fn build_advanced_admin_data(store: &DataStore, data_dir: &Path) -> Value {
         })
         .unwrap_or_default();
 
-    let blacklist = store.read_document(&data_dir.join("blacklist.json"), json!({}));
-    let mut banned_accounts: Vec<Value> = blacklist
-        .as_object()
-        .map(|m| {
-            m.iter()
-                .map(|(email, info)| {
-                    json!({
-                        "email": email,
-                        "reason": info.get("reason").and_then(|v| v.as_str()).unwrap_or("Banned by admin"),
-                        "bannedAt": info.get("banned_at").or_else(|| info.get("blacklisted_at")).and_then(|v| v.as_i64()).unwrap_or(0),
-                        "by": info.get("by").or_else(|| info.get("admin")).and_then(|v| v.as_str()).unwrap_or("admin"),
-                    })
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    let mut banned_accounts: Vec<Value> = crate::bans::blacklist_all(store);
     banned_accounts.sort_by(|a, b| {
         b.get("bannedAt")
             .and_then(|v| v.as_i64())

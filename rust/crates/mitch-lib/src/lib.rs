@@ -19,6 +19,7 @@
 pub mod achievements;
 pub mod admin;
 pub mod auth;
+pub mod bans;
 pub mod blog;
 pub mod chat;
 pub mod coins;

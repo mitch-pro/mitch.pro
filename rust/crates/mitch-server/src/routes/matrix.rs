@@ -890,17 +890,15 @@ pub fn resolve_all_emails_for_target(
         }
     }
 
-    // 3. Blacklist files
-    for bl_path in [data_dir.join("blacklist.json"), store.base_dir.join("data/blacklist.json")] {
-        let bl = store.read_document(&bl_path, json!({}));
-        if let Some(map) = bl.as_object() {
-            for (email_key, _) in map {
-                let local = email_key.split('@').next().unwrap_or("");
-                let local_clean: String = local.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
-                if !clean_cmp.is_empty() && (local_clean == clean_cmp || local.eq_ignore_ascii_case(local_raw)) {
-                    push_email(&mut results, email_key);
-                }
-            }
+    // 3. Blacklist
+    for entry in mitch_lib::bans::blacklist_all(store) {
+        let Some(email_key) = entry.get("email").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let local = email_key.split('@').next().unwrap_or("");
+        let local_clean: String = local.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+        if !clean_cmp.is_empty() && (local_clean == clean_cmp || local.eq_ignore_ascii_case(local_raw)) {
+            push_email(&mut results, email_key);
         }
     }
 
@@ -4147,16 +4145,7 @@ async fn mod_unban(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> 
     // Also unban at the account/SSO level if blacklisted or shadow-banned
     let associated_emails = resolve_all_emails_for_target(&state.store, &state.data_dir(), &state.id_secret, raw_input);
     for email in &associated_emails {
-        for bl_path in [state.cfg.data_dir.join("blacklist.json"), state.store.base_dir.join("data/blacklist.json")] {
-            let mut bl = state.store.read_document(&bl_path, json!({}));
-            if let Some(map) = bl.as_object_mut() {
-                let removed1 = map.remove(email);
-                let removed2 = map.remove(email.to_lowercase().as_str());
-                if removed1.is_some() || removed2.is_some() {
-                    let _ = state.store.write_document(&bl_path, &bl);
-                }
-            }
-        }
+        mitch_lib::bans::blacklist_remove(&state.store, email, &email.to_lowercase());
 
         {
             let mut bans = state.shadow_bans.write().unwrap_or_else(|e| e.into_inner());
@@ -4172,15 +4161,9 @@ async fn mod_unban(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> 
         }
 
         let last_known = state.store.read_document(&state.cfg.data_dir.join("last_known_ips.json"), json!({}));
-        if let Some(target_ip) = last_known.get(email.as_str()).and_then(|v| v.as_str()).map(str::to_string) {
-            if !mitch_lib::auth::WHITELISTED_IPS.contains(&target_ip.as_str()) {
-                let banned_ips_file = state.cfg.data_dir.join("banned_ips.json");
-                let mut banned = state.store.read_document(&banned_ips_file, json!({}));
-                if let Some(map) = banned.as_object_mut() {
-                    if map.remove(&target_ip).is_some() {
-                        let _ = state.store.write_document(&banned_ips_file, &banned);
-                    }
-                }
+        if let Some(target_ip) = last_known.get(email.as_str()).and_then(|v| v.as_str()) {
+            if !mitch_lib::auth::WHITELISTED_IPS.contains(&target_ip) {
+                mitch_lib::bans::banned_ips_remove(&state.store, target_ip);
             }
         }
     }
@@ -7151,12 +7134,8 @@ mod tests {
         });
         let _ = state.store.write_document(&settings_file, &settings);
 
-        // Also put them in blacklist.json
-        let bl_file = state.cfg.data_dir.join("blacklist.json");
-        let bl = json!({
-            "long.tran@student.rjuhsd.us": { "reason": "banned" }
-        });
-        let _ = state.store.write_document(&bl_file, &bl);
+        // Also blacklist them.
+        mitch_lib::bans::blacklist_insert(&state.store, "long.tran@student.rjuhsd.us", "banned", "admin");
 
         // 4. Perform unban
         unban_matrix_user_from_room(&state.id_secret, &state.store, &state.data_dir(), "!general:mitch.pro", "@longtran:mitch.pro").await;
@@ -7194,9 +7173,14 @@ mod tests {
         let resp = mod_unban(&state, &headers, &unban_body).await;
         assert_eq!(resp.status(), StatusCode::OK);
 
-        let loaded_bl = state.store.read_document(&bl_file, json!({}));
-        assert!(loaded_bl.get("long.tran@student.rjuhsd.us").is_none(), "Blacklist must be lifted");
-        assert!(loaded_bl.get("longtran@student.rjuhsd.us").is_none(), "Blacklist must be lifted");
+        assert!(
+            mitch_lib::bans::blacklist_get(&state.store, "long.tran@student.rjuhsd.us", "long.tran@student.rjuhsd.us").is_none(),
+            "Blacklist must be lifted"
+        );
+        assert!(
+            mitch_lib::bans::blacklist_get(&state.store, "longtran@student.rjuhsd.us", "longtran@student.rjuhsd.us").is_none(),
+            "Blacklist must be lifted"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }

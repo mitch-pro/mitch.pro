@@ -422,15 +422,7 @@ async fn approve(state: &Arc<AppState>, body: &Value) -> Response {
                 map.remove(tok);
             }
             let _ = state.store.write_document(&tokens_file, &tokens);
-            let bl_file = state.cfg.data_dir.join("blacklist.json");
-            let mut bl = state.store.read_document(&bl_file, json!({}));
-            if let Some(map) = bl.as_object_mut() {
-                map.insert(
-                    email.to_string(),
-                    json!({ "reason": reason, "blacklisted_at": now_millis() as f64 / 1000.0 }),
-                );
-            }
-            let _ = state.store.write_document(&bl_file, &bl);
+            mitch_lib::bans::blacklist_insert(&state.store, email, reason, "admin");
             let site_name = site_name(state);
             let subject = format!("Your {site_name} Access Request Was Not Approved");
             let html = super::legacy::make_access_status_html(
