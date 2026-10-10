@@ -34,7 +34,6 @@
 </script>
 <script src="/ssh/xterm.js" defer></script>
 <script src="/ssh/xterm-addon-fit.js" defer></script>
-<script src="/home-dayboard.js?v=2" defer></script>
 <!-- AUTH_INJECT_START -->
 <style>
   #devtools-btn{position:fixed;right:12px;bottom:12px;z-index:999999;
@@ -3538,49 +3537,6 @@ if (document.readyState === 'loading') {
         <a class="hub-action" href="/game-portal/" onclick="openHomeHref(event, '/game-portal/');"><span class="action-logo"><svg viewBox="0 0 24 24"><path d="M8 8h8c3 0 5 2.5 5 6s-2 6-4.5 6c-2 0-2.5-2.5-4.5-2.5S9.5 20 7.5 20C5 20 3 17.5 3 14s2-6 5-6Z"/><path d="M7 12v4m-2-2h4m7-1h.01m2 3h.01"/></svg></span><span class="action-copy"><b>Games</b><small>Choose your arcade</small></span></a>
         <button type="button" class="hub-action hub-daily mitch-coin-amount" id="hub-daily-chip" hidden>Daily claim</button>
       </nav>
-
-  <!-- Live dayboard: weather · calendar · bells -->
-  <section class="home-dayboard" aria-labelledby="home-dayboard-title">
-    <h2 id="home-dayboard-title" class="home-dayboard-sr">Around Woodcreek <span class="dayboard-location">Roseville, California</span></h2>
-    <div class="home-dayboard-grid">
-      <article class="home-day-card home-weather-card" id="home-weather-card">
-        <header class="home-card-head">
-          <div><small>Local weather</small><h3>Roseville</h3></div>
-          <span class="home-live-pill" id="home-weather-state"><i></i> LIVE</span>
-        </header>
-        <div class="home-weather-now">
-          <div><strong id="home-weather-temp">--°</strong><b id="home-weather-condition">Connecting</b></div>
-          <span id="home-weather-icon" class="home-weather-icon" aria-hidden="true"></span>
-        </div>
-        <div class="home-weather-metrics">
-          <span><small>Feels</small><b id="home-weather-feels">--°</b></span>
-          <span><small>High / Low</small><b id="home-weather-range">--° / --°</b></span>
-          <span><small>Wind</small><b id="home-weather-wind">-- mph</b></span>
-        </div>
-        <div class="home-hourly-weather" id="home-hourly-weather" aria-label="Hourly weather"></div>
-        <footer id="home-weather-updated">Connecting to Open-Meteo</footer>
-      </article>
-
-      <article class="home-day-card home-calendar-card">
-        <header class="home-card-head">
-          <div><small>Woodcreek calendar</small><h3 id="home-calendar-title">This month</h3></div>
-          <div class="home-calendar-nav">
-            <button type="button" id="home-cal-prev" aria-label="Previous month">‹</button>
-            <button type="button" id="home-cal-today">Today</button>
-            <button type="button" id="home-cal-next" aria-label="Next month">›</button>
-          </div>
-        </header>
-        <div class="home-calendar-week"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
-        <div class="home-calendar-days" id="home-calendar-days"></div>
-        <div class="home-calendar-agenda">
-          <div><small>Upcoming at Woodcreek</small><a href="https://woodcreek.rjuhsd.us/calendar" target="_blank" rel="noopener">Official feed ↗</a></div>
-          <ol id="home-school-events"><li>Loading Woodcreek events…</li></ol>
-        </div>
-      </article>
-
-      <a class="home-schedule-button" href="https://rjuhsd.school/">Newly Improved Bell Schedule <span>(Woodcreek High School)</span><b aria-hidden="true">↗</b></a>
-    </div>
-  </section>
 
   <!-- Workspace -->
   <div class="hud-workspace">

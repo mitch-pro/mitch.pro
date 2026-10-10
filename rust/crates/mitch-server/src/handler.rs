@@ -75,7 +75,6 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/guest-preview.js",
     "/home-friends.js",
     "/home.css",
-    "/home-dayboard.js",
     "/auth.js",
     "/sync.js",
     "/auth-non-enrolled.js",
