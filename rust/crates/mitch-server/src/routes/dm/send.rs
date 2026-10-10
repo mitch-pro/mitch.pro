@@ -66,12 +66,8 @@ pub(crate) async fn handle(
     if sid.is_empty() || !auth::valid_id(sid, &state.id_secret) || is_revoked_id(state, sid) {
         return Some(json_response(401, json!({ "error": "auth required" })));
     }
-    let names = state
-        .store
-        .read_document(&data_file(state, "names.json"), json!({}));
-    let sender_email = names
-        .get(sid)
-        .map(|v| jsval::string(v).to_lowercase())
+    let sender_email = auth::names_get_email(&state.store, sid)
+        .map(|e| e.to_lowercase())
         .unwrap_or_default();
     if sender_email.is_empty() {
         return Some(json_response(403, json!({ "error": "email not found" })));

@@ -88,12 +88,6 @@ fn check_admin_pw(state: &Arc<AppState>, body: &Value) -> bool {
     }
 }
 
-fn names_doc(state: &Arc<AppState>) -> Value {
-    state
-        .store
-        .read_document(&state.cfg.base_dir.join("data/names.json"), json!({}))
-}
-
 fn session_log_doc(state: &Arc<AppState>) -> Vec<Value> {
     state
         .store
@@ -106,16 +100,10 @@ fn session_log_doc(state: &Arc<AppState>) -> Vec<Value> {
 /// dtype `history` — session log entries for one email's sids.
 fn history(state: &Arc<AppState>, body: &Value) -> Response {
     let name = body.get("name").and_then(|v| v.as_str()).unwrap_or("");
-    let names = names_doc(state);
-    let uids: std::collections::HashSet<String> = names
-        .as_object()
-        .map(|m| {
-            m.iter()
-                .filter(|(_, v)| v.as_str() == Some(name))
-                .map(|(k, _)| k.clone())
-                .collect()
-        })
-        .unwrap_or_default();
+    let uids: std::collections::HashSet<String> =
+        mitch_lib::auth::names_sids_for_exact_email(&state.store, name)
+            .into_iter()
+            .collect();
     let entries: Vec<Value> = session_log_doc(state)
         .into_iter()
         .filter(|e| {
@@ -139,7 +127,6 @@ fn history(state: &Arc<AppState>, body: &Value) -> Response {
 
 /// dtype `users` — last activity per sid.
 fn users(state: &Arc<AppState>) -> Response {
-    let names = names_doc(state);
     let mut latest: std::collections::HashMap<String, (i64, String)> =
         std::collections::HashMap::new();
     for e in session_log_doc(state) {
@@ -168,11 +155,8 @@ fn users(state: &Arc<AppState>) -> Response {
     let mut users: Vec<Value> = latest
         .into_iter()
         .map(|(uid, (logts, page))| {
-            let name = names
-                .get(uid.as_str())
-                .and_then(|v| v.as_str())
-                .unwrap_or(&uid[..uid.len().min(20)])
-                .to_string();
+            let name = mitch_lib::auth::names_get_email(&state.store, &uid)
+                .unwrap_or_else(|| uid[..uid.len().min(20)].to_string());
             json!({
                 "uid": uid,
                 "name": name,
@@ -199,17 +183,13 @@ fn suggestions(state: &Arc<AppState>) -> Response {
         .as_array()
         .cloned()
         .unwrap_or_default();
-    let names = names_doc(state);
     for s in sugs.iter_mut() {
         let id = s
             .get("id")
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
-        let name = names
-            .get(id.as_str())
-            .and_then(|v| v.as_str())
-            .map(str::to_string)
+        let name = mitch_lib::auth::names_get_email(&state.store, &id)
             .or_else(|| s.get("name").and_then(|v| v.as_str()).map(str::to_string))
             .unwrap_or_else(|| id.chars().take(20).collect::<String>());
         if let Some(obj) = s.as_object_mut() {

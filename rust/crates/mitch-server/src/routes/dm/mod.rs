@@ -133,12 +133,8 @@ pub(super) fn dm_auth(
     if sid.is_empty() || !auth::valid_id(sid, &state.id_secret) || is_revoked_id(state, sid) {
         return Err((401, "auth required"));
     }
-    let names = state
-        .store
-        .read_document(&data_file(state, "names.json"), json!({}));
-    let email = names
-        .get(sid)
-        .map(|v| jsval::string(v).to_lowercase())
+    let email = auth::names_get_email(&state.store, sid)
+        .map(|e| e.to_lowercase())
         .unwrap_or_default();
     if email.is_empty() {
         return Err((403, "email not found"));

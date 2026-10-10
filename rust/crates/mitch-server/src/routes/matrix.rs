@@ -760,12 +760,10 @@ pub fn resolve_matrix_user_id_from_store(
     }
     let matrix_users_file = data_dir.join("matrix_users.json");
     let matrix_users = store.read_document(&matrix_users_file, json!({}));
-    let names_file = store.base_dir.join("data/names.json");
-    let names = store.read_document(&names_file, json!({}));
     if let Some(map) = matrix_users.as_object() {
         for (uid, uname_val) in map {
             let matched_email = mitch_lib::auth::email_from_sid(store, secret, uid)
-                .or_else(|| names.get(uid).and_then(|v| v.as_str()).map(str::to_string));
+                .or_else(|| mitch_lib::auth::names_get_email(store, uid));
             if let Some(email) = matched_email {
                 if mitch_lib::auth::normalize_email(&email) == norm {
                     if let Some(uname) = uname_val.as_str() {
@@ -869,13 +867,10 @@ pub fn resolve_all_emails_for_target(
         }
     }
 
-    // 2. matrix_users.json and names.json
+    // 2. matrix_users.json and the names table
     let matrix_users_file = data_dir.join("matrix_users.json");
     let matrix_users = store.read_document(&matrix_users_file, json!({}));
     if let Some(map) = matrix_users.as_object() {
-        let names_file = store.base_dir.join("data/names.json");
-        let names = store.read_document(&names_file, json!({}));
-
         for (uid_or_key, uname_val) in map {
             let uname = uname_val.as_str().unwrap_or("");
             let uname_clean: String = uname.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
@@ -883,7 +878,7 @@ pub fn resolve_all_emails_for_target(
             let matched = !uname.is_empty() && (!clean_cmp.is_empty() && uname_clean == clean_cmp || uname.eq_ignore_ascii_case(local_raw));
             if matched {
                 if let Some(email) = mitch_lib::auth::email_from_sid(store, secret, uid_or_key)
-                    .or_else(|| names.get(uid_or_key).and_then(|v| v.as_str()).map(str::to_string)) {
+                    .or_else(|| mitch_lib::auth::names_get_email(store, uid_or_key)) {
                     push_email(&mut results, &email);
                 }
             }
@@ -986,8 +981,6 @@ pub fn resolve_all_matrix_user_ids_from_store(
     let matrix_users_file = data_dir.join("matrix_users.json");
     let matrix_users = store.read_document(&matrix_users_file, json!({}));
     if let Some(map) = matrix_users.as_object() {
-        let names_file = store.base_dir.join("data/names.json");
-        let names = store.read_document(&names_file, json!({}));
         let clean_cmp: String = local_raw.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
 
         for (uid_or_key, uname_val) in map {
@@ -999,7 +992,7 @@ pub fn resolve_all_matrix_user_ids_from_store(
             }
 
             let associated_email = mitch_lib::auth::email_from_sid(store, secret, uid_or_key)
-                .or_else(|| names.get(uid_or_key).and_then(|v| v.as_str()).map(str::to_string));
+                .or_else(|| mitch_lib::auth::names_get_email(store, uid_or_key));
             if let Some(email) = associated_email {
                 let norm_assoc = mitch_lib::auth::normalize_email(&email);
                 let assoc_local = norm_assoc.split('@').next().unwrap_or("");

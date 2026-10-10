@@ -1090,9 +1090,6 @@ pub(crate) fn build_daily_summary(state: &Arc<AppState>) -> String {
     let logs = state
         .store
         .read_document(&state.cfg.data_dir.join("sessions.json"), json!([]));
-    let names = state
-        .store
-        .read_document(&state.cfg.base_dir.join("data/names.json"), json!({}));
     let start_of_day = local_start_of_day_ms();
     let mut registered: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     let mut guest_count = 0usize;
@@ -1110,7 +1107,7 @@ pub(crate) fn build_daily_summary(state: &Arc<AppState>) -> String {
         let id = entry.get("id").and_then(|v| v.as_str()).unwrap_or("");
         let mut email = mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, id);
         if email.is_none() {
-            email = names.get(id).and_then(|v| v.as_str()).map(str::to_string);
+            email = mitch_lib::auth::names_get_email(&state.store, id);
         }
         match email {
             Some(e) if !e.is_empty() => {

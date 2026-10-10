@@ -117,16 +117,8 @@ pub fn get_uid_for_email(store: &DataStore, id_secret: &[u8], email: &str) -> Op
         return None;
     }
     let norm = auth::normalize_email(email);
-    let names = store.read_document(&store.base_dir.join(crate::auth::names_file()), json!({}));
-    if let Some(map) = names.as_object() {
-        for (sid, e) in map {
-            if e.as_str()
-                .map(|s| auth::normalize_email(s) == norm)
-                .unwrap_or(false)
-            {
-                return Some(sid.clone());
-            }
-        }
+    if let Some(sid) = auth::names_find_sid_by_norm_email(store, &norm) {
+        return Some(sid);
     }
     let gen = auth::current_session_generation(store, &norm);
     Some(auth::make_email_id(&norm, gen.max(0) as u64, id_secret))
@@ -145,10 +137,9 @@ pub fn email_from_hash(
     if hash.contains('@') {
         return Some(hash.to_string());
     }
-    let names = store.read_document(&store.base_dir.join(crate::auth::names_file()), json!({}));
-    if let Some(email) = names.get(hash).and_then(|v| v.as_str()) {
+    if let Some(email) = crate::auth::names_get_email(store, hash) {
         if !email.is_empty() {
-            return Some(email.to_string());
+            return Some(email);
         }
     }
     let username = normalize_username(hash);
@@ -464,13 +455,9 @@ pub fn canonical_delivery_email(
     if !raw.contains('@') {
         if let Some(from_sid) = crate::auth::email_from_sid(store, id_secret, &raw) {
             raw = from_sid;
-        } else {
-            let names =
-                store.read_document(&store.base_dir.join(crate::auth::names_file()), json!({}));
-            if let Some(hit) = names.get(&raw).and_then(|v| v.as_str()) {
-                if hit.contains('@') {
-                    raw = hit.to_string();
-                }
+        } else if let Some(hit) = crate::auth::names_get_email(store, &raw) {
+            if hit.contains('@') {
+                raw = hit;
             }
         }
         if !raw.contains('@') {
@@ -485,18 +472,11 @@ pub fn canonical_delivery_email(
             .unwrap_or(false)
     };
 
-    // 1. names.json — dotted local or any-case difference wins.
-    let names = store.read_document(&store.base_dir.join(crate::auth::names_file()), json!({}));
-    if let Some(map) = names.as_object() {
-        for email in map.values() {
-            if let Some(e) = email.as_str() {
-                if e.contains('@')
-                    && crate::auth::normalize_email(e) == norm
-                    && (local_dotted(e) || e != norm)
-                {
-                    return e.to_lowercase().trim().to_string();
-                }
-            }
+    // 1. names table — dotted local or any-case difference wins.
+    let name_candidates = crate::auth::names_candidates_for_norm_email(store, &norm);
+    for e in &name_candidates {
+        if e.contains('@') && (local_dotted(e) || e != &norm) {
+            return e.to_lowercase().trim().to_string();
         }
     }
 
@@ -528,15 +508,9 @@ pub fn canonical_delivery_email(
         }
     }
 
-    // 4. Any match in names.json.
-    if let Some(map) = names.as_object() {
-        for email in map.values() {
-            if let Some(e) = email.as_str() {
-                if crate::auth::normalize_email(e) == norm {
-                    return e.to_lowercase().trim().to_string();
-                }
-            }
-        }
+    // 4. Any match in the names table.
+    if let Some(e) = name_candidates.first() {
+        return e.to_lowercase().trim().to_string();
     }
 
     raw

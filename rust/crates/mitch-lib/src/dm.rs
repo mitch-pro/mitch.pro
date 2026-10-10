@@ -294,9 +294,8 @@ pub fn build_address_index(store: &DataStore, data_dir: &Path) -> DmAddrIndex {
         add_username(&mut idx, uname, &norm);
         add_username(&mut idx, &default_username_for_email(&norm), &norm);
     }
-    let names = store.read_document(&data_dir.join("names.json"), json!({}));
-    for email in names.as_object().unwrap_or(&Map::new()).values() {
-        add_email(&mut idx, &crate::jsval::string(email));
+    for email in crate::auth::names_all_emails(store) {
+        add_email(&mut idx, &email);
     }
     let tokens = store.read_document(&store.base_dir.join("data/tokens.json"), json!({}));
     for data in tokens.as_object().unwrap_or(&Map::new()).values() {

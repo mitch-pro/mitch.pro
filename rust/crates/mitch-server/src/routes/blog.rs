@@ -60,10 +60,7 @@ pub fn authed_email_for_request(state: &AppState, headers: &HeaderMap) -> Option
             return Some(trimmed.to_string());
         }
     }
-    let names = state
-        .store
-        .read_document(&data_file(state, "names.json"), json!({}));
-    if let Some(e) = names.get(&sid).and_then(|v| v.as_str()) {
+    if let Some(e) = mitch_lib::auth::names_get_email(&state.store, &sid) {
         let trimmed = e.trim();
         if !trimmed.is_empty() {
             return Some(trimmed.to_string());

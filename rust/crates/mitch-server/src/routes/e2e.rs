@@ -104,12 +104,8 @@ fn names_email(state: &AppState, headers: &HeaderMap) -> Result<String, Box<Resp
             json!({ "success": false, "message": "Auth required" }),
         )));
     }
-    let names = state
-        .store
-        .read_document(&data_file(state, "names.json"), json!({}));
-    let email = names
-        .get(&sid)
-        .map(|v| jsval::string(v).to_lowercase().trim().to_string())
+    let email = auth::names_get_email(&state.store, &sid)
+        .map(|e| e.to_lowercase().trim().to_string())
         .unwrap_or_default();
     if email.is_empty() {
         return Err(Box::new(json_response(

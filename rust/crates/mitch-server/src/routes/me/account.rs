@@ -1108,19 +1108,8 @@ pub(crate) fn rename_email_references(
         let _ = state.store.write_document(&path, &obj);
     }
 
-    // names.json — any sid pointing at the old email moves to the new one.
-    let names_path = data_file(state, "names.json");
-    let mut names = state.store.read_document(&names_path, json!({}));
-    if let Some(map) = names.as_object_mut() {
-        for value in map.values_mut() {
-            if let Some(s) = value.as_str() {
-                if auth::normalize_email(s) == old_norm {
-                    *value = json!(new_email);
-                }
-            }
-        }
-    }
-    let _ = state.store.write_document(&names_path, &names);
+    // names table — any sid pointing at the old email moves to the new one.
+    auth::names_update_email_for_norm(&state.store, old_norm, new_email);
 
     // tokens.json — email + norm_email on matching records.
     let tokens_path = data_file(state, "tokens.json");

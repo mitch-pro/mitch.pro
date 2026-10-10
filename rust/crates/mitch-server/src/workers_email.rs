@@ -348,37 +348,24 @@ fn enrolled_users(state: &AppState) -> Vec<String> {
     users
 }
 
-/// `userdataForEmail(email)` (server.js:4832-4844) — names.json scan (first
-/// uid whose name matches case-insensitively) → that user's
+/// `userdataForEmail(email)` (server.js:4832-4844) — names table lookup
+/// (first uid whose name matches case-insensitively) → that user's
 /// `/opt/userdata/<sha256(uid)[..32]>/data.json`. Missing file or bad JSON
 /// → `{}` (the JS catch).
 fn userdata_for_email(state: &AppState, email: &str) -> Value {
-    let names = state
-        .store
-        .read_document(&state.data_dir().join("names.json"), json!({}))
-        .as_object()
-        .cloned()
-        .unwrap_or_default();
-    let lower = email.to_lowercase();
-    for (uid, name) in &names {
-        let Some(name) = name.as_str() else {
-            continue;
-        };
-        if name.to_lowercase() != lower {
-            continue;
-        }
-        let Some(fpath) = crate::routes::members::userdata_path(uid) else {
-            return json!({});
-        };
-        if !fpath.exists() {
-            return json!({});
-        }
-        return std::fs::read_to_string(&fpath)
-            .ok()
-            .and_then(|raw| serde_json::from_str(&raw).ok())
-            .unwrap_or_else(|| json!({}));
+    let Some(uid) = mitch_lib::auth::names_find_sid_by_email_ci(&state.store, email) else {
+        return json!({});
+    };
+    let Some(fpath) = crate::routes::members::userdata_path(&uid) else {
+        return json!({});
+    };
+    if !fpath.exists() {
+        return json!({});
     }
-    json!({})
+    std::fs::read_to_string(&fpath)
+        .ok()
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .unwrap_or_else(|| json!({}))
 }
 
 /// `emailSlot(email, slots)` (server.js:4846-4849) — `Math.imul` hash over
@@ -567,9 +554,6 @@ fn weekly_digest_impl(state: &Arc<AppState>) -> Result<(), String> {
     let logs = state
         .store
         .read_document(&state.data_dir().join("sessions.json"), json!([]));
-    let names = state
-        .store
-        .read_document(&state.data_dir().join("names.json"), json!({}));
     let week_ago = (mitch_lib::school::now_millis() - 7 * 86_400_000) as f64;
 
     // gamesByEmail — ping session-log entries carry no `page`, so today this
@@ -595,7 +579,7 @@ fn weekly_digest_impl(state: &Arc<AppState>) -> Result<(), String> {
                 continue;
             }
             let uid = jsval::str_or(entry.get("id"), "");
-            let Some(email) = names.get(&uid).and_then(|v| v.as_str()) else {
+            let Some(email) = mitch_lib::auth::names_get_email(&state.store, &uid) else {
                 continue;
             };
             let email = email.to_lowercase();

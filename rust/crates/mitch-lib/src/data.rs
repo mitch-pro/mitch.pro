@@ -237,6 +237,12 @@ impl DataStore {
                         banned_by TEXT NOT NULL DEFAULT 'site admin',
                         email TEXT NOT NULL DEFAULT ''
                     );
+                    CREATE TABLE IF NOT EXISTS names (
+                        sid TEXT PRIMARY KEY,
+                        email TEXT NOT NULL,
+                        norm_email TEXT NOT NULL,
+                        created_at INTEGER NOT NULL
+                    );
                     CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs (ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_level ON app_logs (level, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_category ON app_logs (category, ts DESC);
@@ -245,7 +251,9 @@ impl DataStore {
                     CREATE INDEX IF NOT EXISTS idx_vm_audit_logs_vm ON vm_audit_logs (vm_record_id, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_coins_balance ON coins (balance DESC);
                     CREATE INDEX IF NOT EXISTS idx_blacklist_banned_at ON blacklist (banned_at DESC);
-                    CREATE INDEX IF NOT EXISTS idx_banned_ips_email ON banned_ips (email);",
+                    CREATE INDEX IF NOT EXISTS idx_banned_ips_email ON banned_ips (email);
+                    CREATE INDEX IF NOT EXISTS idx_names_norm_email ON names (norm_email);
+                    CREATE INDEX IF NOT EXISTS idx_names_email_nocase ON names (email COLLATE NOCASE);",
                 );
                 match result {
                     Ok(()) => return Ok(()),
@@ -299,6 +307,7 @@ impl DataStore {
         store.backfill_coins_table_from_json();
         store.backfill_blacklist_table_from_json();
         store.backfill_banned_ips_table_from_json();
+        store.backfill_names_table_from_json();
         Ok(store)
     }
 
@@ -413,6 +422,32 @@ impl DataStore {
             let _ = conn.execute(
                 "INSERT OR IGNORE INTO banned_ips (ip, reason, banned_at, banned_by, email) VALUES (?1, ?2, ?3, ?4, ?5)",
                 rusqlite::params![ip, reason, banned_at, banned_by, email],
+            );
+        }
+    }
+
+    /// One-time (idempotent) backfill from names.json (sid -> email) into
+    /// the real `names` table. Every row's `norm_email` is derived at
+    /// backfill time so later lookups (reverse by email, cleanup on
+    /// generation bump) can use an index instead of scanning every row.
+    fn backfill_names_table_from_json(&self) {
+        let names = self.read_document(&self.base_dir.join("data/names.json"), Value::Null);
+        let Some(map) = names.as_object() else {
+            return;
+        };
+        if map.is_empty() {
+            return;
+        }
+        let now = now_millis();
+        let conn = self.conn();
+        for (sid, email_val) in map {
+            let Some(email) = email_val.as_str() else {
+                continue;
+            };
+            let norm = crate::auth::normalize_email(email);
+            let _ = conn.execute(
+                "INSERT OR IGNORE INTO names (sid, email, norm_email, created_at) VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![sid, email, norm, now],
             );
         }
     }

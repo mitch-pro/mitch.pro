@@ -128,13 +128,8 @@ pub(crate) async fn handle(
     {
         return Some(resp(401, &json!({ "error": "auth required" })));
     }
-    let names: Value = state
-        .store
-        .read_document(&state.data_dir().join("names.json"), json!({}));
-    let my_email = names
-        .get(&sid)
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
+    let my_email = mitch_lib::auth::names_get_email(&state.store, &sid)
+        .unwrap_or_default()
         .to_lowercase();
     if my_email.is_empty() {
         return Some(resp(403, &json!({ "error": "not found" })));

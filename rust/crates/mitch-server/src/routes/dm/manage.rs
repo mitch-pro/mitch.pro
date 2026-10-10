@@ -150,12 +150,8 @@ pub(super) async fn mark_read(
     if sid.is_empty() || !auth::valid_id(sid, &state.id_secret) {
         return json_response(401, json!({ "error": "auth required" }));
     }
-    let names = state
-        .store
-        .read_document(&data_file(state, "names.json"), json!({}));
-    let my_email = names
-        .get(sid)
-        .map(|v| jsval::string(v).to_lowercase())
+    let my_email = auth::names_get_email(&state.store, sid)
+        .map(|e| e.to_lowercase())
         .unwrap_or_default();
     let body = match parse_body(headers, body_bytes) {
         Ok(b) => b,

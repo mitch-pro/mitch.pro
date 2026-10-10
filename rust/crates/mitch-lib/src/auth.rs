@@ -296,12 +296,137 @@ fn sessions_file() -> std::path::PathBuf {
     std::path::PathBuf::from("data/auth_sessions.json")
 }
 
-pub(crate) fn names_file() -> std::path::PathBuf {
-    std::path::PathBuf::from("data/names.json")
-}
-
 fn generations_file() -> std::path::PathBuf {
     std::path::PathBuf::from("data/generations.json")
+}
+
+/// `email` for one sid, from the real `names` table (was a
+/// names.json[sid] lookup).
+pub fn names_get_email(store: &DataStore, sid: &str) -> Option<String> {
+    if sid.is_empty() {
+        return None;
+    }
+    let conn = store.conn();
+    conn.query_row(
+        "SELECT email FROM names WHERE sid = ?1",
+        rusqlite::params![sid],
+        |r| r.get::<_, String>(0),
+    )
+    .ok()
+}
+
+/// Upserts the sid -> email mapping (was names.json[sid] = email).
+pub fn names_set(store: &DataStore, sid: &str, email: &str) {
+    let norm = normalize_email(email);
+    let conn = store.conn();
+    let _ = conn.execute(
+        "INSERT INTO names (sid, email, norm_email, created_at) VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(sid) DO UPDATE SET email = ?2, norm_email = ?3",
+        rusqlite::params![sid, email, norm, now_millis()],
+    );
+}
+
+/// Removes every row for the given normalized email (was the
+/// rotate_session_generation stale-sid sweep over the whole blob).
+/// Returns the removed sids.
+pub fn names_remove_for_norm_email(store: &DataStore, norm_email: &str) -> Vec<String> {
+    let conn = store.conn();
+    let sids: Vec<String> = {
+        let mut stmt = match conn.prepare("SELECT sid FROM names WHERE norm_email = ?1") {
+            Ok(s) => s,
+            Err(_) => return Vec::new(),
+        };
+        let found: Vec<String> = match stmt.query_map(rusqlite::params![norm_email], |r| r.get::<_, String>(0)) {
+            Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
+            Err(_) => return Vec::new(),
+        };
+        found
+    };
+    for sid in &sids {
+        let _ = conn.execute("DELETE FROM names WHERE sid = ?1", rusqlite::params![sid]);
+    }
+    sids
+}
+
+/// First sid on record for a normalized email, most recent first (was a
+/// names.json reverse scan — `getUidForEmail`).
+pub fn names_find_sid_by_norm_email(store: &DataStore, norm_email: &str) -> Option<String> {
+    let conn = store.conn();
+    conn.query_row(
+        "SELECT sid FROM names WHERE norm_email = ?1 ORDER BY created_at DESC LIMIT 1",
+        rusqlite::params![norm_email],
+        |r| r.get::<_, String>(0),
+    )
+    .ok()
+}
+
+/// Sid whose stored email matches case-insensitively (was
+/// `userdataForEmail`'s case-insensitive names.json scan).
+pub fn names_find_sid_by_email_ci(store: &DataStore, email: &str) -> Option<String> {
+    let conn = store.conn();
+    conn.query_row(
+        "SELECT sid FROM names WHERE email = ?1 COLLATE NOCASE LIMIT 1",
+        rusqlite::params![email],
+        |r| r.get::<_, String>(0),
+    )
+    .ok()
+}
+
+/// Every sid whose stored email is an exact (case-sensitive) match (was an
+/// admin-dashboard names.json scan for one user's session history).
+pub fn names_sids_for_exact_email(store: &DataStore, email: &str) -> Vec<String> {
+    let conn = store.conn();
+    let mut stmt = match conn.prepare("SELECT sid FROM names WHERE email = ?1") {
+        Ok(s) => s,
+        Err(_) => return Vec::new(),
+    };
+    let result = match stmt.query_map(rusqlite::params![email], |r| r.get::<_, String>(0)) {
+        Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
+        Err(_) => Vec::new(),
+    };
+    result
+}
+
+/// Every stored email value for a normalized email (was a names.json scan
+/// collecting every value whose normalized form matched, used by
+/// `canonicalDeliveryEmail` to prefer a dotted-local/case-differing form).
+pub fn names_candidates_for_norm_email(store: &DataStore, norm_email: &str) -> Vec<String> {
+    let conn = store.conn();
+    let mut stmt = match conn.prepare("SELECT email FROM names WHERE norm_email = ?1") {
+        Ok(s) => s,
+        Err(_) => return Vec::new(),
+    };
+    let result = match stmt.query_map(rusqlite::params![norm_email], |r| r.get::<_, String>(0)) {
+        Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
+        Err(_) => Vec::new(),
+    };
+    result
+}
+
+/// Every stored email value (was a full names.json values() scan, used to
+/// seed the DM search index).
+pub fn names_all_emails(store: &DataStore) -> Vec<String> {
+    let conn = store.conn();
+    let mut stmt = match conn.prepare("SELECT email FROM names") {
+        Ok(s) => s,
+        Err(_) => return Vec::new(),
+    };
+    let result = match stmt.query_map([], |r| r.get::<_, String>(0)) {
+        Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
+        Err(_) => Vec::new(),
+    };
+    result
+}
+
+/// Moves every row for `old_norm` onto `new_email` (was the rename flow's
+/// names.json full-table rewrite in account.rs).
+pub fn names_update_email_for_norm(store: &DataStore, old_norm: &str, new_email: &str) {
+    let new_norm = normalize_email(new_email);
+    let conn = store.conn();
+    let _ = conn.execute(
+        "UPDATE names SET email = ?2, norm_email = ?3 WHERE norm_email = ?1",
+        rusqlite::params![old_norm, new_email, new_norm],
+    );
 }
 
 fn now_millis() -> i64 {
@@ -331,16 +456,8 @@ pub fn issue_login_session(
 ) -> String {
     let gen = current_session_generation(store, norm_email);
     let student_id = make_email_id(norm_email, gen as u64, id_secret);
-    let names_path = store.base_dir.join(names_file());
-    let mut names = store.read_document(&names_path, serde_json::json!({}));
-    if names.get(&student_id).and_then(|v| v.as_str()) != Some(original_email) {
-        if let Some(map) = names.as_object_mut() {
-            map.insert(
-                student_id.clone(),
-                Value::String(original_email.to_string()),
-            );
-        }
-        let _ = store.write_document(&names_path, &names);
+    if names_get_email(store, &student_id).as_deref() != Some(original_email) {
+        names_set(store, &student_id, original_email);
     }
     student_id
 }
@@ -449,14 +566,13 @@ pub fn email_from_sid(store: &DataStore, id_secret: &[u8], sid: &str) -> Option<
     if sid.is_empty() {
         return None;
     }
-    let names = store.read_document(&store.base_dir.join(names_file()), serde_json::json!({}));
-    if let Some(email) = names.get(sid).and_then(|v| v.as_str()) {
-        let norm = normalize_email(email);
+    if let Some(email) = names_get_email(store, sid) {
+        let norm = normalize_email(&email);
         let gen = current_session_generation(store, &norm);
         if sid == make_email_id(&norm, gen as u64, id_secret)
-            || sid == make_email_id(email, gen as u64, id_secret)
+            || sid == make_email_id(&email, gen as u64, id_secret)
         {
-            return Some(email.to_string());
+            return Some(email);
         }
         return None;
     }
@@ -538,13 +654,7 @@ pub fn check_password_cookie(
         .and_then(|v| v.as_str())
         .map(str::to_string)
         .or_else(|| email_from_sid(store, id_secret, sid))
-        .or_else(|| {
-            store
-                .read_document(&store.base_dir.join(names_file()), serde_json::json!({}))
-                .get(sid)
-                .and_then(|v| v.as_str())
-                .map(str::to_string)
-        });
+        .or_else(|| names_get_email(store, sid));
     let Some(email) = email else { return false };
 
     let norm = normalize_email(&email);
@@ -794,23 +904,7 @@ pub fn rotate_session_generation(store: &DataStore, norm_email: &str) -> i64 {
     }
     let _ = store.write_document(&gens_path, &gens);
 
-    let names_path = store.base_dir.join(names_file());
-    let mut names = store.read_document(&names_path, serde_json::json!({}));
-    if let Some(map) = names.as_object_mut() {
-        let stale: Vec<String> = map
-            .iter()
-            .filter(|(_, v)| {
-                v.as_str()
-                    .map(|s| normalize_email(s) == norm)
-                    .unwrap_or(false)
-            })
-            .map(|(k, _)| k.clone())
-            .collect();
-        for key in stale {
-            map.remove(&key);
-        }
-        let _ = store.write_document(&names_path, &names);
-    }
+    names_remove_for_norm_email(store, &norm);
     invalidate_auth_sessions_for_email(store, &norm, None);
     next_gen
 }
@@ -1305,16 +1399,15 @@ pub fn is_admin_id(store: &DataStore, id_secret: &[u8], sid: &str, node_env_test
             }
         }
     }
-    // names.json path (generation-bound; no fallthrough on mismatch).
-    let names = store.read_document(&store.base_dir.join(names_file()), json!({}));
-    if let Some(email) = names.get(sid).and_then(|v| v.as_str()) {
-        let norm = normalize_email(email);
+    // names table path (generation-bound; no fallthrough on mismatch).
+    if let Some(email) = names_get_email(store, sid) {
+        let norm = normalize_email(&email);
         if !site_admin_emails(store).contains(&norm) {
             return false;
         }
         let gen = current_session_generation(store, &norm);
         return sid == make_email_id(&norm, gen as u64, id_secret)
-            || sid == make_email_id(email, gen as u64, id_secret);
+            || sid == make_email_id(&email, gen as u64, id_secret);
     }
     // Infinite-token path.
     let tokens = store.read_document(&store.base_dir.join("data/tokens.json"), json!({}));
@@ -1471,9 +1564,6 @@ mod tests {
         let email = "admin@mitch.pro";
         let norm = normalize_email(email);
         store
-            .write_document(&base.join("data/names.json"), &json!({}))
-            .unwrap();
-        store
             .write_document(
                 &base.join("data/admins.json"),
                 &json!({ "owners": [email] }),
@@ -1490,12 +1580,8 @@ mod tests {
         let stale = make_email_id(email, 0, &id_secret);
         let current = make_email_id(email, 2, &id_secret);
         let norm_current = make_email_id(&norm, 2, &id_secret);
-        store
-            .write_document(
-                &base.join("data/names.json"),
-                &json!({ stale.clone(): email, current.clone(): email }),
-            )
-            .unwrap();
+        names_set(&store, &stale, email);
+        names_set(&store, &current, email);
         // Stale generation: admin email but wrong gen → false, no fallthrough.
         assert!(!is_admin_id(&store, &id_secret, &stale, false));
         // Current generation via raw email and via normalized email both pass.
@@ -1504,12 +1590,7 @@ mod tests {
         assert!(is_any_admin_id(&store, &id_secret, &current, false));
         // A non-admin name with a valid generation is still not an admin.
         let rando = make_email_id("rando@mitch.pro", 0, &id_secret);
-        store
-            .write_document(
-                &base.join("data/names.json"),
-                &json!({ rando.clone(): "rando@mitch.pro" }),
-            )
-            .unwrap();
+        names_set(&store, &rando, "rando@mitch.pro");
         assert!(!is_admin_id(&store, &id_secret, &rando, false));
         std::fs::remove_dir_all(base).ok();
     }
@@ -1520,9 +1601,6 @@ mod tests {
         let (base, store) = temp_store("roles-token");
         let email = "owner@mitch.pro";
         let norm = normalize_email(email);
-        store
-            .write_document(&base.join("data/names.json"), &json!({}))
-            .unwrap();
         store
             .write_document(
                 &base.join("data/admins.json"),
@@ -1680,14 +1758,7 @@ mod tests {
         let sid = make_email_id(norm, 0, &secret);
 
         // Seed names + passwords via the store (DB-backed paths).
-        let mut names = serde_json::Map::new();
-        names.insert(sid.clone(), serde_json::json!("a.b+x@mitch.pro"));
-        store
-            .write_document(
-                &base.join("data/names.json"),
-                &serde_json::Value::Object(names),
-            )
-            .unwrap();
+        names_set(&store, &sid, "a.b+x@mitch.pro");
         let mut passwords = serde_json::Map::new();
         passwords.insert(norm.to_string(), serde_json::json!("argon2id$hash"));
         store

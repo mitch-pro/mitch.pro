@@ -1566,13 +1566,7 @@ async fn suggest(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) 
         return json_resp(400, json!({ "success": false, "message": "Empty." }));
     }
 
-    let names = state
-        .store
-        .read_document(&data_file(state, "names.json"), json!({}));
-    let name = names
-        .get(&user_id)
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
+    let name = mitch_lib::auth::names_get_email(&state.store, &user_id)
         .unwrap_or_else(|| user_id.chars().take(12).collect::<String>());
 
     let entry = json!({

@@ -18,7 +18,7 @@
 
 use super::{is_revoked_id, qs_get};
 use crate::handler::get_real_ip;
-use crate::routes::me::{cookies_of, data_file, json_response, parse_body_strict};
+use crate::routes::me::{cookies_of, json_response, parse_body_strict};
 use crate::state::AppState;
 use axum::body::Body;
 use axum::http::{HeaderMap, HeaderValue};
@@ -771,14 +771,7 @@ fn att_auth(state: &AppState, headers: &HeaderMap) -> Result<String, (u16, &'sta
         .map(|v| jsval::string(&v));
     let email = session_email
         .or_else(|| auth::email_from_sid(&state.store, &state.id_secret, sid))
-        .or_else(|| {
-            state
-                .store
-                .read_document(&data_file(state, "names.json"), json!({}))
-                .get(sid)
-                .and_then(|v| v.as_str())
-                .map(str::to_string)
-        })
+        .or_else(|| auth::names_get_email(&state.store, sid))
         .unwrap_or_default()
         .to_lowercase();
     if email.is_empty() {
