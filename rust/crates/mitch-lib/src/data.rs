@@ -267,6 +267,18 @@ impl DataStore {
                         updated_at INTEGER NOT NULL,
                         PRIMARY KEY (email, game)
                     );
+                    CREATE TABLE IF NOT EXISTS e2e_keys (
+                        email TEXT PRIMARY KEY,
+                        data TEXT NOT NULL,
+                        updated_at INTEGER NOT NULL
+                    );
+                    CREATE TABLE IF NOT EXISTS dm_cleared (
+                        email TEXT NOT NULL,
+                        store TEXT NOT NULL,
+                        data TEXT NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        PRIMARY KEY (email, store)
+                    );
                     CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs (ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_level ON app_logs (level, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_category ON app_logs (category, ts DESC);
@@ -335,6 +347,8 @@ impl DataStore {
         store.backfill_names_table_from_json();
         store.backfill_invite_tables_from_json();
         store.backfill_mini_game_sessions_from_json();
+        store.backfill_e2e_keys_from_json();
+        store.backfill_dm_cleared_from_json();
         Ok(store)
     }
 
@@ -555,6 +569,50 @@ impl DataStore {
                 let _ = conn.execute(
                     "INSERT OR IGNORE INTO mini_game_sessions (email, game, data, updated_at) VALUES (?1, ?2, ?3, ?4)",
                     rusqlite::params![email, game, data_str, now],
+                );
+            }
+        }
+    }
+
+    /// One-time (idempotent) backfill from e2e_keys.json into the real
+    /// `e2e_keys` table (one row per email, the whole record kept as a
+    /// JSON blob in `data`).
+    fn backfill_e2e_keys_from_json(&self) {
+        let now = now_millis();
+        let doc = self.read_document(&self.data_dir.join("e2e_keys.json"), Value::Null);
+        let Some(map) = doc.as_object() else { return };
+        let conn = self.conn();
+        for (email, data) in map {
+            let data_str = serde_json::to_string(data).unwrap_or_else(|_| "{}".to_string());
+            let _ = conn.execute(
+                "INSERT OR IGNORE INTO e2e_keys (email, data, updated_at) VALUES (?1, ?2, ?3)",
+                rusqlite::params![email, data_str, now],
+            );
+        }
+    }
+
+    /// One-time (idempotent) backfill from dm_cleared.json/
+    /// pickle_dm_cleared.json into the real `dm_cleared` table (one row per
+    /// email+store, the per-conversation cleared-at map kept as a JSON blob
+    /// in `data`).
+    fn backfill_dm_cleared_from_json(&self) {
+        let now = now_millis();
+        let docs: Vec<(&str, Value)> = [
+            ("main", "dm_cleared.json"),
+            ("pickle", "pickle_dm_cleared.json"),
+        ]
+        .into_iter()
+        .map(|(store, file)| (store, self.read_document(&self.data_dir.join(file), Value::Null)))
+        .collect();
+
+        let conn = self.conn();
+        for (store, doc) in &docs {
+            let Some(map) = doc.as_object() else { continue };
+            for (email, data) in map {
+                let data_str = serde_json::to_string(data).unwrap_or_else(|_| "{}".to_string());
+                let _ = conn.execute(
+                    "INSERT OR IGNORE INTO dm_cleared (email, store, data, updated_at) VALUES (?1, ?2, ?3, ?4)",
+                    rusqlite::params![email, store, data_str, now],
                 );
             }
         }

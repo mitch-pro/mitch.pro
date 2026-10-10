@@ -45,6 +45,53 @@ pub fn derive_user_e2e_keys(id_secret: &[u8], email: &str) -> (serde_json::Value
     (jwk, pub_key_hex)
 }
 
+// ── Stored (user-chosen) E2E keys ───────────────────────────────────────────
+//
+// Separate from the server-derived fallback above: once a user sets up
+// Secure Chat client-side, their real pubKeyHex/encryptedPrivateJwk/ivHex
+// (plus a short rotation history) live here — real `e2e_keys` table instead
+// of the old e2e_keys.json blob, one row per email.
+
+use crate::data::DataStore;
+use serde_json::Value;
+
+fn now_millis() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+pub fn user_e2e_key_get(store: &DataStore, norm_email: &str) -> Option<Value> {
+    let conn = store.conn();
+    let raw: Option<String> = conn
+        .query_row(
+            "SELECT data FROM e2e_keys WHERE email = ?1",
+            rusqlite::params![norm_email],
+            |r| r.get(0),
+        )
+        .ok();
+    raw.and_then(|s| serde_json::from_str(&s).ok())
+}
+
+pub fn user_e2e_key_set(store: &DataStore, norm_email: &str, data: &Value) {
+    let data_str = serde_json::to_string(data).unwrap_or_else(|_| "{}".to_string());
+    let conn = store.conn();
+    let _ = conn.execute(
+        "INSERT INTO e2e_keys (email, data, updated_at) VALUES (?1, ?2, ?3)
+         ON CONFLICT(email) DO UPDATE SET data = ?2, updated_at = ?3",
+        rusqlite::params![norm_email, data_str, now_millis()],
+    );
+}
+
+pub fn rename_e2e_key_email(store: &DataStore, old_norm: &str, new_norm: &str) {
+    let conn = store.conn();
+    let _ = conn.execute(
+        "UPDATE e2e_keys SET email = ?2 WHERE email = ?1",
+        rusqlite::params![old_norm, new_norm],
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -66,5 +113,30 @@ mod tests {
             let s = jwk1[k].as_str().unwrap();
             assert_eq!(s.len(), 43);
         }
+    }
+
+    fn temp_store(tag: &str) -> DataStore {
+        let base = std::env::temp_dir().join(format!(
+            "mitch-lib-e2e-test-{tag}-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(base.join("data")).unwrap();
+        DataStore::open(&base, &base.join("data")).unwrap()
+    }
+
+    #[test]
+    fn user_e2e_key_round_trip_and_rename() {
+        let store = temp_store("round-trip");
+        assert_eq!(user_e2e_key_get(&store, "a@gmail.com"), None);
+        let data = serde_json::json!({"pubKeyHex": "ab12", "history": []});
+        user_e2e_key_set(&store, "a@gmail.com", &data);
+        assert_eq!(user_e2e_key_get(&store, "a@gmail.com"), Some(data));
+
+        rename_e2e_key_email(&store, "a@gmail.com", "b@gmail.com");
+        assert_eq!(user_e2e_key_get(&store, "a@gmail.com"), None);
+        assert!(user_e2e_key_get(&store, "b@gmail.com").is_some());
     }
 }

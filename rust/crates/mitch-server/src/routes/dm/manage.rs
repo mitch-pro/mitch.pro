@@ -408,17 +408,13 @@ pub(super) async fn clear(
     };
     let store = store_of(headers);
     let idx = dm::address_index_cached(&state.store, &state.cfg.data_dir);
-    let mut cleared = state
-        .store
-        .read_document(&data_file(state, store.cleared), json!({}));
     let norm = auth::normalize_email(&auth.email);
     // if (!cleared[norm]) cleared[norm] = {} — a truthy non-object entry
     // makes the JS property writes silent no-ops, mirrored by the
     // as_object_mut() guards below.
-    if !cleared.get(norm.as_str()).map(truthy).unwrap_or(false) {
-        if let Some(obj) = cleared.as_object_mut() {
-            obj.insert(norm.clone(), json!({}));
-        }
+    let mut my_cleared = mitch_lib::dm::dm_cleared_get(&state.store, store, &norm);
+    if !truthy(&my_cleared) {
+        my_cleared = json!({});
     }
     let now = now_millis() as f64;
     let mut target_hit = true;
@@ -436,10 +432,7 @@ pub(super) async fn clear(
                 .map(|members| members.iter().any(|m| norm_of(m) == norm))
                 .unwrap_or(false);
             if mine {
-                if let Some(entry) = cleared
-                    .get_mut(norm.as_str())
-                    .and_then(|v| v.as_object_mut())
-                {
+                if let Some(entry) = my_cleared.as_object_mut() {
                     entry.insert(concat_key("group:", g.get("id")), js_num_value(now));
                 }
             }
@@ -473,18 +466,12 @@ pub(super) async fn clear(
             }
         }
         for peer in peers {
-            if let Some(entry) = cleared
-                .get_mut(norm.as_str())
-                .and_then(|v| v.as_object_mut())
-            {
+            if let Some(entry) = my_cleared.as_object_mut() {
                 entry.insert(format!("dm:{peer}"), js_num_value(now));
             }
         }
     } else if let Some(gid) = body.get("groupId").filter(|v| truthy(v)) {
-        if let Some(entry) = cleared
-            .get_mut(norm.as_str())
-            .and_then(|v| v.as_object_mut())
-        {
+        if let Some(entry) = my_cleared.as_object_mut() {
             entry.insert(concat_key("group:", Some(gid)), js_num_value(now));
         }
     } else if let Some(with_v) = body.get("with").filter(|v| truthy(v)) {
@@ -497,10 +484,7 @@ pub(super) async fn clear(
                 r
             }
         };
-        if let Some(entry) = cleared
-            .get_mut(norm.as_str())
-            .and_then(|v| v.as_object_mut())
-        {
+        if let Some(entry) = my_cleared.as_object_mut() {
             entry.insert(
                 format!("dm:{}", auth::normalize_email(&with_raw)),
                 js_num_value(now),
@@ -516,10 +500,7 @@ pub(super) async fn clear(
     if !target_hit {
         return json_response(400, json!({ "error": "missing target" }));
     }
-    state
-        .store
-        .write_document(&data_file(state, store.cleared), &cleared)
-        .ok();
+    mitch_lib::dm::dm_cleared_set(&state.store, store, &norm, &my_cleared);
     json_response(200, json!({ "success": true }))
 }
 

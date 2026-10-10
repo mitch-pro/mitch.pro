@@ -88,10 +88,7 @@ fn groups_inner(state: &Arc<AppState>, auth: &super::DmAuth, headers: &HeaderMap
         .as_array()
         .cloned()
         .unwrap_or_default();
-    let cleared = state
-        .store
-        .read_document(&data_file(state, store.cleared), json!({}));
-    let my_cleared = cleared.get(my_norm.as_str()).cloned().unwrap_or(json!({}));
+    let my_cleared = mitch_lib::dm::dm_cleared_get(&state.store, store, &my_norm);
     let mut result: Vec<Value> = groups
         .iter()
         .map(|g| {
@@ -281,11 +278,8 @@ fn inbox_inner(
         .as_array()
         .cloned()
         .unwrap_or_default();
-    let cleared = state
-        .store
-        .read_document(&data_file(state, store.cleared), json!({}));
     let my_norm = auth::normalize_email(&auth.email);
-    let my_cleared = cleared.get(my_norm.as_str()).cloned().unwrap_or(json!({}));
+    let my_cleared = mitch_lib::dm::dm_cleared_get(&state.store, store, &my_norm);
     let groups: Vec<Value> = state
         .store
         .read_document(&data_file(state, store.groups), json!([]))

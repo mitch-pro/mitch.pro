@@ -73,16 +73,8 @@ fn members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let dms = state
         .store
         .read_document(&data_file(state, "dms.json"), json!([]));
-    let cleared = state
-        .store
-        .read_document(&data_file(state, "dm_cleared.json"), json!({}));
-    let my_cleared = cleared
-        .get(viewer_norm.as_str())
-        .cloned()
-        .unwrap_or(json!({}));
-    let e2e_keys = state
-        .store
-        .read_document(&data_file(state, "e2e_keys.json"), json!({}));
+    let my_cleared =
+        mitch_lib::dm::dm_cleared_get(&state.store, &mitch_lib::dm::DMS_MAIN, &viewer_norm);
     let friends = state
         .store
         .read_document(&data_file(state, "friends.json"), json!({}));
@@ -132,7 +124,8 @@ fn members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
 
         // `e2eUsers[norm]?.pub_key` — the live WS chat-key leg arrives with the
         // Step 11 WS work; here the map is empty, so the stored/derived key wins.
-        let e2e_entry = e2e_keys.get(norm.as_str()).filter(|v| jsval::truthy(v));
+        let e2e_entry = mitch_lib::e2e::user_e2e_key_get(&state.store, &norm);
+        let e2e_entry = e2e_entry.as_ref().filter(|v| jsval::truthy(v));
         let entry_pub = e2e_entry.and_then(|e| e.get("pubKeyHex")).cloned();
         let pub_key = match e2e_entry {
             Some(_) => entry_pub, // undefined when pubKeyHex is missing → key dropped

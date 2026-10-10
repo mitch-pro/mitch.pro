@@ -19,22 +19,71 @@ use std::sync::Mutex;
 pub struct DmStore {
     pub dms: &'static str,
     pub groups: &'static str,
-    pub cleared: &'static str,
     pub pickle: bool,
 }
 
 pub const DMS_MAIN: DmStore = DmStore {
     dms: "dms.json",
     groups: "groups.json",
-    cleared: "dm_cleared.json",
     pickle: false,
 };
 pub const DMS_PICKLE: DmStore = DmStore {
     dms: "pickle_dms.json",
     groups: "pickle_groups.json",
-    cleared: "pickle_dm_cleared.json",
     pickle: true,
 };
+
+fn dm_cleared_store_key(store: &DmStore) -> &'static str {
+    if store.pickle {
+        "pickle"
+    } else {
+        "main"
+    }
+}
+
+fn now_millis() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+/// One user's per-conversation cleared-at map (`{convoKey: timestamp}`),
+/// or an empty object if they've never cleared anything — real
+/// `dm_cleared` table (one row per email+store) instead of the old
+/// dm_cleared.json/pickle_dm_cleared.json blobs.
+pub fn dm_cleared_get(store: &DataStore, dm_store: &DmStore, norm_email: &str) -> Value {
+    let conn = store.conn();
+    let raw: Option<String> = conn
+        .query_row(
+            "SELECT data FROM dm_cleared WHERE email = ?1 AND store = ?2",
+            rusqlite::params![norm_email, dm_cleared_store_key(dm_store)],
+            |r| r.get(0),
+        )
+        .ok();
+    raw.and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| json!({}))
+}
+
+pub fn dm_cleared_set(store: &DataStore, dm_store: &DmStore, norm_email: &str, data: &Value) {
+    let data_str = serde_json::to_string(data).unwrap_or_else(|_| "{}".to_string());
+    let conn = store.conn();
+    let _ = conn.execute(
+        "INSERT INTO dm_cleared (email, store, data, updated_at) VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(email, store) DO UPDATE SET data = ?3, updated_at = ?4",
+        rusqlite::params![norm_email, dm_cleared_store_key(dm_store), data_str, now_millis()],
+    );
+}
+
+/// Moves both the main and pickle cleared-state rows (if any) onto the
+/// user's new normalized email.
+pub fn rename_dm_cleared_email(store: &DataStore, old_norm: &str, new_norm: &str) {
+    let conn = store.conn();
+    let _ = conn.execute(
+        "UPDATE dm_cleared SET email = ?2 WHERE email = ?1",
+        rusqlite::params![old_norm, new_norm],
+    );
+}
 
 /// `Number(process.env.NAME || default)` — JS falsy (missing, 0, NaN, "")
 /// falls to the default.

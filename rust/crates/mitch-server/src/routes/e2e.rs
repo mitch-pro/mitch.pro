@@ -155,11 +155,8 @@ fn get_key(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         Ok(e) => e,
         Err(resp) => return *resp,
     };
-    let e2e_keys: Value = state
-        .store
-        .read_document(&data_file(state, "e2e_keys.json"), json!({}));
     let norm = auth::normalize_email(&email);
-    let entry = e2e_keys.get(&norm).filter(|e| truthy(e));
+    let entry = mitch_lib::e2e::user_e2e_key_get(&state.store, &norm).filter(truthy);
     let Some(entry) = entry else {
         return json_response(404, json!({ "success": false, "message": "Not found" }));
     };
@@ -378,11 +375,8 @@ fn register_key(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -
         );
     }
 
-    let mut e2e_keys: Value = state
-        .store
-        .read_document(&data_file(state, "e2e_keys.json"), json!({}));
     let norm = auth::normalize_email(&email);
-    let previous = e2e_keys.get(&norm).cloned().unwrap_or(Value::Null);
+    let previous = mitch_lib::e2e::user_e2e_key_get(&state.store, &norm).unwrap_or(Value::Null);
     // `body.createOnly === true` — strictly the boolean.
     if body.get("createOnly").and_then(|v| v.as_bool()) == Some(true)
         && truthy_prop(previous.get("encryptedPrivateJwk"))
@@ -430,26 +424,16 @@ fn register_key(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -
     history.truncate(5);
     // The JS key order: pubKeyHex, encryptedPrivateJwk, ivHex, kdfSaltHex,
     // kdfIterations, updatedAt, history.
-    if !e2e_keys.is_object() {
-        e2e_keys = json!({});
-    }
-    if let Some(map) = e2e_keys.as_object_mut() {
-        map.insert(
-            norm,
-            json!({
-                "pubKeyHex": raw_pub,
-                "encryptedPrivateJwk": raw_enc,
-                "ivHex": raw_iv,
-                "kdfSaltHex": kdf_salt,
-                "kdfIterations": js_num_value(kdf_iterations),
-                "updatedAt": now_millis(),
-                "history": history,
-            }),
-        );
-    }
-    let _ = state
-        .store
-        .write_document(&data_file(state, "e2e_keys.json"), &e2e_keys);
+    let entry = json!({
+        "pubKeyHex": raw_pub,
+        "encryptedPrivateJwk": raw_enc,
+        "ivHex": raw_iv,
+        "kdfSaltHex": kdf_salt,
+        "kdfIterations": js_num_value(kdf_iterations),
+        "updatedAt": now_millis(),
+        "history": history,
+    });
+    mitch_lib::e2e::user_e2e_key_set(&state.store, &norm, &entry);
     json_response(200, json!({ "success": true }))
 }
 
