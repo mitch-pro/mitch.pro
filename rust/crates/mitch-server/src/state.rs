@@ -129,16 +129,6 @@ pub struct AppState {
         std::collections::HashMap<String, crate::routes::games::GamePortalSession>,
     >,
 
-    /// The two remaining idle/mini-game session maps (server.js:539-615),
-    /// normalized email → the JS session object kept verbatim
-    /// (insertion-ordered Value) because every endpoint echoes `state: s`
-    /// straight back. Each has a `save…Sessions()` write-through to its
-    /// data/<name>.json document. typing/piano/piccolo/logic moved to the
-    /// real `mini_game_sessions` table (mitch_lib::minigames) — clicker and
-    /// richard are the two left on this blob-backed pattern.
-    pub clicker_sessions: std::sync::Mutex<std::collections::HashMap<String, serde_json::Value>>,
-    pub richard_sessions: std::sync::Mutex<std::collections::HashMap<String, serde_json::Value>>,
-
     /// `logicDictionary` (server.js:542-553) — the 5-letter lowercase words
     /// from data/wordle_dictionary.txt, loaded once at boot (missing file →
     /// empty set, like the JS try/catch).
@@ -373,10 +363,6 @@ impl AppState {
             mitch_lib::school::now_millis(),
         );
         let canvas = crate::routes::canvas::CanvasState::load(&store, &cfg.data_dir.clone());
-        // The idle-game session maps are seeded BEFORE the struct literal (the
-        // `store` field move happens earlier in the literal than these fields).
-        let clicker_map = Self::load_session_map(&store, &cfg.data_dir, "clicker_sessions.json");
-        let richard_map = Self::load_session_map(&store, &cfg.data_dir, "richard_sessions.json");
         let logic_dictionary = Self::load_logic_dictionary(&cfg.data_dir);
         let cv_games_map = Self::load_cv_games(&store, &cfg.data_dir);
         let jeopardy_lobbies = crate::routes::jeopardy::load_lobbies(&store, &cfg.data_dir);
@@ -432,10 +418,6 @@ impl AppState {
             matrix_sso_login_lock: tokio::sync::Mutex::new(()),
             cv_online: std::sync::Mutex::new(std::collections::HashMap::new()),
             game_portal_sessions: std::sync::Mutex::new(std::collections::HashMap::new()),
-            // Idle-game session maps: clicker/richard are seeded from their
-            // documents at boot (server.js:25252-25255).
-            clicker_sessions: std::sync::Mutex::new(clicker_map),
-            richard_sessions: std::sync::Mutex::new(richard_map),
             logic_dictionary: std::sync::Mutex::new(logic_dictionary),
             bj_games: std::sync::Mutex::new(std::collections::HashMap::new()),
             casino_history: std::sync::Mutex::new(std::collections::HashMap::new()),
@@ -482,20 +464,6 @@ impl AppState {
             .read_document(&data_dir.join("chess_vs.json"), serde_json::json!({}))
             .as_object()
             .map(|o| o.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
-            .unwrap_or_default()
-    }
-
-    /// `loadXxxSessions()` — `Map(Object.entries(loadJson(FILE, {})))` with a
-    /// try/catch → empty map.
-    fn load_session_map(
-        store: &mitch_lib::data::DataStore,
-        data_dir: &std::path::Path,
-        name: &str,
-    ) -> std::collections::HashMap<String, serde_json::Value> {
-        store
-            .read_document(&data_dir.join(name), serde_json::json!({}))
-            .as_object()
-            .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
             .unwrap_or_default()
     }
 

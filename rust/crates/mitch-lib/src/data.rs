@@ -528,8 +528,9 @@ impl DataStore {
     }
 
     /// One-time (idempotent) backfill from typing_sessions.json/
-    /// piano_sessions.json/piccolo_sessions.json/logic_sessions.json into
-    /// the real `mini_game_sessions` table (one row per email+game, the
+    /// piano_sessions.json/piccolo_sessions.json/logic_sessions.json/
+    /// clicker_sessions.json/richard_sessions.json into the real
+    /// `mini_game_sessions` table (one row per email+game, the
     /// game-specific fields kept as a JSON blob in `data` — same shape as
     /// before, just no longer a whole-file rewrite on every payout).
     fn backfill_mini_game_sessions_from_json(&self) {
@@ -539,6 +540,8 @@ impl DataStore {
             ("piano", "piano_sessions.json"),
             ("piccolo", "piccolo_sessions.json"),
             ("logic", "logic_sessions.json"),
+            ("clicker", "clicker_sessions.json"),
+            ("richard", "richard_sessions.json"),
         ]
         .into_iter()
         .map(|(game, file)| (game, self.read_document(&self.data_dir.join(file), Value::Null)))

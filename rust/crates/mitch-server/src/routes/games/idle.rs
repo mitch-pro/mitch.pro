@@ -4,9 +4,10 @@
 //! `RICHARD_BUSINESSES` / `getRichardSpeed` / `getRichardPower` /
 //! `applyRichardOffline`, and the `ADRIAN_TECH` / `ADRIAN_UPGRADES` tables.
 //!
-//! Session objects live in `AppState.clicker_sessions` / `richard_sessions`
-//! as verbatim `serde_json::Value`s and every response echoes them back —
-//! so response bodies go out through `mitch_lib::data::js_stringify` (exact
+//! Session objects live in the `mini_game_sessions` table
+//! (`mitch_lib::minigames`, game = "clicker"/"richard") as verbatim
+//! `serde_json::Value`s and every response echoes them back — so response
+//! bodies go out through `mitch_lib::data::js_stringify` (exact
 //! ECMAScript number rendering: `1e+22`, no `.0`), not serde_json.
 
 use axum::http::{HeaderMap, Method};
@@ -641,47 +642,25 @@ fn adrian_state(state: &Arc<AppState>, headers: &HeaderMap) -> axum::response::R
     let norm = mitch_lib::auth::normalize_email(&email);
     let now = now_millis();
 
-    let mut map = state
-        .clicker_sessions
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    let offline_gain = match map.get(&norm).cloned() {
+    let existing = mitch_lib::minigames::mini_session_get(&state.store, &norm, "clicker");
+    let (s, offline_gain) = match existing {
         None => {
             let s = default_clicker_session(now);
-            map.insert(norm.clone(), s.clone());
-            save_sessions(
-                &state.store,
-                state.data_dir(),
-                "clicker_sessions.json",
-                &map,
-            );
-            0.0
+            mitch_lib::minigames::mini_session_set(&state.store, &norm, "clicker", &s);
+            (s, 0.0)
         }
         Some(mut s) => {
             let gain = apply_adrian_offline(&state.store, state.data_dir(), &mut s, &email, now);
             if gain > 0.0 {
-                map.insert(norm.clone(), s.clone());
-                save_sessions(
-                    &state.store,
-                    state.data_dir(),
-                    "clicker_sessions.json",
-                    &map,
-                );
+                mitch_lib::minigames::mini_session_set(&state.store, &norm, "clicker", &s);
             }
-            gain
+            (s, gain)
         }
     };
-    drop(map);
 
     // The gain is echoed in richard's response only; adrian's response shape
     // is { success, state, upgrades, tech }.
     let _ = offline_gain;
-    let map = state
-        .clicker_sessions
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    let s = map.get(&norm).cloned().unwrap_or_else(|| json!({}));
-    drop(map);
     js_body(&json!({
         "success": true,
         "state": s,
@@ -705,11 +684,7 @@ fn adrian_buy(
         Err(resp) => return *resp,
     };
     let norm = mitch_lib::auth::normalize_email(&email);
-    let mut map = state
-        .clicker_sessions
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    let Some(mut s) = map.get(&norm).cloned() else {
+    let Some(mut s) = mitch_lib::minigames::mini_session_get(&state.store, &norm, "clicker") else {
         return json_resp_str(400, js_stringify(&json!({ "success": false })));
     };
 
@@ -804,14 +779,7 @@ fn adrian_buy(
         upgrades.insert(up_id.clone(), jsval::num_value(count + actual_buy_count));
     }
     set_num(&mut s, "lastTs", now_millis() as f64);
-    map.insert(norm.clone(), s.clone());
-    save_sessions(
-        &state.store,
-        state.data_dir(),
-        "clicker_sessions.json",
-        &map,
-    );
-    drop(map);
+    mitch_lib::minigames::mini_session_set(&state.store, &norm, "clicker", &s);
 
     json_resp_str(
         200,
@@ -840,13 +808,7 @@ fn adrian_sync(
     };
     let norm = mitch_lib::auth::normalize_email(&email);
     let now = now_millis();
-    let mut map = state
-        .clicker_sessions
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    let mut s = map
-        .get(&norm)
-        .cloned()
+    let mut s = mitch_lib::minigames::mini_session_get(&state.store, &norm, "clicker")
         .unwrap_or_else(|| default_clicker_session(now));
 
     let claim = body
@@ -855,14 +817,7 @@ fn adrian_sync(
         .unwrap_or(false);
     let client_points = body.get("points").and_then(jsval::number).unwrap_or(0.0);
     process_adrian_sync(state, &mut s, client_points, &email, claim, now);
-    map.insert(norm.clone(), s.clone());
-    save_sessions(
-        &state.store,
-        state.data_dir(),
-        "clicker_sessions.json",
-        &map,
-    );
-    drop(map);
+    mitch_lib::minigames::mini_session_set(&state.store, &norm, "clicker", &s);
 
     json_resp_str(
         200,
@@ -883,44 +838,22 @@ fn richard_state(state: &Arc<AppState>, headers: &HeaderMap) -> axum::response::
     let norm = mitch_lib::auth::normalize_email(&email);
     let now = now_millis();
 
-    let mut map = state
-        .richard_sessions
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    let offline_gain = match map.get(&norm).cloned() {
+    let existing = mitch_lib::minigames::mini_session_get(&state.store, &norm, "richard");
+    let (s, offline_gain) = match existing {
         None => {
             let s = default_richard_session(now);
-            map.insert(norm.clone(), s.clone());
-            save_sessions(
-                &state.store,
-                state.data_dir(),
-                "richard_sessions.json",
-                &map,
-            );
-            0.0
+            mitch_lib::minigames::mini_session_set(&state.store, &norm, "richard", &s);
+            (s, 0.0)
         }
         Some(mut s) => {
             let gain = apply_richard_offline(&state.store, state.data_dir(), &mut s, &email, now);
             if gain > 0.0 {
-                map.insert(norm.clone(), s.clone());
-                save_sessions(
-                    &state.store,
-                    state.data_dir(),
-                    "richard_sessions.json",
-                    &map,
-                );
+                mitch_lib::minigames::mini_session_set(&state.store, &norm, "richard", &s);
             }
-            gain
+            (s, gain)
         }
     };
-    drop(map);
 
-    let map = state
-        .richard_sessions
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    let s = map.get(&norm).cloned().unwrap_or_else(|| json!({}));
-    drop(map);
     json_resp_str(
         200,
         js_stringify(&json!({
@@ -947,13 +880,7 @@ fn richard_sync(
     };
     let norm = mitch_lib::auth::normalize_email(&email);
     let now = now_millis();
-    let mut map = state
-        .richard_sessions
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    let mut s = map
-        .get(&norm)
-        .cloned()
+    let mut s = mitch_lib::minigames::mini_session_get(&state.store, &norm, "richard")
         .unwrap_or_else(|| default_richard_session(now));
 
     // clientCash = Math.min(1e290, Number(body.state?.cash) || 0)
@@ -1108,14 +1035,7 @@ fn richard_sync(
     }
 
     set_num(&mut s, "lastTs", now as f64);
-    map.insert(norm.clone(), s.clone());
-    save_sessions(
-        &state.store,
-        state.data_dir(),
-        "richard_sessions.json",
-        &map,
-    );
-    drop(map);
+    mitch_lib::minigames::mini_session_set(&state.store, &norm, "richard", &s);
 
     json_resp_str(
         200,
@@ -1140,16 +1060,6 @@ fn owned_upgrade(s: &Value, id: &str) -> bool {
     }
 }
 
-/// `saveXxxSessions()` — `saveJson(FILE, Object.fromEntries(map))`.
-pub(crate) fn save_sessions(
-    store: &DataStore,
-    data_dir: &Path,
-    name: &str,
-    map: &std::collections::HashMap<String, Value>,
-) {
-    let doc = Value::Object(map.iter().map(|(k, v)| (k.clone(), v.clone())).collect());
-    let _ = store.write_document(&data_dir.join(name), &doc);
-}
 
 /// `parseInt(s, 10) || 0`-shaped decimal prefix parse (JS parseInt on the
 /// String() of the value; "12.7abc" → 12, "" → NaN → caller's || 1).
