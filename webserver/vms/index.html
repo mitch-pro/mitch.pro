@@ -166,6 +166,13 @@
           <button type="button" id="byo-os-create-btn" class="primary-button">Create computer from this ISO →</button>
           <button type="button" id="byo-os-delete-btn" class="quiet-button">Remove ISO</button>
         </div>
+        <div id="byo-os-problem-box" style="margin-top:14px; padding-top:12px; border-top:1px solid #334155;">
+          <p style="font-size:0.78rem; color:#64748b; margin:0 0 8px 0;">Got the wrong file? (e.g. a download <em>page</em> instead of the ISO itself)</p>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button type="button" id="byo-os-refund-btn" class="quiet-button is-hidden">This was the wrong link — refund me</button>
+            <button type="button" id="byo-os-report-btn" class="quiet-button">Report an issue</button>
+          </div>
+        </div>
       </div>
 
       <p id="byo-os-status" class="form-status" style="font-size: 0.85rem; margin: 12px 0 0 0; min-height: 1.2em;" role="status"></p>
@@ -213,6 +220,6 @@
 
   <script src="/app-shell.js?v=17" defer></script>
   <script src="/vms/portal.js?v=8" defer></script>
-  <script src="/vms/byo-os.js?v=1" defer></script>
+  <script src="/vms/byo-os.js?v=2" defer></script>
 </body>
 </html>

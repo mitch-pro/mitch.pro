@@ -54,6 +54,12 @@ const LINK_ISO_SURCHARGE_PER_GB: f64 = 100.0;
 /// total cost even for an arbitrarily large ISO.
 const LINK_ISO_SURCHARGE_CAP_GB: f64 = 12.0;
 
+/// Below this, a "successfully uploaded" ISO is almost certainly the wrong
+/// thing entirely (a download-page HTML redirect, a login wall, a broken
+/// mirror) rather than a real install image — small enough that a user can
+/// self-refund with no review, instead of needing a ticket.
+const SELF_REFUND_MAX_BYTES: u64 = 128 * 1024 * 1024;
+
 /// `BYO_OS_COST_COINS` plus a per-GB surcharge for anything over
 /// `LINK_ISO_INCLUDED_GB`, capped at `LINK_ISO_SURCHARGE_CAP_GB`.
 fn link_iso_cost_coins(size_bytes: u64) -> f64 {
@@ -163,6 +169,138 @@ pub(crate) async fn handle(
             let _ = state.store.write_document(&isos_manifest_file(state), &manifest);
         }
         return Some(json_response(200, json!({ "ok": true })));
+    }
+
+    // POST /api/vm/byo-os/iso/refund-undersized — self-service refund for
+    // an ISO that came back too small to possibly be a real install image
+    // (the classic mistake: a link to a download *page* instead of the
+    // file itself). No admin review needed — the size threshold is the
+    // whole safety check, so it's tight and automatic.
+    if path == "/api/vm/byo-os/iso/refund-undersized" && *method == Method::POST {
+        let mut manifest = state.store.read_document(&isos_manifest_file(state), json!({}));
+        let Some(entry) = manifest.get(&actor.email).cloned() else {
+            return Some(json_response(404, json!({ "error": "No stored ISO found." })));
+        };
+        let size_bytes = entry.get("sizeBytes").and_then(jsval::number).unwrap_or(0.0) as u64;
+        if size_bytes >= SELF_REFUND_MAX_BYTES {
+            return Some(json_response(
+                400,
+                json!({
+                    "error": format!(
+                        "That ISO is {} — too large to self-refund. Submit a ticket instead and it'll be reviewed.",
+                        fmt_gb(size_bytes)
+                    ),
+                    "code": "too_large_for_self_refund",
+                }),
+            ));
+        }
+        let proxmox_filename = jsval::str_or(entry.get("proxmoxFilename"), "");
+        if !proxmox_filename.is_empty() {
+            let _ = crate::proxmox_desktop::desktop().delete_iso(&proxmox_filename).await;
+        }
+        let refund = link_iso_cost_coins(size_bytes);
+        mitch_lib::coins::add_coins(
+            &state.store,
+            state.data_dir(),
+            &actor.email,
+            refund,
+            1.0,
+            "byo_os_iso_self_refund",
+        );
+        if let Some(map) = manifest.as_object_mut() {
+            map.remove(&actor.email);
+        }
+        let _ = state.store.write_document(&isos_manifest_file(state), &manifest);
+        vm_audit(
+            state,
+            &actor.email,
+            None,
+            "BYO_OS_ISO_SELF_REFUNDED",
+            true,
+            Some(&json!({ "sizeBytes": size_bytes, "refundCoins": refund })),
+        );
+        return Some(json_response(
+            200,
+            json!({
+                "ok": true,
+                "refunded": refund,
+                "coins": mitch_lib::coins::get_coins(&state.store, state.data_dir(), &actor.email),
+            }),
+        ));
+    }
+
+    // POST /api/vm/byo-os/iso/report-issue — one-click ticket for anything
+    // the self-refund threshold doesn't cover (a large ISO that's still
+    // wrong somehow, a VM that won't create from it, etc.) — pings the
+    // admin to review and manually restore coins if warranted. Doesn't
+    // touch the stored ISO or balance itself; at most one open report per
+    // stored ISO (re-clicking after the same entry was already reported is
+    // a no-op) so a confused user mashing the button doesn't spam alerts.
+    if path == "/api/vm/byo-os/iso/report-issue" && *method == Method::POST {
+        let mut manifest = state.store.read_document(&isos_manifest_file(state), json!({}));
+        let Some(entry) = manifest.get(&actor.email).cloned() else {
+            return Some(json_response(404, json!({ "error": "No stored ISO found." })));
+        };
+        if jsval::truthy(entry.get("reported").unwrap_or(&Value::Null)) {
+            return Some(json_response(
+                200,
+                json!({ "ok": true, "message": "Already reported — it's in the queue." }),
+            ));
+        }
+
+        let filename = jsval::str_or(entry.get("filename"), "custom.iso");
+        let size_bytes = entry.get("sizeBytes").and_then(jsval::number).unwrap_or(0.0) as u64;
+        let proxmox_filename = jsval::str_or(entry.get("proxmoxFilename"), "");
+        let body: Value = serde_json::from_slice(body_bytes).unwrap_or(json!({}));
+        let note = jsval::str_or(body.get("note"), "");
+
+        let report = json!({
+            "email": actor.email,
+            "filename": filename,
+            "sizeBytes": size_bytes,
+            "proxmoxFilename": proxmox_filename,
+            "uploadedAt": entry.get("uploadedAt").cloned().unwrap_or(Value::Null),
+            "note": note,
+            "reportedAt": mitch_lib::school::now_millis(),
+        });
+        let reports_file = state.data_dir().join("byo_os_reports.json");
+        let mut reports = state.store.read_document(&reports_file, json!([]));
+        if let Some(arr) = reports.as_array_mut() {
+            arr.push(report);
+        }
+        let _ = state.store.write_document(&reports_file, &reports);
+
+        crate::routes::push::ntfy_notify(
+            &format!(
+                "BYO-OS ISO issue from {}: \"{filename}\" ({}). {}",
+                actor.email,
+                fmt_gb(size_bytes),
+                if note.is_empty() { "No note.".to_string() } else { format!("Note: {note}") }
+            ),
+            "BYO-OS Ticket",
+            "high",
+        );
+
+        if let Some(map) = manifest.as_object_mut() {
+            if let Some(obj) = map.get_mut(&actor.email).and_then(|v| v.as_object_mut()) {
+                obj.insert("reported".to_string(), json!(true));
+            }
+        }
+        let _ = state.store.write_document(&isos_manifest_file(state), &manifest);
+
+        vm_audit(
+            state,
+            &actor.email,
+            None,
+            "BYO_OS_ISO_ISSUE_REPORTED",
+            true,
+            Some(&json!({ "filename": filename, "sizeBytes": size_bytes })),
+        );
+
+        return Some(json_response(
+            200,
+            json!({ "ok": true, "message": "Reported — it'll be reviewed and your coins restored if it checks out." }),
+        ));
     }
 
     // POST /api/vm/byo-os/iso/start — begin a new chunked upload.

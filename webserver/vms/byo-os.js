@@ -6,6 +6,7 @@
 (function () {
   const CHUNK_SIZE = 16 * 1024 * 1024; // 16MB — server's hard ceiling is 24MB.
   const MAX_ISO_BYTES = 6 * 1024 * 1024 * 1024; // 6GB
+  const SELF_REFUND_MAX_BYTES = 128 * 1024 * 1024; // matches byo_os.rs's SELF_REFUND_MAX_BYTES
 
   const $ = (id) => document.getElementById(id);
   const dialog = () => $('byo-os-dialog');
@@ -64,6 +65,13 @@
         $('byo-os-iso-name').textContent = isoData.iso.filename;
         $('byo-os-iso-meta').textContent =
           `${fmtBytes(isoData.iso.sizeBytes)} · uploaded ${new Date(isoData.iso.uploadedAt).toLocaleString()}`;
+        const undersized = Number(isoData.iso.sizeBytes) > 0 && Number(isoData.iso.sizeBytes) < SELF_REFUND_MAX_BYTES;
+        $('byo-os-refund-btn').classList.toggle('is-hidden', !undersized);
+        const reportBtn = $('byo-os-report-btn');
+        if (reportBtn) {
+          reportBtn.disabled = !!isoData.iso.reported;
+          reportBtn.textContent = isoData.iso.reported ? 'Already reported' : 'Report an issue';
+        }
       }
       hasExistingComputer = !!(
         computersData && Array.isArray(computersData.computers) && computersData.computers.length > 0
@@ -210,6 +218,8 @@
     const urlBtn = $('byo-os-url-btn');
     const deleteBtn = $('byo-os-delete-btn');
     const createBtn = $('byo-os-create-btn');
+    const refundBtn = $('byo-os-refund-btn');
+    const reportBtn = $('byo-os-report-btn');
 
     openBtns.forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -247,6 +257,39 @@
         await refreshIsoState();
       } catch (e) {
         setStatus(e.message, true);
+      }
+    });
+    refundBtn.addEventListener('click', async () => {
+      if (!confirm('Refund this ISO as a wrong link? It will be removed and your coins returned.')) return;
+      refundBtn.disabled = true;
+      try {
+        const data = await api('/api/vm/byo-os/iso/refund-undersized', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
+          body: '{}',
+        });
+        setStatus(`Refunded ${data.refunded} coins.`);
+        await refreshIsoState();
+      } catch (e) {
+        setStatus(e.message, true);
+      } finally {
+        refundBtn.disabled = false;
+      }
+    });
+    reportBtn.addEventListener('click', async () => {
+      const note = prompt('Optional: what went wrong? (leave blank to just flag it)') || '';
+      reportBtn.disabled = true;
+      try {
+        const data = await api('/api/vm/byo-os/iso/report-issue', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
+          body: JSON.stringify({ note }),
+        });
+        setStatus(data.message || 'Reported.');
+        await refreshIsoState();
+      } catch (e) {
+        setStatus(e.message, true);
+        reportBtn.disabled = false;
       }
     });
     createBtn.addEventListener('click', async () => {
