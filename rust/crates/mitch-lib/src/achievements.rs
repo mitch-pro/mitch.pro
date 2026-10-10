@@ -441,11 +441,10 @@ mod tests {
         );
         assert_eq!(entry.get("pixels").and_then(|v| v.as_f64()), Some(1.0));
         // Coin balance reflects the 0.2 paint coin (no multiplier).
-        let coins = store.read_document(&data_dir.join("coins.json"), json!({}));
-        assert_eq!(coins.get("p@x.com").and_then(|v| v.as_f64()), Some(0.2));
-        // Empty email is a no-op (no coins.json entry created).
+        assert_eq!(crate::coins::get_coins(&store, &data_dir, "p@x.com"), 0.2);
+        // Empty email is a no-op (no coins row created).
         add_painting_coin(&store, &data_dir, "", mult);
-        let coins = store.read_document(&data_dir.join("coins.json"), json!({}));
+        let coins = crate::coins::load_coins(&store, &data_dir);
         assert_eq!(coins.as_object().map(Map::len), Some(1));
     }
 }

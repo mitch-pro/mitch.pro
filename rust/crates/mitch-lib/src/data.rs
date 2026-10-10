@@ -204,12 +204,19 @@ impl DataStore {
                         active_users TEXT DEFAULT '',
                         is_running INTEGER NOT NULL DEFAULT 1
                     );
+                    CREATE TABLE IF NOT EXISTS coins (
+                        email TEXT PRIMARY KEY,
+                        balance REAL NOT NULL DEFAULT 0,
+                        lifetime_earned REAL NOT NULL DEFAULT 0,
+                        updated_at INTEGER NOT NULL
+                    );
                     CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs (ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_level ON app_logs (level, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_category ON app_logs (category, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_virtual_machines_owner ON virtual_machines (owner_email, status);
                     CREATE INDEX IF NOT EXISTS idx_vm_audit_logs_ts ON vm_audit_logs (ts DESC);
-                    CREATE INDEX IF NOT EXISTS idx_vm_audit_logs_vm ON vm_audit_logs (vm_record_id, ts DESC);",
+                    CREATE INDEX IF NOT EXISTS idx_vm_audit_logs_vm ON vm_audit_logs (vm_record_id, ts DESC);
+                    CREATE INDEX IF NOT EXISTS idx_coins_balance ON coins (balance DESC);",
                 );
                 match result {
                     Ok(()) => return Ok(()),
@@ -254,12 +261,47 @@ impl DataStore {
             rusqlite::params![now_millis()],
         )?;
 
-        Ok(Self {
+        let store = Self {
             base_dir: base_dir.to_path_buf(),
             data_dir: data_dir.to_path_buf(),
             conn: Mutex::new(conn),
             app_log_writes: std::sync::atomic::AtomicUsize::new(0),
-        })
+        };
+        store.backfill_coins_table_from_json();
+        Ok(store)
+    }
+
+    /// One-time (idempotent — only inserts rows the `coins` table doesn't
+    /// already have) backfill from the old coins.json/user_stats.json blob
+    /// storage into the real `coins` table. Safe to run on every startup:
+    /// `INSERT OR IGNORE` never touches a row that's already there, so once
+    /// migrated this is a cheap no-op pass over whatever's still in the
+    /// (now otherwise-unused) coins.json blob.
+    fn backfill_coins_table_from_json(&self) {
+        let coins_blob = self.read_document(&self.data_dir.join("coins.json"), Value::Null);
+        let Some(balances) = coins_blob.as_object() else {
+            return;
+        };
+        if balances.is_empty() {
+            return;
+        }
+        let stats_blob = self.read_document(&self.data_dir.join("user_stats.json"), Value::Null);
+        let now = now_millis();
+        let conn = self.conn();
+        for (email, balance_val) in balances {
+            let Some(balance) = balance_val.as_f64() else {
+                continue;
+            };
+            let lifetime_earned = stats_blob
+                .get(email)
+                .and_then(|s| s.get("lifetime_earned"))
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            let _ = conn.execute(
+                "INSERT OR IGNORE INTO coins (email, balance, lifetime_earned, updated_at) VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![email, balance, lifetime_earned, now],
+            );
+        }
     }
 
     /// Path key semantics of `relativeKey()`: posix-relative to baseDir,

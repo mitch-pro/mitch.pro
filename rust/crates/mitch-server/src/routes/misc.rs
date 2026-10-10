@@ -299,8 +299,8 @@ fn log_click(state: &Arc<AppState>, body: &serde_json::Value) -> Response {
 }
 
 /// `GET /api/leaderboard` — server.js:20489-20535. Ranked by coins desc,
-/// tie-break name asc. Reads coins.json + user_stats.json + profiles.json +
-/// cosmetics.json (all DB-stored).
+/// tie-break name asc. Coins come from the real `coins` table now; stats,
+/// profiles, and cosmetics are still read from their JSON-blob documents.
 fn leaderboard(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let cookie_header = headers
         .get(axum::http::header::COOKIE)
@@ -319,9 +319,10 @@ fn leaderboard(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         .map(mitch_lib::auth::normalize_email)
         .unwrap_or_default();
 
-    let coins = state
-        .store
-        .read_document(&state.data_dir().join("coins.json"), json!({}));
+    // coins now lives in a real table, not the (no-longer-written, so
+    // increasingly stale) coins.json blob — go through the function that
+    // actually reads it.
+    let coins = mitch_lib::coins::load_coins(&state.store, state.data_dir());
     let profiles = state
         .store
         .read_document(&state.data_dir().join("profiles.json"), json!({}));

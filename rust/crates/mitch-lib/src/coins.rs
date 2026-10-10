@@ -3,40 +3,84 @@
 //! addAdminNotification (3102-3123).
 //!
 //! Contract:
-//! - coins.json maps normalized email → f64 balance (toFixed(4) rounding).
+//! - Balances live in the real `coins` table (email PK, balance,
+//!   lifetime_earned), not a JSON blob — every earn/spend used to read the
+//!   *entire site's* coins.json, mutate one entry, and write the whole
+//!   blob back, which both serializes every concurrent transaction
+//!   site-wide through one row and is vulnerable to a lost update if two
+//!   writes raced (both read the same "before", second write clobbers the
+//!   first). `coins.json` is migrated once into this table on startup
+//!   (`DataStore::backfill_coins_table_from_json`) and no longer written.
 //! - addCoins: positive amounts are multiplied by the global coin multiplier
 //!   (raised to at least 2.0 during a personal happy hour), negative amounts
 //!   pass through unmultiplied. Balances round to 4 decimals (JS toFixed).
-//! - Positive amounts also bump `lifetime_earned` in user_stats.json.
+//!   The read-modify-write of one row still happens in Rust (to keep the
+//!   exact rounding/multiplier logic), but now inside a BEGIN IMMEDIATE
+//!   transaction scoped to that one row instead of a whole-document write,
+//!   the same pattern `reserve_virtual_machine` already uses for atomic
+//!   single-row updates.
+//! - Positive amounts also bump `lifetime_earned`, now a column on the
+//!   same row instead of a separate user_stats.json write.
 //! - Every change appends a TSV line to logs/coins.log.
 //! - coin_gifts.json maps normalized email → array of notices (capped 50,
-//!   newest first via unshift).
+//!   newest first via unshift). Unrelated to the balance itself — still a
+//!   JSON blob, not migrated here.
 
 use crate::auth::normalize_email;
 use crate::data::DataStore;
 use serde_json::{json, Value};
 use std::path::Path;
 
-/// `loadCoins()` / `saveCoins()` — the JS keeps coinsCache in memory; every
-/// write goes straight to disk through saveJson, so read-through works.
-pub fn load_coins(store: &DataStore, data_dir: &Path) -> Value {
-    store.read_document(&data_dir.join("coins.json"), json!({}))
-}
-
-pub fn save_coins(store: &DataStore, data_dir: &Path, coins: &Value) {
-    let _ = store.write_document(&data_dir.join("coins.json"), coins);
+/// `loadCoins()` — every known balance as `{email: balance}`, matching the
+/// old coins.json shape so existing callers (the leaderboard, the admin
+/// economy audit) need no changes beyond this function's internals.
+pub fn load_coins(store: &DataStore, _data_dir: &Path) -> Value {
+    let conn = store.conn();
+    let mut stmt = match conn.prepare("SELECT email, balance FROM coins") {
+        Ok(s) => s,
+        Err(_) => return json!({}),
+    };
+    let rows = stmt.query_map([], |row| {
+        let email: String = row.get(0)?;
+        let balance: f64 = row.get(1)?;
+        Ok((email, balance))
+    });
+    let Ok(rows) = rows else { return json!({}) };
+    let mut map = serde_json::Map::new();
+    for row in rows.filter_map(|r| r.ok()) {
+        map.insert(row.0, json!(row.1));
+    }
+    Value::Object(map)
 }
 
 /// `getCoins(email)` — 0 for empty email or unknown user.
-pub fn get_coins(store: &DataStore, data_dir: &Path, email: &str) -> f64 {
+pub fn get_coins(store: &DataStore, _data_dir: &Path, email: &str) -> f64 {
     if email.is_empty() {
         return 0.0;
     }
     let norm = normalize_email(email);
-    load_coins(store, data_dir)
-        .get(&norm)
-        .and_then(|v| v.as_f64())
-        .unwrap_or(0.0)
+    let conn = store.conn();
+    conn.query_row(
+        "SELECT balance FROM coins WHERE email = ?1",
+        rusqlite::params![norm],
+        |row| row.get::<_, f64>(0),
+    )
+    .unwrap_or(0.0)
+}
+
+/// `lifetimeEarned(email)` — companion to `get_coins`, 0 for unknown user.
+pub fn get_lifetime_earned(store: &DataStore, email: &str) -> f64 {
+    if email.is_empty() {
+        return 0.0;
+    }
+    let norm = normalize_email(email);
+    let conn = store.conn();
+    conn.query_row(
+        "SELECT lifetime_earned FROM coins WHERE email = ?1",
+        rusqlite::params![norm],
+        |row| row.get::<_, f64>(0),
+    )
+    .unwrap_or(0.0)
 }
 
 /// `globalCoinMultiplier` default (server.js:1159).
@@ -44,7 +88,9 @@ pub const DEFAULT_COIN_MULTIPLIER: f64 = 1.0;
 
 /// `addCoins(email, amount, reason)` — server.js:2979-3005.
 /// `multiplier` is `globalCoinMultiplier` at call time; `personal_happy_hour`
-/// is read from user_stats.json (positive amounts only, minimum 2.0x).
+/// is read from user_stats.json (positive amounts only, minimum 2.0x) —
+/// that lookup stays a blob read (user_stats.json isn't migrated here),
+/// only the balance/lifetime_earned persistence is now a real row.
 pub fn add_coins(
     store: &DataStore,
     data_dir: &Path,
@@ -57,8 +103,7 @@ pub fn add_coins(
         return;
     }
     let norm = normalize_email(email);
-    let mut coins = load_coins(store, data_dir);
-    let mut stats = store.read_document(&data_dir.join("user_stats.json"), json!({}));
+    let stats = store.read_document(&data_dir.join("user_stats.json"), json!({}));
 
     let personal_hh = stats
         .get(&norm)
@@ -72,32 +117,45 @@ pub fn add_coins(
         multiplier
     };
     let adjusted = if amount > 0.0 { amount * mult } else { amount };
-    let before = coins.get(&norm).and_then(|v| v.as_f64()).unwrap_or(0.0);
-    let after = js_round4(before + adjusted);
-    if let Some(map) = coins.as_object_mut() {
-        map.insert(norm.clone(), json!(after));
-    }
-    save_coins(store, data_dir, &coins);
 
-    // Track lifetime earned in stats — JS merges into the user's existing
-    // entry (`stats[norm].lifetime_earned = …`, server.js:3092-3095); the
-    // entry keeps its other fields (pixels, streaks, …).
-    if amount > 0.0 {
-        if let Some(map) = stats.as_object_mut() {
-            let entry = map.entry(norm.clone()).or_insert_with(|| json!({}));
-            if !entry.is_object() {
-                *entry = json!({});
-            }
-            if let Some(obj) = entry.as_object_mut() {
-                let lifetime = obj
-                    .get("lifetime_earned")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(0.0);
-                obj.insert("lifetime_earned".into(), json!(lifetime + adjusted));
-            }
+    // One row, one transaction: BEGIN IMMEDIATE takes the write lock
+    // up front (same pattern reserve_virtual_machine uses), so a
+    // concurrent add_coins for the same email can't read the same
+    // "before" this one is about to overwrite — the lost-update race
+    // the old whole-blob read/write had.
+    let (before, after) = {
+        let conn = store.conn();
+        if conn.execute_batch("BEGIN IMMEDIATE").is_err() {
+            return;
         }
-        let _ = store.write_document(&data_dir.join("user_stats.json"), &stats);
-    }
+        let before = conn
+            .query_row(
+                "SELECT balance FROM coins WHERE email = ?1",
+                rusqlite::params![norm],
+                |row| row.get::<_, f64>(0),
+            )
+            .unwrap_or(0.0);
+        let lifetime_before = conn
+            .query_row(
+                "SELECT lifetime_earned FROM coins WHERE email = ?1",
+                rusqlite::params![norm],
+                |row| row.get::<_, f64>(0),
+            )
+            .unwrap_or(0.0);
+        let after = js_round4(before + adjusted);
+        let lifetime_after = if amount > 0.0 {
+            lifetime_before + adjusted
+        } else {
+            lifetime_before
+        };
+        let _ = conn.execute(
+            "INSERT INTO coins (email, balance, lifetime_earned, updated_at) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(email) DO UPDATE SET balance = ?2, lifetime_earned = ?3, updated_at = ?4",
+            rusqlite::params![norm, after, lifetime_after, now_millis()],
+        );
+        let _ = conn.execute_batch("COMMIT");
+        (before, after)
+    };
 
     // Append to coin log (JS parity: silent on failure).
     let ts = js_iso_date();
@@ -120,6 +178,25 @@ pub fn add_coins(
         .append(true)
         .open(logs_dir.join("coins.log"))
         .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
+}
+
+/// Moves a balance row to a new email key — used when a user changes their
+/// account email (server.js's `renameEmailReferences`, which used to treat
+/// coins.json as just another entry in its generic key-rename list; a real
+/// table needs its own UPDATE instead of a blob key move).
+pub fn rename_coins_email(store: &DataStore, old_norm: &str, new_norm: &str) {
+    if old_norm.is_empty() || new_norm.is_empty() || old_norm == new_norm {
+        return;
+    }
+    let conn = store.conn();
+    // DELETE any existing row at the destination first — ON CONFLICT would
+    // otherwise fail the rename outright if new_norm somehow already has a
+    // (presumably stale/zero) row.
+    let _ = conn.execute("DELETE FROM coins WHERE email = ?1", rusqlite::params![new_norm]);
+    let _ = conn.execute(
+        "UPDATE coins SET email = ?1 WHERE email = ?2",
+        rusqlite::params![new_norm, old_norm],
+    );
 }
 
 /// `addCoinGiftNotice(targetEmail, amount, adminEmail, reason)` — 3083-3100.
@@ -340,16 +417,48 @@ mod tests {
         let coins = load_coins(&store, &data);
         assert_eq!(coins.get(&norm).and_then(|v| v.as_f64()), Some(11.0));
         assert_eq!(get_coins(&store, &data, "ab@student.rjuhsd.us"), 11.0);
-        // lifetime_earned tracked in user_stats for positive amounts
-        // (multiplier-adjusted: 10 + 3×2.0).
-        let stats = store.read_document(&data.join("user_stats.json"), json!({}));
-        assert_eq!(
-            stats
-                .get(&norm)
-                .and_then(|s| s.get("lifetime_earned"))
-                .and_then(|v| v.as_f64()),
-            Some(16.0)
-        );
+        // lifetime_earned tracked on the same coins row for positive
+        // amounts only (multiplier-adjusted: 10 + 3×2.0 — the -5 burn
+        // doesn't count).
+        assert_eq!(get_lifetime_earned(&store, "ab@student.rjuhsd.us"), 16.0);
+        std::fs::remove_dir_all(base).ok();
+    }
+
+    #[test]
+    fn add_coins_is_race_free_under_concurrent_writers() {
+        // The whole point of moving off the whole-blob read/modify/write:
+        // two "concurrent" adds to the same email must both land, not have
+        // the second clobber the first's update with a stale "before".
+        let (base, data, store) = temp_store("race");
+        let store = std::sync::Arc::new(store);
+        let data = std::sync::Arc::new(data);
+        let mut handles = Vec::new();
+        for _ in 0..20 {
+            let store = store.clone();
+            let data = data.clone();
+            handles.push(std::thread::spawn(move || {
+                add_coins(&store, &data, "racer@mitch.pro", 1.0, 1.0, "race");
+            }));
+        }
+        for h in handles {
+            h.join().unwrap();
+        }
+        assert_eq!(get_coins(&store, &data, "racer@mitch.pro"), 20.0);
+        std::fs::remove_dir_all(&*base).ok();
+    }
+
+    #[test]
+    fn rename_coins_email_moves_the_row() {
+        // Plain gmail.com addresses pass through normalize_email unchanged
+        // (no dot/plus, non-mitch domain), unlike mitch.pro ones (which
+        // remap to student.rjuhsd.us) — keeps this test's literals equal
+        // to their own normalized form, matching what the real caller
+        // (rename_email_references) always passes: already-normalized keys.
+        let (base, data, store) = temp_store("rename");
+        add_coins(&store, &data, "old@gmail.com", 50.0, 1.0, "test");
+        rename_coins_email(&store, "old@gmail.com", "new@gmail.com");
+        assert_eq!(get_coins(&store, &data, "old@gmail.com"), 0.0);
+        assert_eq!(get_coins(&store, &data, "new@gmail.com"), 50.0);
         std::fs::remove_dir_all(base).ok();
     }
 
