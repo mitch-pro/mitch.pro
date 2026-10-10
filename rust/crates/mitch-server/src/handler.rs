@@ -247,7 +247,6 @@ pub fn prepare_rjuhsd_html(
     } else {
         req_school.as_str()
     };
-    let is_default_school_view = req_school.is_empty() || req_school == "woodcreek";
 
     let school_meta = match effective_school {
         "woodcreek" => Some(("Woodcreek High School", "Woodcreek", "Timberwolves")),
@@ -262,13 +261,18 @@ pub fn prepare_rjuhsd_html(
     if let Some((name, short, mascot)) = school_meta {
         let school_title = format!("{name} Bell Schedule | RJUHSD Hub");
         let school_desc = format!("Live {name} bell schedule, period countdowns, daily times, and calendar for the {mascot} in Roseville Joint Union High School District (RJUHSD).");
-        // Woodcreek's schedule lives at the bare URL too, so both must
-        // canonicalize to the same clean URL instead of splitting ranking
-        // signal between "/" and "/?school=woodcreek".
-        let school_canonical = if is_default_school_view {
-            format!("https://{req_host_str}{back_path}")
+        // Every school (including the bare-URL default, Woodcreek) now
+        // canonicalizes to its own clean path (/woodcreek/, /roseville/,
+        // ...) instead of a query-string variant — query params rank worse
+        // and read worse in search results than a real path segment, and
+        // splitting ranking signal between "/" and "/?school=woodcreek" was
+        // actively hurting "woodcreek bell schedule" specifically. Scoped
+        // to the real host: the mitch.pro preview mirror has no per-school
+        // path routed, so it keeps canonicalizing to its own bare URL.
+        let school_canonical = if is_rjuhsd {
+            format!("https://{req_host_str}/{effective_school}/")
         } else {
-            format!("https://{req_host_str}{back_path}?school={effective_school}")
+            format!("https://{req_host_str}{back_path}")
         };
 
         static TITLE_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
@@ -1452,11 +1456,12 @@ pub async fn handle(
             .ok()
             .map(|h| inject_shared_head(&h))
     };
-    let rjuhsd_hub_html = |req_host_val: Option<&str>, is_rjuhsd_val: bool| -> Option<String> {
-        std::fs::read_to_string(webroot.join("rjuhsd").join("index.html"))
-            .ok()
-            .map(|h| prepare_rjuhsd_html(&h, req_host_val, is_rjuhsd_val, &search, &state.cfg))
-    };
+    let rjuhsd_hub_html =
+        |req_host_val: Option<&str>, is_rjuhsd_val: bool, search_val: &str| -> Option<String> {
+            std::fs::read_to_string(webroot.join("rjuhsd").join("index.html"))
+                .ok()
+                .map(|h| prepare_rjuhsd_html(&h, req_host_val, is_rjuhsd_val, search_val, &state.cfg))
+        };
 
     if (path == "/" || path == "/index.html") && pickle_host {
         if let Some(html) = pickle_hub_html() {
@@ -1464,8 +1469,38 @@ pub async fn handle(
         }
     }
     if (path == "/" || path == "/index.html") && rjuhsd_host {
-        if let Some(html) = rjuhsd_hub_html(Some(&req_host), true) {
+        if let Some(html) = rjuhsd_hub_html(Some(&req_host), true, &search) {
             return html_response(html);
+        }
+    }
+    // Clean per-school paths (/woodcreek/, /roseville/, ...) — the real,
+    // indexable URL for each school's schedule. A query-string variant
+    // (?school=X) ranks worse and reads worse in search results than a
+    // path segment, so old links get a permanent redirect onto the clean
+    // path instead of being served directly. Scoped to the real host —
+    // not routed on the mitch.pro preview mirror.
+    const RJUHSD_SCHOOL_SLUGS: &[&str] =
+        &["woodcreek", "roseville", "granitebay", "antelope", "westpark", "oakmont"];
+    if rjuhsd_host && (path == "/" || path == "/index.html") {
+        if let Some((_, raw_school)) = query(&search).into_iter().find(|(k, _)| k == "school") {
+            let slug = raw_school.to_lowercase();
+            if RJUHSD_SCHOOL_SLUGS.contains(&slug.as_str()) {
+                return redirect(&format!("https://{req_host}/{slug}/"), 301);
+            }
+        }
+    }
+    if rjuhsd_host {
+        let trimmed = path.trim_end_matches('/');
+        if let Some(slug) = RJUHSD_SCHOOL_SLUGS
+            .iter()
+            .copied()
+            .find(|s| trimmed == format!("/{s}"))
+        {
+            if let Some(html) =
+                rjuhsd_hub_html(Some(&req_host), true, &format!("school={slug}"))
+            {
+                return html_response(html);
+            }
         }
     }
     if path == "/sexypickleclub"
@@ -1494,7 +1529,7 @@ pub async fn handle(
         }
     }
     if path == "/rjuhsd" || path == "/rjuhsd/" || path == "/rjuhsd/index.html" {
-        if let Some(html) = rjuhsd_hub_html(Some(&req_host), rjuhsd_host) {
+        if let Some(html) = rjuhsd_hub_html(Some(&req_host), rjuhsd_host, &search) {
             return html_response(html);
         }
         return err_resp(404, Some("Not found"), None);
@@ -2364,4 +2399,76 @@ fn unsubscribe_invalid_html() -> Response {
         .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")
         .body(axum::body::Body::from(html))
         .unwrap_or_else(|_| crate::errors::err_resp(500, None, None))
+}
+
+#[cfg(test)]
+mod rjuhsd_school_url_tests {
+    use super::*;
+
+    fn fixture() -> String {
+        r#"<!doctype html><html><head>
+<title>old</title>
+<meta name="description" content="old">
+<link rel="canonical" href="https://rjuhsd.school/">
+<meta property="og:title" content="old">
+<meta property="og:description" content="old">
+<meta property="og:url" content="old">
+<meta name="twitter:title" content="old">
+<meta name="twitter:description" content="old">
+</head><body>
+<p class="hero-overline" id="hero-overline">old</p>
+<span id="school-heading">old</span>
+<span class="period-range" id="current-range">old</span>
+</body></html>"#
+            .to_string()
+    }
+
+    fn canonical_of(html: &str) -> String {
+        static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+        let re = RE.get_or_init(|| {
+            regex::Regex::new(r#"<link rel="canonical" href="([^"]*)">"#).unwrap()
+        });
+        re.captures(html)
+            .map(|c| c[1].to_string())
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn default_school_canonicalizes_to_its_own_clean_path_not_root() {
+        let cfg = SiteConfig::load();
+        let html = prepare_rjuhsd_html(&fixture(), Some("rjuhsd.school"), true, "", &cfg);
+        // The bare URL (no ?school=, default Woodcreek content) must point
+        // its canonical at /woodcreek/, not at itself — splitting ranking
+        // signal between "/" and a query-string variant was the bug.
+        assert_eq!(canonical_of(&html), "https://rjuhsd.school/woodcreek/");
+    }
+
+    #[test]
+    fn non_default_school_canonicalizes_to_its_own_clean_path() {
+        let cfg = SiteConfig::load();
+        let html = prepare_rjuhsd_html(
+            &fixture(),
+            Some("rjuhsd.school"),
+            true,
+            "school=roseville",
+            &cfg,
+        );
+        assert_eq!(canonical_of(&html), "https://rjuhsd.school/roseville/");
+    }
+
+    #[test]
+    fn preview_mirror_keeps_its_own_bare_canonical() {
+        // The mitch.pro preview mirror has no per-school path routed, so it
+        // must keep canonicalizing to its own URL rather than a path that
+        // doesn't exist there.
+        let cfg = SiteConfig::load();
+        let html = prepare_rjuhsd_html(
+            &fixture(),
+            Some("mitch.pro"),
+            false,
+            "school=roseville",
+            &cfg,
+        );
+        assert_eq!(canonical_of(&html), "https://mitch.pro/rjuhsd/");
+    }
 }
