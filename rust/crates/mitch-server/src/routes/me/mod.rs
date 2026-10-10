@@ -33,7 +33,7 @@ pub async fn handle(
     body: &serde_json::Value,
     body_bytes: &[u8],
 ) -> Option<Response> {
-    if let Some(resp) = cosmetics::handle(state, method, path, headers, body, body_bytes) {
+    if let Some(resp) = cosmetics::handle(state, method, path, headers, body, body_bytes).await {
         return Some(resp);
     }
     if let Some(resp) = notifications::handle(state, method, path, headers, body, body_bytes) {
