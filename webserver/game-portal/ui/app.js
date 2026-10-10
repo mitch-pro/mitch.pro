@@ -6,8 +6,6 @@
     games: [],
     category: 'All',
     view: 'all',
-    mediaPlatform: null,
-    mediaIndex: 0,
     query: '',
     limit: 60,
     current: null,
@@ -20,26 +18,6 @@
     recent: readList('mitch.games.catalog.recent')
   };
   const featuredTitles = ['Slope', 'Subway Surfers', 'Retro Bowl', 'Cookie Clicker', 'Run 3'];
-  const mediaFeeds = {
-    youtube: [
-      { title: 'Minecraft — official trailer', id: 'MmB9b5njVbA' },
-      { title: 'Mario Kart World Direct', id: '3pE23YTYEZM' },
-      { title: 'Sonic Racing: CrossWorlds', id: 'Ks_Uxuhz6nc' },
-      { title: 'Mario Kart World trailer', id: 'Q3E5QGQIMH4' }
-    ],
-    tiktok: [
-      { title: 'Gaming Hall of Fame', id: '6698048466972577029' },
-      { title: 'Minecraft returns', id: '6699526370562673926' },
-      { title: 'Switch player', id: '6665394212252421382' },
-      { title: 'Game over', id: '6662528580204891397' },
-      { title: 'Nintendo cosplay', id: '6690246152375241990' }
-    ],
-    instagram: [
-      { title: 'Mario Kart World', id: 'DK0lBePMfjI', kind: 'reel' },
-      { title: 'Minecraft build', id: 'Dcf81lplt-Q', kind: 'p' },
-      { title: 'Minecraft archive', id: '4ObC5EpMOO', kind: 'p' }
-    ]
-  };
   const frontPageTitles = [
     'Slope', 'Subway Surfers', 'Retro Bowl', 'Cookie Clicker', 'Run 3',
     'Minecraft TD', 'EaglercraftX (Minecraft 1.8.8)', 'Basketball Stars', '2048', 'Friday Night Funkin',
@@ -358,7 +336,7 @@
       button.type = 'button';
       button.textContent = name;
       button.setAttribute('aria-pressed', String(state.category === name));
-      button.addEventListener('click', () => { closeMedia(); state.category = name; state.limit = 60; render(); });
+      button.addEventListener('click', () => { state.category = name; state.limit = 60; render(); });
       return button;
     }));
     byId('side-categories').replaceChildren(...available.filter(name => name !== 'All').map(name => {
@@ -372,11 +350,10 @@
       count.textContent = counts.get(name).toLocaleString();
       button.append(label, count);
       button.setAttribute('aria-pressed', String(state.category === name));
-      button.addEventListener('click', () => { closeMedia(); state.view = 'all'; state.category = name; state.limit = 60; closeMenu(); render(); });
+      button.addEventListener('click', () => { state.view = 'all'; state.category = name; state.limit = 60; closeMenu(); render(); });
       return button;
     }));
-    document.querySelectorAll('[data-view]').forEach(button => button.setAttribute('aria-pressed', String(!state.mediaPlatform && button.dataset.view === state.view)));
-    document.querySelectorAll('[data-platform]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.platform === state.mediaPlatform)));
+    document.querySelectorAll('[data-view]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.view === state.view)));
   }
 
   function renderSidebarRecent() {
@@ -410,13 +387,10 @@
   function render() {
     const games = filteredGames();
     const viewName = state.view === 'favorites' ? 'Saved' : state.view === 'recent' ? 'Recently played' : (state.category === 'All' ? 'Discover' : state.category);
-    byId('current-view-name').textContent = state.mediaPlatform ? platformName(state.mediaPlatform) : viewName;
+    byId('current-view-name').textContent = viewName;
     byId('page-title').textContent = 'super duper games';
-    byId('page-title').closest('.page-intro').hidden = !!state.mediaPlatform;
-    byId('media-room').hidden = !state.mediaPlatform;
-    byId('spotlight').hidden = !!state.mediaPlatform || !!state.query || state.view !== 'all';
-    byId('quick-picks-section').hidden = !!state.mediaPlatform || !!state.query || state.view !== 'all';
-    document.querySelector('.catalog-section').hidden = !!state.mediaPlatform;
+    byId('spotlight').hidden = !!state.query || state.view !== 'all';
+    byId('quick-picks-section').hidden = !!state.query || state.view !== 'all';
     byId('catalog-heading').textContent = state.view === 'favorites' ? 'Saved games' : (state.view === 'recent' ? 'Recently played' : 'Browse games');
     byId('result-count').textContent = `${games.length.toLocaleString()} ${games.length === 1 ? 'game' : 'games'}`;
     revealObserver?.disconnect();
@@ -470,92 +444,7 @@
     }
   }
 
-  function platformName(platform) {
-    return { youtube: 'YouTube', tiktok: 'TikTok', instagram: 'Instagram' }[platform] || '';
-  }
-
-  function mediaEmbedUrl(platform, item) {
-    if (platform === 'youtube') return `https://www.youtube.com/embed/${item.id}`;
-    if (platform === 'tiktok') return `https://www.tiktok.com/player/v1/${item.id}?controls=1&description=1`;
-    return `https://www.instagram.com/${item.kind}/${item.id}/embed/captioned/`;
-  }
-
-  function selectMediaItem(index) {
-    const feed = mediaFeeds[state.mediaPlatform];
-    if (!feed || index < 0 || index >= feed.length) return;
-    state.mediaIndex = index;
-    const item = feed[index];
-    byId('media-play-title').textContent = item.title;
-    byId('media-position').textContent = `${index + 1} / ${feed.length}`;
-    const oldFrame = byId('media-frame');
-    const frame = oldFrame.cloneNode(false);
-    frame.title = `${platformName(state.mediaPlatform)}: ${item.title}`;
-    byId('media-stage').dataset.loading = 'true';
-    frame.addEventListener('load', () => { byId('media-stage').dataset.loading = 'false'; }, { once: true });
-    oldFrame.replaceWith(frame);
-    frame.src = mediaEmbedUrl(state.mediaPlatform, item);
-    byId('media-prev').disabled = index === 0;
-    byId('media-next').disabled = index === feed.length - 1;
-    document.querySelectorAll('.media-feed-item').forEach((button, position) => {
-      button.setAttribute('aria-current', String(position === index));
-    });
-  }
-
-  function renderMediaFeed() {
-    const feed = mediaFeeds[state.mediaPlatform];
-    byId('media-feed-list').replaceChildren(...feed.map((item, index) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'media-feed-item';
-      const art = document.createElement('span');
-      art.className = 'media-feed-art';
-      const image = document.createElement('img');
-      image.src = state.mediaPlatform === 'youtube'
-        ? `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`
-        : `./ui/icons/${state.mediaPlatform}.svg`;
-      image.alt = '';
-      image.loading = 'lazy';
-      image.addEventListener('error', () => image.remove(), { once: true });
-      art.append(image);
-      const label = document.createElement('span');
-      label.className = 'media-feed-item-copy';
-      const number = document.createElement('small');
-      number.textContent = String(index + 1).padStart(2, '0');
-      const title = document.createElement('strong');
-      title.textContent = item.title;
-      label.append(number, title);
-      button.append(art, label);
-      button.addEventListener('click', () => selectMediaItem(index));
-      return button;
-    }));
-    selectMediaItem(0);
-  }
-
-  function closeMedia() {
-    if (!state.mediaPlatform) return;
-    state.mediaPlatform = null;
-    byId('media-frame').src = 'about:blank';
-    byId('media-stage').dataset.loading = 'false';
-  }
-
-  function openMedia(platform) {
-    state.mediaPlatform = platform;
-    closeMenu();
-    byId('media-room').dataset.platform = platform;
-    byId('media-brand').className = `social-logo ${platform}`;
-    byId('media-brand-logo').src = `./ui/icons/${platform}.svg`;
-    byId('media-title').textContent = platformName(platform);
-    document.querySelectorAll('[data-media-tab]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mediaTab === platform)));
-    render();
-    renderMediaFeed();
-    byId('media-room').scrollIntoView({ block: 'start' });
-  }
-
-  byId('media-prev').addEventListener('click', () => selectMediaItem(state.mediaIndex - 1));
-  byId('media-next').addEventListener('click', () => selectMediaItem(state.mediaIndex + 1));
-  document.querySelectorAll('[data-platform]').forEach(button => button.addEventListener('click', () => openMedia(button.dataset.platform)));
-  document.querySelectorAll('[data-media-tab]').forEach(button => button.addEventListener('click', () => openMedia(button.dataset.mediaTab)));
-  search.addEventListener('input', () => { closeMedia(); state.query = search.value; state.limit = 60; render(); });
+  search.addEventListener('input', () => { state.query = search.value; state.limit = 60; render(); });
   function closeMenu() {
     byId('sidebar').classList.remove('is-open');
     byId('menu-scrim').hidden = true;
@@ -568,7 +457,7 @@
     byId('mobile-menu').setAttribute('aria-expanded', String(open));
   });
   byId('menu-scrim').addEventListener('click', closeMenu);
-  document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => { closeMedia(); state.view = button.dataset.view; state.category = 'All'; state.limit = 60; closeMenu(); render(); }));
+  document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => { state.view = button.dataset.view; state.category = 'All'; state.limit = 60; closeMenu(); render(); }));
   byId('clear-filters').addEventListener('click', () => { state.category = 'All'; state.view = 'all'; state.query = ''; search.value = ''; render(); });
   byId('load-more').addEventListener('click', () => { state.limit += 60; render(); });
   byId('shuffle').addEventListener('click', randomGame);
