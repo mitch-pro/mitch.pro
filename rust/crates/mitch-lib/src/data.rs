@@ -260,6 +260,13 @@ impl DataStore {
                         sent_at INTEGER NOT NULL,
                         PRIMARY KEY (sender_email, recipient_email)
                     );
+                    CREATE TABLE IF NOT EXISTS mini_game_sessions (
+                        email TEXT NOT NULL,
+                        game TEXT NOT NULL,
+                        data TEXT NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        PRIMARY KEY (email, game)
+                    );
                     CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs (ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_level ON app_logs (level, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_category ON app_logs (category, ts DESC);
@@ -327,6 +334,7 @@ impl DataStore {
         store.backfill_banned_ips_table_from_json();
         store.backfill_names_table_from_json();
         store.backfill_invite_tables_from_json();
+        store.backfill_mini_game_sessions_from_json();
         Ok(store)
     }
 
@@ -515,6 +523,36 @@ impl DataStore {
                         rusqlite::params![sender, recipient, now],
                     );
                 }
+            }
+        }
+    }
+
+    /// One-time (idempotent) backfill from typing_sessions.json/
+    /// piano_sessions.json/piccolo_sessions.json/logic_sessions.json into
+    /// the real `mini_game_sessions` table (one row per email+game, the
+    /// game-specific fields kept as a JSON blob in `data` — same shape as
+    /// before, just no longer a whole-file rewrite on every payout).
+    fn backfill_mini_game_sessions_from_json(&self) {
+        let now = now_millis();
+        let docs: Vec<(&str, Value)> = [
+            ("typing", "typing_sessions.json"),
+            ("piano", "piano_sessions.json"),
+            ("piccolo", "piccolo_sessions.json"),
+            ("logic", "logic_sessions.json"),
+        ]
+        .into_iter()
+        .map(|(game, file)| (game, self.read_document(&self.data_dir.join(file), Value::Null)))
+        .collect();
+
+        let conn = self.conn();
+        for (game, doc) in &docs {
+            let Some(map) = doc.as_object() else { continue };
+            for (email, data) in map {
+                let data_str = serde_json::to_string(data).unwrap_or_else(|_| "{}".to_string());
+                let _ = conn.execute(
+                    "INSERT OR IGNORE INTO mini_game_sessions (email, game, data, updated_at) VALUES (?1, ?2, ?3, ?4)",
+                    rusqlite::params![email, game, data_str, now],
+                );
             }
         }
     }

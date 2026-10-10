@@ -35,6 +35,7 @@ pub mod jstime;
 pub mod jsval;
 pub mod log;
 pub mod matrix;
+pub mod minigames;
 pub mod profile;
 pub mod school;
 pub mod shop;

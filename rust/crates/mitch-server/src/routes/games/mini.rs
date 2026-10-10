@@ -63,17 +63,6 @@ fn now_millis() -> i64 {
         .unwrap_or(0)
 }
 
-/// `saveXxxSessions()` — write-through of the whole map (idle::save_sessions).
-fn save_sessions(
-    store: &mitch_lib::data::DataStore,
-    data_dir: &std::path::Path,
-    name: &str,
-    map: &std::collections::HashMap<String, Value>,
-) {
-    let doc = Value::Object(map.iter().map(|(k, v)| (k.clone(), v.clone())).collect());
-    let _ = store.write_document(&data_dir.join(name), &doc);
-}
-
 /// `new Date(ms).toDateString()` (local timezone, via mitch-lib jstime).
 fn to_date_string(ms: f64) -> String {
     mitch_lib::jstime::js_to_date_string(ms as i64)
@@ -144,13 +133,7 @@ fn kodys_payout(
 
     let now = now_millis();
     let today = to_date_string(now as f64);
-    let mut map = state
-        .typing_sessions
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    let mut s = map
-        .get(&norm)
-        .cloned()
+    let mut s = mitch_lib::minigames::mini_session_get(&state.store, &norm, "typing")
         .unwrap_or(json!({"dailyCount": 0, "lastTs": 0}));
     let last_ts = s.get("lastTs").and_then(jsval::number).unwrap_or(0.0);
     if to_date_string(last_ts) != today {
@@ -234,8 +217,7 @@ fn kodys_payout(
             obj.insert("dailyCount".into(), jsval::num_value(daily_count + 1.0));
             obj.insert("lastTs".into(), json!(now));
         }
-        map.insert(norm.clone(), s.clone());
-        save_sessions(&state.store, state.data_dir(), "typing_sessions.json", &map);
+        mitch_lib::minigames::mini_session_set(&state.store, &norm, "typing", &s);
         tracing::info!(
             "[typing] {email} earned {coins} coins at {wpm} WPM{}",
             if friend_bonus_active {
@@ -332,13 +314,7 @@ fn piano_payout(
 
     let now = now_millis();
     let today = to_date_string(now as f64);
-    let mut map = state
-        .piano_sessions
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    let mut s = map
-        .get(&norm)
-        .cloned()
+    let mut s = mitch_lib::minigames::mini_session_get(&state.store, &norm, "piano")
         .unwrap_or(json!({"dailyCount": 0, "lastTs": 0}));
     let last_ts = s.get("lastTs").and_then(jsval::number).unwrap_or(0.0);
     if to_date_string(last_ts) != today {
@@ -410,8 +386,7 @@ fn piano_payout(
             obj.insert("dailyCount".into(), jsval::num_value(new_daily));
             obj.insert("lastTs".into(), json!(now));
         }
-        map.insert(norm.clone(), s.clone());
-        save_sessions(&state.store, state.data_dir(), "piano_sessions.json", &map);
+        mitch_lib::minigames::mini_session_set(&state.store, &norm, "piano", &s);
         tracing::info!("[piano] {email} earned {final_coins} coins for score {score}");
         return json_resp(
             200,
@@ -427,8 +402,7 @@ fn piano_payout(
     if let Some(obj) = s.as_object_mut() {
         obj.insert("lastTs".into(), json!(now));
     }
-    map.insert(norm.clone(), s.clone());
-    save_sessions(&state.store, state.data_dir(), "piano_sessions.json", &map);
+    mitch_lib::minigames::mini_session_set(&state.store, &norm, "piano", &s);
     mitch_lib::achievements::update_stat(
         &state.store,
         state.data_dir(),
@@ -516,13 +490,7 @@ fn piccolo_payout(
 
     let now = now_millis();
     let today = to_date_string(now as f64);
-    let mut map = state
-        .piccolo_sessions
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    let mut s = map
-        .get(&norm)
-        .cloned()
+    let mut s = mitch_lib::minigames::mini_session_get(&state.store, &norm, "piccolo")
         .unwrap_or(json!({"dailyCoins": 0, "lastTs": 0}));
     let last_ts = s.get("lastTs").and_then(jsval::number).unwrap_or(0.0);
     if to_date_string(last_ts) != today {
@@ -593,13 +561,7 @@ fn piccolo_payout(
             obj.insert("dailyCoins".into(), jsval::num_value(new_daily));
             obj.insert("lastTs".into(), json!(now));
         }
-        map.insert(norm.clone(), s.clone());
-        save_sessions(
-            &state.store,
-            state.data_dir(),
-            "piccolo_sessions.json",
-            &map,
-        );
+        mitch_lib::minigames::mini_session_set(&state.store, &norm, "piccolo", &s);
         tracing::info!("[piccolo] {email} earned {final_coins} coins for score {score}");
         return json_resp(
             200,
@@ -614,13 +576,7 @@ fn piccolo_payout(
     if let Some(obj) = s.as_object_mut() {
         obj.insert("lastTs".into(), json!(now));
     }
-    map.insert(norm.clone(), s.clone());
-    save_sessions(
-        &state.store,
-        state.data_dir(),
-        "piccolo_sessions.json",
-        &map,
-    );
+    mitch_lib::minigames::mini_session_set(&state.store, &norm, "piccolo", &s);
     mitch_lib::achievements::update_stat(
         &state.store,
         state.data_dir(),
@@ -655,13 +611,7 @@ fn logic_state(state: &Arc<AppState>, headers: &HeaderMap) -> axum::response::Re
         Err(resp) => return *resp,
     };
     let norm = mitch_lib::auth::normalize_email(&email);
-    let map = state
-        .logic_sessions
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    let s = map
-        .get(&norm)
-        .cloned()
+    let s = mitch_lib::minigames::mini_session_get(&state.store, &norm, "logic")
         .unwrap_or(json!({"puzzlesDone": 0, "lastSolvedTs": 0}));
     let today = to_date_string(now_millis() as f64);
     let solved_today =
@@ -712,19 +662,12 @@ fn logic_next_wordle(state: &Arc<AppState>, headers: &HeaderMap) -> axum::respon
     };
     let norm = mitch_lib::auth::normalize_email(&email);
     let random_word = LOGIC_WORDS[mitch_lib::crypto::js_random_index(LOGIC_WORDS.len())];
-    let mut map = state
-        .logic_sessions
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    let mut s = map
-        .get(&norm)
-        .cloned()
+    let mut s = mitch_lib::minigames::mini_session_get(&state.store, &norm, "logic")
         .unwrap_or(json!({"puzzlesDone": 0, "lastSolvedTs": 0}));
     if let Some(obj) = s.as_object_mut() {
         obj.insert("currentWordle".into(), json!(random_word));
     }
-    map.insert(norm.clone(), s.clone());
-    save_sessions(&state.store, state.data_dir(), "logic_sessions.json", &map);
+    mitch_lib::minigames::mini_session_set(&state.store, &norm, "logic", &s);
     json_resp(200, json!({ "success": true, "word": random_word }))
 }
 
@@ -754,13 +697,7 @@ fn logic_solve(
     let now = now_millis();
     let today = to_date_string(now as f64);
 
-    let mut map = state
-        .logic_sessions
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    let mut s = map
-        .get(&norm)
-        .cloned()
+    let mut s = mitch_lib::minigames::mini_session_get(&state.store, &norm, "logic")
         .unwrap_or(json!({"puzzlesDone": 0, "lastSolvedTs": 0}));
     let first_today =
         to_date_string(s.get("lastSolvedTs").and_then(jsval::number).unwrap_or(0.0)) != today;
@@ -968,8 +905,7 @@ fn logic_solve(
     if let Some(obj) = s.as_object_mut() {
         obj.insert("puzzlesDone".into(), jsval::num_value(puzzles_done + 1.0));
     }
-    map.insert(norm.clone(), s.clone());
-    save_sessions(&state.store, state.data_dir(), "logic_sessions.json", &map);
+    mitch_lib::minigames::mini_session_set(&state.store, &norm, "logic", &s);
     tracing::info!(
         "[logic] {email} solved {game_type}, earned {final_coins} coins (First today: {first_today})"
     );
