@@ -243,6 +243,23 @@ impl DataStore {
                         norm_email TEXT NOT NULL,
                         created_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS invite_codes (
+                        email TEXT PRIMARY KEY,
+                        code TEXT NOT NULL,
+                        created_at INTEGER NOT NULL
+                    );
+                    CREATE TABLE IF NOT EXISTS invite_claims (
+                        email TEXT PRIMARY KEY,
+                        ref_norm TEXT NOT NULL,
+                        claimed_at INTEGER NOT NULL,
+                        paid INTEGER NOT NULL DEFAULT 1
+                    );
+                    CREATE TABLE IF NOT EXISTS invite_sent (
+                        sender_email TEXT NOT NULL,
+                        recipient_email TEXT NOT NULL,
+                        sent_at INTEGER NOT NULL,
+                        PRIMARY KEY (sender_email, recipient_email)
+                    );
                     CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs (ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_level ON app_logs (level, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_category ON app_logs (category, ts DESC);
@@ -253,7 +270,8 @@ impl DataStore {
                     CREATE INDEX IF NOT EXISTS idx_blacklist_banned_at ON blacklist (banned_at DESC);
                     CREATE INDEX IF NOT EXISTS idx_banned_ips_email ON banned_ips (email);
                     CREATE INDEX IF NOT EXISTS idx_names_norm_email ON names (norm_email);
-                    CREATE INDEX IF NOT EXISTS idx_names_email_nocase ON names (email COLLATE NOCASE);",
+                    CREATE INDEX IF NOT EXISTS idx_names_email_nocase ON names (email COLLATE NOCASE);
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_invite_codes_code ON invite_codes (code);",
                 );
                 match result {
                     Ok(()) => return Ok(()),
@@ -308,6 +326,7 @@ impl DataStore {
         store.backfill_blacklist_table_from_json();
         store.backfill_banned_ips_table_from_json();
         store.backfill_names_table_from_json();
+        store.backfill_invite_tables_from_json();
         Ok(store)
     }
 
@@ -449,6 +468,54 @@ impl DataStore {
                 "INSERT OR IGNORE INTO names (sid, email, norm_email, created_at) VALUES (?1, ?2, ?3, ?4)",
                 rusqlite::params![sid, email, norm, now],
             );
+        }
+    }
+
+    /// One-time (idempotent) backfill from invite_codes.json/
+    /// invite_claims.json/invite_sent.json into the real invite_codes/
+    /// invite_claims/invite_sent tables.
+    fn backfill_invite_tables_from_json(&self) {
+        let now = now_millis();
+        let codes = self.read_document(&self.data_dir.join("invite_codes.json"), Value::Null);
+        let claims = self.read_document(&self.data_dir.join("invite_claims.json"), Value::Null);
+        let sent = self.read_document(&self.data_dir.join("invite_sent.json"), Value::Null);
+        let conn = self.conn();
+
+        if let Some(map) = codes.as_object() {
+            for (email, code_val) in map {
+                let Some(code) = code_val.as_str() else { continue };
+                let _ = conn.execute(
+                    "INSERT OR IGNORE INTO invite_codes (email, code, created_at) VALUES (?1, ?2, ?3)",
+                    rusqlite::params![email, code.trim().to_uppercase(), now],
+                );
+            }
+        }
+
+        if let Some(map) = claims.as_object() {
+            for (email, info) in map {
+                let Some(ref_norm) = info.get("refNorm").and_then(|v| v.as_str()) else {
+                    continue;
+                };
+                let claimed_at = info.get("ts").and_then(|v| v.as_i64()).unwrap_or(now);
+                let paid = info.get("paid").and_then(|v| v.as_bool()).unwrap_or(true);
+                let _ = conn.execute(
+                    "INSERT OR IGNORE INTO invite_claims (email, ref_norm, claimed_at, paid) VALUES (?1, ?2, ?3, ?4)",
+                    rusqlite::params![email, ref_norm, claimed_at, paid],
+                );
+            }
+        }
+
+        if let Some(map) = sent.as_object() {
+            for (sender, recipients) in map {
+                let Some(arr) = recipients.as_array() else { continue };
+                for recipient in arr {
+                    let Some(recipient) = recipient.as_str() else { continue };
+                    let _ = conn.execute(
+                        "INSERT OR IGNORE INTO invite_sent (sender_email, recipient_email, sent_at) VALUES (?1, ?2, ?3)",
+                        rusqlite::params![sender, recipient, now],
+                    );
+                }
+            }
         }
     }
 

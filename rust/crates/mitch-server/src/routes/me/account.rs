@@ -1067,9 +1067,10 @@ pub(crate) fn rename_email_references(
     new_norm: &str,
     new_email: &str,
 ) {
-    // coins is a real table now, not a JSON blob key to rename in the
-    // generic loop below — it needs its own UPDATE.
+    // coins and the invite system are real tables now, not JSON blob keys
+    // to rename in the generic loop below — they need their own UPDATEs.
     mitch_lib::coins::rename_coins_email(&state.store, old_norm, new_norm);
+    mitch_lib::invites::rename_invite_email(&state.store, old_norm, new_norm);
     let key_maps = [
         "passwords.json",
         "profiles.json",
@@ -1078,9 +1079,6 @@ pub(crate) fn rename_email_references(
         "daily_logins.json",
         "cosmetics.json",
         "coin_gifts.json",
-        "invite_codes.json",
-        "invite_claims.json",
-        "invite_sent.json",
         "premium_gifts_sent.json",
         "e2e_keys.json",
         "dm_cleared.json",

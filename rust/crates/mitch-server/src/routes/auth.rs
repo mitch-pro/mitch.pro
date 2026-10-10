@@ -544,39 +544,12 @@ async fn verify_signup(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &
         .trim()
         .to_uppercase();
     if !ref_code.is_empty() {
-        let inv_codes = state
-            .store
-            .read_document(&data_file(state, "invite_codes.json"), json!({}));
-        let mut found_ref_norm: Option<String> = None;
-        if let Some(map) = inv_codes.as_object() {
-            for (k, v) in map {
-                let code_str = v.as_str().unwrap_or("").trim().to_uppercase();
-                if code_str == ref_code {
-                    found_ref_norm = Some(k.clone());
-                    break;
-                }
-            }
-        }
+        let found_ref_norm = mitch_lib::invites::invite_code_find_owner(&state.store, &ref_code);
         if let Some(ref_norm) = found_ref_norm {
             if ref_norm != norm_email {
-                let mut inv_claims = state
-                    .store
-                    .read_document(&data_file(state, "invite_claims.json"), json!({}));
-                let already_claimed = inv_claims.get(&norm_email).is_some();
-                if !already_claimed {
-                    if let Some(map) = inv_claims.as_object_mut() {
-                        map.insert(
-                            norm_email.clone(),
-                            json!({
-                                "refNorm": ref_norm,
-                                "ts": now_ms(),
-                                "paid": true
-                            }),
-                        );
-                        let _ = state
-                            .store
-                            .write_document(&data_file(state, "invite_claims.json"), &inv_claims);
-                    }
+                let newly_claimed =
+                    mitch_lib::invites::invite_claim_insert_if_new(&state.store, &norm_email, &ref_norm);
+                if newly_claimed {
                     coins::add_coins(
                         &state.store,
                         &state.cfg.data_dir,
@@ -1369,25 +1342,11 @@ fn invite_set_code(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]
     }
 
     let norm = auth::normalize_email(&email);
-    let mut inv_codes = state
-        .store
-        .read_document(&data_file(state, "invite_codes.json"), json!({}));
-    if let Some(map) = inv_codes.as_object() {
-        for (k, v) in map {
-            if v.as_str().unwrap_or("").trim().to_uppercase() == desired && k != &norm {
-                return json_resp(
-                    409,
-                    json!({ "success": false, "error": "That code is already taken. Try another." }),
-                );
-            }
-        }
-    }
-
-    if let Some(map) = inv_codes.as_object_mut() {
-        map.insert(norm, json!(desired));
-        let _ = state
-            .store
-            .write_document(&data_file(state, "invite_codes.json"), &inv_codes);
+    if !mitch_lib::invites::invite_code_set(&state.store, &norm, &desired) {
+        return json_resp(
+            409,
+            json!({ "success": false, "error": "That code is already taken. Try another." }),
+        );
     }
 
     json_resp(200, json!({ "success": true, "code": desired }))
@@ -1442,11 +1401,8 @@ fn invite_send(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) ->
         );
     }
 
-    let mut inv_codes = state
-        .store
-        .read_document(&data_file(state, "invite_codes.json"), json!({}));
-    let code = match inv_codes.get(&norm).and_then(|v| v.as_str()) {
-        Some(c) => c.to_string(),
+    let code = match mitch_lib::invites::invite_code_get(&state.store, &norm) {
+        Some(c) => c,
         None => {
             let prefix: String = email
                 .split('@')
@@ -1459,37 +1415,13 @@ fn invite_send(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) ->
                 .to_uppercase();
             let suffix = format!("{:03}", (rand::random::<u32>() % 900) + 100);
             let gen = format!("{prefix}{suffix}");
-            if let Some(map) = inv_codes.as_object_mut() {
-                map.insert(norm.clone(), json!(gen));
-                let _ = state
-                    .store
-                    .write_document(&data_file(state, "invite_codes.json"), &inv_codes);
-            }
+            let _ = mitch_lib::invites::invite_code_set(&state.store, &norm, &gen);
             gen
         }
     };
 
-    let mut inv_sent = state
-        .store
-        .read_document(&data_file(state, "invite_sent.json"), json!({}));
     let norm_to = auth::normalize_email(&to_email);
-    let mut already_sent = false;
-    if let Some(arr) = inv_sent.get(&norm).and_then(|v| v.as_array()) {
-        already_sent = arr
-            .iter()
-            .any(|v| v.as_str().map(auth::normalize_email) == Some(norm_to.clone()));
-    }
-    if !already_sent {
-        if let Some(map) = inv_sent.as_object_mut() {
-            let list = map.entry(norm.clone()).or_insert_with(|| json!([]));
-            if let Some(arr) = list.as_array_mut() {
-                arr.push(json!(norm_to));
-            }
-            let _ = state
-                .store
-                .write_document(&data_file(state, "invite_sent.json"), &inv_sent);
-        }
-    }
+    let already_sent = !mitch_lib::invites::invite_sent_insert_if_new(&state.store, &norm, &norm_to);
 
     let invite_link = format!(
         "https://mitchdog.com/enroll?ref={}&email={}",
@@ -2234,10 +2166,10 @@ mod tests {
         let resp_set = invite_set_code(&state, &headers, &serde_json::to_vec(&set_req).unwrap());
         assert_eq!(resp_set.status(), StatusCode::OK);
 
-        let codes = state
-            .store
-            .read_document(&data_file(&state, "invite_codes.json"), json!({}));
-        assert_eq!(codes[&norm], "FRANKIE");
+        assert_eq!(
+            mitch_lib::invites::invite_code_get(&state.store, &norm),
+            Some("FRANKIE".to_string())
+        );
 
         // Send invite
         let send_req = json!({ "to": "grace@student.rjuhsd.us" });
