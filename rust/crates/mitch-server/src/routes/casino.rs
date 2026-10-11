@@ -182,17 +182,14 @@ fn closed() -> axum::response::Response {
     resp(403, &json!({ "error": "Casino is currently closed." }))
 }
 
-fn user_stats(state: &Arc<AppState>) -> Value {
-    state
-        .store
-        .read_document(&state.data_dir().join("user_stats.json"), json!({}))
+fn user_stats(state: &Arc<AppState>, norm: &str) -> Value {
+    mitch_lib::user_stats::user_stats_get(&state.store, norm)
 }
 
 /// `isVip` — `stats[norm] && stats[norm].vip_casino_until > Date.now()`.
 fn is_vip(state: &Arc<AppState>, norm: &str) -> bool {
-    user_stats(state)
-        .get(norm)
-        .and_then(|s| s.get("vip_casino_until"))
+    user_stats(state, norm)
+        .get("vip_casino_until")
         .and_then(jsval::number)
         .unwrap_or(0.0)
         > now_millis() as f64
@@ -328,18 +325,14 @@ fn settle_casino_round(
     let (free_spin, prepaid) = opts;
     let (email, norm) = (player.email, player.norm);
     let now = now_millis() as f64;
-    let stats = user_stats(state);
-    let entry = stats.get(norm);
-    let until = |key: &str| {
-        entry
-            .and_then(|s| s.get(key))
-            .and_then(jsval::number)
-            .unwrap_or(0.0)
-    };
+    let entry = user_stats(state, norm);
+    let until = |key: &str| entry.get(key).and_then(jsval::number).unwrap_or(0.0);
     // `(stats[norm].x || 0) > Date.now()` — NaN is falsy in JS, so an
-    // unparseable `x` reads as 0 too (jsval::number's None → 0.0).
-    let is_double = entry.is_some() && until("double_down_until") > now;
-    let is_insured = entry.is_some() && until("bad_beat_insurance_until") > now;
+    // unparseable `x` reads as 0 too (jsval::number's None → 0.0), and a
+    // missing/falsy `stats[norm]` entry reads as 0 either way, so there's
+    // no separate "entry exists" check needed.
+    let is_double = until("double_down_until") > now;
+    let is_insured = until("bad_beat_insurance_until") > now;
 
     let mut final_payout = payout;
     let mut final_outcome = outcome.to_string();
@@ -1829,14 +1822,13 @@ fn slots(
     if !enabled(state) {
         return closed();
     }
-    let mut stats = user_stats(state);
+    let mut stats = user_stats(state, norm);
     let is_vip = is_vip(state, norm);
     if is_vip_room && !is_vip {
         return resp(403, &json!({ "error": "VIP pass required" }));
     }
     let free_spins = stats
-        .get(norm)
-        .and_then(|s| s.get("slots_free_spins"))
+        .get("slots_free_spins")
         .and_then(jsval::number)
         .unwrap_or(0.0);
     let is_free_spin = free_spins > 0.0 && !is_vip_room;
@@ -1858,12 +1850,8 @@ fn slots(
             );
         }
         // stats[norm].slots_free_spins = freeSpins - 1; saveUserStats.
-        if let Some(s) = stats.get_mut(norm) {
-            s["slots_free_spins"] = jsval::num_value(free_spins - 1.0);
-        }
-        let _ = state
-            .store
-            .write_document(&state.data_dir().join("user_stats.json"), &stats);
+        stats["slots_free_spins"] = jsval::num_value(free_spins - 1.0);
+        mitch_lib::user_stats::user_stats_set(&state.store, norm, &stats);
     } else {
         let bal = mitch_lib::coins::get_coins(&state.store, state.data_dir(), email);
         if !bet.is_finite() || bet < 1.0 || bet > bal {

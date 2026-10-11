@@ -331,9 +331,7 @@ fn leaderboard(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let profiles = state
         .store
         .read_document(&state.data_dir().join("profiles.json"), json!({}));
-    let user_stats = state
-        .store
-        .read_document(&state.data_dir().join("user_stats.json"), json!({}));
+    let user_stats = mitch_lib::user_stats::user_stats_all(&state.store);
 
     let mut keys: Vec<String> = Vec::new();
     let mut seen = std::collections::HashSet::new();
@@ -623,12 +621,7 @@ fn me_coins(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         &state.store,
         &norm
     ));
-    let stats = state
-        .store
-        .read_document(&state.data_dir().join("user_stats.json"), json!({}))
-        .get(norm.as_str())
-        .cloned()
-        .unwrap_or(json!({}));
+    let stats = mitch_lib::user_stats::user_stats_get(&state.store, &norm);
     json_response(
         200,
         json!({

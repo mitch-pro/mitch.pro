@@ -318,16 +318,9 @@ pub fn pixel_post(state: &Arc<AppState>, headers: &HeaderMap, body: &Value) -> R
                 && !email.is_empty()
             {
                 let norm = normalize_email(&email);
-                let stats_file = state.data_dir().join("user_stats.json");
-                let mut stats: Map<String, Value> = state
-                    .store
-                    .read_document(&stats_file, json!({}))
-                    .as_object()
-                    .cloned()
-                    .unwrap_or_default();
-                let entry = stats.entry(norm.clone()).or_insert_with(|| json!({}));
+                let mut entry = mitch_lib::user_stats::user_stats_get(&state.store, &norm);
                 if !entry.is_object() {
-                    *entry = json!({});
+                    entry = json!({});
                 }
                 let now_f = now as f64;
                 let last_reset = entry
@@ -348,9 +341,7 @@ pub fn pixel_post(state: &Arc<AppState>, headers: &HeaderMap, body: &Value) -> R
                     if let Some(obj) = entry.as_object_mut() {
                         obj.insert("week_locks".into(), json!(week_locks + 1.0));
                     }
-                    let _ = state
-                        .store
-                        .write_document(&stats_file, &Value::Object(stats));
+                    mitch_lib::user_stats::user_stats_set(&state.store, &norm, &entry);
                     let mut locks = state
                         .canvas
                         .locks

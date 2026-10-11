@@ -317,6 +317,11 @@ impl DataStore {
                         hash TEXT NOT NULL,
                         updated_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS user_stats (
+                        email TEXT PRIMARY KEY,
+                        data TEXT NOT NULL,
+                        updated_at INTEGER NOT NULL
+                    );
                     CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs (ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_level ON app_logs (level, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_category ON app_logs (category, ts DESC);
@@ -395,6 +400,7 @@ impl DataStore {
         store.backfill_cosmetics_from_json();
         store.backfill_achievements_from_json();
         store.backfill_passwords_from_json();
+        store.backfill_user_stats_from_json();
         Ok(store)
     }
 
@@ -820,6 +826,24 @@ impl DataStore {
             let _ = conn.execute(
                 "INSERT OR IGNORE INTO passwords (email, hash, updated_at) VALUES (?1, ?2, ?3)",
                 rusqlite::params![email, hash, now],
+            );
+        }
+    }
+
+    /// One-time (idempotent) backfill from user_stats.json into the real
+    /// `user_stats` table (one row per email, the whole per-user record
+    /// kept as a JSON blob in `data` — same shape as `cosmetics`/`push_subs`,
+    /// since the stat keys are dynamic/game-specific rather than fixed).
+    fn backfill_user_stats_from_json(&self) {
+        let now = now_millis();
+        let doc = self.read_document(&self.data_dir.join("user_stats.json"), Value::Null);
+        let Some(map) = doc.as_object() else { return };
+        let conn = self.conn();
+        for (email, data) in map {
+            let data_str = serde_json::to_string(data).unwrap_or_else(|_| "{}".to_string());
+            let _ = conn.execute(
+                "INSERT OR IGNORE INTO user_stats (email, data, updated_at) VALUES (?1, ?2, ?3)",
+                rusqlite::params![email, data_str, now],
             );
         }
     }

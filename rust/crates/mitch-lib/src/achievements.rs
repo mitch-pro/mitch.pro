@@ -2,7 +2,8 @@
 //! `ACHIEVEMENT_DEFINITIONS`, `awardAchievement`, `updateStat`,
 //! `addPaintingCoin`.
 //!
-//! `user_stats.json` is still a `loadJson`/`saveJson` blob file. Earned
+//! Per-user stats live in the real `user_stats` table (one row per
+//! email, blob-valued since the stat keys are dynamic); earned
 //! achievements live in the real `achievements` table (one row per
 //! email+achievement_id) instead of the old achievements.json blob — the
 //! old check-then-push-then-write-the-whole-blob was racy: two concurrent
@@ -14,7 +15,8 @@ use crate::auth::normalize_email;
 use crate::coins::add_coins;
 use crate::data::DataStore;
 use crate::school::{now_millis, utc_iso_day};
-use serde_json::{json, Map, Value};
+use crate::user_stats::{user_stats_get, user_stats_set};
+use serde_json::json;
 use std::path::Path;
 
 /// One definition entry (server.js:3049-3078).
@@ -250,10 +252,6 @@ pub const ACHIEVEMENT_DEFINITIONS: &[(&str, AchievementDef)] = &[
     ),
 ];
 
-fn user_stats_file(data_dir: &Path) -> std::path::PathBuf {
-    data_dir.join("user_stats.json")
-}
-
 /// Every achievement id a user has earned (was achievements.json[norm]).
 pub fn achievements_for(store: &DataStore, norm_email: &str) -> Vec<String> {
     let conn = store.conn();
@@ -306,23 +304,18 @@ pub fn update_stat(
         return 0.0;
     }
     let norm = normalize_email(email);
-    let mut stats: Map<String, Value> = store
-        .read_document(&user_stats_file(data_dir), json!({}))
-        .as_object()
-        .cloned()
-        .unwrap_or_default();
-    let entry = stats.entry(norm.clone()).or_insert_with(|| json!({}));
+    let mut entry = user_stats_get(store, &norm);
     if !entry.is_object() {
         // JS `stats[norm][key] = ...` on a primitive would throw; callers only
         // ever see object entries, so replace a corrupt one the crash-path way.
-        *entry = json!({});
+        entry = json!({});
     }
     let current = entry.get(key).and_then(|v| v.as_f64()).unwrap_or(0.0);
     let total = current + inc;
     if let Some(obj) = entry.as_object_mut() {
         obj.insert(key.to_string(), json!(total));
     }
-    let _ = store.write_document(&user_stats_file(data_dir), &Value::Object(stats));
+    user_stats_set(store, &norm, &entry);
 
     for (id, def) in ACHIEVEMENT_DEFINITIONS {
         if def.stat == key && total >= def.goal {
@@ -365,38 +358,28 @@ pub fn add_painting_coin(store: &DataStore, data_dir: &Path, email: &str, coin_m
     }
     let norm = normalize_email(email);
     let today = utc_iso_day(now_millis());
-    let mut stats: Map<String, Value> = store
-        .read_document(&user_stats_file(data_dir), json!({}))
-        .as_object()
-        .cloned()
-        .unwrap_or_default();
-    let entry = stats.entry(norm.clone()).or_insert_with(|| json!({}));
+    let mut entry = user_stats_get(store, &norm);
     if !entry.is_object() {
-        *entry = json!({});
+        entry = json!({});
     }
     if entry.get("last_paint_day").and_then(|v| v.as_str()) != Some(today.as_str()) {
         if let Some(obj) = entry.as_object_mut() {
             obj.insert("last_paint_day".into(), json!(today));
             obj.insert("day_paint_count".into(), json!(0));
         }
-        let _ = store.write_document(&user_stats_file(data_dir), &Value::Object(stats.clone()));
+        user_stats_set(store, &norm, &entry);
     }
     // The JS re-loads here (`const s = loadUserStats()`); the day-reset save
     // already landed, so a fresh read is the equivalent.
-    let day_count = stats
-        .get(&norm)
-        .and_then(|s| s.get("day_paint_count"))
+    let day_count = entry
+        .get("day_paint_count")
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0);
     if day_count < 1000.0 {
-        if let Some(obj) = stats.get_mut(&norm).and_then(|s| s.as_object_mut()) {
-            let count = obj
-                .get("day_paint_count")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0);
-            obj.insert("day_paint_count".into(), json!(count + 1.0));
+        if let Some(obj) = entry.as_object_mut() {
+            obj.insert("day_paint_count".into(), json!(day_count + 1.0));
         }
-        let _ = store.write_document(&user_stats_file(data_dir), &Value::Object(stats));
+        user_stats_set(store, &norm, &entry);
         add_coins(store, data_dir, email, 0.2, coin_multiplier, "");
     }
     update_stat(store, data_dir, email, "pixels", 1.0, coin_multiplier);
@@ -449,8 +432,7 @@ mod tests {
         let (store, data_dir) = fresh_store("paint-coin");
         let mult = 1.0;
         add_painting_coin(&store, &data_dir, "p@x.com", mult);
-        let stats = store.read_document(&user_stats_file(&data_dir), json!({}));
-        let entry = stats.get("p@x.com").unwrap();
+        let entry = user_stats_get(&store, "p@x.com");
         assert_eq!(
             entry.get("day_paint_count").and_then(|v| v.as_f64()),
             Some(1.0)
@@ -461,7 +443,7 @@ mod tests {
         // Empty email is a no-op (no coins row created).
         add_painting_coin(&store, &data_dir, "", mult);
         let coins = crate::coins::load_coins(&store, &data_dir);
-        assert_eq!(coins.as_object().map(Map::len), Some(1));
+        assert_eq!(coins.as_object().map(serde_json::Map::len), Some(1));
     }
 
     #[test]

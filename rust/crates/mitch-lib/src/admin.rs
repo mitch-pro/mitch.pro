@@ -254,7 +254,7 @@ pub fn build_advanced_admin_data(store: &DataStore, data_dir: &Path) -> Value {
             .cmp(&a.get("ts").and_then(|v| v.as_i64()).unwrap_or(0))
     });
 
-    let user_stats = store.read_document(&data_dir.join("user_stats.json"), json!({}));
+    let user_stats = crate::user_stats::user_stats_all(store);
     let active_users: Vec<Value> = user_stats
         .as_object()
         .map(|m| {

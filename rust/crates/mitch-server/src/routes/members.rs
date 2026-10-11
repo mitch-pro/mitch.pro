@@ -826,28 +826,23 @@ fn touch_active_email(state: &Arc<AppState>, email: &str, now: i64) {
         return;
     }
     let norm = auth::normalize_email(email);
-    let file = data_file(state, "user_stats.json");
-    let mut stats = state.store.read_document(&file, json!({}));
-    let Some(map) = stats.as_object_mut() else {
-        return;
-    };
+    let mut entry = mitch_lib::user_stats::user_stats_get(&state.store, &norm);
     // `if (!stats[norm]) stats[norm] = {}` — falsy entries are replaced.
-    let needs_reset = map.get(&norm).map(|v| !jsval::truthy(v)).unwrap_or(true);
-    if needs_reset {
-        map.insert(norm.clone(), json!({}));
+    if !jsval::truthy(&entry) {
+        entry = json!({});
     }
-    let Some(entry) = map.get_mut(&norm).and_then(|e| e.as_object_mut()) else {
+    let Some(obj) = entry.as_object_mut() else {
         return; // JS: property set on a truthy primitive silently no-ops
     };
-    let last = entry
+    let last = obj
         .get("last_active_at")
         .and_then(jsval::number)
         .unwrap_or(0.0);
     if (now as f64) - last < 10_000.0 {
         return;
     }
-    entry.insert("last_active_at".into(), json!(now));
-    let _ = state.store.write_document(&file, &stats);
+    obj.insert("last_active_at".into(), json!(now));
+    mitch_lib::user_stats::user_stats_set(&state.store, &norm, &entry);
 }
 
 #[cfg(test)]

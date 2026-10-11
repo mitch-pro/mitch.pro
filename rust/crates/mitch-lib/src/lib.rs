@@ -45,6 +45,7 @@ pub mod shop;
 pub mod sso;
 pub mod state;
 pub mod totp;
+pub mod user_stats;
 pub mod vm;
 pub mod vm_security;
 pub mod webauthn;

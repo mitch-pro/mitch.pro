@@ -118,10 +118,7 @@ fn get_public_profile(state: &Arc<AppState>, headers: &HeaderMap, slug_raw: &str
     let is_admin = auth::is_admin_email(&state.store, &actual_email);
     let is_moderator = auth::is_moderator_email(&state.store, &actual_email);
     let is_tester = auth::is_tester_email(&state.store, &actual_email);
-    let user_stats = state
-        .store
-        .read_document(&data_file(state, "user_stats.json"), json!({}));
-    let stats = user_stats.get(&norm).cloned().unwrap_or(json!({}));
+    let stats = mitch_lib::user_stats::user_stats_get(&state.store, &norm);
     let achievements = json!(mitch_lib::achievements::achievements_for(
         &state.store,
         &norm
@@ -227,10 +224,7 @@ fn get_profile(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let is_admin = auth::is_admin_email(&state.store, &email);
     let is_moderator = auth::is_moderator_email(&state.store, &email);
     let is_tester = auth::is_tester_email(&state.store, &email);
-    let user_stats = state
-        .store
-        .read_document(&data_file(state, "user_stats.json"), json!({}));
-    let stats = user_stats.get(&norm).cloned().unwrap_or(json!({}));
+    let stats = mitch_lib::user_stats::user_stats_get(&state.store, &norm);
     let achievements = json!(mitch_lib::achievements::achievements_for(
         &state.store,
         &norm
@@ -743,12 +737,7 @@ fn me_root(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         .map(|e| auth::normalize_email(e))
         .unwrap_or_default();
     let stats = if has_email {
-        state
-            .store
-            .read_document(&data_file(state, "user_stats.json"), json!({}))
-            .get(&norm)
-            .cloned()
-            .unwrap_or(json!({}))
+        mitch_lib::user_stats::user_stats_get(&state.store, &norm)
     } else {
         json!({})
     };
@@ -1062,9 +1051,9 @@ pub(crate) fn rename_email_references(
     mitch_lib::shop::rename_cosmetics_email(&state.store, old_norm, new_norm);
     mitch_lib::achievements::rename_achievements_email(&state.store, old_norm, new_norm);
     mitch_lib::passwords::rename_password_email(&state.store, old_norm, new_norm);
+    mitch_lib::user_stats::rename_user_stats_email(&state.store, old_norm, new_norm);
     let key_maps = [
         "profiles.json",
-        "user_stats.json",
         "premium_gifts_sent.json",
         "sebastians_claims.json",
     ];

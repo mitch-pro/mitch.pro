@@ -158,12 +158,9 @@ pub fn email_from_hash(
             }
         }
     }
-    let stats = store.read_document(&data_dir.join("user_stats.json"), json!({}));
-    if let Some(map) = stats.as_object() {
-        for email in map.keys() {
-            if get_uid_for_email(store, id_secret, email).as_deref() == Some(hash) {
-                return Some(email.clone());
-            }
+    for email in crate::user_stats::user_stats_all_emails(store) {
+        if get_uid_for_email(store, id_secret, &email).as_deref() == Some(hash) {
+            return Some(email);
         }
     }
     let tokens = store.read_document(&data_dir.join("tokens.json"), json!({}));

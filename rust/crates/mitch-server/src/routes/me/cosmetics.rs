@@ -228,9 +228,7 @@ async fn shop_buy(
             .unwrap_or(30.0);
         bump_stat_until(state, &norm, "bad_beat_insurance_until", minutes);
     } else if cost_type == "happy_hour_extension" {
-        let user_stats_file = data_file(state, "user_stats.json");
-        let mut stats = state.store.read_document(&user_stats_file, json!({}));
-        let mut entry = stats.get(norm.as_str()).cloned().unwrap_or(json!({}));
+        let mut entry = mitch_lib::user_stats::user_stats_get(&state.store, &norm);
         let current = entry
             .get("personal_happy_hour_until")
             .and_then(|v| v.as_f64())
@@ -248,14 +246,9 @@ async fn shop_buy(
                 json!(current + 15.0 * 60.0 * 1000.0),
             );
         }
-        if let Some(obj) = stats.as_object_mut() {
-            obj.insert(norm.clone(), entry);
-        }
-        let _ = state.store.write_document(&user_stats_file, &stats);
+        mitch_lib::user_stats::user_stats_set(&state.store, &norm, &entry);
     } else if cost_type == "slots_free_spin" {
-        let user_stats_file = data_file(state, "user_stats.json");
-        let mut stats = state.store.read_document(&user_stats_file, json!({}));
-        let mut entry = stats.get(norm.as_str()).cloned().unwrap_or(json!({}));
+        let mut entry = mitch_lib::user_stats::user_stats_get(&state.store, &norm);
         let current = entry
             .get("slots_free_spins")
             .and_then(|v| v.as_i64())
@@ -264,18 +257,13 @@ async fn shop_buy(
         if let Some(obj) = entry.as_object_mut() {
             obj.insert("slots_free_spins".to_string(), json!(current + add));
         }
-        if let Some(obj) = stats.as_object_mut() {
-            obj.insert(norm.clone(), entry);
-        }
-        let _ = state.store.write_document(&user_stats_file, &stats);
+        mitch_lib::user_stats::user_stats_set(&state.store, &norm, &entry);
     } else if cost_type == "loaded_dice" {
         bump_stat_until(state, &norm, "loaded_dice_until", 30.0);
     } else if cost_type == "casino_glitch_chip" {
         bump_stat_until(state, &norm, "casino_glitch_until", 20.0);
     } else if cost_type == "infinite_luck_charm" {
-        let user_stats_file = data_file(state, "user_stats.json");
-        let mut stats = state.store.read_document(&user_stats_file, json!({}));
-        let mut entry = stats.get(norm.as_str()).cloned().unwrap_or(json!({}));
+        let mut entry = mitch_lib::user_stats::user_stats_get(&state.store, &norm);
         let now = mitch_lib::school::now_millis() as f64;
         let current = entry
             .get("infinite_luck_until")
@@ -294,10 +282,7 @@ async fn shop_buy(
                 obj.insert(key.to_string(), json!(existing.max(until)));
             }
         }
-        if let Some(obj) = stats.as_object_mut() {
-            obj.insert(norm.clone(), entry);
-        }
-        let _ = state.store.write_document(&user_stats_file, &stats);
+        mitch_lib::user_stats::user_stats_set(&state.store, &norm, &entry);
     }
 
     if cost > 0 {
@@ -321,19 +306,14 @@ async fn shop_buy(
 /// bad_beat_insurance/loaded_dice/casino_glitch_chip's "extend from now or
 /// from whenever the existing grant runs out" duration stacking.
 fn bump_stat_until(state: &Arc<AppState>, norm: &str, key: &str, duration_minutes: f64) {
-    let file = data_file(state, "user_stats.json");
-    let mut stats = state.store.read_document(&file, json!({}));
-    let mut entry = stats.get(norm).cloned().unwrap_or(json!({}));
+    let mut entry = mitch_lib::user_stats::user_stats_get(&state.store, norm);
     let now = mitch_lib::school::now_millis() as f64;
     let current = entry.get(key).and_then(|v| v.as_f64()).unwrap_or(0.0);
     let until = now.max(current) + duration_minutes * 60.0 * 1000.0;
     if let Some(obj) = entry.as_object_mut() {
         obj.insert(key.to_string(), json!(until));
     }
-    if let Some(obj) = stats.as_object_mut() {
-        obj.insert(norm.to_string(), entry);
-    }
-    let _ = state.store.write_document(&file, &stats);
+    mitch_lib::user_stats::user_stats_set(&state.store, norm, &entry);
 }
 
 /// `GET /api/me/inventory` — server.js:11347-11356. Note the different 401

@@ -362,46 +362,41 @@ pub async fn ping(
     // Playtime stats + ping reward for the email (server.js:15663-15682).
     if let Some(ref em) = email {
         let norm = mitch_lib::auth::normalize_email(em);
-        let stats_file = state.data_dir().join("user_stats.json");
-        let mut stats = state.store.read_document(&stats_file, json!({}));
-        if let Some(map) = stats.as_object_mut() {
-            let user = map.entry(norm.clone()).or_insert(json!({}));
-            if let Some(u) = user.as_object_mut() {
-                let playtime = u.entry("playtime").or_insert(json!({}));
-                if let Some(pt) = playtime.as_object_mut() {
-                    let cat_entry = pt.entry(category.clone()).or_insert(json!(0));
-                    let cur = cat_entry.as_i64().unwrap_or(0);
-                    *cat_entry = json!(cur + 1);
-                }
-                // last_ping_reward: 0.25 coins per 60s (server.js:15668-15673).
-                let now = now_millis() as f64;
-                let last_reward = u
-                    .get("last_ping_reward")
+        let mut user = mitch_lib::user_stats::user_stats_get(&state.store, &norm);
+        if let Some(u) = user.as_object_mut() {
+            let playtime = u.entry("playtime").or_insert(json!({}));
+            if let Some(pt) = playtime.as_object_mut() {
+                let cat_entry = pt.entry(category.clone()).or_insert(json!(0));
+                let cur = cat_entry.as_i64().unwrap_or(0);
+                *cat_entry = json!(cur + 1);
+            }
+            // last_ping_reward: 0.25 coins per 60s (server.js:15668-15673).
+            let now = now_millis() as f64;
+            let last_reward = u
+                .get("last_ping_reward")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            if now - last_reward >= 60_000.0 {
+                mitch_lib::coins::add_coins(
+                    &state.store,
+                    state.data_dir(),
+                    em,
+                    0.25,
+                    state.coin_multiplier(),
+                    "",
+                );
+                u.insert("last_ping_reward".into(), json!(now));
+            }
+            if now
+                - u.get("last_active_at")
                     .and_then(|v| v.as_f64())
-                    .unwrap_or(0.0);
-                if now - last_reward >= 60_000.0 {
-                    mitch_lib::coins::add_coins(
-                        &state.store,
-                        state.data_dir(),
-                        em,
-                        0.25,
-                        state.coin_multiplier(),
-                        "",
-                    );
-                    u.insert("last_ping_reward".into(), json!(now));
-                }
-                if now
-                    - u.get("last_active_at")
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(0.0)
-                    >= 10_000.0
-                {
-                    u.insert("last_active_at".into(), json!(now));
-                }
+                    .unwrap_or(0.0)
+                >= 10_000.0
+            {
+                u.insert("last_active_at".into(), json!(now));
             }
         }
-        let _ = state.store.write_document(&stats_file, &stats);
-        let _ = norm;
+        mitch_lib::user_stats::user_stats_set(&state.store, &norm, &user);
     }
 
     // Presence leg (server.js:15617-15639): the playingGame ladder keyed off

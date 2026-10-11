@@ -88,9 +88,7 @@ pub const DEFAULT_COIN_MULTIPLIER: f64 = 1.0;
 
 /// `addCoins(email, amount, reason)` — server.js:2979-3005.
 /// `multiplier` is `globalCoinMultiplier` at call time; `personal_happy_hour`
-/// is read from user_stats.json (positive amounts only, minimum 2.0x) —
-/// that lookup stays a blob read (user_stats.json isn't migrated here),
-/// only the balance/lifetime_earned persistence is now a real row.
+/// is read from the `user_stats` table (positive amounts only, minimum 2.0x).
 pub fn add_coins(
     store: &DataStore,
     data_dir: &Path,
@@ -103,11 +101,10 @@ pub fn add_coins(
         return;
     }
     let norm = normalize_email(email);
-    let stats = store.read_document(&data_dir.join("user_stats.json"), json!({}));
+    let stats = crate::user_stats::user_stats_get(store, &norm);
 
     let personal_hh = stats
-        .get(&norm)
-        .and_then(|s| s.get("personal_happy_hour_until"))
+        .get("personal_happy_hour_until")
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0)
         > now_millis() as f64;

@@ -149,23 +149,15 @@ fn game_portal_status(state: &Arc<AppState>, headers: &HeaderMap) -> axum::respo
     let norm = mitch_lib::auth::normalize_email(&email);
     let now = now_millis();
     let today = game_portal_day_key(now);
-    let stats_file = state.data_dir().join("user_stats.json");
-    let stats = state.store.read_document(&stats_file, json!({}));
-    let user = stats.get(&norm);
-    let daily_earned = if user
-        .and_then(|u| u.get("game_portal_reward_day"))
-        .and_then(|v| v.as_str())
-        == Some(today.as_str())
-    {
-        jsval::number(
-            user.and_then(|u| u.get("game_portal_reward_today"))
-                .unwrap_or(&json!(0)),
-        )
-        .map(|n| n.max(0.0))
-        .unwrap_or(0.0)
-    } else {
-        0.0
-    };
+    let stats = mitch_lib::user_stats::user_stats_get(&state.store, &norm);
+    let daily_earned =
+        if stats.get("game_portal_reward_day").and_then(|v| v.as_str()) == Some(today.as_str()) {
+            jsval::number(stats.get("game_portal_reward_today").unwrap_or(&json!(0)))
+                .map(|n| n.max(0.0))
+                .unwrap_or(0.0)
+        } else {
+            0.0
+        };
     let coins = mitch_lib::coins::get_coins(&state.store, &state.cfg.data_dir, &email);
     json_resp(
         200,
@@ -258,13 +250,7 @@ fn game_portal_heartbeat(
 
     // stats = loadUserStats(); if (!stats[norm]) stats[norm] = {};
     // if (stats[norm].game_portal_reward_day !== today) { reset + save }
-    let stats_file = state.data_dir().join("user_stats.json");
-    let mut stats = state.store.read_document(&stats_file, json!({}));
-    let user = stats
-        .as_object_mut()
-        .map(|m| m.entry(norm.clone()).or_insert_with(|| json!({})))
-        .cloned()
-        .unwrap_or(json!({}));
+    let user = mitch_lib::user_stats::user_stats_get(&state.store, &norm);
     let mut user = match user {
         Value::Object(o) => o,
         _ => serde_json::Map::new(),
@@ -274,8 +260,7 @@ fn game_portal_heartbeat(
     if !day_matches {
         user.insert("game_portal_reward_day".into(), json!(today.clone()));
         user.insert("game_portal_reward_today".into(), json!(0));
-        stats[norm.clone()] = Value::Object(user.clone());
-        let _ = state.store.write_document(&stats_file, &stats);
+        mitch_lib::user_stats::user_stats_set(&state.store, &norm, &Value::Object(user.clone()));
     }
 
     let daily_earned = jsval::number(user.get("game_portal_reward_today").unwrap_or(&json!(0)))
@@ -324,8 +309,7 @@ fn game_portal_heartbeat(
             "game_portal_coins".into(),
             jsval::num_value(coins_cur + settled.earned as f64),
         );
-        stats[norm.clone()] = Value::Object(user.clone());
-        let _ = state.store.write_document(&stats_file, &stats);
+        mitch_lib::user_stats::user_stats_set(&state.store, &norm, &Value::Object(user.clone()));
     }
 
     // touchUserPresence(email, active ? `Playing ${game}` : 'Browsing games')

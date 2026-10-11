@@ -625,13 +625,8 @@ pub fn handle(
             ));
         }
         // Clean up user stats premium email fields.
-        let stats_file = state.cfg.data_dir.join("user_stats.json");
-        let mut stats = state.store.read_document(&stats_file, json!({}));
-        if let Some(entry) = stats
-            .as_object_mut()
-            .and_then(|m| m.get_mut(norm.as_str()))
-            .and_then(|v| v.as_object_mut())
-        {
+        let mut entry = mitch_lib::user_stats::user_stats_get(&state.store, &norm);
+        if let Some(obj) = entry.as_object_mut() {
             for key in [
                 "premium_email",
                 "premium_email_request",
@@ -641,10 +636,10 @@ pub fn handle(
                 "premium_lost_at",
                 "email_revoke_notified",
             ] {
-                entry.remove(key);
+                obj.remove(key);
             }
         }
-        let _ = state.store.write_document(&stats_file, &stats);
+        mitch_lib::user_stats::user_stats_set(&state.store, &norm, &entry);
         mitch_lib::admin::log_admin_action(
             &state.store,
             &state.cfg.data_dir,

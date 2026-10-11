@@ -511,11 +511,7 @@ pub fn build_inventory(
 ) -> Value {
     let norm = auth::normalize_email(email);
     let unlocked_ai = store.read_document(&data_dir.join("unlocked_ai.json"), json!({}));
-    let stats = store
-        .read_document(&data_dir.join("user_stats.json"), json!({}))
-        .get(norm.as_str())
-        .cloned()
-        .unwrap_or(json!({}));
+    let stats = crate::user_stats::user_stats_get(store, &norm);
     let daily = crate::daily_logins::daily_login_get(store, &norm).unwrap_or(json!({}));
     let entry = cosmetics_get(store, &norm).unwrap_or(json!({}));
     let user_cosm = sanitize_cosmetics_for_email(store, email, &entry);
@@ -654,10 +650,8 @@ pub fn owns_shop_item(
     }
     if cost_type == "vip_casino_pass" {
         let norm = auth::normalize_email(email);
-        let until = store
-            .read_document(&data_dir.join("user_stats.json"), json!({}))
-            .get(norm.as_str())
-            .and_then(|s| s.get("vip_casino_until"))
+        let until = crate::user_stats::user_stats_get(store, &norm)
+            .get("vip_casino_until")
             .and_then(|v| v.as_f64())
             .unwrap_or(0.0);
         let now_ms = std::time::SystemTime::now()
