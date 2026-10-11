@@ -499,21 +499,7 @@ async fn unsub(state: &Arc<AppState>, body: &Value) -> Response {
     let _ = state.store.write_document(&reqs_file, &json!(kept));
     let site_name = site_name(state);
     if action == "approve" {
-        let unsub_file = state.cfg.data_dir.join("newsletter_unsub.json");
-        let unsub = state
-            .store
-            .read_document(&unsub_file, json!([]))
-            .as_array()
-            .cloned()
-            .unwrap_or_default();
-        let mut set: std::collections::BTreeSet<String> = unsub
-            .iter()
-            .filter_map(|v| v.as_str().map(str::to_string))
-            .collect();
-        set.insert(email.clone());
-        let _ = state
-            .store
-            .write_document(&unsub_file, &json!(set.into_iter().collect::<Vec<_>>()));
+        mitch_lib::newsletter_unsub::newsletter_unsub_add(&state.store, &email);
         let subject = format!("You've Been Unsubscribed from the {site_name} Newsletter");
         let html = super::legacy::make_access_status_html(
                 state,
@@ -549,16 +535,11 @@ fn newsletter_list(state: &Arc<AppState>) -> Response {
         .as_array()
         .cloned()
         .unwrap_or_default();
-    let unsub_set: std::collections::BTreeSet<String> = state
-        .store
-        .read_document(&state.cfg.data_dir.join("newsletter_unsub.json"), json!([]))
-        .as_array()
-        .map(|a| {
-            a.iter()
-                .filter_map(|v| v.as_str().map(|s| s.to_lowercase()))
-                .collect()
-        })
-        .unwrap_or_default();
+    let unsub_set: std::collections::BTreeSet<String> =
+        mitch_lib::newsletter_unsub::newsletter_unsub_all_emails(&state.store)
+            .into_iter()
+            .map(|s| s.to_lowercase())
+            .collect();
     let tokens = mitch_lib::tokens::token_all(&state.store);
     let mut emails: Vec<Value> = Vec::new();
     let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
@@ -618,16 +599,11 @@ async fn newsletter_send(state: &Arc<AppState>, body: &Value) -> Response {
         .as_array()
         .cloned()
         .unwrap_or_default();
-    let unsub_set: std::collections::BTreeSet<String> = state
-        .store
-        .read_document(&state.cfg.data_dir.join("newsletter_unsub.json"), json!([]))
-        .as_array()
-        .map(|a| {
-            a.iter()
-                .filter_map(|v| v.as_str().map(|s| s.to_lowercase()))
-                .collect()
-        })
-        .unwrap_or_default();
+    let unsub_set: std::collections::BTreeSet<String> =
+        mitch_lib::newsletter_unsub::newsletter_unsub_all_emails(&state.store)
+            .into_iter()
+            .map(|s| s.to_lowercase())
+            .collect();
     let mut emails: Vec<String> = extra
         .iter()
         .filter_map(|v| v.as_str())

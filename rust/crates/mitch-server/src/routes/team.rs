@@ -321,9 +321,7 @@ fn handled(state: &Arc<AppState>, body_bytes: &[u8]) -> Response {
 }
 
 /// POST /api/team/unsubscribe (server.js:23062-23076) — append to the
-/// newsletter unsub list. The JS reads it via loadJson (DB) but writes the
-/// DISK file with a sorted-unique 2-space dump; the DB copy is untouched by
-/// this path (parity with that quirk preserved).
+/// newsletter unsub list.
 fn unsubscribe(state: &Arc<AppState>, body_bytes: &[u8], member_name: &str) -> Response {
     let Some(body) = parse_body_strict(body_bytes) else {
         return json_response(400, json!({ "error": "bad json" }));
@@ -334,23 +332,7 @@ fn unsubscribe(state: &Arc<AppState>, body_bytes: &[u8], member_name: &str) -> R
     if email.is_empty() || !email.contains('@') {
         return json_response(400, json!({ "error": "email required" }));
     }
-    let file = state.cfg.data_dir.join("newsletter_unsub.json");
-    let mut unsub = state
-        .store
-        .read_document(&file, json!([]))
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
-    if !unsub.iter().any(|v| v == &json!(email)) {
-        unsub.push(json!(email));
-        let mut uniq: Vec<String> = unsub.iter().map(mitch_lib::jsval::string).collect();
-        uniq.sort();
-        uniq.dedup();
-        // JS writeFileSync(file, JSON.stringify([...new Set(unsub)].sort(), null, 2))
-        let content = mitch_lib::data::js_stringify_pretty(&json!(uniq));
-        let _ = std::fs::write(&file, &content);
-        let _ = state.store.write_document(&file, &json!(uniq));
-    }
+    mitch_lib::newsletter_unsub::newsletter_unsub_add(&state.store, &email);
     tracing::info!("[team] unsubscribed {email} by {member_name}");
     json_response(200, json!({ "ok": true }))
 }
@@ -930,8 +912,6 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(code(&resp), 400);
-        // Second, lower-sorting address — the disk dump must be sorted/unique
-        // with 2-space indent (JS writeFileSync parity).
         let resp = handle(
             &state,
             &Method::POST,
@@ -943,8 +923,15 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(code(&resp), 200);
-        let raw = std::fs::read_to_string(dir.join("data/newsletter_unsub.json")).unwrap();
-        assert_eq!(raw.trim(), "[\n  \"a@b.c\",\n  \"b@c.com\"\n]");
+        assert!(mitch_lib::newsletter_unsub::newsletter_unsub_exists(
+            &state.store,
+            "b@c.com"
+        ));
+        assert!(mitch_lib::newsletter_unsub::newsletter_unsub_exists(
+            &state.store,
+            "a@b.c"
+        ));
+        let _ = dir;
     }
 
     #[tokio::test]

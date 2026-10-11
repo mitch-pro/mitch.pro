@@ -706,13 +706,12 @@ fn sync_newsletter_unsub(state: &Arc<AppState>, uid: &str, body: &Value, existin
     let Some(email) = auth::email_from_sid(&state.store, &state.id_secret, uid) else {
         return;
     };
-    newsletter_sync_core(&state.store, state.data_dir(), &email, body, existing);
+    newsletter_sync_core(&state.store, &email, body, existing);
 }
 
-/// The sync core over `(store, data_dir, email)` so it is unit-testable.
+/// The sync core over `(store, email)` so it is unit-testable.
 fn newsletter_sync_core(
     store: &mitch_lib::data::DataStore,
-    data_dir: &std::path::Path,
     email: &str,
     body: &Value,
     existing: &Value,
@@ -740,42 +739,15 @@ fn newsletter_sync_core(
         other => other.clone(),
     };
     let low = email.to_lowercase().trim().to_string();
-    let file = data_dir.join("newsletter_unsub.json");
-    let unsub = store.read_document(&file, json!([]));
-    let Some(list) = unsub.as_array() else {
-        return; // JS .includes/.indexOf on a non-array throws → outer catch
-    };
-    let mut new_list: Vec<Value> = list.clone();
-    let mut changed = false;
     match pref.get("newsletter") {
         Some(Value::Bool(false)) => {
-            if !list.iter().any(|e| e.as_str() == Some(low.as_str())) {
-                new_list.push(json!(low));
-                changed = true;
-            }
+            mitch_lib::newsletter_unsub::newsletter_unsub_add(store, &low);
         }
         Some(Value::Bool(true)) => {
-            if let Some(pos) = list.iter().position(|e| e.as_str() == Some(low.as_str())) {
-                new_list.remove(pos);
-                changed = true;
-            }
+            mitch_lib::newsletter_unsub::newsletter_unsub_remove(store, &low);
         }
         _ => {}
     }
-    if !changed {
-        return;
-    }
-    // saveJson(..., [...new Set(unsub)].sort()) — dedupe (Set keeps the first
-    // occurrence), then JS default string sort.
-    let mut deduped: Vec<Value> = Vec::new();
-    for e in &new_list {
-        if !deduped.contains(e) {
-            deduped.push(e.clone());
-        }
-    }
-    deduped.sort_by_key(jsval::string);
-    let _ = store.write_document(&file, &json!(deduped));
-    let _ = std::fs::write(&file, mitch_lib::data::js_stringify_pretty(&json!(deduped)));
 }
 
 // ── shared helpers ───────────────────────────────────────────────────────────
@@ -869,26 +841,25 @@ mod tests {
         ));
         std::fs::create_dir_all(base.join("data")).unwrap();
         let store = mitch_lib::data::DataStore::open(&base, &base.join("data")).unwrap();
-        let dir = base.join("data");
-        let file = dir.join("newsletter_unsub.json");
-        let read_list =
-            |store: &mitch_lib::data::DataStore| -> Value { store.read_document(&file, json!([])) };
+        let exists = |store: &mitch_lib::data::DataStore, email: &str| -> bool {
+            mitch_lib::newsletter_unsub::newsletter_unsub_exists(store, email)
+        };
         let body = json!({"_snapshot": {"_prefPrivacy": "{\"newsletter\":false}"}});
         let existing = body.clone();
-        newsletter_sync_core(&store, &dir, "User@student.rjuhsd.us", &body, &existing);
-        assert_eq!(read_list(&store), json!(["user@student.rjuhsd.us"]));
-        // Already present → unchanged list (dedupe, not a second entry).
-        newsletter_sync_core(&store, &dir, "user@student.rjuhsd.us", &body, &existing);
-        assert_eq!(read_list(&store), json!(["user@student.rjuhsd.us"]));
+        newsletter_sync_core(&store, "User@student.rjuhsd.us", &body, &existing);
+        assert!(exists(&store, "user@student.rjuhsd.us"));
+        // Already present → unchanged (idempotent add, not a second entry).
+        newsletter_sync_core(&store, "user@student.rjuhsd.us", &body, &existing);
+        assert!(exists(&store, "user@student.rjuhsd.us"));
         // newsletter:true removes it.
         let on = json!({"_snapshot": {"_prefPrivacy": "{\"newsletter\":true}"}});
-        newsletter_sync_core(&store, &dir, "user@student.rjuhsd.us", &on, &on);
-        assert_eq!(read_list(&store), json!([]));
+        newsletter_sync_core(&store, "user@student.rjuhsd.us", &on, &on);
+        assert!(!exists(&store, "user@student.rjuhsd.us"));
         // newsletter:0 (neither strict false nor true) → untouched.
         let off_num = json!({"_snapshot": {"_prefPrivacy": "{\"newsletter\":0}"}});
-        store.write_document(&file, &json!(["keep@x"])).unwrap();
-        newsletter_sync_core(&store, &dir, "keep@x", &off_num, &off_num);
-        assert_eq!(read_list(&store), json!(["keep@x"]));
+        mitch_lib::newsletter_unsub::newsletter_unsub_add(&store, "keep@x");
+        newsletter_sync_core(&store, "keep@x", &off_num, &off_num);
+        assert!(exists(&store, "keep@x"));
         std::fs::remove_dir_all(&base).ok();
     }
 

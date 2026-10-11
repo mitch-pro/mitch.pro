@@ -2213,30 +2213,7 @@ fn handle_unsubscribe(state: &Arc<AppState>, path: &str) -> Option<Response> {
     }
     if let Some(email) = matched_email {
         let norm_email = email.to_ascii_lowercase().trim().to_string();
-        let unsub_file = state.data_dir().join("newsletter_unsub.json");
-        let unsub = state
-            .store
-            .read_document(&unsub_file, serde_json::json!([]));
-        let mut list: Vec<String> = unsub
-            .as_array()
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect()
-            })
-            .unwrap_or_default();
-        if !list.contains(&norm_email) {
-            list.push(norm_email);
-            list.sort();
-            list.dedup();
-            let _ = state
-                .store
-                .write_document(&unsub_file, &serde_json::json!(list));
-            let _ = std::fs::write(
-                &unsub_file,
-                mitch_lib::data::js_stringify_pretty(&serde_json::json!(list)),
-            );
-        }
+        mitch_lib::newsletter_unsub::newsletter_unsub_add(&state.store, &norm_email);
         Some(unsubscribe_success_html(&email))
     } else {
         Some(unsubscribe_invalid_html())

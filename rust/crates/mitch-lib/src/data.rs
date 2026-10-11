@@ -342,6 +342,10 @@ impl DataStore {
                         data TEXT NOT NULL,
                         updated_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS newsletter_unsub (
+                        email TEXT PRIMARY KEY,
+                        created_at INTEGER NOT NULL
+                    );
                     CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs (ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_level ON app_logs (level, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_category ON app_logs (category, ts DESC);
@@ -425,6 +429,7 @@ impl DataStore {
         store.backfill_tokens_from_json();
         store.backfill_revoked_ids_from_json();
         store.backfill_friends_from_json();
+        store.backfill_newsletter_unsub_from_json();
         Ok(store)
     }
 
@@ -937,6 +942,50 @@ impl DataStore {
             let _ = conn.execute(
                 "INSERT OR IGNORE INTO friend_lists (email, data, updated_at) VALUES (?1, ?2, ?3)",
                 rusqlite::params![email, data_str, now],
+            );
+        }
+    }
+
+    /// One-time (idempotent) backfill from newsletter_unsub.json into the
+    /// real `newsletter_unsub` table (one row per email). The old blob was
+    /// usually a plain array, but some historical records stored an
+    /// object with an `emails`/`unsub`/`list` array, or an object keyed
+    /// by email — tolerate all three shapes, same as the old
+    /// `newsletter_unsub_set` reader did.
+    fn backfill_newsletter_unsub_from_json(&self) {
+        let now = now_millis();
+        let doc = self.read_document(&self.data_dir.join("newsletter_unsub.json"), Value::Null);
+        let mut emails: Vec<String> = Vec::new();
+        if let Some(arr) = doc.as_array() {
+            for v in arr {
+                if let Some(s) = v.as_str() {
+                    emails.push(s.to_string());
+                }
+            }
+        } else if let Some(obj) = doc.as_object() {
+            for (k, v) in obj {
+                if k == "emails" || k == "unsub" || k == "list" {
+                    if let Some(arr) = v.as_array() {
+                        for item in arr {
+                            if let Some(s) = item.as_str() {
+                                emails.push(s.to_string());
+                            }
+                        }
+                    }
+                } else if k.contains('@') {
+                    emails.push(k.clone());
+                }
+            }
+        }
+        let conn = self.conn();
+        for email in emails {
+            let low = email.to_lowercase().trim().to_string();
+            if low.is_empty() {
+                continue;
+            }
+            let _ = conn.execute(
+                "INSERT OR IGNORE INTO newsletter_unsub (email, created_at) VALUES (?1, ?2)",
+                rusqlite::params![low, now],
             );
         }
     }

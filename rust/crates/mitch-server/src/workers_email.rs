@@ -179,67 +179,12 @@ pub(crate) fn check_userdata_unsubscribed(ud: &Value) -> bool {
 pub(crate) fn newsletter_unsub_set(state: &AppState) -> HashSet<String> {
     let mut set = HashSet::new();
 
-    let mut add_from_val = |val: Value| {
-        if let Some(arr) = val.as_array() {
-            for v in arr {
-                if let Some(s) = v.as_str() {
-                    let low = s.to_lowercase().trim().to_string();
-                    if !low.is_empty() {
-                        let norm = mitch_lib::auth::normalize_email(&low);
-                        set.insert(low);
-                        if !norm.is_empty() {
-                            set.insert(norm);
-                        }
-                    }
-                }
-            }
-        } else if let Some(obj) = val.as_object() {
-            for (k, v) in obj {
-                if k == "emails" || k == "unsub" || k == "list" {
-                    if let Some(arr) = v.as_array() {
-                        for item in arr {
-                            if let Some(s) = item.as_str() {
-                                let low = s.to_lowercase().trim().to_string();
-                                if !low.is_empty() {
-                                    set.insert(low.clone());
-                                    let norm = mitch_lib::auth::normalize_email(&low);
-                                    if !norm.is_empty() {
-                                        set.insert(norm);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else if k.contains('@') {
-                    let low = k.to_lowercase().trim().to_string();
-                    set.insert(low.clone());
-                    let norm = mitch_lib::auth::normalize_email(&low);
-                    if !norm.is_empty() {
-                        set.insert(norm);
-                    }
-                }
-            }
-        }
-    };
-
-    // 1. Read newsletter_unsub.json from store and disk (data_dir and base_dir/data)
-    let p1 = state.data_dir().join("newsletter_unsub.json");
-    let doc1 = state.store.read_document(&p1, json!([]));
-    add_from_val(doc1);
-    if let Ok(raw) = std::fs::read_to_string(&p1) {
-        if let Ok(val) = serde_json::from_str::<Value>(&raw) {
-            add_from_val(val);
-        }
-    }
-
-    let p2 = state.cfg.base_dir.join("data/newsletter_unsub.json");
-    if p2 != p1 {
-        let doc2 = state.store.read_document(&p2, json!([]));
-        add_from_val(doc2);
-        if let Ok(raw) = std::fs::read_to_string(&p2) {
-            if let Ok(val) = serde_json::from_str::<Value>(&raw) {
-                add_from_val(val);
-            }
+    // 1. The newsletter_unsub table.
+    for low in mitch_lib::newsletter_unsub::newsletter_unsub_all_emails(&state.store) {
+        let norm = mitch_lib::auth::normalize_email(&low);
+        set.insert(low);
+        if !norm.is_empty() {
+            set.insert(norm);
         }
     }
 
@@ -1615,20 +1560,15 @@ mod tests {
     }
 
     #[test]
-    fn test_newsletter_unsub_from_store_and_disk() {
+    fn test_newsletter_unsub_set_normalizes_matches() {
         let (state, dir) = test_state();
 
-        // 1. Store write (simulating API / DB unsubscribe)
-        let _ = state.store.write_document(
-            &state.data_dir().join("newsletter_unsub.json"),
-            &json!(["store_unsub@example.com", "first.last@student.rjuhsd.us"]),
+        mitch_lib::newsletter_unsub::newsletter_unsub_add(&state.store, "store_unsub@example.com");
+        mitch_lib::newsletter_unsub::newsletter_unsub_add(
+            &state.store,
+            "first.last@student.rjuhsd.us",
         );
-
-        // 2. Disk write (simulating manual edit on disk)
-        let _ = std::fs::write(
-            state.data_dir().join("newsletter_unsub.json"),
-            serde_json::to_string(&json!(["disk_unsub@example.com"])).unwrap(),
-        );
+        mitch_lib::newsletter_unsub::newsletter_unsub_add(&state.store, "disk_unsub@example.com");
 
         let set = newsletter_unsub_set(&state);
         // Direct matches
@@ -1675,9 +1615,10 @@ mod tests {
         );
 
         // Unsubscribe tok2 directly, and tok3 via normalized address (without dot)
-        let _ = state.store.write_document(
-            &state.data_dir().join("newsletter_unsub.json"),
-            &json!(["unsubbed@example.com", "alicestudent@student.rjuhsd.us"]),
+        mitch_lib::newsletter_unsub::newsletter_unsub_add(&state.store, "unsubbed@example.com");
+        mitch_lib::newsletter_unsub::newsletter_unsub_add(
+            &state.store,
+            "alicestudent@student.rjuhsd.us",
         );
 
         let enrolled = enrolled_users(&state);

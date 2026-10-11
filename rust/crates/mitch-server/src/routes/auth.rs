@@ -1208,28 +1208,7 @@ fn newsletter_unsubscribe_direct(
         auth::normalize_email(&acct_email)
     };
 
-    let unsub_file = data_file(state, "newsletter_unsub.json");
-    let mut unsub: Vec<String> = state
-        .store
-        .read_document(&unsub_file, json!([]))
-        .as_array()
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                .collect()
-        })
-        .unwrap_or_default();
-
-    if !unsub.contains(&norm_email) {
-        unsub.push(norm_email.clone());
-        unsub.sort();
-        unsub.dedup();
-        let _ = state.store.write_document(&unsub_file, &json!(unsub));
-        let _ = std::fs::write(
-            &unsub_file,
-            mitch_lib::data::js_stringify_pretty(&json!(unsub)),
-        );
-    }
+    mitch_lib::newsletter_unsub::newsletter_unsub_add(&state.store, &norm_email);
 
     json_resp(200, json!({ "success": true, "email": norm_email }))
 }
@@ -2038,10 +2017,10 @@ mod tests {
         );
         assert_eq!(resp_unsub.status(), StatusCode::OK);
 
-        let unsub_list = state
-            .store
-            .read_document(&data_file(&state, "newsletter_unsub.json"), json!([]));
-        assert!(unsub_list.as_array().unwrap().iter().any(|v| v == &norm));
+        assert!(mitch_lib::newsletter_unsub::newsletter_unsub_exists(
+            &state.store,
+            &norm
+        ));
     }
 
     #[tokio::test]
