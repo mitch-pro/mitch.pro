@@ -220,8 +220,8 @@ fn inbox(state: &Arc<AppState>) -> Response {
 
 // ── POST endpoints ───────────────────────────────────────────────────────────
 
-/// POST /api/team/reply (server.js:22996-23046) — spawnSync the support
-/// send script, then append the Sent record straight to the disk cache the
+/// POST /api/team/reply (server.js:22996-23046) — send via the mitch-mail
+/// service, then append the Sent record straight to the disk cache the
 /// IMAP watcher owns (tmp+rename).
 async fn reply(state: &Arc<AppState>, body_bytes: &[u8], member_name: &str) -> Response {
     let Some(body) = parse_body_strict(body_bytes) else {
@@ -237,26 +237,11 @@ async fn reply(state: &Arc<AppState>, body_bytes: &[u8], member_name: &str) -> R
     if !(has("to") && has("subject") && has("body")) {
         return json_response(400, json!({ "error": "missing fields" }));
     }
-    let script = state.cfg.base_dir.join("mail/support_send.js");
-    let mut args: Vec<String> = vec![script.to_string_lossy().into_owned(), "--raw".into()];
-    if !in_reply_to.is_empty() {
-        args.push("--in-reply-to".into());
-        args.push(in_reply_to);
-    }
-    args.push(to.clone());
-    args.push(subject.clone());
-    args.push(reply_body.clone());
-    let base_dir = state.cfg.base_dir.clone();
-    let (status, _stdout, stderr) =
-        tokio::task::spawn_blocking(move || spawn_sync_timed("node", &args, &base_dir, 30_000))
-            .await
-            .unwrap_or((None, String::new(), String::new()));
-    if status != Some(0) {
-        let err = stderr.trim();
-        return json_response(
-            500,
-            json!({ "error": if err.is_empty() { "send failed" } else { err } }),
-        );
+    let in_reply_to_header = (!in_reply_to.is_empty()).then_some(in_reply_to);
+    if let Err(err) =
+        send_via_mitch_mail("support", &to, &subject, &reply_body, in_reply_to_header, true).await
+    {
+        return json_response(500, json!({ "error": err }));
     }
     tracing::info!("[team] reply to {to} by {member_name}");
 
@@ -378,8 +363,9 @@ fn gmail_toggle(state: &Arc<AppState>, member_name: &str) -> Response {
     }
 }
 
-/// POST /api/team/gmail-reply (server.js:23092-23096) — spawnSync the gmail
-/// send script, then append under the thread key in the DB-backed sent doc.
+/// POST /api/team/gmail-reply (server.js:23092-23096) — send via the
+/// mitch-mail service, then append under the thread key in the DB-backed
+/// sent doc.
 async fn gmail_reply(state: &Arc<AppState>, body_bytes: &[u8], member_name: &str) -> Response {
     let Some(body) = parse_body_strict(body_bytes) else {
         return json_response(400, json!({ "error": "bad json" }));
@@ -394,26 +380,11 @@ async fn gmail_reply(state: &Arc<AppState>, body_bytes: &[u8], member_name: &str
     if !(has("to") && has("subject") && has("body")) {
         return json_response(400, json!({ "error": "missing fields" }));
     }
-    let send_script = state.cfg.base_dir.join("mail/send_email.js");
-    let mut args: Vec<String> = vec![send_script.to_string_lossy().into_owned(), "--raw".into()];
-    if !message_id.is_empty() {
-        args.push("--in-reply-to".into());
-        args.push(format!("<{message_id}>"));
-    }
-    args.push(to.clone());
-    args.push(subject.clone());
-    args.push(reply_body.clone());
-    let cwd = state.cfg.base_dir.clone();
-    let (status, _stdout, stderr) =
-        tokio::task::spawn_blocking(move || spawn_sync_timed("bun", &args, &cwd, 40_000))
-            .await
-            .unwrap_or((None, String::new(), String::new()));
-    if status != Some(0) {
-        let err = stderr.trim();
-        return json_response(
-            500,
-            json!({ "error": if err.is_empty() { "send failed" } else { err } }),
-        );
+    let in_reply_to_header = (!message_id.is_empty()).then(|| format!("<{message_id}>"));
+    if let Err(err) =
+        send_via_mitch_mail("gmail", &to, &subject, &reply_body, in_reply_to_header, true).await
+    {
+        return json_response(500, json!({ "error": err }));
     }
     // JS: threadKey || messageId || (to + '|' + subject)
     let key = if !body_thread_key.is_empty() {
@@ -571,59 +542,44 @@ async fn ai(_state: &Arc<AppState>, body_bytes: &[u8], member_name: &str) -> Res
     json_response(500, json!({ "error": "AI failed" }))
 }
 
-/// `spawnSync` with a timeout — polls `try_wait` on the blocking thread and
-/// kills on the deadline (JS spawnSync's `timeout` option returns status
-/// null on kill; both map to the caller's `status != Some(0)` failure arm).
-fn spawn_sync_timed(
-    program: &str,
-    args: &[String],
-    cwd: &std::path::Path,
-    timeout_ms: u64,
-) -> (Option<i32>, String, String) {
-    let Ok(mut child) = std::process::Command::new(program)
-        .args(args)
-        .current_dir(cwd)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-    else {
-        // spawnSync reports an error object with status null.
-        return (None, String::new(), String::new());
-    };
-    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                let out = child.wait_with_output().ok();
-                return (
-                    status.code(),
-                    out.as_ref()
-                        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
-                        .unwrap_or_default(),
-                    out.as_ref()
-                        .map(|o| String::from_utf8_lossy(&o.stderr).into_owned())
-                        .unwrap_or_default(),
-                );
-            }
-            Ok(None) => {
-                if std::time::Instant::now() >= deadline {
-                    let _ = child.kill();
-                    let out = child.wait_with_output().ok();
-                    return (
-                        None,
-                        out.as_ref()
-                            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
-                            .unwrap_or_default(),
-                        out.as_ref()
-                            .map(|o| String::from_utf8_lossy(&o.stderr).into_owned())
-                            .unwrap_or_default(),
-                    );
-                }
-                std::thread::sleep(std::time::Duration::from_millis(25));
-            }
-            Err(_) => return (None, String::new(), String::new()),
-        }
+/// Sends one message through the mitch-mail service's `/send` endpoint
+/// (replaces spawning `mail/send_email.js` / `mail/support_send.js` via
+/// node/bun). `MAIL_RS_URL` matches the JS shim's own env var, same default.
+async fn send_via_mitch_mail(
+    sender: &str,
+    to: &str,
+    subject: &str,
+    body: &str,
+    in_reply_to: Option<String>,
+    raw: bool,
+) -> Result<(), String> {
+    let base =
+        std::env::var("MAIL_RS_URL").unwrap_or_else(|_| "http://127.0.0.1:6902".to_string());
+    let resp = reqwest::Client::new()
+        .post(format!("{base}/send"))
+        .timeout(std::time::Duration::from_secs(30))
+        .json(&json!({
+            "sender": sender,
+            "to": to,
+            "subject": subject,
+            "body": body,
+            "inReplyTo": in_reply_to,
+            "alt": false,
+            "raw": raw,
+            "dry_run": false,
+        }))
+        .send()
+        .await
+        .map_err(|e| format!("mitch-mail unreachable: {e}"))?;
+    if resp.status().is_success() {
+        return Ok(());
     }
+    let parsed: Value = resp.json().await.unwrap_or_default();
+    Err(parsed
+        .get("error")
+        .and_then(Value::as_str)
+        .unwrap_or("send failed")
+        .to_string())
 }
 #[cfg(test)]
 mod tests {
@@ -888,7 +844,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn reply_validates_and_reports_spawn_failure() {
+    async fn reply_validates_and_reports_send_failure() {
         let (state, dir) = test_state();
         seed_tokens(&dir);
         let h = bearer("tok-mitch");
@@ -916,8 +872,8 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(code(&resp), 400);
-        // A real spawn: the script path doesn't exist in the temp base →
-        // node exits nonzero → 500 with an error payload.
+        // A real HTTP call: nothing listens on MAIL_RS_URL in tests →
+        // mitch-mail unreachable → 500 with an error payload.
         let resp = handle(
             &state,
             &Method::POST,
@@ -1001,7 +957,7 @@ mod tests {
         let (state, dir) = test_state();
         seed_tokens(&dir);
         let h = bearer("tok-mitch");
-        // Missing fields → 400 (no spawn).
+        // Missing fields → 400 (no send attempted).
         let resp = handle(
             &state,
             &Method::POST,
@@ -1013,8 +969,7 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(code(&resp), 400);
-        // The send script path doesn't exist in the temp base → spawn fails
-        // (or bun exits nonzero) → 500.
+        // Nothing listens on MAIL_RS_URL in tests → mitch-mail unreachable → 500.
         let resp = handle(
             &state,
             &Method::POST,
