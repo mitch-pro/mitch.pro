@@ -1494,13 +1494,12 @@ pub fn execute_moderator_approved_action(
             if msg.is_empty() {
                 return Err((400, "message required".into()));
             }
-            let jumpscare = s("type").as_str() == Some("jumpscare");
             // WS fan-out (server.js:7093-7100).
             crate::ws::broadcast(
                 state,
                 crate::ws::WsRecipients::All,
                 json!({
-                    "type": if jumpscare { "admin_jumpscare" } else { "admin_broadcast" },
+                    "type": "admin_broadcast",
                     "message": msg,
                 })
                 .to_string(),
@@ -1509,7 +1508,7 @@ pub fn execute_moderator_approved_action(
                 &state.store,
                 &state.cfg.data_dir,
                 actor,
-                if jumpscare { "jumpscare" } else { "broadcast" },
+                "broadcast",
                 json!({ "message": msg }).merge(requested_by()),
             );
             Ok(json!({ "ok": true }))

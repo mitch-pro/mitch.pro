@@ -71,11 +71,6 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-// Let the admin broadcast video stream directly from the network. Service
-// Worker cache.put can fail on large authenticated/range media responses.
-if (requestUrl.pathname === '/media/admin-jumpscare-krupp-1935.webm') {
-  return;
-}
 const isThemeJs = requestUrl.pathname === '/theme.js';
 
   if (isThemeJs) {

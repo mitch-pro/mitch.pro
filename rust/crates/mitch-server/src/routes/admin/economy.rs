@@ -339,17 +339,12 @@ pub fn handle(
         if !ctx.is_any_admin(state) {
             return Some(forbidden());
         }
-        let typ_str = body
-            .get("type")
-            .and_then(|v| v.as_str())
-            .unwrap_or("normal");
-        let is_jumpscare = typ_str == "jumpscare";
         let msg_str = body
             .get("msg")
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .trim();
-        if !is_jumpscare && msg_str.is_empty() {
+        if msg_str.is_empty() {
             return Some(json_response(400, json!({ "error": "message required" })));
         }
         let msg_truncated = &msg_str[..msg_str.len().min(500)];
@@ -360,11 +355,7 @@ pub fn handle(
         let random_hex = mitch_lib::crypto::random_bytes_hex(6);
         let event = crate::state::AdminBroadcastEvent {
             broadcast_id: format!("{}-{random_hex}", mitch_lib::crypto::to_base36(now)),
-            event_type: if is_jumpscare {
-                "admin_jumpscare".to_string()
-            } else {
-                "admin_broadcast".to_string()
-            },
+            event_type: "admin_broadcast".to_string(),
             message: msg_truncated.to_string(),
             created_at: now as i64,
             expires_at: (now + 5 * 60 * 1000) as i64,
@@ -383,11 +374,7 @@ pub fn handle(
             &state.store,
             &state.cfg.data_dir,
             &ctx.email(state),
-            if is_jumpscare {
-                "jumpscare"
-            } else {
-                "broadcast"
-            },
+            "broadcast",
             json!({ "message": msg_truncated }),
         );
         return Some(json_response(

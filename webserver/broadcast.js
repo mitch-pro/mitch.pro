@@ -54,13 +54,11 @@
       return false;
     }
     function handleMessage(data) {
-      if ((data.type === 'admin_broadcast' || data.type === 'admin_jumpscare') && data.createdAt && Number(data.createdAt) < pageOpenedAt) {
+      if (data.type === 'admin_broadcast' && data.createdAt && Number(data.createdAt) < pageOpenedAt) {
         return;
       }
       if (data.type === 'admin_broadcast') {
         if (!hasSeenBroadcast(data)) showBroadcast(data.message);
-      } else if (data.type === 'admin_jumpscare') {
-        if (!hasSeenBroadcast(data)) showJumpscare(data.message);
       } else if (data.type === 'refresh_notifications') {
         if (typeof window.__refreshNotifications === 'function') {
           window.__refreshNotifications();
@@ -197,47 +195,6 @@
         if (!document.hidden) { pollLatestBroadcast(); refreshPeoplePanel(); }
       });
       setInterval(refreshPeoplePanel, 30000);
-    }
-    function showJumpscare(msg) {
-      showVideoJumpscare(msg);
-    }
-    function showVideoJumpscare(msg) {
-      var previous = document.getElementById('admin-video-jumpscare');
-      if (previous) {
-        var previousVideo = previous.querySelector('video');
-        if (previousVideo) previousVideo.pause();
-        previous.remove();
-      }
-      var overlay = document.createElement('div');
-      overlay.id = 'admin-video-jumpscare';
-      overlay.setAttribute('role', 'dialog');
-      overlay.setAttribute('aria-modal', 'true');
-      overlay.style.cssText = 'position:fixed;inset:0;background:#000;z-index:2147483647;display:grid;place-items:center;overflow:hidden;';
-      var video = document.createElement('video');
-      video.src = '/media/admin-jumpscare-krupp-1935.webm';
-      video.autoplay = true;
-      video.playsInline = true;
-      video.preload = 'auto';
-      video.style.cssText = 'width:100%;height:100%;object-fit:contain;background:#000;';
-      var close = document.createElement('button');
-      close.type = 'button';
-      close.setAttribute('aria-label', 'Close video');
-      close.textContent = '×';
-      close.style.cssText = 'position:absolute;top:max(12px,env(safe-area-inset-top));right:14px;width:42px;height:42px;border:1px solid #ffffff55;border-radius:50%;background:#000a;color:#fff;font:26px/1 system-ui;cursor:pointer;z-index:2;';
-      var caption = document.createElement('div');
-      caption.style.cssText = 'position:absolute;left:50%;bottom:max(18px,env(safe-area-inset-bottom));translate:-50% 0;max-width:min(760px,calc(100% - 40px));padding:9px 14px;border-radius:10px;background:#000b;color:#fff;font:700 clamp(14px,2vw,22px)/1.25 system-ui;text-align:center;';
-      caption.textContent = String(msg || '').trim();
-      caption.hidden = !caption.textContent;
-      function remove() { video.pause(); video.removeAttribute('src'); overlay.remove(); }
-      close.onclick = remove;
-      video.addEventListener('ended', remove, { once: true });
-      video.addEventListener('error', function() { caption.hidden = false; caption.textContent = 'The video could not be loaded.'; });
-      overlay.append(video, close, caption);
-      document.body.appendChild(overlay);
-      video.play().catch(function() {
-        video.muted = true;
-        video.play().catch(function() {});
-      });
     }
     function showBroadcast(msg) {
       var el = document.createElement('div');
