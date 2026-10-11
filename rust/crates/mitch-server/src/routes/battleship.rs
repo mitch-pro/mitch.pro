@@ -269,10 +269,7 @@ fn online(state: &Arc<AppState>) -> axum::response::Response {
 /// `myDisplayName` (server.js:20801-20802 / 20826-20827) — profile
 /// displayName || nickname || username || the canonical local part.
 fn display_name(state: &AppState, norm: &str, canonical: &str) -> String {
-    let profiles: Value = state
-        .store
-        .read_document(&state.data_dir().join("profiles.json"), json!({}));
-    let prof = profiles.get(norm).cloned().unwrap_or(json!({}));
+    let prof = mitch_lib::profiles::profile_get(&state.store, norm);
     let pick = ["displayName", "nickname", "username"]
         .iter()
         .find_map(|k| prof.get(*k).filter(|v| jsval::truthy(v)).cloned())

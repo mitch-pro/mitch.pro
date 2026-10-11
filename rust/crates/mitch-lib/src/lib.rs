@@ -39,6 +39,7 @@ pub mod matrix;
 pub mod minigames;
 pub mod passwords;
 pub mod profile;
+pub mod profiles;
 pub mod push_subs;
 pub mod school;
 pub mod shop;

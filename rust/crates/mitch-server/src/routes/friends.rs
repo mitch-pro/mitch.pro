@@ -355,9 +355,7 @@ fn friends_list(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         .and_then(|v| v.as_array())
         .map(|a| a.iter().map(jsval::string).collect())
         .unwrap_or_default();
-    let profiles = state
-        .store
-        .read_document(&data_file(state, "profiles.json"), json!({}));
+    let profiles = mitch_lib::profiles::profile_all(&state.store);
     let now = mitch_lib::school::now_millis();
     let presence_map = state
         .user_presence

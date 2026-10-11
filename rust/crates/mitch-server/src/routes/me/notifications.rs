@@ -738,17 +738,6 @@ fn me_complete_tutorial(state: &Arc<AppState>, headers: &HeaderMap) -> Response 
         obj.insert("hasCompletedTutorial".into(), json!(true));
         obj.insert("has_completed_tutorial".into(), json!(true));
     }
-    let profiles_file = data_file(state, "profiles.json");
-    let mut profiles = state.store.read_document(&profiles_file, json!({}));
-    if let Some(obj) = profiles.as_object_mut() {
-        obj.insert(norm.clone(), profile);
-    }
-    if state
-        .store
-        .write_document(&profiles_file, &profiles)
-        .is_err()
-    {
-        return json_response(400, json!({ "error": "save failed" }));
-    }
+    mitch_lib::profiles::profile_set(&state.store, &norm, &profile);
     json_response(200, json!({ "ok": true }))
 }

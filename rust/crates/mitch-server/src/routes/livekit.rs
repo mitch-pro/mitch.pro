@@ -198,13 +198,10 @@ fn token_endpoint(
     } else {
         mitch_lib::auth::normalize_email(&cookie_email)
     };
-    let profiles = state
-        .store
-        .read_document(&state.data_dir().join("profiles.json"), json!({}));
     let prof = if norm_email.is_empty() {
         json!({})
     } else {
-        profiles.get(&norm_email).cloned().unwrap_or(json!({}))
+        mitch_lib::profiles::profile_get(&state.store, &norm_email)
     };
 
     // JS: `body.room || body.room_id || body.roomId || 'default'`.

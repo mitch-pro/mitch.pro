@@ -58,7 +58,7 @@ pub fn default_username_for_email(email: &str) -> String {
 /// profiles document is loaded here, exactly like the JS lazy load.
 pub fn process_member_fields(
     store: &DataStore,
-    data_dir: &Path,
+    _data_dir: &Path,
     member_email: &str,
     profile: Option<&Value>,
     viewer_email: Option<&str>,
@@ -71,16 +71,9 @@ pub fn process_member_fields(
     let viewer_can_see = norm_viewer == norm_target
         || auth::is_admin_email(store, viewer_email.unwrap_or(""))
         || auth::is_moderator_email(store, viewer_email.unwrap_or(""));
-    let profiles;
     let p = match profile {
         Some(p) => p.clone(),
-        None => {
-            profiles = store.read_document(&data_dir.join("profiles.json"), json!({}));
-            profiles
-                .get(norm_target.as_str())
-                .cloned()
-                .unwrap_or(json!({}))
-        }
+        None => crate::profiles::profile_get(store, &norm_target),
     };
     let username = p
         .get("username")
@@ -143,7 +136,7 @@ pub fn email_from_hash(
         }
     }
     let username = normalize_username(hash);
-    let profiles = store.read_document(&data_dir.join("profiles.json"), json!({}));
+    let profiles = crate::profiles::profile_all(store);
     if let Some(map) = profiles.as_object() {
         for (email, p) in map {
             if !username.is_empty() {
@@ -181,7 +174,7 @@ pub fn email_from_hash(
 /// substring. All against passwords.json + profiles.json.
 pub fn resolve_target_email(
     store: &DataStore,
-    data_dir: &Path,
+    _data_dir: &Path,
     id_secret: &[u8],
     input: &str,
 ) -> Option<String> {
@@ -222,7 +215,7 @@ pub fn resolve_target_email(
     }
 
     // 3. Match by username / displayName (exact, case-insensitive).
-    let profiles = store.read_document(&data_dir.join("profiles.json"), json!({}));
+    let profiles = crate::profiles::profile_all(store);
     if let Some(map) = profiles.as_object() {
         for (norm_email, profile) in map {
             if let Some(username) = profile.get("username").and_then(|v| v.as_str()) {
@@ -475,9 +468,8 @@ pub fn canonical_delivery_email(
         }
     }
 
-    // 2. profiles.json — user-customized profile email.
-    let profiles = store.read_document(&data_dir.join("profiles.json"), json!({}));
-    if let Some(p) = profiles.get(norm.as_str()) {
+    // 2. profiles table — user-customized profile email.
+    if let Some(p) = crate::profiles::profile_get_opt(store, &norm) {
         if let Some(e) = p.get("email").and_then(|v| v.as_str()) {
             if e.contains('@')
                 && crate::auth::normalize_email(e) == norm
@@ -525,8 +517,7 @@ pub fn display_email(
         return String::new();
     }
     let norm = crate::auth::normalize_email(&raw);
-    let profiles = store.read_document(&data_dir.join("profiles.json"), json!({}));
-    if let Some(p) = profiles.get(norm.as_str()) {
+    if let Some(p) = crate::profiles::profile_get_opt(store, &norm) {
         if let Some(e) = p.get("email").and_then(|v| v.as_str()) {
             if e.split('@')
                 .next()
@@ -559,8 +550,7 @@ pub fn ensure_profile_defaults(
     original_email: &str,
     patch: &Value,
 ) -> Value {
-    let profiles_file = data_dir.join("profiles.json");
-    let profiles = store.read_document(&profiles_file, json!({}));
+    let profiles = crate::profiles::profile_all(store);
     let mut used = std::collections::HashSet::new();
     if let Some(map) = profiles.as_object() {
         for (email, p) in map {
@@ -720,11 +710,7 @@ pub fn ensure_profile_defaults(
             .unwrap_or(false)),
     );
 
-    let mut profiles_out = profiles;
-    if let Some(map) = profiles_out.as_object_mut() {
-        map.insert(norm_email.to_string(), record.clone());
-    }
-    let _ = store.write_document(&profiles_file, &profiles_out);
+    crate::profiles::profile_set(store, norm_email, &record);
     record
 }
 

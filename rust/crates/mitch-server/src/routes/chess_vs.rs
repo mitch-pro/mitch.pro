@@ -441,10 +441,7 @@ fn challenge(state: &Arc<AppState>, body: &Value, my_email: &str) -> axum::respo
         my_email,
     );
     let my_norm = mitch_lib::auth::normalize_email(my_email);
-    let profiles: Value = state
-        .store
-        .read_document(&state.data_dir().join("profiles.json"), json!({}));
-    let prof = profiles.get(&my_norm).cloned().unwrap_or(json!({}));
+    let prof = mitch_lib::profiles::profile_get(&state.store, &my_norm);
     let from_name = ["displayName", "nickname", "username"]
         .iter()
         .find_map(|k| prof.get(*k).filter(|v| jsval::truthy(v)).cloned())
@@ -554,10 +551,7 @@ fn respond(state: &Arc<AppState>, body: &Value, my_email: &str) -> axum::respons
         my_email,
     );
     let my_norm = mitch_lib::auth::normalize_email(my_email);
-    let profiles: Value = state
-        .store
-        .read_document(&state.data_dir().join("profiles.json"), json!({}));
-    let prof = profiles.get(&my_norm).cloned().unwrap_or(json!({}));
+    let prof = mitch_lib::profiles::profile_get(&state.store, &my_norm);
     let responder_name = ["displayName", "nickname", "username"]
         .iter()
         .find_map(|k| prof.get(*k).filter(|v| jsval::truthy(v)).cloned())
@@ -817,10 +811,7 @@ fn display_name_of(state: &AppState, email: &str) -> String {
         email,
     );
     let norm = mitch_lib::auth::normalize_email(email);
-    let profiles: Value = state
-        .store
-        .read_document(&state.data_dir().join("profiles.json"), json!({}));
-    let prof = profiles.get(&norm).cloned().unwrap_or(json!({}));
+    let prof = mitch_lib::profiles::profile_get(&state.store, &norm);
     ["displayName", "nickname", "username"]
         .iter()
         .find_map(|k| prof.get(*k).filter(|v| jsval::truthy(v)).cloned())

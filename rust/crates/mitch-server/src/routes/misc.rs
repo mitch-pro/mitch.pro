@@ -328,9 +328,7 @@ fn leaderboard(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     // increasingly stale) coins.json blob — go through the function that
     // actually reads it.
     let coins = mitch_lib::coins::load_coins(&state.store, state.data_dir());
-    let profiles = state
-        .store
-        .read_document(&state.data_dir().join("profiles.json"), json!({}));
+    let profiles = mitch_lib::profiles::profile_all(&state.store);
     let user_stats = mitch_lib::user_stats::user_stats_all(&state.store);
 
     let mut keys: Vec<String> = Vec::new();

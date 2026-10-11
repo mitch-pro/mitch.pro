@@ -106,10 +106,7 @@ pub fn blog_role_for_email(state: &AppState, email: &str) -> &'static str {
 /// `blogAuthorName(email)` (server.js:6597).
 pub fn blog_author_name(state: &AppState, email: &str) -> String {
     let norm = normalize_email(email);
-    let profiles = state
-        .store
-        .read_document(&data_file(state, "profiles.json"), json!({}));
-    if let Some(prof) = profiles.get(&norm) {
+    if let Some(prof) = mitch_lib::profiles::profile_get_opt(&state.store, &norm) {
         if let Some(nick) = prof
             .get("nickname")
             .and_then(|v| v.as_str())

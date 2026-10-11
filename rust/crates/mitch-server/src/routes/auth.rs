@@ -139,9 +139,7 @@ pub(crate) fn resolve_login_identifier(state: &AppState, input: &str) -> Option<
         }
         return None;
     }
-    let profiles = state
-        .store
-        .read_document(&data_file(state, "profiles.json"), json!({}));
+    let profiles = mitch_lib::profiles::profile_all(&state.store);
     if let Some(obj) = profiles.as_object() {
         for (norm_email, profile) in obj {
             let u = profile
@@ -317,9 +315,7 @@ async fn signup(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -
                 json!({ "success": false, "message": "Username must use lowercase letters, numbers, \".\", \"_\", or \"-\"." }),
             );
         }
-        let profiles = state
-            .store
-            .read_document(&data_file(state, "profiles.json"), json!({}));
+        let profiles = mitch_lib::profiles::profile_all(&state.store);
         if let Some(obj) = profiles.as_object() {
             if obj.values().any(|p| {
                 p.get("username")
@@ -1975,16 +1971,15 @@ mod tests {
         // Enable TOTP 2FA
         let totp_secret = totp::random_base32(32);
         let sealed_secret = totp::seal_totp_secret(&totp_secret, &state.id_secret);
-        let mut profiles = json!({});
-        profiles[norm.clone()] = json!({
-            "twofa_enabled": true,
-            "twofa_type": "totp",
-            "totp_secret": sealed_secret
-        });
-        state
-            .store
-            .write_document(&data_file(&state, "profiles.json"), &profiles)
-            .unwrap();
+        mitch_lib::profiles::profile_set(
+            &state.store,
+            &norm,
+            &json!({
+                "twofa_enabled": true,
+                "twofa_type": "totp",
+                "totp_secret": sealed_secret
+            }),
+        );
 
         let headers = HeaderMap::new();
         let login_req = json!({

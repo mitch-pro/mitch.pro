@@ -164,9 +164,7 @@ pub(super) async fn mark_read(
     };
     let store = store_of(headers);
     let idx = dm::address_index_cached(&state.store, &state.cfg.data_dir);
-    let profiles = state
-        .store
-        .read_document(&data_file(state, "profiles.json"), json!({}));
+    let profiles = mitch_lib::profiles::profile_all(&state.store);
     let my_norm = auth::normalize_email(&my_email);
     // Per-message closure state the JS recomputes inside the loop; constant
     // per request, so hoisted (same semantics, one read instead of N).

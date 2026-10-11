@@ -283,9 +283,7 @@ pub async fn handle(
             record_views.push(view);
         }
 
-        let profiles = state
-            .store
-            .read_document(&state.data_dir().join("profiles.json"), json!({}));
+        let profiles = mitch_lib::profiles::profile_all(&state.store);
         let mut user_emails: Vec<String> = mitch_lib::passwords::password_all_emails(&state.store);
         user_emails.sort();
         let users: Vec<Value> = user_emails

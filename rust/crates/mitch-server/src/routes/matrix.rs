@@ -752,9 +752,7 @@ pub fn resolve_matrix_user_id_from_store(
     norm_email: &str,
 ) -> String {
     let norm = mitch_lib::auth::normalize_email(norm_email);
-    let profiles_file = data_dir.join("profiles.json");
-    let profiles = store.read_document(&profiles_file, json!({}));
-    if let Some(prof) = profiles.get(&norm) {
+    if let Some(prof) = mitch_lib::profiles::profile_get_opt(store, &norm) {
         if let Some(uname) = prof.get("username").and_then(|v| v.as_str()) {
             if !uname.is_empty() {
                 return format!("@{uname}:mitch.pro");
@@ -846,8 +844,7 @@ pub fn resolve_all_emails_for_target(
         .collect();
 
     // 1. Profiles
-    let profiles_file = data_dir.join("profiles.json");
-    let profiles = store.read_document(&profiles_file, json!({}));
+    let profiles = mitch_lib::profiles::profile_all(store);
     if let Some(map) = profiles.as_object() {
         for (email_key, prof) in map {
             let p_email = mitch_lib::auth::normalize_email(email_key);
@@ -992,9 +989,8 @@ pub fn resolve_all_matrix_user_ids_from_store(
         None
     };
 
-    // 1. Check profiles.json for exact or fuzzy matches (username, displayName, nickname, email)
-    let profiles_file = data_dir.join("profiles.json");
-    let profiles = store.read_document(&profiles_file, json!({}));
+    // 1. Check profiles for exact or fuzzy matches (username, displayName, nickname, email)
+    let profiles = mitch_lib::profiles::profile_all(store);
     if let Some(map) = profiles.as_object() {
         let clean_cmp: String = local_raw
             .to_lowercase()
@@ -1846,8 +1842,7 @@ pub fn find_profile_email_by_matrix_user_id(
         }
     }
 
-    let profiles_file = state.data_dir().join("profiles.json");
-    let profiles = state.store.read_document(&profiles_file, json!({}));
+    let profiles = mitch_lib::profiles::profile_all(&state.store);
     if let Some(map) = profiles.as_object() {
         for (norm_email, p) in map {
             if let Some(uname) = p.get("username").and_then(|v| v.as_str()) {
@@ -2611,9 +2606,7 @@ fn api_sso_status(state: &AppState, headers: &HeaderMap) -> Response {
     let email =
         mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, uid).unwrap_or_default();
     let norm = mitch_lib::auth::normalize_email(&email);
-    let profiles_file = state.data_dir().join("profiles.json");
-    let profiles = state.store.read_document(&profiles_file, json!({}));
-    let prof = profiles.get(&norm).cloned().unwrap_or(json!({}));
+    let prof = mitch_lib::profiles::profile_get(&state.store, &norm);
     let username = prof
         .get("username")
         .and_then(|v| v.as_str())
@@ -2679,9 +2672,7 @@ async fn api_sso_login(state: &AppState, headers: &HeaderMap, body_bytes: &[u8])
     let email =
         mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, uid).unwrap_or_default();
     let norm = mitch_lib::auth::normalize_email(&email);
-    let profiles_file = state.data_dir().join("profiles.json");
-    let profiles = state.store.read_document(&profiles_file, json!({}));
-    let prof = profiles.get(&norm).cloned().unwrap_or(json!({}));
+    let prof = mitch_lib::profiles::profile_get(&state.store, &norm);
     let username = prof
         .get("username")
         .and_then(|v| v.as_str())
@@ -5660,8 +5651,7 @@ fn resolve_member_norm(state: &AppState, member_id: &str) -> String {
         }
     }
 
-    let profiles_file = state.data_dir().join("profiles.json");
-    let profiles = state.store.read_document(&profiles_file, json!({}));
+    let profiles = mitch_lib::profiles::profile_all(&state.store);
     if let Some(obj) = profiles.as_object() {
         for (email_key, prof_val) in obj {
             if let Some(uname) = prof_val.get("username").and_then(|v| v.as_str()) {
@@ -5712,9 +5702,7 @@ async fn resolve_sender_info(
     }
 
     if !sender_norm_email.is_empty() {
-        let profiles_file = state.data_dir().join("profiles.json");
-        let profiles = state.store.read_document(&profiles_file, json!({}));
-        if let Some(prof) = profiles.get(&sender_norm_email) {
+        if let Some(prof) = mitch_lib::profiles::profile_get_opt(&state.store, &sender_norm_email) {
             if let Some(name) = prof
                 .get("displayName")
                 .or_else(|| prof.get("nickname"))
@@ -6407,21 +6395,22 @@ pub async fn handle_matrix_gateway(
                     if let Some(norm) =
                         find_profile_email_by_matrix_user_id(state, &decoded_user_id)
                     {
-                        let profiles_file = state.data_dir().join("profiles.json");
-                        let mut profiles = state.store.read_document(&profiles_file, json!({}));
-                        if let Some(prof) = profiles.get_mut(&norm).and_then(|v| v.as_object_mut())
+                        if let Some(mut prof) =
+                            mitch_lib::profiles::profile_get_opt(&state.store, &norm)
                         {
-                            let bio_clean = &bio_val.trim()[..bio_val.trim().len().min(300)];
-                            prof.insert("bio".to_string(), json!(bio_clean));
-                            let now = now_millis();
-                            prof.insert("updatedAt".to_string(), json!(now));
-                            let uname = prof
-                                .get("username")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("")
-                                .to_string();
-                            let _ = state.store.write_document(&profiles_file, &profiles);
-                            crate::ws::broadcast_profile_change(state, &uname, now);
+                            if let Some(obj) = prof.as_object_mut() {
+                                let bio_clean = &bio_val.trim()[..bio_val.trim().len().min(300)];
+                                obj.insert("bio".to_string(), json!(bio_clean));
+                                let now = now_millis();
+                                obj.insert("updatedAt".to_string(), json!(now));
+                                let uname = obj
+                                    .get("username")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
+                                mitch_lib::profiles::profile_set(&state.store, &norm, &prof);
+                                crate::ws::broadcast_profile_change(state, &uname, now);
+                            }
                         }
                     }
                 }
@@ -6828,24 +6817,27 @@ pub async fn handle_matrix_gateway(
                             if let Some(norm) =
                                 find_profile_email_by_matrix_user_id(state, &decoded_user_id)
                             {
-                                let profiles_file = state.data_dir().join("profiles.json");
-                                let mut profiles =
-                                    state.store.read_document(&profiles_file, json!({}));
-                                if let Some(prof) =
-                                    profiles.get_mut(&norm).and_then(|v| v.as_object_mut())
+                                if let Some(mut prof) =
+                                    mitch_lib::profiles::profile_get_opt(&state.store, &norm)
                                 {
-                                    let dn_clean = &displayname_val.trim()
-                                        [..displayname_val.trim().len().min(40)];
-                                    prof.insert("displayName".to_string(), json!(dn_clean));
-                                    let now = now_millis();
-                                    prof.insert("updatedAt".to_string(), json!(now));
-                                    let uname = prof
-                                        .get("username")
-                                        .and_then(|v| v.as_str())
-                                        .unwrap_or("")
-                                        .to_string();
-                                    let _ = state.store.write_document(&profiles_file, &profiles);
-                                    crate::ws::broadcast_profile_change(state, &uname, now);
+                                    if let Some(obj) = prof.as_object_mut() {
+                                        let dn_clean = &displayname_val.trim()
+                                            [..displayname_val.trim().len().min(40)];
+                                        obj.insert("displayName".to_string(), json!(dn_clean));
+                                        let now = now_millis();
+                                        obj.insert("updatedAt".to_string(), json!(now));
+                                        let uname = obj
+                                            .get("username")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
+                                        mitch_lib::profiles::profile_set(
+                                            &state.store,
+                                            &norm,
+                                            &prof,
+                                        );
+                                        crate::ws::broadcast_profile_change(state, &uname, now);
+                                    }
                                 }
                             }
                         }
@@ -6866,21 +6858,21 @@ pub async fn handle_matrix_gateway(
                             } else {
                                 String::new()
                             };
-                            let profiles_file = state.data_dir().join("profiles.json");
-                            let mut profiles = state.store.read_document(&profiles_file, json!({}));
-                            if let Some(prof) =
-                                profiles.get_mut(&norm).and_then(|v| v.as_object_mut())
+                            if let Some(mut prof) =
+                                mitch_lib::profiles::profile_get_opt(&state.store, &norm)
                             {
-                                prof.insert("pfp".to_string(), json!(pfp_val));
-                                let now = now_millis();
-                                prof.insert("updatedAt".to_string(), json!(now));
-                                let uname = prof
-                                    .get("username")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("")
-                                    .to_string();
-                                let _ = state.store.write_document(&profiles_file, &profiles);
-                                crate::ws::broadcast_profile_change(state, &uname, now);
+                                if let Some(obj) = prof.as_object_mut() {
+                                    obj.insert("pfp".to_string(), json!(pfp_val));
+                                    let now = now_millis();
+                                    obj.insert("updatedAt".to_string(), json!(now));
+                                    let uname = obj
+                                        .get("username")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("")
+                                        .to_string();
+                                    mitch_lib::profiles::profile_set(&state.store, &norm, &prof);
+                                    crate::ws::broadcast_profile_change(state, &uname, now);
+                                }
                             }
                         }
                     }
@@ -6892,24 +6884,27 @@ pub async fn handle_matrix_gateway(
                             if let Some(norm) =
                                 find_profile_email_by_matrix_user_id(state, &decoded_user_id)
                             {
-                                let profiles_file = state.data_dir().join("profiles.json");
-                                let mut profiles =
-                                    state.store.read_document(&profiles_file, json!({}));
-                                if let Some(prof) =
-                                    profiles.get_mut(&norm).and_then(|v| v.as_object_mut())
+                                if let Some(mut prof) =
+                                    mitch_lib::profiles::profile_get_opt(&state.store, &norm)
                                 {
-                                    let bio_clean =
-                                        &status_msg.trim()[..status_msg.trim().len().min(300)];
-                                    prof.insert("bio".to_string(), json!(bio_clean));
-                                    let now = now_millis();
-                                    prof.insert("updatedAt".to_string(), json!(now));
-                                    let uname = prof
-                                        .get("username")
-                                        .and_then(|v| v.as_str())
-                                        .unwrap_or("")
-                                        .to_string();
-                                    let _ = state.store.write_document(&profiles_file, &profiles);
-                                    crate::ws::broadcast_profile_change(state, &uname, now);
+                                    if let Some(obj) = prof.as_object_mut() {
+                                        let bio_clean =
+                                            &status_msg.trim()[..status_msg.trim().len().min(300)];
+                                        obj.insert("bio".to_string(), json!(bio_clean));
+                                        let now = now_millis();
+                                        obj.insert("updatedAt".to_string(), json!(now));
+                                        let uname = obj
+                                            .get("username")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
+                                        mitch_lib::profiles::profile_set(
+                                            &state.store,
+                                            &norm,
+                                            &prof,
+                                        );
+                                        crate::ws::broadcast_profile_change(state, &uname, now);
+                                    }
                                 }
                             }
                         }
@@ -6930,9 +6925,9 @@ pub async fn handle_matrix_gateway(
                     if let Some(norm) =
                         find_profile_email_by_matrix_user_id(state, &decoded_user_id)
                     {
-                        let profiles_file = state.data_dir().join("profiles.json");
-                        let profiles = state.store.read_document(&profiles_file, json!({}));
-                        if let Some(prof) = profiles.get(&norm) {
+                        if let Some(prof) =
+                            mitch_lib::profiles::profile_get_opt(&state.store, &norm)
+                        {
                             if let Some(bio) = prof.get("bio").and_then(|v| v.as_str()) {
                                 if !bio.is_empty() {
                                     if let Ok(mut profile_data) =
@@ -7150,16 +7145,16 @@ mod tests {
         let norm = mitch_lib::auth::normalize_email(email);
         let uid = mitch_lib::auth::make_email_id(email, 0, &state.id_secret);
 
-        let profiles_file = state.data_dir().join("profiles.json");
-        let profiles = json!({
-            &norm: {
+        mitch_lib::profiles::profile_set(
+            &state.store,
+            &norm,
+            &json!({
                 "username": "syncuser",
                 "displayName": "Sync User",
                 "bio": "Hello from mitch.pro",
                 "pfp": "/images/avatar.png"
-            }
-        });
-        let _ = state.store.write_document(&profiles_file, &profiles);
+            }),
+        );
 
         let matrix_users_file = state.data_dir().join("matrix_users.json");
         let matrix_users = json!({
@@ -7195,9 +7190,8 @@ mod tests {
         assert!(resp.is_some());
         assert_eq!(resp.unwrap().status(), StatusCode::OK);
 
-        // Verify bio was updated in profiles.json
-        let updated_profiles = state.store.read_document(&profiles_file, json!({}));
-        let prof = updated_profiles.get(&norm).unwrap();
+        // Verify bio was updated in the profiles table
+        let prof = mitch_lib::profiles::profile_get(&state.store, &norm);
         assert_eq!(
             prof.get("bio").unwrap().as_str().unwrap(),
             "New bio from Matrix client"
@@ -7447,17 +7441,17 @@ mod tests {
     async fn test_matrix_unban_fuzzy_resolution_and_blacklist_cleanup() {
         let (state, dir) = test_state();
 
-        // 1. Populate profiles.json with Long Tran
-        let profiles_file = state.data_dir().join("profiles.json");
-        let profiles = json!({
-            "long.tran@student.rjuhsd.us": {
+        // 1. Populate the profiles table with Long Tran
+        mitch_lib::profiles::profile_set(
+            &state.store,
+            "long.tran@student.rjuhsd.us",
+            &json!({
                 "email": "long.tran@student.rjuhsd.us",
                 "username": "longtran",
                 "displayName": "Long Tran",
                 "nickname": "Long"
-            }
-        });
-        let _ = state.store.write_document(&profiles_file, &profiles);
+            }),
+        );
 
         // 2. Resolve candidates for "Long Tran"
         let resolved = resolve_all_matrix_user_ids_for_target(&state, "Long Tran");

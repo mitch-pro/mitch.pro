@@ -360,10 +360,7 @@ async fn chat_send(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]
         }
     }
 
-    let profiles = state
-        .store
-        .read_document(&data_file(state, "profiles.json"), json!({}));
-    let p = profiles.get(&norm_email).cloned().unwrap_or(json!({}));
+    let p = mitch_lib::profiles::profile_get(&state.store, &norm_email);
     let name = jsval::str_or(
         p.get("displayName").filter(|v| jsval::truthy(v)),
         email.split('@').next().unwrap_or(""),
@@ -953,9 +950,7 @@ fn club_applicants(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let all = state
         .store
         .read_document(&data_file(state, "pickle_members.json"), json!({}));
-    let profiles = state
-        .store
-        .read_document(&data_file(state, "profiles.json"), json!({}));
+    let profiles = mitch_lib::profiles::profile_all(&state.store);
     fn status_rank(status: &str) -> i64 {
         match status {
             "pending" => 0,
@@ -1085,9 +1080,7 @@ async fn bulletin_post(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &
         return json_response(400, json!({ "error": "empty post" }));
     }
     let norm = auth::normalize_email(&email);
-    let profiles = state
-        .store
-        .read_document(&data_file(state, "profiles.json"), json!({}));
+    let profiles = mitch_lib::profiles::profile_all(&state.store);
     let author_name = jsval::str_or(
         profiles
             .get(&norm)
@@ -1366,9 +1359,7 @@ fn club_features(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             }
         }
     }
-    let profiles = state
-        .store
-        .read_document(&data_file(state, "profiles.json"), json!({}));
+    let profiles = mitch_lib::profiles::profile_all(&state.store);
     let mut top_briners: Vec<&(String, i64, i64)> = msg_counts.iter().collect();
     top_briners.sort_by_key(|e| std::cmp::Reverse(e.1)); // stable, like JS
     let top_briners: Vec<Value> = top_briners

@@ -1104,16 +1104,12 @@ fn dm_digest_impl(state: &Arc<AppState>) -> Result<(), String> {
             }
         }
         let total = senders.values().sum::<f64>();
-        // Sender display names — profiles.json is hoisted out of the JS
-        // per-sender loadJson (nothing mutates it mid-run).
-        let profiles = state
-            .store
-            .read_document(&state.data_dir().join("profiles.json"), json!({}));
+        // Sender display names.
         let names = senders
             .keys()
             .map(|e| {
                 let norm = mitch_lib::auth::normalize_email(e);
-                let prof = profiles.get(&norm).cloned().unwrap_or_else(|| json!({}));
+                let prof = mitch_lib::profiles::profile_get(&state.store, &norm);
                 let pick = ["displayName", "nickname", "username"]
                     .iter()
                     .find(|k| truthy_of(prof.get(**k)))

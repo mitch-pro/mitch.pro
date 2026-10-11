@@ -334,13 +334,13 @@ fn add_username(idx: &mut DmAddrIndex, uname: &str, norm: &str) {
 
 /// `dmAddressIndex()` WITHOUT the 15s cache — callers should use
 /// [`address_index_cached`] so the JS staleness behavior is preserved.
-pub fn build_address_index(store: &DataStore, data_dir: &Path) -> DmAddrIndex {
+pub fn build_address_index(store: &DataStore, _data_dir: &Path) -> DmAddrIndex {
     let mut idx = DmAddrIndex {
         emails: std::collections::HashSet::new(),
         by_username: HashMap::new(),
         by_mask: HashMap::new(),
     };
-    let profiles = store.read_document(&data_dir.join("profiles.json"), json!({}));
+    let profiles = crate::profiles::profile_all(store);
     for (email, p) in profiles.as_object().unwrap_or(&Map::new()) {
         add_email(&mut idx, email);
         let norm = normalize_email(email);
@@ -608,12 +608,17 @@ mod tests {
     #[test]
     fn resolve_member_ref_ladder() {
         let (store, data_dir) = temp_store("addr");
-        // profiles.json drives the index.
-        let profiles = json!({
-            "alice@student.rjuhsd.us": {"username": "alice"},
-            "bob@student.rjuhsd.us": {"username": "bobby"},
-        });
-        let _ = store.write_document(&data_dir.join("profiles.json"), &profiles);
+        // profiles table drives the index.
+        crate::profiles::profile_set(
+            &store,
+            "alice@student.rjuhsd.us",
+            &json!({"username": "alice"}),
+        );
+        crate::profiles::profile_set(
+            &store,
+            "bob@student.rjuhsd.us",
+            &json!({"username": "bobby"}),
+        );
         let idx = build_address_index(&store, &data_dir);
         // Direct email.
         assert_eq!(

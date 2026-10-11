@@ -1350,7 +1350,7 @@ pub(crate) fn get_vm_fleet_usage_stats(state: &AppState, day_key: &str) -> Value
 
     let timeline = vmlib::get_vm_usage_timeline(&state.store, &resolved_day);
     let daily_usage = load_vm_json(state, "vm_daily_usage.json", json!({}));
-    let profiles = load_vm_json(state, "profiles.json", json!({}));
+    let profiles = mitch_lib::profiles::profile_all(&state.store);
 
     // Build the user email set across records, dailyUsage and timeline
     // (server.js:27328-27333) — insertion-ordered like the JS Set.

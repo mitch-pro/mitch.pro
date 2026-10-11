@@ -79,9 +79,7 @@ fn groups_inner(state: &Arc<AppState>, auth: &super::DmAuth, headers: &HeaderMap
                 .unwrap_or(false)
         })
         .collect();
-    let profiles = state
-        .store
-        .read_document(&data_file(state, "profiles.json"), json!({}));
+    let profiles = mitch_lib::profiles::profile_all(&state.store);
     let dms: Vec<Value> = state
         .store
         .read_document(&data_file(state, store.dms), json!([]))
@@ -301,9 +299,7 @@ fn inbox_inner(
         .iter()
         .filter_map(|g| g.get("id").cloned())
         .collect();
-    let profiles = state
-        .store
-        .read_document(&data_file(state, "profiles.json"), json!({}));
+    let profiles = mitch_lib::profiles::profile_all(&state.store);
     let my_masked = mask_email(&auth.email);
     let my_username = {
         let u = profiles

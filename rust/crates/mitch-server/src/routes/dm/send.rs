@@ -262,13 +262,7 @@ pub(crate) async fn handle(
         &state.id_secret,
         &sender_email,
     );
-    let profiles = state
-        .store
-        .read_document(&data_file(state, "profiles.json"), json!({}));
-    let prof = profiles
-        .get(sender_norm.as_str())
-        .cloned()
-        .unwrap_or(json!({}));
+    let prof = mitch_lib::profiles::profile_get(&state.store, &sender_norm);
     let sender_display = {
         // displayName || nickname || username || canonical local-part
         let pick = ["displayName", "nickname", "username"]

@@ -896,9 +896,7 @@ pub fn resolve_member_ref(state: &Arc<AppState>, raw: &str) -> String {
     if q.is_empty() {
         return String::new();
     }
-    let profiles = state
-        .store
-        .read_document(&state.cfg.data_dir.join("profiles.json"), json!({}));
+    let profiles = mitch_lib::profiles::profile_all(&state.store);
     if q.contains('@') {
         let norm = mitch_lib::auth::normalize_email(&q);
         if profiles.get(norm.as_str()).is_some() {

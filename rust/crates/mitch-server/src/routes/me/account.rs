@@ -64,20 +64,18 @@ fn get_public_profile(state: &Arc<AppState>, headers: &HeaderMap, slug_raw: &str
         &slug,
     )
     .unwrap_or(slug);
-    let profiles = state
-        .store
-        .read_document(&data_file(state, "profiles.json"), json!({}));
     let norm = auth::normalize_email(&actual_email);
-    let mut profile = profiles.get(&norm).cloned().unwrap_or_else(|| {
-        json!({
-            "email": actual_email,
-            "username": mitch_lib::profile::default_username_for_email(&actual_email),
-            "displayName": "",
-            "bio": "",
-            "pfp": "",
-            "background": ""
-        })
-    });
+    let mut profile =
+        mitch_lib::profiles::profile_get_opt(&state.store, &norm).unwrap_or_else(|| {
+            json!({
+                "email": actual_email,
+                "username": mitch_lib::profile::default_username_for_email(&actual_email),
+                "displayName": "",
+                "bio": "",
+                "pfp": "",
+                "background": ""
+            })
+        });
     let processed = mitch_lib::profile::process_member_fields(
         &state.store,
         state.data_dir(),
@@ -176,19 +174,17 @@ fn get_profile(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let Some(email) = auth::email_from_sid(&state.store, &state.id_secret, &sid) else {
         return json_response(401, json!({ "error": "not logged in" }));
     };
-    let profiles = state
-        .store
-        .read_document(&data_file(state, "profiles.json"), json!({}));
     let norm = auth::normalize_email(&email);
-    let mut profile = profiles.get(&norm).cloned().unwrap_or_else(|| {
-        json!({
-            "username": mitch_lib::profile::default_username_for_email(&email),
-            "displayName": "",
-            "bio": "",
-            "pfp": "",
-            "background": ""
-        })
-    });
+    let mut profile =
+        mitch_lib::profiles::profile_get_opt(&state.store, &norm).unwrap_or_else(|| {
+            json!({
+                "username": mitch_lib::profile::default_username_for_email(&email),
+                "displayName": "",
+                "bio": "",
+                "pfp": "",
+                "background": ""
+            })
+        });
     let processed = mitch_lib::profile::process_member_fields(
         &state.store,
         state.data_dir(),
@@ -297,9 +293,7 @@ fn post_profile(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -
     };
     let norm = auth::normalize_email(&email);
     let is_premium = auth::is_premium_email(&state.store, &email);
-    let profiles_path = data_file(state, "profiles.json");
-    let mut profiles = state.store.read_document(&profiles_path, json!({}));
-    let existing = profiles.get(&norm).cloned().unwrap_or(json!({}));
+    let existing = mitch_lib::profiles::profile_get(&state.store, &norm);
 
     let req_username = body
         .get("username")
@@ -431,10 +425,7 @@ fn post_profile(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -
         map.insert("updatedAt".into(), json!(now));
     }
 
-    if let Some(map) = profiles.as_object_mut() {
-        map.insert(norm.clone(), record.clone());
-    }
-    let _ = state.store.write_document(&profiles_path, &profiles);
+    mitch_lib::profiles::profile_set(&state.store, &norm, &record);
 
     crate::ws::broadcast_profile_change(state, &username, now);
 
@@ -794,12 +785,7 @@ fn me_root(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     }
 
     let my_profile = if has_email {
-        state
-            .store
-            .read_document(&data_file(state, "profiles.json"), json!({}))
-            .get(&norm)
-            .cloned()
-            .unwrap_or(json!({}))
+        mitch_lib::profiles::profile_get(&state.store, &norm)
     } else {
         json!({})
     };
@@ -1052,11 +1038,8 @@ pub(crate) fn rename_email_references(
     mitch_lib::achievements::rename_achievements_email(&state.store, old_norm, new_norm);
     mitch_lib::passwords::rename_password_email(&state.store, old_norm, new_norm);
     mitch_lib::user_stats::rename_user_stats_email(&state.store, old_norm, new_norm);
-    let key_maps = [
-        "profiles.json",
-        "premium_gifts_sent.json",
-        "sebastians_claims.json",
-    ];
+    mitch_lib::profiles::rename_profile_email(&state.store, old_norm, new_norm, new_email);
+    let key_maps = ["premium_gifts_sent.json", "sebastians_claims.json"];
     for file in key_maps {
         let path = data_file(state, file);
         let mut obj = state.store.read_document(&path, json!({}));
@@ -1066,13 +1049,6 @@ pub(crate) fn rename_email_references(
         if let Some(map) = obj.as_object_mut() {
             map.insert(new_norm.to_string(), value);
             map.remove(old_norm);
-            if file == "profiles.json" {
-                if let Some(rec) = map.get_mut(new_norm) {
-                    if let Some(inner) = rec.as_object_mut() {
-                        inner.insert("email".to_string(), json!(new_email));
-                    }
-                }
-            }
         }
         let _ = state.store.write_document(&path, &obj);
     }
@@ -1239,19 +1215,17 @@ mod tests {
         let (state, _dir) = test_state();
         let email = "testuser@student.rjuhsd.us";
         let norm = auth::normalize_email(email);
-        let profiles_file = data_file(&state, "profiles.json");
-        let _ = state.store.write_document(
-            &profiles_file,
+        mitch_lib::profiles::profile_set(
+            &state.store,
+            &norm,
             &json!({
-                norm.clone(): {
-                    "email": email,
-                    "username": "testuser",
-                    "displayName": "Test User",
-                    "bio": "Hello world",
-                    "pfp": "https://example.com/pfp.png",
-                    "totp_secret": "SUPER_SECRET",
-                    "twofa_enabled": true
-                }
+                "email": email,
+                "username": "testuser",
+                "displayName": "Test User",
+                "bio": "Hello world",
+                "pfp": "https://example.com/pfp.png",
+                "totp_secret": "SUPER_SECRET",
+                "twofa_enabled": true
             }),
         );
 

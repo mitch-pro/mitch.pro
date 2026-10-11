@@ -4,7 +4,7 @@
 //! These endpoints skip `validId` and resolve the email from the raw sid
 //! only (JS: `emailFromSid(cookies['studentId'] || cookies['id'] || '')`).
 
-use super::{cookies_of, data_file, json_response, me_uid, parse_body_strict};
+use super::{cookies_of, json_response, me_uid, parse_body_strict};
 use crate::routes::admin::legacy::html_base_template;
 use crate::routes::push::send_email_bg;
 use crate::state::{AppState, PendingSecurityCode};
@@ -120,10 +120,7 @@ fn enable_2fa(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> 
     }
 
     if type_ == "totp" {
-        let profiles = state
-            .store
-            .read_document(&data_file(state, "profiles.json"), json!({}));
-        let profile = profiles.get(&norm).cloned().unwrap_or(json!({}));
+        let profile = mitch_lib::profiles::profile_get(&state.store, &norm);
         // JS: profiles[norm]?.pendingTotpSecret || profiles[norm]?.totp_secret
         //     || profiles[norm]?.totpSecret — first truthy string wins.
         let stored_secret = jsval::string(&jsval::or(
@@ -356,10 +353,7 @@ pub(crate) struct TwoFactorConfig {
 }
 
 pub(crate) fn two_factor_config(state: &Arc<AppState>, norm_email: &str) -> TwoFactorConfig {
-    let profiles = state
-        .store
-        .read_document(&data_file(state, "profiles.json"), json!({}));
-    let p = profiles.get(norm_email).cloned().unwrap_or(json!({}));
+    let p = mitch_lib::profiles::profile_get(&state.store, norm_email);
     TwoFactorConfig {
         enabled: jsval::truthy(&jsval::or(p.get("twofa_enabled"), json!(false)))
             || jsval::truthy(&jsval::or(p.get("twofaEnabled"), json!(false)))
@@ -380,11 +374,10 @@ pub(crate) fn two_factor_config(state: &Arc<AppState>, norm_email: &str) -> TwoF
 
 /// `saveTwoFactorConfig(normEmail, patch)` (server.js:2600-2611).
 pub(crate) fn save_two_factor_config(state: &Arc<AppState>, norm_email: &str, patch: &Value) {
-    let file = data_file(state, "profiles.json");
-    // JS loads the outer map FIRST, then ensureProfileDefaults does its own
-    // load/normalize/save; the outer (pre-ensure) record still wins the
+    // JS loads the outer record FIRST, then ensureProfileDefaults does its
+    // own load/normalize/save; the outer (pre-ensure) record still wins the
     // spread below. Reproduce that exactly.
-    let outer = state.store.read_document(&file, json!({}));
+    let stale = mitch_lib::profiles::profile_get(&state.store, norm_email);
     let p = mitch_lib::profile::ensure_profile_defaults(
         &state.store,
         state.data_dir(),
@@ -393,7 +386,6 @@ pub(crate) fn save_two_factor_config(state: &Arc<AppState>, norm_email: &str, pa
         norm_email,
         &json!({}),
     );
-    let stale = outer.get(norm_email).cloned().unwrap_or(json!({}));
     let mut merged = merge_objects(&merge_objects(&p, &stale), patch);
     if let Some(map) = merged.as_object_mut() {
         map.insert(
@@ -401,11 +393,7 @@ pub(crate) fn save_two_factor_config(state: &Arc<AppState>, norm_email: &str, pa
             json!(mitch_lib::school::now_millis()),
         );
     }
-    let mut profiles = state.store.read_document(&file, json!({}));
-    if let Some(map) = profiles.as_object_mut() {
-        map.insert(norm_email.to_string(), merged);
-    }
-    let _ = state.store.write_document(&file, &profiles);
+    mitch_lib::profiles::profile_set(&state.store, norm_email, &merged);
 }
 
 /// `makeVerificationCodeHtml(label, code, expiryMinutes[, email])`

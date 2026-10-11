@@ -64,9 +64,7 @@ fn members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let tokens = state
         .store
         .read_document(&data_file(state, "tokens.json"), json!({}));
-    let profiles = state
-        .store
-        .read_document(&data_file(state, "profiles.json"), json!({}));
+    let profiles = mitch_lib::profiles::profile_all(&state.store);
     let dms = state
         .store
         .read_document(&data_file(state, "dms.json"), json!([]));
@@ -442,9 +440,7 @@ fn admin_members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let Some((_, viewer_email)) = member_gate(state, headers) else {
         return json_response(401, json!({ "error": "auth required" }));
     };
-    let profiles = state
-        .store
-        .read_document(&data_file(state, "profiles.json"), json!({}));
+    let profiles = mitch_lib::profiles::profile_all(&state.store);
     let members: Vec<Value> = auth::admin_member_emails(&state.store)
         .iter()
         .filter(|e| e.as_str() != TEST_ACCOUNT_EMAIL && !auth::is_owner_email(&state.store, e))
@@ -483,9 +479,7 @@ fn moderator_members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let Some((_, viewer_email)) = member_gate(state, headers) else {
         return json_response(401, json!({ "error": "auth required" }));
     };
-    let profiles = state
-        .store
-        .read_document(&data_file(state, "profiles.json"), json!({}));
+    let profiles = mitch_lib::profiles::profile_all(&state.store);
     let mut excluded: Vec<String> = Vec::new();
     for email in auth::site_admin_emails(&state.store)
         .iter()
@@ -542,9 +536,7 @@ fn owner_members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let Some((_, viewer_email)) = member_gate(state, headers) else {
         return json_response(401, json!({ "error": "auth required" }));
     };
-    let profiles = state
-        .store
-        .read_document(&data_file(state, "profiles.json"), json!({}));
+    let profiles = mitch_lib::profiles::profile_all(&state.store);
     // [...new Set([...owners, ...coOwners].map(normalizeEmail))] — insertion order.
     let mut norms: Vec<String> = Vec::new();
     for email in auth::owner_member_emails(&state.store)
@@ -596,9 +588,7 @@ fn premium_members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let applications = state
         .store
         .read_document(&data_file(state, "applications.json"), json!([]));
-    let profiles = state
-        .store
-        .read_document(&data_file(state, "profiles.json"), json!({}));
+    let profiles = mitch_lib::profiles::profile_all(&state.store);
     let mut seen: Vec<String> = Vec::new();
     let mut members: Vec<Value> = Vec::new();
     if let Some(apps) = applications.as_array() {
