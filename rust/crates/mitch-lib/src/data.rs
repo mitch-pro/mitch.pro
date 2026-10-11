@@ -327,6 +327,11 @@ impl DataStore {
                         data TEXT NOT NULL,
                         updated_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS tokens (
+                        token TEXT PRIMARY KEY,
+                        data TEXT NOT NULL,
+                        updated_at INTEGER NOT NULL
+                    );
                     CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs (ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_level ON app_logs (level, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_category ON app_logs (category, ts DESC);
@@ -407,6 +412,7 @@ impl DataStore {
         store.backfill_passwords_from_json();
         store.backfill_user_stats_from_json();
         store.backfill_profiles_from_json();
+        store.backfill_tokens_from_json();
         Ok(store)
     }
 
@@ -867,6 +873,23 @@ impl DataStore {
             let _ = conn.execute(
                 "INSERT OR IGNORE INTO profiles (email, data, updated_at) VALUES (?1, ?2, ?3)",
                 rusqlite::params![email, data_str, now],
+            );
+        }
+    }
+
+    /// One-time (idempotent) backfill from tokens.json into the real
+    /// `tokens` table (one row per token, the whole record kept as a JSON
+    /// blob in `data`).
+    fn backfill_tokens_from_json(&self) {
+        let now = now_millis();
+        let doc = self.read_document(&self.data_dir.join("tokens.json"), Value::Null);
+        let Some(map) = doc.as_object() else { return };
+        let conn = self.conn();
+        for (token, data) in map {
+            let data_str = serde_json::to_string(data).unwrap_or_else(|_| "{}".to_string());
+            let _ = conn.execute(
+                "INSERT OR IGNORE INTO tokens (token, data, updated_at) VALUES (?1, ?2, ?3)",
+                rusqlite::params![token, data_str, now],
             );
         }
     }

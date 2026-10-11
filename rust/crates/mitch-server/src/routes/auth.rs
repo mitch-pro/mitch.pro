@@ -448,25 +448,18 @@ async fn verify_signup(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &
         .unwrap_or(&email)
         .to_string();
     let tok = random_bytes_hex(24);
-    let mut tokens = state
-        .store
-        .read_document(&data_file(state, "tokens.json"), json!({}));
-    if let Some(map) = tokens.as_object_mut() {
-        let host = request_host(headers).to_string();
-        map.insert(
-            tok.clone(),
-            json!({
-                "email": raw_email,
-                "norm_email": norm_email,
-                "created_at": (now_ms() as f64) / 1000.0,
-                "used": true,
-                "claimed_domains": [host]
-            }),
-        );
-        let _ = state
-            .store
-            .write_document(&data_file(state, "tokens.json"), &tokens);
-    }
+    let host = request_host(headers).to_string();
+    mitch_lib::tokens::token_set(
+        &state.store,
+        &tok,
+        &json!({
+            "email": raw_email,
+            "norm_email": norm_email,
+            "created_at": (now_ms() as f64) / 1000.0,
+            "used": true,
+            "claimed_domains": [host]
+        }),
+    );
 
     let _sid = auth::issue_login_session(&state.store, &state.id_secret, &norm_email, &raw_email);
 
@@ -851,26 +844,19 @@ async fn request_access(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: 
 
     let otp = format!("{:06}", (rand::random::<u32>() % 900_000) + 100_000);
     let token = random_bytes_hex(24);
-    let mut tokens = state
-        .store
-        .read_document(&data_file(state, "tokens.json"), json!({}));
-    if let Some(map) = tokens.as_object_mut() {
-        map.insert(
-            token.clone(),
-            json!({
-                "email": email,
-                "norm_email": norm_email,
-                "otp": otp,
-                "created_at": (now_ms() as f64) / 1000.0,
-                "expires": now_ms() + (30 * 60 * 1000),
-                "used": false,
-                "type": "reset"
-            }),
-        );
-        let _ = state
-            .store
-            .write_document(&data_file(state, "tokens.json"), &tokens);
-    }
+    mitch_lib::tokens::token_set(
+        &state.store,
+        &token,
+        &json!({
+            "email": email,
+            "norm_email": norm_email,
+            "otp": otp,
+            "created_at": (now_ms() as f64) / 1000.0,
+            "expires": now_ms() + (30 * 60 * 1000),
+            "used": false,
+            "type": "reset"
+        }),
+    );
 
     let html = make_verification_code_html(state, "Password Reset", &otp, 30, &email);
     send_email_bg(state, &email, "Your mitch.pro Reset Code", &html);
@@ -917,15 +903,12 @@ async fn claim_token(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u
         .unwrap_or("")
         .trim()
         .to_string();
-    let mut tokens = state
-        .store
-        .read_document(&data_file(state, "tokens.json"), json!({}));
-
     let mut token_key = token.clone();
-    let mut entry = tokens.get(&token).cloned();
+    let mut entry = mitch_lib::tokens::token_get(&state.store, &token);
 
     // OTP fallback for 6-digit codes
     if entry.is_none() && token.len() == 6 && token.chars().all(|c| c.is_ascii_digit()) {
+        let tokens = mitch_lib::tokens::token_all(&state.store);
         if let Some(obj) = tokens.as_object() {
             for (k, t) in obj {
                 let t_type = t.get("type").and_then(|v| v.as_str()).unwrap_or("");
@@ -1054,12 +1037,7 @@ async fn claim_token(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u
         }
     }
 
-    if let Some(map) = tokens.as_object_mut() {
-        map.insert(token_key, entry_val);
-        let _ = state
-            .store
-            .write_document(&data_file(state, "tokens.json"), &tokens);
-    }
+    mitch_lib::tokens::token_set(&state.store, &token_key, &entry_val);
 
     let _sid = auth::issue_login_session(&state.store, &state.id_secret, &norm_email, &email);
 
@@ -1929,9 +1907,7 @@ mod tests {
         assert_eq!(resp_req.status(), StatusCode::OK);
 
         // Find OTP
-        let tokens = state
-            .store
-            .read_document(&data_file(&state, "tokens.json"), json!({}));
+        let tokens = mitch_lib::tokens::token_all(&state.store);
         let mut otp = String::new();
         for (_k, t) in tokens.as_object().unwrap() {
             if t["norm_email"] == norm && t["type"] == "reset" {

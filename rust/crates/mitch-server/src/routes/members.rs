@@ -61,9 +61,7 @@ fn members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let viewer_norm = auth::normalize_email(&viewer_email);
     touch_active_email(state, &viewer_email, now);
 
-    let tokens = state
-        .store
-        .read_document(&data_file(state, "tokens.json"), json!({}));
+    let tokens = mitch_lib::tokens::token_all(&state.store);
     let profiles = mitch_lib::profiles::profile_all(&state.store);
     let dms = state
         .store

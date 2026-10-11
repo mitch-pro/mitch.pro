@@ -118,12 +118,7 @@ pub fn get_uid_for_email(store: &DataStore, id_secret: &[u8], email: &str) -> Op
 }
 
 /// `emailFromHash(hash)` (server.js:6186-6220).
-pub fn email_from_hash(
-    store: &DataStore,
-    data_dir: &Path,
-    id_secret: &[u8],
-    hash: &str,
-) -> Option<String> {
+pub fn email_from_hash(store: &DataStore, id_secret: &[u8], hash: &str) -> Option<String> {
     if hash.is_empty() {
         return None;
     }
@@ -156,7 +151,7 @@ pub fn email_from_hash(
             return Some(email);
         }
     }
-    let tokens = store.read_document(&data_dir.join("tokens.json"), json!({}));
+    let tokens = crate::tokens::token_all(store);
     if let Some(map) = tokens.as_object() {
         for t in map.values() {
             if let Some(email) = t.get("email").and_then(|v| v.as_str()) {
@@ -432,7 +427,7 @@ pub fn default_username_for_email_used(
 /// tokens.json, with sid resolution for non-email inputs.
 pub fn canonical_delivery_email(
     store: &DataStore,
-    data_dir: &Path,
+    _data_dir: &Path,
     id_secret: &[u8],
     raw: &str,
 ) -> String {
@@ -480,8 +475,8 @@ pub fn canonical_delivery_email(
         }
     }
 
-    // 3. tokens.json — enrollment tokens.
-    let tokens = store.read_document(&data_dir.join("tokens.json"), json!({}));
+    // 3. tokens table — enrollment tokens.
+    let tokens = crate::tokens::token_all(store);
     if let Some(map) = tokens.as_object() {
         for data in map.values() {
             if let Some(e) = data.get("email").and_then(|v| v.as_str()) {

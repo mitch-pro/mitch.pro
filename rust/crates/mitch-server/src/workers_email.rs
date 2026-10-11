@@ -309,9 +309,7 @@ pub(crate) fn is_unsubscribed(state: &AppState, unsub_set: &HashSet<String>, ema
 /// email, deduped, minus newsletter unsubscribes and keeping only records
 /// with `claimed_domains` or `used`.
 fn enrolled_users(state: &AppState) -> Vec<String> {
-    let tokens = state
-        .store
-        .read_document(&state.data_dir().join("tokens.json"), json!({}));
+    let tokens = mitch_lib::tokens::token_all(&state.store);
     let unsub = newsletter_unsub_set(state);
     let mut seen: HashSet<String> = HashSet::new();
     let mut users = Vec::new();
@@ -1659,15 +1657,22 @@ mod tests {
     fn test_enrolled_users_filters_unsubscribed() {
         let (state, dir) = test_state();
 
-        // Populate tokens.json with 3 enrolled users
-        let tokens = json!({
-            "tok1": { "email": "active@example.com", "used": true },
-            "tok2": { "email": "unsubbed@example.com", "used": true },
-            "tok3": { "email": "alice.student@student.rjuhsd.us", "claimed_domains": ["mitch.pro"] },
-        });
-        let _ = state
-            .store
-            .write_document(&state.data_dir().join("tokens.json"), &tokens);
+        // Populate the tokens table with 3 enrolled users
+        mitch_lib::tokens::token_set(
+            &state.store,
+            "tok1",
+            &json!({ "email": "active@example.com", "used": true }),
+        );
+        mitch_lib::tokens::token_set(
+            &state.store,
+            "tok2",
+            &json!({ "email": "unsubbed@example.com", "used": true }),
+        );
+        mitch_lib::tokens::token_set(
+            &state.store,
+            "tok3",
+            &json!({ "email": "alice.student@student.rjuhsd.us", "claimed_domains": ["mitch.pro"] }),
+        );
 
         // Unsubscribe tok2 directly, and tok3 via normalized address (without dot)
         let _ = state.store.write_document(

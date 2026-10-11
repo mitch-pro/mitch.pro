@@ -57,13 +57,8 @@ fn get_public_profile(state: &Arc<AppState>, headers: &HeaderMap, slug_raw: &str
     let cookies = cookies_of(state, headers);
     let sid = me_uid(&cookies);
     let viewer_email = auth::email_from_sid(&state.store, &state.id_secret, &sid);
-    let actual_email = mitch_lib::profile::email_from_hash(
-        &state.store,
-        state.data_dir(),
-        &state.id_secret,
-        &slug,
-    )
-    .unwrap_or(slug);
+    let actual_email =
+        mitch_lib::profile::email_from_hash(&state.store, &state.id_secret, &slug).unwrap_or(slug);
     let norm = auth::normalize_email(&actual_email);
     let mut profile =
         mitch_lib::profiles::profile_get_opt(&state.store, &norm).unwrap_or_else(|| {
@@ -1056,11 +1051,10 @@ pub(crate) fn rename_email_references(
     // names table — any sid pointing at the old email moves to the new one.
     auth::names_update_email_for_norm(&state.store, old_norm, new_email);
 
-    // tokens.json — email + norm_email on matching records.
-    let tokens_path = data_file(state, "tokens.json");
-    let mut tokens = state.store.read_document(&tokens_path, json!({}));
-    if let Some(map) = tokens.as_object_mut() {
-        for rec in map.values_mut() {
+    // tokens table — email + norm_email on matching records.
+    let tokens = mitch_lib::tokens::token_all(&state.store);
+    if let Some(map) = tokens.as_object() {
+        for (key, rec) in map {
             let rec_norm = rec
                 .get("email")
                 .or_else(|| rec.get("norm_email"))
@@ -1068,14 +1062,15 @@ pub(crate) fn rename_email_references(
                 .map(auth::normalize_email)
                 .unwrap_or_default();
             if rec_norm == old_norm {
-                if let Some(inner) = rec.as_object_mut() {
+                let mut updated = rec.clone();
+                if let Some(inner) = updated.as_object_mut() {
                     inner.insert("email".to_string(), json!(new_email));
                     inner.insert("norm_email".to_string(), json!(new_norm));
                 }
+                mitch_lib::tokens::token_set(&state.store, key, &updated);
             }
         }
     }
-    let _ = state.store.write_document(&tokens_path, &tokens);
 
     // friends.json — move the key, then remap list entries.
     let friends_path = data_file(state, "friends.json");
