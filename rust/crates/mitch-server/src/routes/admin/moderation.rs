@@ -13,13 +13,15 @@ use axum::response::Response;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
-fn spawn_staff_sync(secret: Vec<u8>, store: Arc<mitch_lib::data::DataStore>, data_dir: std::path::PathBuf) {
+fn spawn_staff_sync(
+    secret: Vec<u8>,
+    store: Arc<mitch_lib::data::DataStore>,
+    data_dir: std::path::PathBuf,
+) {
     if let Ok(handle) = tokio::runtime::Handle::try_current() {
         handle.spawn(async move {
             crate::routes::matrix::sync_staff_power_levels_to_all_official_rooms(
-                &secret,
-                &store,
-                &data_dir,
+                &secret, &store, &data_dir,
             )
             .await;
         });
@@ -44,7 +46,6 @@ fn spawn_matrix_unban(
         });
     }
 }
-
 
 pub fn handle(
     state: &Arc<AppState>,
@@ -606,11 +607,7 @@ fn set_admin(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response {
         &state.store,
         &state.cfg.data_dir,
         &admin_email,
-        if active {
-            "add_admin"
-        } else {
-            "remove_admin"
-        },
+        if active { "add_admin" } else { "remove_admin" },
         json!({ "target": target_raw }),
     );
     spawn_staff_sync(
@@ -635,7 +632,10 @@ fn set_co_owner(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response
     }
     let target = mitch_lib::auth::normalize_email(&target_raw);
     if mitch_lib::auth::is_owner_email(&state.store, &target) {
-        return json_response(403, json!({ "error": "Owner cannot be modified as a co-owner" }));
+        return json_response(
+            403,
+            json!({ "error": "Owner cannot be modified as a co-owner" }),
+        );
     }
     let active = body.get("active").and_then(|v| v.as_bool()) == Some(true);
     let admins_file = state.cfg.base_dir.join("data/admins.json");
@@ -695,11 +695,7 @@ fn revert_admin_action(
     headers: &HeaderMap,
 ) -> Response {
     let admin_email = ctx.email(state);
-    let action_id = body
-        .get("id")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .trim();
+    let action_id = body.get("id").and_then(|v| v.as_str()).unwrap_or("").trim();
     if action_id.is_empty() {
         return json_response(400, json!({ "error": "Action id required" }));
     }
@@ -712,15 +708,18 @@ fn revert_admin_action(
         .cloned()
         .unwrap_or_default();
 
-    let target_action = actions.iter().find(|a| {
-        a.get("id").and_then(|v| v.as_str()).unwrap_or("") == action_id
-    });
+    let target_action = actions
+        .iter()
+        .find(|a| a.get("id").and_then(|v| v.as_str()).unwrap_or("") == action_id);
 
     let Some(action_obj) = target_action else {
         return json_response(404, json!({ "error": "Action not found in audit log" }));
     };
 
-    let action_name = action_obj.get("action").and_then(|v| v.as_str()).unwrap_or("");
+    let action_name = action_obj
+        .get("action")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     let details = action_obj.get("details").unwrap_or(&Value::Null);
 
     let revert_result: Result<String, String> = match action_name {
@@ -752,7 +751,12 @@ fn revert_admin_action(
             if email.is_empty() {
                 Err("Missing target email in action log".into())
             } else {
-                let resp = ban_account(state, &json!({ "email": email, "reason": "Reverted unban action" }), ctx, headers);
+                let resp = ban_account(
+                    state,
+                    &json!({ "email": email, "reason": "Reverted unban action" }),
+                    ctx,
+                    headers,
+                );
                 if resp.status().is_success() {
                     Ok(format!("Banned {}", email))
                 } else {
@@ -851,7 +855,11 @@ fn revert_admin_action(
             }
         }
         "shadow_ban" => {
-            let email = details.get("targetEmail").or_else(|| details.get("email")).and_then(|v| v.as_str()).unwrap_or("");
+            let email = details
+                .get("targetEmail")
+                .or_else(|| details.get("email"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             if email.is_empty() {
                 Err("Missing target email".into())
             } else {
@@ -859,23 +867,42 @@ fn revert_admin_action(
                 let mut sb = state.store.read_document(&sb_file, json!([]));
                 let norm = mitch_lib::auth::normalize_email(email);
                 if let Some(arr) = sb.as_array_mut() {
-                    arr.retain(|x| mitch_lib::auth::normalize_email(x.as_str().unwrap_or("")) != norm);
+                    arr.retain(|x| {
+                        mitch_lib::auth::normalize_email(x.as_str().unwrap_or("")) != norm
+                    });
                     let _ = state.store.write_document(&sb_file, &sb);
                 }
                 Ok(format!("Unshadow-banned {}", email))
             }
         }
         "add_coins" | "gift_coins" => {
-            let email = details.get("targetEmail").or_else(|| details.get("email")).and_then(|v| v.as_str()).unwrap_or("");
-            let amount = details.get("amount").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let email = details
+                .get("targetEmail")
+                .or_else(|| details.get("email"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let amount = details
+                .get("amount")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
             if email.is_empty() || amount <= 0.0 {
                 Err("Missing target email or positive amount in action log".into())
             } else {
-                mitch_lib::coins::add_coins(&state.store, &state.cfg.data_dir, email, -amount, 1.0, "reverted admin action");
+                mitch_lib::coins::add_coins(
+                    &state.store,
+                    &state.cfg.data_dir,
+                    email,
+                    -amount,
+                    1.0,
+                    "reverted admin action",
+                );
                 Ok(format!("Deducted {} coins from {}", amount, email))
             }
         }
-        other => Err(format!("Action '{}' cannot be automatically reverted", other)),
+        other => Err(format!(
+            "Action '{}' cannot be automatically reverted",
+            other
+        )),
     };
 
     match revert_result {
@@ -891,7 +918,10 @@ fn revert_admin_action(
                     "message": msg,
                 }),
             );
-            json_response(200, json!({ "ok": true, "message": msg, "reverted": action_name }))
+            json_response(
+                200,
+                json!({ "ok": true, "message": msg, "reverted": action_name }),
+            )
         }
         Err(err) => json_response(400, json!({ "error": err })),
     }
@@ -1033,9 +1063,8 @@ fn toggle_ban_set(
     file: &str,
     action_name: &str,
 ) -> Response {
-    let target = mitch_lib::auth::normalize_email(
-        body.get("email").and_then(|v| v.as_str()).unwrap_or(""),
-    );
+    let target =
+        mitch_lib::auth::normalize_email(body.get("email").and_then(|v| v.as_str()).unwrap_or(""));
     if target.is_empty() {
         return json_response(400, json!({ "error": "valid email required" }));
     }
@@ -1245,7 +1274,10 @@ fn unban_account(
             "role": role,
         }),
     );
-    json_response(200, json!({ "ok": true, "targetEmail": target_email, "existed": existed }))
+    json_response(
+        200,
+        json!({ "ok": true, "targetEmail": target_email, "existed": existed }),
+    )
 }
 
 /// `POST /api/admin/chat-reports/resolve` — action 'delete' or resolve.
@@ -1569,9 +1601,15 @@ pub fn execute_moderator_approved_action(
             Ok(json!({ "ok": true, "targetEmail": target_email }))
         }
         "unban_account" => {
-            let email_raw = s("email").as_str().unwrap_or("").to_lowercase().trim().to_string();
+            let email_raw = s("email")
+                .as_str()
+                .unwrap_or("")
+                .to_lowercase()
+                .trim()
+                .to_string();
             let target_email = mitch_lib::auth::normalize_email(&email_raw);
-            let existed = mitch_lib::bans::blacklist_remove(&state.store, &target_email, &email_raw);
+            let existed =
+                mitch_lib::bans::blacklist_remove(&state.store, &target_email, &email_raw);
 
             // Remove from shadow bans
             {
@@ -1816,11 +1854,7 @@ pub fn execute_moderator_approved_action(
                 &state.store,
                 &state.cfg.data_dir,
                 actor,
-                if active {
-                    "add_admin"
-                } else {
-                    "remove_admin"
-                },
+                if active { "add_admin" } else { "remove_admin" },
                 json!({ "target": target_raw }).merge(requested_by()),
             );
             spawn_staff_sync(
@@ -1987,9 +2021,7 @@ pub async fn lookup_profile(state: &Arc<AppState>, search: &str) -> Response {
                     }
                 }
                 if let Ok((status, _, bytes)) = crate::routes::matrix::call_conduit(
-                    &format!(
-                        "/_matrix/client/v3/rooms/{encoded_room}/state/m.room.power_levels"
-                    ),
+                    &format!("/_matrix/client/v3/rooms/{encoded_room}/state/m.room.power_levels"),
                     Method::GET,
                     Some(headers),
                     None,

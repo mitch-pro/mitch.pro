@@ -605,16 +605,23 @@ fn premium_members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         for a in apps {
             let status = a.get("status").and_then(|v| v.as_str()).unwrap_or("");
             let app_type = a.get("type").and_then(|v| v.as_str()).unwrap_or("");
-            let grant_premium = a.get("grantPremium").and_then(|v| v.as_bool()).unwrap_or(false);
+            let grant_premium = a
+                .get("grantPremium")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             let email = a.get("email").and_then(|v| v.as_str()).unwrap_or("");
-            if status == "approved" && (app_type == "premium" || grant_premium) && email != TEST_ACCOUNT_EMAIL {
+            if status == "approved"
+                && (app_type == "premium" || grant_premium)
+                && email != TEST_ACCOUNT_EMAIL
+            {
                 let norm = auth::normalize_email(email);
                 if seen.contains(&norm) {
                     continue;
                 }
                 seen.push(norm.clone());
                 let prof = profiles.get(norm.as_str()).cloned().unwrap_or(json!({}));
-                let cosm = mitch_lib::shop::cosmetics_get(&state.store, norm.as_str()).unwrap_or(json!({}));
+                let cosm = mitch_lib::shop::cosmetics_get(&state.store, norm.as_str())
+                    .unwrap_or(json!({}));
                 let processed = profile::process_member_fields(
                     &state.store,
                     state.data_dir(),

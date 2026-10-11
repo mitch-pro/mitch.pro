@@ -1807,7 +1807,11 @@ exit 0
                 tracing::warn!(
                     "[proxmox] ISO upload attempt {attempt}/{MAX_ATTEMPTS} rejected (HTTP {status}): {body_text}"
                 );
-                let mapped = if status == 401 || status == 403 { 503 } else { status };
+                let mapped = if status == 401 || status == 403 {
+                    503
+                } else {
+                    status
+                };
                 // Same message-surfacing as request() — show Proxmox's own
                 // diagnostic (e.g. a permission error) instead of a generic
                 // string, falling back to the raw body text (pveproxy's own
@@ -1823,7 +1827,10 @@ exit 0
                     .or_else(|| {
                         payload.get("errors").and_then(|errors| {
                             errors.as_object().and_then(|obj| {
-                                obj.values().next().and_then(Value::as_str).map(str::to_string)
+                                obj.values()
+                                    .next()
+                                    .and_then(Value::as_str)
+                                    .map(str::to_string)
                             })
                         })
                     })
@@ -1835,7 +1842,11 @@ exit 0
                     Some(d) => format!("The computer service rejected the request: {d}"),
                     None => "Uploading the ISO to the hypervisor failed.".to_string(),
                 };
-                last_err = Some(ProxmoxServiceError::new("UPSTREAM_REJECTED", message, mapped));
+                last_err = Some(ProxmoxServiceError::new(
+                    "UPSTREAM_REJECTED",
+                    message,
+                    mapped,
+                ));
                 // Only a plain 400 gets retried with a fresh name — the
                 // duplicate-filename-collision case. Auth/storage-full/etc
                 // errors won't be fixed by trying again.
@@ -1885,7 +1896,11 @@ exit 0
         let mut written: u64 = 0;
         loop {
             let chunk = response.chunk().await.map_err(|_| {
-                ProxmoxServiceError::new("FETCH_FAILED", "That link's response was interrupted.", 502)
+                ProxmoxServiceError::new(
+                    "FETCH_FAILED",
+                    "That link's response was interrupted.",
+                    502,
+                )
             })?;
             let Some(chunk) = chunk else { break };
             file.write_all(&chunk).await.map_err(|_| {
@@ -1975,7 +1990,10 @@ exit 0
             if !download.status().is_success() {
                 return Err(ProxmoxServiceError::new(
                     "FETCH_REJECTED",
-                    format!("That link returned HTTP {} — check the URL.", download.status().as_u16()),
+                    format!(
+                        "That link returned HTTP {} — check the URL.",
+                        download.status().as_u16()
+                    ),
                     400,
                 ));
             }
@@ -1988,8 +2006,10 @@ exit 0
                 // path (which already retries and surfaces errors) rather
                 // than duplicating that here.
                 let _ = tokio::fs::create_dir_all(scratch_dir).await;
-                let temp_path =
-                    scratch_dir.join(format!("link-{}.iso", mitch_lib::crypto::random_bytes_hex(8)));
+                let temp_path = scratch_dir.join(format!(
+                    "link-{}.iso",
+                    mitch_lib::crypto::random_bytes_hex(8)
+                ));
                 let written = match Self::drain_response_to_file(download, &temp_path).await {
                     Ok(w) => w,
                     Err(error) => {
@@ -2063,7 +2083,11 @@ exit 0
                 tracing::warn!(
                     "[proxmox] ISO link relay attempt {attempt}/{MAX_ATTEMPTS} rejected (HTTP {status}): {body_text}"
                 );
-                let mapped = if status == 401 || status == 403 { 503 } else { status };
+                let mapped = if status == 401 || status == 403 {
+                    503
+                } else {
+                    status
+                };
                 let payload: Value = serde_json::from_str(&body_text).unwrap_or(Value::Null);
                 let detail = payload
                     .get("message")
@@ -2079,7 +2103,11 @@ exit 0
                     Some(d) => format!("The computer service rejected the request: {d}"),
                     None => "Uploading the ISO to the hypervisor failed.".to_string(),
                 };
-                last_err = Some(ProxmoxServiceError::new("UPSTREAM_REJECTED", message, mapped));
+                last_err = Some(ProxmoxServiceError::new(
+                    "UPSTREAM_REJECTED",
+                    message,
+                    mapped,
+                ));
                 if status != 400 || attempt == MAX_ATTEMPTS {
                     break;
                 }
@@ -2097,7 +2125,8 @@ exit 0
             let upid = envelope.get("data").cloned().unwrap_or(Value::Null);
             // A huge ISO over a slow link can legitimately take a long
             // while for Proxmox's own copy/validate task to finish.
-            self.wait_for_task(&self.node, Some(&upid), 1_800_000).await?;
+            self.wait_for_task(&self.node, Some(&upid), 1_800_000)
+                .await?;
             return Ok((remote_filename, size));
         }
 
@@ -2495,7 +2524,10 @@ mod tests {
         );
         // No MAC segment at all (template already bare) — passes through
         // as the same bridge, no trailing comma artifact.
-        assert_eq!(net0_with_fresh_mac("virtio,bridge=vmbr2,tag=50"), "virtio,bridge=vmbr2,tag=50");
+        assert_eq!(
+            net0_with_fresh_mac("virtio,bridge=vmbr2,tag=50"),
+            "virtio,bridge=vmbr2,tag=50"
+        );
         // Degenerate case: no comma at all.
         assert_eq!(net0_with_fresh_mac("virtio"), "virtio");
     }

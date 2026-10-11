@@ -1978,7 +1978,10 @@ mod tests {
         assert_eq!(lobby.scores.get("alice@school.edu"), Some(&600));
         assert_eq!(lobby.players, vec!["alice@school.edu", "bob@school.edu"]);
         let ac = lobby.active_clue.as_ref().unwrap();
-        assert!(ac.wager.is_nan(), "NaN wager must round-trip as NaN, not fail or become 0");
+        assert!(
+            ac.wager.is_nan(),
+            "NaN wager must round-trip as NaN, not fail or become 0"
+        );
         assert_eq!(ac.buzzed_by.as_deref(), Some("alice@school.edu"));
         let board = lobby.board.as_ref().unwrap();
         assert_eq!(board.get("History").unwrap()[0].value, 400);

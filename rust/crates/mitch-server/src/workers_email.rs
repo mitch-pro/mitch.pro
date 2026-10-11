@@ -163,8 +163,7 @@ pub(crate) fn check_userdata_unsubscribed(ud: &Value) -> bool {
             _ => None,
         };
         if let Some(n) = notif_obj {
-            if n.get("newsletter") == Some(&json!(false))
-                || n.get("puzzle") == Some(&json!(false))
+            if n.get("newsletter") == Some(&json!(false)) || n.get("puzzle") == Some(&json!(false))
             {
                 return true;
             }
@@ -1066,7 +1065,9 @@ fn dm_digest_impl(state: &Arc<AppState>) -> Result<(), String> {
             continue;
         }
         let target_email = canonical_email(state, &recip);
-        if is_unsubscribed(state, &unsub, &recip) || (!target_email.is_empty() && is_unsubscribed(state, &unsub, &target_email)) {
+        if is_unsubscribed(state, &unsub, &recip)
+            || (!target_email.is_empty() && is_unsubscribed(state, &unsub, &target_email))
+        {
             continue;
         }
 
@@ -1146,25 +1147,15 @@ fn dm_digest_impl(state: &Arc<AppState>) -> Result<(), String> {
             "dm_digest_sent_at",
             jsval::num_value(now_ms as f64),
         );
-        set_log_field(
-            &mut log,
-            &recip,
-            "dm_digest_day",
-            json!(day_key),
-        );
-        if &target_email != &recip {
+        set_log_field(&mut log, &recip, "dm_digest_day", json!(day_key));
+        if target_email != recip {
             set_log_field(
                 &mut log,
                 &target_email,
                 "dm_digest_sent_at",
                 jsval::num_value(now_ms as f64),
             );
-            set_log_field(
-                &mut log,
-                &target_email,
-                "dm_digest_day",
-                json!(day_key),
-            );
+            set_log_field(&mut log, &target_email, "dm_digest_day", json!(day_key));
         }
         changed = true;
         tracing::info!(
@@ -1242,8 +1233,20 @@ fn dm_digest_impl(state: &Arc<AppState>) -> Result<(), String> {
                 let sent_at = mobj
                     .get(recip)
                     .or_else(|| mobj.get(&target_email))
-                    .or_else(|| if !norm_recip.is_empty() { mobj.get(&norm_recip) } else { None })
-                    .or_else(|| if !norm_target.is_empty() { mobj.get(&norm_target) } else { None })
+                    .or_else(|| {
+                        if !norm_recip.is_empty() {
+                            mobj.get(&norm_recip)
+                        } else {
+                            None
+                        }
+                    })
+                    .or_else(|| {
+                        if !norm_target.is_empty() {
+                            mobj.get(&norm_target)
+                        } else {
+                            None
+                        }
+                    })
                     .and_then(jsval::number);
                 if let Some(st) = sent_at {
                     if (now_ms as f64) - st < MATRIX_MESSAGE_EMAIL_INTERVAL_MS {
@@ -1255,8 +1258,16 @@ fn dm_digest_impl(state: &Arc<AppState>) -> Result<(), String> {
             // 2. Check email_log.json across all key variants
             let ulog = log_entry(&log, recip);
             let ulog_target = log_entry(&log, &target_email);
-            let ulog_norm_r = if !norm_recip.is_empty() { log_entry(&log, &norm_recip) } else { json!({}) };
-            let ulog_norm_t = if !norm_target.is_empty() { log_entry(&log, &norm_target) } else { json!({}) };
+            let ulog_norm_r = if !norm_recip.is_empty() {
+                log_entry(&log, &norm_recip)
+            } else {
+                json!({})
+            };
+            let ulog_norm_t = if !norm_target.is_empty() {
+                log_entry(&log, &norm_target)
+            } else {
+                json!({})
+            };
 
             let last_sent = ulog
                 .get("matrix_digest_sent_at")
@@ -1364,24 +1375,14 @@ fn dm_digest_impl(state: &Arc<AppState>) -> Result<(), String> {
                 if k.is_empty() {
                     continue;
                 }
-                set_log_field(
-                    &mut log,
-                    &k,
-                    "matrix_digest_ts",
-                    jsval::num_value(latest),
-                );
+                set_log_field(&mut log, &k, "matrix_digest_ts", jsval::num_value(latest));
                 set_log_field(
                     &mut log,
                     &k,
                     "matrix_digest_sent_at",
                     jsval::num_value(now_ms as f64),
                 );
-                set_log_field(
-                    &mut log,
-                    &k,
-                    "matrix_digest_day",
-                    json!(day_key),
-                );
+                set_log_field(&mut log, &k, "matrix_digest_day", json!(day_key));
             }
 
             changed = true;
@@ -1708,7 +1709,9 @@ mod tests {
                 }
             ]
         });
-        let _ = state.store.write_document(&state.data_dir().join("matrix_notifications.json"), &notifs);
+        let _ = state
+            .store
+            .write_document(&state.data_dir().join("matrix_notifications.json"), &notifs);
 
         // Run digest worker
         let res = dm_digest_impl(&state);
@@ -1719,7 +1722,10 @@ mod tests {
         let ulog = log_entry(&log, email);
         assert!(truthy_of(ulog.get("matrix_digest_ts")));
         assert!(truthy_of(ulog.get("matrix_digest_sent_at")));
-        let day = ulog.get("matrix_digest_day").and_then(|v| v.as_str()).unwrap();
+        let day = ulog
+            .get("matrix_digest_day")
+            .and_then(|v| v.as_str())
+            .unwrap();
         let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
         assert_eq!(day, today);
 
@@ -1740,7 +1746,10 @@ mod tests {
                 }
             ]
         });
-        let _ = state.store.write_document(&state.data_dir().join("matrix_notifications.json"), &notifs2);
+        let _ = state.store.write_document(
+            &state.data_dir().join("matrix_notifications.json"),
+            &notifs2,
+        );
 
         // Run digest worker again
         let res2 = dm_digest_impl(&state);
@@ -1749,9 +1758,11 @@ mod tests {
         // Verify matrix_digest_ts was NOT updated to newer_ts because of the daily limit!
         let log2 = load_email_log(&state);
         let ulog2 = log_entry(&log2, email);
-        assert_eq!(ulog2.get("matrix_digest_ts").and_then(jsval::number), Some(old_ts));
+        assert_eq!(
+            ulog2.get("matrix_digest_ts").and_then(jsval::number),
+            Some(old_ts)
+        );
 
         let _ = std::fs::remove_dir_all(dir);
     }
 }
-

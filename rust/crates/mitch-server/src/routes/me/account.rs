@@ -122,7 +122,10 @@ fn get_public_profile(state: &Arc<AppState>, headers: &HeaderMap, slug_raw: &str
         .store
         .read_document(&data_file(state, "user_stats.json"), json!({}));
     let stats = user_stats.get(&norm).cloned().unwrap_or(json!({}));
-    let achievements = json!(mitch_lib::achievements::achievements_for(&state.store, &norm));
+    let achievements = json!(mitch_lib::achievements::achievements_for(
+        &state.store,
+        &norm
+    ));
     let coins = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &actual_email);
     let user_cosm = mitch_lib::shop::cosmetics_get(&state.store, &norm).unwrap_or(json!({}));
 
@@ -228,7 +231,10 @@ fn get_profile(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         .store
         .read_document(&data_file(state, "user_stats.json"), json!({}));
     let stats = user_stats.get(&norm).cloned().unwrap_or(json!({}));
-    let achievements = json!(mitch_lib::achievements::achievements_for(&state.store, &norm));
+    let achievements = json!(mitch_lib::achievements::achievements_for(
+        &state.store,
+        &norm
+    ));
     let coins = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &email);
     let user_cosm = mitch_lib::shop::cosmetics_get(&state.store, &norm).unwrap_or(json!({}));
 

@@ -680,10 +680,9 @@ pub async fn handle(
             .map(|v| v.eq_ignore_ascii_case("websocket"))
             .unwrap_or(false);
         if !is_upgrade {
-            if let Some(resp) = crate::routes::livekit::handle_http_fallback(
-                &method, &path, &search, body_bytes,
-            )
-            .await
+            if let Some(resp) =
+                crate::routes::livekit::handle_http_fallback(&method, &path, &search, body_bytes)
+                    .await
             {
                 return resp;
             }
@@ -1017,8 +1016,7 @@ pub async fn handle(
     let is_exempt = matches!(
         public_help_base,
         "/faq" | "/privacy" | "/use-agreement" | "/cookies" | "/copyright"
-    )
-        || clean_path == "/enroll"
+    ) || clean_path == "/enroll"
         || clean_path == "/api/me/coins"
         || clean_path == "/larp"
         || clean_path == "/larp/rezero"
@@ -1463,7 +1461,10 @@ pub async fn handle(
         if let Ok(xml) = std::fs::read_to_string(webroot.join("rjuhsd").join("sitemap.xml")) {
             return Response::builder()
                 .status(StatusCode::OK)
-                .header(axum::http::header::CONTENT_TYPE, "application/xml; charset=utf-8")
+                .header(
+                    axum::http::header::CONTENT_TYPE,
+                    "application/xml; charset=utf-8",
+                )
                 .body(axum::body::Body::from(xml))
                 .unwrap_or_else(|_| crate::errors::err_resp(500, None, None));
         }
@@ -1475,12 +1476,14 @@ pub async fn handle(
             .ok()
             .map(|h| inject_shared_head(&h))
     };
-    let rjuhsd_hub_html =
-        |req_host_val: Option<&str>, is_rjuhsd_val: bool, search_val: &str| -> Option<String> {
-            std::fs::read_to_string(webroot.join("rjuhsd").join("index.html"))
-                .ok()
-                .map(|h| prepare_rjuhsd_html(&h, req_host_val, is_rjuhsd_val, search_val, &state.cfg))
-        };
+    let rjuhsd_hub_html = |req_host_val: Option<&str>,
+                           is_rjuhsd_val: bool,
+                           search_val: &str|
+     -> Option<String> {
+        std::fs::read_to_string(webroot.join("rjuhsd").join("index.html"))
+            .ok()
+            .map(|h| prepare_rjuhsd_html(&h, req_host_val, is_rjuhsd_val, search_val, &state.cfg))
+    };
 
     if (path == "/" || path == "/index.html") && pickle_host {
         if let Some(html) = pickle_hub_html() {
@@ -1505,8 +1508,14 @@ pub async fn handle(
     // split authority onto /woodcreek/ when "/" already has it. So "/"
     // IS Woodcreek's real canonical URL, and /woodcreek/ (and
     // ?school=woodcreek) redirect to it instead of the reverse.
-    const RJUHSD_SCHOOL_SLUGS: &[&str] =
-        &["woodcreek", "roseville", "granitebay", "antelope", "westpark", "oakmont"];
+    const RJUHSD_SCHOOL_SLUGS: &[&str] = &[
+        "woodcreek",
+        "roseville",
+        "granitebay",
+        "antelope",
+        "westpark",
+        "oakmont",
+    ];
     if rjuhsd_host && (path == "/" || path == "/index.html") {
         if let Some((_, raw_school)) = query(&search).into_iter().find(|(k, _)| k == "school") {
             let slug = raw_school.to_lowercase();
@@ -1529,9 +1538,7 @@ pub async fn handle(
             .filter(|s| *s != "woodcreek")
             .find(|s| trimmed == format!("/{s}"))
         {
-            if let Some(html) =
-                rjuhsd_hub_html(Some(&req_host), true, &format!("school={slug}"))
-            {
+            if let Some(html) = rjuhsd_hub_html(Some(&req_host), true, &format!("school={slug}")) {
                 return html_response(html);
             }
         }
@@ -2458,9 +2465,8 @@ mod rjuhsd_school_url_tests {
 
     fn canonical_of(html: &str) -> String {
         static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
-        let re = RE.get_or_init(|| {
-            regex::Regex::new(r#"<link rel="canonical" href="([^"]*)">"#).unwrap()
-        });
+        let re = RE
+            .get_or_init(|| regex::Regex::new(r#"<link rel="canonical" href="([^"]*)">"#).unwrap());
         re.captures(html)
             .map(|c| c[1].to_string())
             .unwrap_or_default()

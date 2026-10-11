@@ -914,7 +914,10 @@ mod tests {
         let mut rec = sample("vm-byo-os", 300.0);
         rec["templateVmid"] = Value::Null;
         let reserved = reserve_virtual_machine(&store, &rec);
-        assert!(reserved.is_some(), "reservation with a null template should succeed");
+        assert!(
+            reserved.is_some(),
+            "reservation with a null template should succeed"
+        );
         assert_eq!(reserved.unwrap().template_vmid, None);
 
         assert!(

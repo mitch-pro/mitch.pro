@@ -547,8 +547,11 @@ async fn verify_signup(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &
         let found_ref_norm = mitch_lib::invites::invite_code_find_owner(&state.store, &ref_code);
         if let Some(ref_norm) = found_ref_norm {
             if ref_norm != norm_email {
-                let newly_claimed =
-                    mitch_lib::invites::invite_claim_insert_if_new(&state.store, &norm_email, &ref_norm);
+                let newly_claimed = mitch_lib::invites::invite_claim_insert_if_new(
+                    &state.store,
+                    &norm_email,
+                    &ref_norm,
+                );
                 if newly_claimed {
                     coins::add_coins(
                         &state.store,
@@ -1421,7 +1424,8 @@ fn invite_send(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) ->
     };
 
     let norm_to = auth::normalize_email(&to_email);
-    let already_sent = !mitch_lib::invites::invite_sent_insert_if_new(&state.store, &norm, &norm_to);
+    let already_sent =
+        !mitch_lib::invites::invite_sent_insert_if_new(&state.store, &norm, &norm_to);
 
     let invite_link = format!(
         "https://mitchdog.com/enroll?ref={}&email={}",

@@ -704,7 +704,14 @@ mod tests {
         st.flush_pixels(&store, &data_dir);
         assert!(doc().is_none());
 
-        st.set_pixel(&store, &data_dir, 1.0, 1.0, json!({"color": "#abcabc"}), None);
+        st.set_pixel(
+            &store,
+            &data_dir,
+            1.0,
+            1.0,
+            json!({"color": "#abcabc"}),
+            None,
+        );
         assert!(st.pixels_dirty.load(Ordering::Relaxed));
 
         st.flush_pixels(&store, &data_dir);

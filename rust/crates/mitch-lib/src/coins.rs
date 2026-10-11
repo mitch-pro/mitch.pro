@@ -192,7 +192,10 @@ pub fn rename_coins_email(store: &DataStore, old_norm: &str, new_norm: &str) {
     // DELETE any existing row at the destination first — ON CONFLICT would
     // otherwise fail the rename outright if new_norm somehow already has a
     // (presumably stale/zero) row.
-    let _ = conn.execute("DELETE FROM coins WHERE email = ?1", rusqlite::params![new_norm]);
+    let _ = conn.execute(
+        "DELETE FROM coins WHERE email = ?1",
+        rusqlite::params![new_norm],
+    );
     let _ = conn.execute(
         "UPDATE coins SET email = ?1 WHERE email = ?2",
         rusqlite::params![new_norm, old_norm],
@@ -301,7 +304,11 @@ pub fn admin_notice_rows(store: &DataStore) -> Vec<(String, Value)> {
         Err(_) => return Vec::new(),
     };
     let result = match stmt.query_map([], |r| {
-        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, i64>(2)? != 0))
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, i64>(2)? != 0,
+        ))
     }) {
         Ok(rows) => rows
             .filter_map(|r| r.ok())
@@ -401,7 +408,13 @@ pub fn add_admin_notification(
         "url": clean_path,
         "batchId": batch_id,
     });
-    Some(insert_coin_gift_notice(store, &norm, "admin_notice", batch_id, data))
+    Some(insert_coin_gift_notice(
+        store,
+        &norm,
+        "admin_notice",
+        batch_id,
+        data,
+    ))
 }
 
 /// `addVmAdminNotification(targetEmail, title, message, adminEmail, url)`
@@ -428,7 +441,13 @@ pub fn add_vm_admin_notification(
         "url": if url.is_empty() { "/vms/" } else { url },
         "batchId": "",
     });
-    Some(insert_coin_gift_notice(store, &norm, "vm_admin_access", "", data))
+    Some(insert_coin_gift_notice(
+        store,
+        &norm,
+        "vm_admin_access",
+        "",
+        data,
+    ))
 }
 
 fn now_millis() -> i64 {
@@ -599,34 +618,77 @@ mod tests {
         let a_id = a.get("id").and_then(|v| v.as_str()).unwrap().to_string();
         mark_coin_gift_notices_read(&store, &norm, &[a_id.clone()].into_iter().collect());
         let mine = coin_gift_notices_for(&store, &norm);
-        let a_row = mine.iter().find(|n| n.get("id").and_then(|v| v.as_str()) == Some(a_id.as_str())).unwrap();
+        let a_row = mine
+            .iter()
+            .find(|n| n.get("id").and_then(|v| v.as_str()) == Some(a_id.as_str()))
+            .unwrap();
         let b_id = b.get("id").and_then(|v| v.as_str()).unwrap();
-        let b_row = mine.iter().find(|n| n.get("id").and_then(|v| v.as_str()) == Some(b_id)).unwrap();
+        let b_row = mine
+            .iter()
+            .find(|n| n.get("id").and_then(|v| v.as_str()) == Some(b_id))
+            .unwrap();
         assert_eq!(a_row.get("read").and_then(|v| v.as_bool()), Some(true));
         assert_eq!(b_row.get("read").and_then(|v| v.as_bool()), Some(false));
         // Empty ids marks every notice read.
         mark_coin_gift_notices_read(&store, &norm, &std::collections::HashSet::new());
         let mine = coin_gift_notices_for(&store, &norm);
-        assert!(mine.iter().all(|n| n.get("read").and_then(|v| v.as_bool()) == Some(true)));
+        assert!(mine
+            .iter()
+            .all(|n| n.get("read").and_then(|v| v.as_bool()) == Some(true)));
         std::fs::remove_dir_all(base).ok();
     }
 
     #[test]
     fn unsend_removes_by_id_or_batch_across_users() {
         let (base, data, store) = temp_store("unsend");
-        let n1 = add_admin_notification(&store, &data, "a@mitch.pro", "t", "m", "admin", "batchA", "").unwrap();
-        add_admin_notification(&store, &data, "b@mitch.pro", "t", "m", "admin", "batchA", "").unwrap();
-        add_admin_notification(&store, &data, "c@mitch.pro", "t", "m", "admin", "batchB", "").unwrap();
+        let n1 = add_admin_notification(
+            &store,
+            &data,
+            "a@mitch.pro",
+            "t",
+            "m",
+            "admin",
+            "batchA",
+            "",
+        )
+        .unwrap();
+        add_admin_notification(
+            &store,
+            &data,
+            "b@mitch.pro",
+            "t",
+            "m",
+            "admin",
+            "batchA",
+            "",
+        )
+        .unwrap();
+        add_admin_notification(
+            &store,
+            &data,
+            "c@mitch.pro",
+            "t",
+            "m",
+            "admin",
+            "batchB",
+            "",
+        )
+        .unwrap();
         // A coin gift (not an admin_notice) must never be touched by unsend.
         add_coin_gift_notice(&store, &data, "a@mitch.pro", 5.0, "admin", "");
 
         let removed = unsend_coin_gift_notices(&store, "", "batchA");
         assert_eq!(removed, 2);
-        assert!(coin_gift_notices_for(&store, &normalize_email("a@mitch.pro"))
-            .iter()
-            .any(|n| n.get("amount").is_some()));
+        assert!(
+            coin_gift_notices_for(&store, &normalize_email("a@mitch.pro"))
+                .iter()
+                .any(|n| n.get("amount").is_some())
+        );
         assert!(coin_gift_notices_for(&store, &normalize_email("b@mitch.pro")).is_empty());
-        assert_eq!(coin_gift_notices_for(&store, &normalize_email("c@mitch.pro")).len(), 1);
+        assert_eq!(
+            coin_gift_notices_for(&store, &normalize_email("c@mitch.pro")).len(),
+            1
+        );
 
         let n1_id = n1.get("id").and_then(|v| v.as_str()).unwrap();
         let removed = unsend_coin_gift_notices(&store, n1_id, "");
@@ -638,7 +700,8 @@ mod tests {
     fn rename_moves_every_notice() {
         let (base, data, store) = temp_store("notice-rename");
         add_coin_gift_notice(&store, &data, "old@gmail.com", 1.0, "admin", "");
-        add_admin_notification(&store, &data, "old@gmail.com", "t", "m", "admin", "b1", "").unwrap();
+        add_admin_notification(&store, &data, "old@gmail.com", "t", "m", "admin", "b1", "")
+            .unwrap();
         rename_coin_gift_notices_email(&store, "old@gmail.com", "new@gmail.com");
         assert!(coin_gift_notices_for(&store, "old@gmail.com").is_empty());
         assert_eq!(coin_gift_notices_for(&store, "new@gmail.com").len(), 2);

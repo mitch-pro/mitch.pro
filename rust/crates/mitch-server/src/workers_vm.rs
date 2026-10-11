@@ -291,7 +291,8 @@ pub(crate) async fn enforce_vm_max_uptime_worker(state: &AppState) {
             }
         }
 
-        let is_admin = !owner_email.is_empty() && mitch_lib::auth::is_admin_email(&state.store, &owner_email);
+        let is_admin =
+            !owner_email.is_empty() && mitch_lib::auth::is_admin_email(&state.store, &owner_email);
 
         let now = now_ms() as i64;
         let uptime = guest.get("uptime").and_then(jsval::number).unwrap_or(0.0);
@@ -341,7 +342,8 @@ pub(crate) async fn enforce_vm_max_uptime_worker(state: &AppState) {
             .unwrap_or(0.0);
 
         // Daily / session uptime expiration (only for non-exempt users)
-        let is_uptime_expired = !is_lease_exempt && remaining_seconds.map(|s| s <= 0.0).unwrap_or(false);
+        let is_uptime_expired =
+            !is_lease_exempt && remaining_seconds.map(|s| s <= 0.0).unwrap_or(false);
 
         // Inactivity expiration (applies to ALL users, including admins after 30m)
         let mut is_inactive = false;

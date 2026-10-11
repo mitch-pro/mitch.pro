@@ -1060,7 +1060,6 @@ fn owned_upgrade(s: &Value, id: &str) -> bool {
     }
 }
 
-
 /// `parseInt(s, 10) || 0`-shaped decimal prefix parse (JS parseInt on the
 /// String() of the value; "12.7abc" → 12, "" → NaN → caller's || 1).
 pub(crate) fn parse_int_js(s: &str) -> f64 {

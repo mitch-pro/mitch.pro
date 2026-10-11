@@ -336,10 +336,11 @@ pub fn names_remove_for_norm_email(store: &DataStore, norm_email: &str) -> Vec<S
             Ok(s) => s,
             Err(_) => return Vec::new(),
         };
-        let found: Vec<String> = match stmt.query_map(rusqlite::params![norm_email], |r| r.get::<_, String>(0)) {
-            Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
-            Err(_) => return Vec::new(),
-        };
+        let found: Vec<String> =
+            match stmt.query_map(rusqlite::params![norm_email], |r| r.get::<_, String>(0)) {
+                Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
+                Err(_) => return Vec::new(),
+            };
         found
     };
     for sid in &sids {

@@ -103,7 +103,10 @@ async fn shop_buy(
     if item.get("type").and_then(|v| v.as_str()) == Some("premium") {
         return json_response(400, json!({ "error": "invalid shop item" }));
     }
-    let disabled = item.get("disabled").and_then(|v| v.as_bool()).unwrap_or(false);
+    let disabled = item
+        .get("disabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     if disabled && !auth::is_admin_email(&state.store, &email) {
         return json_response(
             400,
@@ -171,7 +174,10 @@ async fn shop_buy(
             })
             .unwrap_or_default();
         if mine.iter().any(|m| m == &item_id) {
-            return json_response(400, json!({ "error": "You already unlocked this personality." }));
+            return json_response(
+                400,
+                json!({ "error": "You already unlocked this personality." }),
+            );
         }
         mine.push(item_id.clone());
         if let Some(obj) = unlocked.as_object_mut() {
@@ -185,10 +191,14 @@ async fn shop_buy(
             .unwrap_or(1440.0);
         bump_stat_until(state, &norm, "vip_casino_until", minutes);
     } else if cost_type == "streak_freeze" {
-        let mut entry = mitch_lib::daily_logins::daily_login_get(&state.store, &norm).unwrap_or(json!({
-            "lastClaimDate": "", "streak": 0, "streakFreezes": 0
-        }));
-        let freezes = entry.get("streakFreezes").and_then(|v| v.as_i64()).unwrap_or(0);
+        let mut entry =
+            mitch_lib::daily_logins::daily_login_get(&state.store, &norm).unwrap_or(json!({
+                "lastClaimDate": "", "streak": 0, "streakFreezes": 0
+            }));
+        let freezes = entry
+            .get("streakFreezes")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
         if freezes >= 3 {
             return json_response(
                 400,
@@ -518,7 +528,14 @@ mod tests {
         std::env::set_var("NODE_ENV", "test");
         let (state, _dir) = test_state();
         let email = "buyer@student.rjuhsd.us";
-        mitch_lib::coins::add_coins(&state.store, state.data_dir(), email, 2000.0, 1.0, "test_init");
+        mitch_lib::coins::add_coins(
+            &state.store,
+            state.data_dir(),
+            email,
+            2000.0,
+            1.0,
+            "test_init",
+        );
         let headers = auth_headers(&state, email);
 
         let resp = shop_buy(
@@ -559,7 +576,14 @@ mod tests {
         std::env::set_var("NODE_ENV", "test");
         let (state, _dir) = test_state();
         let email = "poor@student.rjuhsd.us";
-        mitch_lib::coins::add_coins(&state.store, state.data_dir(), email, 10.0, 1.0, "test_init");
+        mitch_lib::coins::add_coins(
+            &state.store,
+            state.data_dir(),
+            email,
+            10.0,
+            1.0,
+            "test_init",
+        );
         let headers = auth_headers(&state, email);
 
         let resp = shop_buy(
@@ -571,7 +595,10 @@ mod tests {
         .await;
         assert_eq!(resp.status(), 400);
         let data = body_json(resp).await;
-        assert!(data["error"].as_str().unwrap().contains("Insufficient coins"));
+        assert!(data["error"]
+            .as_str()
+            .unwrap()
+            .contains("Insufficient coins"));
         let balance = mitch_lib::coins::get_coins(&state.store, state.data_dir(), email);
         assert_eq!(balance, 10.0, "a failed purchase must never charge coins");
     }

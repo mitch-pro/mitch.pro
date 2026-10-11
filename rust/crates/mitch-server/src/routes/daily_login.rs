@@ -69,7 +69,8 @@ pub async fn handle(
 
 fn daily_login_state(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let client_ip = crate::handler::get_real_ip(headers, None);
-    if let Some((code, msg)) = state.rate_limit_check(&client_ip, "anon", "/api/daily-login/state") {
+    if let Some((code, msg)) = state.rate_limit_check(&client_ip, "anon", "/api/daily-login/state")
+    {
         return json_resp(code, json!({ "error": msg }));
     }
 
@@ -168,7 +169,8 @@ fn daily_login_state(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
 
 fn daily_login_claim(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let client_ip = crate::handler::get_real_ip(headers, None);
-    if let Some((code, msg)) = state.rate_limit_check(&client_ip, "anon", "/api/daily-login/claim") {
+    if let Some((code, msg)) = state.rate_limit_check(&client_ip, "anon", "/api/daily-login/claim")
+    {
         return json_resp(code, json!({ "error": msg }));
     }
 
@@ -194,7 +196,8 @@ fn daily_login_claim(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     };
 
     let norm = auth::normalize_email(&email);
-    let mut data = mitch_lib::daily_logins::daily_login_get(&state.store, &norm).unwrap_or(json!({}));
+    let mut data =
+        mitch_lib::daily_logins::daily_login_get(&state.store, &norm).unwrap_or(json!({}));
 
     let last_claim_date = data
         .get("lastClaimDate")

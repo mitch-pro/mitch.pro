@@ -85,7 +85,8 @@ mod tests {
     fn get_set_remove_round_trip() {
         let store = temp_store("round-trip");
         assert_eq!(push_sub_get(&store, "a@gmail.com"), None);
-        let sub = json!({"endpoint": "https://example.com/x", "keys": {"p256dh": "a", "auth": "b"}});
+        let sub =
+            json!({"endpoint": "https://example.com/x", "keys": {"p256dh": "a", "auth": "b"}});
         push_sub_set(&store, "a@gmail.com", &sub);
         assert_eq!(push_sub_get(&store, "a@gmail.com"), Some(sub));
         assert!(push_sub_remove(&store, "a@gmail.com"));

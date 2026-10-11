@@ -77,7 +77,12 @@ mod tests {
     fn get_set_round_trip_and_missing_is_none() {
         let store = temp_store("round-trip");
         assert_eq!(mini_session_get(&store, "a@gmail.com", "typing"), None);
-        mini_session_set(&store, "a@gmail.com", "typing", &json!({"dailyCount": 3, "lastTs": 100}));
+        mini_session_set(
+            &store,
+            "a@gmail.com",
+            "typing",
+            &json!({"dailyCount": 3, "lastTs": 100}),
+        );
         assert_eq!(
             mini_session_get(&store, "a@gmail.com", "typing"),
             Some(json!({"dailyCount": 3, "lastTs": 100}))
@@ -90,7 +95,12 @@ mod tests {
     fn set_overwrites_the_whole_blob() {
         let store = temp_store("overwrite");
         mini_session_set(&store, "a@gmail.com", "logic", &json!({"puzzlesDone": 1}));
-        mini_session_set(&store, "a@gmail.com", "logic", &json!({"puzzlesDone": 2, "currentWordle": "APPLE"}));
+        mini_session_set(
+            &store,
+            "a@gmail.com",
+            "logic",
+            &json!({"puzzlesDone": 2, "currentWordle": "APPLE"}),
+        );
         assert_eq!(
             mini_session_get(&store, "a@gmail.com", "logic"),
             Some(json!({"puzzlesDone": 2, "currentWordle": "APPLE"}))

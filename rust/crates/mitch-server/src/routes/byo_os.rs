@@ -64,8 +64,8 @@ const SELF_REFUND_MAX_BYTES: u64 = 128 * 1024 * 1024;
 /// `LINK_ISO_INCLUDED_GB`, capped at `LINK_ISO_SURCHARGE_CAP_GB`.
 fn link_iso_cost_coins(size_bytes: u64) -> f64 {
     let size_gb = size_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
-    let billable_overage_gb =
-        (size_gb - LINK_ISO_INCLUDED_GB).clamp(0.0, LINK_ISO_SURCHARGE_CAP_GB - LINK_ISO_INCLUDED_GB);
+    let billable_overage_gb = (size_gb - LINK_ISO_INCLUDED_GB)
+        .clamp(0.0, LINK_ISO_SURCHARGE_CAP_GB - LINK_ISO_INCLUDED_GB);
     BYO_OS_COST_COINS + billable_overage_gb * LINK_ISO_SURCHARGE_PER_GB
 }
 
@@ -146,7 +146,9 @@ pub(crate) async fn handle(
 
     // GET /api/vm/byo-os/iso — current stored ISO, if any.
     if path == "/api/vm/byo-os/iso" && *method == Method::GET {
-        let manifest = state.store.read_document(&isos_manifest_file(state), json!({}));
+        let manifest = state
+            .store
+            .read_document(&isos_manifest_file(state), json!({}));
         let entry = manifest.get(&actor.email).cloned();
         return Some(json_response(200, json!({ "iso": entry })));
     }
@@ -155,7 +157,9 @@ pub(crate) async fn handle(
     // The ISO lives on Proxmox's own storage (never this box's disk once
     // upload completes — see /iso/complete), so this deletes it there.
     if path == "/api/vm/byo-os/iso/delete" && *method == Method::POST {
-        let mut manifest = state.store.read_document(&isos_manifest_file(state), json!({}));
+        let mut manifest = state
+            .store
+            .read_document(&isos_manifest_file(state), json!({}));
         if let Some(entry) = manifest.get(&actor.email).cloned() {
             let proxmox_filename = jsval::str_or(entry.get("proxmoxFilename"), "");
             if !proxmox_filename.is_empty() {
@@ -166,7 +170,9 @@ pub(crate) async fn handle(
             if let Some(map) = manifest.as_object_mut() {
                 map.remove(&actor.email);
             }
-            let _ = state.store.write_document(&isos_manifest_file(state), &manifest);
+            let _ = state
+                .store
+                .write_document(&isos_manifest_file(state), &manifest);
         }
         return Some(json_response(200, json!({ "ok": true })));
     }
@@ -177,11 +183,19 @@ pub(crate) async fn handle(
     // file itself). No admin review needed — the size threshold is the
     // whole safety check, so it's tight and automatic.
     if path == "/api/vm/byo-os/iso/refund-undersized" && *method == Method::POST {
-        let mut manifest = state.store.read_document(&isos_manifest_file(state), json!({}));
+        let mut manifest = state
+            .store
+            .read_document(&isos_manifest_file(state), json!({}));
         let Some(entry) = manifest.get(&actor.email).cloned() else {
-            return Some(json_response(404, json!({ "error": "No stored ISO found." })));
+            return Some(json_response(
+                404,
+                json!({ "error": "No stored ISO found." }),
+            ));
         };
-        let size_bytes = entry.get("sizeBytes").and_then(jsval::number).unwrap_or(0.0) as u64;
+        let size_bytes = entry
+            .get("sizeBytes")
+            .and_then(jsval::number)
+            .unwrap_or(0.0) as u64;
         if size_bytes >= SELF_REFUND_MAX_BYTES {
             return Some(json_response(
                 400,
@@ -196,7 +210,9 @@ pub(crate) async fn handle(
         }
         let proxmox_filename = jsval::str_or(entry.get("proxmoxFilename"), "");
         if !proxmox_filename.is_empty() {
-            let _ = crate::proxmox_desktop::desktop().delete_iso(&proxmox_filename).await;
+            let _ = crate::proxmox_desktop::desktop()
+                .delete_iso(&proxmox_filename)
+                .await;
         }
         let refund = link_iso_cost_coins(size_bytes);
         mitch_lib::coins::add_coins(
@@ -210,7 +226,9 @@ pub(crate) async fn handle(
         if let Some(map) = manifest.as_object_mut() {
             map.remove(&actor.email);
         }
-        let _ = state.store.write_document(&isos_manifest_file(state), &manifest);
+        let _ = state
+            .store
+            .write_document(&isos_manifest_file(state), &manifest);
         vm_audit(
             state,
             &actor.email,
@@ -237,9 +255,14 @@ pub(crate) async fn handle(
     // stored ISO (re-clicking after the same entry was already reported is
     // a no-op) so a confused user mashing the button doesn't spam alerts.
     if path == "/api/vm/byo-os/iso/report-issue" && *method == Method::POST {
-        let mut manifest = state.store.read_document(&isos_manifest_file(state), json!({}));
+        let mut manifest = state
+            .store
+            .read_document(&isos_manifest_file(state), json!({}));
         let Some(entry) = manifest.get(&actor.email).cloned() else {
-            return Some(json_response(404, json!({ "error": "No stored ISO found." })));
+            return Some(json_response(
+                404,
+                json!({ "error": "No stored ISO found." }),
+            ));
         };
         if jsval::truthy(entry.get("reported").unwrap_or(&Value::Null)) {
             return Some(json_response(
@@ -249,7 +272,10 @@ pub(crate) async fn handle(
         }
 
         let filename = jsval::str_or(entry.get("filename"), "custom.iso");
-        let size_bytes = entry.get("sizeBytes").and_then(jsval::number).unwrap_or(0.0) as u64;
+        let size_bytes = entry
+            .get("sizeBytes")
+            .and_then(jsval::number)
+            .unwrap_or(0.0) as u64;
         let proxmox_filename = jsval::str_or(entry.get("proxmoxFilename"), "");
         let body: Value = serde_json::from_slice(body_bytes).unwrap_or(json!({}));
         let note = jsval::str_or(body.get("note"), "");
@@ -275,7 +301,11 @@ pub(crate) async fn handle(
                 "BYO-OS ISO issue from {}: \"{filename}\" ({}). {}",
                 actor.email,
                 fmt_gb(size_bytes),
-                if note.is_empty() { "No note.".to_string() } else { format!("Note: {note}") }
+                if note.is_empty() {
+                    "No note.".to_string()
+                } else {
+                    format!("Note: {note}")
+                }
             ),
             "BYO-OS Ticket",
             "high",
@@ -286,7 +316,9 @@ pub(crate) async fn handle(
                 obj.insert("reported".to_string(), json!(true));
             }
         }
-        let _ = state.store.write_document(&isos_manifest_file(state), &manifest);
+        let _ = state
+            .store
+            .write_document(&isos_manifest_file(state), &manifest);
 
         vm_audit(
             state,
@@ -306,15 +338,27 @@ pub(crate) async fn handle(
     // POST /api/vm/byo-os/iso/start — begin a new chunked upload.
     if path == "/api/vm/byo-os/iso/start" && *method == Method::POST {
         if is_vm_banned(state, &actor.email) {
-            return Some(json_response(403, json!({ "error": "VM access is restricted on this account." })));
+            return Some(json_response(
+                403,
+                json!({ "error": "VM access is restricted on this account." }),
+            ));
         }
         if is_byo_os_banned(state, &actor.email) {
-            return Some(json_response(403, json!({ "error": "BYO-OS is restricted on this account." })));
+            return Some(json_response(
+                403,
+                json!({ "error": "BYO-OS is restricted on this account." }),
+            ));
         }
         let body: Value = serde_json::from_slice(body_bytes).unwrap_or(json!({}));
         let filename = safe_iso_filename(&jsval::str_or(body.get("filename"), "custom.iso"));
-        let total_size = body.get("totalSizeBytes").and_then(jsval::number).unwrap_or(0.0);
-        let chunk_size = body.get("chunkSizeBytes").and_then(jsval::number).unwrap_or(0.0);
+        let total_size = body
+            .get("totalSizeBytes")
+            .and_then(jsval::number)
+            .unwrap_or(0.0);
+        let chunk_size = body
+            .get("chunkSizeBytes")
+            .and_then(jsval::number)
+            .unwrap_or(0.0);
         if !(total_size.is_finite() && total_size > 0.0 && total_size as u64 <= MAX_ISO_BYTES) {
             return Some(json_response(
                 400,
@@ -341,7 +385,10 @@ pub(crate) async fn handle(
         let upload_id = mitch_lib::crypto::random_bytes_hex(16);
         let dir = uploads_dir(state).join(&upload_id);
         if std::fs::create_dir_all(&dir).is_err() {
-            return Some(json_response(500, json!({ "error": "Could not start the upload." })));
+            return Some(json_response(
+                500,
+                json!({ "error": "Could not start the upload." }),
+            ));
         }
         let manifest = json!({
             "ownerEmail": actor.email,
@@ -351,7 +398,9 @@ pub(crate) async fn handle(
             "totalChunks": total_chunks,
             "createdAt": mitch_lib::school::now_millis(),
         });
-        let _ = state.store.write_document(&upload_manifest_path(state, &upload_id), &manifest);
+        let _ = state
+            .store
+            .write_document(&upload_manifest_path(state, &upload_id), &manifest);
         return Some(json_response(
             200,
             json!({ "uploadId": upload_id, "totalChunks": total_chunks }),
@@ -362,7 +411,10 @@ pub(crate) async fn handle(
     if path == "/api/vm/byo-os/iso/chunk" && *method == Method::POST {
         let q = crate::handler::query(search);
         let upload_id = q.get("uploadId").cloned().unwrap_or_default();
-        let index: u64 = q.get("index").and_then(|v| v.parse().ok()).unwrap_or(u64::MAX);
+        let index: u64 = q
+            .get("index")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(u64::MAX);
         if upload_id.is_empty() || !upload_id.chars().all(|c| c.is_ascii_alphanumeric()) {
             return Some(json_response(400, json!({ "error": "invalid uploadId" })));
         }
@@ -370,21 +422,35 @@ pub(crate) async fn handle(
             .store
             .read_document(&upload_manifest_path(state, &upload_id), Value::Null);
         if manifest.is_null() {
-            return Some(json_response(404, json!({ "error": "Upload not found or expired." })));
+            return Some(json_response(
+                404,
+                json!({ "error": "Upload not found or expired." }),
+            ));
         }
         if jsval::str_or(manifest.get("ownerEmail"), "") != actor.email {
             return Some(json_response(403, json!({ "error": "Not your upload." })));
         }
-        let total_chunks = manifest.get("totalChunks").and_then(jsval::number).unwrap_or(0.0) as u64;
+        let total_chunks = manifest
+            .get("totalChunks")
+            .and_then(jsval::number)
+            .unwrap_or(0.0) as u64;
         if index >= total_chunks {
-            return Some(json_response(400, json!({ "error": "chunk index out of range" })));
+            return Some(json_response(
+                400,
+                json!({ "error": "chunk index out of range" }),
+            ));
         }
         if body_bytes.len() as u64 > MAX_CHUNK_BYTES {
             return Some(json_response(413, json!({ "error": "Chunk too large." })));
         }
-        let chunk_path = uploads_dir(state).join(&upload_id).join(format!("{index}.chunk"));
+        let chunk_path = uploads_dir(state)
+            .join(&upload_id)
+            .join(format!("{index}.chunk"));
         if std::fs::write(&chunk_path, body_bytes).is_err() {
-            return Some(json_response(500, json!({ "error": "Could not write chunk to disk." })));
+            return Some(json_response(
+                500,
+                json!({ "error": "Could not write chunk to disk." }),
+            ));
         }
         return Some(json_response(200, json!({ "ok": true, "received": index })));
     }
@@ -399,7 +465,10 @@ pub(crate) async fn handle(
         if manifest.is_null() || jsval::str_or(manifest.get("ownerEmail"), "") != actor.email {
             return Some(json_response(404, json!({ "error": "Upload not found." })));
         }
-        let total_chunks = manifest.get("totalChunks").and_then(jsval::number).unwrap_or(0.0) as u64;
+        let total_chunks = manifest
+            .get("totalChunks")
+            .and_then(jsval::number)
+            .unwrap_or(0.0) as u64;
         let dir = uploads_dir(state).join(&upload_id);
         let mut received: Vec<u64> = Vec::new();
         for i in 0..total_chunks {
@@ -427,10 +496,19 @@ pub(crate) async fn handle(
             return Some(json_response(403, json!({ "error": "Not your upload." })));
         }
         if is_vm_banned(state, &actor.email) || is_byo_os_banned(state, &actor.email) {
-            return Some(json_response(403, json!({ "error": "BYO-OS is restricted on this account." })));
+            return Some(json_response(
+                403,
+                json!({ "error": "BYO-OS is restricted on this account." }),
+            ));
         }
-        let total_chunks = manifest.get("totalChunks").and_then(jsval::number).unwrap_or(0.0) as u64;
-        let declared_size = manifest.get("totalSizeBytes").and_then(jsval::number).unwrap_or(0.0) as u64;
+        let total_chunks = manifest
+            .get("totalChunks")
+            .and_then(jsval::number)
+            .unwrap_or(0.0) as u64;
+        let declared_size = manifest
+            .get("totalSizeBytes")
+            .and_then(jsval::number)
+            .unwrap_or(0.0) as u64;
         let filename = jsval::str_or(manifest.get("filename"), "custom.iso");
         let dir = uploads_dir(state).join(&upload_id);
         for i in 0..total_chunks {
@@ -452,7 +530,10 @@ pub(crate) async fn handle(
             ));
         }
         if !crate::proxmox_desktop::desktop().configured() {
-            return Some(json_response(503, json!({ "error": "Computer service is not configured." })));
+            return Some(json_response(
+                503,
+                json!({ "error": "Computer service is not configured." }),
+            ));
         }
 
         // Reassembled only in a scratch spot and only for as long as it
@@ -483,7 +564,10 @@ pub(crate) async fn handle(
             Ok(w) => w,
             Err(_) => {
                 let _ = std::fs::remove_file(&local_path);
-                return Some(json_response(500, json!({ "error": "Could not assemble the uploaded ISO." })));
+                return Some(json_response(
+                    500,
+                    json!({ "error": "Could not assemble the uploaded ISO." }),
+                ));
             }
         };
         if written != declared_size {
@@ -499,7 +583,9 @@ pub(crate) async fn handle(
         // box. Coins are only charged once this actually succeeds. The
         // destination filename is generated by upload_iso itself (and may
         // change across internal retries), so take whatever it reports back.
-        let upload_result = crate::proxmox_desktop::desktop().upload_iso(&local_path).await;
+        let upload_result = crate::proxmox_desktop::desktop()
+            .upload_iso(&local_path)
+            .await;
         let _ = std::fs::remove_file(&local_path);
         let _ = std::fs::remove_dir(&dir);
         let proxmox_filename = match upload_result {
@@ -515,7 +601,9 @@ pub(crate) async fn handle(
 
         // Enforce "1 ISO max": drop whatever Proxmox-side ISO was stored
         // before (best-effort — Proxmox's own ISO storage, not this box).
-        let mut iso_manifest = state.store.read_document(&isos_manifest_file(state), json!({}));
+        let mut iso_manifest = state
+            .store
+            .read_document(&isos_manifest_file(state), json!({}));
         if let Some(prev) = iso_manifest.get(&actor.email).cloned() {
             let prev_filename = jsval::str_or(prev.get("proxmoxFilename"), "");
             if !prev_filename.is_empty() && prev_filename != proxmox_filename {
@@ -543,7 +631,9 @@ pub(crate) async fn handle(
         if let Some(map) = iso_manifest.as_object_mut() {
             map.insert(actor.email.clone(), entry.clone());
         }
-        let _ = state.store.write_document(&isos_manifest_file(state), &iso_manifest);
+        let _ = state
+            .store
+            .write_document(&isos_manifest_file(state), &iso_manifest);
 
         let _ = std::fs::remove_file(upload_manifest_path(state, &upload_id));
         let _ = std::fs::remove_dir(&dir);
@@ -576,15 +666,24 @@ pub(crate) async fn handle(
     // link_iso_cost_coins for how a bigger file costs more instead.
     if path == "/api/vm/byo-os/iso/from-url" && *method == Method::POST {
         if is_vm_banned(state, &actor.email) {
-            return Some(json_response(403, json!({ "error": "VM access is restricted on this account." })));
+            return Some(json_response(
+                403,
+                json!({ "error": "VM access is restricted on this account." }),
+            ));
         }
         if is_byo_os_banned(state, &actor.email) {
-            return Some(json_response(403, json!({ "error": "BYO-OS is restricted on this account." })));
+            return Some(json_response(
+                403,
+                json!({ "error": "BYO-OS is restricted on this account." }),
+            ));
         }
         let body: Value = serde_json::from_slice(body_bytes).unwrap_or(json!({}));
         let raw_url = jsval::str_or(body.get("url"), "").trim().to_string();
         if raw_url.len() > 2000 {
-            return Some(json_response(400, json!({ "error": "That link is too long." })));
+            return Some(json_response(
+                400,
+                json!({ "error": "That link is too long." }),
+            ));
         }
         let parsed = url::Url::parse(&raw_url)
             .ok()
@@ -610,7 +709,10 @@ pub(crate) async fn handle(
             ));
         }
         if !crate::proxmox_desktop::desktop().configured() {
-            return Some(json_response(503, json!({ "error": "Computer service is not configured." })));
+            return Some(json_response(
+                503,
+                json!({ "error": "Computer service is not configured." }),
+            ));
         }
 
         let display_filename = parsed
@@ -634,9 +736,12 @@ pub(crate) async fn handle(
         };
 
         let total_cost = link_iso_cost_coins(size_bytes);
-        let current_balance = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &actor.email);
+        let current_balance =
+            mitch_lib::coins::get_coins(&state.store, state.data_dir(), &actor.email);
         if current_balance < total_cost {
-            let _ = crate::proxmox_desktop::desktop().delete_iso(&proxmox_filename).await;
+            let _ = crate::proxmox_desktop::desktop()
+                .delete_iso(&proxmox_filename)
+                .await;
             return Some(json_response(
                 402,
                 json!({
@@ -649,11 +754,15 @@ pub(crate) async fn handle(
             ));
         }
 
-        let mut iso_manifest = state.store.read_document(&isos_manifest_file(state), json!({}));
+        let mut iso_manifest = state
+            .store
+            .read_document(&isos_manifest_file(state), json!({}));
         if let Some(prev) = iso_manifest.get(&actor.email).cloned() {
             let prev_filename = jsval::str_or(prev.get("proxmoxFilename"), "");
             if !prev_filename.is_empty() && prev_filename != proxmox_filename {
-                let _ = crate::proxmox_desktop::desktop().delete_iso(&prev_filename).await;
+                let _ = crate::proxmox_desktop::desktop()
+                    .delete_iso(&prev_filename)
+                    .await;
             }
         }
 
@@ -675,7 +784,9 @@ pub(crate) async fn handle(
         if let Some(map) = iso_manifest.as_object_mut() {
             map.insert(actor.email.clone(), entry.clone());
         }
-        let _ = state.store.write_document(&isos_manifest_file(state), &iso_manifest);
+        let _ = state
+            .store
+            .write_document(&isos_manifest_file(state), &iso_manifest);
 
         vm_audit(
             state,
@@ -683,7 +794,9 @@ pub(crate) async fn handle(
             None,
             "BYO_OS_ISO_UPLOADED",
             true,
-            Some(&json!({ "filename": display_filename, "sizeBytes": size_bytes, "sourceUrl": raw_url, "costCoins": total_cost })),
+            Some(
+                &json!({ "filename": display_filename, "sizeBytes": size_bytes, "sourceUrl": raw_url, "costCoins": total_cost }),
+            ),
         );
 
         return Some(json_response(
@@ -700,12 +813,20 @@ pub(crate) async fn handle(
     // already sitting on Proxmox's storage (uploaded at /iso/complete time).
     if path == "/api/vm/byo-os/create" && *method == Method::POST {
         if is_vm_banned(state, &actor.email) {
-            return Some(json_response(403, json!({ "error": "VM access is restricted on this account." })));
+            return Some(json_response(
+                403,
+                json!({ "error": "VM access is restricted on this account." }),
+            ));
         }
         if is_byo_os_banned(state, &actor.email) {
-            return Some(json_response(403, json!({ "error": "BYO-OS is restricted on this account." })));
+            return Some(json_response(
+                403,
+                json!({ "error": "BYO-OS is restricted on this account." }),
+            ));
         }
-        let iso_manifest = state.store.read_document(&isos_manifest_file(state), json!({}));
+        let iso_manifest = state
+            .store
+            .read_document(&isos_manifest_file(state), json!({}));
         let Some(iso_entry) = iso_manifest.get(&actor.email).cloned() else {
             return Some(json_response(
                 400,
@@ -726,7 +847,10 @@ pub(crate) async fn handle(
         // at a time, regardless of which path (template or BYO-OS) started it.
         let lock_key = format!("byo-os-create-{}", actor.email);
         {
-            let mut requests = state.vm_power_requests.lock().unwrap_or_else(|e| e.into_inner());
+            let mut requests = state
+                .vm_power_requests
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             if requests.contains_key(&lock_key)
                 || requests.contains_key(&format!("create-{}", actor.email))
                 || requests.contains_key(&format!("recreate-{}", actor.email))
@@ -736,7 +860,10 @@ pub(crate) async fn handle(
                     json!({ "error": "A computer operation is already in progress for your account." }),
                 ));
             }
-            requests.insert(lock_key.clone(), json!({ "startedAt": mitch_lib::school::now_millis() as f64 }));
+            requests.insert(
+                lock_key.clone(),
+                json!({ "startedAt": mitch_lib::school::now_millis() as f64 }),
+            );
         }
 
         // Delete any existing computer(s) first — same as the template
@@ -756,7 +883,9 @@ pub(crate) async fn handle(
                 .delete_guest(&old, true)
                 .await
             {
-                tracing::warn!("[byo-os create] Note: Proxmox delete for {old_id} returned: {err:?}");
+                tracing::warn!(
+                    "[byo-os create] Note: Proxmox delete for {old_id} returned: {err:?}"
+                );
             }
             let deleted = vmlib::delete_virtual_machine(&state.store, &old_id);
             tracing::warn!("[byo-os create] local delete_virtual_machine({old_id}) -> {deleted}");
@@ -767,7 +896,14 @@ pub(crate) async fn handle(
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .remove(&old_id);
-            vm_audit(state, &actor.email, Some(&old), "VM_DELETED_FOR_RECREATE", true, None);
+            vm_audit(
+                state,
+                &actor.email,
+                Some(&old),
+                "VM_DELETED_FOR_RECREATE",
+                true,
+                None,
+            );
         }
 
         let body: Value = serde_json::from_slice(body_bytes).unwrap_or(json!({}));
@@ -812,9 +948,16 @@ pub(crate) async fn handle(
             {
                 Ok(v) => v as f64,
                 Err(e) => {
-                    state.vm_power_requests.lock().unwrap_or_else(|e| e.into_inner()).remove(&lock_key);
+                    state
+                        .vm_power_requests
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .remove(&lock_key);
                     let friendly = crate::routes::vm::friendly_vm_error(&e.into());
-                    return Some(json_response(friendly.0, json!({ "error": friendly.1, "code": friendly.2 })));
+                    return Some(json_response(
+                        friendly.0,
+                        json!({ "error": friendly.1, "code": friendly.2 }),
+                    ));
                 }
             };
             let candidate_hostname = format!("byo-os-{}", candidate_vmid as i64);
@@ -851,7 +994,11 @@ pub(crate) async fn handle(
             excluded_vmids.push(candidate_vmid);
         }
         let Some(pending_record) = pending_record else {
-            state.vm_power_requests.lock().unwrap_or_else(|e| e.into_inner()).remove(&lock_key);
+            state
+                .vm_power_requests
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&lock_key);
             return Some(json_response(
                 500,
                 json!({ "error": "Could not reserve a computer slot. Please try again." }),
@@ -870,7 +1017,11 @@ pub(crate) async fn handle(
                 iso_filename: proxmox_filename.clone(),
             })
             .await;
-        state.vm_power_requests.lock().unwrap_or_else(|e| e.into_inner()).remove(&lock_key);
+        state
+            .vm_power_requests
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&lock_key);
 
         match result {
             Ok(created) => {
@@ -886,13 +1037,28 @@ pub(crate) async fn handle(
                 let record = vmlib::upsert_virtual_machine(&state.store, &merged)
                     .map(|r| r.to_json())
                     .unwrap_or(merged);
-                vm_audit(state, &actor.email, Some(&record), "BYO_OS_VM_CREATED", true, None);
-                return Some(json_response(201, json!({ "success": true, "computer": record })));
+                vm_audit(
+                    state,
+                    &actor.email,
+                    Some(&record),
+                    "BYO_OS_VM_CREATED",
+                    true,
+                    None,
+                );
+                return Some(json_response(
+                    201,
+                    json!({ "success": true, "computer": record }),
+                ));
             }
             Err(err) => {
                 let rec_id = jsval::str_or(pending_record.get("id"), "");
                 if !rec_id.is_empty() {
-                    vmlib::update_virtual_machine_runtime(&state.store, &rec_id, None, Some("provisioning-failed"));
+                    vmlib::update_virtual_machine_runtime(
+                        &state.store,
+                        &rec_id,
+                        None,
+                        Some("provisioning-failed"),
+                    );
                 }
                 vm_audit(
                     state,
@@ -903,7 +1069,10 @@ pub(crate) async fn handle(
                     Some(&json!({ "code": err.code })),
                 );
                 let friendly = crate::routes::vm::friendly_vm_error(&err.into());
-                return Some(json_response(friendly.0, json!({ "error": friendly.1, "code": friendly.2 })));
+                return Some(json_response(
+                    friendly.0,
+                    json!({ "error": friendly.1, "code": friendly.2 }),
+                ));
             }
         }
     }
@@ -915,7 +1084,10 @@ pub(crate) async fn handle(
     // never had an ISO attached in the first place).
     if path == "/api/vm/byo-os/detach-iso" && *method == Method::POST {
         if is_vm_banned(state, &actor.email) {
-            return Some(json_response(403, json!({ "error": "VM access is restricted on this account." })));
+            return Some(json_response(
+                403,
+                json!({ "error": "VM access is restricted on this account." }),
+            ));
         }
         let records = vmlib::get_virtual_machines_for_owner(&state.store, &actor.email);
         let Some(record) = records.into_iter().find(|r| r.template_vmid.is_none()) else {
@@ -925,7 +1097,10 @@ pub(crate) async fn handle(
             ));
         };
         let record_json = record.to_json();
-        let node = jsval::str_or(record_json.get("node"), crate::proxmox_desktop::desktop().node());
+        let node = jsval::str_or(
+            record_json.get("node"),
+            crate::proxmox_desktop::desktop().node(),
+        );
         if let Err(e) = crate::proxmox_desktop::desktop()
             .detach_iso(&node, record.vmid as i64)
             .await
@@ -933,7 +1108,14 @@ pub(crate) async fn handle(
             let friendly = crate::routes::vm::friendly_vm_error(&e.into());
             return Some(json_response(friendly.0, json!({ "error": friendly.1 })));
         }
-        vm_audit(state, &actor.email, Some(&record_json), "BYO_OS_ISO_DETACHED", true, None);
+        vm_audit(
+            state,
+            &actor.email,
+            Some(&record_json),
+            "BYO_OS_ISO_DETACHED",
+            true,
+            None,
+        );
         return Some(json_response(
             200,
             json!({ "ok": true, "message": "ISO detached — restart your computer to boot from disk." }),

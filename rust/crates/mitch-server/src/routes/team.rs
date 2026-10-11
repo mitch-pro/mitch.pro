@@ -238,8 +238,15 @@ async fn reply(state: &Arc<AppState>, body_bytes: &[u8], member_name: &str) -> R
         return json_response(400, json!({ "error": "missing fields" }));
     }
     let in_reply_to_header = (!in_reply_to.is_empty()).then_some(in_reply_to);
-    if let Err(err) =
-        send_via_mitch_mail("support", &to, &subject, &reply_body, in_reply_to_header, true).await
+    if let Err(err) = send_via_mitch_mail(
+        "support",
+        &to,
+        &subject,
+        &reply_body,
+        in_reply_to_header,
+        true,
+    )
+    .await
     {
         return json_response(500, json!({ "error": err }));
     }
@@ -381,8 +388,15 @@ async fn gmail_reply(state: &Arc<AppState>, body_bytes: &[u8], member_name: &str
         return json_response(400, json!({ "error": "missing fields" }));
     }
     let in_reply_to_header = (!message_id.is_empty()).then(|| format!("<{message_id}>"));
-    if let Err(err) =
-        send_via_mitch_mail("gmail", &to, &subject, &reply_body, in_reply_to_header, true).await
+    if let Err(err) = send_via_mitch_mail(
+        "gmail",
+        &to,
+        &subject,
+        &reply_body,
+        in_reply_to_header,
+        true,
+    )
+    .await
     {
         return json_response(500, json!({ "error": err }));
     }
@@ -553,8 +567,7 @@ async fn send_via_mitch_mail(
     in_reply_to: Option<String>,
     raw: bool,
 ) -> Result<(), String> {
-    let base =
-        std::env::var("MAIL_RS_URL").unwrap_or_else(|_| "http://127.0.0.1:6902".to_string());
+    let base = std::env::var("MAIL_RS_URL").unwrap_or_else(|_| "http://127.0.0.1:6902".to_string());
     let resp = reqwest::Client::new()
         .post(format!("{base}/send"))
         .timeout(std::time::Duration::from_secs(30))

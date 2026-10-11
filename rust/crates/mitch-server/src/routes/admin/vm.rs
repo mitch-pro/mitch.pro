@@ -162,8 +162,14 @@ pub async fn handle(
     ctx: &AdminCtx,
 ) -> Resp {
     // Origin check for /api/admin/vms/* POST
-    if path.starts_with("/api/admin/vms/") && *method == Method::POST && !crate::routes::vm::vm_same_origin_request(headers) {
-        return Some(json_response(403, json!({ "error": "Request origin rejected." })));
+    if path.starts_with("/api/admin/vms/")
+        && *method == Method::POST
+        && !crate::routes::vm::vm_same_origin_request(headers)
+    {
+        return Some(json_response(
+            403,
+            json!({ "error": "Request origin rejected." }),
+        ));
     }
 
     // GET /api/admin/vms/overview (server.js:20620-20691)
@@ -176,17 +182,21 @@ pub async fn handle(
             None => return Some(json_response(401, json!({ "error": "Sign in required." }))),
         };
         if !actor.is_admin {
-            return Some(json_response(403, json!({ "error": "Admin access required." })));
+            return Some(json_response(
+                403,
+                json!({ "error": "Admin access required." }),
+            ));
         }
         let is_owner = auth::is_owner_email(&state.store, &actor.email);
 
         let records = vmlib::list_virtual_machines(&state.store, true);
         let pve = crate::proxmox_desktop::desktop();
-        let (guests, capacity, service_error) = match tokio::join!(pve.list_guests(), pve.node_capacity()) {
-            (Ok(g), Ok(c)) => (g, json!(c), String::new()),
-            (Err(e), _) => (Vec::new(), Value::Null, e.message),
-            (_, Err(e)) => (Vec::new(), Value::Null, e.message),
-        };
+        let (guests, capacity, service_error) =
+            match tokio::join!(pve.list_guests(), pve.node_capacity()) {
+                (Ok(g), Ok(c)) => (g, json!(c), String::new()),
+                (Err(e), _) => (Vec::new(), Value::Null, e.message),
+                (_, Err(e)) => (Vec::new(), Value::Null, e.message),
+            };
 
         let now = now_millis() as f64;
         let mut active_sessions: Vec<Value> = Vec::new();
@@ -233,14 +243,36 @@ pub async fn handle(
                 Some(&actor.to_json()),
             );
             if let Some(map) = view.as_object_mut() {
-                map.insert("ownerEmail".into(), record.get("ownerEmail").cloned().unwrap_or(Value::Null));
-                map.insert("vmid".into(), record.get("vmid").cloned().unwrap_or(Value::Null));
-                map.insert("node".into(), record.get("node").cloned().unwrap_or(Value::Null));
-                map.insert("guestType".into(), record.get("guestType").cloned().unwrap_or(Value::Null));
-                map.insert("assignmentStatus".into(), record.get("status").cloned().unwrap_or(Value::Null));
+                map.insert(
+                    "ownerEmail".into(),
+                    record.get("ownerEmail").cloned().unwrap_or(Value::Null),
+                );
+                map.insert(
+                    "vmid".into(),
+                    record.get("vmid").cloned().unwrap_or(Value::Null),
+                );
+                map.insert(
+                    "node".into(),
+                    record.get("node").cloned().unwrap_or(Value::Null),
+                );
+                map.insert(
+                    "guestType".into(),
+                    record.get("guestType").cloned().unwrap_or(Value::Null),
+                );
+                map.insert(
+                    "assignmentStatus".into(),
+                    record.get("status").cloned().unwrap_or(Value::Null),
+                );
                 map.insert("activeUsers".into(), json!(active_users));
                 map.insert("isCurrentlyInUse".into(), json!(!active_users.is_empty()));
-                map.insert("canAccess".into(), json!(crate::routes::vm::vm_record_allowed_for_actor(state, &record, &actor.to_json())));
+                map.insert(
+                    "canAccess".into(),
+                    json!(crate::routes::vm::vm_record_allowed_for_actor(
+                        state,
+                        &record,
+                        &actor.to_json()
+                    )),
+                );
                 if is_owner && jsval::str_or(record.get("status"), "") != "unassigned" {
                     let creds = owner_vm_desktop_credentials(state, &record_id);
                     if !creds.is_null() {
@@ -251,8 +283,12 @@ pub async fn handle(
             record_views.push(view);
         }
 
-        let passwords = state.store.read_document(&state.data_dir().join("passwords.json"), json!({}));
-        let profiles = state.store.read_document(&state.data_dir().join("profiles.json"), json!({}));
+        let passwords = state
+            .store
+            .read_document(&state.data_dir().join("passwords.json"), json!({}));
+        let profiles = state
+            .store
+            .read_document(&state.data_dir().join("profiles.json"), json!({}));
         let mut user_emails: Vec<String> = passwords
             .as_object()
             .map(|m| m.keys().cloned().collect())
@@ -274,9 +310,18 @@ pub async fn handle(
             .collect();
 
         let running_resources = crate::routes::vm::get_running_non_admin_vm_resources(state).await;
-        let running_non_admin_count = running_resources.get("count").and_then(jsval::number).unwrap_or(0.0) as i64;
-        let running_non_admin_cores = running_resources.get("cores").and_then(jsval::number).unwrap_or(0.0) as i64;
-        let running_non_admin_memory_mb = running_resources.get("memoryMb").and_then(jsval::number).unwrap_or(0.0) as i64;
+        let running_non_admin_count = running_resources
+            .get("count")
+            .and_then(jsval::number)
+            .unwrap_or(0.0) as i64;
+        let running_non_admin_cores = running_resources
+            .get("cores")
+            .and_then(jsval::number)
+            .unwrap_or(0.0) as i64;
+        let running_non_admin_memory_mb = running_resources
+            .get("memoryMb")
+            .and_then(jsval::number)
+            .unwrap_or(0.0) as i64;
 
         let query_map = crate::handler::query(search);
         let day_key = query_map.get("day").cloned().unwrap_or_default();
@@ -291,18 +336,30 @@ pub async fn handle(
         let available_guests: Vec<Value> = guests
             .iter()
             .filter(|guest| {
-                !guest.get("template").and_then(Value::as_bool).unwrap_or(false)
+                !guest
+                    .get("template")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
                     && guest.get("type").and_then(Value::as_str) == Some("qemu")
-                    && guest.get("vmid").and_then(Value::as_i64).map_or(false, |id| !assigned_vmids.contains(&id))
+                    && guest
+                        .get("vmid")
+                        .and_then(Value::as_i64)
+                        .is_some_and(|id| !assigned_vmids.contains(&id))
             })
             .cloned()
             .collect();
         let templates: Vec<Value> = guests
             .iter()
             .filter(|guest| {
-                guest.get("template").and_then(Value::as_bool).unwrap_or(false)
+                guest
+                    .get("template")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
                     && guest.get("type").and_then(Value::as_str) == Some("qemu")
-                    && guest.get("vmid").and_then(Value::as_i64).map_or(false, |id| template_vmids.contains(&id))
+                    && guest
+                        .get("vmid")
+                        .and_then(Value::as_i64)
+                        .is_some_and(|id| template_vmids.contains(&id))
             })
             .cloned()
             .collect();
@@ -310,25 +367,28 @@ pub async fn handle(
         let audit_rows = vmlib::list_vm_audit_logs(&state.store, 100.0);
         let audit: Vec<Value> = audit_rows.into_iter().map(|r| r.to_json()).collect();
 
-        return Some(json_response(200, json!({
-            "computers": record_views,
-            "availableGuests": available_guests,
-            "templates": templates,
-            "users": users,
-            "capacity": capacity,
-            "serviceAvailable": pve.configured() && service_error.is_empty(),
-            "serviceError": service_error,
-            "audit": audit,
-            "activeSessions": active_sessions,
-            "runningNonAdminCount": running_non_admin_count,
-            "runningNonAdminCores": running_non_admin_cores,
-            "runningNonAdminMemoryMb": running_non_admin_memory_mb,
-            "maxFleetCores": mitch_lib::vm_security::VM_FLEET_MAX_CORES,
-            "maxFleetMemoryMb": mitch_lib::vm_security::VM_FLEET_MAX_MEMORY_MB,
-            "maxRunningNonAdminLimit": mitch_lib::vm_security::VM_MAX_CONCURRENT_RUNNING,
-            "usageStats": usage_stats,
-            "viewerIsOwner": is_owner,
-        })));
+        return Some(json_response(
+            200,
+            json!({
+                "computers": record_views,
+                "availableGuests": available_guests,
+                "templates": templates,
+                "users": users,
+                "capacity": capacity,
+                "serviceAvailable": pve.configured() && service_error.is_empty(),
+                "serviceError": service_error,
+                "audit": audit,
+                "activeSessions": active_sessions,
+                "runningNonAdminCount": running_non_admin_count,
+                "runningNonAdminCores": running_non_admin_cores,
+                "runningNonAdminMemoryMb": running_non_admin_memory_mb,
+                "maxFleetCores": mitch_lib::vm_security::VM_FLEET_MAX_CORES,
+                "maxFleetMemoryMb": mitch_lib::vm_security::VM_FLEET_MAX_MEMORY_MB,
+                "maxRunningNonAdminLimit": mitch_lib::vm_security::VM_MAX_CONCURRENT_RUNNING,
+                "usageStats": usage_stats,
+                "viewerIsOwner": is_owner,
+            }),
+        ));
     }
 
     // GET /api/admin/vms/stats (server.js:20693-20701)
@@ -341,12 +401,18 @@ pub async fn handle(
             None => return Some(json_response(401, json!({ "error": "Sign in required." }))),
         };
         if !actor.is_admin {
-            return Some(json_response(403, json!({ "error": "Admin access required." })));
+            return Some(json_response(
+                403,
+                json!({ "error": "Admin access required." }),
+            ));
         }
         let query_map = crate::handler::query(search);
         let day_key = query_map.get("day").cloned().unwrap_or_default();
         let usage_stats = crate::routes::vm::get_vm_fleet_usage_stats(state, &day_key);
-        return Some(json_response(200, json!({ "ok": true, "usageStats": usage_stats })));
+        return Some(json_response(
+            200,
+            json!({ "ok": true, "usageStats": usage_stats }),
+        ));
     }
 
     // POST /api/admin/vms/assign (server.js:20703-20735)
@@ -359,27 +425,47 @@ pub async fn handle(
             None => return Some(json_response(401, json!({ "error": "Sign in required." }))),
         };
         if !actor.is_admin {
-            return Some(json_response(403, json!({ "error": "Admin access required." })));
+            return Some(json_response(
+                403,
+                json!({ "error": "Admin access required." }),
+            ));
         }
 
         let raw_email = jsval::str_or(body.get("ownerEmail"), "").trim().to_string();
-        let resolved = profile::resolve_target_email(&state.store, state.data_dir(), &state.id_secret, &raw_email)
-            .unwrap_or(raw_email);
+        let resolved = profile::resolve_target_email(
+            &state.store,
+            state.data_dir(),
+            &state.id_secret,
+            &raw_email,
+        )
+        .unwrap_or(raw_email);
         let owner_email = auth::normalize_email(&resolved);
-        let passwords = state.store.read_document(&state.data_dir().join("passwords.json"), json!({}));
+        let passwords = state
+            .store
+            .read_document(&state.data_dir().join("passwords.json"), json!({}));
         if owner_email.is_empty() || !passwords.get(&owner_email).is_some() {
-            return Some(json_response(400, json!({ "error": "Choose a valid website user." })));
+            return Some(json_response(
+                400,
+                json!({ "error": "Choose a valid website user." }),
+            ));
         }
 
         let vmid = body.get("vmid").and_then(jsval::number).unwrap_or(0.0);
         if !crate::routes::vm::is_vm_id_in_range(vmid) {
-            return Some(json_response(400, json!({ "error": "Choose a valid computer." })));
+            return Some(json_response(
+                400,
+                json!({ "error": "Choose a valid computer." }),
+            ));
         }
 
         let record = vmlib::get_virtual_machine_by_vmid(&state.store, vmid);
         if let Some(ref rec) = record {
-            if rec.status != "unassigned" && auth::normalize_email(&rec.owner_email) != owner_email {
-                return Some(json_response(409, json!({ "error": "That computer is already assigned." })));
+            if rec.status != "unassigned" && auth::normalize_email(&rec.owner_email) != owner_email
+            {
+                return Some(json_response(
+                    409,
+                    json!({ "error": "That computer is already assigned." }),
+                ));
             }
         }
 
@@ -387,16 +473,25 @@ pub async fn handle(
             Ok(g) => g,
             Err(e) => {
                 let friendly = crate::routes::vm::friendly_vm_error(&e.into());
-                return Some(json_response(friendly.0, json!({ "error": friendly.1, "code": friendly.2 })));
+                return Some(json_response(
+                    friendly.0,
+                    json!({ "error": friendly.1, "code": friendly.2 }),
+                ));
             }
         };
         let guest = guests.iter().find(|item| {
             item.get("vmid").and_then(jsval::number) == Some(vmid)
                 && item.get("type").and_then(Value::as_str) == Some("qemu")
-                && !item.get("template").and_then(Value::as_bool).unwrap_or(false)
+                && !item
+                    .get("template")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
         });
         let Some(guest) = guest else {
-            return Some(json_response(404, json!({ "error": "Computer not found or cannot be assigned." })));
+            return Some(json_response(
+                404,
+                json!({ "error": "Computer not found or cannot be assigned." }),
+            ));
         };
 
         let node = jsval::str_or(guest.get("node"), crate::proxmox_desktop::desktop().node());
@@ -405,23 +500,48 @@ pub async fn handle(
             "node": node,
             "guestType": "qemu",
         });
-        let config = crate::proxmox_desktop::desktop().get_config(&guest_qemu).await.unwrap_or(json!({}));
+        let config = crate::proxmox_desktop::desktop()
+            .get_config(&guest_qemu)
+            .await
+            .unwrap_or(json!({}));
 
-        let cores = config.get("cores").and_then(jsval::number)
+        let cores = config
+            .get("cores")
+            .and_then(jsval::number)
             .or_else(|| guest.get("cpuCores").and_then(jsval::number))
             .unwrap_or(4.0);
-        let memory = config.get("memory").and_then(jsval::number)
+        let memory = config
+            .get("memory")
+            .and_then(jsval::number)
             .or_else(|| guest.get("memoryMb").and_then(jsval::number))
             .unwrap_or(16384.0);
         let disk = guest.get("diskGb").and_then(jsval::number).unwrap_or(64.0);
 
-        let friendly_name = jsval::str_or(body.get("friendlyName"), "My Computer").trim().to_string();
-        let friendly_name = if friendly_name.is_empty() { "My Computer" } else { &friendly_name[..friendly_name.len().min(60)] };
-        let os_name = jsval::str_or(body.get("operatingSystem"), "Linux Mint Cinnamon").trim().to_string();
-        let os_name = if os_name.is_empty() { "Linux Mint Cinnamon" } else { &os_name[..os_name.len().min(80)] };
+        let friendly_name = jsval::str_or(body.get("friendlyName"), "My Computer")
+            .trim()
+            .to_string();
+        let friendly_name = if friendly_name.is_empty() {
+            "My Computer"
+        } else {
+            &friendly_name[..friendly_name.len().min(60)]
+        };
+        let os_name = jsval::str_or(body.get("operatingSystem"), "Linux Mint Cinnamon")
+            .trim()
+            .to_string();
+        let os_name = if os_name.is_empty() {
+            "Linux Mint Cinnamon"
+        } else {
+            &os_name[..os_name.len().min(80)]
+        };
 
-        let rec_id = record.as_ref().map(|r| r.id.clone()).unwrap_or_else(|| format!("vm-{}", vmid as i64));
-        let created_at = record.as_ref().map(|r| r.created_at).unwrap_or_else(|| now_millis() as f64);
+        let rec_id = record
+            .as_ref()
+            .map(|r| r.id.clone())
+            .unwrap_or_else(|| format!("vm-{}", vmid as i64));
+        let created_at = record
+            .as_ref()
+            .map(|r| r.created_at)
+            .unwrap_or_else(|| now_millis() as f64);
         let hostname = jsval::str_or(guest.get("name"), &rec_id);
 
         let new_rec = vmlib::upsert_virtual_machine(
@@ -445,7 +565,10 @@ pub async fn handle(
             }),
         );
         let Some(new_rec) = new_rec else {
-            return Some(json_response(500, json!({ "error": "Failed to assign computer." })));
+            return Some(json_response(
+                500,
+                json!({ "error": "Failed to assign computer." }),
+            ));
         };
 
         crate::routes::vm::vm_audit(
@@ -467,7 +590,10 @@ pub async fn handle(
             map.insert("ownerEmail".into(), json!(new_rec.owner_email));
             map.insert("vmid".into(), json!(new_rec.vmid));
         }
-        return Some(json_response(201, json!({ "success": true, "computer": comp })));
+        return Some(json_response(
+            201,
+            json!({ "success": true, "computer": comp }),
+        ));
     }
 
     // POST /api/admin/vms/unassign (server.js:20737-20752)
@@ -480,13 +606,19 @@ pub async fn handle(
             None => return Some(json_response(401, json!({ "error": "Sign in required." }))),
         };
         if !actor.is_admin {
-            return Some(json_response(403, json!({ "error": "Admin access required." })));
+            return Some(json_response(
+                403,
+                json!({ "error": "Admin access required." }),
+            ));
         }
 
         let id = jsval::str_or(body.get("id"), "");
         let record = vmlib::get_virtual_machine_by_id(&state.store, &id);
         let Some(record) = record else {
-            return Some(json_response(404, json!({ "error": "Computer not found." })));
+            return Some(json_response(
+                404,
+                json!({ "error": "Computer not found." }),
+            ));
         };
 
         let success = vmlib::unassign_virtual_machine(&state.store, &record.id);
@@ -515,16 +647,29 @@ pub async fn handle(
             None => return Some(json_response(401, json!({ "error": "Sign in required." }))),
         };
         if !actor.is_admin {
-            return Some(json_response(403, json!({ "error": "Admin access required." })));
+            return Some(json_response(
+                403,
+                json!({ "error": "Admin access required." }),
+            ));
         }
 
         let raw_email = jsval::str_or(body.get("ownerEmail"), "").trim().to_string();
-        let resolved = profile::resolve_target_email(&state.store, state.data_dir(), &state.id_secret, &raw_email)
-            .unwrap_or(raw_email);
+        let resolved = profile::resolve_target_email(
+            &state.store,
+            state.data_dir(),
+            &state.id_secret,
+            &raw_email,
+        )
+        .unwrap_or(raw_email);
         let owner_email = auth::normalize_email(&resolved);
-        let passwords = state.store.read_document(&state.data_dir().join("passwords.json"), json!({}));
+        let passwords = state
+            .store
+            .read_document(&state.data_dir().join("passwords.json"), json!({}));
         if owner_email.is_empty() || !passwords.get(&owner_email).is_some() {
-            return Some(json_response(400, json!({ "error": "Choose a valid website user." })));
+            return Some(json_response(
+                400,
+                json!({ "error": "Choose a valid website user." }),
+            ));
         }
 
         {
@@ -533,9 +678,15 @@ pub async fn handle(
                 .lock()
                 .unwrap_or_else(|e| e.into_inner());
             if requests.contains_key("admin-create") {
-                return Some(json_response(409, json!({ "error": "Another computer is currently being created." })));
+                return Some(json_response(
+                    409,
+                    json!({ "error": "Another computer is currently being created." }),
+                ));
             }
-            requests.insert("admin-create".to_string(), json!({ "startedAt": now_millis() }));
+            requests.insert(
+                "admin-create".to_string(),
+                json!({ "startedAt": now_millis() }),
+            );
         }
 
         let default_tpl = crate::proxmox_desktop::desktop()
@@ -543,44 +694,108 @@ pub async fn handle(
             .first()
             .copied()
             .unwrap_or(9010);
-        let template_vmid = body.get("templateVmid").and_then(jsval::number).unwrap_or(default_tpl as f64) as i64;
-        if !crate::proxmox_desktop::desktop().template_vmids().contains(&template_vmid) {
-            state.vm_power_requests.lock().unwrap_or_else(|e| e.into_inner()).remove("admin-create");
-            return Some(json_response(400, json!({ "error": "Choose an available desktop template." })));
+        let template_vmid = body
+            .get("templateVmid")
+            .and_then(jsval::number)
+            .unwrap_or(default_tpl as f64) as i64;
+        if !crate::proxmox_desktop::desktop()
+            .template_vmids()
+            .contains(&template_vmid)
+        {
+            state
+                .vm_power_requests
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove("admin-create");
+            return Some(json_response(
+                400,
+                json!({ "error": "Choose an available desktop template." }),
+            ));
         }
 
         let desktop_username = jsval::str_or(body.get("desktopUsername"), "");
         let desktop_password = jsval::str_or(body.get("desktopPassword"), "");
-        let (login_username, login_password) = match crate::proxmox_desktop::desktop().validate_desktop_login(&desktop_username, &desktop_password) {
+        let (login_username, login_password) = match crate::proxmox_desktop::desktop()
+            .validate_desktop_login(&desktop_username, &desktop_password)
+        {
             Ok(l) => l,
             Err(_) => {
-                state.vm_power_requests.lock().unwrap_or_else(|e| e.into_inner()).remove("admin-create");
-                return Some(json_response(400, json!({
-                    "error": "Choose a desktop username and a non-empty password without line breaks.",
-                    "code": "invalid_desktop_login"
-                })));
+                state
+                    .vm_power_requests
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove("admin-create");
+                return Some(json_response(
+                    400,
+                    json!({
+                        "error": "Choose a desktop username and a non-empty password without line breaks.",
+                        "code": "invalid_desktop_login"
+                    }),
+                ));
             }
         };
 
-        let cpu_cores = body.get("cpuCores").and_then(jsval::number).unwrap_or(6.0).clamp(2.0, 16.0).round();
-        let memory_mb = body.get("memoryMb").and_then(jsval::number).unwrap_or(16384.0).clamp(2048.0, 65536.0).round();
-        let disk_gb = body.get("diskGb").and_then(jsval::number).unwrap_or(64.0).clamp(40.0, 256.0).round();
+        let cpu_cores = body
+            .get("cpuCores")
+            .and_then(jsval::number)
+            .unwrap_or(6.0)
+            .clamp(2.0, 16.0)
+            .round();
+        let memory_mb = body
+            .get("memoryMb")
+            .and_then(jsval::number)
+            .unwrap_or(16384.0)
+            .clamp(2048.0, 65536.0)
+            .round();
+        let disk_gb = body
+            .get("diskGb")
+            .and_then(jsval::number)
+            .unwrap_or(64.0)
+            .clamp(40.0, 256.0)
+            .round();
 
-        let default_host = format!("computer-{}", owner_email.split('@').next().unwrap_or("student"));
-        let hostname = jsval::str_or(body.get("hostname"), &default_host).trim().to_string();
-        let friendly_name = jsval::str_or(body.get("friendlyName"), "My Computer").trim().to_string();
-        let friendly_name = if friendly_name.is_empty() { "My Computer" } else { &friendly_name[..friendly_name.len().min(60)] };
-        let os_name = jsval::str_or(body.get("operatingSystem"), "Ubuntu Desktop LTS").trim().to_string();
-        let os_name = if os_name.is_empty() { "Ubuntu Desktop LTS" } else { &os_name[..os_name.len().min(80)] };
+        let default_host = format!(
+            "computer-{}",
+            owner_email.split('@').next().unwrap_or("student")
+        );
+        let hostname = jsval::str_or(body.get("hostname"), &default_host)
+            .trim()
+            .to_string();
+        let friendly_name = jsval::str_or(body.get("friendlyName"), "My Computer")
+            .trim()
+            .to_string();
+        let friendly_name = if friendly_name.is_empty() {
+            "My Computer"
+        } else {
+            &friendly_name[..friendly_name.len().min(60)]
+        };
+        let os_name = jsval::str_or(body.get("operatingSystem"), "Ubuntu Desktop LTS")
+            .trim()
+            .to_string();
+        let os_name = if os_name.is_empty() {
+            "Ubuntu Desktop LTS"
+        } else {
+            &os_name[..os_name.len().min(80)]
+        };
 
         let all_records = vmlib::list_virtual_machines(&state.store, true);
         let existing_vmids: Vec<f64> = all_records.iter().map(|r| r.vmid).collect();
-        let vmid = match crate::proxmox_desktop::desktop().next_available_vmid(PVE_VMID_MIN as f64, PVE_VMID_MAX as f64, &existing_vmids).await {
+        let vmid = match crate::proxmox_desktop::desktop()
+            .next_available_vmid(PVE_VMID_MIN as f64, PVE_VMID_MAX as f64, &existing_vmids)
+            .await
+        {
             Ok(v) => v as f64,
             Err(e) => {
-                state.vm_power_requests.lock().unwrap_or_else(|e| e.into_inner()).remove("admin-create");
+                state
+                    .vm_power_requests
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove("admin-create");
                 let friendly = crate::routes::vm::friendly_vm_error(&e.into());
-                return Some(json_response(friendly.0, json!({ "error": friendly.1, "code": friendly.2 })));
+                return Some(json_response(
+                    friendly.0,
+                    json!({ "error": friendly.1, "code": friendly.2 }),
+                ));
             }
         };
 
@@ -605,8 +820,15 @@ pub async fn handle(
             }),
         );
         let Some(pending_record) = pending_record else {
-            state.vm_power_requests.lock().unwrap_or_else(|e| e.into_inner()).remove("admin-create");
-            return Some(json_response(409, json!({ "error": "Another computer is being created. Please try again." })));
+            state
+                .vm_power_requests
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove("admin-create");
+            return Some(json_response(
+                409,
+                json!({ "error": "Another computer is being created. Please try again." }),
+            ));
         };
 
         let clone_params = crate::proxmox_desktop::CloneDesktopParams {
@@ -619,8 +841,14 @@ pub async fn handle(
             desktop_username: login_username.clone(),
             desktop_password: login_password.clone(),
         };
-        let clone_res = crate::proxmox_desktop::desktop().clone_desktop(&clone_params).await;
-        state.vm_power_requests.lock().unwrap_or_else(|e| e.into_inner()).remove("admin-create");
+        let clone_res = crate::proxmox_desktop::desktop()
+            .clone_desktop(&clone_params)
+            .await;
+        state
+            .vm_power_requests
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove("admin-create");
 
         match clone_res {
             Ok(created) => {
@@ -635,9 +863,18 @@ pub async fn handle(
                 }
                 let record = vmlib::upsert_virtual_machine(&state.store, &merged);
                 let Some(record) = record else {
-                    return Some(json_response(500, json!({ "error": "Failed to save created computer record." })));
+                    return Some(json_response(
+                        500,
+                        json!({ "error": "Failed to save created computer record." }),
+                    ));
                 };
-                store_vm_desktop_credentials(state, &record.id, &record.owner_email, &login_username, &login_password);
+                store_vm_desktop_credentials(
+                    state,
+                    &record.id,
+                    &record.owner_email,
+                    &login_username,
+                    &login_password,
+                );
                 crate::routes::vm::vm_audit(
                     state,
                     &actor.email,
@@ -664,7 +901,10 @@ pub async fn handle(
                     map.insert("ownerEmail".into(), json!(record.owner_email));
                     map.insert("vmid".into(), json!(record.vmid));
                 }
-                return Some(json_response(201, json!({ "success": true, "computer": comp })));
+                return Some(json_response(
+                    201,
+                    json!({ "success": true, "computer": comp }),
+                ));
             }
             Err(e) => {
                 let _ = vmlib::update_virtual_machine_runtime(
@@ -682,7 +922,10 @@ pub async fn handle(
                     Some(&json!({ "code": e.code })),
                 );
                 let friendly = crate::routes::vm::friendly_vm_error(&e.into());
-                return Some(json_response(friendly.0, json!({ "error": friendly.1, "code": friendly.2 })));
+                return Some(json_response(
+                    friendly.0,
+                    json!({ "error": friendly.1, "code": friendly.2 }),
+                ));
             }
         }
     }
@@ -698,33 +941,56 @@ pub async fn handle(
         };
         let is_owner = auth::is_owner_email(&state.store, &actor.email);
         if !is_owner {
-            return Some(json_response(403, json!({ "error": "Owner access required." })));
+            return Some(json_response(
+                403,
+                json!({ "error": "Owner access required." }),
+            ));
         }
 
         let id = jsval::str_or(body.get("id"), "");
         let record = vmlib::get_virtual_machine_by_id(&state.store, &id);
         let Some(record) = record else {
-            return Some(json_response(404, json!({ "error": "Assigned computer not found." })));
+            return Some(json_response(
+                404,
+                json!({ "error": "Assigned computer not found." }),
+            ));
         };
         if record.status == "unassigned" {
-            return Some(json_response(404, json!({ "error": "Assigned computer not found." })));
+            return Some(json_response(
+                404,
+                json!({ "error": "Assigned computer not found." }),
+            ));
         }
 
         let username = jsval::str_or(body.get("username"), "");
         let password = jsval::str_or(body.get("password"), "");
-        let (login_username, login_password) = match crate::proxmox_desktop::desktop().validate_desktop_login(&username, &password) {
+        let (login_username, login_password) = match crate::proxmox_desktop::desktop()
+            .validate_desktop_login(&username, &password)
+        {
             Ok(l) => l,
             Err(_) => {
-                return Some(json_response(400, json!({
-                    "error": "Choose a desktop username and a non-empty password without line breaks.",
-                    "code": "invalid_desktop_login"
-                })));
+                return Some(json_response(
+                    400,
+                    json!({
+                        "error": "Choose a desktop username and a non-empty password without line breaks.",
+                        "code": "invalid_desktop_login"
+                    }),
+                ));
             }
         };
 
-        match crate::proxmox_desktop::desktop().enable_friendly_desktop_login(record.vmid as i64, &login_username, &login_password).await {
+        match crate::proxmox_desktop::desktop()
+            .enable_friendly_desktop_login(record.vmid as i64, &login_username, &login_password)
+            .await
+        {
             Ok(_) => {
-                store_vm_desktop_credentials(state, &record.id, &record.owner_email, &login_username, &login_password);
+                store_vm_desktop_credentials(
+                    state,
+                    &record.id,
+                    &record.owner_email,
+                    &login_username,
+                    &login_password,
+                );
                 crate::routes::vm::vm_audit(
                     state,
                     &actor.email,
@@ -734,7 +1000,10 @@ pub async fn handle(
                     Some(&json!({ "username": login_username })),
                 );
                 let creds = owner_vm_desktop_credentials(state, &record.id);
-                return Some(json_response(200, json!({ "success": true, "credentials": creds })));
+                return Some(json_response(
+                    200,
+                    json!({ "success": true, "credentials": creds }),
+                ));
             }
             Err(err) => {
                 crate::routes::vm::vm_audit(
@@ -767,22 +1036,32 @@ pub async fn handle(
             None => return Some(json_response(401, json!({ "error": "Sign in required." }))),
         };
         if !actor.is_admin {
-            return Some(json_response(403, json!({ "error": "Admin access required." })));
+            return Some(json_response(
+                403,
+                json!({ "error": "Admin access required." }),
+            ));
         }
 
         let vmid_fallback = jsval::str_or(body.get("vmid"), "");
         let id_str = jsval::str_or(body.get("id"), &vmid_fallback);
-        let record = vmlib::get_virtual_machine_by_id(&state.store, &id_str)
-            .or_else(|| {
-                id_str.parse::<f64>().ok().and_then(|v| vmlib::get_virtual_machine_by_vmid(&state.store, v))
-            });
+        let record = vmlib::get_virtual_machine_by_id(&state.store, &id_str).or_else(|| {
+            id_str
+                .parse::<f64>()
+                .ok()
+                .and_then(|v| vmlib::get_virtual_machine_by_vmid(&state.store, v))
+        });
         let Some(record) = record else {
-            return Some(json_response(404, json!({ "error": "Computer not found." })));
+            return Some(json_response(
+                404,
+                json!({ "error": "Computer not found." }),
+            ));
         };
 
         let is_force = body.get("force").and_then(Value::as_bool).unwrap_or(false);
         let rec_json = record.to_json();
-        let del_res = crate::proxmox_desktop::desktop().delete_guest(&rec_json, is_force).await;
+        let del_res = crate::proxmox_desktop::desktop()
+            .delete_guest(&rec_json, is_force)
+            .await;
         let proxmox_error = match del_res {
             Ok(_) => None,
             Err(e) => Some(crate::routes::vm::friendly_vm_error(&e.into()).1),
@@ -798,11 +1077,14 @@ pub async fn handle(
                     false,
                     Some(&json!({ "error": err_msg })),
                 );
-                return Some(json_response(500, json!({
-                    "error": err_msg,
-                    "canForce": true,
-                    "message": format!("{err_msg} You can click Force Delete to remove it anyway and ignore Proxmox errors.")
-                })));
+                return Some(json_response(
+                    500,
+                    json!({
+                        "error": err_msg,
+                        "canForce": true,
+                        "message": format!("{err_msg} You can click Force Delete to remove it anyway and ignore Proxmox errors.")
+                    }),
+                ));
             }
         }
 
@@ -839,11 +1121,17 @@ pub async fn handle(
         );
 
         let msg = if is_force && proxmox_error.is_some() {
-            format!("Computer deleted from system (ignored Proxmox error: {})", proxmox_error.as_deref().unwrap_or(""))
+            format!(
+                "Computer deleted from system (ignored Proxmox error: {})",
+                proxmox_error.as_deref().unwrap_or("")
+            )
         } else {
             "Computer deleted.".to_string()
         };
-        return Some(json_response(200, json!({ "success": true, "message": msg })));
+        return Some(json_response(
+            200,
+            json!({ "success": true, "message": msg }),
+        ));
     }
 
     // POST /api/admin/vms/downgrade-specs — admin override of a computer's
@@ -863,7 +1151,10 @@ pub async fn handle(
             None => return Some(json_response(401, json!({ "error": "Sign in required." }))),
         };
         if !actor.is_admin {
-            return Some(json_response(403, json!({ "error": "Admin access required." })));
+            return Some(json_response(
+                403,
+                json!({ "error": "Admin access required." }),
+            ));
         }
 
         let vmid_fallback = jsval::str_or(body.get("vmid"), "");
@@ -875,7 +1166,10 @@ pub async fn handle(
                 .and_then(|v| vmlib::get_virtual_machine_by_vmid(&state.store, v))
         });
         let Some(record) = record else {
-            return Some(json_response(404, json!({ "error": "Computer not found." })));
+            return Some(json_response(
+                404,
+                json!({ "error": "Computer not found." }),
+            ));
         };
 
         let cpu_opt = body.get("cpuCores").and_then(jsval::number);

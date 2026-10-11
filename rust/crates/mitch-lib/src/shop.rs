@@ -351,10 +351,7 @@ pub fn shop_items_for(store: &DataStore, catalog: &[Value], email: &str) -> Vec<
                 obj.insert("tier".into(), json!(shop_tier_for(item)));
                 obj.insert("perk".into(), json!(shop_perk_for(item)));
                 obj.insert("originalCost".into(), json!(shop_base_cost_for(item)));
-                obj.insert(
-                    "cost".into(),
-                    json!(shop_cost_for(store, item, email)),
-                );
+                obj.insert("cost".into(), json!(shop_cost_for(store, item, email)));
                 let discount_pct =
                     if premium && item.get("type").and_then(|v| v.as_str()) != Some("premium") {
                         (premium_discount_for(item) * 100.0).round() as i64

@@ -251,8 +251,9 @@ async fn marketplace_list(
         let Some((bucket, active_key)) = shop::shop_type_config(cost_type) else {
             return json_response(400, json!({ "error": "untradeable cosmetic item type" }));
         };
-        let mut owned =
-            shop::normalize_cosmetics(&shop::cosmetics_get(&state.store, &norm).unwrap_or(json!({})));
+        let mut owned = shop::normalize_cosmetics(
+            &shop::cosmetics_get(&state.store, &norm).unwrap_or(json!({})),
+        );
         let has_item = owned
             .get(bucket)
             .and_then(|v| v.as_array())

@@ -676,4 +676,3 @@ fn validate_image(image_raw: &Value) -> Result<Option<Value>, (u16, &'static str
     }
     Ok(None)
 }
-

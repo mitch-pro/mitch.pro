@@ -257,9 +257,7 @@ fn user_stats_file(data_dir: &Path) -> std::path::PathBuf {
 /// Every achievement id a user has earned (was achievements.json[norm]).
 pub fn achievements_for(store: &DataStore, norm_email: &str) -> Vec<String> {
     let conn = store.conn();
-    let mut stmt = match conn
-        .prepare("SELECT achievement_id FROM achievements WHERE email = ?1")
-    {
+    let mut stmt = match conn.prepare("SELECT achievement_id FROM achievements WHERE email = ?1") {
         Ok(s) => s,
         Err(_) => return Vec::new(),
     };
@@ -469,12 +467,29 @@ mod tests {
     #[test]
     fn award_achievement_pays_bonus_exactly_once() {
         let (store, data_dir) = fresh_store("award-once");
-        assert!(award_achievement(&store, &data_dir, "b@x.com", "painter_1", 100.0, 1.0));
+        assert!(award_achievement(
+            &store,
+            &data_dir,
+            "b@x.com",
+            "painter_1",
+            100.0,
+            1.0
+        ));
         assert_eq!(crate::coins::get_coins(&store, &data_dir, "b@x.com"), 100.0);
         // Re-awarding the same id is a no-op — no second payout.
-        assert!(!award_achievement(&store, &data_dir, "b@x.com", "painter_1", 100.0, 1.0));
+        assert!(!award_achievement(
+            &store,
+            &data_dir,
+            "b@x.com",
+            "painter_1",
+            100.0,
+            1.0
+        ));
         assert_eq!(crate::coins::get_coins(&store, &data_dir, "b@x.com"), 100.0);
-        assert_eq!(achievements_for(&store, "b@x.com"), vec!["painter_1".to_string()]);
+        assert_eq!(
+            achievements_for(&store, "b@x.com"),
+            vec!["painter_1".to_string()]
+        );
     }
 
     #[test]

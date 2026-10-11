@@ -1184,18 +1184,42 @@ mod tests {
 
     #[tokio::test]
     async fn test_luma_slope_fetch() {
-        let dir = std::env::temp_dir().join(format!("mitch-proxy-test-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let dir = std::env::temp_dir().join(format!(
+            "mitch-proxy-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         std::fs::create_dir_all(&dir).unwrap();
         let store = Arc::new(mitch_lib::data::DataStore::open(&dir, &dir).unwrap());
         let cfg = crate::hosts::SiteConfig::load();
         let state = Arc::new(AppState::new(cfg, store));
         let mut headers = HeaderMap::new();
-        headers.insert("user-agent", axum::http::HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0"));
-        let resp = game_proxy(&state, &axum::http::Method::GET, "/proxy/luma/Slope/index.html", "", &headers).await;
+        headers.insert(
+            "user-agent",
+            axum::http::HeaderValue::from_static(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0",
+            ),
+        );
+        let resp = game_proxy(
+            &state,
+            &axum::http::Method::GET,
+            "/proxy/luma/Slope/index.html",
+            "",
+            &headers,
+        )
+        .await;
         assert!(resp.is_some());
         let r = resp.unwrap();
         assert_eq!(r.status(), StatusCode::OK);
-        assert!(!r.headers().contains_key("transfer-encoding"), "transfer-encoding must be stripped");
-        assert!(!r.headers().contains_key("connection"), "connection must be stripped");
+        assert!(
+            !r.headers().contains_key("transfer-encoding"),
+            "transfer-encoding must be stripped"
+        );
+        assert!(
+            !r.headers().contains_key("connection"),
+            "connection must be stripped"
+        );
     }
 }

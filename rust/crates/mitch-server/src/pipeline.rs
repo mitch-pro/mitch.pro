@@ -90,10 +90,9 @@ pub fn inject_page(
         && !is_rjuhsd
         && !is_pickle
         && (!is_embedded || is_standalone_game_portal)
+        && !is_authenticated_html
     {
-        if !is_authenticated_html {
-            inject_str.push_str("<script src=\"/guest-preview.js?v=1\" defer></script>\n");
-        }
+        inject_str.push_str("<script src=\"/guest-preview.js?v=1\" defer></script>\n");
     }
 
     if is_authenticated_html && !is_embedded && !raw.contains("/broadcast.js") {

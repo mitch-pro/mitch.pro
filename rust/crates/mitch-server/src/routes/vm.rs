@@ -2788,7 +2788,8 @@ pub fn handle_desktop_ws_upgrade(
         && !record_owner.is_empty()
         && mitch_lib::auth::normalize_email(&record_owner)
             != mitch_lib::auth::normalize_email(&actor.email);
-    if is_admin_using_other_vm && !actor.is_owner && !is_vm_admin_access_allowed(state, &record_id) {
+    if is_admin_using_other_vm && !actor.is_owner && !is_vm_admin_access_allowed(state, &record_id)
+    {
         return Some(json_response(
             403,
             json!({ "error": "The owner has not allowed administrator access to this computer." }),
@@ -5180,7 +5181,10 @@ pub(crate) async fn handle(
                 || action == "force-stop"
                 || action == "restart";
 
-            if is_admin_using_other_vm && !is_admin_power_override && !is_vm_admin_access_allowed(state, comp_id) {
+            if is_admin_using_other_vm
+                && !is_admin_power_override
+                && !is_vm_admin_access_allowed(state, comp_id)
+            {
                 request_vm_admin_access(state, &record, &actor.email);
                 return Some(json_response(
                     403,
@@ -5353,7 +5357,7 @@ pub(crate) async fn handle(
                             .lock()
                             .unwrap_or_else(|e| e.into_inner())
                             .entry(comp_id.to_string())
-                            .or_insert_with(|| now_ms() as i64);
+                            .or_insert_with(now_ms);
                     } else if action == "force-stop" || action == "restart" {
                         state
                             .vm_shutdown_initiated
@@ -5458,7 +5462,10 @@ pub(crate) async fn handle(
                 && mitch_lib::auth::normalize_email(&record_owner)
                     != mitch_lib::auth::normalize_email(&actor.email);
 
-            if is_admin_using_other_vm && !actor.is_owner && !is_vm_admin_access_allowed(state, comp_id) {
+            if is_admin_using_other_vm
+                && !actor.is_owner
+                && !is_vm_admin_access_allowed(state, comp_id)
+            {
                 request_vm_admin_access(state, &record, &actor.email);
                 return Some(json_response(
                     403,
@@ -5663,7 +5670,10 @@ mod tests {
 
         // Behind reverse proxy with port 443 in Host header
         let mut headers_port = HeaderMap::new();
-        headers_port.insert(axum::http::header::HOST, "mitchdog.com:443".parse().unwrap());
+        headers_port.insert(
+            axum::http::header::HOST,
+            "mitchdog.com:443".parse().unwrap(),
+        );
         headers_port.insert(
             axum::http::header::ORIGIN,
             "https://mitchdog.com".parse().unwrap(),

@@ -623,7 +623,11 @@ pub fn handle_push_routes(
                 serde_json::json!({ "error": "bad json" }),
             ));
         };
-        let topic = body.get("topic").and_then(|v| v.as_str()).unwrap_or("").trim();
+        let topic = body
+            .get("topic")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
         if !topic.is_empty() {
             let is_url = topic.starts_with("http://") || topic.starts_with("https://");
             if is_url {

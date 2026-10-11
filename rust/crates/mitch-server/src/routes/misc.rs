@@ -78,11 +78,13 @@ pub async fn handle(
         return Some(crate::routes::dayboard::school_info(&school_key).await);
     }
     if path == "/api/bell/override" && *method == Method::GET {
-        let override_val = state.store.read_document(
-            &state.data_dir().join("bell_overrides.json"),
-            Value::Null,
-        );
-        return Some(json_resp(200, serde_json::json!({ "override": override_val })));
+        let override_val = state
+            .store
+            .read_document(&state.data_dir().join("bell_overrides.json"), Value::Null);
+        return Some(json_resp(
+            200,
+            serde_json::json!({ "override": override_val }),
+        ));
     }
     if path == "/api/bad-passwords" && *method == Method::GET {
         return Some(bad_passwords(state));
@@ -167,7 +169,10 @@ fn site_catalog(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         Ok(raw) => raw,
         Err(error) => {
             tracing::error!("failed to read homepage site catalog: {error}");
-            return json_response(500, json!({ "success": false, "error": "catalog_unavailable" }));
+            return json_response(
+                500,
+                json!({ "success": false, "error": "catalog_unavailable" }),
+            );
         }
     };
     let cookie_header = headers
@@ -614,7 +619,10 @@ fn me_coins(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     };
     let norm = mitch_lib::auth::normalize_email(&email);
     let coins = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &email);
-    let achievements = json!(mitch_lib::achievements::achievements_for(&state.store, &norm));
+    let achievements = json!(mitch_lib::achievements::achievements_for(
+        &state.store,
+        &norm
+    ));
     let stats = state
         .store
         .read_document(&state.data_dir().join("user_stats.json"), json!({}))
@@ -1053,7 +1061,8 @@ mod tests {
 
     #[test]
     fn site_catalog_filters_comments_and_staff_links() {
-        let raw = "// hidden\nurl /matrix/ Matrix Chat\nadmin url /admin/ Admin\n\nurl /casino/ Casino\n";
+        let raw =
+            "// hidden\nurl /matrix/ Matrix Chat\nadmin url /admin/ Admin\n\nurl /casino/ Casino\n";
         assert_eq!(
             visible_site_catalog(raw, false),
             "url /matrix/ Matrix Chat\nurl /casino/ Casino"

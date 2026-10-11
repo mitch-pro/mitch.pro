@@ -794,9 +794,20 @@ mod tests {
             "lastSeen 0 → never inactive"
         );
         assert!(!is_vm_inactive(900_000.0, 1_000_000.0, false));
-        assert!(is_vm_inactive(400_000.0, 1_000_000.0, false), "600s elapsed");
-        assert!(!is_vm_inactive(1_000_000.0 - 29.0 * 60_000.0, 1_000_000.0, true));
-        assert!(is_vm_inactive(1_000_000.0 - 30.0 * 60_000.0, 1_000_000.0, true));
+        assert!(
+            is_vm_inactive(400_000.0, 1_000_000.0, false),
+            "600s elapsed"
+        );
+        assert!(!is_vm_inactive(
+            1_000_000.0 - 29.0 * 60_000.0,
+            1_000_000.0,
+            true
+        ));
+        assert!(is_vm_inactive(
+            1_000_000.0 - 30.0 * 60_000.0,
+            1_000_000.0,
+            true
+        ));
     }
 
     #[test]

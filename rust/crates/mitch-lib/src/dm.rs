@@ -71,7 +71,12 @@ pub fn dm_cleared_set(store: &DataStore, dm_store: &DmStore, norm_email: &str, d
     let _ = conn.execute(
         "INSERT INTO dm_cleared (email, store, data, updated_at) VALUES (?1, ?2, ?3, ?4)
          ON CONFLICT(email, store) DO UPDATE SET data = ?3, updated_at = ?4",
-        rusqlite::params![norm_email, dm_cleared_store_key(dm_store), data_str, now_millis()],
+        rusqlite::params![
+            norm_email,
+            dm_cleared_store_key(dm_store),
+            data_str,
+            now_millis()
+        ],
     );
 }
 

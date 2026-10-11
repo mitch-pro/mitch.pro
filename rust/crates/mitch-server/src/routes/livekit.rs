@@ -384,7 +384,11 @@ pub async fn handle_http_passthrough(
 ) -> Response {
     let (livekit_host, livekit_port) = livekit_upstream_addr();
     let Some(suffix) = path.strip_prefix("/livekit") else {
-        return json_with_cors(StatusCode::NOT_FOUND.as_u16(), json!({ "error": "not found" }), false);
+        return json_with_cors(
+            StatusCode::NOT_FOUND.as_u16(),
+            json!({ "error": "not found" }),
+            false,
+        );
     };
     let query_part = if search.is_empty() {
         String::new()
@@ -628,10 +632,7 @@ mod tests {
         // 'mitch-secret-livekit-matrix-key-2026'.
         let secret = b"mitch-secret-livekit-matrix-key-2026";
         let expected = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
-            mitch_lib::crypto::hmac_sha256(
-                secret,
-                format!("{}.{}", parts[0], parts[1]).as_bytes(),
-            ),
+            mitch_lib::crypto::hmac_sha256(secret, format!("{}.{}", parts[0], parts[1]).as_bytes()),
         );
         assert_eq!(parts[2], expected);
     }

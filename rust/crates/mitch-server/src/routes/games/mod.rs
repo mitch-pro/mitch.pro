@@ -157,9 +157,12 @@ fn game_portal_status(state: &Arc<AppState>, headers: &HeaderMap) -> axum::respo
         .and_then(|v| v.as_str())
         == Some(today.as_str())
     {
-        jsval::number(user.and_then(|u| u.get("game_portal_reward_today")).unwrap_or(&json!(0)))
-            .map(|n| n.max(0.0))
-            .unwrap_or(0.0)
+        jsval::number(
+            user.and_then(|u| u.get("game_portal_reward_today"))
+                .unwrap_or(&json!(0)),
+        )
+        .map(|n| n.max(0.0))
+        .unwrap_or(0.0)
     } else {
         0.0
     };
@@ -587,7 +590,14 @@ mod tests {
         cfg.data_dir = dir.clone();
         let state = Arc::new(AppState::new(cfg, store));
         let headers = HeaderMap::new();
-        let resp = handle(&state, &Method::GET, "/api/game-portal/status", &headers, &json!({}), &[]);
+        let resp = handle(
+            &state,
+            &Method::GET,
+            "/api/game-portal/status",
+            &headers,
+            &json!({}),
+            &[],
+        );
         assert!(resp.is_some());
         let resp = resp.unwrap();
         assert_eq!(resp.status(), axum::http::StatusCode::UNAUTHORIZED);

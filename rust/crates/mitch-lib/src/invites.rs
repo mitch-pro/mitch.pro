@@ -92,7 +92,11 @@ pub fn invite_claim_insert_if_new(store: &DataStore, norm_email: &str, ref_norm:
 
 /// Records that `sender_norm` invited `recipient_norm`, if not already
 /// sent. Returns `true` if this is a newly recorded invite.
-pub fn invite_sent_insert_if_new(store: &DataStore, sender_norm: &str, recipient_norm: &str) -> bool {
+pub fn invite_sent_insert_if_new(
+    store: &DataStore,
+    sender_norm: &str,
+    recipient_norm: &str,
+) -> bool {
     let conn = store.conn();
     let changed = conn
         .execute(
@@ -156,24 +160,54 @@ mod tests {
         assert!(!invite_code_set(&store, "bob@gmail.com", "ALICE123"));
         // Setting your own code to the same value again is fine.
         assert!(invite_code_set(&store, "alice@gmail.com", "ALICE123"));
-        assert_eq!(invite_code_get(&store, "alice@gmail.com"), Some("ALICE123".to_string()));
-        assert_eq!(invite_code_find_owner(&store, "alice123"), Some("alice@gmail.com".to_string()));
+        assert_eq!(
+            invite_code_get(&store, "alice@gmail.com"),
+            Some("ALICE123".to_string())
+        );
+        assert_eq!(
+            invite_code_find_owner(&store, "alice123"),
+            Some("alice@gmail.com".to_string())
+        );
     }
 
     #[test]
     fn invite_claim_insert_if_new_only_pays_once() {
         let store = temp_store("claim-once");
-        assert!(invite_claim_insert_if_new(&store, "newbie@gmail.com", "referrer@gmail.com"));
+        assert!(invite_claim_insert_if_new(
+            &store,
+            "newbie@gmail.com",
+            "referrer@gmail.com"
+        ));
         // Second attempt (simulating a retried/duplicate request) must not re-claim.
-        assert!(!invite_claim_insert_if_new(&store, "newbie@gmail.com", "someone-else@gmail.com"));
+        assert!(!invite_claim_insert_if_new(
+            &store,
+            "newbie@gmail.com",
+            "someone-else@gmail.com"
+        ));
     }
 
     #[test]
     fn invite_sent_dedupes() {
         let store = temp_store("sent-dedupe");
-        assert!(invite_sent_insert_if_new(&store, "sender@gmail.com", "friend@gmail.com"));
-        assert!(!invite_sent_insert_if_new(&store, "sender@gmail.com", "friend@gmail.com"));
-        assert!(invite_sent_contains(&store, "sender@gmail.com", "friend@gmail.com"));
-        assert!(!invite_sent_contains(&store, "sender@gmail.com", "nobody@gmail.com"));
+        assert!(invite_sent_insert_if_new(
+            &store,
+            "sender@gmail.com",
+            "friend@gmail.com"
+        ));
+        assert!(!invite_sent_insert_if_new(
+            &store,
+            "sender@gmail.com",
+            "friend@gmail.com"
+        ));
+        assert!(invite_sent_contains(
+            &store,
+            "sender@gmail.com",
+            "friend@gmail.com"
+        ));
+        assert!(!invite_sent_contains(
+            &store,
+            "sender@gmail.com",
+            "nobody@gmail.com"
+        ));
     }
 }

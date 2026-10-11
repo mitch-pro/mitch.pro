@@ -572,8 +572,8 @@ pub async fn sync_matrix_user_to_official_rooms(
     user_token: &str,
     target_power_level: i64,
 ) {
-    let space_alias = url::form_urlencoded::byte_serialize(b"#mitch.pro:mitch.pro")
-        .collect::<String>();
+    let space_alias =
+        url::form_urlencoded::byte_serialize(b"#mitch.pro:mitch.pro").collect::<String>();
     let space_id = if let Ok((status, _, bytes)) = call_conduit(
         &format!("/_matrix/client/v3/directory/room/{space_alias}"),
         Method::GET,
@@ -594,9 +594,12 @@ pub async fn sync_matrix_user_to_official_rooms(
     };
     let admin_token = get_system_admin_matrix_token(secret).await.ok();
     if let Some(space_id) = &space_id {
-        let encoded_space = url::form_urlencoded::byte_serialize(space_id.as_bytes())
-            .collect::<String>();
-        for token in [Some(user_token), admin_token.as_deref()].into_iter().flatten() {
+        let encoded_space =
+            url::form_urlencoded::byte_serialize(space_id.as_bytes()).collect::<String>();
+        for token in [Some(user_token), admin_token.as_deref()]
+            .into_iter()
+            .flatten()
+        {
             if token.is_empty() {
                 continue;
             }
@@ -621,10 +624,10 @@ pub async fn sync_matrix_user_to_official_rooms(
         };
 
         if let (Some(space_id), Some(admin_token)) = (&space_id, &admin_token) {
-            let encoded_space = url::form_urlencoded::byte_serialize(space_id.as_bytes())
-                .collect::<String>();
-            let encoded_room = url::form_urlencoded::byte_serialize(room_id.as_bytes())
-                .collect::<String>();
+            let encoded_space =
+                url::form_urlencoded::byte_serialize(space_id.as_bytes()).collect::<String>();
+            let encoded_room =
+                url::form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>();
             let mut headers = HeaderMap::new();
             headers.insert("Content-Type", HeaderValue::from_static("application/json"));
             if let Ok(value) = HeaderValue::from_str(&format!("Bearer {admin_token}")) {
@@ -778,7 +781,7 @@ pub fn resolve_matrix_user_id_from_store(
 }
 
 pub fn resolve_matrix_user_id_for_email(state: &AppState, norm_email: &str) -> String {
-    resolve_matrix_user_id_from_store(&state.store, &state.data_dir(), &state.id_secret, norm_email)
+    resolve_matrix_user_id_from_store(&state.store, state.data_dir(), &state.id_secret, norm_email)
 }
 
 fn push_matrix_user_id(results: &mut Vec<String>, id: &str) {
@@ -789,7 +792,11 @@ fn push_matrix_user_id(results: &mut Vec<String>, id: &str) {
     let full_id = if clean.starts_with('@') && clean.contains(':') {
         clean.to_string()
     } else {
-        let u = clean.trim_start_matches('@').split(':').next().unwrap_or(clean);
+        let u = clean
+            .trim_start_matches('@')
+            .split(':')
+            .next()
+            .unwrap_or(clean);
         format!("@{u}:mitch.pro")
     };
     let normalized: String = full_id.chars().filter(|c| !c.is_whitespace()).collect();
@@ -832,7 +839,11 @@ pub fn resolve_all_emails_for_target(
 
     let stripped = raw.trim_start_matches('@');
     let local_raw = stripped.split(':').next().unwrap_or(stripped);
-    let clean_cmp: String = local_raw.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+    let clean_cmp: String = local_raw
+        .to_lowercase()
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .collect();
 
     // 1. Profiles
     let profiles_file = data_dir.join("profiles.json");
@@ -840,24 +851,43 @@ pub fn resolve_all_emails_for_target(
     if let Some(map) = profiles.as_object() {
         for (email_key, prof) in map {
             let p_email = mitch_lib::auth::normalize_email(email_key);
-            let raw_email = prof.get("email").and_then(|v| v.as_str()).unwrap_or(email_key);
+            let raw_email = prof
+                .get("email")
+                .and_then(|v| v.as_str())
+                .unwrap_or(email_key);
             let p_uname = prof.get("username").and_then(|v| v.as_str()).unwrap_or("");
-            let p_display = prof.get("displayName").or_else(|| prof.get("nickname")).and_then(|v| v.as_str()).unwrap_or("");
+            let p_display = prof
+                .get("displayName")
+                .or_else(|| prof.get("nickname"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
 
-            let p_uname_clean: String = p_uname.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
-            let p_display_clean: String = p_display.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+            let p_uname_clean: String = p_uname
+                .to_lowercase()
+                .chars()
+                .filter(|c| c.is_alphanumeric())
+                .collect();
+            let p_display_clean: String = p_display
+                .to_lowercase()
+                .chars()
+                .filter(|c| c.is_alphanumeric())
+                .collect();
             let p_email_local = p_email.split('@').next().unwrap_or("");
-            let p_email_clean: String = p_email_local.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+            let p_email_clean: String = p_email_local
+                .to_lowercase()
+                .chars()
+                .filter(|c| c.is_alphanumeric())
+                .collect();
 
-            let matched = (!clean_cmp.is_empty() && (
-                clean_cmp == p_uname_clean
-                || clean_cmp == p_display_clean
-                || clean_cmp == p_email_clean
-                || p_display.eq_ignore_ascii_case(local_raw)
-                || p_uname.eq_ignore_ascii_case(local_raw)
-            )) || raw.eq_ignore_ascii_case(&p_email)
-               || raw.eq_ignore_ascii_case(email_key)
-               || raw.eq_ignore_ascii_case(raw_email);
+            let matched = (!clean_cmp.is_empty()
+                && (clean_cmp == p_uname_clean
+                    || clean_cmp == p_display_clean
+                    || clean_cmp == p_email_clean
+                    || p_display.eq_ignore_ascii_case(local_raw)
+                    || p_uname.eq_ignore_ascii_case(local_raw)))
+                || raw.eq_ignore_ascii_case(&p_email)
+                || raw.eq_ignore_ascii_case(email_key)
+                || raw.eq_ignore_ascii_case(raw_email);
 
             if matched {
                 push_email(&mut results, &p_email);
@@ -873,12 +903,19 @@ pub fn resolve_all_emails_for_target(
     if let Some(map) = matrix_users.as_object() {
         for (uid_or_key, uname_val) in map {
             let uname = uname_val.as_str().unwrap_or("");
-            let uname_clean: String = uname.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+            let uname_clean: String = uname
+                .to_lowercase()
+                .chars()
+                .filter(|c| c.is_alphanumeric())
+                .collect();
 
-            let matched = !uname.is_empty() && (!clean_cmp.is_empty() && uname_clean == clean_cmp || uname.eq_ignore_ascii_case(local_raw));
+            let matched = !uname.is_empty()
+                && (!clean_cmp.is_empty() && uname_clean == clean_cmp
+                    || uname.eq_ignore_ascii_case(local_raw));
             if matched {
                 if let Some(email) = mitch_lib::auth::email_from_sid(store, secret, uid_or_key)
-                    .or_else(|| mitch_lib::auth::names_get_email(store, uid_or_key)) {
+                    .or_else(|| mitch_lib::auth::names_get_email(store, uid_or_key))
+                {
                     push_email(&mut results, &email);
                 }
             }
@@ -891,8 +928,14 @@ pub fn resolve_all_emails_for_target(
             continue;
         };
         let local = email_key.split('@').next().unwrap_or("");
-        let local_clean: String = local.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
-        if !clean_cmp.is_empty() && (local_clean == clean_cmp || local.eq_ignore_ascii_case(local_raw)) {
+        let local_clean: String = local
+            .to_lowercase()
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .collect();
+        if !clean_cmp.is_empty()
+            && (local_clean == clean_cmp || local.eq_ignore_ascii_case(local_raw))
+        {
             push_email(&mut results, email_key);
         }
     }
@@ -904,8 +947,14 @@ pub fn resolve_all_emails_for_target(
         for v in arr {
             if let Some(s) = v.as_str() {
                 let local = s.split('@').next().unwrap_or("");
-                let local_clean: String = local.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
-                if !clean_cmp.is_empty() && (local_clean == clean_cmp || local.eq_ignore_ascii_case(local_raw)) {
+                let local_clean: String = local
+                    .to_lowercase()
+                    .chars()
+                    .filter(|c| c.is_alphanumeric())
+                    .collect();
+                if !clean_cmp.is_empty()
+                    && (local_clean == clean_cmp || local.eq_ignore_ascii_case(local_raw))
+                {
                     push_email(&mut results, s);
                 }
             }
@@ -947,24 +996,44 @@ pub fn resolve_all_matrix_user_ids_from_store(
     let profiles_file = data_dir.join("profiles.json");
     let profiles = store.read_document(&profiles_file, json!({}));
     if let Some(map) = profiles.as_object() {
-        let clean_cmp: String = local_raw.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+        let clean_cmp: String = local_raw
+            .to_lowercase()
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .collect();
         for (email_key, prof) in map {
             let p_email = mitch_lib::auth::normalize_email(email_key);
             let p_uname = prof.get("username").and_then(|v| v.as_str()).unwrap_or("");
-            let p_display = prof.get("displayName").or_else(|| prof.get("nickname")).and_then(|v| v.as_str()).unwrap_or("");
+            let p_display = prof
+                .get("displayName")
+                .or_else(|| prof.get("nickname"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
 
-            let p_uname_clean: String = p_uname.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
-            let p_display_clean: String = p_display.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+            let p_uname_clean: String = p_uname
+                .to_lowercase()
+                .chars()
+                .filter(|c| c.is_alphanumeric())
+                .collect();
+            let p_display_clean: String = p_display
+                .to_lowercase()
+                .chars()
+                .filter(|c| c.is_alphanumeric())
+                .collect();
             let p_email_local = p_email.split('@').next().unwrap_or("");
-            let p_email_clean: String = p_email_local.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+            let p_email_clean: String = p_email_local
+                .to_lowercase()
+                .chars()
+                .filter(|c| c.is_alphanumeric())
+                .collect();
 
-            let matched = (!clean_cmp.is_empty() && (
-                clean_cmp == p_uname_clean
-                || clean_cmp == p_display_clean
-                || clean_cmp == p_email_clean
-                || p_display.eq_ignore_ascii_case(local_raw)
-                || p_uname.eq_ignore_ascii_case(local_raw)
-            )) || email_candidate.as_deref() == Some(&p_email);
+            let matched = (!clean_cmp.is_empty()
+                && (clean_cmp == p_uname_clean
+                    || clean_cmp == p_display_clean
+                    || clean_cmp == p_email_clean
+                    || p_display.eq_ignore_ascii_case(local_raw)
+                    || p_uname.eq_ignore_ascii_case(local_raw)))
+                || email_candidate.as_deref() == Some(&p_email);
 
             if matched {
                 if !p_uname.is_empty() {
@@ -981,13 +1050,24 @@ pub fn resolve_all_matrix_user_ids_from_store(
     let matrix_users_file = data_dir.join("matrix_users.json");
     let matrix_users = store.read_document(&matrix_users_file, json!({}));
     if let Some(map) = matrix_users.as_object() {
-        let clean_cmp: String = local_raw.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+        let clean_cmp: String = local_raw
+            .to_lowercase()
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .collect();
 
         for (uid_or_key, uname_val) in map {
             let uname = uname_val.as_str().unwrap_or("");
-            let uname_clean: String = uname.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+            let uname_clean: String = uname
+                .to_lowercase()
+                .chars()
+                .filter(|c| c.is_alphanumeric())
+                .collect();
 
-            if !uname.is_empty() && (!clean_cmp.is_empty() && uname_clean == clean_cmp || uname.eq_ignore_ascii_case(local_raw)) {
+            if !uname.is_empty()
+                && (!clean_cmp.is_empty() && uname_clean == clean_cmp
+                    || uname.eq_ignore_ascii_case(local_raw))
+            {
                 push_matrix_user_id(&mut results, uname);
             }
 
@@ -996,8 +1076,14 @@ pub fn resolve_all_matrix_user_ids_from_store(
             if let Some(email) = associated_email {
                 let norm_assoc = mitch_lib::auth::normalize_email(&email);
                 let assoc_local = norm_assoc.split('@').next().unwrap_or("");
-                let assoc_clean: String = assoc_local.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
-                if email_candidate.as_deref() == Some(&norm_assoc) || (!clean_cmp.is_empty() && clean_cmp == assoc_clean) {
+                let assoc_clean: String = assoc_local
+                    .to_lowercase()
+                    .chars()
+                    .filter(|c| c.is_alphanumeric())
+                    .collect();
+                if email_candidate.as_deref() == Some(&norm_assoc)
+                    || (!clean_cmp.is_empty() && clean_cmp == assoc_clean)
+                {
                     if !uname.is_empty() {
                         push_matrix_user_id(&mut results, uname);
                     }
@@ -1008,7 +1094,8 @@ pub fn resolve_all_matrix_user_ids_from_store(
     }
 
     // 3. Generate standard formatting variations (collapsed, dotted, dashed, underscored)
-    let words: Vec<&str> = local_raw.split(|c: char| c.is_whitespace() || c == '.' || c == '-' || c == '_')
+    let words: Vec<&str> = local_raw
+        .split(|c: char| c.is_whitespace() || c == '.' || c == '-' || c == '_')
         .filter(|w| !w.is_empty())
         .collect();
     if !words.is_empty() {
@@ -1036,15 +1123,26 @@ pub fn resolve_all_matrix_user_ids_from_store(
     let settings_file = data_dir.join("matrix_room_settings.json");
     let room_settings = store.read_document(&settings_file, json!({}));
     if let Some(rooms) = room_settings.as_object() {
-        let clean_cmp: String = local_raw.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+        let clean_cmp: String = local_raw
+            .to_lowercase()
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .collect();
         for (_, room) in rooms {
             for list_key in ["bannedUsers", "mutedUsers"] {
                 if let Some(users_map) = room.get(list_key).and_then(|v| v.as_object()) {
                     for (k, val) in users_map {
                         let uid = val.get("userId").and_then(|v| v.as_str()).unwrap_or(k);
-                        let stripped_u = uid.trim_start_matches('@').split(':').next().unwrap_or(uid);
-                        let u_clean: String = stripped_u.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
-                        if !clean_cmp.is_empty() && (u_clean == clean_cmp || stripped_u.eq_ignore_ascii_case(local_raw)) {
+                        let stripped_u =
+                            uid.trim_start_matches('@').split(':').next().unwrap_or(uid);
+                        let u_clean: String = stripped_u
+                            .to_lowercase()
+                            .chars()
+                            .filter(|c| c.is_alphanumeric())
+                            .collect();
+                        if !clean_cmp.is_empty()
+                            && (u_clean == clean_cmp || stripped_u.eq_ignore_ascii_case(local_raw))
+                        {
                             push_matrix_user_id(&mut results, uid);
                         }
                     }
@@ -1062,7 +1160,7 @@ pub fn resolve_all_matrix_user_ids_from_store(
 }
 
 pub fn resolve_all_matrix_user_ids_for_target(state: &AppState, input: &str) -> Vec<String> {
-    resolve_all_matrix_user_ids_from_store(&state.store, &state.data_dir(), &state.id_secret, input)
+    resolve_all_matrix_user_ids_from_store(&state.store, state.data_dir(), &state.id_secret, input)
 }
 
 pub async fn sync_staff_power_levels_to_all_official_rooms(
@@ -1125,7 +1223,10 @@ pub async fn sync_staff_power_levels_to_all_official_rooms(
                 let mut changed = false;
                 if let Some(users_map) = pl_data.get_mut("users").and_then(|v| v.as_object_mut()) {
                     for (staff_user, &target_pl) in &staff_power_levels {
-                        let cur = users_map.get(staff_user).and_then(|v| v.as_i64()).unwrap_or(0);
+                        let cur = users_map
+                            .get(staff_user)
+                            .and_then(|v| v.as_i64())
+                            .unwrap_or(0);
                         if cur != target_pl {
                             users_map.insert(staff_user.clone(), json!(target_pl));
                             changed = true;
@@ -1200,7 +1301,6 @@ pub async fn sync_user_mention_only_push_rules(user_token: &str) {
     .await;
 }
 
-
 pub async fn unban_matrix_user_from_room(
     secret: &[u8],
     store: &mitch_lib::data::DataStore,
@@ -1217,36 +1317,72 @@ pub async fn unban_matrix_user_from_room(
             .split(':')
             .next()
             .unwrap_or(target_user_id);
-        let uname_clean: String = uname.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
-        let target_clean: String = target_user_id.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+        let uname_clean: String = uname
+            .to_lowercase()
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .collect();
+        let target_clean: String = target_user_id
+            .to_lowercase()
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .collect();
         for (r_id, room) in rooms_map {
             if !room_id.is_empty() && room_id != "all" && room_id != "*" && r_id != room_id {
                 continue;
             }
             if let Some(b_map) = room.get_mut("bannedUsers").and_then(|v| v.as_object_mut()) {
-                let to_remove: Vec<String> = b_map.keys().filter(|k| {
-                    let k_local = k.trim_start_matches('@').split(':').next().unwrap_or(k);
-                    let k_clean: String = k_local.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
-                    let k_raw_clean: String = k.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
-                    k.eq_ignore_ascii_case(target_user_id)
-                        || k.eq_ignore_ascii_case(uname)
-                        || (!uname_clean.is_empty() && (k_clean == uname_clean || k_raw_clean == uname_clean))
-                        || (!target_clean.is_empty() && (k_clean == target_clean || k_raw_clean == target_clean))
-                }).cloned().collect();
+                let to_remove: Vec<String> = b_map
+                    .keys()
+                    .filter(|k| {
+                        let k_local = k.trim_start_matches('@').split(':').next().unwrap_or(k);
+                        let k_clean: String = k_local
+                            .to_lowercase()
+                            .chars()
+                            .filter(|c| c.is_alphanumeric())
+                            .collect();
+                        let k_raw_clean: String = k
+                            .to_lowercase()
+                            .chars()
+                            .filter(|c| c.is_alphanumeric())
+                            .collect();
+                        k.eq_ignore_ascii_case(target_user_id)
+                            || k.eq_ignore_ascii_case(uname)
+                            || (!uname_clean.is_empty()
+                                && (k_clean == uname_clean || k_raw_clean == uname_clean))
+                            || (!target_clean.is_empty()
+                                && (k_clean == target_clean || k_raw_clean == target_clean))
+                    })
+                    .cloned()
+                    .collect();
                 for k in to_remove {
                     b_map.remove(&k);
                 }
             }
             if let Some(m_map) = room.get_mut("mutedUsers").and_then(|v| v.as_object_mut()) {
-                let to_remove: Vec<String> = m_map.keys().filter(|k| {
-                    let k_local = k.trim_start_matches('@').split(':').next().unwrap_or(k);
-                    let k_clean: String = k_local.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
-                    let k_raw_clean: String = k.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
-                    k.eq_ignore_ascii_case(target_user_id)
-                        || k.eq_ignore_ascii_case(uname)
-                        || (!uname_clean.is_empty() && (k_clean == uname_clean || k_raw_clean == uname_clean))
-                        || (!target_clean.is_empty() && (k_clean == target_clean || k_raw_clean == target_clean))
-                }).cloned().collect();
+                let to_remove: Vec<String> = m_map
+                    .keys()
+                    .filter(|k| {
+                        let k_local = k.trim_start_matches('@').split(':').next().unwrap_or(k);
+                        let k_clean: String = k_local
+                            .to_lowercase()
+                            .chars()
+                            .filter(|c| c.is_alphanumeric())
+                            .collect();
+                        let k_raw_clean: String = k
+                            .to_lowercase()
+                            .chars()
+                            .filter(|c| c.is_alphanumeric())
+                            .collect();
+                        k.eq_ignore_ascii_case(target_user_id)
+                            || k.eq_ignore_ascii_case(uname)
+                            || (!uname_clean.is_empty()
+                                && (k_clean == uname_clean || k_raw_clean == uname_clean))
+                            || (!target_clean.is_empty()
+                                && (k_clean == target_clean || k_raw_clean == target_clean))
+                    })
+                    .cloned()
+                    .collect();
                 for k in to_remove {
                     m_map.remove(&k);
                 }
@@ -1287,8 +1423,16 @@ pub async fn unban_matrix_user_from_room(
         .split(':')
         .next()
         .unwrap_or(target_user_id);
-    let uname_clean: String = uname.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
-    let target_clean: String = target_user_id.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+    let uname_clean: String = uname
+        .to_lowercase()
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .collect();
+    let target_clean: String = target_user_id
+        .to_lowercase()
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .collect();
 
     // Also inspect room banned members from Conduit: unban any member whose state_key matches target_user_id
     if let Ok((status, _, bytes)) = call_conduit(
@@ -1307,25 +1451,43 @@ pub async fn unban_matrix_user_from_room(
                 if let Some(chunk) = members_data.get("chunk").and_then(|v| v.as_array()) {
                     for ev in chunk {
                         let uid = ev.get("state_key").and_then(|v| v.as_str()).unwrap_or("");
-                        let membership = ev.get("content").and_then(|c| c.get("membership")).and_then(|m| m.as_str()).unwrap_or("");
+                        let membership = ev
+                            .get("content")
+                            .and_then(|c| c.get("membership"))
+                            .and_then(|m| m.as_str())
+                            .unwrap_or("");
                         if membership == "ban" && !uid.is_empty() {
-                            let uid_local = uid.trim_start_matches('@').split(':').next().unwrap_or(uid);
-                            let uid_clean: String = uid_local.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
-                            let uid_raw_clean: String = uid.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+                            let uid_local =
+                                uid.trim_start_matches('@').split(':').next().unwrap_or(uid);
+                            let uid_clean: String = uid_local
+                                .to_lowercase()
+                                .chars()
+                                .filter(|c| c.is_alphanumeric())
+                                .collect();
+                            let uid_raw_clean: String = uid
+                                .to_lowercase()
+                                .chars()
+                                .filter(|c| c.is_alphanumeric())
+                                .collect();
                             if uid.eq_ignore_ascii_case(target_user_id)
                                 || uid.eq_ignore_ascii_case(uname)
-                                || (!uname_clean.is_empty() && (uid_clean == uname_clean || uid_raw_clean == uname_clean))
-                                || (!target_clean.is_empty() && (uid_clean == target_clean || uid_raw_clean == target_clean))
+                                || (!uname_clean.is_empty()
+                                    && (uid_clean == uname_clean || uid_raw_clean == uname_clean))
+                                || (!target_clean.is_empty()
+                                    && (uid_clean == target_clean || uid_raw_clean == target_clean))
                             {
                                 let payload = json!({ "user_id": uid });
                                 let _ = call_conduit(
                                     &format!(
                                         "/_matrix/client/v3/rooms/{}/unban",
-                                        url::form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>()
+                                        url::form_urlencoded::byte_serialize(room_id.as_bytes())
+                                            .collect::<String>()
                                     ),
                                     Method::POST,
                                     Some(req_headers.clone()),
-                                    Some(Bytes::from(serde_json::to_vec(&payload).unwrap_or_default())),
+                                    Some(Bytes::from(
+                                        serde_json::to_vec(&payload).unwrap_or_default(),
+                                    )),
                                 )
                                 .await;
                             }
@@ -1354,25 +1516,47 @@ pub async fn unban_matrix_user_from_room(
                     for ev in arr {
                         if ev.get("type").and_then(|v| v.as_str()) == Some("m.room.member") {
                             let uid = ev.get("state_key").and_then(|v| v.as_str()).unwrap_or("");
-                            let membership = ev.get("content").and_then(|c| c.get("membership")).and_then(|m| m.as_str()).unwrap_or("");
+                            let membership = ev
+                                .get("content")
+                                .and_then(|c| c.get("membership"))
+                                .and_then(|m| m.as_str())
+                                .unwrap_or("");
                             if membership == "ban" && !uid.is_empty() {
-                                let uid_local = uid.trim_start_matches('@').split(':').next().unwrap_or(uid);
-                                let uid_clean: String = uid_local.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
-                                let uid_raw_clean: String = uid.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+                                let uid_local =
+                                    uid.trim_start_matches('@').split(':').next().unwrap_or(uid);
+                                let uid_clean: String = uid_local
+                                    .to_lowercase()
+                                    .chars()
+                                    .filter(|c| c.is_alphanumeric())
+                                    .collect();
+                                let uid_raw_clean: String = uid
+                                    .to_lowercase()
+                                    .chars()
+                                    .filter(|c| c.is_alphanumeric())
+                                    .collect();
                                 if uid.eq_ignore_ascii_case(target_user_id)
                                     || uid.eq_ignore_ascii_case(uname)
-                                    || (!uname_clean.is_empty() && (uid_clean == uname_clean || uid_raw_clean == uname_clean))
-                                    || (!target_clean.is_empty() && (uid_clean == target_clean || uid_raw_clean == target_clean))
+                                    || (!uname_clean.is_empty()
+                                        && (uid_clean == uname_clean
+                                            || uid_raw_clean == uname_clean))
+                                    || (!target_clean.is_empty()
+                                        && (uid_clean == target_clean
+                                            || uid_raw_clean == target_clean))
                                 {
                                     let payload = json!({ "user_id": uid });
                                     let _ = call_conduit(
                                         &format!(
                                             "/_matrix/client/v3/rooms/{}/unban",
-                                            url::form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>()
+                                            url::form_urlencoded::byte_serialize(
+                                                room_id.as_bytes()
+                                            )
+                                            .collect::<String>()
                                         ),
                                         Method::POST,
                                         Some(req_headers.clone()),
-                                        Some(Bytes::from(serde_json::to_vec(&payload).unwrap_or_default())),
+                                        Some(Bytes::from(
+                                            serde_json::to_vec(&payload).unwrap_or_default(),
+                                        )),
                                     )
                                     .await;
                                 }
@@ -1399,22 +1583,36 @@ pub async fn unban_matrix_user_from_room(
         if status.is_success() {
             if let Ok(mut pl_data) = serde_json::from_slice::<Value>(&bytes) {
                 if let Some(users) = pl_data.get_mut("users").and_then(|v| v.as_object_mut()) {
-                    let to_remove: Vec<String> = users.iter().filter_map(|(u, pl)| {
-                        let val = pl.as_i64().unwrap_or(0);
-                        let u_local = u.trim_start_matches('@').split(':').next().unwrap_or(u);
-                        let u_clean: String = u_local.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
-                        let u_raw_clean: String = u.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
-                        if val < 0 && (
-                            u.eq_ignore_ascii_case(target_user_id)
-                                || u.eq_ignore_ascii_case(uname)
-                                || (!uname_clean.is_empty() && (u_clean == uname_clean || u_raw_clean == uname_clean))
-                                || (!target_clean.is_empty() && (u_clean == target_clean || u_raw_clean == target_clean))
-                        ) {
-                            Some(u.clone())
-                        } else {
-                            None
-                        }
-                    }).collect();
+                    let to_remove: Vec<String> = users
+                        .iter()
+                        .filter_map(|(u, pl)| {
+                            let val = pl.as_i64().unwrap_or(0);
+                            let u_local = u.trim_start_matches('@').split(':').next().unwrap_or(u);
+                            let u_clean: String = u_local
+                                .to_lowercase()
+                                .chars()
+                                .filter(|c| c.is_alphanumeric())
+                                .collect();
+                            let u_raw_clean: String = u
+                                .to_lowercase()
+                                .chars()
+                                .filter(|c| c.is_alphanumeric())
+                                .collect();
+                            if val < 0
+                                && (u.eq_ignore_ascii_case(target_user_id)
+                                    || u.eq_ignore_ascii_case(uname)
+                                    || (!uname_clean.is_empty()
+                                        && (u_clean == uname_clean || u_raw_clean == uname_clean))
+                                    || (!target_clean.is_empty()
+                                        && (u_clean == target_clean
+                                            || u_raw_clean == target_clean)))
+                            {
+                                Some(u.clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
                     if !to_remove.is_empty() {
                         for u in to_remove {
                             users.remove(&u);
@@ -1460,7 +1658,9 @@ pub async fn invite_matrix_user_to_room(secret: &[u8], room_id: &str, target_use
         ),
         Method::POST,
         Some(headers),
-        Some(Bytes::from(serde_json::to_vec(&payload).unwrap_or_default())),
+        Some(Bytes::from(
+            serde_json::to_vec(&payload).unwrap_or_default(),
+        )),
     )
     .await;
 }
@@ -1471,7 +1671,8 @@ pub async fn unban_matrix_user_all_rooms(
     data_dir: &std::path::Path,
     target_identifier: &str,
 ) {
-    let resolved = resolve_all_matrix_user_ids_from_store(store, data_dir, secret, target_identifier);
+    let resolved =
+        resolve_all_matrix_user_ids_from_store(store, data_dir, secret, target_identifier);
     let targets = if resolved.is_empty() {
         vec![if target_identifier.starts_with('@') {
             target_identifier.to_string()
@@ -1488,7 +1689,8 @@ pub async fn unban_matrix_user_all_rooms(
         // or search for its alias.
         for (alias, name, topic) in OFFICIAL_ROOMS {
             if let Ok(room_id) = ensure_official_room(secret, alias, name, topic).await {
-                unban_matrix_user_from_room(secret, store, data_dir, &room_id, target_user_id).await;
+                unban_matrix_user_from_room(secret, store, data_dir, &room_id, target_user_id)
+                    .await;
                 invite_matrix_user_to_room(secret, &room_id, target_user_id).await;
             }
         }
@@ -1775,7 +1977,8 @@ pub async fn sync_profile_to_matrix(
                 .await;
             }
         } else {
-            let avatar_bytes_opt: Option<(String, Vec<u8>)> = if raw_pfp.starts_with("data:image/") {
+            let avatar_bytes_opt: Option<(String, Vec<u8>)> = if raw_pfp.starts_with("data:image/")
+            {
                 if let Some((meta, data)) = raw_pfp.split_once(',') {
                     let mime = meta
                         .trim_start_matches("data:")
@@ -1874,13 +2077,19 @@ pub async fn sync_profile_to_matrix(
                 {
                     if status.is_success() {
                         if let Ok(resp_json) = serde_json::from_slice::<Value>(&upload_resp) {
-                            if let Some(mxc_uri) = resp_json.get("content_uri").and_then(|v| v.as_str()) {
+                            if let Some(mxc_uri) =
+                                resp_json.get("content_uri").and_then(|v| v.as_str())
+                            {
                                 let body = json!({ "avatar_url": mxc_uri });
                                 let _ = call_conduit(
-                                    &format!("/_matrix/client/v3/profile/{encoded_user_id}/avatar_url"),
+                                    &format!(
+                                        "/_matrix/client/v3/profile/{encoded_user_id}/avatar_url"
+                                    ),
                                     Method::PUT,
                                     Some(auth_header.clone()),
-                                    Some(Bytes::from(serde_json::to_vec(&body).unwrap_or_default())),
+                                    Some(Bytes::from(
+                                        serde_json::to_vec(&body).unwrap_or_default(),
+                                    )),
                                 )
                                 .await;
                             }
@@ -2846,7 +3055,10 @@ const GIF_PAGE_SIZE: i64 = 25;
 
 /// Giphy trending/search, one page.
 async fn fetch_giphy_gifs(query: Option<&str>, offset: i64) -> Vec<Value> {
-    let mut giphy_key = std::env::var("GIPHY_API_KEY").unwrap_or_default().trim().to_string();
+    let mut giphy_key = std::env::var("GIPHY_API_KEY")
+        .unwrap_or_default()
+        .trim()
+        .to_string();
     if giphy_key.is_empty() {
         giphy_key = "sXpGFDGZs0Dv1mmNFvYaGUvYwKX0PWIh".to_string();
     }
@@ -2861,7 +3073,10 @@ async fn fetch_giphy_gifs(query: Option<&str>, offset: i64) -> Vec<Value> {
             "https://api.giphy.com/v1/gifs/trending?api_key={giphy_key}&limit={GIF_PAGE_SIZE}&offset={offset}&rating=g"
         ),
     };
-    let Ok(client) = reqwest::Client::builder().timeout(std::time::Duration::from_secs(6)).build() else {
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(6))
+        .build()
+    else {
         return Vec::new();
     };
     let Ok(resp) = client.get(&url).send().await else {
@@ -2962,7 +3177,10 @@ async fn api_gifs_proxy(_state: &AppState, _headers: &HeaderMap, search: &str) -
     if parsed_url.scheme() != "http" && parsed_url.scheme() != "https" {
         return cors_json_response(400, json!({ "error": "invalid scheme" }));
     }
-    let client = match reqwest::Client::builder().timeout(std::time::Duration::from_secs(10)).build() {
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+    {
         Ok(c) => c,
         Err(_) => return cors_json_response(500, json!({ "error": "client build failed" })),
     };
@@ -3000,7 +3218,9 @@ async fn api_gifs_proxy(_state: &AppState, _headers: &HeaderMap, search: &str) -
     if let Ok(ct) = HeaderValue::from_str(&content_type) {
         builder = builder.header(hyper::header::CONTENT_TYPE, ct);
     }
-    builder.body(axum::body::Body::from(bytes)).unwrap_or_else(|_| cors_json_response(500, json!({ "error": "response builder failed" })))
+    builder
+        .body(axum::body::Body::from(bytes))
+        .unwrap_or_else(|_| cors_json_response(500, json!({ "error": "response builder failed" })))
 }
 
 async fn api_gifs_send(_state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> Response {
@@ -3011,7 +3231,10 @@ async fn api_gifs_send(_state: &AppState, headers: &HeaderMap, body_bytes: &[u8]
         .map(str::trim)
         .unwrap_or("");
     if token.is_empty() {
-        return cors_json_response(401, json!({ "error": "Authorization Bearer token required" }));
+        return cors_json_response(
+            401,
+            json!({ "error": "Authorization Bearer token required" }),
+        );
     }
 
     let payload: Value = match serde_json::from_slice(body_bytes) {
@@ -3019,9 +3242,21 @@ async fn api_gifs_send(_state: &AppState, headers: &HeaderMap, body_bytes: &[u8]
         Err(_) => return cors_json_response(400, json!({ "error": "Invalid JSON body" })),
     };
 
-    let room_id = payload.get("roomId").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
-    let gif_url = payload.get("url").and_then(|v| v.as_str()).unwrap_or("").trim();
-    let title = payload.get("title").and_then(|v| v.as_str()).unwrap_or("GIF");
+    let room_id = payload
+        .get("roomId")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let gif_url = payload
+        .get("url")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+    let title = payload
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("GIF");
 
     if room_id.is_empty() || gif_url.is_empty() {
         return cors_json_response(400, json!({ "error": "roomId and url are required" }));
@@ -3042,10 +3277,16 @@ async fn api_gifs_send(_state: &AppState, headers: &HeaderMap, body_bytes: &[u8]
         )
         .await
         {
-            Ok((status, _, bytes)) if status.is_success() => serde_json::from_slice::<Value>(&bytes)
-                .ok()
-                .and_then(|data| data.get("room_id").and_then(|v| v.as_str()).map(str::to_string))
-                .unwrap_or(room_id),
+            Ok((status, _, bytes)) if status.is_success() => {
+                serde_json::from_slice::<Value>(&bytes)
+                    .ok()
+                    .and_then(|data| {
+                        data.get("room_id")
+                            .and_then(|v| v.as_str())
+                            .map(str::to_string)
+                    })
+                    .unwrap_or(room_id)
+            }
             _ => room_id,
         }
     } else {
@@ -3064,7 +3305,9 @@ async fn api_gifs_send(_state: &AppState, headers: &HeaderMap, body_bytes: &[u8]
         Method::GET,
         Some(auth_headers.clone()),
         None,
-    ).await {
+    )
+    .await
+    {
         if status.is_success() {
             // Room is encrypted, tell client to use local crypto staging
             return cors_json_response(200, json!({ "encrypted": true }));
@@ -3079,7 +3322,10 @@ async fn api_gifs_send(_state: &AppState, headers: &HeaderMap, body_bytes: &[u8]
         return cors_json_response(400, json!({ "error": "Invalid scheme" }));
     }
 
-    let Ok(client) = reqwest::Client::builder().timeout(std::time::Duration::from_secs(12)).build() else {
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(12))
+        .build()
+    else {
         return cors_json_response(500, json!({ "error": "Client build failed" }));
     };
 
@@ -3098,7 +3344,10 @@ async fn api_gifs_send(_state: &AppState, headers: &HeaderMap, body_bytes: &[u8]
     };
 
     if !resp.status().is_success() {
-        return cors_json_response(502, json!({ "error": "Upstream gif provider returned error" }));
+        return cors_json_response(
+            502,
+            json!({ "error": "Upstream gif provider returned error" }),
+        );
     }
 
     let content_type = resp
@@ -3120,7 +3369,13 @@ async fn api_gifs_send(_state: &AppState, headers: &HeaderMap, body_bytes: &[u8]
     } else {
         "gif"
     };
-    let filename = format!("{}.{ext}", title.chars().filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-').collect::<String>());
+    let filename = format!(
+        "{}.{ext}",
+        title
+            .chars()
+            .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
+            .collect::<String>()
+    );
 
     let mut upload_headers = auth_headers.clone();
     if let Ok(ct) = HeaderValue::from_str(&content_type) {
@@ -3132,14 +3387,22 @@ async fn api_gifs_send(_state: &AppState, headers: &HeaderMap, body_bytes: &[u8]
         Method::POST,
         Some(upload_headers),
         Some(bytes.clone()),
-    ).await;
+    )
+    .await;
 
     let content_uri = match upload_res {
         Ok((status, _, upload_bytes)) if status.is_success() => {
             let data: Value = serde_json::from_slice(&upload_bytes).unwrap_or(json!({}));
-            let uri = data.get("content_uri").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let uri = data
+                .get("content_uri")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
             if uri.is_empty() {
-                return cors_json_response(502, json!({ "error": "No content_uri returned from media upload" }));
+                return cors_json_response(
+                    502,
+                    json!({ "error": "No content_uri returned from media upload" }),
+                );
             }
             uri
         }
@@ -3165,8 +3428,11 @@ async fn api_gifs_send(_state: &AppState, headers: &HeaderMap, body_bytes: &[u8]
         &format!("/_matrix/client/v3/rooms/{encoded_room}/send/m.room.message/{txn_id}"),
         Method::PUT,
         Some(send_headers),
-        Some(Bytes::from(serde_json::to_vec(&send_payload).unwrap_or_default())),
-    ).await;
+        Some(Bytes::from(
+            serde_json::to_vec(&send_payload).unwrap_or_default(),
+        )),
+    )
+    .await;
 
     match send_res {
         Ok((status, _, send_bytes)) if status.is_success() => {
@@ -3198,7 +3464,11 @@ fn apply_gif_favorite_action(
     list.retain(|g| g.get("id").and_then(|v| v.as_str()) != Some(gif_id));
     if action == "add" {
         let g = gif.ok_or("gif object is required to add a favorite")?;
-        let url = g.get("url").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let url = g
+            .get("url")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         if url.is_empty() {
             return Err("gif.url is required to favorite a GIF");
         }
@@ -3286,9 +3556,12 @@ async fn api_gifs_favorites_post(
 }
 
 async fn api_stickers_packs(_state: &AppState, _headers: &HeaderMap) -> Response {
-    cors_json_response(200, json!({
-        "packs": curated_sticker_packs()
-    }))
+    cors_json_response(
+        200,
+        json!({
+            "packs": curated_sticker_packs()
+        }),
+    )
 }
 
 fn curated_gifs(query: Option<&str>) -> Vec<Value> {
@@ -3463,8 +3736,16 @@ fn curated_gifs(query: Option<&str>) -> Vec<Value> {
         let filtered: Vec<Value> = all
             .into_iter()
             .filter(|item| {
-                let title = item.get("title").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
-                let tags = item.get("tags").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
+                let title = item
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+                let tags = item
+                    .get("tags")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_lowercase();
                 terms.iter().all(|t| title.contains(t) || tags.contains(t))
             })
             .collect();
@@ -3518,7 +3799,7 @@ fn curated_sticker_packs() -> Vec<Value> {
                 { "id": "clown", "name": "Clown", "url": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f921.png" },
                 { "id": "salute", "name": "Salute", "url": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1fae1.png" }
             ]
-        })
+        }),
     ]
 }
 
@@ -3681,7 +3962,10 @@ async fn mod_overview(state: &AppState, headers: &HeaderMap) -> Response {
                                 .and_then(|r| r.as_str())
                                 .unwrap_or("");
                             let sender = ev.get("sender").and_then(|s| s.as_str()).unwrap_or("");
-                            let ts = ev.get("origin_server_ts").and_then(|t| t.as_i64()).unwrap_or(0);
+                            let ts = ev
+                                .get("origin_server_ts")
+                                .and_then(|t| t.as_i64())
+                                .unwrap_or(0);
                             banned_users.push(json!({
                                 "userId": uid,
                                 "reason": reason,
@@ -3696,7 +3980,10 @@ async fn mod_overview(state: &AppState, headers: &HeaderMap) -> Response {
     }
 
     let mut user_slowmodes = Vec::new();
-    if let Some(obj) = room_settings.get("userSlowmode").and_then(|v| v.as_object()) {
+    if let Some(obj) = room_settings
+        .get("userSlowmode")
+        .and_then(|v| v.as_object())
+    {
         for (u_id, sec_val) in obj.iter() {
             let sec = sec_val.as_i64().unwrap_or(0);
             if sec > 0 {
@@ -3753,7 +4040,11 @@ async fn mod_set_role(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) 
             if clean.starts_with('@') && clean.contains(':') {
                 clean
             } else {
-                let u = clean.trim_start_matches('@').split(':').next().unwrap_or(&clean);
+                let u = clean
+                    .trim_start_matches('@')
+                    .split(':')
+                    .next()
+                    .unwrap_or(&clean);
                 format!("@{u}:mitch.pro")
             }
         });
@@ -3886,7 +4177,11 @@ async fn mod_kick(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> R
             if clean.starts_with('@') && clean.contains(':') {
                 clean
             } else {
-                let u = clean.trim_start_matches('@').split(':').next().unwrap_or(&clean);
+                let u = clean
+                    .trim_start_matches('@')
+                    .split(':')
+                    .next()
+                    .unwrap_or(&clean);
                 format!("@{u}:mitch.pro")
             }
         });
@@ -3980,7 +4275,11 @@ async fn mod_ban(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> Re
             if clean.starts_with('@') && clean.contains(':') {
                 clean
             } else {
-                let u = clean.trim_start_matches('@').split(':').next().unwrap_or(&clean);
+                let u = clean
+                    .trim_start_matches('@')
+                    .split(':')
+                    .next()
+                    .unwrap_or(&clean);
                 format!("@{u}:mitch.pro")
             }
         });
@@ -4102,7 +4401,11 @@ async fn mod_unban(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> 
         let fallback = if clean.starts_with('@') && clean.contains(':') {
             clean
         } else {
-            let u = clean.trim_start_matches('@').split(':').next().unwrap_or(&clean);
+            let u = clean
+                .trim_start_matches('@')
+                .split(':')
+                .next()
+                .unwrap_or(&clean);
             format!("@{u}:mitch.pro")
         };
         candidates.push(fallback);
@@ -4119,7 +4422,7 @@ async fn mod_unban(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> 
             unban_matrix_user_all_rooms(
                 &state.id_secret,
                 &state.store,
-                &state.data_dir(),
+                state.data_dir(),
                 candidate,
             )
             .await;
@@ -4127,7 +4430,7 @@ async fn mod_unban(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> 
             unban_matrix_user_from_room(
                 &state.id_secret,
                 &state.store,
-                &state.data_dir(),
+                state.data_dir(),
                 explicit_room,
                 candidate,
             )
@@ -4136,7 +4439,8 @@ async fn mod_unban(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> 
     }
 
     // Also unban at the account/SSO level if blacklisted or shadow-banned
-    let associated_emails = resolve_all_emails_for_target(&state.store, &state.data_dir(), &state.id_secret, raw_input);
+    let associated_emails =
+        resolve_all_emails_for_target(&state.store, state.data_dir(), &state.id_secret, raw_input);
     for email in &associated_emails {
         mitch_lib::bans::blacklist_remove(&state.store, email, &email.to_lowercase());
 
@@ -4153,7 +4457,9 @@ async fn mod_unban(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> 
             }
         }
 
-        let last_known = state.store.read_document(&state.cfg.data_dir.join("last_known_ips.json"), json!({}));
+        let last_known = state
+            .store
+            .read_document(&state.cfg.data_dir.join("last_known_ips.json"), json!({}));
         if let Some(target_ip) = last_known.get(email.as_str()).and_then(|v| v.as_str()) {
             if !mitch_lib::auth::WHITELISTED_IPS.contains(&target_ip) {
                 mitch_lib::bans::banned_ips_remove(&state.store, target_ip);
@@ -4320,11 +4626,18 @@ async fn mod_slowmode(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) 
             .into_iter()
             .next()
             .unwrap_or_else(|| {
-                let clean: String = target_uid_raw.chars().filter(|c| !c.is_whitespace()).collect();
+                let clean: String = target_uid_raw
+                    .chars()
+                    .filter(|c| !c.is_whitespace())
+                    .collect();
                 if clean.starts_with('@') && clean.contains(':') {
                     clean
                 } else {
-                    let u = clean.trim_start_matches('@').split(':').next().unwrap_or(&clean);
+                    let u = clean
+                        .trim_start_matches('@')
+                        .split(':')
+                        .next()
+                        .unwrap_or(&clean);
                     format!("@{u}:mitch.pro")
                 }
             });
@@ -4436,7 +4749,11 @@ async fn mod_mute_user(state: &AppState, headers: &HeaderMap, body_bytes: &[u8])
             if clean.starts_with('@') && clean.contains(':') {
                 clean
             } else {
-                let u = clean.trim_start_matches('@').split(':').next().unwrap_or(&clean);
+                let u = clean
+                    .trim_start_matches('@')
+                    .split(':')
+                    .next()
+                    .unwrap_or(&clean);
                 format!("@{u}:mitch.pro")
             }
         });
@@ -5446,14 +5763,19 @@ fn check_user_is_mentioned(member_id: &str, member_norm: &str, parsed: Option<&V
 
     // 1. Matrix MSC3952 m.mentions:
     if let Some(mentions) = parsed.get("m.mentions").and_then(|v| v.as_object()) {
-        if mentions.get("room").and_then(|v| v.as_bool()).unwrap_or(false) {
+        if mentions
+            .get("room")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+        {
             return true;
         }
         if let Some(user_ids) = mentions.get("user_ids").and_then(|v| v.as_array()) {
-            if user_ids
-                .iter()
-                .any(|u| u.as_str().map(|s| s.eq_ignore_ascii_case(member_id)).unwrap_or(false))
-            {
+            if user_ids.iter().any(|u| {
+                u.as_str()
+                    .map(|s| s.eq_ignore_ascii_case(member_id))
+                    .unwrap_or(false)
+            }) {
                 return true;
             }
         }
@@ -5467,9 +5789,7 @@ fn check_user_is_mentioned(member_id: &str, member_norm: &str, parsed: Option<&V
         .unwrap_or("");
     let full_text = format!("{body} {formatted_body}").to_lowercase();
 
-    if full_text.contains("@room")
-        || full_text.contains("@all")
-        || full_text.contains("@everyone")
+    if full_text.contains("@room") || full_text.contains("@all") || full_text.contains("@everyone")
     {
         return true;
     }
@@ -5851,7 +6171,11 @@ pub async fn handle_room_summary(state: &AppState, raw_room_id_or_alias: &str) -
     // Check official rooms
     for (alias, name, topic) in OFFICIAL_ROOMS {
         let full_alias = format!("#{alias}:mitch.pro");
-        let bare = trimmed.trim_start_matches('#').split(':').next().unwrap_or("");
+        let bare = trimmed
+            .trim_start_matches('#')
+            .split(':')
+            .next()
+            .unwrap_or("");
         let matches = trimmed.eq_ignore_ascii_case(&full_alias)
             || trimmed.eq_ignore_ascii_case(alias)
             || bare.eq_ignore_ascii_case(alias);
@@ -5884,7 +6208,9 @@ pub async fn handle_room_summary(state: &AppState, raw_room_id_or_alias: &str) -
 
     // Check official rooms by cached room_id
     {
-        let cache = official_room_id_map().lock().unwrap_or_else(|e| e.into_inner());
+        let cache = official_room_id_map()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         for (alias, name, topic) in OFFICIAL_ROOMS {
             if let Some(cached_id) = cache.get(*alias) {
                 if cached_id == trimmed {
@@ -6295,8 +6621,9 @@ pub async fn handle_matrix_gateway(
                         .and_then(|v| v.as_i64())
                         .unwrap_or(0);
 
-                    if let Some(user_slowmodes) =
-                        room_settings.get("userSlowmode").and_then(|v| v.as_object())
+                    if let Some(user_slowmodes) = room_settings
+                        .get("userSlowmode")
+                        .and_then(|v| v.as_object())
                     {
                         for sid in &sender_ids {
                             if let Some(sec) = user_slowmodes.get(sid).and_then(|v| v.as_i64()) {
@@ -6640,7 +6967,11 @@ pub async fn handle_matrix_gateway(
         }
         Err(err) => {
             if method == Method::GET && path.starts_with("/_matrix/media/") {
-                return Some(cors_response(StatusCode::NOT_FOUND, Bytes::new(), Some("text/plain")));
+                return Some(cors_response(
+                    StatusCode::NOT_FOUND,
+                    Bytes::new(),
+                    Some("text/plain"),
+                ));
             }
             Some(cors_json_response(
                 502,
@@ -6899,7 +7230,9 @@ mod tests {
         assert!(resp.is_some());
         let r = resp.unwrap();
         assert_eq!(r.status(), StatusCode::OK);
-        let body_bytes = axum::body::to_bytes(r.into_body(), usize::MAX).await.unwrap();
+        let body_bytes = axum::body::to_bytes(r.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let val: Value = serde_json::from_slice(&body_bytes).unwrap();
         let results = val.get("results").unwrap().as_array().unwrap();
         assert!(!results.is_empty());
@@ -6919,7 +7252,9 @@ mod tests {
         assert!(resp.is_some());
         let r = resp.unwrap();
         assert_eq!(r.status(), StatusCode::OK);
-        let body_bytes = axum::body::to_bytes(r.into_body(), usize::MAX).await.unwrap();
+        let body_bytes = axum::body::to_bytes(r.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let val: Value = serde_json::from_slice(&body_bytes).unwrap();
         let results = val.get("results").unwrap().as_array().unwrap();
         assert!(!results.is_empty());
@@ -6937,7 +7272,9 @@ mod tests {
         assert!(resp.is_some());
         let r = resp.unwrap();
         assert_eq!(r.status(), StatusCode::OK);
-        let body_bytes = axum::body::to_bytes(r.into_body(), usize::MAX).await.unwrap();
+        let body_bytes = axum::body::to_bytes(r.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let val: Value = serde_json::from_slice(&body_bytes).unwrap();
         let packs = val.get("packs").unwrap().as_array().unwrap();
         assert!(!packs.is_empty());
@@ -6952,14 +7289,30 @@ mod tests {
             },
             "body": "Hello there"
         });
-        assert!(check_user_is_mentioned("@target:mitch.pro", "target", Some(&content_msc)));
-        assert!(!check_user_is_mentioned("@other:mitch.pro", "other", Some(&content_msc)));
+        assert!(check_user_is_mentioned(
+            "@target:mitch.pro",
+            "target",
+            Some(&content_msc)
+        ));
+        assert!(!check_user_is_mentioned(
+            "@other:mitch.pro",
+            "other",
+            Some(&content_msc)
+        ));
 
         let content_body = json!({
             "body": "Hey @target, how are you?"
         });
-        assert!(check_user_is_mentioned("@target:mitch.pro", "target", Some(&content_body)));
-        assert!(!check_user_is_mentioned("@other:mitch.pro", "other", Some(&content_body)));
+        assert!(check_user_is_mentioned(
+            "@target:mitch.pro",
+            "target",
+            Some(&content_body)
+        ));
+        assert!(!check_user_is_mentioned(
+            "@other:mitch.pro",
+            "other",
+            Some(&content_body)
+        ));
 
         let content_room = json!({
             "m.mentions": {
@@ -6967,12 +7320,20 @@ mod tests {
             },
             "body": "Attention room"
         });
-        assert!(check_user_is_mentioned("@any:mitch.pro", "any", Some(&content_room)));
+        assert!(check_user_is_mentioned(
+            "@any:mitch.pro",
+            "any",
+            Some(&content_room)
+        ));
 
         let content_plain = json!({
             "body": "Just talking about random things"
         });
-        assert!(!check_user_is_mentioned("@target:mitch.pro", "target", Some(&content_plain)));
+        assert!(!check_user_is_mentioned(
+            "@target:mitch.pro",
+            "target",
+            Some(&content_plain)
+        ));
     }
 
     #[tokio::test]
@@ -7001,13 +7362,24 @@ mod tests {
                 }
             }
         });
-        let _ = state.store.write_document(&settings_file, &initial_settings);
+        let _ = state
+            .store
+            .write_document(&settings_file, &initial_settings);
 
         let loaded = load_matrix_room_settings(&state, room_id);
-        let user_slow = loaded.get("userSlowmode").and_then(|v| v.as_object()).unwrap();
-        assert_eq!(user_slow.get("@chatter:mitch.pro").and_then(|v| v.as_i64()), Some(15));
+        let user_slow = loaded
+            .get("userSlowmode")
+            .and_then(|v| v.as_object())
+            .unwrap();
+        assert_eq!(
+            user_slow.get("@chatter:mitch.pro").and_then(|v| v.as_i64()),
+            Some(15)
+        );
 
-        let banned = loaded.get("bannedUsers").and_then(|v| v.as_object()).unwrap();
+        let banned = loaded
+            .get("bannedUsers")
+            .and_then(|v| v.as_object())
+            .unwrap();
         assert!(banned.contains_key("@spammer:mitch.pro"));
 
         // 2. Slowmode tracking respects individual sender
@@ -7033,11 +7405,19 @@ mod tests {
 
         let updated = load_matrix_room_settings(&state, room_id);
         assert_eq!(
-            updated.get("userSlowmode").and_then(|v| v.as_object()).unwrap().get("@chatter:mitch.pro"),
+            updated
+                .get("userSlowmode")
+                .and_then(|v| v.as_object())
+                .unwrap()
+                .get("@chatter:mitch.pro"),
             None
         );
         assert_eq!(
-            updated.get("bannedUsers").and_then(|v| v.as_object()).unwrap().get("@spammer:mitch.pro"),
+            updated
+                .get("bannedUsers")
+                .and_then(|v| v.as_object())
+                .unwrap()
+                .get("@spammer:mitch.pro"),
             None
         );
     }
@@ -7092,7 +7472,12 @@ mod tests {
         assert!(resolved.contains(&"@longtran:mitch.pro".to_string()));
         assert!(resolved.contains(&"@long.tran:mitch.pro".to_string()));
 
-        let resolved_emails = resolve_all_emails_for_target(&state.store, &state.data_dir(), &state.id_secret, "Long Tran");
+        let resolved_emails = resolve_all_emails_for_target(
+            &state.store,
+            state.data_dir(),
+            &state.id_secret,
+            "Long Tran",
+        );
         assert!(resolved_emails.contains(&"long.tran@student.rjuhsd.us".to_string()));
 
         // 3. Populate matrix_room_settings.json with banned entry under "Long Tran" and "@longtran:mitch.pro"
@@ -7111,15 +7496,30 @@ mod tests {
         let _ = state.store.write_document(&settings_file, &settings);
 
         // Also blacklist them.
-        mitch_lib::bans::blacklist_insert(&state.store, "long.tran@student.rjuhsd.us", "banned", "admin");
+        mitch_lib::bans::blacklist_insert(
+            &state.store,
+            "long.tran@student.rjuhsd.us",
+            "banned",
+            "admin",
+        );
 
         // 4. Perform unban
-        unban_matrix_user_from_room(&state.id_secret, &state.store, &state.data_dir(), "!general:mitch.pro", "@longtran:mitch.pro").await;
+        unban_matrix_user_from_room(
+            &state.id_secret,
+            &state.store,
+            state.data_dir(),
+            "!general:mitch.pro",
+            "@longtran:mitch.pro",
+        )
+        .await;
 
         let loaded_settings = state.store.read_document(&settings_file, json!({}));
         let room = loaded_settings.get("!general:mitch.pro").unwrap();
         let banned_users = room.get("bannedUsers").and_then(|v| v.as_object()).unwrap();
-        assert!(banned_users.is_empty(), "bannedUsers should be cleaned: {banned_users:?}");
+        assert!(
+            banned_users.is_empty(),
+            "bannedUsers should be cleaned: {banned_users:?}"
+        );
 
         // 5. Test mod_unban HTTP handler with staff authentication
         let admins_file = state.store.base_dir.join("data/admins.json");
@@ -7144,17 +7544,28 @@ mod tests {
         let unban_body = serde_json::to_vec(&json!({
             "userId": "Long Tran",
             "roomId": "all"
-        })).unwrap();
+        }))
+        .unwrap();
 
         let resp = mod_unban(&state, &headers, &unban_body).await;
         assert_eq!(resp.status(), StatusCode::OK);
 
         assert!(
-            mitch_lib::bans::blacklist_get(&state.store, "long.tran@student.rjuhsd.us", "long.tran@student.rjuhsd.us").is_none(),
+            mitch_lib::bans::blacklist_get(
+                &state.store,
+                "long.tran@student.rjuhsd.us",
+                "long.tran@student.rjuhsd.us"
+            )
+            .is_none(),
             "Blacklist must be lifted"
         );
         assert!(
-            mitch_lib::bans::blacklist_get(&state.store, "longtran@student.rjuhsd.us", "longtran@student.rjuhsd.us").is_none(),
+            mitch_lib::bans::blacklist_get(
+                &state.store,
+                "longtran@student.rjuhsd.us",
+                "longtran@student.rjuhsd.us"
+            )
+            .is_none(),
             "Blacklist must be lifted"
         );
 
@@ -7178,7 +7589,10 @@ mod tests {
         let gif = sample_gif("abc");
         apply_gif_favorite_action(&mut list, "abc", "add", Some(&gif)).unwrap();
         assert_eq!(list.len(), 1);
-        assert_eq!(list[0].get("url").unwrap().as_str().unwrap(), "https://example.com/abc.gif");
+        assert_eq!(
+            list[0].get("url").unwrap().as_str().unwrap(),
+            "https://example.com/abc.gif"
+        );
 
         apply_gif_favorite_action(&mut list, "abc", "remove", None).unwrap();
         assert!(list.is_empty());
@@ -7226,9 +7640,16 @@ mod tests {
         let (state, _dir) = test_state();
         let headers = HeaderMap::new();
 
-        let resp = handle_api(&state, &Method::GET, "/api/matrix/gifs/favorites", &headers, "", &[])
-            .await
-            .unwrap();
+        let resp = handle_api(
+            &state,
+            &Method::GET,
+            "/api/matrix/gifs/favorites",
+            &headers,
+            "",
+            &[],
+        )
+        .await
+        .unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 
         let body = serde_json::to_vec(&json!({ "action": "add", "gif": sample_gif("x") })).unwrap();

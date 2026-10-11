@@ -545,7 +545,9 @@ impl DataStore {
 
         if let Some(map) = codes.as_object() {
             for (email, code_val) in map {
-                let Some(code) = code_val.as_str() else { continue };
+                let Some(code) = code_val.as_str() else {
+                    continue;
+                };
                 let _ = conn.execute(
                     "INSERT OR IGNORE INTO invite_codes (email, code, created_at) VALUES (?1, ?2, ?3)",
                     rusqlite::params![email, code.trim().to_uppercase(), now],
@@ -569,9 +571,13 @@ impl DataStore {
 
         if let Some(map) = sent.as_object() {
             for (sender, recipients) in map {
-                let Some(arr) = recipients.as_array() else { continue };
+                let Some(arr) = recipients.as_array() else {
+                    continue;
+                };
                 for recipient in arr {
-                    let Some(recipient) = recipient.as_str() else { continue };
+                    let Some(recipient) = recipient.as_str() else {
+                        continue;
+                    };
                     let _ = conn.execute(
                         "INSERT OR IGNORE INTO invite_sent (sender_email, recipient_email, sent_at) VALUES (?1, ?2, ?3)",
                         rusqlite::params![sender, recipient, now],
@@ -598,7 +604,12 @@ impl DataStore {
             ("richard", "richard_sessions.json"),
         ]
         .into_iter()
-        .map(|(game, file)| (game, self.read_document(&self.data_dir.join(file), Value::Null)))
+        .map(|(game, file)| {
+            (
+                game,
+                self.read_document(&self.data_dir.join(file), Value::Null),
+            )
+        })
         .collect();
 
         let conn = self.conn();
@@ -642,7 +653,12 @@ impl DataStore {
             ("pickle", "pickle_dm_cleared.json"),
         ]
         .into_iter()
-        .map(|(store, file)| (store, self.read_document(&self.data_dir.join(file), Value::Null)))
+        .map(|(store, file)| {
+            (
+                store,
+                self.read_document(&self.data_dir.join(file), Value::Null),
+            )
+        })
         .collect();
 
         let conn = self.conn();
@@ -697,7 +713,9 @@ impl DataStore {
         let Some(map) = doc.as_object() else { return };
         let conn = self.conn();
         for (email, notices) in map {
-            let Some(arr) = notices.as_array() else { continue };
+            let Some(arr) = notices.as_array() else {
+                continue;
+            };
             for notice in arr {
                 let Some(id) = notice.get("id").and_then(|v| v.as_str()) else {
                     continue;
@@ -705,7 +723,10 @@ impl DataStore {
                 let kind = notice.get("kind").and_then(|v| v.as_str()).unwrap_or("");
                 let batch_id = notice.get("batchId").and_then(|v| v.as_str()).unwrap_or("");
                 let ts = notice.get("ts").and_then(|v| v.as_i64()).unwrap_or(now);
-                let read = notice.get("read").and_then(|v| v.as_bool()).unwrap_or(false);
+                let read = notice
+                    .get("read")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
                 let data_str = serde_json::to_string(notice).unwrap_or_else(|_| "{}".to_string());
                 let _ = conn.execute(
                     "INSERT OR IGNORE INTO coin_gift_notices (id, email, kind, batch_id, ts, read, data, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -770,7 +791,9 @@ impl DataStore {
         for (email, list) in map {
             let Some(arr) = list.as_array() else { continue };
             for ach_id in arr {
-                let Some(ach_id) = ach_id.as_str() else { continue };
+                let Some(ach_id) = ach_id.as_str() else {
+                    continue;
+                };
                 let _ = conn.execute(
                     "INSERT OR IGNORE INTO achievements (email, achievement_id, earned_at) VALUES (?1, ?2, ?3)",
                     rusqlite::params![email, ach_id, now],

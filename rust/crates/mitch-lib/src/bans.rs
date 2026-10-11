@@ -34,11 +34,17 @@ pub fn blacklist_insert(store: &DataStore, email: &str, reason: &str, banned_by:
 pub fn blacklist_remove(store: &DataStore, norm_email: &str, raw_email: &str) -> bool {
     let conn = store.conn();
     let removed_norm = conn
-        .execute("DELETE FROM blacklist WHERE email = ?1", rusqlite::params![norm_email])
+        .execute(
+            "DELETE FROM blacklist WHERE email = ?1",
+            rusqlite::params![norm_email],
+        )
         .unwrap_or(0);
     let removed_raw = if raw_email != norm_email {
-        conn.execute("DELETE FROM blacklist WHERE email = ?1", rusqlite::params![raw_email])
-            .unwrap_or(0)
+        conn.execute(
+            "DELETE FROM blacklist WHERE email = ?1",
+            rusqlite::params![raw_email],
+        )
+        .unwrap_or(0)
     } else {
         0
     };
@@ -100,8 +106,11 @@ pub fn banned_ips_insert(store: &DataStore, ip: &str, reason: &str, banned_by: &
 
 pub fn banned_ips_remove(store: &DataStore, ip: &str) -> bool {
     let conn = store.conn();
-    conn.execute("DELETE FROM banned_ips WHERE ip = ?1", rusqlite::params![ip])
-        .unwrap_or(0)
+    conn.execute(
+        "DELETE FROM banned_ips WHERE ip = ?1",
+        rusqlite::params![ip],
+    )
+    .unwrap_or(0)
         > 0
 }
 
@@ -120,12 +129,11 @@ pub fn banned_ips_remove_for_account(
         Ok(s) => s,
         Err(_) => return Vec::new(),
     };
-    let rows: Vec<(String, String)> = match stmt.query_map([], |r| {
-        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
-    }) {
-        Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
-        Err(_) => return Vec::new(),
-    };
+    let rows: Vec<(String, String)> =
+        match stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))) {
+            Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
+            Err(_) => return Vec::new(),
+        };
     let to_remove: Vec<String> = rows
         .into_iter()
         .filter(|(ip, email)| {
@@ -134,7 +142,10 @@ pub fn banned_ips_remove_for_account(
         .map(|(ip, _)| ip)
         .collect();
     for ip in &to_remove {
-        let _ = conn.execute("DELETE FROM banned_ips WHERE ip = ?1", rusqlite::params![ip]);
+        let _ = conn.execute(
+            "DELETE FROM banned_ips WHERE ip = ?1",
+            rusqlite::params![ip],
+        );
     }
     to_remove
 }
@@ -180,7 +191,11 @@ mod tests {
         let entry = blacklist_get(&store, "person@gmail.com", "person@gmail.com").unwrap();
         assert_eq!(entry.get("reason").unwrap(), "spamming");
         assert_eq!(entry.get("by").unwrap(), "admin@mitch.pro");
-        assert!(blacklist_remove(&store, "person@gmail.com", "person@gmail.com"));
+        assert!(blacklist_remove(
+            &store,
+            "person@gmail.com",
+            "person@gmail.com"
+        ));
         assert!(blacklist_get(&store, "person@gmail.com", "person@gmail.com").is_none());
     }
 
@@ -196,7 +211,13 @@ mod tests {
     #[test]
     fn banned_ips_insert_then_get_then_remove() {
         let store = temp_store("ip-basic");
-        banned_ips_insert(&store, "1.2.3.4", "abuse", "admin@mitch.pro", "person@gmail.com");
+        banned_ips_insert(
+            &store,
+            "1.2.3.4",
+            "abuse",
+            "admin@mitch.pro",
+            "person@gmail.com",
+        );
         let entry = banned_ips_get(&store, "1.2.3.4").unwrap();
         assert_eq!(entry.get("reason").unwrap(), "abuse");
         assert!(banned_ips_remove(&store, "1.2.3.4"));
