@@ -25,6 +25,7 @@ pub mod chat;
 pub mod coins;
 pub mod config;
 pub mod crypto;
+pub mod daily_logins;
 pub mod data;
 pub mod dm;
 pub mod e2e;

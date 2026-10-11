@@ -301,7 +301,7 @@ pub fn premium_discount_for(item: &Value) -> f64 {
 /// `shopCostFor` (server.js:7435-7462) — streak-freeze ladder + premium
 /// discount. `daily_logins` is read from the store (JS uses its in-memory
 /// `dailyLogins` cache; same values, single-instance assumption preserved).
-pub fn shop_cost_for(store: &DataStore, data_dir: &Path, item: &Value, email: &str) -> i64 {
+pub fn shop_cost_for(store: &DataStore, item: &Value, email: &str) -> i64 {
     if item.is_null() {
         return 0;
     }
@@ -309,11 +309,7 @@ pub fn shop_cost_for(store: &DataStore, data_dir: &Path, item: &Value, email: &s
     let id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");
     if id == "streak_freeze" && !email.is_empty() {
         let norm = auth::normalize_email(email);
-        let daily = store
-            .read_document(&data_dir.join("daily_logins.json"), json!({}))
-            .get(norm.as_str())
-            .cloned()
-            .unwrap_or(json!({}));
+        let daily = crate::daily_logins::daily_login_get(store, &norm).unwrap_or(json!({}));
         let freezes = daily
             .get("streakFreezes")
             .and_then(|v| v.as_i64())
@@ -337,12 +333,7 @@ pub fn shop_cost_for(store: &DataStore, data_dir: &Path, item: &Value, email: &s
 
 /// `shopItemsFor` (server.js:7435 area): catalog filtered for non-admins,
 /// each item decorated with tier/perk/originalCost/cost/discountPct.
-pub fn shop_items_for(
-    store: &DataStore,
-    data_dir: &Path,
-    catalog: &[Value],
-    email: &str,
-) -> Vec<Value> {
+pub fn shop_items_for(store: &DataStore, catalog: &[Value], email: &str) -> Vec<Value> {
     let premium = auth::is_premium_email(store, email);
     let admin = auth::is_admin_email(store, email);
     catalog
@@ -362,7 +353,7 @@ pub fn shop_items_for(
                 obj.insert("originalCost".into(), json!(shop_base_cost_for(item)));
                 obj.insert(
                     "cost".into(),
-                    json!(shop_cost_for(store, data_dir, item, email)),
+                    json!(shop_cost_for(store, item, email)),
                 );
                 let discount_pct =
                     if premium && item.get("type").and_then(|v| v.as_str()) != Some("premium") {
@@ -488,11 +479,7 @@ pub fn build_inventory(
         .get(norm.as_str())
         .cloned()
         .unwrap_or(json!({}));
-    let daily = store
-        .read_document(&data_dir.join("daily_logins.json"), json!({}))
-        .get(norm.as_str())
-        .cloned()
-        .unwrap_or(json!({}));
+    let daily = crate::daily_logins::daily_login_get(store, &norm).unwrap_or(json!({}));
     let entry = cosm.get(norm.as_str()).cloned().unwrap_or(json!({}));
     let user_cosm = sanitize_cosmetics_for_email(store, email, &entry);
     let ai: Vec<Value> = unlocked_ai

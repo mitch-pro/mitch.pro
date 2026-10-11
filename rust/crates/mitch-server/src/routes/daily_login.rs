@@ -95,12 +95,7 @@ fn daily_login_state(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     };
 
     let norm = auth::normalize_email(&email);
-    let daily_file = state.data_dir().join("daily_logins.json");
-    let daily_logins = state.store.read_document(&daily_file, json!({}));
-    let data = daily_logins
-        .get(norm.as_str())
-        .cloned()
-        .unwrap_or(json!({}));
+    let data = mitch_lib::daily_logins::daily_login_get(&state.store, &norm).unwrap_or(json!({}));
 
     let last_claim_date = data
         .get("lastClaimDate")
@@ -199,12 +194,7 @@ fn daily_login_claim(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     };
 
     let norm = auth::normalize_email(&email);
-    let daily_file = state.data_dir().join("daily_logins.json");
-    let mut daily_logins = state.store.read_document(&daily_file, json!({}));
-    let mut data = daily_logins
-        .get(norm.as_str())
-        .cloned()
-        .unwrap_or(json!({}));
+    let mut data = mitch_lib::daily_logins::daily_login_get(&state.store, &norm).unwrap_or(json!({}));
 
     let last_claim_date = data
         .get("lastClaimDate")
@@ -263,13 +253,7 @@ fn daily_login_claim(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             "streakFreezes": freezes,
         });
     }
-
-    if let Some(map) = daily_logins.as_object_mut() {
-        map.insert(norm.clone(), data);
-    } else {
-        daily_logins = json!({ norm.clone(): data });
-    }
-    let _ = state.store.write_document(&daily_file, &daily_logins);
+    mitch_lib::daily_logins::daily_login_set(&state.store, &norm, &data);
 
     let reward = get_daily_reward(streak);
 

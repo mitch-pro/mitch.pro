@@ -42,7 +42,7 @@ fn shop_items(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         String::new()
     };
     let catalog = mitch_lib::shop::load_shop_catalog(&state.store, state.data_dir());
-    let items = mitch_lib::shop::shop_items_for(&state.store, state.data_dir(), &catalog, &email);
+    let items = mitch_lib::shop::shop_items_for(&state.store, &catalog, &email);
     json_response(
         200,
         json!({
@@ -132,7 +132,7 @@ async fn shop_buy(
         return json_response(400, json!({ "error": "You already own this item." }));
     }
 
-    let cost = mitch_lib::shop::shop_cost_for(&state.store, state.data_dir(), &item, &email);
+    let cost = mitch_lib::shop::shop_cost_for(&state.store, &item, &email);
     let balance = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &email);
     if balance < cost as f64 {
         return json_response(
@@ -190,9 +190,7 @@ async fn shop_buy(
             .unwrap_or(1440.0);
         bump_stat_until(state, &norm, "vip_casino_until", minutes);
     } else if cost_type == "streak_freeze" {
-        let daily_file = data_file(state, "daily_logins.json");
-        let mut daily = state.store.read_document(&daily_file, json!({}));
-        let mut entry = daily.get(norm.as_str()).cloned().unwrap_or(json!({
+        let mut entry = mitch_lib::daily_logins::daily_login_get(&state.store, &norm).unwrap_or(json!({
             "lastClaimDate": "", "streak": 0, "streakFreezes": 0
         }));
         let freezes = entry.get("streakFreezes").and_then(|v| v.as_i64()).unwrap_or(0);
@@ -205,10 +203,7 @@ async fn shop_buy(
         if let Some(obj) = entry.as_object_mut() {
             obj.insert("streakFreezes".to_string(), json!(freezes + 1));
         }
-        if let Some(obj) = daily.as_object_mut() {
-            obj.insert(norm.clone(), entry);
-        }
-        let _ = state.store.write_document(&daily_file, &daily);
+        mitch_lib::daily_logins::daily_login_set(&state.store, &norm, &entry);
     } else if cost_type == "happy_hour_ticket" {
         let minutes = item
             .get("durationMinutes")

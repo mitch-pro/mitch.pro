@@ -279,6 +279,13 @@ impl DataStore {
                         updated_at INTEGER NOT NULL,
                         PRIMARY KEY (email, store)
                     );
+                    CREATE TABLE IF NOT EXISTS daily_logins (
+                        email TEXT PRIMARY KEY,
+                        last_claim_date TEXT NOT NULL DEFAULT '',
+                        streak INTEGER NOT NULL DEFAULT 0,
+                        streak_freezes INTEGER NOT NULL DEFAULT 0,
+                        updated_at INTEGER NOT NULL
+                    );
                     CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs (ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_level ON app_logs (level, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_category ON app_logs (category, ts DESC);
@@ -349,6 +356,7 @@ impl DataStore {
         store.backfill_mini_game_sessions_from_json();
         store.backfill_e2e_keys_from_json();
         store.backfill_dm_cleared_from_json();
+        store.backfill_daily_logins_from_json();
         Ok(store)
     }
 
@@ -615,6 +623,32 @@ impl DataStore {
                     rusqlite::params![email, store, data_str, now],
                 );
             }
+        }
+    }
+
+    /// One-time (idempotent) backfill from daily_logins.json into the real
+    /// `daily_logins` table — the JSON blob's 3 fields map directly onto
+    /// real columns since every entry was always exactly this shape.
+    fn backfill_daily_logins_from_json(&self) {
+        let now = now_millis();
+        let doc = self.read_document(&self.data_dir.join("daily_logins.json"), Value::Null);
+        let Some(map) = doc.as_object() else { return };
+        let conn = self.conn();
+        for (email, info) in map {
+            let last_claim_date = info
+                .get("lastClaimDate")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let streak = info.get("streak").and_then(|v| v.as_i64()).unwrap_or(0);
+            let streak_freezes = info
+                .get("streakFreezes")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+            let _ = conn.execute(
+                "INSERT OR IGNORE INTO daily_logins (email, last_claim_date, streak, streak_freezes, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params![email, last_claim_date, streak, streak_freezes, now],
+            );
         }
     }
 
