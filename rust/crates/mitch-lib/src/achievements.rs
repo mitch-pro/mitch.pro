@@ -2,8 +2,13 @@
 //! `ACHIEVEMENT_DEFINITIONS`, `awardAchievement`, `updateStat`,
 //! `addPaintingCoin`.
 //!
-//! `user_stats.json` / `achievements.json` are `loadJson`/`saveJson` files →
-//! the SQLite-backed document layer, matching every other consumer.
+//! `user_stats.json` is still a `loadJson`/`saveJson` blob file. Earned
+//! achievements live in the real `achievements` table (one row per
+//! email+achievement_id) instead of the old achievements.json blob — the
+//! old check-then-push-then-write-the-whole-blob was racy: two concurrent
+//! stat updates crossing the same goal at once could both see "not yet
+//! earned" and double-pay the bonus. `award_achievement_once`'s
+//! `INSERT OR IGNORE` closes that window entirely.
 
 use crate::auth::normalize_email;
 use crate::coins::add_coins;
@@ -248,8 +253,43 @@ pub const ACHIEVEMENT_DEFINITIONS: &[(&str, AchievementDef)] = &[
 fn user_stats_file(data_dir: &Path) -> std::path::PathBuf {
     data_dir.join("user_stats.json")
 }
-fn achievements_file(data_dir: &Path) -> std::path::PathBuf {
-    data_dir.join("achievements.json")
+
+/// Every achievement id a user has earned (was achievements.json[norm]).
+pub fn achievements_for(store: &DataStore, norm_email: &str) -> Vec<String> {
+    let conn = store.conn();
+    let mut stmt = match conn
+        .prepare("SELECT achievement_id FROM achievements WHERE email = ?1")
+    {
+        Ok(s) => s,
+        Err(_) => return Vec::new(),
+    };
+    let result = match stmt.query_map(rusqlite::params![norm_email], |r| r.get::<_, String>(0)) {
+        Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
+        Err(_) => Vec::new(),
+    };
+    result
+}
+
+/// Atomically records one earned achievement if the user doesn't already
+/// have it. Returns `true` only the first time — callers should only pay
+/// the bonus when this returns `true`.
+fn award_achievement_once(store: &DataStore, norm_email: &str, ach_id: &str) -> bool {
+    let conn = store.conn();
+    let changed = conn
+        .execute(
+            "INSERT OR IGNORE INTO achievements (email, achievement_id, earned_at) VALUES (?1, ?2, ?3)",
+            rusqlite::params![norm_email, ach_id, now_millis()],
+        )
+        .unwrap_or(0);
+    changed > 0
+}
+
+pub fn rename_achievements_email(store: &DataStore, old_norm: &str, new_norm: &str) {
+    let conn = store.conn();
+    let _ = conn.execute(
+        "UPDATE achievements SET email = ?2 WHERE email = ?1",
+        rusqlite::params![old_norm, new_norm],
+    );
 }
 
 /// `updateStat(email, key, inc = 1)` (server.js:3406-3420) — increments the
@@ -309,23 +349,9 @@ pub fn award_achievement(
         return false;
     }
     let norm = normalize_email(email);
-    let mut achs: Map<String, Value> = store
-        .read_document(&achievements_file(data_dir), json!({}))
-        .as_object()
-        .cloned()
-        .unwrap_or_default();
-    let list = achs.entry(norm.clone()).or_insert_with(|| json!([]));
-    let already = list
-        .as_array()
-        .map(|a| a.iter().any(|v| v.as_str() == Some(ach_id)))
-        .unwrap_or(false);
-    if already {
+    if !award_achievement_once(store, &norm, ach_id) {
         return false;
     }
-    if let Some(arr) = list.as_array_mut() {
-        arr.push(json!(ach_id));
-    }
-    let _ = store.write_document(&achievements_file(data_dir), &Value::Object(achs));
     if bonus > 0.0 {
         add_coins(store, data_dir, &norm, bonus, coin_multiplier, "");
     }
@@ -409,21 +435,13 @@ mod tests {
             update_stat(&store, &data_dir, "a@x.com", "pixels", 1.0, mult),
             100.0
         );
-        let achs = store.read_document(&achievements_file(&data_dir), json!({}));
-        assert_eq!(
-            achs.get("a@x.com").and_then(|v| v.as_array()).map(Vec::len),
-            Some(1)
-        );
+        assert_eq!(achievements_for(&store, "a@x.com").len(), 1);
         // 900 more crosses painter_2; painter_1 is not re-awarded.
         assert_eq!(
             update_stat(&store, &data_dir, "a@x.com", "pixels", 900.0, mult),
             1000.0
         );
-        let achs = store.read_document(&achievements_file(&data_dir), json!({}));
-        assert_eq!(
-            achs.get("a@x.com").and_then(|v| v.as_array()).map(Vec::len),
-            Some(2)
-        );
+        assert_eq!(achievements_for(&store, "a@x.com").len(), 2);
         // Empty email is a 0 no-op.
         assert_eq!(update_stat(&store, &data_dir, "", "pixels", 1.0, mult), 0.0);
     }
@@ -446,5 +464,26 @@ mod tests {
         add_painting_coin(&store, &data_dir, "", mult);
         let coins = crate::coins::load_coins(&store, &data_dir);
         assert_eq!(coins.as_object().map(Map::len), Some(1));
+    }
+
+    #[test]
+    fn award_achievement_pays_bonus_exactly_once() {
+        let (store, data_dir) = fresh_store("award-once");
+        assert!(award_achievement(&store, &data_dir, "b@x.com", "painter_1", 100.0, 1.0));
+        assert_eq!(crate::coins::get_coins(&store, &data_dir, "b@x.com"), 100.0);
+        // Re-awarding the same id is a no-op — no second payout.
+        assert!(!award_achievement(&store, &data_dir, "b@x.com", "painter_1", 100.0, 1.0));
+        assert_eq!(crate::coins::get_coins(&store, &data_dir, "b@x.com"), 100.0);
+        assert_eq!(achievements_for(&store, "b@x.com"), vec!["painter_1".to_string()]);
+    }
+
+    #[test]
+    fn rename_moves_every_achievement() {
+        let (store, data_dir) = fresh_store("ach-rename");
+        award_achievement(&store, &data_dir, "old@x.com", "painter_1", 0.0, 1.0);
+        award_achievement(&store, &data_dir, "old@x.com", "chess_win_1", 0.0, 1.0);
+        rename_achievements_email(&store, "old@x.com", "new@x.com");
+        assert!(achievements_for(&store, "old@x.com").is_empty());
+        assert_eq!(achievements_for(&store, "new@x.com").len(), 2);
     }
 }

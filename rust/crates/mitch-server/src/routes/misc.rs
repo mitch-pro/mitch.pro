@@ -614,12 +614,7 @@ fn me_coins(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     };
     let norm = mitch_lib::auth::normalize_email(&email);
     let coins = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &email);
-    let achievements = state
-        .store
-        .read_document(&state.data_dir().join("achievements.json"), json!({}))
-        .get(norm.as_str())
-        .cloned()
-        .unwrap_or(json!([]));
+    let achievements = json!(mitch_lib::achievements::achievements_for(&state.store, &norm));
     let stats = state
         .store
         .read_document(&state.data_dir().join("user_stats.json"), json!({}))

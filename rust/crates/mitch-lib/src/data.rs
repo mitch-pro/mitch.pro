@@ -306,6 +306,12 @@ impl DataStore {
                         data TEXT NOT NULL,
                         updated_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS achievements (
+                        email TEXT NOT NULL,
+                        achievement_id TEXT NOT NULL,
+                        earned_at INTEGER NOT NULL,
+                        PRIMARY KEY (email, achievement_id)
+                    );
                     CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs (ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_level ON app_logs (level, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_category ON app_logs (category, ts DESC);
@@ -382,6 +388,7 @@ impl DataStore {
         store.backfill_coin_gift_notices_from_json();
         store.backfill_push_subs_from_json();
         store.backfill_cosmetics_from_json();
+        store.backfill_achievements_from_json();
         Ok(store)
     }
 
@@ -749,6 +756,26 @@ impl DataStore {
                 "INSERT OR IGNORE INTO cosmetics (email, data, updated_at) VALUES (?1, ?2, ?3)",
                 rusqlite::params![email, data_str, now],
             );
+        }
+    }
+
+    /// One-time (idempotent) backfill from achievements.json into the real
+    /// `achievements` table — one row per (email, achievement_id) instead
+    /// of one row per email holding an array.
+    fn backfill_achievements_from_json(&self) {
+        let now = now_millis();
+        let doc = self.read_document(&self.data_dir.join("achievements.json"), Value::Null);
+        let Some(map) = doc.as_object() else { return };
+        let conn = self.conn();
+        for (email, list) in map {
+            let Some(arr) = list.as_array() else { continue };
+            for ach_id in arr {
+                let Some(ach_id) = ach_id.as_str() else { continue };
+                let _ = conn.execute(
+                    "INSERT OR IGNORE INTO achievements (email, achievement_id, earned_at) VALUES (?1, ?2, ?3)",
+                    rusqlite::params![email, ach_id, now],
+                );
+            }
         }
     }
 

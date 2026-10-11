@@ -122,10 +122,7 @@ fn get_public_profile(state: &Arc<AppState>, headers: &HeaderMap, slug_raw: &str
         .store
         .read_document(&data_file(state, "user_stats.json"), json!({}));
     let stats = user_stats.get(&norm).cloned().unwrap_or(json!({}));
-    let achievements_doc = state
-        .store
-        .read_document(&data_file(state, "achievements.json"), json!({}));
-    let achievements = achievements_doc.get(&norm).cloned().unwrap_or(json!([]));
+    let achievements = json!(mitch_lib::achievements::achievements_for(&state.store, &norm));
     let coins = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &actual_email);
     let user_cosm = mitch_lib::shop::cosmetics_get(&state.store, &norm).unwrap_or(json!({}));
 
@@ -231,10 +228,7 @@ fn get_profile(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         .store
         .read_document(&data_file(state, "user_stats.json"), json!({}));
     let stats = user_stats.get(&norm).cloned().unwrap_or(json!({}));
-    let achievements_doc = state
-        .store
-        .read_document(&data_file(state, "achievements.json"), json!({}));
-    let achievements = achievements_doc.get(&norm).cloned().unwrap_or(json!([]));
+    let achievements = json!(mitch_lib::achievements::achievements_for(&state.store, &norm));
     let coins = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &email);
     let user_cosm = mitch_lib::shop::cosmetics_get(&state.store, &norm).unwrap_or(json!({}));
 
@@ -1053,10 +1047,11 @@ pub(crate) fn rename_email_references(
     new_email: &str,
 ) {
     // coins, the invite system, mini-game sessions, e2e keys, dm_cleared,
-    // daily_logins, coin_gift_notices, and push_subs are real tables now,
-    // not JSON blob keys to rename in the generic loop below — they need
-    // their own UPDATEs. (The old loop only ever covered piccolo_sessions
-    // anyway — typing/piano/logic renames were silently dropped before.)
+    // daily_logins, coin_gift_notices, push_subs, cosmetics, and
+    // achievements are real tables now, not JSON blob keys to rename in
+    // the generic loop below — they need their own UPDATEs. (The old loop
+    // only ever covered piccolo_sessions anyway — typing/piano/logic
+    // renames were silently dropped before.)
     mitch_lib::coins::rename_coins_email(&state.store, old_norm, new_norm);
     mitch_lib::invites::rename_invite_email(&state.store, old_norm, new_norm);
     mitch_lib::minigames::rename_mini_sessions_email(&state.store, old_norm, new_norm);
@@ -1066,11 +1061,11 @@ pub(crate) fn rename_email_references(
     mitch_lib::coins::rename_coin_gift_notices_email(&state.store, old_norm, new_norm);
     mitch_lib::push_subs::rename_push_sub_email(&state.store, old_norm, new_norm);
     mitch_lib::shop::rename_cosmetics_email(&state.store, old_norm, new_norm);
+    mitch_lib::achievements::rename_achievements_email(&state.store, old_norm, new_norm);
     let key_maps = [
         "passwords.json",
         "profiles.json",
         "user_stats.json",
-        "achievements.json",
         "premium_gifts_sent.json",
         "sebastians_claims.json",
     ];
