@@ -434,10 +434,10 @@ fn inbox_inner(
                     }
                     at.unwrap_or(0.0)
                 };
-                let from_me = m.get("from").map(&is_me_ref).unwrap_or(false);
-                let to_me = m.get("to").map(&is_me_ref).unwrap_or(false);
-                let from_peer = m.get("from").map(&is_peer_ref).unwrap_or(false);
-                let to_peer = m.get("to").map(&is_peer_ref).unwrap_or(false);
+                let from_me = m.get("from").map(is_me_ref).unwrap_or(false);
+                let to_me = m.get("to").map(is_me_ref).unwrap_or(false);
+                let from_peer = m.get("from").map(is_peer_ref).unwrap_or(false);
+                let to_peer = m.get("to").map(is_peer_ref).unwrap_or(false);
                 return ((from_me && to_peer) || (from_peer && to_me)) && ts > cleared_at;
             }
             // general inbox: my DMs + group messages for my groups
@@ -450,7 +450,7 @@ fn inbox_inner(
                     cleared_lookup(&my_cleared, &concat_key("group:", Some(&gid))).unwrap_or(0.0);
                 return ts > cleared_at;
             }
-            let from_me = m.get("from").map(&is_me_ref).unwrap_or(false);
+            let from_me = m.get("from").map(is_me_ref).unwrap_or(false);
             let peer = if from_me {
                 resolve_of(m.get("to"))
             } else {
@@ -472,7 +472,7 @@ fn inbox_inner(
                 }
                 at.unwrap_or(0.0)
             };
-            let to_me = m.get("to").map(&is_me_ref).unwrap_or(false);
+            let to_me = m.get("to").map(is_me_ref).unwrap_or(false);
             (from_me || to_me) && ts > cleared_at
         })
         .cloned()
