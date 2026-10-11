@@ -312,6 +312,11 @@ impl DataStore {
                         earned_at INTEGER NOT NULL,
                         PRIMARY KEY (email, achievement_id)
                     );
+                    CREATE TABLE IF NOT EXISTS passwords (
+                        email TEXT PRIMARY KEY,
+                        hash TEXT NOT NULL,
+                        updated_at INTEGER NOT NULL
+                    );
                     CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs (ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_level ON app_logs (level, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_category ON app_logs (category, ts DESC);
@@ -389,6 +394,7 @@ impl DataStore {
         store.backfill_push_subs_from_json();
         store.backfill_cosmetics_from_json();
         store.backfill_achievements_from_json();
+        store.backfill_passwords_from_json();
         Ok(store)
     }
 
@@ -799,6 +805,22 @@ impl DataStore {
                     rusqlite::params![email, ach_id, now],
                 );
             }
+        }
+    }
+
+    /// One-time (idempotent) backfill from passwords.json into the real
+    /// `passwords` table (one row per email, hash kept as-is).
+    fn backfill_passwords_from_json(&self) {
+        let now = now_millis();
+        let doc = self.read_document(&self.data_dir.join("passwords.json"), Value::Null);
+        let Some(map) = doc.as_object() else { return };
+        let conn = self.conn();
+        for (email, hash) in map {
+            let Some(hash) = hash.as_str() else { continue };
+            let _ = conn.execute(
+                "INSERT OR IGNORE INTO passwords (email, hash, updated_at) VALUES (?1, ?2, ?3)",
+                rusqlite::params![email, hash, now],
+            );
         }
     }
 

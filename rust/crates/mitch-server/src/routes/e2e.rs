@@ -503,15 +503,11 @@ fn verify_password(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]
             json!({ "success": false, "message": "Password required" }),
         );
     }
-    let passwords: Value = state
-        .store
-        .read_document(&data_file(state, "passwords.json"), json!({}));
-    let stored = passwords
-        .get(auth::normalize_email(&email).as_str())
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let stored =
+        mitch_lib::passwords::password_hash_get(&state.store, &auth::normalize_email(&email))
+            .unwrap_or_default();
     // `!stored || !(await Bun.password.verify(...))` → 401 Incorrect password.
-    if stored.is_empty() || !mitch_lib::crypto::argon2_verify(stored, &password) {
+    if stored.is_empty() || !mitch_lib::crypto::argon2_verify(&stored, &password) {
         return json_response(
             401,
             json!({ "success": false, "message": "Incorrect password" }),

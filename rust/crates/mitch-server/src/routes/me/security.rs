@@ -178,14 +178,11 @@ fn disable_2fa(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) ->
         return Some(json_response(400, json!({ "error": "bad json" })));
     };
     let norm = auth::normalize_email(&email);
-    let passwords = state
-        .store
-        .read_document(&data_file(state, "passwords.json"), json!({}));
-    let stored = passwords.get(&norm).and_then(|v| v.as_str()).unwrap_or("");
+    let stored = mitch_lib::passwords::password_hash_get(&state.store, &norm).unwrap_or_default();
     let password = jsval::string(&jsval::or(body.get("password"), json!("")));
     // JS: try { ok = await Bun.password.verify(String(body.password || ''), stored); } catch {}
     // A missing/empty stored hash throws → ok stays false.
-    let ok = !stored.is_empty() && mitch_lib::crypto::argon2_verify(stored, &password);
+    let ok = !stored.is_empty() && mitch_lib::crypto::argon2_verify(&stored, &password);
     if !ok {
         return Some(json_response(401, json!({ "error": "password incorrect" })));
     }

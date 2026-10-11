@@ -132,12 +132,9 @@ pub(crate) fn resolve_login_identifier(state: &AppState, input: &str) -> Option<
     if ident.is_empty() {
         return None;
     }
-    let passwords = state
-        .store
-        .read_document(&data_file(state, "passwords.json"), json!({}));
     if ident.contains('@') {
         let norm = auth::normalize_email(&ident);
-        if passwords.get(&norm).is_some() {
+        if mitch_lib::passwords::password_exists(&state.store, &norm) {
             return Some(norm);
         }
         return None;
@@ -153,7 +150,7 @@ pub(crate) fn resolve_login_identifier(state: &AppState, input: &str) -> Option<
                 .unwrap_or("")
                 .trim()
                 .to_lowercase();
-            if u == ident && passwords.get(norm_email).is_some() {
+            if u == ident && mitch_lib::passwords::password_exists(&state.store, norm_email) {
                 return Some(norm_email.clone());
             }
         }
@@ -299,10 +296,7 @@ async fn signup(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -
     }
 
     // Existing account check
-    let passwords = state
-        .store
-        .read_document(&data_file(state, "passwords.json"), json!({}));
-    if passwords.get(&norm_email).is_some() {
+    if mitch_lib::passwords::password_exists(&state.store, &norm_email) {
         return json_resp(
             400,
             json!({ "success": false, "message": "Account already exists. Please log in." }),
@@ -450,15 +444,7 @@ async fn verify_signup(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &
     }
 
     let hash = entry_val.get("hash").and_then(|v| v.as_str()).unwrap_or("");
-    let mut passwords = state
-        .store
-        .read_document(&data_file(state, "passwords.json"), json!({}));
-    if let Some(map) = passwords.as_object_mut() {
-        map.insert(norm_email.clone(), json!(hash));
-        let _ = state
-            .store
-            .write_document(&data_file(state, "passwords.json"), &passwords);
-    }
+    mitch_lib::passwords::password_set(&state.store, &norm_email, hash);
 
     let raw_email = entry_val
         .get("email")
@@ -639,18 +625,15 @@ async fn login(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) ->
         );
     };
 
-    let passwords = state
-        .store
-        .read_document(&data_file(state, "passwords.json"), json!({}));
-    let Some(stored_val) = passwords.get(&norm_email) else {
+    let Some(stored_hash) = mitch_lib::passwords::password_hash_get(&state.store, &norm_email)
+    else {
         return json_resp(
             401,
             json!({ "success": false, "message": "Invalid email/username or password." }),
         );
     };
-    let stored_hash = stored_val.as_str().unwrap_or("");
 
-    if !crypto::argon2_verify(stored_hash, &password) {
+    if !crypto::argon2_verify(&stored_hash, &password) {
         return json_resp(
             401,
             json!({ "success": false, "message": "Invalid email/username or password." }),
@@ -863,10 +846,7 @@ async fn request_access(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: 
     }
 
     let norm_email = auth::normalize_email(&email);
-    let passwords = state
-        .store
-        .read_document(&data_file(state, "passwords.json"), json!({}));
-    if passwords.get(&norm_email).is_none() {
+    if !mitch_lib::passwords::password_exists(&state.store, &norm_email) {
         return json_resp(
             400,
             json!({ "success": false, "message": "Account not found." }),
@@ -1011,15 +991,7 @@ async fn claim_token(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u
             return json_resp(400, json!({ "success": false, "message": pwd_err }));
         }
         let hash = crypto::argon2_hash(&new_password);
-        let mut passwords = state
-            .store
-            .read_document(&data_file(state, "passwords.json"), json!({}));
-        if let Some(map) = passwords.as_object_mut() {
-            map.insert(norm_email.clone(), json!(hash));
-            let _ = state
-                .store
-                .write_document(&data_file(state, "passwords.json"), &passwords);
-        }
+        mitch_lib::passwords::password_set(&state.store, &norm_email, &hash);
         auth::rotate_session_generation(&state.store, &norm_email);
         if two_factor_config(state, &norm_email).type_ == "totp" {
             save_two_factor_config(
@@ -1909,10 +1881,7 @@ mod tests {
         assert_eq!(resp_good.status(), StatusCode::OK);
 
         // Verify passwords and tokens
-        let passwords = state
-            .store
-            .read_document(&data_file(&state, "passwords.json"), json!({}));
-        assert!(passwords.get(&norm).is_some());
+        assert!(mitch_lib::passwords::password_exists(&state.store, &norm));
     }
 
     #[tokio::test]
@@ -1923,12 +1892,7 @@ mod tests {
         // Seed password
         let norm = auth::normalize_email("bob@student.rjuhsd.us");
         let hash = crypto::argon2_hash("Password123!");
-        let mut passwords = json!({});
-        passwords[norm.clone()] = json!(hash);
-        state
-            .store
-            .write_document(&data_file(&state, "passwords.json"), &passwords)
-            .unwrap();
+        mitch_lib::passwords::password_set(&state.store, &norm, &hash);
 
         let headers = HeaderMap::new();
         let login_bad = json!({
@@ -1958,12 +1922,7 @@ mod tests {
         // Seed account
         let norm = auth::normalize_email("charlie@student.rjuhsd.us");
         let hash = crypto::argon2_hash("OldPassword123!");
-        let mut passwords = json!({});
-        passwords[norm.clone()] = json!(hash);
-        state
-            .store
-            .write_document(&data_file(&state, "passwords.json"), &passwords)
-            .unwrap();
+        mitch_lib::passwords::password_set(&state.store, &norm, &hash);
 
         let headers = HeaderMap::new();
         let reset_req = json!({
@@ -2011,12 +1970,7 @@ mod tests {
 
         let norm = auth::normalize_email("dave@student.rjuhsd.us");
         let hash = crypto::argon2_hash("Password123!");
-        let mut passwords = json!({});
-        passwords[norm.clone()] = json!(hash);
-        state
-            .store
-            .write_document(&data_file(&state, "passwords.json"), &passwords)
-            .unwrap();
+        mitch_lib::passwords::password_set(&state.store, &norm, &hash);
 
         // Enable TOTP 2FA
         let totp_secret = totp::random_base32(32);

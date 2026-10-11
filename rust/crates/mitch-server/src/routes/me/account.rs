@@ -493,10 +493,7 @@ fn change_email(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -
     if old_norm == new_norm {
         return json_response(400, json!({ "error": "new email matches current email" }));
     }
-    let passwords = state
-        .store
-        .read_document(&data_file(state, "passwords.json"), json!({}));
-    if passwords.get(&new_norm).is_some() {
+    if mitch_lib::passwords::password_exists(&state.store, &new_norm) {
         return json_response(400, json!({ "error": "email already in use" }));
     }
     let code = format!("{}", (100000.0 + js_rand() * 900000.0) as i64);
@@ -659,10 +656,8 @@ async fn change_password(
         );
     }
 
-    let passwords_file = data_file(state, "passwords.json");
-    let mut passwords = state.store.read_document(&passwords_file, json!({}));
-    let stored = passwords.get(&norm).and_then(|v| v.as_str()).unwrap_or("");
-    if stored.is_empty() || !mitch_lib::crypto::argon2_verify(stored, &current_password) {
+    let stored = mitch_lib::passwords::password_hash_get(&state.store, &norm).unwrap_or_default();
+    if stored.is_empty() || !mitch_lib::crypto::argon2_verify(&stored, &current_password) {
         return json_response(
             401,
             json!({ "success": false, "message": "Current password incorrect." }),
@@ -682,13 +677,11 @@ async fn change_password(
         );
     }
 
-    if let Some(map) = passwords.as_object_mut() {
-        map.insert(
-            norm.clone(),
-            json!(mitch_lib::crypto::argon2_hash(&new_password)),
-        );
-    }
-    let _ = state.store.write_document(&passwords_file, &passwords);
+    mitch_lib::passwords::password_set(
+        &state.store,
+        &norm,
+        &mitch_lib::crypto::argon2_hash(&new_password),
+    );
     auth::rotate_session_generation(&state.store, &norm);
 
     auth_success_response(state, headers, json!({ "success": true }), &norm, &email)
@@ -1068,8 +1061,8 @@ pub(crate) fn rename_email_references(
     mitch_lib::push_subs::rename_push_sub_email(&state.store, old_norm, new_norm);
     mitch_lib::shop::rename_cosmetics_email(&state.store, old_norm, new_norm);
     mitch_lib::achievements::rename_achievements_email(&state.store, old_norm, new_norm);
+    mitch_lib::passwords::rename_password_email(&state.store, old_norm, new_norm);
     let key_maps = [
-        "passwords.json",
         "profiles.json",
         "user_stats.json",
         "premium_gifts_sent.json",

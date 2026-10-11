@@ -5309,13 +5309,8 @@ async fn translate_matrix_password(
         return (false, body_bytes.to_vec());
     }
 
-    let passwords = state
-        .store
-        .read_document(&state.data_dir().join("passwords.json"), json!({}));
-    let stored_hash = passwords
-        .get(&account.norm_email)
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let stored_hash = mitch_lib::passwords::password_hash_get(&state.store, &account.norm_email)
+        .unwrap_or_default();
     let conduit_pass = get_matrix_password_for_uid(&account.uid, &state.id_secret);
     let mut changed = false;
 
@@ -5327,7 +5322,7 @@ async fn translate_matrix_password(
         if entered == conduit_pass {
             // Already internal conduit password
         } else if !stored_hash.is_empty() {
-            let valid = mitch_lib::crypto::argon2_verify(stored_hash, &entered);
+            let valid = mitch_lib::crypto::argon2_verify(&stored_hash, &entered);
             if valid {
                 parsed["auth"]["password"] = json!(conduit_pass);
                 changed = true;
@@ -5335,14 +5330,11 @@ async fn translate_matrix_password(
                     if let Some(new_p) = parsed.get("new_password").and_then(|v| v.as_str()) {
                         let new_hash = mitch_lib::crypto::argon2_hash(new_p);
                         if !new_hash.is_empty() {
-                            let mut pw_map = passwords.clone();
-                            if let Some(obj) = pw_map.as_object_mut() {
-                                obj.insert(account.norm_email.clone(), json!(new_hash));
-                                let _ = state.store.write_document(
-                                    &state.data_dir().join("passwords.json"),
-                                    &pw_map,
-                                );
-                            }
+                            mitch_lib::passwords::password_set(
+                                &state.store,
+                                &account.norm_email,
+                                &new_hash,
+                            );
                             parsed["new_password"] = json!(conduit_pass);
                         }
                     }
@@ -5356,7 +5348,7 @@ async fn translate_matrix_password(
         if entered == conduit_pass {
             // Already internal conduit password
         } else if !stored_hash.is_empty() {
-            let valid = mitch_lib::crypto::argon2_verify(stored_hash, &entered);
+            let valid = mitch_lib::crypto::argon2_verify(&stored_hash, &entered);
             if valid {
                 parsed["password"] = json!(conduit_pass);
                 changed = true;

@@ -283,16 +283,10 @@ pub async fn handle(
             record_views.push(view);
         }
 
-        let passwords = state
-            .store
-            .read_document(&state.data_dir().join("passwords.json"), json!({}));
         let profiles = state
             .store
             .read_document(&state.data_dir().join("profiles.json"), json!({}));
-        let mut user_emails: Vec<String> = passwords
-            .as_object()
-            .map(|m| m.keys().cloned().collect())
-            .unwrap_or_default();
+        let mut user_emails: Vec<String> = mitch_lib::passwords::password_all_emails(&state.store);
         user_emails.sort();
         let users: Vec<Value> = user_emails
             .into_iter()
@@ -440,10 +434,9 @@ pub async fn handle(
         )
         .unwrap_or(raw_email);
         let owner_email = auth::normalize_email(&resolved);
-        let passwords = state
-            .store
-            .read_document(&state.data_dir().join("passwords.json"), json!({}));
-        if owner_email.is_empty() || !passwords.get(&owner_email).is_some() {
+        if owner_email.is_empty()
+            || !mitch_lib::passwords::password_exists(&state.store, &owner_email)
+        {
             return Some(json_response(
                 400,
                 json!({ "error": "Choose a valid website user." }),
@@ -662,10 +655,9 @@ pub async fn handle(
         )
         .unwrap_or(raw_email);
         let owner_email = auth::normalize_email(&resolved);
-        let passwords = state
-            .store
-            .read_document(&state.data_dir().join("passwords.json"), json!({}));
-        if owner_email.is_empty() || !passwords.get(&owner_email).is_some() {
+        if owner_email.is_empty()
+            || !mitch_lib::passwords::password_exists(&state.store, &owner_email)
+        {
             return Some(json_response(
                 400,
                 json!({ "error": "Choose a valid website user." }),

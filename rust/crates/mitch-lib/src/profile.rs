@@ -195,13 +195,11 @@ pub fn resolve_target_email(
     if target.is_empty() {
         return None;
     }
-    let passwords = store.read_document(&data_dir.join("passwords.json"), json!({}));
-    let password_map = passwords.as_object()?;
-    let emails: Vec<String> = password_map
-        .keys()
+    let emails: Vec<String> = crate::passwords::password_all_emails(store)
+        .into_iter()
         .map(|e| e.trim().to_lowercase())
         .collect();
-    let has_pw = |email: &str| password_map.contains_key(email);
+    let has_pw = |email: &str| crate::passwords::password_exists(store, email);
 
     // 1. Direct or normalized match.
     if has_pw(&target) {
