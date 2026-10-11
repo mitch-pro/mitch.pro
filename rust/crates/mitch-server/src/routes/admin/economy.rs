@@ -697,9 +697,7 @@ pub fn is_premium_email(state: &Arc<AppState>, email: &str) -> bool {
 
 /// Emails of every non-revoked token (the allUsers fan-out target set).
 fn token_email_targets(state: &Arc<AppState>) -> std::collections::BTreeSet<String> {
-    let tokens = state
-        .store
-        .read_document(&state.cfg.base_dir.join("data/tokens.json"), json!({}));
+    let tokens = mitch_lib::tokens::token_all(&state.store);
     let revoked = state
         .store
         .read_document(&state.cfg.base_dir.join("data/revoked.json"), json!({}));

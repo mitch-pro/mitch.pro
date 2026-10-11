@@ -577,17 +577,14 @@ pub fn email_from_sid(store: &DataStore, id_secret: &[u8], sid: &str) -> Option<
         }
         return None;
     }
-    // tokens.json: direct sid key, then infinite tokens by generation.
-    let tokens = store.read_document(
-        &store.base_dir.join("data/tokens.json"),
-        serde_json::json!({}),
-    );
-    if let Some(rec) = tokens.get(sid) {
+    // tokens table: direct sid key, then infinite tokens by generation.
+    if let Some(rec) = crate::tokens::token_get(store, sid) {
         return rec
             .get("email")
             .and_then(|v| v.as_str())
             .map(str::to_string);
     }
+    let tokens = crate::tokens::token_all(store);
     for (_tok, rec) in tokens.as_object()?.iter() {
         if !rec
             .get("infinite")
@@ -1411,7 +1408,7 @@ pub fn is_admin_id(store: &DataStore, id_secret: &[u8], sid: &str, node_env_test
             || sid == make_email_id(&email, gen as u64, id_secret);
     }
     // Infinite-token path.
-    let tokens = store.read_document(&store.base_dir.join("data/tokens.json"), json!({}));
+    let tokens = crate::tokens::token_all(store);
     let admin_norms: std::collections::HashSet<String> =
         site_admin_emails(store).into_iter().collect();
     for rec in tokens
@@ -1610,17 +1607,16 @@ mod tests {
             .unwrap();
         // Infinite token claimed once: gen = claim_count = 1.
         let claimed = make_email_id(&norm, 1, &id_secret);
-        store
-            .write_document(
-                &base.join("data/tokens.json"),
-                &json!({ "tok123": {
-                    "email": email,
-                    "norm_email": norm,
-                    "infinite": true,
-                    "claim_count": 1,
-                }}),
-            )
-            .unwrap();
+        crate::tokens::token_set(
+            &store,
+            "tok123",
+            &json!({
+                "email": email,
+                "norm_email": norm,
+                "infinite": true,
+                "claim_count": 1,
+            }),
+        );
         assert!(is_admin_id(&store, &id_secret, &claimed, false));
         // Wrong generation fails.
         assert!(!is_admin_id(
@@ -1630,17 +1626,16 @@ mod tests {
             false
         ));
         // Non-infinite tokens are skipped.
-        store
-            .write_document(
-                &base.join("data/tokens.json"),
-                &json!({ "tok123": {
-                    "email": email,
-                    "norm_email": norm,
-                    "infinite": false,
-                    "claim_count": 1,
-                }}),
-            )
-            .unwrap();
+        crate::tokens::token_set(
+            &store,
+            "tok123",
+            &json!({
+                "email": email,
+                "norm_email": norm,
+                "infinite": false,
+                "claim_count": 1,
+            }),
+        );
         assert!(!is_admin_id(&store, &id_secret, &claimed, false));
         std::fs::remove_dir_all(base).ok();
     }

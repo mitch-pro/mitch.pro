@@ -207,9 +207,7 @@ fn suggestions(state: &Arc<AppState>) -> Response {
 
 /// dtype `requests` — pending tokens, appeals, unsub requests, premium.
 fn requests(state: &Arc<AppState>) -> Response {
-    let tokens = state
-        .store
-        .read_document(&state.cfg.base_dir.join("data/tokens.json"), json!({}));
+    let tokens = mitch_lib::tokens::token_all(&state.store);
     let mut pending: Vec<Value> = tokens
         .as_object()
         .map(|m| {
@@ -311,19 +309,15 @@ async fn approve(state: &Arc<AppState>, body: &Value) -> Response {
     let tok = body.get("token").and_then(|v| v.as_str()).unwrap_or("");
     let email = body.get("email").and_then(|v| v.as_str()).unwrap_or("");
     let action = body.get("action").and_then(|v| v.as_str()).unwrap_or("");
-    let tokens_file = state.cfg.base_dir.join("data/tokens.json");
-    let mut tokens = state.store.read_document(&tokens_file, json!({}));
     match action {
         "approve" | "approve_team" => {
             let new_tok = mitch_lib::crypto::random_bytes_hex(24);
-            if let Some(map) = tokens.as_object_mut() {
-                map.insert(
-                    new_tok.clone(),
-                    json!({ "email": email, "created_at": now_millis() as f64 / 1000.0, "used": false }),
-                );
-                map.remove(tok);
-            }
-            let _ = state.store.write_document(&tokens_file, &tokens);
+            mitch_lib::tokens::token_set(
+                &state.store,
+                &new_tok,
+                &json!({ "email": email, "created_at": now_millis() as f64 / 1000.0, "used": false }),
+            );
+            mitch_lib::tokens::token_remove(&state.store, tok);
             if action == "approve_team" {
                 // Silent approval + premium grant; no email.
                 let norm = mitch_lib::auth::normalize_email(email);
@@ -375,10 +369,7 @@ async fn approve(state: &Arc<AppState>, body: &Value) -> Response {
             json_response(200, json!({ "ok": true }))
         }
         "deny" => {
-            if let Some(map) = tokens.as_object_mut() {
-                map.remove(tok);
-            }
-            let _ = state.store.write_document(&tokens_file, &tokens);
+            mitch_lib::tokens::token_remove(&state.store, tok);
             let site_name = site_name(state);
             let subject = format!("Your {site_name} Access Request Was Not Approved");
             let html = super::legacy::make_access_status_html(
@@ -398,10 +389,7 @@ async fn approve(state: &Arc<AppState>, body: &Value) -> Response {
                 .get("reason")
                 .and_then(|v| v.as_str())
                 .unwrap_or("no reason given");
-            if let Some(map) = tokens.as_object_mut() {
-                map.remove(tok);
-            }
-            let _ = state.store.write_document(&tokens_file, &tokens);
+            mitch_lib::tokens::token_remove(&state.store, tok);
             mitch_lib::bans::blacklist_insert(&state.store, email, reason, "admin");
             let site_name = site_name(state);
             let subject = format!("Your {site_name} Access Request Was Not Approved");
@@ -449,16 +437,12 @@ async fn appeal(state: &Arc<AppState>, body: &Value) -> Response {
             }
         }
         let _ = state.store.write_document(&revoked_file, &revoked);
-        let tokens_file = state.cfg.base_dir.join("data/tokens.json");
-        let mut tokens = state.store.read_document(&tokens_file, json!({}));
         let new_tok = mitch_lib::crypto::random_bytes_hex(24);
-        if let Some(map) = tokens.as_object_mut() {
-            map.insert(
-                new_tok.clone(),
-                json!({ "email": email, "created_at": now_millis() as f64 / 1000.0, "used": false }),
-            );
-        }
-        let _ = state.store.write_document(&tokens_file, &tokens);
+        mitch_lib::tokens::token_set(
+            &state.store,
+            &new_tok,
+            &json!({ "email": email, "created_at": now_millis() as f64 / 1000.0, "used": false }),
+        );
         let site_name = site_name(state);
         let link = format!("{}/claim.html?token={new_tok}", site_url_of(email, state));
         let subject = format!("Your {site_name} Appeal Has Been Approved");
@@ -580,9 +564,7 @@ fn newsletter_list(state: &Arc<AppState>) -> Response {
                 .collect()
         })
         .unwrap_or_default();
-    let tokens = state
-        .store
-        .read_document(&state.cfg.base_dir.join("data/tokens.json"), json!({}));
+    let tokens = mitch_lib::tokens::token_all(&state.store);
     let mut emails: Vec<Value> = Vec::new();
     let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for e in &extra {
@@ -659,9 +641,7 @@ async fn newsletter_send(state: &Arc<AppState>, body: &Value) -> Response {
         .collect();
     let mut seen: std::collections::BTreeSet<String> =
         emails.iter().map(|e| e.to_lowercase()).collect();
-    let tokens = state
-        .store
-        .read_document(&state.cfg.base_dir.join("data/tokens.json"), json!({}));
+    let tokens = mitch_lib::tokens::token_all(&state.store);
     if let Some(map) = tokens.as_object() {
         for (_tok, d) in map {
             let email = d
@@ -780,24 +760,20 @@ fn rl_reset_all(state: &Arc<AppState>) -> Response {
 
 /// dtype `gen_token` — infinite admin token.
 fn gen_token(state: &Arc<AppState>) -> Response {
-    let tokens_file = state.cfg.base_dir.join("data/tokens.json");
-    let mut tokens = state.store.read_document(&tokens_file, json!({}));
     let tok = mitch_lib::crypto::random_bytes_hex(24);
-    if let Some(map) = tokens.as_object_mut() {
-        map.insert(
-            tok.clone(),
-            json!({
-                "email": "admin@mitch.pro",
-                "norm_email": "admin@mitch.pro",
-                "gen": 0,
-                "created_at": now_millis() as f64 / 1000.0,
-                "used": false,
-                "infinite": true,
-                "claim_count": 0,
-            }),
-        );
-    }
-    let _ = state.store.write_document(&tokens_file, &tokens);
+    mitch_lib::tokens::token_set(
+        &state.store,
+        &tok,
+        &json!({
+            "email": "admin@mitch.pro",
+            "norm_email": "admin@mitch.pro",
+            "gen": 0,
+            "created_at": now_millis() as f64 / 1000.0,
+            "used": false,
+            "infinite": true,
+            "claim_count": 0,
+        }),
+    );
     json_response(
         200,
         json!({ "url": format!("https://mitch.88chan.me/claim.html?token={tok}"), "token": tok }),

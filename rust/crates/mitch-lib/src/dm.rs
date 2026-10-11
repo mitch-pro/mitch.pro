@@ -351,7 +351,7 @@ pub fn build_address_index(store: &DataStore, _data_dir: &Path) -> DmAddrIndex {
     for email in crate::auth::names_all_emails(store) {
         add_email(&mut idx, &email);
     }
-    let tokens = store.read_document(&store.base_dir.join("data/tokens.json"), json!({}));
+    let tokens = crate::tokens::token_all(store);
     for data in tokens.as_object().unwrap_or(&Map::new()).values() {
         if let Some(email) = data.get("email").and_then(|v| v.as_str()) {
             add_email(&mut idx, email);
