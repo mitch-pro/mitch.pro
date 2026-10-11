@@ -115,12 +115,9 @@ pub fn broadcast_presence_changed(state: &Arc<AppState>, email: &str, online: bo
     if norm.is_empty() {
         return;
     }
-    let friends: Value = state
-        .store
-        .read_document(&state.data_dir().join("friends.json"), json!({}));
+    let friends = mitch_lib::friends::friends_get(&state.store, &norm);
     let mut recipients: HashSet<String> = friends
-        .get(&norm)
-        .and_then(|v| v.as_array())
+        .as_array()
         .map(|arr| {
             arr.iter()
                 .map(|f| mitch_lib::auth::normalize_email(&mitch_lib::jsval::string(f)))
@@ -195,10 +192,8 @@ pub async fn notify_friends_online(state: &Arc<AppState>, email: &str) {
     if norm.is_empty() {
         return;
     }
-    let friends: Value = state
-        .store
-        .read_document(&state.data_dir().join("friends.json"), json!({}));
-    let Some(my_list) = friends.get(&norm).and_then(|v| v.as_array()).cloned() else {
+    let friends = mitch_lib::friends::friends_get(&state.store, &norm);
+    let Some(my_list) = friends.as_array().cloned() else {
         return;
     };
     let sender_name =

@@ -165,12 +165,8 @@ fn kodys_payout(
         }
         // 1.5x friend-play bonus: any friend online in the last 120s.
         let mut friend_bonus_active = false;
-        let friends = state
-            .store
-            .read_document(&state.data_dir().join("friends.json"), json!({}));
-        let my_friends = friends
-            .get(&norm)
-            .and_then(|v| v.as_array())
+        let my_friends = mitch_lib::friends::friends_get(&state.store, &norm)
+            .as_array()
             .cloned()
             .unwrap_or_default();
         let now2 = now_millis();

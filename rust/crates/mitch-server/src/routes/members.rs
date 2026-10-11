@@ -68,12 +68,8 @@ fn members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         .read_document(&data_file(state, "dms.json"), json!([]));
     let my_cleared =
         mitch_lib::dm::dm_cleared_get(&state.store, &mitch_lib::dm::DMS_MAIN, &viewer_norm);
-    let friends = state
-        .store
-        .read_document(&data_file(state, "friends.json"), json!({}));
-    let my_friends: Vec<String> = friends
-        .get(viewer_norm.as_str())
-        .and_then(|v| v.as_array())
+    let my_friends: Vec<String> = mitch_lib::friends::friends_get(&state.store, &viewer_norm)
+        .as_array()
         .map(|a| a.iter().map(jsval::string).collect())
         .unwrap_or_default();
     let friend_requests = state

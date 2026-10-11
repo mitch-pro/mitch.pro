@@ -30,6 +30,7 @@ pub mod data;
 pub mod dm;
 pub mod e2e;
 pub mod email;
+pub mod friends;
 pub mod guest;
 pub mod invites;
 pub mod jstime;

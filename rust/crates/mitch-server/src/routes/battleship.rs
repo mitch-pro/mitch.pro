@@ -923,13 +923,9 @@ fn are_friends(state: &AppState, a: &str, b: &str) -> bool {
     }
     let norm_a = mitch_lib::auth::normalize_email(a);
     let norm_b = mitch_lib::auth::normalize_email(b);
-    let friends: Value = state
-        .store
-        .read_document(&state.data_dir().join("friends.json"), json!({}));
     let has = |norm: &str, target: &str| {
-        friends
-            .get(norm)
-            .and_then(|v| v.as_array())
+        mitch_lib::friends::friends_get(&state.store, norm)
+            .as_array()
             .is_some_and(|arr| {
                 arr.iter()
                     .any(|f| mitch_lib::auth::normalize_email(f.as_str().unwrap_or("")) == target)

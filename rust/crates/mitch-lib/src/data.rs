@@ -337,6 +337,11 @@ impl DataStore {
                         data TEXT NOT NULL,
                         updated_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS friend_lists (
+                        email TEXT PRIMARY KEY,
+                        data TEXT NOT NULL,
+                        updated_at INTEGER NOT NULL
+                    );
                     CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs (ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_level ON app_logs (level, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_category ON app_logs (category, ts DESC);
@@ -419,6 +424,7 @@ impl DataStore {
         store.backfill_profiles_from_json();
         store.backfill_tokens_from_json();
         store.backfill_revoked_ids_from_json();
+        store.backfill_friends_from_json();
         Ok(store)
     }
 
@@ -914,6 +920,23 @@ impl DataStore {
             let _ = conn.execute(
                 "INSERT OR IGNORE INTO revoked_ids (sid, data, updated_at) VALUES (?1, ?2, ?3)",
                 rusqlite::params![sid, data_str, now],
+            );
+        }
+    }
+
+    /// One-time (idempotent) backfill from friends.json into the real
+    /// `friends` table (one row per email, the friend-email array kept as
+    /// a JSON blob in `data`).
+    fn backfill_friends_from_json(&self) {
+        let now = now_millis();
+        let doc = self.read_document(&self.data_dir.join("friends.json"), Value::Null);
+        let Some(map) = doc.as_object() else { return };
+        let conn = self.conn();
+        for (email, data) in map {
+            let data_str = serde_json::to_string(data).unwrap_or_else(|_| "[]".to_string());
+            let _ = conn.execute(
+                "INSERT OR IGNORE INTO friend_lists (email, data, updated_at) VALUES (?1, ?2, ?3)",
+                rusqlite::params![email, data_str, now],
             );
         }
     }

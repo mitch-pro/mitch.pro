@@ -1072,26 +1072,8 @@ pub(crate) fn rename_email_references(
         }
     }
 
-    // friends.json — move the key, then remap list entries.
-    let friends_path = data_file(state, "friends.json");
-    let mut friends = state.store.read_document(&friends_path, json!({}));
-    if let Some(map) = friends.as_object_mut() {
-        if let Some(list) = map.remove(old_norm) {
-            map.insert(new_norm.to_string(), list);
-        }
-        for value in map.values_mut() {
-            if let Some(arr) = value.as_array_mut() {
-                for f in arr.iter_mut() {
-                    if let Some(s) = f.as_str() {
-                        if auth::normalize_email(s) == old_norm {
-                            *f = json!(new_norm);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    let _ = state.store.write_document(&friends_path, &friends);
+    // friends table — move the row, then remap list entries.
+    mitch_lib::friends::rename_friend_references(&state.store, old_norm, new_norm);
 
     // friend_requests.json — remap from/to.
     let requests_path = data_file(state, "friend_requests.json");

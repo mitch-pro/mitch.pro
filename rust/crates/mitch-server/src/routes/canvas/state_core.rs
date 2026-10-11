@@ -559,16 +559,11 @@ pub fn check_zone_access(
         return true;
     }
     if mitch_lib::jsval::truthy(zone.get("friendsOnly").unwrap_or(&Value::Null)) {
-        let friends = store.read_document(&data_dir.join("friends.json"), json!({}));
+        let owner_friends_val = mitch_lib::friends::friends_get(store, &norm_owner);
+        let user_friends_val = mitch_lib::friends::friends_get(store, &norm_email);
         let empty = vec![];
-        let owner_friends = friends
-            .get(&norm_owner)
-            .and_then(|v| v.as_array())
-            .unwrap_or(&empty);
-        let user_friends = friends
-            .get(&norm_email)
-            .and_then(|v| v.as_array())
-            .unwrap_or(&empty);
+        let owner_friends = owner_friends_val.as_array().unwrap_or(&empty);
+        let user_friends = user_friends_val.as_array().unwrap_or(&empty);
         let is_friend_of_owner = owner_friends
             .iter()
             .any(|v| mitch_lib::jsval::string(v) == norm_email)

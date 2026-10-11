@@ -100,11 +100,8 @@ async fn friend_request(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: 
         return json_response(400, json!({ "error": "cannot friend request yourself" }));
     }
 
-    let friends_file = data_file(state, "friends.json");
-    let mut friends = state.store.read_document(&friends_file, json!({}));
-    let already = friends
-        .get(&norm)
-        .and_then(|v| v.as_array())
+    let already = mitch_lib::friends::friends_get(&state.store, &norm)
+        .as_array()
         .map(|list| {
             list.iter()
                 .any(|f| auth::normalize_email(&jsval::string(f)) == friend_email)
@@ -127,9 +124,8 @@ async fn friend_request(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: 
             arr.remove(idx);
             let _ = state.store.write_document(&requests_file, &requests);
 
-            push_friend_entry(&mut friends, &norm, &friend_email);
-            push_friend_entry(&mut friends, &friend_email, &norm);
-            let _ = state.store.write_document(&friends_file, &friends);
+            mitch_lib::friends::friends_add(&state.store, &norm, &friend_email);
+            mitch_lib::friends::friends_add(&state.store, &friend_email, &norm);
 
             send_web_push_clean(
                 state,
@@ -281,11 +277,8 @@ async fn request_respond(
     let _ = state.store.write_document(&requests_file, &requests);
 
     if action == "accept" {
-        let friends_file = data_file(state, "friends.json");
-        let mut friends = state.store.read_document(&friends_file, json!({}));
-        push_friend_entry(&mut friends, &norm, &friend_email);
-        push_friend_entry(&mut friends, &friend_email, &norm);
-        let _ = state.store.write_document(&friends_file, &friends);
+        mitch_lib::friends::friends_add(&state.store, &norm, &friend_email);
+        mitch_lib::friends::friends_add(&state.store, &friend_email, &norm);
 
         send_web_push_clean(
             state,
@@ -322,20 +315,12 @@ fn friends_remove(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8])
     let friend_email = auth::normalize_email(&resolved);
     let norm = auth::normalize_email(&email);
 
-    let friends_file = data_file(state, "friends.json");
-    let mut friends = state.store.read_document(&friends_file, json!({}));
-    let mut changed = false;
     for (key, other) in [(&norm, &friend_email), (&friend_email, &norm)] {
-        if let Some(list) = friends.get_mut(key).and_then(|v| v.as_array_mut()) {
-            let orig_len = list.len();
-            list.retain(|f| auth::normalize_email(&jsval::string(f)) != *other);
-            if list.len() != orig_len {
-                changed = true;
-            }
+        let mut list = mitch_lib::friends::friends_get(&state.store, key);
+        if let Some(arr) = list.as_array_mut() {
+            arr.retain(|f| auth::normalize_email(&jsval::string(f)) != *other);
+            mitch_lib::friends::friends_set(&state.store, key, &list);
         }
-    }
-    if changed {
-        let _ = state.store.write_document(&friends_file, &friends);
     }
     json_response(200, json!({ "ok": true }))
 }
@@ -347,12 +332,8 @@ fn friends_list(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         Err((code, msg)) => return json_response(code, json!({ "error": msg })),
     };
     let norm = auth::normalize_email(&email);
-    let friends = state
-        .store
-        .read_document(&data_file(state, "friends.json"), json!({}));
-    let my_list: Vec<String> = friends
-        .get(&norm)
-        .and_then(|v| v.as_array())
+    let my_list: Vec<String> = mitch_lib::friends::friends_get(&state.store, &norm)
+        .as_array()
         .map(|a| a.iter().map(jsval::string).collect())
         .unwrap_or_default();
     let profiles = mitch_lib::profiles::profile_all(&state.store);
@@ -449,18 +430,6 @@ fn requests_pending(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
 /// the Step 11 WS batch; the map-only port moved to `crate::ws`.
 pub(crate) fn is_user_present(state: &std::sync::Arc<AppState>, email: &str, now: i64) -> bool {
     crate::ws::is_user_present(state, email, now)
-}
-
-/// `friends[key] ||= []; if (!includes(x)) push(x)` (server.js:16110-16115).
-fn push_friend_entry(friends: &mut Value, key: &str, entry: &str) {
-    if let Some(map) = friends.as_object_mut() {
-        let list = map.entry(key.to_string()).or_insert_with(|| json!([]));
-        if let Some(arr) = list.as_array_mut() {
-            if !arr.iter().any(|v| jsval::string(v) == entry) {
-                arr.push(json!(entry));
-            }
-        }
-    }
 }
 
 /// `notificationUrl` (server.js:2053-2055).
