@@ -286,11 +286,7 @@ pub(crate) async fn handle(
 }
 
 fn is_revoked_id(state: &AppState, sid: &str) -> bool {
-    state
-        .store
-        .read_document(&state.data_dir().join("revoked.json"), json!({}))
-        .get(sid)
-        .is_some()
+    mitch_lib::revoked::revoked_id_exists(&state.store, sid)
 }
 
 fn route(

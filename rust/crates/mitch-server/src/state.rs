@@ -575,12 +575,7 @@ impl AppState {
 
     /// `isRevoked(id)` (server.js:2927-2930).
     pub fn is_revoked_id(&self, sid: &str) -> bool {
-        if sid.is_empty() {
-            return false;
-        }
-        let file = self.cfg.data_dir.join("revoked.json");
-        let doc = self.store.read_document(&file, serde_json::json!({}));
-        doc.as_object().is_some_and(|m| m.contains_key(sid))
+        mitch_lib::revoked::revoked_id_exists(&self.store, sid)
     }
 }
 

@@ -1978,11 +1978,7 @@ fn authenticated_vm_actor(
     if sid.is_empty() || !mitch_lib::auth::valid_id(&sid, &state.id_secret) {
         return None;
     }
-    let revoked: serde_json::Value = state.store.read_document(
-        &state.cfg.data_dir.join("revoked.json"),
-        serde_json::json!({}),
-    );
-    if revoked.get(&sid).is_some() {
+    if mitch_lib::revoked::revoked_id_exists(&state.store, &sid) {
         return None;
     }
     if !state.check_password_cookie(headers, Some(&sid)) {

@@ -35,13 +35,7 @@ fn is_invalidated(state: &AppState, id: &str) -> bool {
 }
 
 fn is_revoked(state: &AppState, id: &str) -> bool {
-    if id.is_empty() {
-        return false;
-    }
-    let doc = state
-        .store
-        .read_document(&data_file(state, "revoked.json"), json!({}));
-    doc.as_object().is_some_and(|m| m.contains_key(id))
+    mitch_lib::revoked::revoked_id_exists(&state.store, id)
 }
 
 /// Main route dispatch for auth, registration, reset, invite, newsletter, and SSO endpoints.

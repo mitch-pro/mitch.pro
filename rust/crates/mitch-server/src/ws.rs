@@ -527,13 +527,9 @@ async fn close_leg(state: &Arc<AppState>, email_norm: &str, socket_id: u64) {
     }
 }
 
-/// `isRevoked(id)` — key presence in data/revoked.json.
+/// `isRevoked(id)` — key presence in the revoked_ids table.
 fn is_revoked_id(state: &AppState, sid: &str) -> bool {
-    state
-        .store
-        .read_document(&state.data_dir().join("revoked.json"), json!({}))
-        .get(sid)
-        .is_some()
+    mitch_lib::revoked::revoked_id_exists(&state.store, sid)
 }
 
 fn now_millis() -> i64 {

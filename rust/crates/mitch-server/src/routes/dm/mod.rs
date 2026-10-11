@@ -19,7 +19,7 @@ pub(crate) use attachment::clean_expired;
 pub(crate) use notif::notif_allowed;
 mod send;
 
-use crate::routes::me::{cookies_of, data_file};
+use crate::routes::me::cookies_of;
 use crate::state::AppState;
 use axum::http::{HeaderMap, Method};
 use axum::response::Response;
@@ -145,14 +145,10 @@ pub(super) fn dm_auth(
     })
 }
 
-/// `isRevoked(id)` (server.js:2769) — key presence in revoked.json.
+/// `isRevoked(id)` (server.js:2769) — key presence in the revoked_ids table.
 /// (members.rs keeps a private copy; DM needs it before its email lookup.)
 pub(super) fn is_revoked_id(state: &AppState, sid: &str) -> bool {
-    state
-        .store
-        .read_document(&data_file(state, "revoked.json"), json!({}))
-        .get(sid)
-        .is_some()
+    mitch_lib::revoked::revoked_id_exists(&state.store, sid)
 }
 
 /// `normalizeEmail(v)` on a raw JSON value — the JS falsy gate (`if (!email)

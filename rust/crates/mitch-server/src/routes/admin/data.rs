@@ -424,19 +424,14 @@ async fn appeal(state: &Arc<AppState>, body: &Value) -> Response {
         .cloned()
         .unwrap_or_default();
     if action == "approve" {
-        let revoked_file = state.cfg.base_dir.join("data/revoked.json");
-        let mut revoked = state.store.read_document(&revoked_file, json!({}));
-        if let Some(map) = revoked.as_object_mut() {
-            let remove: Vec<String> = map
-                .iter()
-                .filter(|(_, rec)| rec.get("email").and_then(|v| v.as_str()) == Some(email))
-                .map(|(k, _)| k.clone())
-                .collect();
-            for k in remove {
-                map.remove(&k);
+        let revoked = mitch_lib::revoked::revoked_all(&state.store);
+        if let Some(map) = revoked.as_object() {
+            for (sid, rec) in map {
+                if rec.get("email").and_then(|v| v.as_str()) == Some(email) {
+                    mitch_lib::revoked::revoked_id_remove(&state.store, sid);
+                }
             }
         }
-        let _ = state.store.write_document(&revoked_file, &revoked);
         let new_tok = mitch_lib::crypto::random_bytes_hex(24);
         mitch_lib::tokens::token_set(
             &state.store,

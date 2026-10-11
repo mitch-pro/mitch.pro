@@ -81,11 +81,7 @@ fn is_pickle_founder_email(state: &Arc<AppState>, norm: &str) -> bool {
 
 /// `isRevoked(id)` (server.js:2769) — `id in loadRevoked()`.
 fn is_revoked_id(state: &Arc<AppState>, sid: &str) -> bool {
-    state
-        .store
-        .read_document(&data_file(state, "revoked.json"), json!({}))
-        .get(sid)
-        .is_some()
+    mitch_lib::revoked::revoked_id_exists(&state.store, sid)
 }
 
 /// `isPickleFounderId(sid)` (server.js:260-264).

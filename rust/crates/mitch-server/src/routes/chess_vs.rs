@@ -1223,11 +1223,7 @@ fn resp_body(body: &Value) -> axum::response::Response {
 }
 
 fn is_revoked_id(state: &AppState, sid: &str) -> bool {
-    state
-        .store
-        .read_document(&state.data_dir().join("revoked.json"), json!({}))
-        .get(sid)
-        .is_some()
+    mitch_lib::revoked::revoked_id_exists(&state.store, sid)
 }
 
 fn are_friends(state: &AppState, a: &str, b: &str) -> bool {

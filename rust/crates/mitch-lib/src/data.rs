@@ -332,6 +332,11 @@ impl DataStore {
                         data TEXT NOT NULL,
                         updated_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS revoked_ids (
+                        sid TEXT PRIMARY KEY,
+                        data TEXT NOT NULL,
+                        updated_at INTEGER NOT NULL
+                    );
                     CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs (ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_level ON app_logs (level, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_category ON app_logs (category, ts DESC);
@@ -413,6 +418,7 @@ impl DataStore {
         store.backfill_user_stats_from_json();
         store.backfill_profiles_from_json();
         store.backfill_tokens_from_json();
+        store.backfill_revoked_ids_from_json();
         Ok(store)
     }
 
@@ -890,6 +896,24 @@ impl DataStore {
             let _ = conn.execute(
                 "INSERT OR IGNORE INTO tokens (token, data, updated_at) VALUES (?1, ?2, ?3)",
                 rusqlite::params![token, data_str, now],
+            );
+        }
+    }
+
+    /// One-time (idempotent) backfill from revoked.json into the real
+    /// `revoked_ids` table (one row per sid, the whole value kept as a
+    /// JSON blob — it's a plain bool in some entries, an object with an
+    /// `email` field in others).
+    fn backfill_revoked_ids_from_json(&self) {
+        let now = now_millis();
+        let doc = self.read_document(&self.data_dir.join("revoked.json"), Value::Null);
+        let Some(map) = doc.as_object() else { return };
+        let conn = self.conn();
+        for (sid, data) in map {
+            let data_str = serde_json::to_string(data).unwrap_or_else(|_| "null".to_string());
+            let _ = conn.execute(
+                "INSERT OR IGNORE INTO revoked_ids (sid, data, updated_at) VALUES (?1, ?2, ?3)",
+                rusqlite::params![sid, data_str, now],
             );
         }
     }

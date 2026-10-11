@@ -139,11 +139,7 @@ pub async fn content(
     };
 
     // Auth ladder: revoked > invalidated > valid_hashes.json array fallback.
-    let revoked = state
-        .store
-        .read_document(&state.data_dir().join("revoked.json"), json!({}))
-        .get(hash)
-        .cloned();
+    let revoked = mitch_lib::revoked::revoked_id_get(&state.store, hash);
     let invalidated = state
         .store
         .read_document(&state.data_dir().join("invalidated.json"), json!({}))

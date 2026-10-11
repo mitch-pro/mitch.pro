@@ -116,14 +116,7 @@ fn ssh_error_json(message: &str) -> String {
 }
 
 fn is_revoked_id(state: &AppState, sid: &str) -> bool {
-    state
-        .store
-        .read_document(
-            &crate::routes::me::data_file(state, "revoked.json"),
-            json!({}),
-        )
-        .get(sid)
-        .is_some()
+    mitch_lib::revoked::revoked_id_exists(&state.store, sid)
 }
 
 // ── the session loop ─────────────────────────────────────────────────────────

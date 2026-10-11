@@ -698,9 +698,6 @@ pub fn is_premium_email(state: &Arc<AppState>, email: &str) -> bool {
 /// Emails of every non-revoked token (the allUsers fan-out target set).
 fn token_email_targets(state: &Arc<AppState>) -> std::collections::BTreeSet<String> {
     let tokens = mitch_lib::tokens::token_all(&state.store);
-    let revoked = state
-        .store
-        .read_document(&state.cfg.base_dir.join("data/revoked.json"), json!({}));
     let mut targets = std::collections::BTreeSet::new();
     if let Some(map) = tokens.as_object() {
         for (tok, data) in map {
@@ -711,12 +708,7 @@ fn token_email_targets(state: &Arc<AppState>) -> std::collections::BTreeSet<Stri
                 .to_lowercase()
                 .trim()
                 .to_string();
-            if email.is_empty()
-                || revoked
-                    .as_object()
-                    .map(|r| r.contains_key(tok))
-                    .unwrap_or(false)
-            {
+            if email.is_empty() || mitch_lib::revoked::revoked_id_exists(&state.store, tok) {
                 continue;
             }
             targets.insert(email);

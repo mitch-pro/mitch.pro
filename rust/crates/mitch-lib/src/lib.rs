@@ -41,6 +41,7 @@ pub mod passwords;
 pub mod profile;
 pub mod profiles;
 pub mod push_subs;
+pub mod revoked;
 pub mod school;
 pub mod shop;
 pub mod sso;

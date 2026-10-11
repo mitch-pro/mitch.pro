@@ -797,13 +797,9 @@ fn member_gate(state: &Arc<AppState>, headers: &HeaderMap) -> Option<(String, St
     Some((sid, email))
 }
 
-/// `isRevoked(id)` (server.js:2769) — key presence in revoked.json.
+/// `isRevoked(id)` (server.js:2769) — key presence in the revoked_ids table.
 fn is_revoked_id(state: &Arc<AppState>, sid: &str) -> bool {
-    state
-        .store
-        .read_document(&data_file(state, "revoked.json"), json!({}))
-        .get(sid)
-        .is_some()
+    mitch_lib::revoked::revoked_id_exists(&state.store, sid)
 }
 
 /// `touchActiveEmail(email, now)` (server.js:3396-3404) — the 10s-throttled
