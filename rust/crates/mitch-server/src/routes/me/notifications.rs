@@ -214,20 +214,11 @@ fn me_coin_gifts(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         return json_response(401, json!({ "error": "email not found" }));
     };
     let norm = auth::normalize_email(&email);
-    let gifts = state
-        .store
-        .read_document(&data_file(state, "coin_gifts.json"), json!({}));
-    let notices: Vec<Value> = gifts
-        .get(norm.as_str())
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter(|g| !g.get("read").and_then(|v| v.as_bool()).unwrap_or(false))
-                .take(10)
-                .cloned()
-                .collect()
-        })
-        .unwrap_or_default();
+    let notices: Vec<Value> = mitch_lib::coins::coin_gift_notices_for(&state.store, &norm)
+        .into_iter()
+        .filter(|g| !g.get("read").and_then(|v| v.as_bool()).unwrap_or(false))
+        .take(10)
+        .collect();
     json_response(200, json!({ "notices": notices }))
 }
 
@@ -256,27 +247,7 @@ fn me_coin_gifts_read(
         .and_then(|v| v.as_array())
         .map(|arr| arr.iter().map(jsval::string).collect())
         .unwrap_or_default();
-    let gifts_file = data_file(state, "coin_gifts.json");
-    let mut gifts = state.store.read_document(&gifts_file, json!({}));
-    let mut mine: Vec<Value> = gifts
-        .get(norm.as_str())
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default();
-    for notice in mine.iter_mut() {
-        let id = jsval::string_of(notice.get("id"));
-        if ids.is_empty() || ids.contains(&id) {
-            if let Some(obj) = notice.as_object_mut() {
-                obj.insert("read".into(), json!(true));
-            }
-        }
-    }
-    if let Some(obj) = gifts.as_object_mut() {
-        obj.insert(norm.clone(), Value::Array(mine));
-    }
-    if state.store.write_document(&gifts_file, &gifts).is_err() {
-        return json_response(400, json!({ "error": "save failed" }));
-    }
+    mitch_lib::coins::mark_coin_gift_notices_read(&state.store, &norm, &ids);
     json_response(200, json!({ "ok": true }))
 }
 
@@ -296,15 +267,7 @@ fn me_notifications(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let norm = auth::normalize_email(&email);
 
     let mut notices: Vec<Value> = Vec::new();
-    let gifts = state
-        .store
-        .read_document(&data_file(state, "coin_gifts.json"), json!({}));
-    for g in gifts
-        .get(norm.as_str())
-        .and_then(|v| v.as_array())
-        .into_iter()
-        .flatten()
-    {
+    for g in mitch_lib::coins::coin_gift_notices_for(&state.store, &norm) {
         if g.get("read").and_then(|v| v.as_bool()).unwrap_or(false) {
             continue;
         }
@@ -599,34 +562,13 @@ fn me_notifications_read(
         .unwrap_or_default();
 
     // 1. Coin gifts.
-    let gifts_file = data_file(state, "coin_gifts.json");
-    let mut gifts = state.store.read_document(&gifts_file, json!({}));
-    let mut gifts_changed = false;
-    let mut mine_gifts: Vec<Value> = gifts
-        .get(norm.as_str())
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default();
-    for notice in mine_gifts.iter_mut() {
-        let id = jsval::string_of(notice.get("id"));
-        if mark_all || coin_gift_ids.contains(&id) {
-            if !notice
-                .get("read")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-            {
-                gifts_changed = true;
-            }
-            if let Some(obj) = notice.as_object_mut() {
-                obj.insert("read".into(), json!(true));
-            }
-        }
-    }
-    if gifts_changed {
-        if let Some(obj) = gifts.as_object_mut() {
-            obj.insert(norm.clone(), Value::Array(mine_gifts));
-        }
-        let _ = state.store.write_document(&gifts_file, &gifts);
+    let gift_ids_to_mark = if mark_all {
+        std::collections::HashSet::new()
+    } else {
+        coin_gift_ids.clone()
+    };
+    if mark_all || !coin_gift_ids.is_empty() {
+        mitch_lib::coins::mark_coin_gift_notices_read(&state.store, &norm, &gift_ids_to_mark);
     }
 
     // 2. DMs + group reads.

@@ -1038,36 +1038,7 @@ pub fn moderator_burn_coins(
 
 /// The unsend scan shared by the endpoint and remove_admin_notice.
 fn unsend_notification(state: &Arc<AppState>, id: &str, batch_id: &str) -> i64 {
-    let file = state.cfg.data_dir.join("coin_gifts.json");
-    let mut gifts = state.store.read_document(&file, json!({}));
-    let mut removed = 0i64;
-    if let Some(map) = gifts.as_object_mut() {
-        for (_email, notices) in map.iter_mut() {
-            let Some(arr) = notices.as_array().cloned() else {
-                continue;
-            };
-            let kept: Vec<Value> = arr
-                .into_iter()
-                .filter(|notice| {
-                    let is_notice =
-                        notice.get("kind").and_then(|v| v.as_str()) == Some("admin_notice");
-                    let matches = is_notice
-                        && ((!id.is_empty()
-                            && notice.get("id").and_then(|v| v.as_str()).unwrap_or("") == id)
-                            || (!batch_id.is_empty()
-                                && notice.get("batchId").and_then(|v| v.as_str()).unwrap_or("")
-                                    == batch_id));
-                    if matches {
-                        removed += 1;
-                    }
-                    !matches
-                })
-                .collect();
-            *notices = json!(kept);
-        }
-    }
-    let _ = state.store.write_document(&file, &gifts);
-    removed
+    mitch_lib::coins::unsend_coin_gift_notices(&state.store, id, batch_id)
 }
 
 /// `sendDailySummaryNotification` body (server.js:3966-4014) — builds the

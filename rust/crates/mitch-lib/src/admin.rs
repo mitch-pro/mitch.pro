@@ -220,43 +220,32 @@ pub fn build_advanced_admin_data(store: &DataStore, data_dir: &Path) -> Value {
         .collect();
     let profile_reports = public_profile_reports(store, data_dir, 250);
 
-    // sentNotifications: admin_notice rows in coin_gifts.json, deduped on
-    // batchId+targetEmail, newest first.
-    let gifts = store.read_document(&data_dir.join("coin_gifts.json"), json!({}));
+    // sentNotifications: admin_notice rows, deduped on batchId+targetEmail,
+    // newest first.
     let mut sent_notifications: Vec<Value> = Vec::new();
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
-    if let Some(map) = gifts.as_object() {
-        for (target_email, notices) in map {
-            let Some(arr) = notices.as_array() else {
-                continue;
-            };
-            for notice in arr {
-                if notice.get("kind").and_then(|v| v.as_str()) != Some("admin_notice") {
-                    continue;
-                }
-                let key = format!(
-                    "{}:{}",
-                    notice
-                        .get("batchId")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_else(|| notice.get("id").and_then(|v| v.as_str()).unwrap_or("")),
-                    target_email
-                );
-                if !seen.insert(key) {
-                    continue;
-                }
-                sent_notifications.push(json!({
-                    "id": notice.get("id").map(|v| v.as_str().unwrap_or("").to_string()).unwrap_or_default(),
-                    "batchId": notice.get("batchId").map(|v| v.as_str().unwrap_or("").to_string()).unwrap_or_default(),
-                    "targetEmail": target_email,
-                    "title": notice.get("title").and_then(|v| v.as_str()).unwrap_or("Admin notification"),
-                    "from": notice.get("from").and_then(|v| v.as_str()).unwrap_or("admin"),
-                    "source": notice.get("source").and_then(|v| v.as_str()).unwrap_or("mitchdog.com"),
-                    "ts": notice.get("ts").and_then(|v| v.as_i64()).unwrap_or(0),
-                    "read": notice.get("read").and_then(|v| v.as_bool()).unwrap_or(false),
-                }));
-            }
+    for (target_email, notice) in crate::coins::admin_notice_rows(store) {
+        let key = format!(
+            "{}:{}",
+            notice
+                .get("batchId")
+                .and_then(|v| v.as_str())
+                .unwrap_or_else(|| notice.get("id").and_then(|v| v.as_str()).unwrap_or("")),
+            target_email
+        );
+        if !seen.insert(key) {
+            continue;
         }
+        sent_notifications.push(json!({
+            "id": notice.get("id").map(|v| v.as_str().unwrap_or("").to_string()).unwrap_or_default(),
+            "batchId": notice.get("batchId").map(|v| v.as_str().unwrap_or("").to_string()).unwrap_or_default(),
+            "targetEmail": target_email,
+            "title": notice.get("title").and_then(|v| v.as_str()).unwrap_or("Admin notification"),
+            "from": notice.get("from").and_then(|v| v.as_str()).unwrap_or("admin"),
+            "source": notice.get("source").and_then(|v| v.as_str()).unwrap_or("mitchdog.com"),
+            "ts": notice.get("ts").and_then(|v| v.as_i64()).unwrap_or(0),
+            "read": notice.get("read").and_then(|v| v.as_bool()).unwrap_or(false),
+        }));
     }
     sent_notifications.sort_by(|a, b| {
         b.get("ts")
@@ -856,16 +845,16 @@ mod tests {
             "view_admin_tools",
             json!({}),
         );
-        store
-            .write_document(
-                &base.join("data/coin_gifts.json"),
-                &json!({ "user@mitch.pro": [{
-                    "kind": "admin_notice", "id": "n1", "batchId": "b1",
-                    "title": "Hi", "message": "m", "from": "admin@mitch.pro",
-                    "ts": 5, "read": false,
-                }]}),
-            )
-            .unwrap();
+        crate::coins::add_admin_notification(
+            &store,
+            &data,
+            "user@mitch.pro",
+            "Hi",
+            "m",
+            "admin@mitch.pro",
+            "b1",
+            "",
+        );
         let advanced = build_advanced_admin_data(&store, &data);
         assert_eq!(
             advanced

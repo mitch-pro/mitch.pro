@@ -286,6 +286,16 @@ impl DataStore {
                         streak_freezes INTEGER NOT NULL DEFAULT 0,
                         updated_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS coin_gift_notices (
+                        id TEXT PRIMARY KEY,
+                        email TEXT NOT NULL,
+                        kind TEXT NOT NULL DEFAULT '',
+                        batch_id TEXT NOT NULL DEFAULT '',
+                        ts INTEGER NOT NULL,
+                        read INTEGER NOT NULL DEFAULT 0,
+                        data TEXT NOT NULL,
+                        created_at INTEGER NOT NULL
+                    );
                     CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs (ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_level ON app_logs (level, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_category ON app_logs (category, ts DESC);
@@ -297,7 +307,9 @@ impl DataStore {
                     CREATE INDEX IF NOT EXISTS idx_banned_ips_email ON banned_ips (email);
                     CREATE INDEX IF NOT EXISTS idx_names_norm_email ON names (norm_email);
                     CREATE INDEX IF NOT EXISTS idx_names_email_nocase ON names (email COLLATE NOCASE);
-                    CREATE UNIQUE INDEX IF NOT EXISTS idx_invite_codes_code ON invite_codes (code);",
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_invite_codes_code ON invite_codes (code);
+                    CREATE INDEX IF NOT EXISTS idx_coin_gift_notices_email_ts ON coin_gift_notices (email, ts DESC);
+                    CREATE INDEX IF NOT EXISTS idx_coin_gift_notices_batch ON coin_gift_notices (batch_id);",
                 );
                 match result {
                     Ok(()) => return Ok(()),
@@ -357,6 +369,7 @@ impl DataStore {
         store.backfill_e2e_keys_from_json();
         store.backfill_dm_cleared_from_json();
         store.backfill_daily_logins_from_json();
+        store.backfill_coin_gift_notices_from_json();
         Ok(store)
     }
 
@@ -649,6 +662,37 @@ impl DataStore {
                 "INSERT OR IGNORE INTO daily_logins (email, last_claim_date, streak, streak_freezes, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
                 rusqlite::params![email, last_claim_date, streak, streak_freezes, now],
             );
+        }
+    }
+
+    /// One-time (idempotent) backfill from coin_gifts.json into the real
+    /// `coin_gift_notices` table — one row per notice instead of one row
+    /// per email holding an array. `kind`/`batch_id` are pulled out as real
+    /// columns (so the cross-user admin-notice scans no longer have to
+    /// walk every user), but the notice's own JSON (including its `kind`/
+    /// `batchId` keys when present) is kept verbatim in `data` so reads
+    /// reconstruct byte-for-byte the same shape callers always got.
+    fn backfill_coin_gift_notices_from_json(&self) {
+        let now = now_millis();
+        let doc = self.read_document(&self.data_dir.join("coin_gifts.json"), Value::Null);
+        let Some(map) = doc.as_object() else { return };
+        let conn = self.conn();
+        for (email, notices) in map {
+            let Some(arr) = notices.as_array() else { continue };
+            for notice in arr {
+                let Some(id) = notice.get("id").and_then(|v| v.as_str()) else {
+                    continue;
+                };
+                let kind = notice.get("kind").and_then(|v| v.as_str()).unwrap_or("");
+                let batch_id = notice.get("batchId").and_then(|v| v.as_str()).unwrap_or("");
+                let ts = notice.get("ts").and_then(|v| v.as_i64()).unwrap_or(now);
+                let read = notice.get("read").and_then(|v| v.as_bool()).unwrap_or(false);
+                let data_str = serde_json::to_string(notice).unwrap_or_else(|_| "{}".to_string());
+                let _ = conn.execute(
+                    "INSERT OR IGNORE INTO coin_gift_notices (id, email, kind, batch_id, ts, read, data, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    rusqlite::params![id, email, kind, batch_id, ts, read, data_str, now],
+                );
+            }
         }
     }
 

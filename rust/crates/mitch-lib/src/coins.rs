@@ -199,10 +199,158 @@ pub fn rename_coins_email(store: &DataStore, old_norm: &str, new_norm: &str) {
     );
 }
 
+/// Inserts one notice row for `norm_email` and prunes that user back down
+/// to the newest 50 (the old blob's unshift-then-truncate-49 cap). `data`
+/// is the notice's own fields (minus id/ts/read, set here) — including
+/// `kind`/`batchId` when the caller wants them echoed back, since `data`
+/// is what reads reconstruct verbatim.
+fn insert_coin_gift_notice(
+    store: &DataStore,
+    norm_email: &str,
+    kind: &str,
+    batch_id: &str,
+    mut data: Value,
+) -> Value {
+    let id = crate::crypto::random_bytes_hex(12);
+    let ts = now_millis();
+    if let Some(obj) = data.as_object_mut() {
+        obj.insert("id".into(), json!(id));
+        obj.insert("ts".into(), json!(ts));
+        obj.insert("read".into(), json!(false));
+    }
+    let data_str = serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string());
+    let conn = store.conn();
+    let _ = conn.execute(
+        "INSERT INTO coin_gift_notices (id, email, kind, batch_id, ts, read, data, created_at) VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?5)",
+        rusqlite::params![id, norm_email, kind, batch_id, ts, data_str],
+    );
+    let _ = conn.execute(
+        "DELETE FROM coin_gift_notices WHERE email = ?1 AND id NOT IN (
+            SELECT id FROM coin_gift_notices WHERE email = ?1 ORDER BY ts DESC, rowid DESC LIMIT 50
+        )",
+        rusqlite::params![norm_email],
+    );
+    data
+}
+
+/// Every notice for one user, newest first (was a coin_gifts.json[norm]
+/// array read).
+pub fn coin_gift_notices_for(store: &DataStore, norm_email: &str) -> Vec<Value> {
+    let conn = store.conn();
+    let mut stmt = match conn.prepare(
+        "SELECT data, read FROM coin_gift_notices WHERE email = ?1 ORDER BY ts DESC, rowid DESC",
+    ) {
+        Ok(s) => s,
+        Err(_) => return Vec::new(),
+    };
+    let result = match stmt.query_map(rusqlite::params![norm_email], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? != 0))
+    }) {
+        Ok(rows) => rows
+            .filter_map(|r| r.ok())
+            .filter_map(|(data, read)| with_live_read(&data, read))
+            .collect(),
+        Err(_) => Vec::new(),
+    };
+    result
+}
+
+/// Parses `data` and overlays the real `read` column — `data` carries
+/// whatever `read` was true at insert time, but `mark_coin_gift_notices_read`
+/// only updates the column, so reads must overlay it to see mark-as-read
+/// changes.
+fn with_live_read(data: &str, read: bool) -> Option<Value> {
+    let mut v: Value = serde_json::from_str(data).ok()?;
+    if let Some(obj) = v.as_object_mut() {
+        obj.insert("read".into(), json!(read));
+    }
+    Some(v)
+}
+
+/// Marks notices read for one user — specific `ids`, or every notice when
+/// `ids` is empty (was the JS's "empty ids marks all" contract).
+pub fn mark_coin_gift_notices_read(
+    store: &DataStore,
+    norm_email: &str,
+    ids: &std::collections::HashSet<String>,
+) {
+    let conn = store.conn();
+    if ids.is_empty() {
+        let _ = conn.execute(
+            "UPDATE coin_gift_notices SET read = 1 WHERE email = ?1",
+            rusqlite::params![norm_email],
+        );
+    } else {
+        for id in ids {
+            let _ = conn.execute(
+                "UPDATE coin_gift_notices SET read = 1 WHERE email = ?1 AND id = ?2",
+                rusqlite::params![norm_email, id],
+            );
+        }
+    }
+}
+
+/// Every `admin_notice` row across every user, as (email, notice) pairs —
+/// was a full coin_gifts.json scan over every user's array.
+pub fn admin_notice_rows(store: &DataStore) -> Vec<(String, Value)> {
+    let conn = store.conn();
+    let mut stmt = match conn.prepare(
+        "SELECT email, data, read FROM coin_gift_notices WHERE kind = 'admin_notice' ORDER BY ts DESC, rowid DESC",
+    ) {
+        Ok(s) => s,
+        Err(_) => return Vec::new(),
+    };
+    let result = match stmt.query_map([], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, i64>(2)? != 0))
+    }) {
+        Ok(rows) => rows
+            .filter_map(|r| r.ok())
+            .filter_map(|(email, data, read)| with_live_read(&data, read).map(|v| (email, v)))
+            .collect(),
+        Err(_) => Vec::new(),
+    };
+    result
+}
+
+/// Deletes every `admin_notice` row matching `id` or `batch_id` (either
+/// may be empty to skip that condition) across every user. Returns how
+/// many rows were removed — was a full-site scan rewriting every user's
+/// blob to drop matching entries.
+pub fn unsend_coin_gift_notices(store: &DataStore, id: &str, batch_id: &str) -> i64 {
+    let conn = store.conn();
+    let mut removed = 0i64;
+    if !id.is_empty() {
+        removed += conn
+            .execute(
+                "DELETE FROM coin_gift_notices WHERE kind = 'admin_notice' AND id = ?1",
+                rusqlite::params![id],
+            )
+            .unwrap_or(0) as i64;
+    }
+    if !batch_id.is_empty() {
+        removed += conn
+            .execute(
+                "DELETE FROM coin_gift_notices WHERE kind = 'admin_notice' AND batch_id = ?1",
+                rusqlite::params![batch_id],
+            )
+            .unwrap_or(0) as i64;
+    }
+    removed
+}
+
+/// Moves every one of a user's notices onto their new normalized email.
+pub fn rename_coin_gift_notices_email(store: &DataStore, old_norm: &str, new_norm: &str) {
+    let conn = store.conn();
+    let _ = conn.execute(
+        "UPDATE coin_gift_notices SET email = ?2 WHERE email = ?1",
+        rusqlite::params![old_norm, new_norm],
+    );
+}
+
 /// `addCoinGiftNotice(targetEmail, amount, adminEmail, reason)` — 3083-3100.
 pub fn add_coin_gift_notice(
     store: &DataStore,
-    data_dir: &Path,
+    _data_dir: &Path,
     target_email: &str,
     amount: f64,
     admin_email: &str,
@@ -212,29 +360,12 @@ pub fn add_coin_gift_notice(
     if norm.is_empty() {
         return None;
     }
-    let file = data_dir.join("coin_gifts.json");
-    let mut gifts = store.read_document(&file, json!({}));
-    let map = gifts.as_object_mut()?;
-    let notices = map
-        .entry(norm.clone())
-        .or_insert_with(|| json!([]))
-        .as_array_mut()
-        .cloned()
-        .unwrap_or_default();
-    let notice = json!({
-        "id": crate::crypto::random_bytes_hex(12),
+    let data = json!({
         "amount": amount,
         "from": if admin_email.is_empty() { "admin" } else { admin_email },
         "reason": if reason.is_empty() { "admin gift" } else { reason },
-        "ts": now_millis(),
-        "read": false,
     });
-    let mut next = Vec::with_capacity(notices.len() + 1);
-    next.push(notice.clone());
-    next.extend(notices.into_iter().take(49));
-    map.insert(norm, json!(next));
-    let _ = store.write_document(&file, &gifts);
-    Some(notice)
+    Some(insert_coin_gift_notice(store, &norm, "", "", data))
 }
 
 /// `addAdminNotification(targetEmail, title, message, adminEmail, batchId, url)`
@@ -242,7 +373,7 @@ pub fn add_coin_gift_notice(
 #[allow(clippy::too_many_arguments)] // mirrors the JS signature
 pub fn add_admin_notification(
     store: &DataStore,
-    data_dir: &Path,
+    _data_dir: &Path,
     target_email: &str,
     title: &str,
     message: &str,
@@ -254,15 +385,6 @@ pub fn add_admin_notification(
     if norm.is_empty() {
         return None;
     }
-    let file = data_dir.join("coin_gifts.json");
-    let mut gifts = store.read_document(&file, json!({}));
-    let map = gifts.as_object_mut()?;
-    let notices = map
-        .entry(norm.clone())
-        .or_insert_with(|| json!([]))
-        .as_array_mut()
-        .cloned()
-        .unwrap_or_default();
     let clean_path = if url.starts_with('/') {
         url.to_string()
     } else if url.is_empty() {
@@ -270,8 +392,7 @@ pub fn add_admin_notification(
     } else {
         format!("/{url}")
     };
-    let notice = json!({
-        "id": crate::crypto::random_bytes_hex(12),
+    let data = json!({
         "kind": "admin_notice",
         "title": if title.is_empty() { "Admin notification" } else { title },
         "message": message,
@@ -279,22 +400,15 @@ pub fn add_admin_notification(
         "source": "mitchdog.com",
         "url": clean_path,
         "batchId": batch_id,
-        "ts": now_millis(),
-        "read": false,
     });
-    let mut next = Vec::with_capacity(notices.len() + 1);
-    next.push(notice.clone());
-    next.extend(notices.into_iter().take(49));
-    map.insert(norm, json!(next));
-    let _ = store.write_document(&file, &gifts);
-    Some(notice)
+    Some(insert_coin_gift_notice(store, &norm, "admin_notice", batch_id, data))
 }
 
 /// `addVmAdminNotification(targetEmail, title, message, adminEmail, url)`
 /// — server.js:3309-3330. `kind: 'vm_admin_access'` rows in coin_gifts.json.
 pub fn add_vm_admin_notification(
     store: &DataStore,
-    data_dir: &Path,
+    _data_dir: &Path,
     target_email: &str,
     title: &str,
     message: &str,
@@ -305,17 +419,7 @@ pub fn add_vm_admin_notification(
     if norm.is_empty() {
         return None;
     }
-    let file = data_dir.join("coin_gifts.json");
-    let mut gifts = store.read_document(&file, json!({}));
-    let map = gifts.as_object_mut()?;
-    let notices = map
-        .entry(norm.clone())
-        .or_insert_with(|| json!([]))
-        .as_array_mut()
-        .cloned()
-        .unwrap_or_default();
-    let notice = json!({
-        "id": crate::crypto::random_bytes_hex(12),
+    let data = json!({
         "kind": "vm_admin_access",
         "title": if title.is_empty() { "Computer Access Alert" } else { title },
         "message": message,
@@ -323,15 +427,8 @@ pub fn add_vm_admin_notification(
         "source": "mitchdog.com",
         "url": if url.is_empty() { "/vms/" } else { url },
         "batchId": "",
-        "ts": now_millis(),
-        "read": false,
     });
-    let mut next = Vec::with_capacity(notices.len() + 1);
-    next.push(notice.clone());
-    next.extend(notices.into_iter().take(49));
-    map.insert(norm, json!(next));
-    let _ = store.write_document(&file, &gifts);
-    Some(notice)
+    Some(insert_coin_gift_notice(store, &norm, "vm_admin_access", "", data))
 }
 
 fn now_millis() -> i64 {
@@ -385,7 +482,6 @@ fn js_round4(x: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     fn temp_store(tag: &str) -> (std::path::PathBuf, std::path::PathBuf, DataStore) {
         let base = std::env::temp_dir().join(format!(
@@ -481,23 +577,71 @@ mod tests {
             n.get("source").and_then(|v| v.as_str()),
             Some("mitchdog.com")
         );
-        let gifts = store.read_document(&data.join("coin_gifts.json"), json!({}));
-        let mine = gifts
-            .get(normalize_email("user@mitch.pro").as_str())
-            .and_then(|v| v.as_array())
-            .unwrap();
+        let norm = normalize_email("user@mitch.pro");
+        let mine = coin_gift_notices_for(&store, &norm);
         assert_eq!(mine.len(), 1);
         // Coin gift notices cap at 50, newest first.
         for i in 0..55 {
             add_coin_gift_notice(&store, &data, "user@mitch.pro", i as f64, "admin", "");
         }
-        let gifts = store.read_document(&base.join("data/coin_gifts.json"), json!({}));
-        let mine = gifts
-            .get(normalize_email("user@mitch.pro").as_str())
-            .and_then(|v| v.as_array())
-            .unwrap();
+        let mine = coin_gift_notices_for(&store, &norm);
         assert_eq!(mine.len(), 50);
         assert_eq!(mine[0].get("amount").and_then(|v| v.as_f64()), Some(54.0));
+        std::fs::remove_dir_all(base).ok();
+    }
+
+    #[test]
+    fn mark_read_specific_ids_and_all() {
+        let (base, data, store) = temp_store("mark-read");
+        let norm = normalize_email("user@mitch.pro");
+        let a = add_coin_gift_notice(&store, &data, "user@mitch.pro", 1.0, "admin", "").unwrap();
+        let b = add_coin_gift_notice(&store, &data, "user@mitch.pro", 2.0, "admin", "").unwrap();
+        let a_id = a.get("id").and_then(|v| v.as_str()).unwrap().to_string();
+        mark_coin_gift_notices_read(&store, &norm, &[a_id.clone()].into_iter().collect());
+        let mine = coin_gift_notices_for(&store, &norm);
+        let a_row = mine.iter().find(|n| n.get("id").and_then(|v| v.as_str()) == Some(a_id.as_str())).unwrap();
+        let b_id = b.get("id").and_then(|v| v.as_str()).unwrap();
+        let b_row = mine.iter().find(|n| n.get("id").and_then(|v| v.as_str()) == Some(b_id)).unwrap();
+        assert_eq!(a_row.get("read").and_then(|v| v.as_bool()), Some(true));
+        assert_eq!(b_row.get("read").and_then(|v| v.as_bool()), Some(false));
+        // Empty ids marks every notice read.
+        mark_coin_gift_notices_read(&store, &norm, &std::collections::HashSet::new());
+        let mine = coin_gift_notices_for(&store, &norm);
+        assert!(mine.iter().all(|n| n.get("read").and_then(|v| v.as_bool()) == Some(true)));
+        std::fs::remove_dir_all(base).ok();
+    }
+
+    #[test]
+    fn unsend_removes_by_id_or_batch_across_users() {
+        let (base, data, store) = temp_store("unsend");
+        let n1 = add_admin_notification(&store, &data, "a@mitch.pro", "t", "m", "admin", "batchA", "").unwrap();
+        add_admin_notification(&store, &data, "b@mitch.pro", "t", "m", "admin", "batchA", "").unwrap();
+        add_admin_notification(&store, &data, "c@mitch.pro", "t", "m", "admin", "batchB", "").unwrap();
+        // A coin gift (not an admin_notice) must never be touched by unsend.
+        add_coin_gift_notice(&store, &data, "a@mitch.pro", 5.0, "admin", "");
+
+        let removed = unsend_coin_gift_notices(&store, "", "batchA");
+        assert_eq!(removed, 2);
+        assert!(coin_gift_notices_for(&store, &normalize_email("a@mitch.pro"))
+            .iter()
+            .any(|n| n.get("amount").is_some()));
+        assert!(coin_gift_notices_for(&store, &normalize_email("b@mitch.pro")).is_empty());
+        assert_eq!(coin_gift_notices_for(&store, &normalize_email("c@mitch.pro")).len(), 1);
+
+        let n1_id = n1.get("id").and_then(|v| v.as_str()).unwrap();
+        let removed = unsend_coin_gift_notices(&store, n1_id, "");
+        assert_eq!(removed, 0, "already removed by the batch delete above");
+        std::fs::remove_dir_all(base).ok();
+    }
+
+    #[test]
+    fn rename_moves_every_notice() {
+        let (base, data, store) = temp_store("notice-rename");
+        add_coin_gift_notice(&store, &data, "old@gmail.com", 1.0, "admin", "");
+        add_admin_notification(&store, &data, "old@gmail.com", "t", "m", "admin", "b1", "").unwrap();
+        rename_coin_gift_notices_email(&store, "old@gmail.com", "new@gmail.com");
+        assert!(coin_gift_notices_for(&store, "old@gmail.com").is_empty());
+        assert_eq!(coin_gift_notices_for(&store, "new@gmail.com").len(), 2);
         std::fs::remove_dir_all(base).ok();
     }
 }
