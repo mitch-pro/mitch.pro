@@ -38,6 +38,7 @@ pub mod log;
 pub mod matrix;
 pub mod minigames;
 pub mod profile;
+pub mod push_subs;
 pub mod school;
 pub mod shop;
 pub mod sso;

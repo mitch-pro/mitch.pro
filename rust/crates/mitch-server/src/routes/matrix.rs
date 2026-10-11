@@ -5577,13 +5577,6 @@ async fn dispatch_matrix_message_notifications(
     let notif_url = format!("/matrix/#/room/{enc_room}");
 
     let vapid_public = std::env::var("VAPID_PUBLIC_KEY").unwrap_or_default();
-    let subs = if !vapid_public.is_empty() {
-        state
-            .store
-            .read_document(&state.data_dir().join("push_subs.json"), json!({}))
-    } else {
-        json!({})
-    };
 
     for member_id in &members {
         if !sender_user_id.is_empty() && member_id.eq_ignore_ascii_case(&sender_user_id) {
@@ -5629,7 +5622,7 @@ async fn dispatch_matrix_message_notifications(
         );
 
         if !vapid_public.is_empty() {
-            if let Some(sub) = subs.get(&member_norm) {
+            if let Some(sub) = mitch_lib::push_subs::push_sub_get(&state.store, &member_norm) {
                 let push_payload = json!({
                     "title": title_to_use,
                     "body": preview_text,
@@ -5708,10 +5701,7 @@ async fn dispatch_matrix_invite_notifications(
 
     let vapid_public = std::env::var("VAPID_PUBLIC_KEY").unwrap_or_default();
     if !vapid_public.is_empty() {
-        let subs = state
-            .store
-            .read_document(&state.data_dir().join("push_subs.json"), json!({}));
-        if let Some(sub) = subs.get(&member_norm) {
+        if let Some(sub) = mitch_lib::push_subs::push_sub_get(&state.store, &member_norm) {
             let push_payload = json!({
                 "title": notif_title,
                 "body": notif_body,
@@ -5787,13 +5777,6 @@ async fn dispatch_matrix_call_notifications(
     let notif_url = format!("/matrix/#/room/{enc_room}");
 
     let vapid_public = std::env::var("VAPID_PUBLIC_KEY").unwrap_or_default();
-    let subs = if !vapid_public.is_empty() {
-        state
-            .store
-            .read_document(&state.data_dir().join("push_subs.json"), json!({}))
-    } else {
-        json!({})
-    };
 
     for member_id in &members {
         if !sender_user_id.is_empty() && member_id.eq_ignore_ascii_case(&sender_user_id) {
@@ -5838,7 +5821,7 @@ async fn dispatch_matrix_call_notifications(
         );
 
         if !vapid_public.is_empty() {
-            if let Some(sub) = subs.get(&member_norm) {
+            if let Some(sub) = mitch_lib::push_subs::push_sub_get(&state.store, &member_norm) {
                 let push_payload = json!({
                     "title": notif_title,
                     "body": notif_body,

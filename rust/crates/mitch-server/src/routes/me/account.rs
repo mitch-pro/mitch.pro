@@ -1064,10 +1064,10 @@ pub(crate) fn rename_email_references(
     new_email: &str,
 ) {
     // coins, the invite system, mini-game sessions, e2e keys, dm_cleared,
-    // daily_logins, and coin_gift_notices are real tables now, not JSON
-    // blob keys to rename in the generic loop below — they need their own
-    // UPDATEs. (The old loop only ever covered piccolo_sessions anyway —
-    // typing/piano/logic renames were silently dropped before.)
+    // daily_logins, coin_gift_notices, and push_subs are real tables now,
+    // not JSON blob keys to rename in the generic loop below — they need
+    // their own UPDATEs. (The old loop only ever covered piccolo_sessions
+    // anyway — typing/piano/logic renames were silently dropped before.)
     mitch_lib::coins::rename_coins_email(&state.store, old_norm, new_norm);
     mitch_lib::invites::rename_invite_email(&state.store, old_norm, new_norm);
     mitch_lib::minigames::rename_mini_sessions_email(&state.store, old_norm, new_norm);
@@ -1075,6 +1075,7 @@ pub(crate) fn rename_email_references(
     mitch_lib::dm::rename_dm_cleared_email(&state.store, old_norm, new_norm);
     mitch_lib::daily_logins::rename_daily_login_email(&state.store, old_norm, new_norm);
     mitch_lib::coins::rename_coin_gift_notices_email(&state.store, old_norm, new_norm);
+    mitch_lib::push_subs::rename_push_sub_email(&state.store, old_norm, new_norm);
     let key_maps = [
         "passwords.json",
         "profiles.json",
@@ -1082,7 +1083,6 @@ pub(crate) fn rename_email_references(
         "achievements.json",
         "cosmetics.json",
         "premium_gifts_sent.json",
-        "push_subs.json",
         "sebastians_claims.json",
     ];
     for file in key_maps {

@@ -209,9 +209,6 @@ pub async fn notify_friends_online(state: &Arc<AppState>, email: &str) {
     if vapid_public.is_empty() {
         return; // JS parity: `if (sub && VAPID_PUBLIC)`.
     }
-    let subs: Value = state
-        .store
-        .read_document(&state.data_dir().join("push_subs.json"), json!({}));
     let payload = json!({
         "title": "Friend Online",
         "body": format!("{sender_name} is now online!"),
@@ -225,19 +222,8 @@ pub async fn notify_friends_online(state: &Arc<AppState>, email: &str) {
         {
             continue;
         }
-        // `subs[friend] || subs[friendNorm]` — raw key first.
-        let sub = subs
-            .get(&friend_raw)
-            .filter(|s| !s.is_null())
-            .or_else(|| subs.get(&friend_norm))
-            .cloned();
-        if let Some(sub) = sub {
-            if sub.is_null() {
-                continue;
-            }
-            // send_web_push cleans up both keys on 410/404, matching the JS
-            // `delete subs[friend]; delete subs[friendNorm]` catch handler.
-            crate::routes::push::send_web_push(state, "", &friend_raw, &sub, &payload).await;
+        if let Some(sub) = mitch_lib::push_subs::push_sub_get(&state.store, &friend_norm) {
+            crate::routes::push::send_web_push(state, "", &friend_norm, &sub, &payload).await;
         }
     }
 }

@@ -296,6 +296,11 @@ impl DataStore {
                         data TEXT NOT NULL,
                         created_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS push_subs (
+                        email TEXT PRIMARY KEY,
+                        data TEXT NOT NULL,
+                        updated_at INTEGER NOT NULL
+                    );
                     CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs (ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_level ON app_logs (level, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_category ON app_logs (category, ts DESC);
@@ -370,6 +375,7 @@ impl DataStore {
         store.backfill_dm_cleared_from_json();
         store.backfill_daily_logins_from_json();
         store.backfill_coin_gift_notices_from_json();
+        store.backfill_push_subs_from_json();
         Ok(store)
     }
 
@@ -693,6 +699,33 @@ impl DataStore {
                     rusqlite::params![id, email, kind, batch_id, ts, read, data_str, now],
                 );
             }
+        }
+    }
+
+    /// One-time (idempotent) backfill from push_subs.json into the real
+    /// `push_subs` table. Legacy entries could be keyed by the raw or the
+    /// normalized email (every write path normalizes today, but old rows
+    /// predate that) — every reader used to try both forms or re-normalize
+    /// the whole map on each call, so this normalizes the key once here
+    /// instead, collapsing both forms onto one row per user going forward.
+    fn backfill_push_subs_from_json(&self) {
+        let now = now_millis();
+        let doc = self.read_document(&self.data_dir.join("push_subs.json"), Value::Null);
+        let Some(map) = doc.as_object() else { return };
+        let conn = self.conn();
+        for (key, sub) in map {
+            if !sub.is_object() {
+                continue;
+            }
+            let norm = crate::auth::normalize_email(key);
+            if norm.is_empty() {
+                continue;
+            }
+            let data_str = serde_json::to_string(sub).unwrap_or_else(|_| "{}".to_string());
+            let _ = conn.execute(
+                "INSERT OR IGNORE INTO push_subs (email, data, updated_at) VALUES (?1, ?2, ?3)",
+                rusqlite::params![norm, data_str, now],
+            );
         }
     }
 

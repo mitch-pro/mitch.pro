@@ -226,12 +226,6 @@ pub(crate) async fn handle(
     let vapid_public = std::env::var("VAPID_PUBLIC_KEY")
         .map(|v| v.trim().to_string())
         .unwrap_or_default();
-    // VAPID_PUBLIC ? loadPushSubscriptions() : {} — normalized keys.
-    let subs = if vapid_public.is_empty() {
-        json!({})
-    } else {
-        load_push_subscriptions(state)
-    };
     let requested_expiry =
         jsval::number(body.get("expiry").unwrap_or(&Value::Null)).unwrap_or(f64::NAN);
     let requested_expiry = if requested_expiry.is_nan() || requested_expiry == 0.0 {
@@ -431,7 +425,9 @@ pub(crate) async fn handle(
                 if !notif_allowed(state, &member_norm, "group") {
                     continue;
                 }
-                if truthy(&jsval::or(subs.get(member_norm.as_str()), json!(null))) {
+                if !vapid_public.is_empty()
+                    && mitch_lib::push_subs::push_sub_get(&state.store, &member_norm).is_some()
+                {
                     let payload = json!({
                         "title": format!("{sender_display} in {group_name}"),
                         "body": notify_body,
@@ -458,7 +454,7 @@ pub(crate) async fn handle(
                     encode_uri_component(&sender_canonical)
                 )));
                 if !vapid_public.is_empty()
-                    && truthy(&jsval::or(subs.get(to_canonical.as_str()), json!(null)))
+                    && mitch_lib::push_subs::push_sub_get(&state.store, to_canonical).is_some()
                 {
                     let payload = json!({
                         "title": format!("Message from {sender_display}"),
@@ -681,20 +677,3 @@ fn validate_image(image_raw: &Value) -> Result<Option<Value>, (u16, &'static str
     Ok(None)
 }
 
-/// `loadPushSubscriptions()` (server.js:2154) — push_subs.json with
-/// normalized keys; only truthy object subscriptions survive.
-fn load_push_subscriptions(state: &AppState) -> Value {
-    let stored = state
-        .store
-        .read_document(&data_file(state, "push_subs.json"), json!({}));
-    let mut normalized = Map::new();
-    if let Some(obj) = stored.as_object() {
-        for (k, v) in obj {
-            let key = auth::normalize_email(k);
-            if !key.is_empty() && truthy(v) && v.is_object() {
-                normalized.insert(key, v.clone());
-            }
-        }
-    }
-    Value::Object(normalized)
-}

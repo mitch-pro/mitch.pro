@@ -1,8 +1,8 @@
 //! Push + email side-channels (plan Step 8). These are fire-and-forget
 //! channels: failures never alter the HTTP response, matching the JS's
 //! `proc.unref()` + silent-catch semantics.
-//! - `push_admin_notification` — VAPID web push against data/push_subs.json
-//!   via the `web-push` crate (no-op without VAPID env, like the JS gate).
+//! - `push_admin_notification` — VAPID web push against the push_subs
+//!   table via the `web-push` crate (no-op without VAPID env, like the JS gate).
 //! - `ntfy_notify` — POST to ntfy.sh with the configured topic.
 //! - `send_email_bg` — POST to the mitch-mail service (:6902), the same
 //!   transport the mail shims use since Step 2.
@@ -12,7 +12,7 @@ use crate::state::AppState;
 use std::sync::Arc;
 
 /// `pushAdminNotification(targetEmail, title, message)` — server.js:3125.
-/// Reads push_subs.json, best-effort send, 410/404 cleanup, all async.
+/// Reads the push_subs table, best-effort send, 410/404 cleanup, all async.
 pub fn push_admin_notification(
     state: &Arc<AppState>,
     target_email: &str,
@@ -25,19 +25,12 @@ pub fn push_admin_notification(
     if vapid_public.is_empty() {
         return; // JS parity: `if (!VAPID_PUBLIC) return;`
     }
-    let subs = state.store.read_document(
-        &state.cfg.data_dir.join("push_subs.json"),
-        serde_json::json!({}),
-    );
     let norm = mitch_lib::auth::normalize_email(target_email);
-    let sub = subs
-        .get(target_email)
-        .or_else(|| subs.get(norm.as_str()))
-        .cloned();
-    let Some(sub) = sub else { return };
+    let Some(sub) = mitch_lib::push_subs::push_sub_get(&state.store, &norm) else {
+        return;
+    };
     let body = message.chars().take(120).collect::<String>();
     let state = state.clone();
-    let target_email = target_email.to_string();
     let title = title.to_string();
     let payload = serde_json::json!({
         "title": if title.is_empty() { "Admin notification" } else { &title },
@@ -45,7 +38,7 @@ pub fn push_admin_notification(
         "url": "/",
     });
     tokio::spawn(async move {
-        let _ = send_web_push(&state, &vapid_public, &target_email, &sub, &payload).await;
+        let _ = send_web_push(&state, &vapid_public, &norm, &sub, &payload).await;
     });
 }
 
@@ -127,13 +120,7 @@ pub(crate) async fn send_web_push(
             _ => false,
         };
         if gone {
-            let file = state.cfg.data_dir.join("push_subs.json");
-            let mut subs = state.store.read_document(&file, serde_json::json!({}));
-            if let Some(map) = subs.as_object_mut() {
-                map.remove(target_email);
-                map.remove(&mitch_lib::auth::normalize_email(target_email));
-            }
-            let _ = state.store.write_document(&file, &subs);
+            mitch_lib::push_subs::push_sub_remove(&state.store, target_email);
         }
         tracing::warn!("push send failed: {e:?} ({e}) endpoint={endpoint}");
         return gone;
@@ -141,10 +128,10 @@ pub(crate) async fn send_web_push(
     false
 }
 
-/// `sendWebPushClean(subs, email, payload)` (server.js:2263-2276). Loads
-/// push_subs.json, looks the subscription up by the NORMALIZED email only,
-/// and deletes it from the store on 410/404. Awaited by the friends flows
-/// exactly as the JS awaits it.
+/// `sendWebPushClean(subs, email, payload)` (server.js:2263-2276). Looks
+/// the subscription up by the NORMALIZED email only, and deletes it from
+/// the store on 410/404. Awaited by the friends flows exactly as the JS
+/// awaits it.
 pub async fn send_web_push_clean(state: &Arc<AppState>, email: &str, payload: &serde_json::Value) {
     let vapid_public = std::env::var("VAPID_PUBLIC_KEY")
         .map(|v| v.trim().to_string())
@@ -156,17 +143,11 @@ pub async fn send_web_push_clean(state: &Arc<AppState>, email: &str, payload: &s
     if key.is_empty() {
         return;
     }
-    let file = state.cfg.data_dir.join("push_subs.json");
-    let subs = state.store.read_document(&file, serde_json::json!({}));
-    let Some(sub) = subs.get(&key).cloned() else {
+    let Some(sub) = mitch_lib::push_subs::push_sub_get(&state.store, &key) else {
         return;
     };
     if send_web_push(state, &vapid_public, &key, &sub, payload).await {
-        let mut subs = state.store.read_document(&file, serde_json::json!({}));
-        if let Some(map) = subs.as_object_mut() {
-            map.remove(&key);
-        }
-        let _ = state.store.write_document(&file, &subs);
+        mitch_lib::push_subs::push_sub_remove(&state.store, &key);
     }
 }
 
@@ -539,12 +520,7 @@ pub fn handle_push_routes(
             ));
         }
         let norm = mitch_lib::auth::normalize_email(&email);
-        let subs_file = state.data_dir().join("push_subs.json");
-        let mut subs = state.store.read_document(&subs_file, serde_json::json!({}));
-        if let Some(map) = subs.as_object_mut() {
-            map.insert(norm, body);
-            let _ = state.store.write_document(&subs_file, &subs);
-        }
+        mitch_lib::push_subs::push_sub_set(&state.store, &norm, &body);
         return Some(crate::errors::json_resp(
             200,
             serde_json::json!({ "success": true }),
@@ -576,12 +552,7 @@ pub fn handle_push_routes(
             ));
         }
         let norm = mitch_lib::auth::normalize_email(&email);
-        let subs_file = state.data_dir().join("push_subs.json");
-        let mut subs = state.store.read_document(&subs_file, serde_json::json!({}));
-        if let Some(map) = subs.as_object_mut() {
-            map.remove(&norm);
-            let _ = state.store.write_document(&subs_file, &subs);
-        }
+        mitch_lib::push_subs::push_sub_remove(&state.store, &norm);
         return Some(crate::errors::json_resp(
             200,
             serde_json::json!({ "success": true }),
