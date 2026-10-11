@@ -52,8 +52,6 @@ pub fn auto_finalize_marketplace(state: &AppState) {
     let expiry_window = 24 * 3600 * 1000;
 
     let catalog = shop::load_shop_catalog(&state.store, state.data_dir());
-    let cosm_file = data_file(state, "cosmetics.json");
-    let mut cosmetics = state.store.read_document(&cosm_file, json!({}));
 
     for item in arr.iter_mut() {
         let status = item.get("status").and_then(|v| v.as_str()).unwrap_or("");
@@ -92,7 +90,7 @@ pub fn auto_finalize_marketplace(state: &AppState) {
                     if let Some((bucket, _)) = shop::shop_type_config(cost_type) {
                         let buyer_norm = auth::normalize_email(buyer);
                         let mut owned = shop::normalize_cosmetics(
-                            &cosmetics.get(&buyer_norm).cloned().unwrap_or(json!({})),
+                            &shop::cosmetics_get(&state.store, &buyer_norm).unwrap_or(json!({})),
                         );
                         if let Some(bucket_arr) =
                             owned.get_mut(bucket).and_then(|v| v.as_array_mut())
@@ -101,9 +99,7 @@ pub fn auto_finalize_marketplace(state: &AppState) {
                                 bucket_arr.push(json!(item_id));
                             }
                         }
-                        if let Some(cmap) = cosmetics.as_object_mut() {
-                            cmap.insert(buyer_norm, owned);
-                        }
+                        shop::cosmetics_set(&state.store, &buyer_norm, &owned);
                     }
                 }
             }
@@ -112,7 +108,6 @@ pub fn auto_finalize_marketplace(state: &AppState) {
 
     if modified {
         let _ = state.store.write_document(&file, &list);
-        let _ = state.store.write_document(&cosm_file, &cosmetics);
     }
 }
 
@@ -256,10 +251,8 @@ async fn marketplace_list(
         let Some((bucket, active_key)) = shop::shop_type_config(cost_type) else {
             return json_response(400, json!({ "error": "untradeable cosmetic item type" }));
         };
-        let cosm_file = data_file(state, "cosmetics.json");
-        let mut cosmetics = state.store.read_document(&cosm_file, json!({}));
         let mut owned =
-            shop::normalize_cosmetics(&cosmetics.get(&norm).cloned().unwrap_or(json!({})));
+            shop::normalize_cosmetics(&shop::cosmetics_get(&state.store, &norm).unwrap_or(json!({})));
         let has_item = owned
             .get(bucket)
             .and_then(|v| v.as_array())
@@ -279,10 +272,7 @@ async fn marketplace_list(
         if owned.get(active_key).and_then(|v| v.as_str()) == Some(item_id) {
             owned[active_key] = json!("");
         }
-        if let Some(cmap) = cosmetics.as_object_mut() {
-            cmap.insert(norm.clone(), owned);
-        }
-        let _ = state.store.write_document(&cosm_file, &cosmetics);
+        shop::cosmetics_set(&state.store, &norm, &owned);
     } else if description.is_empty() {
         return json_response(
             400,
@@ -483,19 +473,15 @@ async fn marketplace_buy(
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
             if let Some((bucket, _)) = shop::shop_type_config(cost_type) {
-                let cosm_file = data_file(state, "cosmetics.json");
-                let mut cosmetics = state.store.read_document(&cosm_file, json!({}));
-                let mut owned =
-                    shop::normalize_cosmetics(&cosmetics.get(&norm).cloned().unwrap_or(json!({})));
+                let mut owned = shop::normalize_cosmetics(
+                    &shop::cosmetics_get(&state.store, &norm).unwrap_or(json!({})),
+                );
                 if let Some(arr) = owned.get_mut(bucket).and_then(|v| v.as_array_mut()) {
                     if !arr.iter().any(|v| v.as_str() == Some(&item_id)) {
                         arr.push(json!(item_id));
                     }
                 }
-                if let Some(cmap) = cosmetics.as_object_mut() {
-                    cmap.insert(norm, owned);
-                }
-                let _ = state.store.write_document(&cosm_file, &cosmetics);
+                shop::cosmetics_set(&state.store, &norm, &owned);
             }
         }
     }
@@ -569,20 +555,16 @@ fn marketplace_cancel(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
             if let Some((bucket, _)) = shop::shop_type_config(cost_type) {
-                let cosm_file = data_file(state, "cosmetics.json");
-                let mut cosmetics = state.store.read_document(&cosm_file, json!({}));
                 let norm = auth::normalize_email(&email);
-                let mut owned =
-                    shop::normalize_cosmetics(&cosmetics.get(&norm).cloned().unwrap_or(json!({})));
+                let mut owned = shop::normalize_cosmetics(
+                    &shop::cosmetics_get(&state.store, &norm).unwrap_or(json!({})),
+                );
                 if let Some(arr) = owned.get_mut(bucket).and_then(|v| v.as_array_mut()) {
                     if !arr.iter().any(|v| v.as_str() == Some(&item_id)) {
                         arr.push(json!(item_id));
                     }
                 }
-                if let Some(cmap) = cosmetics.as_object_mut() {
-                    cmap.insert(norm, owned);
-                }
-                let _ = state.store.write_document(&cosm_file, &cosmetics);
+                shop::cosmetics_set(&state.store, &norm, &owned);
             }
         }
     }
@@ -694,21 +676,16 @@ fn marketplace_mediate(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
                 if let Some((bucket, _)) = shop::shop_type_config(cost_type) {
-                    let cosm_file = data_file(state, "cosmetics.json");
-                    let mut cosmetics = state.store.read_document(&cosm_file, json!({}));
                     let buyer_norm = auth::normalize_email(&buyer);
                     let mut owned = shop::normalize_cosmetics(
-                        &cosmetics.get(&buyer_norm).cloned().unwrap_or(json!({})),
+                        &shop::cosmetics_get(&state.store, &buyer_norm).unwrap_or(json!({})),
                     );
                     if let Some(arr) = owned.get_mut(bucket).and_then(|v| v.as_array_mut()) {
                         if !arr.iter().any(|v| v.as_str() == Some(&item_id)) {
                             arr.push(json!(item_id));
                         }
                     }
-                    if let Some(cmap) = cosmetics.as_object_mut() {
-                        cmap.insert(buyer_norm, owned);
-                    }
-                    let _ = state.store.write_document(&cosm_file, &cosmetics);
+                    shop::cosmetics_set(&state.store, &buyer_norm, &owned);
                 }
             }
         }
@@ -741,21 +718,16 @@ fn marketplace_mediate(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
                 if let Some((bucket, _)) = shop::shop_type_config(cost_type) {
-                    let cosm_file = data_file(state, "cosmetics.json");
-                    let mut cosmetics = state.store.read_document(&cosm_file, json!({}));
                     let seller_norm = auth::normalize_email(&seller);
                     let mut owned = shop::normalize_cosmetics(
-                        &cosmetics.get(&seller_norm).cloned().unwrap_or(json!({})),
+                        &shop::cosmetics_get(&state.store, &seller_norm).unwrap_or(json!({})),
                     );
                     if let Some(arr) = owned.get_mut(bucket).and_then(|v| v.as_array_mut()) {
                         if !arr.iter().any(|v| v.as_str() == Some(&item_id)) {
                             arr.push(json!(item_id));
                         }
                     }
-                    if let Some(cmap) = cosmetics.as_object_mut() {
-                        cmap.insert(seller_norm, owned);
-                    }
-                    let _ = state.store.write_document(&cosm_file, &cosmetics);
+                    shop::cosmetics_set(&state.store, &seller_norm, &owned);
                 }
             }
         }
@@ -992,16 +964,14 @@ mod tests {
         );
 
         // Give seller a cosmetic badge
-        let cosm_file = data_file(&state, "cosmetics.json");
         let seller_norm = auth::normalize_email(seller);
-        let _ = state.store.write_document(
-            &cosm_file,
+        shop::cosmetics_set(
+            &state.store,
+            &seller_norm,
             &json!({
-                seller_norm.clone(): {
-                    "badges": ["verified_badge"],
-                    "colors": [],
-                    "effects": []
-                }
+                "badges": ["verified_badge"],
+                "colors": [],
+                "effects": []
             }),
         );
 
@@ -1024,8 +994,7 @@ mod tests {
         assert_eq!(list_resp.status(), 200);
 
         // Verify item was stripped from seller
-        let cosm = state.store.read_document(&cosm_file, json!({}));
-        let seller_cosm = cosm.get(&seller_norm).unwrap();
+        let seller_cosm = shop::cosmetics_get(&state.store, &seller_norm).unwrap();
         let seller_badges = seller_cosm
             .get("badges")
             .and_then(|v| v.as_array())
@@ -1068,9 +1037,8 @@ mod tests {
         assert_eq!(seller_coins, 50.0);
 
         // Verify cosmetic awarded to buyer
-        let cosm_after = state.store.read_document(&cosm_file, json!({}));
         let buyer_norm = auth::normalize_email(buyer);
-        let buyer_cosm = cosm_after.get(&buyer_norm).unwrap();
+        let buyer_cosm = shop::cosmetics_get(&state.store, &buyer_norm).unwrap();
         let buyer_badges = buyer_cosm.get("badges").and_then(|v| v.as_array()).unwrap();
         assert!(buyer_badges
             .iter()

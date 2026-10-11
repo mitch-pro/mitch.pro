@@ -148,9 +148,7 @@ async fn shop_buy(
         .to_string();
 
     if let Some((bucket, _active)) = mitch_lib::shop::shop_type_config(&cost_type) {
-        let cosmetics_file = data_file(state, "cosmetics.json");
-        let mut cosm_all = state.store.read_document(&cosmetics_file, json!({}));
-        let entry = cosm_all.get(norm.as_str()).cloned().unwrap_or(json!({}));
+        let entry = mitch_lib::shop::cosmetics_get(&state.store, &norm).unwrap_or(json!({}));
         let mut owned = mitch_lib::shop::sanitize_cosmetics_for_email(&state.store, &email, &entry);
         if mitch_lib::shop::cosmetics_bucket_has(&owned, bucket, &item_id) {
             return json_response(400, json!({ "error": "You already own this item." }));
@@ -158,10 +156,7 @@ async fn shop_buy(
         if let Some(arr) = owned.get_mut(bucket).and_then(|v| v.as_array_mut()) {
             arr.push(json!(item_id));
         }
-        if let Some(obj) = cosm_all.as_object_mut() {
-            obj.insert(norm.clone(), owned);
-        }
-        let _ = state.store.write_document(&cosmetics_file, &cosm_all);
+        mitch_lib::shop::cosmetics_set(&state.store, &norm, &owned);
     } else if cost_type == "ai_personality" {
         let unlocked_file = data_file(state, "unlocked_ai.json");
         let mut unlocked = state.store.read_document(&unlocked_file, json!({}));
@@ -375,9 +370,7 @@ fn me_cosmetics_equip(
         .unwrap_or("")
         .to_string();
 
-    let cosmetics_file = data_file(state, "cosmetics.json");
-    let mut cosm = state.store.read_document(&cosmetics_file, json!({}));
-    let entry = cosm.get(norm.as_str()).cloned().unwrap_or(json!({}));
+    let entry = mitch_lib::shop::cosmetics_get(&state.store, &norm).unwrap_or(json!({}));
     let mut user_cosm = mitch_lib::shop::sanitize_cosmetics_for_email(&state.store, &email, &entry);
 
     // `String(itemId || '')` — null/undefined/0 collapse to ''.
@@ -462,12 +455,7 @@ fn me_cosmetics_equip(
         return json_response(400, json!({ "error": "invalid type" }));
     }
 
-    if let Some(obj) = cosm.as_object_mut() {
-        obj.insert(norm.clone(), user_cosm);
-    }
-    if state.store.write_document(&cosmetics_file, &cosm).is_err() {
-        return json_response(400, json!({ "error": "save failed" }));
-    }
+    mitch_lib::shop::cosmetics_set(&state.store, &norm, &user_cosm);
     json_response(200, json!({ "ok": true }))
 }
 
@@ -549,10 +537,8 @@ mod tests {
         assert_eq!(balance, 225.0);
 
         let norm = auth::normalize_email(email);
-        let cosm = state
-            .store
-            .read_document(&data_file(&state, "cosmetics.json"), json!({}));
-        let badges = cosm[&norm]["badges"].as_array().cloned().unwrap_or_default();
+        let cosm = mitch_lib::shop::cosmetics_get(&state.store, &norm).unwrap_or(json!({}));
+        let badges = cosm["badges"].as_array().cloned().unwrap_or_default();
         assert!(badges.contains(&json!("chess_badge")));
 
         // Buying it again is rejected, not double-charged.

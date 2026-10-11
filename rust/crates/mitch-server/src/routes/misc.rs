@@ -299,8 +299,8 @@ fn log_click(state: &Arc<AppState>, body: &serde_json::Value) -> Response {
 }
 
 /// `GET /api/leaderboard` — server.js:20489-20535. Ranked by coins desc,
-/// tie-break name asc. Coins come from the real `coins` table now; stats,
-/// profiles, and cosmetics are still read from their JSON-blob documents.
+/// tie-break name asc. Coins and cosmetics come from real tables now;
+/// stats and profiles are still read from their JSON-blob documents.
 fn leaderboard(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let cookie_header = headers
         .get(axum::http::header::COOKIE)
@@ -326,9 +326,6 @@ fn leaderboard(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let profiles = state
         .store
         .read_document(&state.data_dir().join("profiles.json"), json!({}));
-    let cosmetics = state
-        .store
-        .read_document(&state.data_dir().join("cosmetics.json"), json!({}));
     let user_stats = state
         .store
         .read_document(&state.data_dir().join("user_stats.json"), json!({}));
@@ -352,7 +349,8 @@ fn leaderboard(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     for norm in &keys {
         let profile = profiles.get(norm).and_then(|v| v.as_object());
         let stats = user_stats.get(norm).and_then(|v| v.as_object());
-        let cosm = cosmetics.get(norm).and_then(|v| v.as_object());
+        let cosm_val = mitch_lib::shop::cosmetics_get(&state.store, norm);
+        let cosm = cosm_val.as_ref().and_then(|v| v.as_object());
         let nickname = profile
             .and_then(|p| p.get("nickname"))
             .and_then(|v| v.as_str())

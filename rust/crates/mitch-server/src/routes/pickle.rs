@@ -368,10 +368,7 @@ async fn chat_send(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]
         p.get("displayName").filter(|v| jsval::truthy(v)),
         email.split('@').next().unwrap_or(""),
     );
-    let cosm = state
-        .store
-        .read_document(&data_file(state, "cosmetics.json"), json!({}));
-    let user_cosm = cosm.get(&norm_email).cloned().unwrap_or(json!({}));
+    let user_cosm = mitch_lib::shop::cosmetics_get(&state.store, &norm_email).unwrap_or(json!({}));
     let mut msg = Map::new();
     msg.insert("id".to_string(), json!(random_bytes_hex(8)));
     msg.insert("name".to_string(), json!(name));

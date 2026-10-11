@@ -78,9 +78,6 @@ fn get_public_profile(state: &Arc<AppState>, headers: &HeaderMap, slug_raw: &str
             "background": ""
         })
     });
-    let cosm = state
-        .store
-        .read_document(&data_file(state, "cosmetics.json"), json!({}));
     let processed = mitch_lib::profile::process_member_fields(
         &state.store,
         state.data_dir(),
@@ -130,7 +127,7 @@ fn get_public_profile(state: &Arc<AppState>, headers: &HeaderMap, slug_raw: &str
         .read_document(&data_file(state, "achievements.json"), json!({}));
     let achievements = achievements_doc.get(&norm).cloned().unwrap_or(json!([]));
     let coins = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &actual_email);
-    let user_cosm = cosm.get(&norm).cloned().unwrap_or(json!({}));
+    let user_cosm = mitch_lib::shop::cosmetics_get(&state.store, &norm).unwrap_or(json!({}));
 
     let mut resp_obj = profile;
     if let Some(map) = resp_obj.as_object_mut() {
@@ -195,9 +192,6 @@ fn get_profile(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             "background": ""
         })
     });
-    let cosm = state
-        .store
-        .read_document(&data_file(state, "cosmetics.json"), json!({}));
     let processed = mitch_lib::profile::process_member_fields(
         &state.store,
         state.data_dir(),
@@ -242,7 +236,7 @@ fn get_profile(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         .read_document(&data_file(state, "achievements.json"), json!({}));
     let achievements = achievements_doc.get(&norm).cloned().unwrap_or(json!([]));
     let coins = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &email);
-    let user_cosm = cosm.get(&norm).cloned().unwrap_or(json!({}));
+    let user_cosm = mitch_lib::shop::cosmetics_get(&state.store, &norm).unwrap_or(json!({}));
 
     let mut resp_obj = profile;
     if let Some(map) = resp_obj.as_object_mut() {
@@ -766,12 +760,7 @@ fn me_root(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         json!({})
     };
     let cosmetics = if has_email {
-        state
-            .store
-            .read_document(&data_file(state, "cosmetics.json"), json!({}))
-            .get(&norm)
-            .cloned()
-            .unwrap_or(json!({}))
+        mitch_lib::shop::cosmetics_get(&state.store, &norm).unwrap_or(json!({}))
     } else {
         json!({})
     };
@@ -1076,12 +1065,12 @@ pub(crate) fn rename_email_references(
     mitch_lib::daily_logins::rename_daily_login_email(&state.store, old_norm, new_norm);
     mitch_lib::coins::rename_coin_gift_notices_email(&state.store, old_norm, new_norm);
     mitch_lib::push_subs::rename_push_sub_email(&state.store, old_norm, new_norm);
+    mitch_lib::shop::rename_cosmetics_email(&state.store, old_norm, new_norm);
     let key_maps = [
         "passwords.json",
         "profiles.json",
         "user_stats.json",
         "achievements.json",
-        "cosmetics.json",
         "premium_gifts_sent.json",
         "sebastians_claims.json",
     ];

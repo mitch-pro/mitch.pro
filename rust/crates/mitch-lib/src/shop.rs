@@ -368,6 +368,47 @@ pub fn shop_items_for(store: &DataStore, catalog: &[Value], email: &str) -> Vec<
         .collect()
 }
 
+/// One user's raw cosmetics record (callers normalize/sanitize as needed),
+/// or `None` if they've never owned/equipped anything — real `cosmetics`
+/// table (one row per email) instead of the old cosmetics.json blob.
+pub fn cosmetics_get(store: &DataStore, norm_email: &str) -> Option<Value> {
+    let conn = store.conn();
+    let raw: Option<String> = conn
+        .query_row(
+            "SELECT data FROM cosmetics WHERE email = ?1",
+            rusqlite::params![norm_email],
+            |r| r.get(0),
+        )
+        .ok();
+    raw.and_then(|s| serde_json::from_str(&s).ok())
+}
+
+fn now_millis() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+/// Upserts one user's whole cosmetics record.
+pub fn cosmetics_set(store: &DataStore, norm_email: &str, data: &Value) {
+    let data_str = serde_json::to_string(data).unwrap_or_else(|_| "{}".to_string());
+    let conn = store.conn();
+    let _ = conn.execute(
+        "INSERT INTO cosmetics (email, data, updated_at) VALUES (?1, ?2, ?3)
+         ON CONFLICT(email) DO UPDATE SET data = ?2, updated_at = ?3",
+        rusqlite::params![norm_email, data_str, now_millis()],
+    );
+}
+
+pub fn rename_cosmetics_email(store: &DataStore, old_norm: &str, new_norm: &str) {
+    let conn = store.conn();
+    let _ = conn.execute(
+        "UPDATE cosmetics SET email = ?2 WHERE email = ?1",
+        rusqlite::params![old_norm, new_norm],
+    );
+}
+
 /// `defaultCosmetics` (server.js:7278-7292).
 pub fn default_cosmetics() -> Value {
     json!({
@@ -472,7 +513,6 @@ pub fn build_inventory(
     email: &str,
 ) -> Value {
     let norm = auth::normalize_email(email);
-    let cosm = store.read_document(&data_dir.join("cosmetics.json"), json!({}));
     let unlocked_ai = store.read_document(&data_dir.join("unlocked_ai.json"), json!({}));
     let stats = store
         .read_document(&data_dir.join("user_stats.json"), json!({}))
@@ -480,7 +520,7 @@ pub fn build_inventory(
         .cloned()
         .unwrap_or(json!({}));
     let daily = crate::daily_logins::daily_login_get(store, &norm).unwrap_or(json!({}));
-    let entry = cosm.get(norm.as_str()).cloned().unwrap_or(json!({}));
+    let entry = cosmetics_get(store, &norm).unwrap_or(json!({}));
     let user_cosm = sanitize_cosmetics_for_email(store, email, &entry);
     let ai: Vec<Value> = unlocked_ai
         .get(norm.as_str())

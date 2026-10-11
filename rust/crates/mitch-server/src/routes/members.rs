@@ -67,9 +67,6 @@ fn members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let profiles = state
         .store
         .read_document(&data_file(state, "profiles.json"), json!({}));
-    let cosmetics = state
-        .store
-        .read_document(&data_file(state, "cosmetics.json"), json!({}));
     let dms = state
         .store
         .read_document(&data_file(state, "dms.json"), json!([]));
@@ -115,7 +112,7 @@ fn members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             .get(norm.as_str())
             .cloned()
             .unwrap_or(empty.clone());
-        let cosm = cosmetics.get(norm.as_str()).cloned().unwrap_or(empty);
+        let cosm = mitch_lib::shop::cosmetics_get(&state.store, norm.as_str()).unwrap_or(empty);
         let username = profile::normalize_username(&jsval::string(&jsval::or(
             prof.get("username"),
             json!(profile::default_username_for_email(&norm)),
@@ -448,16 +445,13 @@ fn admin_members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let profiles = state
         .store
         .read_document(&data_file(state, "profiles.json"), json!({}));
-    let cosmetics = state
-        .store
-        .read_document(&data_file(state, "cosmetics.json"), json!({}));
     let members: Vec<Value> = auth::admin_member_emails(&state.store)
         .iter()
         .filter(|e| e.as_str() != TEST_ACCOUNT_EMAIL && !auth::is_owner_email(&state.store, e))
         .map(|email| {
             let norm = auth::normalize_email(email);
             let prof = profiles.get(norm.as_str()).cloned().unwrap_or(json!({}));
-            let cosm = cosmetics.get(norm.as_str()).cloned().unwrap_or(json!({}));
+            let cosm = mitch_lib::shop::cosmetics_get(&state.store, norm.as_str()).unwrap_or(json!({}));
             let processed = profile::process_member_fields(
                 &state.store,
                 state.data_dir(),
@@ -492,9 +486,6 @@ fn moderator_members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let profiles = state
         .store
         .read_document(&data_file(state, "profiles.json"), json!({}));
-    let cosmetics = state
-        .store
-        .read_document(&data_file(state, "cosmetics.json"), json!({}));
     let mut excluded: Vec<String> = Vec::new();
     for email in auth::site_admin_emails(&state.store)
         .iter()
@@ -524,7 +515,7 @@ fn moderator_members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         .map(|email| {
             let norm = auth::normalize_email(&email);
             let prof = profiles.get(norm.as_str()).cloned().unwrap_or(json!({}));
-            let cosm = cosmetics.get(norm.as_str()).cloned().unwrap_or(json!({}));
+            let cosm = mitch_lib::shop::cosmetics_get(&state.store, norm.as_str()).unwrap_or(json!({}));
             let processed = profile::process_member_fields(
                 &state.store,
                 state.data_dir(),
@@ -554,9 +545,6 @@ fn owner_members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let profiles = state
         .store
         .read_document(&data_file(state, "profiles.json"), json!({}));
-    let cosmetics = state
-        .store
-        .read_document(&data_file(state, "cosmetics.json"), json!({}));
     // [...new Set([...owners, ...coOwners].map(normalizeEmail))] — insertion order.
     let mut norms: Vec<String> = Vec::new();
     for email in auth::owner_member_emails(&state.store)
@@ -574,7 +562,7 @@ fn owner_members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         .map(|email| {
             let norm = auth::normalize_email(email);
             let prof = profiles.get(norm.as_str()).cloned().unwrap_or(json!({}));
-            let cosm = cosmetics.get(norm.as_str()).cloned().unwrap_or(json!({}));
+            let cosm = mitch_lib::shop::cosmetics_get(&state.store, norm.as_str()).unwrap_or(json!({}));
             let processed = profile::process_member_fields(
                 &state.store,
                 state.data_dir(),
@@ -611,10 +599,6 @@ fn premium_members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let profiles = state
         .store
         .read_document(&data_file(state, "profiles.json"), json!({}));
-    let cosmetics = state
-        .store
-        .read_document(&data_file(state, "cosmetics.json"), json!({}));
-
     let mut seen: Vec<String> = Vec::new();
     let mut members: Vec<Value> = Vec::new();
     if let Some(apps) = applications.as_array() {
@@ -630,7 +614,7 @@ fn premium_members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
                 }
                 seen.push(norm.clone());
                 let prof = profiles.get(norm.as_str()).cloned().unwrap_or(json!({}));
-                let cosm = cosmetics.get(norm.as_str()).cloned().unwrap_or(json!({}));
+                let cosm = mitch_lib::shop::cosmetics_get(&state.store, norm.as_str()).unwrap_or(json!({}));
                 let processed = profile::process_member_fields(
                     &state.store,
                     state.data_dir(),
