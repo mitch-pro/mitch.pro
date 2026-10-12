@@ -425,7 +425,7 @@ fn post_profile(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -
     crate::ws::broadcast_profile_change(state, &username, now);
 
     let state_clone = Arc::clone(state);
-    let uid_clone = sid.to_string();
+    let norm_clone = norm.clone();
     let dn_clone = record
         .get("displayName")
         .and_then(|v| v.as_str())
@@ -441,7 +441,7 @@ fn post_profile(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -
     tokio::spawn(async move {
         crate::routes::matrix::sync_profile_to_matrix(
             &state_clone,
-            &uid_clone,
+            &norm_clone,
             dn_clone.as_deref(),
             pfp_clone.as_deref(),
             bio_clone.as_deref(),

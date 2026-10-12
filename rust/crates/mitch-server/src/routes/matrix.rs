@@ -196,8 +196,145 @@ fn unreachable_regex() -> regex::Regex {
     })
 }
 
-pub fn get_matrix_password_for_uid(uid: &str, secret: &[u8]) -> String {
+/// The Matrix account password, derived from the account's normalized
+/// email — stable for the life of the account, unlike the session uid
+/// (which changes on password reset/change and "log out other devices").
+pub fn get_matrix_password_for_email(norm_email: &str, secret: &[u8]) -> String {
+    mitch_lib::crypto::hmac_sha256_hex(secret, format!("matrix-account:{norm_email}").as_bytes())
+}
+
+/// The old uid-derived password scheme, kept only for the one-time
+/// migration path that rotates an existing account over to the
+/// email-derived password above.
+fn get_matrix_password_for_uid_legacy(uid: &str, secret: &[u8]) -> String {
     mitch_lib::crypto::hmac_sha256_hex(secret, format!("matrix-account:{uid}").as_bytes())
+}
+
+/// Resolves (and migrates) the stable Matrix username for an email.
+///
+/// Going forward, `matrix_users.json` is keyed by email, so once an
+/// account's mapping lands here it's immune to session-uid drift for
+/// good — no password reset, password change, or "log out other
+/// devices" can ever disturb it again, which is what stops the
+/// `-2`/`-3`-suffixed duplicates from compounding on every such event.
+///
+/// For an account that hasn't been migrated yet, this falls back to
+/// scanning the (old, uid-keyed) entries for one whose uid still
+/// resolves to this email. That resolution can only ever succeed for
+/// the account's *current* uid: `rotate_session_generation` — called on
+/// every password reset/change/"log out other devices" — deliberately
+/// wipes the `names` table's sid->email record for the email being
+/// rotated (a security property, not a bug: an old session identifier
+/// shouldn't stay traceable after that), so a *stale* uid's entry can
+/// never be resolved back to an email once it's been superseded by a
+/// rotation. In practice this means: if the account already has a
+/// reachable (not-yet-rotated-past) entry — which covers every account
+/// that hasn't reset its password since its last Matrix login — it
+/// gets migrated and stabilized immediately, with no visible
+/// disruption. If the entry became unreachable before this fix shipped
+/// (already rotated past at least once with no Matrix login in
+/// between), there is nothing left to recover programmatically; the
+/// account will register fresh (another suffixed name is possible this
+/// one time) but will stay stable under whatever it lands on from then
+/// on. Recovering a *specific* already-orphaned username (e.g. putting
+/// a user back on "admin" instead of "admin-2") needs a manual
+/// conduit-side fix — there's no stored data left to automate it from.
+async fn matrix_username_for_email(state: &AppState, norm_email: &str) -> Option<String> {
+    if norm_email.is_empty() {
+        return None;
+    }
+    let matrix_users_file = state.data_dir().join("matrix_users.json");
+    let mut matrix_users = state.store.read_document(&matrix_users_file, json!({}));
+    if let Some(name) = matrix_users.get(norm_email).and_then(|v| v.as_str()) {
+        return Some(name.to_string());
+    }
+    let map = matrix_users.as_object().cloned()?;
+    let mut found: Option<(String, String)> = None;
+    for (uid, name) in &map {
+        let email = mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, uid)
+            .or_else(|| mitch_lib::auth::names_get_email(&state.store, uid));
+        if email.is_some_and(|email| mitch_lib::auth::normalize_email(&email) == norm_email) {
+            if let Some(n) = name.as_str() {
+                found = Some((uid.clone(), n.to_string()));
+                break;
+            }
+        }
+    }
+    let (old_uid, username) = found?;
+
+    let old_password = get_matrix_password_for_uid_legacy(&old_uid, &state.id_secret);
+    let new_password = get_matrix_password_for_email(norm_email, &state.id_secret);
+    rotate_matrix_password(&username, &old_password, &new_password).await;
+
+    if let Some(obj) = matrix_users.as_object_mut() {
+        obj.remove(&old_uid);
+        obj.insert(norm_email.to_string(), json!(username));
+        let _ = state
+            .store
+            .write_document(&matrix_users_file, &matrix_users);
+    }
+    Some(username)
+}
+
+/// Logs in with `old_password` and, if that succeeds, changes the
+/// account's password to `new_password` via the standard Matrix
+/// account/password endpoint. A no-op (logged, not fatal) if the old
+/// password no longer works — the account just keeps using whatever
+/// password conduit already has on file.
+async fn rotate_matrix_password(username: &str, old_password: &str, new_password: &str) {
+    if old_password == new_password {
+        return;
+    }
+    let mut req_headers = HeaderMap::new();
+    req_headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+    let login_body = json!({
+        "type": "m.login.password",
+        "identifier": { "type": "m.id.user", "user": username },
+        "password": old_password,
+        "initial_device_display_name": "Mitch.pro Password Migration"
+    });
+    let Ok((status, _, bytes)) = call_conduit(
+        "/_matrix/client/v3/login",
+        Method::POST,
+        Some(req_headers.clone()),
+        Some(Bytes::from(
+            serde_json::to_vec(&login_body).unwrap_or_default(),
+        )),
+    )
+    .await
+    else {
+        return;
+    };
+    if !status.is_success() {
+        return;
+    }
+    let Ok(data) = serde_json::from_slice::<Value>(&bytes) else {
+        return;
+    };
+    let Some(token) = data.get("access_token").and_then(|v| v.as_str()) else {
+        return;
+    };
+    let mut auth_header = req_headers;
+    if let Ok(val) = HeaderValue::from_str(&format!("Bearer {token}")) {
+        auth_header.insert("Authorization", val);
+    }
+    let change_body = json!({
+        "new_password": new_password,
+        "auth": {
+            "type": "m.login.password",
+            "identifier": { "type": "m.id.user", "user": username },
+            "password": old_password
+        }
+    });
+    let _ = call_conduit(
+        "/_matrix/client/v3/account/password",
+        Method::POST,
+        Some(auth_header),
+        Some(Bytes::from(
+            serde_json::to_vec(&change_body).unwrap_or_default(),
+        )),
+    )
+    .await;
 }
 
 pub fn sanitize_matrix_device_id(value: &str) -> String {
@@ -1858,23 +1995,22 @@ pub fn find_profile_email_by_matrix_user_id(
 
 pub async fn sync_profile_to_matrix(
     state: &AppState,
-    uid: &str,
+    norm_email: &str,
     display_name: Option<&str>,
     pfp: Option<&str>,
     bio: Option<&str>,
     provided_token: Option<&str>,
 ) {
-    let matrix_users_file = state.data_dir().join("matrix_users.json");
-    let matrix_users = state.store.read_document(&matrix_users_file, json!({}));
-    let Some(matrix_username) = matrix_users.get(uid).and_then(|v| v.as_str()) else {
+    let Some(matrix_username) = matrix_username_for_email(state, norm_email).await else {
         return; // user has never logged into Matrix
     };
+    let matrix_username = matrix_username.as_str();
 
     let mut token = provided_token.map(str::to_string);
     let mut user_id = format!("@{matrix_username}:mitch.pro");
 
     if token.is_none() {
-        let password = get_matrix_password_for_uid(uid, &state.id_secret);
+        let password = get_matrix_password_for_email(norm_email, &state.id_secret);
         let mut req_headers = HeaderMap::new();
         req_headers.insert("Content-Type", HeaderValue::from_static("application/json"));
         let login_body = json!({
@@ -2208,7 +2344,7 @@ pub async fn resolve_matrix_account(
             if let Some(uid) =
                 mitch_lib::profile::get_uid_for_email(&state.store, &state.id_secret, &norm)
             {
-                let assigned = matrix_users.get(&uid).and_then(|v| v.as_str());
+                let assigned = matrix_username_for_email(state, &norm).await;
                 let user_id = match assigned {
                     Some(a) => format!("@{a}:mitch.pro"),
                     None => format!("@{local_part}:mitch.pro"),
@@ -2222,17 +2358,33 @@ pub async fn resolve_matrix_account(
         }
 
         if let Some(obj) = matrix_users.as_object() {
-            for (u, name) in obj.iter() {
+            for (key, name) in obj.iter() {
                 let name_str = name.as_str().unwrap_or("");
                 if name_str.eq_ignore_ascii_case(local_part)
                     || format!("@{name_str}:mitch.pro").eq_ignore_ascii_case(raw)
                 {
-                    if let Some(email) =
-                        mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, u)
-                    {
+                    // `key` is the account's email once migrated, or still
+                    // the old session uid for an entry nothing has
+                    // resolved (and thus migrated) since the uid-keying
+                    // fix — falling back to `names_get_email` so a stale
+                    // uid (past a generation bump) still resolves.
+                    let norm_email = if key.contains('@') {
+                        Some(mitch_lib::auth::normalize_email(key))
+                    } else {
+                        mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, key)
+                            .or_else(|| mitch_lib::auth::names_get_email(&state.store, key))
+                            .map(|email| mitch_lib::auth::normalize_email(&email))
+                    };
+                    if let Some(norm_email) = norm_email {
+                        let uid = mitch_lib::profile::get_uid_for_email(
+                            &state.store,
+                            &state.id_secret,
+                            &norm_email,
+                        )
+                        .unwrap_or_else(|| key.clone());
                         return Some(MatrixAccount {
-                            uid: u.clone(),
-                            norm_email: mitch_lib::auth::normalize_email(&email),
+                            uid,
+                            norm_email,
                             user_id: format!("@{name_str}:mitch.pro"),
                         });
                     }
@@ -2275,27 +2427,34 @@ pub async fn resolve_matrix_account(
                             .split(':')
                             .next()
                             .unwrap_or("");
-                        let mut matched_uid = String::new();
+                        let mut matched_key = String::new();
                         if let Some(obj) = matrix_users.as_object() {
-                            for (u, name) in obj.iter() {
+                            for (key, name) in obj.iter() {
                                 let name_str = name.as_str().unwrap_or("");
                                 if name_str.eq_ignore_ascii_case(uname)
                                     || format!("@{name_str}:mitch.pro")
                                         .eq_ignore_ascii_case(matrix_user_id)
                                 {
-                                    matched_uid = u.clone();
+                                    matched_key = key.clone();
                                     break;
                                 }
                             }
                         }
                         let mut norm = String::new();
-                        if !matched_uid.is_empty() {
-                            if let Some(em) = mitch_lib::auth::email_from_sid(
+                        let mut matched_uid = String::new();
+                        if !matched_key.is_empty() {
+                            if matched_key.contains('@') {
+                                norm = mitch_lib::auth::normalize_email(&matched_key);
+                            } else if let Some(em) = mitch_lib::auth::email_from_sid(
                                 &state.store,
                                 &state.id_secret,
-                                &matched_uid,
-                            ) {
+                                &matched_key,
+                            )
+                            .or_else(|| {
+                                mitch_lib::auth::names_get_email(&state.store, &matched_key)
+                            }) {
                                 norm = mitch_lib::auth::normalize_email(&em);
+                                matched_uid = matched_key.clone();
                             }
                         }
                         if norm.is_empty() && !uname.is_empty() {
@@ -2705,21 +2864,18 @@ async fn api_sso_login(state: &AppState, headers: &HeaderMap, body_bytes: &[u8])
     let _sso_login_guard = state.matrix_sso_login_lock.lock().await;
 
     let matrix_users_file = state.data_dir().join("matrix_users.json");
-    let mut matrix_users = state.store.read_document(&matrix_users_file, json!({}));
-    let assigned_user = matrix_users
-        .get(uid)
-        .and_then(|v| v.as_str())
-        .map(str::to_string)
-        .unwrap_or_else(|| {
-            let u = mitch_lib::profile::normalize_username(username);
-            if u.len() < 2 {
-                format!("user_{}", &uid[..std::cmp::min(6, uid.len())])
-            } else {
-                u
-            }
-        });
+    let existing_mapping = matrix_username_for_email(state, &norm).await;
+    let had_existing_mapping = existing_mapping.is_some();
+    let assigned_user = existing_mapping.unwrap_or_else(|| {
+        let u = mitch_lib::profile::normalize_username(username);
+        if u.len() < 2 {
+            format!("user_{}", &uid[..std::cmp::min(6, uid.len())])
+        } else {
+            u
+        }
+    });
 
-    let password = get_matrix_password_for_uid(uid, &state.id_secret);
+    let password = get_matrix_password_for_email(&norm, &state.id_secret);
 
     // 1. Login attempt
     let mut login_payload = json!({
@@ -2796,9 +2952,10 @@ async fn api_sso_login(state: &AppState, headers: &HeaderMap, body_bytes: &[u8])
         );
     };
 
-    if matrix_users.get(uid).and_then(|v| v.as_str()) != Some(&final_user) {
+    if !had_existing_mapping || assigned_user != final_user {
+        let mut matrix_users = state.store.read_document(&matrix_users_file, json!({}));
         if let Some(map) = matrix_users.as_object_mut() {
-            map.insert(uid.to_string(), json!(final_user));
+            map.insert(norm.clone(), json!(final_user));
             let _ = state
                 .store
                 .write_document(&matrix_users_file, &matrix_users);
@@ -5117,13 +5274,18 @@ async fn mod_prune_stale(state: &AppState, headers: &HeaderMap, body_bytes: &[u8
     } else {
         String::new()
     };
+    let target_norm_email = if target_uid.is_empty() {
+        String::new()
+    } else {
+        mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, &target_uid)
+            .map(|em| mitch_lib::auth::normalize_email(&em))
+            .unwrap_or_default()
+    };
     let mut target_username = String::new();
 
-    if !target_uid.is_empty() {
-        let matrix_users_file = state.data_dir().join("matrix_users.json");
-        let matrix_users = state.store.read_document(&matrix_users_file, json!({}));
-        if let Some(name) = matrix_users.get(&target_uid).and_then(|v| v.as_str()) {
-            target_username = name.to_string();
+    if !target_norm_email.is_empty() {
+        if let Some(name) = matrix_username_for_email(state, &target_norm_email).await {
+            target_username = name;
         }
     }
 
@@ -5221,9 +5383,9 @@ async fn mod_prune_stale(state: &AppState, headers: &HeaderMap, body_bytes: &[u8
                 .await;
 
                 if let Ok((del_status, _, _)) = del_res {
-                    if del_status == StatusCode::UNAUTHORIZED && !target_uid.is_empty() {
+                    if del_status == StatusCode::UNAUTHORIZED && !target_norm_email.is_empty() {
                         let conduit_pass =
-                            get_matrix_password_for_uid(&target_uid, &state.id_secret);
+                            get_matrix_password_for_email(&target_norm_email, &state.id_secret);
                         let uia_body = serde_json::to_vec(&json!({
                             "devices": to_delete,
                             "auth": {
@@ -5302,7 +5464,7 @@ async fn translate_matrix_password(
 
     let stored_hash = mitch_lib::passwords::password_hash_get(&state.store, &account.norm_email)
         .unwrap_or_default();
-    let conduit_pass = get_matrix_password_for_uid(&account.uid, &state.id_secret);
+    let conduit_pass = get_matrix_password_for_email(&account.norm_email, &state.id_secret);
     let mut changed = false;
 
     if has_auth_password {
@@ -7059,13 +7221,77 @@ mod tests {
 
     #[test]
     fn test_matrix_password_generation() {
-        let p1 = get_matrix_password_for_uid("test-user-123", b"secret-salt");
-        let p2 = get_matrix_password_for_uid("test-user-123", b"secret-salt");
+        let p1 = get_matrix_password_for_email("a@student.rjuhsd.us", b"secret-salt");
+        let p2 = get_matrix_password_for_email("a@student.rjuhsd.us", b"secret-salt");
         assert_eq!(p1, p2);
         assert!(!p1.is_empty());
 
-        let p3 = get_matrix_password_for_uid("test-user-456", b"secret-salt");
+        let p3 = get_matrix_password_for_email("b@student.rjuhsd.us", b"secret-salt");
         assert_ne!(p1, p3);
+    }
+
+    /// An account with an existing (not-yet-migrated, still-current-uid)
+    /// `matrix_users.json` entry gets it correctly migrated to live under
+    /// its email — the common case, covering every account that hasn't
+    /// reset its password since its last Matrix login.
+    #[tokio::test]
+    async fn matrix_username_migrates_a_still_reachable_entry() {
+        let (state, _dir) = test_state();
+        let email = "drift@student.rjuhsd.us";
+        let norm = mitch_lib::auth::normalize_email(email);
+
+        let uid =
+            mitch_lib::auth::issue_login_session(&state.store, &state.id_secret, &norm, email);
+        let matrix_users_file = state.data_dir().join("matrix_users.json");
+        let _ = state
+            .store
+            .write_document(&matrix_users_file, &json!({ &uid: "drift" }));
+
+        let resolved = matrix_username_for_email(&state, &norm).await;
+        assert_eq!(resolved, Some("drift".to_string()));
+
+        // The entry should now live under the email, not the uid.
+        let migrated = state.store.read_document(&matrix_users_file, json!({}));
+        assert_eq!(migrated.get(&uid), None);
+        assert_eq!(migrated.get(&norm).and_then(|v| v.as_str()), Some("drift"));
+    }
+
+    /// Regression test for the `admin-2` bug's actual root cause: once an
+    /// account is keyed by email, a *further* session-generation bump
+    /// (another password reset, change, or "log out other devices") must
+    /// not disturb resolution or spawn a new suffixed duplicate — the
+    /// whole point of moving off the uid key.
+    #[tokio::test]
+    async fn matrix_username_survives_a_generation_bump_once_migrated() {
+        let (state, _dir) = test_state();
+        let email = "stable@student.rjuhsd.us";
+        let norm = mitch_lib::auth::normalize_email(email);
+
+        let uid =
+            mitch_lib::auth::issue_login_session(&state.store, &state.id_secret, &norm, email);
+        let matrix_users_file = state.data_dir().join("matrix_users.json");
+        let _ = state
+            .store
+            .write_document(&matrix_users_file, &json!({ &uid: "stable" }));
+        assert_eq!(
+            matrix_username_for_email(&state, &norm).await,
+            Some("stable".to_string())
+        );
+
+        // Now bump the generation (simulating a password reset) and log
+        // in again under the resulting new uid.
+        mitch_lib::auth::rotate_session_generation(&state.store, &norm);
+        let new_uid =
+            mitch_lib::auth::issue_login_session(&state.store, &state.id_secret, &norm, email);
+        assert_ne!(uid, new_uid, "generation bump should change the uid");
+
+        // Resolution is keyed by email now, so it's untouched by the bump.
+        assert_eq!(
+            matrix_username_for_email(&state, &norm).await,
+            Some("stable".to_string())
+        );
+        let after = state.store.read_document(&matrix_users_file, json!({}));
+        assert_eq!(after.get(&norm).and_then(|v| v.as_str()), Some("stable"));
     }
 
     #[test]
