@@ -512,8 +512,8 @@ fn lucky_seven(
         Err(r) => return *r,
     };
     let dice = [
-        1.0 + mitch_lib::crypto::js_random().floor() * 6.0,
-        1.0 + mitch_lib::crypto::js_random().floor() * 6.0,
+        1.0 + (mitch_lib::crypto::js_random() * 6.0).floor(),
+        1.0 + (mitch_lib::crypto::js_random() * 6.0).floor(),
     ];
     let total = dice[0] + dice[1];
     let won = total == 7.0;
@@ -566,7 +566,7 @@ fn color_card(
     } else {
         "black"
     };
-    let value = 1.0 + mitch_lib::crypto::js_random().floor() * 13.0;
+    let value = 1.0 + (mitch_lib::crypto::js_random() * 13.0).floor();
     let card = card_name(value);
     let won = choice == color;
     let settled = settle_casino_round(
@@ -615,9 +615,9 @@ fn triple_dice(
         return resp(400, &json!({ "error": "Pick a number from 1 to 6." }));
     }
     let dice: [f64; 3] = [
-        1.0 + mitch_lib::crypto::js_random().floor() * 6.0,
-        1.0 + mitch_lib::crypto::js_random().floor() * 6.0,
-        1.0 + mitch_lib::crypto::js_random().floor() * 6.0,
+        1.0 + (mitch_lib::crypto::js_random() * 6.0).floor(),
+        1.0 + (mitch_lib::crypto::js_random() * 6.0).floor(),
+        1.0 + (mitch_lib::crypto::js_random() * 6.0).floor(),
     ];
     let matches = dice.iter().filter(|d| **d == pick).count() as f64;
     let mult = [0.0, 2.0, 5.0, 25.0][matches as usize];
@@ -2108,6 +2108,27 @@ mod tests {
         assert_eq!(table[1], 2.0);
         assert_eq!(table[2], 5.0);
         assert_eq!(table[3], 25.0);
+    }
+
+    /// Regression for a bug where `js_random().floor() * 6.0` (floor applied
+    /// before the multiply, instead of after) made every die always come up
+    /// 1 — a guaranteed-25x triple-dice exploit and an unwinnable lucky-seven
+    /// (whose only win condition, a 7, became unreachable since two dice
+    /// permanently summed to 2). Confirms the fixed `1-6` roll formula
+    /// actually spans its full range over many draws.
+    #[test]
+    fn dice_roll_formula_is_not_degenerate() {
+        let mut seen = std::collections::HashSet::new();
+        for _ in 0..2000 {
+            let roll = 1.0 + (mitch_lib::crypto::js_random() * 6.0).floor();
+            assert!((1.0..=6.0).contains(&roll));
+            seen.insert(roll as i64);
+        }
+        assert_eq!(
+            seen.len(),
+            6,
+            "every face 1-6 should turn up over 2000 rolls"
+        );
     }
 
     /// The poker rank ladder (server.js:23497-23509) — every branch, in
