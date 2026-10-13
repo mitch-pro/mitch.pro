@@ -198,9 +198,11 @@ pub fn set_coins(
     before
 }
 
-/// Sets every balance strictly above `threshold` to `new_balance` — an
-/// economy-wide correction (e.g. clawing back an exploit's winnings).
-/// Returns the affected emails with their prior balances.
+/// Sets every balance strictly above `threshold` to `new_balance`, once — a
+/// point-in-time economy correction (e.g. clawing back an exploit's
+/// winnings), not an ongoing cap: nothing stops an affected balance from
+/// climbing back above `threshold` afterward. Returns the affected emails
+/// with their prior balances.
 pub fn cap_coins_above(
     store: &DataStore,
     data_dir: &Path,

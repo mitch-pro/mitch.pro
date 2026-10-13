@@ -842,12 +842,12 @@
         <div id="set-coins-status" class="form-status"></div>
       </form>
       <form class="action-card danger" onsubmit="capCoins(event)">
-        <h2>Cap Balances Above X</h2>
-        <p>Set every account with more than a threshold down to a fixed amount — e.g. clawing back an exploit's winnings by capping everyone above 100k to 10k.</p>
+        <h2>One-Time Reset: Balances Above X</h2>
+        <p>Sets every account currently above a threshold down to a fixed amount, once — e.g. clawing back an exploit's winnings by resetting everyone above 100k to 10k. This is not an ongoing cap: balances are free to climb past the threshold again afterward.</p>
         <input id="cap-coins-above" type="number" min="0" step="1" placeholder="Above this amount (e.g. 100000)" required>
-        <input id="cap-coins-set-to" type="number" min="0" step="1" placeholder="Set to (e.g. 10000)" required>
-        <input id="cap-coins-reason" type="text" maxlength="160" placeholder="Reason" value="admin economy cap">
-        <button type="submit">Cap Balances</button>
+        <input id="cap-coins-set-to" type="number" min="0" step="1" placeholder="Reset to (e.g. 10000)" required>
+        <input id="cap-coins-reason" type="text" maxlength="160" placeholder="Reason" value="admin economy one-time reset">
+        <button type="submit">Reset Now (One-Time)</button>
         <div id="cap-coins-status" class="form-status"></div>
       </form>
       <div class="action-card">
@@ -1512,7 +1512,7 @@
       e.preventDefault();
       const above = document.getElementById('cap-coins-above').value;
       const setTo = document.getElementById('cap-coins-set-to').value;
-      if (!confirm('Set every account with more than ' + above + ' coins down to ' + setTo + '? This affects every matching account at once and cannot be undone automatically.')) return;
+      if (!confirm('One-time reset: set every account currently above ' + above + ' coins down to ' + setTo + '? This affects every matching account right now only — it does not stop them earning past ' + above + ' again afterward. Cannot be undone automatically.')) return;
       setStatus('cap-coins-status', 'Submitting...', '');
       try {
         const d = await postAdmin('/api/admin/economy/cap-coins', {
@@ -1521,7 +1521,7 @@
           reason: document.getElementById('cap-coins-reason').value.trim(),
         });
         setStatus('cap-coins-status', d.pending ? pendingText(d) :
-          'Capped ' + d.affectedCount + ' account(s) to ' + Number(d.newBalance || 0).toFixed(2) + '.', 'ok');
+          'Reset ' + d.affectedCount + ' account(s) to ' + Number(d.newBalance || 0).toFixed(2) + ' (one-time; not an ongoing cap).', 'ok');
         if (!d.pending) loadData();
       } catch (err) {
         setStatus('cap-coins-status', err.message, 'err');

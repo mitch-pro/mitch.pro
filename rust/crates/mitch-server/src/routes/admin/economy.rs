@@ -405,9 +405,10 @@ pub fn handle(
         ));
     }
 
-    // POST /api/admin/economy/cap-coins (admins only) — sets every balance
-    // strictly above `above` to `setTo`, e.g. clawing back an exploit's
-    // winnings by capping every account over 100k down to 10k.
+    // POST /api/admin/economy/cap-coins (admins only) — one-time reset: sets
+    // every balance strictly above `above` to `setTo`, e.g. clawing back an
+    // exploit's winnings by resetting every account over 100k down to 10k.
+    // Not an ongoing cap — balances are free to climb past `above` again.
     if path == "/api/admin/economy/cap-coins" && *method == Method::POST {
         if !ctx.is_admin(state) {
             return Some(forbidden());
