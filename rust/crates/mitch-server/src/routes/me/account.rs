@@ -1285,4 +1285,47 @@ mod tests {
             Some("https://alice.test/")
         );
     }
+
+    /// Reproduction for a reported bug: a freshly authenticated account
+    /// hits `/api/me` and gets 403 "account banned" even though it was
+    /// never banned. `get_cookies_from_header_value` (auth.rs) only
+    /// re-derives the `studentId` cookie from the `mitch_session` token
+    /// when `node_env_test` is false (production mode) — a test that
+    /// sets NODE_ENV=test never exercises that re-derivation path at
+    /// all, so this calls it directly with `node_env_test: false`
+    /// instead of mutating the global env var (which would race with
+    /// sibling tests that set NODE_ENV=test).
+    #[tokio::test]
+    async fn fresh_session_via_mitch_session_token_is_not_banned() {
+        let (state, _dir) = test_state();
+        let email = "fresh@student.rjuhsd.us";
+        let norm = auth::normalize_email(email);
+
+        let sess =
+            auth::create_auth_session(&state.store, &state.id_secret, &norm, email, "", "", false);
+
+        let cookie_header = format!("mitch_session={}; studentId={}", sess.token, sess.sid);
+        let cookies = mitch_lib::auth::get_cookies_from_header_value(
+            &cookie_header,
+            &state.store,
+            &state.id_secret,
+            false, // node_env_test = false, matching production
+        );
+        let sid = cookies.get("studentId").unwrap_or("").to_string();
+        assert!(
+            !sid.is_empty(),
+            "production-mode cookie resolution should re-derive a studentId from mitch_session"
+        );
+        assert!(mitch_lib::auth::valid_id(&sid, &state.id_secret));
+        assert_eq!(
+            mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, &sid),
+            Some(email.to_string()),
+            "the re-derived sid must resolve back to the account that just authenticated"
+        );
+        assert_eq!(
+            mitch_lib::auth::banned_info_for_sid(&state.store, &state.id_secret, &sid),
+            None,
+            "a brand-new account must never come back banned"
+        );
+    }
 }
