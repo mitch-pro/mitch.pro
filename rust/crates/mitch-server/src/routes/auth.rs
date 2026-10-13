@@ -1835,6 +1835,105 @@ mod tests {
         assert!(mitch_lib::passwords::password_exists(&state.store, &norm));
     }
 
+    /// Reproduction for a reported bug: double-clicking the signup button
+    /// fires two /api/signup requests for the same email before the
+    /// second one's response resolves; the user ends up with two codes
+    /// in two emails, uses the stale one first, then the current one,
+    /// and then the account is somehow unreachable afterward (signup
+    /// succeeds, but subsequent auth looks banned). Reproduces the exact
+    /// sequence using the real signup/verify_signup handlers to see
+    /// whether the resulting session actually comes back as banned.
+    #[tokio::test]
+    async fn double_submit_signup_then_stale_then_current_code_does_not_ban_account() {
+        std::env::set_var("NODE_ENV", "test");
+        let (state, _dir) = test_state();
+        let headers = HeaderMap::new();
+        let email = "dupe@student.rjuhsd.us";
+        let norm = auth::normalize_email(email);
+
+        let req_body = json!({
+            "email": email,
+            "password": "CorrectHorseBatteryStaple123!",
+            "username": "dupe_user",
+            "nickname": "Dupe"
+        });
+
+        // First /api/signup call (the "first click").
+        let resp1 = signup(&state, &headers, &serde_json::to_vec(&req_body).unwrap()).await;
+        assert_eq!(resp1.status(), StatusCode::OK);
+        let codes = state
+            .store
+            .read_document(&data_file(&state, "signup_codes.json"), json!({}));
+        let stale_code = codes[&norm]["code"].as_str().unwrap().to_string();
+
+        // Second /api/signup call for the same email (the "second click",
+        // firing before the button visibly disabled) — overwrites the
+        // code with a new one, same as the real double-submit bug.
+        let resp2 = signup(&state, &headers, &serde_json::to_vec(&req_body).unwrap()).await;
+        assert_eq!(resp2.status(), StatusCode::OK);
+        let codes2 = state
+            .store
+            .read_document(&data_file(&state, "signup_codes.json"), json!({}));
+        let current_code = codes2[&norm]["code"].as_str().unwrap().to_string();
+        assert_ne!(
+            stale_code, current_code,
+            "the second signup call should mint a fresh code"
+        );
+
+        // User tries the STALE code from the first email first (exactly
+        // what "which code to use is confusing" produces) — must fail
+        // without side effects.
+        let verify_stale = json!({ "email": email, "code": stale_code });
+        let resp_stale = verify_signup(
+            &state,
+            &headers,
+            &serde_json::to_vec(&verify_stale).unwrap(),
+        )
+        .await;
+        assert_eq!(resp_stale.status(), StatusCode::BAD_REQUEST);
+
+        // Then the CURRENT code from the second email — must succeed.
+        let verify_current = json!({ "email": email, "code": current_code });
+        let resp_good = verify_signup(
+            &state,
+            &headers,
+            &serde_json::to_vec(&verify_current).unwrap(),
+        )
+        .await;
+        assert_eq!(resp_good.status(), StatusCode::OK);
+
+        // Pull the studentId cookie the server just issued, exactly like
+        // confirmAuthSession's /api/me call would send it back.
+        let sid = resp_good
+            .headers()
+            .get_all(axum::http::header::SET_COOKIE)
+            .iter()
+            .filter_map(|v| v.to_str().ok())
+            .find_map(|v| {
+                v.strip_prefix("studentId=")
+                    .map(|rest| rest.split(';').next().unwrap_or("").to_string())
+            })
+            .expect("verify_signup should set a studentId cookie");
+        assert!(
+            !sid.is_empty(),
+            "studentId cookie should carry a real session id"
+        );
+        assert!(
+            auth::valid_id(&sid, &state.id_secret),
+            "the freshly issued sid should be cryptographically valid"
+        );
+        assert_eq!(
+            auth::banned_info_for_sid(&state.store, &state.id_secret, &sid),
+            None,
+            "a brand-new account must never come back banned"
+        );
+        assert_eq!(
+            auth::email_from_sid(&state.store, &state.id_secret, &sid),
+            Some(email.to_string()),
+            "the fresh sid must resolve back to the email that just signed up"
+        );
+    }
+
     #[tokio::test]
     async fn test_login_and_logout_flow() {
         std::env::set_var("NODE_ENV", "test");
