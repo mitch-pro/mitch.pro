@@ -308,26 +308,26 @@ body.home ::-webkit-scrollbar-track { background: transparent; }
 #sw-notif-btn:hover { color: var(--mh-ink) !important; background: var(--mh-bg-soft) !important; }
 
 /* --------------------------------------------------------------------------
-   Staff rail — plain bordered strip, expands on hover/focus
+   Staff rail — a labeled strip under the masthead, not a floating icon
+   dock. Labels are always visible (no hover-to-reveal): a control only
+   staff ever see shouldn't also make them guess what it does.
    -------------------------------------------------------------------------- */
 
 .staff-access-rail {
-  position: fixed; left: 14px; top: 50%; z-index: 110;
-  display: none; gap: 6px; padding: 6px; transform: translateY(-50%);
-  background: var(--mh-bg); border: 1px solid var(--mh-border); border-radius: var(--mh-radius);
-  box-shadow: 0 8px 24px rgba(20, 16, 24, 0.08);
+  position: static; z-index: 110;
+  display: none; flex-wrap: wrap; gap: 8px; padding: 0; margin: 10px 1.6rem 0;
+  background: none; border: none; box-shadow: none;
 }
-body.home:is(.is-staff, .is-admin) .staff-access-rail { display: grid; }
+body.home:is(.is-staff, .is-admin) .staff-access-rail { display: flex; }
 .staff-access-rail > div { display: contents; }
 .staff-access-button {
   display: grid; grid-template-columns: 34px 1fr; align-items: center; gap: 10px;
-  width: 34px; min-height: 44px; overflow: hidden; padding: 5px;
-  border: 1px solid transparent; border-radius: var(--mh-radius-sm);
-  color: var(--mh-ink); text-decoration: none;
-  transition: width var(--mh-motion) ease, border-color var(--mh-motion) ease, background-color var(--mh-motion) ease;
+  width: 184px; min-height: 44px; overflow: hidden; padding: 5px;
+  border: 1px solid var(--mh-border); border-radius: var(--mh-radius-sm);
+  background: var(--mh-bg); color: var(--mh-ink); text-decoration: none;
+  transition: border-color var(--mh-motion) ease, background-color var(--mh-motion) ease;
 }
-.staff-access-rail:hover .staff-access-button, .staff-access-rail:focus-within .staff-access-button { width: 184px; }
-.staff-access-button:hover { border-color: var(--mh-border); background: var(--mh-bg-soft); }
+.staff-access-button:hover { border-color: var(--mh-accent); background: var(--mh-bg-soft); }
 .staff-access-button > span:first-child {
   display: grid; place-items: center; width: 34px; height: 34px; flex: none;
   border: 1px solid var(--mh-border); border-radius: var(--mh-radius-sm); font-size: 14px;
@@ -337,18 +337,13 @@ body.home:is(.is-staff, .is-admin) .staff-access-rail { display: grid; }
 .staff-moderator > span:first-child { color: #2563eb; }
 .staff-tester > span:first-child { color: var(--mh-accent); }
 .staff-access-copy, .staff-tester-copy {
-  display: flex; flex-direction: column; gap: 1px; min-width: 125px;
-  opacity: 0; visibility: hidden; transform: translateX(-4px); transition: opacity 0.1s, transform 0.1s;
+  display: flex; flex-direction: column; gap: 1px; min-width: 0;
 }
-.staff-access-rail:hover :is(.staff-access-copy, .staff-tester-copy),
-.staff-access-rail:focus-within :is(.staff-access-copy, .staff-tester-copy) { opacity: 1; visibility: visible; transform: none; transition: opacity 0.12s 0.05s, transform 0.12s 0.05s; }
 .staff-access-copy b, .staff-tester-copy b { font-size: 12px; font-weight: 700; white-space: nowrap; }
 .staff-access-copy small, .staff-tester-copy small { font-size: 10px; color: var(--mh-ink-soft); white-space: nowrap; }
 @media (max-width: 1100px) {
-  .staff-access-rail { position: static; display: flex !important; width: auto; margin: 10px 16px 0; transform: none; overflow-x: auto; box-shadow: none; }
-  body.home:not(.is-staff):not(.is-admin) .staff-access-rail { display: none !important; }
-  .staff-access-button, .staff-access-rail:hover .staff-access-button { width: 164px; }
-  .staff-access-rail :is(.staff-access-copy, .staff-tester-copy) { opacity: 1; visibility: visible; transform: none; }
+  .staff-access-rail { overflow-x: auto; }
+  .staff-access-button { width: 164px; }
 }
 
 /* --------------------------------------------------------------------------
