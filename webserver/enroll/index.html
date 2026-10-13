@@ -623,7 +623,11 @@ function populateGradYears() {
   }
 }
 
+var _submitInFlight = false;
+
 async function submit(isResend = false) {
+  if (_submitInFlight) return;
+
   var email = document.getElementById('email').value.trim();
   var password = document.getElementById('signup-password').value;
   var confirm = document.getElementById('signup-confirm-password').value;
@@ -643,14 +647,26 @@ async function submit(isResend = false) {
   if (username && !/^[a-z0-9._-]{2,40}$/.test(username)) { msg.className = 'err'; msg.textContent = 'Username must use lowercase letters, numbers, ".", "_", or "-".'; return; }
   if (!document.getElementById('agree').checked) { msg.className = 'err'; msg.textContent = 'Agreement required.'; return; }
 
-  var captcha = await getCaptchaResponse('signup');
-  if (!captcha) { msg.className = 'err'; msg.textContent = 'Please complete reCAPTCHA.'; return; }
-  if (_checkSpam()) { msg.className = 'err'; msg.textContent = 'Too many requests. Try again in a minute.'; return; }
-
+  // Disable immediately, before the async captcha call below — otherwise
+  // a second click fired while reCAPTCHA is still resolving slips through
+  // and fires a second /api/signup, producing two codes in two emails.
+  _submitInFlight = true;
   btn.disabled = true;
   if (isResend) resendBtn.disabled = true;
   msg.textContent = isResend ? 'Resending code...' : 'Registering...';
   msg.className = '';
+
+  var captcha = await getCaptchaResponse('signup');
+  if (!captcha) {
+    msg.className = 'err'; msg.textContent = 'Please complete reCAPTCHA.';
+    _submitInFlight = false; btn.disabled = false; if (isResend) resendBtn.disabled = false;
+    return;
+  }
+  if (_checkSpam()) {
+    msg.className = 'err'; msg.textContent = 'Too many requests. Try again in a minute.';
+    _submitInFlight = false; btn.disabled = false; if (isResend) resendBtn.disabled = false;
+    return;
+  }
 
   try {
     const r = await fetch('/api/signup', {
@@ -660,6 +676,7 @@ async function submit(isResend = false) {
       body: JSON.stringify({ email, password, username, nickname, gradYear, gender, referralSource, referralDetails, recaptcha_token: captcha, refCode: window._inviteRef || '' })
     });
     const d = await r.json();
+    _submitInFlight = false;
     if (d.success) {
       window._signupPassword = password;
       msg.className = 'ok';
@@ -680,6 +697,7 @@ async function submit(isResend = false) {
       resetCaptcha();
     }
   } catch (e) {
+    _submitInFlight = false;
     msg.className = 'err';
     msg.textContent = 'Server error.';
     btn.disabled = false;
@@ -688,7 +706,11 @@ async function submit(isResend = false) {
   }
 }
 
+var _verifyInFlight = false;
+
 async function verifySignup() {
+  if (_verifyInFlight) return;
+
   const email = document.getElementById('email').value.trim();
   const code = document.getElementById('token').value.trim();
   const tmsg = document.getElementById('tmsg');
@@ -696,12 +718,15 @@ async function verifySignup() {
 
   if (!code) { tmsg.className = 'err'; tmsg.textContent = 'Enter your 6-digit code.'; return; }
 
-  const captcha = await getCaptchaResponse('verify_signup');
-
-
+  // Disable immediately, before the async captcha call below — otherwise
+  // a second click fired while reCAPTCHA is still resolving slips through
+  // and fires a second /api/verify-signup for the same code.
+  _verifyInFlight = true;
   btn.disabled = true;
   tmsg.textContent = 'Verifying and finalizing account...';
   tmsg.className = '';
+
+  const captcha = await getCaptchaResponse('verify_signup');
 
   try {
     const r = await fetch('/api/verify-signup', {
@@ -711,6 +736,7 @@ async function verifySignup() {
       body: JSON.stringify({ email, code, recaptcha_token: captcha })
     });
     const d = await r.json();
+    _verifyInFlight = false;
     if (d.success) {
       try { await confirmAuthSession(d.email); }
       catch (_) {
@@ -730,6 +756,7 @@ async function verifySignup() {
       resetCaptcha();
     }
   } catch (e) {
+    _verifyInFlight = false;
     tmsg.className = 'err';
     tmsg.textContent = 'Server error.';
     btn.disabled = false;

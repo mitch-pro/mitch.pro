@@ -433,6 +433,17 @@ async fn verify_signup(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &
         );
     }
 
+    // Consume the code immediately, before any of the side effects below
+    // (password/session/referral reward) — a second request for the same
+    // code (e.g. a double-submit racing the first) finds it already gone
+    // instead of re-running referral payouts a second time.
+    if let Some(map) = codes.as_object_mut() {
+        map.remove(&norm_email);
+        let _ = state
+            .store
+            .write_document(&data_file(state, "signup_codes.json"), &codes);
+    }
+
     let hash = entry_val.get("hash").and_then(|v| v.as_str()).unwrap_or("");
     mitch_lib::passwords::password_set(&state.store, &norm_email, hash);
 
@@ -496,13 +507,6 @@ async fn verify_signup(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &
                 .store
                 .write_document(&data_file(state, "referral_sources.json"), &refs);
         }
-    }
-
-    if let Some(map) = codes.as_object_mut() {
-        map.remove(&norm_email);
-        let _ = state
-            .store
-            .write_document(&data_file(state, "signup_codes.json"), &codes);
     }
 
     // Referral reward
