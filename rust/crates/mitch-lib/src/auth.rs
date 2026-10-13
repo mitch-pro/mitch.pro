@@ -667,11 +667,7 @@ pub fn check_password_cookie(
     if node_env_test {
         return true;
     }
-    let passwords = store.read_document(
-        &store.base_dir.join("data/passwords.json"),
-        serde_json::json!({}),
-    );
-    passwords.get(&norm).is_some()
+    crate::passwords::password_exists(store, &norm)
 }
 
 /// `cookiePathAttrs(req, maxAge, httpOnly)` — exact attribute string.
@@ -1755,14 +1751,7 @@ mod tests {
 
         // Seed names + passwords via the store (DB-backed paths).
         names_set(&store, &sid, "a.b+x@mitch.pro");
-        let mut passwords = serde_json::Map::new();
-        passwords.insert(norm.to_string(), serde_json::json!("argon2id$hash"));
-        store
-            .write_document(
-                &base.join("data/passwords.json"),
-                &serde_json::Value::Object(passwords),
-            )
-            .unwrap();
+        crate::passwords::password_set(&store, norm, "argon2id$hash");
 
         // No cookies -> false.
         let empty = Cookies::default();
