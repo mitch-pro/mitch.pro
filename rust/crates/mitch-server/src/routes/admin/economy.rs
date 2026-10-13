@@ -334,6 +334,143 @@ pub fn handle(
         return Some(json_response(200, json!({ "ok": true })));
     }
 
+    // POST /api/admin/economy/set-coins (admins only) — sets one account's
+    // balance to an exact value, rather than add/burn's relative delta.
+    if path == "/api/admin/economy/set-coins" && *method == Method::POST {
+        if !ctx.is_admin(state) {
+            return Some(forbidden());
+        }
+        let admin_email = ctx.email(state);
+        let target_raw = body
+            .get("targetEmail")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_lowercase()
+            .trim()
+            .to_string();
+        if !valid_email(&target_raw) {
+            return Some(json_response(
+                400,
+                json!({ "error": "valid target email required" }),
+            ));
+        }
+        let amount = body
+            .get("amount")
+            .and_then(|v| v.as_str())
+            .and_then(parse_f64)
+            .or_else(|| body.get("amount").and_then(|v| v.as_f64()));
+        let Some(amount) = amount.filter(|a| a.is_finite() && *a >= 0.0) else {
+            return Some(json_response(
+                400,
+                json!({ "error": "amount must be a non-negative number" }),
+            ));
+        };
+        if amount > 1_000_000_000.0 {
+            return Some(json_response(
+                400,
+                json!({ "error": "amount is too large" }),
+            ));
+        }
+        let reason = body
+            .get("reason")
+            .and_then(|v| v.as_str())
+            .unwrap_or("admin set balance")
+            .trim()
+            .chars()
+            .take(160)
+            .collect::<String>();
+        let target_email = mitch_lib::auth::normalize_email(&target_raw);
+        let previous = mitch_lib::coins::set_coins(
+            &state.store,
+            &state.cfg.data_dir,
+            &target_raw,
+            amount,
+            &reason,
+        );
+        mitch_lib::admin::log_admin_action(
+            &state.store,
+            &state.cfg.data_dir,
+            &admin_email,
+            "set_coins",
+            json!({ "targetEmail": target_email, "targetRaw": target_raw, "previousBalance": mitch_lib::jsval::num_value(previous), "newBalance": mitch_lib::jsval::num_value(amount), "reason": reason }),
+        );
+        return Some(json_response(
+            200,
+            json!({
+                "ok": true,
+                "targetEmail": target_raw,
+                "previousBalance": mitch_lib::jsval::num_value(previous),
+                "newBalance": mitch_lib::jsval::num_value(amount),
+            }),
+        ));
+    }
+
+    // POST /api/admin/economy/cap-coins (admins only) — sets every balance
+    // strictly above `above` to `setTo`, e.g. clawing back an exploit's
+    // winnings by capping every account over 100k down to 10k.
+    if path == "/api/admin/economy/cap-coins" && *method == Method::POST {
+        if !ctx.is_admin(state) {
+            return Some(forbidden());
+        }
+        let admin_email = ctx.email(state);
+        let above = body
+            .get("above")
+            .and_then(|v| v.as_str())
+            .and_then(parse_f64)
+            .or_else(|| body.get("above").and_then(|v| v.as_f64()));
+        let Some(above) = above.filter(|a| a.is_finite() && *a >= 0.0) else {
+            return Some(json_response(
+                400,
+                json!({ "error": "above must be a non-negative number" }),
+            ));
+        };
+        let set_to = body
+            .get("setTo")
+            .and_then(|v| v.as_str())
+            .and_then(parse_f64)
+            .or_else(|| body.get("setTo").and_then(|v| v.as_f64()));
+        let Some(set_to) = set_to.filter(|a| a.is_finite() && *a >= 0.0) else {
+            return Some(json_response(
+                400,
+                json!({ "error": "setTo must be a non-negative number" }),
+            ));
+        };
+        let reason = body
+            .get("reason")
+            .and_then(|v| v.as_str())
+            .unwrap_or("admin economy cap")
+            .trim()
+            .chars()
+            .take(160)
+            .collect::<String>();
+        let affected = mitch_lib::coins::cap_coins_above(
+            &state.store,
+            &state.cfg.data_dir,
+            above,
+            set_to,
+            &reason,
+        );
+        mitch_lib::admin::log_admin_action(
+            &state.store,
+            &state.cfg.data_dir,
+            &admin_email,
+            "cap_coins",
+            json!({ "above": mitch_lib::jsval::num_value(above), "setTo": mitch_lib::jsval::num_value(set_to), "affectedCount": affected.len(), "reason": reason }),
+        );
+        return Some(json_response(
+            200,
+            json!({
+                "ok": true,
+                "affectedCount": affected.len(),
+                "affected": affected.iter().take(200).map(|(email, before)| json!({
+                    "email": email,
+                    "previousBalance": mitch_lib::jsval::num_value(*before),
+                })).collect::<Vec<_>>(),
+                "newBalance": mitch_lib::jsval::num_value(set_to),
+            }),
+        ));
+    }
+
     // POST /api/admin/broadcast (any admin/moderator).
     if path == "/api/admin/broadcast" {
         if !ctx.is_any_admin(state) {

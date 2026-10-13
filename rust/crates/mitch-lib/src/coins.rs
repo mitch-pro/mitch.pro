@@ -154,12 +154,109 @@ pub fn add_coins(
         (before, after)
     };
 
-    // Append to coin log (JS parity: silent on failure).
+    log_coin_change(data_dir, &norm, before, after, reason);
+}
+
+/// Sets a balance to an exact value — an admin correction, not an earn/spend
+/// event: unlike `add_coins`, this never applies the coin multiplier and
+/// never touches `lifetime_earned`. Returns the prior balance.
+pub fn set_coins(
+    store: &DataStore,
+    data_dir: &Path,
+    email: &str,
+    new_balance: f64,
+    reason: &str,
+) -> f64 {
+    if email.is_empty() {
+        return 0.0;
+    }
+    let norm = normalize_email(email);
+    let new_balance = js_round4(new_balance);
+
+    let before = {
+        let conn = store.conn();
+        if conn.execute_batch("BEGIN IMMEDIATE").is_err() {
+            return 0.0;
+        }
+        let before = conn
+            .query_row(
+                "SELECT balance FROM coins WHERE email = ?1",
+                rusqlite::params![norm],
+                |row| row.get::<_, f64>(0),
+            )
+            .unwrap_or(0.0);
+        let _ = conn.execute(
+            "INSERT INTO coins (email, balance, lifetime_earned, updated_at) VALUES (?1, ?2, 0, ?3)
+             ON CONFLICT(email) DO UPDATE SET balance = ?2, updated_at = ?3",
+            rusqlite::params![norm, new_balance, now_millis()],
+        );
+        let _ = conn.execute_batch("COMMIT");
+        before
+    };
+
+    log_coin_change(data_dir, &norm, before, new_balance, reason);
+    before
+}
+
+/// Sets every balance strictly above `threshold` to `new_balance` — an
+/// economy-wide correction (e.g. clawing back an exploit's winnings).
+/// Returns the affected emails with their prior balances.
+pub fn cap_coins_above(
+    store: &DataStore,
+    data_dir: &Path,
+    threshold: f64,
+    new_balance: f64,
+    reason: &str,
+) -> Vec<(String, f64)> {
+    let new_balance = js_round4(new_balance);
+    let conn = store.conn();
+    if conn.execute_batch("BEGIN IMMEDIATE").is_err() {
+        return Vec::new();
+    }
+    let affected: Vec<(String, f64)> = {
+        let mut stmt = match conn
+            .prepare("SELECT email, balance FROM coins WHERE balance > ?1 ORDER BY balance DESC")
+        {
+            Ok(s) => s,
+            Err(_) => {
+                let _ = conn.execute_batch("ROLLBACK");
+                return Vec::new();
+            }
+        };
+        let rows = stmt.query_map(rusqlite::params![threshold], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?))
+        });
+        match rows {
+            Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
+            Err(_) => Vec::new(),
+        }
+    };
+    let now = now_millis();
+    for (email, _) in &affected {
+        let _ = conn.execute(
+            "UPDATE coins SET balance = ?2, updated_at = ?3 WHERE email = ?1",
+            rusqlite::params![email, new_balance, now],
+        );
+    }
+    let _ = conn.execute_batch("COMMIT");
+    drop(conn);
+
+    for (email, before) in &affected {
+        log_coin_change(data_dir, email, *before, new_balance, reason);
+    }
+    affected
+}
+
+/// Shared `logs/coins.log` TSV append, factored out of `add_coins`/
+/// `set_coins`/`cap_coins_above` so every balance mutation leaves the same
+/// audit trail.
+fn log_coin_change(data_dir: &Path, norm_email: &str, before: f64, after: f64, reason: &str) {
     let ts = js_iso_date();
-    let sign = if adjusted >= 0.0 { "+" } else { "" };
+    let delta = after - before;
+    let sign = if delta >= 0.0 { "+" } else { "" };
     let line = format!(
-        "{ts}\t{norm}\t{sign}{:.4}\t{:.4} -> {:.4}\t{}\n",
-        adjusted,
+        "{ts}\t{norm_email}\t{sign}{:.4}\t{:.4} -> {:.4}\t{}\n",
+        delta,
         before,
         after,
         if reason.is_empty() {
@@ -702,6 +799,52 @@ mod tests {
         rename_coin_gift_notices_email(&store, "old@gmail.com", "new@gmail.com");
         assert!(coin_gift_notices_for(&store, "old@gmail.com").is_empty());
         assert_eq!(coin_gift_notices_for(&store, "new@gmail.com").len(), 2);
+        std::fs::remove_dir_all(base).ok();
+    }
+
+    #[test]
+    fn set_coins_overwrites_balance_without_multiplier_or_lifetime() {
+        let (base, data, store) = temp_store("set-coins");
+        // Earn 10 with a 2x multiplier, tracked in lifetime_earned.
+        add_coins(&store, &data, "p@gmail.com", 10.0, 2.0, "earn");
+        assert_eq!(get_coins(&store, &data, "p@gmail.com"), 20.0);
+        assert_eq!(get_lifetime_earned(&store, "p@gmail.com"), 20.0);
+
+        // set_coins overwrites the balance exactly, ignoring the multiplier,
+        // and leaves lifetime_earned untouched since it's a correction, not
+        // an earn event.
+        let previous = set_coins(&store, &data, "p@gmail.com", 10000.0, "admin set");
+        assert_eq!(previous, 20.0);
+        assert_eq!(get_coins(&store, &data, "p@gmail.com"), 10000.0);
+        assert_eq!(get_lifetime_earned(&store, "p@gmail.com"), 20.0);
+
+        // Works for a brand-new account too (no prior row).
+        let previous = set_coins(&store, &data, "fresh@gmail.com", 500.0, "admin set");
+        assert_eq!(previous, 0.0);
+        assert_eq!(get_coins(&store, &data, "fresh@gmail.com"), 500.0);
+        std::fs::remove_dir_all(base).ok();
+    }
+
+    #[test]
+    fn cap_coins_above_only_touches_accounts_over_threshold() {
+        let (base, data, store) = temp_store("cap-coins");
+        set_coins(&store, &data, "whale@gmail.com", 250000.0, "seed");
+        set_coins(&store, &data, "rich@gmail.com", 100001.0, "seed");
+        set_coins(&store, &data, "exact@gmail.com", 100000.0, "seed");
+        set_coins(&store, &data, "normal@gmail.com", 500.0, "seed");
+
+        let affected = cap_coins_above(&store, &data, 100000.0, 10000.0, "exploit clawback");
+        let affected_emails: std::collections::HashSet<_> =
+            affected.iter().map(|(e, _)| e.clone()).collect();
+        assert_eq!(affected.len(), 2);
+        assert!(affected_emails.contains("whale@gmail.com"));
+        assert!(affected_emails.contains("rich@gmail.com"));
+
+        assert_eq!(get_coins(&store, &data, "whale@gmail.com"), 10000.0);
+        assert_eq!(get_coins(&store, &data, "rich@gmail.com"), 10000.0);
+        // Exactly-at-threshold and below are untouched.
+        assert_eq!(get_coins(&store, &data, "exact@gmail.com"), 100000.0);
+        assert_eq!(get_coins(&store, &data, "normal@gmail.com"), 500.0);
         std::fs::remove_dir_all(base).ok();
     }
 }

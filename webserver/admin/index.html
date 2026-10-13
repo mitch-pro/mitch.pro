@@ -832,6 +832,24 @@
         <button type="submit">Execute Burn</button>
         <div id="burn-status" class="form-status"></div>
       </form>
+      <form class="action-card" onsubmit="setCoins(event)">
+        <h2>Set Balance</h2>
+        <p>Set one user's coin balance to an exact amount, overwriting whatever it currently is.</p>
+        <input id="set-coins-email" type="email" placeholder="user@email.com" required>
+        <input id="set-coins-amount" type="number" min="0" step="1" placeholder="New balance" required>
+        <input id="set-coins-reason" type="text" maxlength="160" placeholder="Reason" value="admin set balance">
+        <button type="submit">Set Balance</button>
+        <div id="set-coins-status" class="form-status"></div>
+      </form>
+      <form class="action-card danger" onsubmit="capCoins(event)">
+        <h2>Cap Balances Above X</h2>
+        <p>Set every account with more than a threshold down to a fixed amount — e.g. clawing back an exploit's winnings by capping everyone above 100k to 10k.</p>
+        <input id="cap-coins-above" type="number" min="0" step="1" placeholder="Above this amount (e.g. 100000)" required>
+        <input id="cap-coins-set-to" type="number" min="0" step="1" placeholder="Set to (e.g. 10000)" required>
+        <input id="cap-coins-reason" type="text" maxlength="160" placeholder="Reason" value="admin economy cap">
+        <button type="submit">Cap Balances</button>
+        <div id="cap-coins-status" class="form-status"></div>
+      </form>
       <div class="action-card">
         <h2>Economy Multiplier</h2>
         <p>Current: <span id="current-multiplier">1.0x</span></p>
@@ -1373,6 +1391,8 @@
       '/api/admin/unsend-notification': 'unsend_notification',
       '/api/admin/gift-coins': 'gift_coins',
       '/api/admin/economy/burn': 'burn_coins',
+      '/api/admin/economy/set-coins': 'set_coins',
+      '/api/admin/economy/cap-coins': 'cap_coins',
       '/api/admin/economy/multiplier': 'economy_multiplier',
       '/api/admin/broadcast': 'broadcast',
       '/api/admin/restricted-mode': 'shadow_ban',
@@ -1465,6 +1485,46 @@
         if (!d.pending) loadData();
       } catch (err) {
         setStatus('burn-status', err.message, 'err');
+      }
+    }
+
+    async function setCoins(e) {
+      e.preventDefault();
+      const email = document.getElementById('set-coins-email').value.trim();
+      const amount = document.getElementById('set-coins-amount').value;
+      if (!confirm('Set ' + email + "'s balance to " + amount + ' coins? This overwrites their current balance.')) return;
+      setStatus('set-coins-status', 'Submitting...', '');
+      try {
+        const d = await postAdmin('/api/admin/economy/set-coins', {
+          targetEmail: email,
+          amount: Number(amount),
+          reason: document.getElementById('set-coins-reason').value.trim(),
+        });
+        setStatus('set-coins-status', d.pending ? pendingText(d) :
+          'Balance set: ' + Number(d.previousBalance || 0).toFixed(2) + ' -> ' + Number(d.newBalance || 0).toFixed(2), 'ok');
+        if (!d.pending) loadData();
+      } catch (err) {
+        setStatus('set-coins-status', err.message, 'err');
+      }
+    }
+
+    async function capCoins(e) {
+      e.preventDefault();
+      const above = document.getElementById('cap-coins-above').value;
+      const setTo = document.getElementById('cap-coins-set-to').value;
+      if (!confirm('Set every account with more than ' + above + ' coins down to ' + setTo + '? This affects every matching account at once and cannot be undone automatically.')) return;
+      setStatus('cap-coins-status', 'Submitting...', '');
+      try {
+        const d = await postAdmin('/api/admin/economy/cap-coins', {
+          above: Number(above),
+          setTo: Number(setTo),
+          reason: document.getElementById('cap-coins-reason').value.trim(),
+        });
+        setStatus('cap-coins-status', d.pending ? pendingText(d) :
+          'Capped ' + d.affectedCount + ' account(s) to ' + Number(d.newBalance || 0).toFixed(2) + '.', 'ok');
+        if (!d.pending) loadData();
+      } catch (err) {
+        setStatus('cap-coins-status', err.message, 'err');
       }
     }
 
