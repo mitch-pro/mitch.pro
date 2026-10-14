@@ -40,6 +40,28 @@ fn base64url(data: &[u8]) -> String {
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(data)
 }
 
+/// Builds one `PublicKeyCredentialDescriptor` (`{id, type, transports?}`)
+/// for a stored credential, to list in `allowCredentials`/
+/// `excludeCredentials`. `transports` is OMITTED (never sent as `null`)
+/// when the stored record has none: the WebAuthn spec types it as an
+/// optional `sequence<DOMString>`, and browsers throw a client-side
+/// TypeError ("cannot be converted to a sequence") out of
+/// `navigator.credentials.create()`/`.get()` if it's present but `null` --
+/// which previously broke every login/registration attempt for an account
+/// with even one credential whose transports were never recorded.
+fn credential_descriptor(c: &Value) -> Value {
+    let mut desc = serde_json::Map::new();
+    desc.insert(
+        "id".to_string(),
+        c.get("id").cloned().unwrap_or(Value::Null),
+    );
+    desc.insert("type".to_string(), json!("public-key"));
+    if let Some(transports) = c.get("transports").filter(|v| v.is_array()) {
+        desc.insert("transports".to_string(), transports.clone());
+    }
+    Value::Object(desc)
+}
+
 pub fn webauthn_rp_for_host(state: &AppState, headers: &HeaderMap) -> Option<(String, String)> {
     let host = crate::hosts::request_host(headers).to_lowercase();
     let h = host.split(':').next().unwrap_or("").to_string();
@@ -157,16 +179,7 @@ async fn login_options(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &
     }
 
     let challenge = base64url(&mitch_lib::crypto::random_bytes(32));
-    let allow_credentials: Vec<Value> = allow
-        .iter()
-        .map(|c| {
-            json!({
-                "id": c.get("id").cloned().unwrap_or(Value::Null),
-                "transports": c.get("transports").cloned().unwrap_or(Value::Null),
-                "type": "public-key"
-            })
-        })
-        .collect();
+    let allow_credentials: Vec<Value> = allow.iter().map(credential_descriptor).collect();
 
     let options = json!({
         "rpId": rp.0,
@@ -464,16 +477,7 @@ async fn register_options(
         .unwrap_or("mitch.pro");
     let rp_name = site_name;
 
-    let exclude_credentials: Vec<Value> = existing
-        .iter()
-        .map(|c| {
-            json!({
-                "id": c.get("id").cloned().unwrap_or(Value::Null),
-                "transports": c.get("transports").cloned().unwrap_or(Value::Null),
-                "type": "public-key"
-            })
-        })
-        .collect();
+    let exclude_credentials: Vec<Value> = existing.iter().map(credential_descriptor).collect();
 
     let options = json!({
         "challenge": challenge,
@@ -828,4 +832,36 @@ fn credentials_list(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             "credentials": public_creds
         }),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression: a stored credential with no transports recorded must
+    /// produce a descriptor with the key OMITTED, never `"transports":
+    /// null` -- the latter crashes navigator.credentials.create()/.get()
+    /// client-side with a TypeError before any network request is sent,
+    /// which broke every login/registration for an account with such a
+    /// credential (e.g. one created by an authenticator/browser combo that
+    /// never reports transports).
+    #[test]
+    fn credential_descriptor_omits_null_transports() {
+        let cred = json!({ "id": "abc123", "transports": Value::Null });
+        let desc = credential_descriptor(&cred);
+        assert_eq!(desc.get("id"), Some(&json!("abc123")));
+        assert_eq!(desc.get("type"), Some(&json!("public-key")));
+        assert!(
+            desc.get("transports").is_none(),
+            "transports must be omitted, not null: {desc:?}"
+        );
+
+        let cred_missing = json!({ "id": "def456" });
+        let desc2 = credential_descriptor(&cred_missing);
+        assert!(desc2.get("transports").is_none());
+
+        let cred_with = json!({ "id": "ghi789", "transports": ["usb", "nfc"] });
+        let desc3 = credential_descriptor(&cred_with);
+        assert_eq!(desc3.get("transports"), Some(&json!(["usb", "nfc"])));
+    }
 }
