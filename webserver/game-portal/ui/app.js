@@ -167,10 +167,7 @@
     favorite.setAttribute('aria-label', `${state.favorites.includes(game.id) ? 'Remove' : 'Save'} ${game.title}`);
     favorite.append(icon('heart'));
     favorite.addEventListener('click', () => toggleFavorite(game.id));
-    const playCue = document.createElement('span');
-    playCue.className = 'card-play-cue';
-    playCue.append(icon('arrow-up-right'));
-    card.append(imageFor(game), info, playCue, open, favorite);
+    card.append(imageFor(game), info, open, favorite);
     return card;
   }
 
@@ -298,7 +295,8 @@
       byId('spotlight-title').textContent = slope.title;
       byId('spotlight-meta').textContent = slope.category;
       if (slope.image) byId('spotlight-image').src = slope.image;
-      byId('spotlight-play').firstChild.textContent = `Play ${slope.title} `;
+      byId('spotlight-play').textContent = `Play ${slope.title}`;
+      byId('spotlight-description').textContent = slope.title === 'Slope' ? 'Keep the ball on track.' : `Play ${slope.title} from the game library.`;
       byId('spotlight-play').onclick = () => launch(slope);
     }
     const picks = featuredTitles.slice(1).map(findGame).filter(Boolean);
@@ -378,7 +376,7 @@
       const title = document.createElement('span');
       title.className = 'sidebar-recent-title';
       title.textContent = game.title;
-      button.append(art, title, icon('play'));
+      button.append(art, title);
       button.addEventListener('click', () => { closeMenu(); launch(game); });
       return button;
     }));
@@ -388,7 +386,7 @@
     const games = filteredGames();
     const viewName = state.view === 'favorites' ? 'Saved' : state.view === 'recent' ? 'Recently played' : (state.category === 'All' ? 'Discover' : state.category);
     byId('current-view-name').textContent = viewName;
-    byId('page-title').textContent = 'super duper games';
+    byId('page-title').textContent = state.view === 'favorites' ? 'Saved games' : state.view === 'recent' ? 'Recently played' : 'Games';
     byId('spotlight').hidden = !!state.query || state.view !== 'all';
     byId('quick-picks-section').hidden = !!state.query || state.view !== 'all';
     byId('catalog-heading').textContent = state.view === 'favorites' ? 'Saved games' : (state.view === 'recent' ? 'Recently played' : 'Browse games');
