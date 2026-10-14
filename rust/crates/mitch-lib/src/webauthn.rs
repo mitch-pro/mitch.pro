@@ -393,8 +393,17 @@ pub fn verify_registration(
         return Err("credential id truncated".into());
     }
     let credential_id = rest[18..18 + cred_id_len].to_vec();
-    let cose: serde_cbor::Value =
-        serde_cbor::from_slice(&rest[18 + cred_id_len..]).map_err(|e| format!("COSE key: {e}"))?;
+    // The COSE key is immediately followed by extension data when the
+    // registration requested extensions (this RP asks for credProps) and
+    // the authenticator set the ED flag -- serde_cbor::from_slice requires
+    // the whole slice to be exactly one value, so it would reject that
+    // trailing data as an error. Use the lower-level Deserializer and skip
+    // its end-of-input check to parse just the one COSE key item and
+    // ignore whatever (if anything) follows it.
+    let cose: serde_cbor::Value = {
+        let mut de = serde_cbor::Deserializer::from_slice(&rest[18 + cred_id_len..]);
+        serde::de::Deserialize::deserialize(&mut de).map_err(|e| format!("COSE key: {e}"))?
+    };
     let key = cose_es256_key(&cose).ok_or("COSE key not ES256")?;
 
     // fmt "packed" self-attestation signs authData || clientDataHash. "none"
@@ -527,7 +536,14 @@ mod tests {
     /// issued_key) registration fixture for the given `fmt`, with no
     /// attStmt contents — enough to exercise verify_registration's fmt gate
     /// and authData/COSE-key parsing without a real authenticator.
-    fn registration_fixture(fmt: &str, rp_id: &str, origin: &str) -> (String, String, String) {
+    /// `trailing` is appended to authData right after the COSE key, as a
+    /// real authenticator's extension-data output would be.
+    fn registration_fixture_with_trailing(
+        fmt: &str,
+        rp_id: &str,
+        origin: &str,
+        trailing: &[u8],
+    ) -> (String, String, String) {
         use p256::elliptic_curve::sec1::ToEncodedPoint;
 
         let (secret_key, _) = crate::crypto::generate_p256_keypair();
@@ -562,6 +578,7 @@ mod tests {
         auth_data.extend_from_slice(&cred_id_len);
         auth_data.extend_from_slice(&cred_id);
         auth_data.extend_from_slice(&cose_bytes);
+        auth_data.extend_from_slice(trailing);
 
         let mut att_obj = serde_cbor::value::Value::Map(std::collections::BTreeMap::new());
         if let serde_cbor::Value::Map(m) = &mut att_obj {
@@ -586,6 +603,46 @@ mod tests {
         let cd_b64 = base64url(cd.to_string().as_bytes());
 
         (att_obj_b64, cd_b64, issued_key)
+    }
+
+    fn registration_fixture(fmt: &str, rp_id: &str, origin: &str) -> (String, String, String) {
+        registration_fixture_with_trailing(fmt, rp_id, origin, &[])
+    }
+
+    /// Regression for a bug where the COSE public key was parsed with
+    /// serde_cbor::from_slice, which requires its input to be exactly one
+    /// CBOR value with nothing left over. register_options requests the
+    /// credProps extension, so a real authenticator sets the ED flag and
+    /// appends CBOR-encoded extension output right after the COSE key in
+    /// authData -- from_slice rejected that as "trailing data at offset
+    /// N", failing every registration from an authenticator that actually
+    /// honors the requested extension (observed live against production).
+    #[test]
+    fn verify_registration_tolerates_trailing_extension_data_after_cose_key() {
+        let trailing_extension = serde_cbor::to_vec(&serde_cbor::value::Value::Map({
+            let mut m = std::collections::BTreeMap::new();
+            m.insert(
+                serde_cbor::Value::Text("credProps".into()),
+                serde_cbor::Value::Map({
+                    let mut inner = std::collections::BTreeMap::new();
+                    inner.insert(
+                        serde_cbor::Value::Text("rk".into()),
+                        serde_cbor::Value::Bool(true),
+                    );
+                    inner
+                }),
+            );
+            m
+        }))
+        .unwrap();
+        let (att, cd, key) = registration_fixture_with_trailing(
+            "none",
+            "mitchdog.com",
+            "https://mitchdog.com",
+            &trailing_extension,
+        );
+        verify_registration(&att, &cd, &key, "https://mitchdog.com", "mitchdog.com")
+            .unwrap_or_else(|e| panic!("trailing extension data should be tolerated: {e}"));
     }
 
     #[test]
