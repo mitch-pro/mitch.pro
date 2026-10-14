@@ -225,8 +225,8 @@ fn cose_es256_key(cbor: &serde_cbor::Value) -> Option<CoseKey> {
         _ => return None,
     };
     let get = |k: i128| -> Option<i128> {
-        map.iter().find_map(|(key, _)| match key {
-            serde_cbor::Value::Integer(i) if *i == k => Some(*i),
+        map.iter().find_map(|(key, value)| match (key, value) {
+            (serde_cbor::Value::Integer(i), serde_cbor::Value::Integer(v)) if *i == k => Some(*v),
             _ => None,
         })
     };
@@ -305,6 +305,7 @@ pub fn verify_authentication_signature(
 }
 
 /// Registration info (the fields stored in passkeys.json).
+#[derive(Debug)]
 pub struct RegistrationInfo {
     pub credential_id: String,
     pub cose_public_key: Vec<u8>,
@@ -312,7 +313,9 @@ pub struct RegistrationInfo {
     pub aaguid_hex: String,
 }
 
-/// Registration attestation verification (fmt "none" or "packed" self-attestation).
+/// Registration attestation verification (fmt "none" or "packed"
+/// self-attestation; "fido-u2f" is accepted the same way "none" is — see
+/// below). Any other fmt is rejected.
 pub fn verify_registration(
     attestation_object_b64url: &str,
     client_data_json_b64url: &str,
@@ -358,7 +361,7 @@ pub fn verify_registration(
         })
     };
     let fmt = find_text("fmt").ok_or("attObj missing fmt")?;
-    if fmt != "none" && fmt != "packed" {
+    if fmt != "none" && fmt != "packed" && fmt != "fido-u2f" {
         return Err(format!("unsupported fmt: {fmt}"));
     }
     let auth_data = find_bytes("authData").ok_or("attObj missing authData")?;
@@ -394,7 +397,15 @@ pub fn verify_registration(
         serde_cbor::from_slice(&rest[18 + cred_id_len..]).map_err(|e| format!("COSE key: {e}"))?;
     let key = cose_es256_key(&cose).ok_or("COSE key not ES256")?;
 
-    // fmt "packed" self-attestation signs authData || clientDataHash.
+    // fmt "packed" self-attestation signs authData || clientDataHash. "none"
+    // and "fido-u2f" (the format many USB security keys report through the
+    // browser's CTAP1 compatibility layer, regardless of the "none"
+    // attestation conveyance this RP requests) skip attestation-statement
+    // verification entirely here — register_options already asks for
+    // attestation "none", so this RP doesn't trust attestation provenance
+    // either way, and the credential's actual public key (extracted above
+    // from authData, which is identical across every fmt) is what every
+    // later login's signature check is verified against regardless.
     if fmt == "packed" {
         let serde_cbor::Value::Map(stmt) = att_map
             .iter()
@@ -510,5 +521,191 @@ mod tests {
         assert!(verify_client_data(&b64, "webauthn.create", &key, "https://mitch.pro").is_err());
         assert!(verify_client_data(&b64, "webauthn.get", &key, "https://evil.com").is_err());
         assert!(verify_client_data(&b64, "webauthn.get", "wrongkey", "https://mitch.pro").is_err());
+    }
+
+    /// Builds a minimal, well-formed (attestation-object, clientDataJSON,
+    /// issued_key) registration fixture for the given `fmt`, with no
+    /// attStmt contents — enough to exercise verify_registration's fmt gate
+    /// and authData/COSE-key parsing without a real authenticator.
+    fn registration_fixture(fmt: &str, rp_id: &str, origin: &str) -> (String, String, String) {
+        use p256::elliptic_curve::sec1::ToEncodedPoint;
+
+        let (secret_key, _) = crate::crypto::generate_p256_keypair();
+        let point = secret_key.public_key().to_encoded_point(false);
+        let x = point.x().unwrap().to_vec();
+        let y = point.y().unwrap().to_vec();
+
+        let mut cose = serde_cbor::value::Value::Map(std::collections::BTreeMap::new());
+        if let serde_cbor::Value::Map(m) = &mut cose {
+            m.insert(serde_cbor::Value::Integer(1), serde_cbor::Value::Integer(2));
+            m.insert(
+                serde_cbor::Value::Integer(3),
+                serde_cbor::Value::Integer(-7),
+            );
+            m.insert(serde_cbor::Value::Integer(-1), serde_cbor::Value::Bytes(y));
+            m.insert(serde_cbor::Value::Integer(-2), serde_cbor::Value::Bytes(x));
+        }
+        let cose_bytes = serde_cbor::to_vec(&cose).unwrap();
+
+        let rp_id_hash = sha256_bytes(rp_id.as_bytes());
+        let flags: u8 = 0xC0; // user-present (0x40) + attested-credential-data (0x80)
+        let counter = [0u8; 4];
+        let aaguid = [0u8; 16];
+        let cred_id = b"test-credential-id".to_vec();
+        let cred_id_len = (cred_id.len() as u16).to_be_bytes();
+
+        let mut auth_data = Vec::new();
+        auth_data.extend_from_slice(&rp_id_hash);
+        auth_data.push(flags);
+        auth_data.extend_from_slice(&counter);
+        auth_data.extend_from_slice(&aaguid);
+        auth_data.extend_from_slice(&cred_id_len);
+        auth_data.extend_from_slice(&cred_id);
+        auth_data.extend_from_slice(&cose_bytes);
+
+        let mut att_obj = serde_cbor::value::Value::Map(std::collections::BTreeMap::new());
+        if let serde_cbor::Value::Map(m) = &mut att_obj {
+            m.insert(
+                serde_cbor::Value::Text("fmt".into()),
+                serde_cbor::Value::Text(fmt.into()),
+            );
+            m.insert(
+                serde_cbor::Value::Text("attStmt".into()),
+                serde_cbor::Value::Map(std::collections::BTreeMap::new()),
+            );
+            m.insert(
+                serde_cbor::Value::Text("authData".into()),
+                serde_cbor::Value::Bytes(auth_data),
+            );
+        }
+        let att_obj_b64 = base64url(&serde_cbor::to_vec(&att_obj).unwrap());
+
+        let challenge = "test-reg-challenge";
+        let issued_key = sha256_hex_str(challenge.as_bytes());
+        let cd = serde_json::json!({"type": "webauthn.create", "challenge": challenge, "origin": origin});
+        let cd_b64 = base64url(cd.to_string().as_bytes());
+
+        (att_obj_b64, cd_b64, issued_key)
+    }
+
+    #[test]
+    fn verify_registration_accepts_none_packed_and_fido_u2f() {
+        for fmt in ["none", "fido-u2f"] {
+            let (att, cd, key) = registration_fixture(fmt, "mitchdog.com", "https://mitchdog.com");
+            let info = verify_registration(&att, &cd, &key, "https://mitchdog.com", "mitchdog.com")
+                .unwrap_or_else(|e| panic!("fmt {fmt} should be accepted: {e}"));
+            assert_eq!(info.counter, 0);
+        }
+    }
+
+    #[test]
+    fn verify_registration_rejects_unrecognized_fmt() {
+        let (att, cd, key) =
+            registration_fixture("android-key", "mitchdog.com", "https://mitchdog.com");
+        let err = verify_registration(&att, &cd, &key, "https://mitchdog.com", "mitchdog.com")
+            .unwrap_err();
+        assert!(err.contains("unsupported fmt"), "got: {err}");
+    }
+
+    /// Regression for a bug where `cose_es256_key`'s kty/alg lookup returned
+    /// the matched CBOR *key* instead of its *value* (`(key, _)` discarded
+    /// the value, then returned `*i` — the key itself, which the match
+    /// guard had already forced to equal the lookup argument). That made
+    /// the kty==2/alg==-7 check always true-by-construction regardless of
+    /// the actual key's type/algorithm, so `cose_es256_key` rejected every
+    /// COSE key unconditionally — breaking every passkey login and
+    /// registration, not just non-"none"/"packed" attestation formats.
+    #[test]
+    fn cose_es256_key_rejects_wrong_kty_and_alg() {
+        // kty=1 (OKP, not EC2) with alg=-7 — wrong key type.
+        let mut wrong_kty = std::collections::BTreeMap::new();
+        wrong_kty.insert(serde_cbor::Value::Integer(1), serde_cbor::Value::Integer(1));
+        wrong_kty.insert(
+            serde_cbor::Value::Integer(3),
+            serde_cbor::Value::Integer(-7),
+        );
+        wrong_kty.insert(
+            serde_cbor::Value::Integer(-2),
+            serde_cbor::Value::Bytes(vec![0u8; 32]),
+        );
+        wrong_kty.insert(
+            serde_cbor::Value::Integer(-1),
+            serde_cbor::Value::Bytes(vec![0u8; 32]),
+        );
+        assert!(cose_es256_key(&serde_cbor::Value::Map(wrong_kty)).is_none());
+
+        // kty=2 (EC2) with alg=-257 (RS256, not ES256) — wrong algorithm.
+        let mut wrong_alg = std::collections::BTreeMap::new();
+        wrong_alg.insert(serde_cbor::Value::Integer(1), serde_cbor::Value::Integer(2));
+        wrong_alg.insert(
+            serde_cbor::Value::Integer(3),
+            serde_cbor::Value::Integer(-257),
+        );
+        wrong_alg.insert(
+            serde_cbor::Value::Integer(-2),
+            serde_cbor::Value::Bytes(vec![0u8; 32]),
+        );
+        wrong_alg.insert(
+            serde_cbor::Value::Integer(-1),
+            serde_cbor::Value::Bytes(vec![0u8; 32]),
+        );
+        assert!(cose_es256_key(&serde_cbor::Value::Map(wrong_alg)).is_none());
+    }
+
+    /// Same regression as `cose_es256_key_rejects_wrong_kty_and_alg`, but
+    /// through the actual login path: a real ES256 signature over
+    /// authData || sha256(clientDataJSON), verified against the stored
+    /// COSE key bytes exactly as `login_verify` does. Before the fix this
+    /// failed unconditionally with "stored key not COSE ES256" for every
+    /// credential, regardless of a valid signature.
+    #[test]
+    fn verify_authentication_signature_accepts_a_real_signature() {
+        use p256::ecdsa::{signature::Signer, Signature, SigningKey};
+        use p256::elliptic_curve::sec1::ToEncodedPoint;
+
+        let (secret_key, _) = crate::crypto::generate_p256_keypair();
+        let point = secret_key.public_key().to_encoded_point(false);
+        let x = point.x().unwrap().to_vec();
+        let y = point.y().unwrap().to_vec();
+
+        let mut cose = std::collections::BTreeMap::new();
+        cose.insert(serde_cbor::Value::Integer(1), serde_cbor::Value::Integer(2));
+        cose.insert(
+            serde_cbor::Value::Integer(3),
+            serde_cbor::Value::Integer(-7),
+        );
+        cose.insert(serde_cbor::Value::Integer(-1), serde_cbor::Value::Bytes(y));
+        cose.insert(serde_cbor::Value::Integer(-2), serde_cbor::Value::Bytes(x));
+        let cose_bytes = serde_cbor::to_vec(&serde_cbor::Value::Map(cose)).unwrap();
+
+        let auth_data = vec![7u8; 37]; // arbitrary but fixed-shape authData.
+        let challenge = "test-login-challenge";
+        let cd = serde_json::json!({"type": "webauthn.get", "challenge": challenge, "origin": "https://mitchdog.com"});
+        let cd_b64 = base64url(cd.to_string().as_bytes());
+        let client_data_bytes = decode_b64url_bytes(&cd_b64).unwrap();
+        let client_hash = sha256_bytes(&client_data_bytes);
+        let mut signed = auth_data.clone();
+        signed.extend_from_slice(&client_hash);
+
+        let signing_key = SigningKey::from(secret_key);
+        let sig: Signature = signing_key.sign(&signed);
+
+        assert!(verify_authentication_signature(
+            &cose_bytes,
+            &auth_data,
+            &cd_b64,
+            sig.to_der().as_bytes(),
+        )
+        .is_ok());
+
+        // A signature over the wrong data must still be rejected.
+        let bad_auth_data = vec![9u8; 37];
+        assert!(verify_authentication_signature(
+            &cose_bytes,
+            &bad_auth_data,
+            &cd_b64,
+            sig.to_der().as_bytes(),
+        )
+        .is_err());
     }
 }
