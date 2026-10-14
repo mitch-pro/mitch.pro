@@ -490,11 +490,16 @@ async fn register_options(
             "name": norm_email,
             "displayName": email,
         },
+        // ES256 only: verify_registration/cose_es256_key (mitch-lib) only
+        // understand COSE kty=2 (EC2) / alg=-7 (ES256) keys. Advertising
+        // -8 (EdDSA), -257 (RS256), or the non-standard -48 here let an
+        // authenticator pick a key type the server could never verify --
+        // it would register "successfully" client-side and then fail
+        // every future login/registration-exclusion check with "stored
+        // key not COSE ES256", a 400 the client only ever sees as a
+        // generic "Passkey registration failed."
         "pubKeyCredParams": [
-            { "alg": -48, "type": "public-key" },
-            { "alg": -8, "type": "public-key" },
-            { "alg": -7, "type": "public-key" },
-            { "alg": -257, "type": "public-key" }
+            { "alg": -7, "type": "public-key" }
         ],
         "timeout": 60000,
         "attestation": "none",
