@@ -452,7 +452,7 @@
         return '<article class="member">' +
           '<div class="cover"><div class="avatar">' + pfp + '</div><span class="online-dot ' + (member.online ? 'on' : '') + '"></span></div>' +
           '<div class="body">' +
-            '<div class="name-row"><div class="name">' + esc(displayName(member)) + '</div><span class="pill role ' + role + '">' + esc(member.role || 'member') + '</span></div>' +
+            '<div class="name-row"><div class="name ' + esc(member.color || '') + '">' + esc(displayName(member)) + '</div><span class="pill role ' + role + '">' + esc(member.role || 'member') + '</span></div>' +
             '<div class="handle">' + esc(handle) + '</div>' +
             '<div class="presence-detail ' + (member.online ? 'is-online' : '') + (inChat ? ' is-chat' : '') + '">' + esc(activity) + (presencePage ? '<code>' + esc(presencePage) + '</code>' : '') + '</div>' +
             (member.bio ? '<div class="bio">' + esc(member.bio) + '</div>' : '') +

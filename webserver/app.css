@@ -568,3 +568,28 @@ body.enroll-page { background: var(--t-bg); }
 html[data-radius] :is(.panel, .card, .pref-section, .stat-card, .member-card, .friend-card, .modal-card) { border-radius: var(--t-radius); }
 html[data-material="glass"] :is(.panel, .card, .pref-section, .app-topbar, .home-feature) { background-color: color-mix(in srgb, var(--t-bg2) 80%, transparent); backdrop-filter: blur(14px); }
 .theme-no-motion *, .theme-no-motion *::before, .theme-no-motion *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+
+/* Purchased name colors, shared by friends and member surfaces. */
+html body .name.neon_purple {color:#c291ff!important;}
+html body .name.electric_blue {color:#72b5ff!important;}
+html body .name.mint_flash {color:#81d9b0!important;}
+html body .name.rose_spark {color:#f2a4bf!important;}
+html body .name.ember_red {color:#f69689!important;}
+html body .name.void_white {color:var(--t-fg)!important;}
+html body .name.gold_glow {color:#e8c578!important;}
+html body .name.rainbow_name {color:var(--t-ac);}
+html.theme-light body .name.neon_purple, html[data-theme="light"] body .name.neon_purple {color:#7840b3!important}
+html.theme-light body .name.electric_blue, html[data-theme="light"] body .name.electric_blue {color:#215dab!important}
+html.theme-light body .name.mint_flash, html[data-theme="light"] body .name.mint_flash {color:#24734f!important}
+html.theme-light body .name.rose_spark, html[data-theme="light"] body .name.rose_spark {color:#aa3f69!important}
+html.theme-light body .name.ember_red, html[data-theme="light"] body .name.ember_red {color:#ae392f!important}
+html.theme-light body .name.gold_glow, html[data-theme="light"] body .name.gold_glow {color:#856019!important}
+
+@media (prefers-color-scheme:light) {
+  html:not([data-theme="dark"]) body .name.neon_purple { color:#7840b3!important; }
+  html:not([data-theme="dark"]) body .name.electric_blue { color:#215dab!important; }
+  html:not([data-theme="dark"]) body .name.mint_flash { color:#24734f!important; }
+  html:not([data-theme="dark"]) body .name.rose_spark { color:#aa3f69!important; }
+  html:not([data-theme="dark"]) body .name.ember_red { color:#ae392f!important; }
+  html:not([data-theme="dark"]) body .name.gold_glow { color:#856019!important; }
+}

@@ -11,8 +11,8 @@
 //!   writes raced (both read the same "before", second write clobbers the
 //!   first). `coins.json` is migrated once into this table on startup
 //!   (`DataStore::backfill_coins_table_from_json`) and no longer written.
-//! - addCoins: positive amounts are multiplied by the global coin multiplier
-//!   (raised to at least 2.0 during a personal happy hour), negative amounts
+//! - addCoins: positive amounts are multiplied by the global coin multiplier;
+//!   negative amounts
 //!   pass through unmultiplied. Balances round to 4 decimals (JS toFixed).
 //!   The read-modify-write of one row still happens in Rust (to keep the
 //!   exact rounding/multiplier logic), but now inside a BEGIN IMMEDIATE
@@ -87,8 +87,7 @@ pub fn get_lifetime_earned(store: &DataStore, email: &str) -> f64 {
 pub const DEFAULT_COIN_MULTIPLIER: f64 = 1.0;
 
 /// `addCoins(email, amount, reason)` — server.js:2979-3005.
-/// `multiplier` is `globalCoinMultiplier` at call time; `personal_happy_hour`
-/// is read from the `user_stats` table (positive amounts only, minimum 2.0x).
+/// `multiplier` is `globalCoinMultiplier` at call time (positive amounts only).
 pub fn add_coins(
     store: &DataStore,
     data_dir: &Path,
@@ -101,19 +100,11 @@ pub fn add_coins(
         return;
     }
     let norm = normalize_email(email);
-    let stats = crate::user_stats::user_stats_get(store, &norm);
-
-    let personal_hh = stats
-        .get("personal_happy_hour_until")
-        .and_then(|v| v.as_f64())
-        .unwrap_or(0.0)
-        > now_millis() as f64;
-    let mult = if personal_hh {
-        multiplier.max(2.0)
+    let adjusted = if amount > 0.0 {
+        amount * multiplier
     } else {
-        multiplier
+        amount
     };
-    let adjusted = if amount > 0.0 { amount * mult } else { amount };
 
     // One row, one transaction: BEGIN IMMEDIATE takes the write lock
     // up front (same pattern reserve_virtual_machine uses), so a
@@ -610,6 +601,19 @@ mod tests {
         let store = DataStore::open(&base, &base.join("data")).unwrap();
         // Helpers take the DATA dir; tests return both for convenience.
         (base.clone(), base.join("data"), store)
+    }
+
+    #[test]
+    fn retired_personal_boost_cannot_multiply_new_earnings() {
+        let (base, data, store) = temp_store("retired-boost");
+        crate::user_stats::user_stats_set(
+            &store,
+            "member@example.com",
+            &json!({"personal_happy_hour_until": 9_999_999_999_999i64}),
+        );
+        add_coins(&store, &data, "member@example.com", 10.0, 1.0, "test");
+        assert_eq!(get_coins(&store, &data, "member@example.com"), 10.0);
+        std::fs::remove_dir_all(base).ok();
     }
 
     #[test]

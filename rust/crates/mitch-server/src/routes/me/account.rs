@@ -801,22 +801,6 @@ fn me_root(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         ),
     ));
 
-    let happy_hour_active = state
-        .happy_hour_active
-        .load(std::sync::atomic::Ordering::Relaxed);
-    let computed = state.happy_hour();
-    let happy_hour_message = if happy_hour_active {
-        format!(
-            "HAPPY HOUR IS ACTIVE! Earn 2X Coins on games & canvas! (Runs {}) 🎰",
-            mitch_lib::school::format_school_hour(computed)
-        )
-    } else {
-        format!(
-            "Happy Hour today: {} (Based on yesterday's least used school hour!) 🍻",
-            mitch_lib::school::format_school_hour(computed)
-        )
-    };
-
     let role = if is_co_owner {
         "co-owner"
     } else if is_owner {
@@ -859,10 +843,6 @@ fn me_root(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             "kdfIterations": kdf_iterations,
             "keyHistory": key_history,
             "premium_email": jsval_or_null(stats.get("premium_email")),
-            "happyHour": {
-                "active": happy_hour_active,
-                "message": happy_hour_message,
-            },
         }),
     )
 }

@@ -342,7 +342,7 @@
   </main>
 
   <footer class="sp-foot">
-    <p>&copy; 2026 sexypickleclub.com &middot; a mitch.pro society &middot; <a href="https://mitch.pro/faq.html" data-site-link="alternate/faq.html">FAQ</a> &middot; <a href="https://mitch.pro/use-agreement.html" data-site-link="alternate/use-agreement.html">Use Agreement</a> &middot; <a href="https://github.com/mitch-pro/mitch.pro" target="_blank" rel="noopener" title="mitch.pro is open source — view the code yourself">Open source</a></p>
+    <p>&copy; 2026 sexypickleclub.com &middot; a mitch.pro society &middot; <a href="https://mitchdog.com/faq.html" data-site-link="alternate/faq.html">FAQ</a> &middot; <a href="https://mitchdog.com/use-agreement.html" data-site-link="alternate/use-agreement.html">Use Agreement</a> &middot; <a href="https://github.com/mitch-pro/mitch.pro" target="_blank" rel="noopener" title="mitch.pro is open source — view the code yourself">Open source</a></p>
   </footer>
 
 <script src="/cookie-consent.js" defer></script>
@@ -388,7 +388,7 @@
   async function goSignIn(e) {
     // Signed out only: let the browser follow the bridge link as-is when the
     // primary origin is reachable (it's the same host for the club).
-    const primary = String((siteInfo && siteInfo.primary) || 'https://mitch.pro').replace(/\/+$/, '');
+    const primary = String((siteInfo && siteInfo.primary) || 'https://mitchdog.com').replace(/\/+$/, '');
     if (await reachable(primary, 4000)) return; // same-server bridge handles it
     e.preventDefault();
     const alternate = String((siteInfo && siteInfo.alternate) || '').replace(/\/+$/, '');

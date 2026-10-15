@@ -98,7 +98,7 @@ fn site_primary_origin(state: &AppState) -> Option<String> {
         .ok()
         .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
         .and_then(|v| v.get("primary").and_then(|p| p.as_str()).map(String::from))
-        .unwrap_or_else(|| "https://mitch.pro".to_string());
+        .unwrap_or_else(|| "https://mitchdog.com".to_string());
     let scheme_end = primary.find("://")?;
     let rest = &primary[scheme_end + 3..];
     let host_end = rest.find('/').unwrap_or(rest.len());

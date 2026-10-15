@@ -39,7 +39,7 @@ const homeCss = readFileSync('webserver/home.css', 'utf8');
 for (const destination of ['/game-portal/', '/matrix/', '/vms/', '/members/', '/preferences/', '/shop/', '/casino/']) {
   assert(home.includes(`href="${destination}"`), `Homepage must preserve ${destination} navigation`);
 }
-for (const id of ['home-search', 'home-search-results', 'links', 'member-side-rail']) {
+for (const id of ['home-search', 'links', 'hub-daily-chip', 'member-side-rail', 'home-search-results']) {
   assert(home.includes(`id="${id}"`), `Homepage must preserve the ${id} integration`);
 }
 assert(home.includes('/home.css?v=10') && home.includes('/home-friends.js?v=4'), 'Homepage assets need cache-busted URLs');

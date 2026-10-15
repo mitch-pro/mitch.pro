@@ -1485,7 +1485,7 @@ fn parse_sso_e2e_private_jwk(raw: Option<&str>) -> Option<Value> {
 }
 
 /// `GET /api/sso/bridge` (server.js:15031-15145).
-fn sso_bridge(state: &Arc<AppState>, headers: &HeaderMap, search: &str) -> Response {
+pub(crate) fn sso_bridge(state: &Arc<AppState>, headers: &HeaderMap, search: &str) -> Response {
     let req_h = request_host(headers);
     let query_map = crate::handler::query(search);
     let back_param = query_map

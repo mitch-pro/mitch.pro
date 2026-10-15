@@ -2,7 +2,7 @@
   'use strict';
   if (window.MitchCoins || /(^|\.)rjuhsd\.school$/.test(location.hostname) || location.pathname.startsWith('/rjuhsd/')) return;
 
-  const icon = '/mitchcoin.png';
+  const icon = '/mitchcoin.svg';
   const widgets = [];
   const fullFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
   const compactFormat = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 });
@@ -16,7 +16,7 @@
       if (balance === Infinity) {
         amount.textContent = '∞';
         widget.dataset.state = status;
-        widget.href = '/coins/';
+        widget.href = '/coins/?v=2';
         widget.title = 'Unlimited MitchCoins (Beta Tester) · Open wallet';
         widget.setAttribute('aria-label', widget.title);
         widget.setAttribute('aria-busy', 'false');
@@ -25,7 +25,7 @@
       const exact = balance === null ? null : fullFormat.format(balance);
       amount.textContent = exact === null ? (status === 'guest' ? 'Sign in' : '—') : (balance >= 10000 ? compactFormat.format(balance) : exact);
       widget.dataset.state = status;
-      widget.href = status === 'guest' ? '/enroll/' : '/coins/';
+      widget.href = status === 'guest' ? '/enroll/' : '/coins/?v=2';
       widget.title = exact === null ? (status === 'guest' ? 'Sign in to view your MitchCoins' : 'MitchCoins balance unavailable') : exact + ' MitchCoins · Open wallet';
       widget.setAttribute('aria-label', widget.title);
       widget.setAttribute('aria-busy', String(status === 'loading'));

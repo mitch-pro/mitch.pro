@@ -209,12 +209,6 @@ async fn shop_buy(
             obj.insert("streakFreezes".to_string(), json!(freezes + 1));
         }
         mitch_lib::daily_logins::daily_login_set(&state.store, &norm, &entry);
-    } else if cost_type == "happy_hour_ticket" {
-        let minutes = item
-            .get("durationMinutes")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(30.0);
-        bump_stat_until(state, &norm, "personal_happy_hour_until", minutes);
     } else if cost_type == "double_down_ticket" {
         let minutes = item
             .get("durationMinutes")
@@ -227,26 +221,6 @@ async fn shop_buy(
             .and_then(|v| v.as_f64())
             .unwrap_or(30.0);
         bump_stat_until(state, &norm, "bad_beat_insurance_until", minutes);
-    } else if cost_type == "happy_hour_extension" {
-        let mut entry = mitch_lib::user_stats::user_stats_get(&state.store, &norm);
-        let current = entry
-            .get("personal_happy_hour_until")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0);
-        let now = mitch_lib::school::now_millis() as f64;
-        if current <= now {
-            return json_response(
-                400,
-                json!({ "error": "You must have an active Personal Happy Hour to extend it." }),
-            );
-        }
-        if let Some(obj) = entry.as_object_mut() {
-            obj.insert(
-                "personal_happy_hour_until".to_string(),
-                json!(current + 15.0 * 60.0 * 1000.0),
-            );
-        }
-        mitch_lib::user_stats::user_stats_set(&state.store, &norm, &entry);
     } else if cost_type == "slots_free_spin" {
         let mut entry = mitch_lib::user_stats::user_stats_get(&state.store, &norm);
         let current = entry
@@ -302,7 +276,7 @@ async fn shop_buy(
 }
 
 /// `stats[norm][key] = max(now, current) + minutes * 60_000` — the shared
-/// shape behind vip_casino_pass/happy_hour_ticket/double_down_ticket/
+/// shape behind vip_casino_pass/double_down_ticket/
 /// bad_beat_insurance/loaded_dice/casino_glitch_chip's "extend from now or
 /// from whenever the existing grant runs out" duration stacking.
 fn bump_stat_until(state: &Arc<AppState>, norm: &str, key: &str, duration_minutes: f64) {

@@ -1,93 +1,12 @@
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>MitchCoins — mitch.pro</title>
-  <link rel="stylesheet" href="/app.css">
-  <script src="/api.js"></script>
-  <script src="/app-shell.js" defer></script>
-  <style>
-    .coins-shell{width:min(68rem,100%)}
-    .coin-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1rem;align-items:end;margin-bottom:1rem}
-    .coin-head h1{margin:0;font-size:clamp(1.8rem,4vw,2.6rem)}
-    .coin-head p{margin:.4rem 0 0;color:var(--t-fg2)}
-    .coin-bank{display:flex;align-items:center;gap:.75rem;min-width:210px;padding:.7rem .85rem;border:1px solid color-mix(in srgb,var(--t-ac) 35%,var(--t-bd));border-radius:15px;background:color-mix(in srgb,var(--t-bg2) 90%,transparent)}
-    .coin-bank img{width:46px;height:46px;object-fit:contain}
-    .coin-bank span{display:block;color:var(--t-fg2);font-size:.72rem;font-weight:700}
-    .coin-bank strong{display:block;color:var(--t-fg);font-size:1.25rem;font-variant-numeric:tabular-nums}
-    .coin-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:.75rem;margin-bottom:1.25rem}
-    .coin-action{display:flex;align-items:center;justify-content:space-between;min-height:56px;padding:.7rem .85rem;border:1px solid var(--t-bd);border-radius:14px;background:color-mix(in srgb,var(--t-bg2) 86%,transparent);color:var(--t-fg);font-weight:800}
-    .coin-action.primary{background:var(--t-ac);color:var(--t-bg);border-color:var(--t-ac)}
-    .coin-promo-banner{margin-bottom:1.25rem;padding:1rem 1.15rem;border:1px solid color-mix(in srgb,var(--t-ac) 40%,var(--t-bd));border-radius:16px;background:linear-gradient(135deg,color-mix(in srgb,var(--t-ac) 12%,var(--t-bg2)),color-mix(in srgb,var(--t-bg2) 95%,transparent));display:flex;align-items:center;justify-content:space-between;gap:1.25rem;flex-wrap:wrap}
-    .coin-promo-tag{display:inline-block;padding:.15rem .5rem;border-radius:999px;background:var(--t-ac);color:var(--t-bg);font-size:.68rem;font-weight:900;text-transform:uppercase;letter-spacing:.05em}
-    .coin-promo-title{display:block;font-size:1.08rem;color:var(--t-fg);margin:.3rem 0 .2rem}
-    .coin-promo-text{margin:0;color:var(--t-fg2);font-size:.82rem;line-height:1.4}
-    .earn-title{display:flex;align-items:end;justify-content:space-between;gap:1rem;margin:0 0 .7rem}
-    .earn-title h2{margin:0;font-size:1.2rem}.earn-title span{color:var(--t-fg2);font-size:.78rem}
-    .earn-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem}
-    .earn-card{min-height:150px;padding:.85rem;display:flex;flex-direction:column;border:1px solid var(--t-bd);border-radius:15px;background:color-mix(in srgb,var(--t-bg2) 88%,transparent);color:var(--t-fg);transition:transform .15s,border-color .15s}
-    .earn-card:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--t-ac) 55%,var(--t-bd));color:var(--t-fg)}
-    .earn-icon{width:38px;height:38px;display:grid;place-items:center;border-radius:11px;background:color-mix(in srgb,var(--t-ac) 16%,var(--t-bg3));color:var(--t-ac);font-size:1.05rem;font-weight:900}
-    .earn-card b{margin-top:auto;font-size:.92rem}.earn-card small{margin-top:.2rem;color:var(--t-fg2);font-size:.73rem;line-height:1.35}
-    .coin-note{margin-top:1rem;color:var(--t-fg2);font-size:.74rem;text-align:center}
-    @media(max-width:900px){.earn-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-    @media(max-width:620px){.coin-head{grid-template-columns:1fr}.coin-bank{min-width:0}.earn-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.earn-card{min-height:135px}}
-    @media(min-width:761px) and (max-height:800px){.coins-page .app-main{padding-top:.8rem!important}.coin-head{margin-bottom:.7rem}.coin-head h1{font-size:1.7rem!important}.coin-bank img{width:38px;height:38px}.earn-card{min-height:125px}.earn-grid{grid-template-columns:repeat(5,minmax(0,1fr))}}
-  </style>
-</head>
-<body class="coins-page">
-  <main class="app-main coins-shell">
-    <header class="coin-head">
-      <div><h1>MitchCoins</h1><p>Earn them around mitch.pro and use them for games, cosmetics, and perks.</p></div>
-      <div class="coin-bank"><img src="/mitchcoin.png" alt=""><div><span>Your balance</span><strong id="coinBalance">—</strong></div></div>
-    </header>
-    <nav class="coin-actions" id="coinActions" aria-label="MitchCoin actions">
-      <a class="coin-action primary" href="/#daily-login-widget"><span>Claim daily reward</span><span aria-hidden="true">→</span></a>
-      <a class="coin-action" href="/shop/"><span>Open shop</span><span aria-hidden="true">→</span></a>
-      <a class="coin-action" href="/vms/#upgrades" style="border-color:color-mix(in srgb,var(--t-ac) 45%,var(--t-bd));background:color-mix(in srgb,var(--t-ac) 10%,var(--t-bg2));"><span>🖥 Upgrade Cloud PC</span><span aria-hidden="true">→</span></a>
-      <a class="coin-action" id="testerAction" href="/tester/" style="display:none;border-color:rgba(168,85,247,0.45);background:rgba(168,85,247,0.12);color:#d8b4fe;"><span>🧪 Tester Hub</span><span aria-hidden="true">→</span></a>
-    </nav>
-    <aside class="coin-promo-banner">
-      <div style="flex:1 1 300px">
-        <div style="display:flex;align-items:center;gap:.5rem">
-          <span class="coin-promo-tag">Featured Perk</span>
-          <span style="color:var(--t-fg2);font-size:.75rem;font-weight:600">VM Lab Hardware Upgrades</span>
-        </div>
-        <strong class="coin-promo-title">Power Up Your In-Browser Cloud PC</strong>
-        <p class="coin-promo-text">Spend MitchCoins on dedicated compute: up to 6 CPU cores, 16 GB RAM, 128 GB persistent storage, and longer daily session passes.</p>
-      </div>
-      <a href="/vms/#upgrades" class="coin-action primary" style="min-height:44px;padding:.55rem 1.1rem;text-decoration:none;font-weight:800;white-space:nowrap"><span>Customize Hardware</span> <span aria-hidden="true">→</span></a>
-    </aside>
-    <div class="earn-title"><h2>Earn more</h2><span>Rewards save to your account</span></div>
-    <section class="earn-grid">
-      <a class="earn-card" href="/games/kodys-keyboard/"><span class="earn-icon">W</span><b>Typing race</b><small>Faster typing earns larger rewards.</small></a>
-      <a class="earn-card" href="/games/lillians-logic/"><span class="earn-icon">?</span><b>Logic puzzles</b><small>Daily puzzle and Wordle rewards.</small></a>
-      <a class="earn-card" href="/canvas/"><span class="earn-icon">✎</span><b>Community canvas</b><small>Earn coins while adding pixels.</small></a>
-      <a class="earn-card" href="/games/pennys-piano-keys/"><span class="earn-icon">♫</span><b>Piano Keys</b><small>Score points and earn MitchCoins.</small></a>
-      <a class="earn-card" href="/games/sebastians-piccolo/"><span class="earn-icon">♪</span><b>Piccolo</b><small>Match notes and collect rewards.</small></a>
-      <a class="earn-card" href="/games/adrian-clicker/"><span class="earn-icon">+</span><b>Adrian Clicker</b><small>Build up active and offline earnings.</small></a>
-      <a class="earn-card" href="/games/richards-riches/"><span class="earn-icon">R</span><b>Richard's Riches</b><small>Grow your game cash into coin rewards.</small></a>
-      <a class="earn-card" href="/invite/"><span class="earn-icon">2K</span><b>Invite friends</b><small>Both accounts earn 2,000 after verification.</small></a>
-      <a class="earn-card" href="/games/chess-bot/"><span class="earn-icon">♟</span><b>Chess</b><small>Challenge friends and play for rewards.</small></a>
-      <a class="earn-card" href="/games/battleship/"><span class="earn-icon">◎</span><b>Battleship</b><small>Friend matches include win bonuses.</small></a>
-    </section>
-    <p class="coin-note">MitchCoins are virtual and have no cash value.</p>
-  </main>
-  <script>
-    fetch('/api/me/coins',{credentials:'include',cache:'no-store'}).then(function(r){return r.ok?r.json():Promise.reject()}).then(function(d){
-      if(d.unlimitedCoins){
-        document.getElementById('coinBalance').textContent='∞ Unlimited';
-      }else{
-        document.getElementById('coinBalance').textContent=d.authenticated===false?'Sign in':Number(d.coins||0).toLocaleString(undefined,{maximumFractionDigits:2});
-      }
-      if(d.isTester){
-        var ta=document.getElementById('testerAction');
-        if(ta) ta.style.display='flex';
-        var actions=document.getElementById('coinActions');
-        if(actions) actions.style.gridTemplateColumns='repeat(auto-fit, minmax(180px, 1fr))';
-      }
-    }).catch(function(){document.getElementById('coinBalance').textContent='Unavailable'});
-  </script>
-</body>
-</html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MitchCoins — mitch.pro</title><meta name="description" content="Your MitchCoins balance, games, cosmetics, and community market."><link rel="canonical" href="https://mitchdog.com/coins/"><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/coins/coins.css"><script src="/app-shell.js" defer></script><script src="/coins/coins.js" defer></script></head>
+<body><main class="app-main coins-main"><header class="coins-heading"><img src="/mitchcoin.svg" width="72" height="72" alt=""><div><h1>MitchCoins</h1><p>Earn coins, play games, and choose something for your profile.</p></div></header>
+<section class="coins-account" aria-label="Your wallet"><div><span>Your balance</span><strong id="coin-balance" aria-live="polite">—</strong><small id="coin-status">Loading your wallet…</small></div><div class="coins-daily"><h2>Daily reward</h2><p id="daily-message">Checking today’s reward…</p><button type="button" class="btn-primary" id="daily-claim" disabled>Claim reward</button></div></section>
+<section aria-labelledby="coins-spend"><h2 id="coins-spend">Use your coins</h2><div class="coins-grid">
+<a class="coin-destination" href="/shop/"><span class="coin-art" aria-hidden="true">Aa</span><h3>Profile shop</h3><p>Name colors, badges, and profile effects that appear across friends, people, and chat.</p><span class="coin-link">Browse the shop</span></a>
+<a class="coin-destination" href="/casino/"><span class="coin-art coin-cards" aria-hidden="true">♠ ♡</span><h3>Casino</h3><p>Slots, blackjack, roulette, and more. Every game uses your MitchCoins balance.</p><span class="coin-link">Choose a game</span></a>
+<a class="coin-destination" href="/marketplace/"><span class="coin-art" aria-hidden="true">▦</span><h3>Community market</h3><p>Buy, sell, and bid on items listed by other members.</p><span class="coin-link">Visit the market</span></a>
+<a class="coin-destination" href="/vms/"><span class="coin-art coin-terminal" aria-hidden="true">&gt;_</span><h3>Cloud computer</h3><p>Manage your computer and see the upgrades available for MitchCoins.</p><span class="coin-link">Open VM Lab</span></a>
+</div></section>
+<section class="coins-bottom"><div><h2>Earn more</h2><a href="/game-portal/"><strong>Play games</strong><span>Supported games reward active play.</span></a><a href="/canvas/"><strong>Community canvas</strong><span>Draw with other members and earn coins.</span></a></div><div><h2>Your collection</h2><a href="/inventory/"><strong>Inventory</strong><span>Equip purchased colors, badges, and effects.</span></a><a href="/leaderboard/"><strong>Leaderboard</strong><span>See your progress alongside other players.</span></a></div></section>
+<p class="coins-note">MitchCoins are virtual points. They have no cash value.</p></main></body></html>

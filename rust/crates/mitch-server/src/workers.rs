@@ -8,7 +8,7 @@
 //! - `canvasHeatmap` hourly 24h sweep (server.js:4788-4793)
 //!
 //! The presence sweep, weekly digest, daily puzzle, chess-clock warning, DM
-//! digest, premium maintenance, nudge, VM purge, happy-hour and DM-prune
+//! digest, premium maintenance, nudge, VM purge and DM-prune
 //! timers land with their owning steps.
 
 /// Starts every live worker task. Call once from `main` after the state build.
@@ -68,8 +68,7 @@ pub fn spawn(state: std::sync::Arc<crate::state::AppState>) {
     // clock warning, DM digest) plus the DM prune, e2e-attachment cleanup and
     // rlLog sweep timers (server.js:5061-5064, 26352, 25227+, 3477-3483).
     crate::workers_email::spawn(state.clone());
-    // Step 13 batch 3 — daily-summary scheduler, premium maintenance and
-    // happy hour (server.js:4211-4218, 26783-26784, 26805-26807).
+    // Daily summary, premium maintenance, and marketplace settlement.
     crate::workers_site::spawn(state.clone());
     // Step 13 batch 4 — VM usage sampling, purge, prune, uptime enforcement, session cleanup.
     crate::workers_vm::spawn(state.clone());

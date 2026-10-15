@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { chromium } from '@playwright/test';
+const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || '@playwright/test');
 
 const root = join(import.meta.dirname, '..');
 const browser = await chromium.launch({
-  executablePath: process.platform === 'win32'
+  executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH || (process.platform === 'win32'
     ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
-    : undefined,
+    : undefined),
   headless: true,
 });
 try {
@@ -39,12 +39,12 @@ try {
     assert.equal(await page.locator('.fs-controls-box .btn.primary').last().isVisible(), true, id);
     if (id === 'card-slots') {
       await page.locator('#bet-max').click();
-      assert.equal(await page.locator('#bet').inputValue(), '1250');
+      assert.equal(await page.locator('#bet').inputValue(), '500');
       await page.locator('#slots').click();
       await page.waitForFunction(() => window.__casinoPosts.length > 0);
       const posted = await page.evaluate(() => window.__casinoPosts[0]);
       assert.equal(posted.path, '/api/casino/slots');
-      assert.equal(posted.body.amount, 1250);
+      assert.equal(posted.body.amount, 500);
       assert.equal(posted.body.recaptcha_token, 'test-token');
     }
     await page.locator('#fs-close-btn').click();

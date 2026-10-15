@@ -367,7 +367,13 @@
 
         function isMatrixStoreAccountMismatch(value) {
           const message = String(value?.message || value || '');
-          return /account in the store doesn't match the account in the constructor/i.test(message);
+          // matrix-sdk-crypto-wasm words this identity/device-key mismatch a
+          // few different ways depending on exactly where it trips (the
+          // account constructor check, cross-signing, or imported-key
+          // verification) - catch the whole family so the local store always
+          // gets cleared and a fresh device re-established, instead of the
+          // error surfacing raw on one wording and not the others.
+          return /account in the store doesn't match the account in the constructor|mismatchedidentitykeys|mismatched keypair detected|user id mismatch in/i.test(message);
         }
 
         function beginMatrixStoreRecovery() {

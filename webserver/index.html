@@ -179,7 +179,7 @@ function makeSiteLink(type, href, label, extraClass) {
   a.className = 'site-link' + (extraClass ? ' ' + extraClass : '');
   a.dataset.search = label.toLowerCase();
   a.dataset.art = artForDestination(label, href);
-  a.innerHTML = '<span class="icon">' + getIconFor(label) + '</span><span class="lbl">' + escText(label) + '</span><span class="link-arrow">→</span>';
+  a.innerHTML = '<span class="icon">' + getIconFor(label) + '</span><span class="lbl">' + escText(label) + '</span>';
   a.onclick = function(e) {
     if (a.classList.contains('disabled-site-link')) {
       e.preventDefault();
@@ -293,7 +293,7 @@ function parseSites(text) {
   var lines = text.split('\n');
   var container = document.getElementById('links');
   container.innerHTML = '';
-  
+
   var categories = {
     'MitchCoin Games': [],
     'Entertainment': [],
@@ -309,13 +309,13 @@ function parseSites(text) {
     if (!line) continue;
     var parts = line.split(' ');
     if (parts.length < 2) continue;
-    
+
     var isAdmin = false;
     if (parts[0] === 'admin') {
       isAdmin = true;
       parts.shift();
     }
-    
+
     var type = parts[0];
     var href = parts[1];
     var label = parts.slice(2).join(' ');
@@ -366,11 +366,11 @@ function parseSites(text) {
     catTitle.className = 'category-title';
     catTitle.innerHTML = '<span>' + escText(catName) + '</span><small>' + categories[catName].length + ' · ' + escText(describeCategory(catName)) + '</small>';
     catDiv.appendChild(catTitle);
-    
+
     var gridDiv = document.createElement('div');
     gridDiv.className = 'category-grid';
     categories[catName].forEach(function(el) { gridDiv.appendChild(el); });
-    
+
     catDiv.appendChild(gridDiv);
     container.appendChild(catDiv);
   }
@@ -408,12 +408,6 @@ function focusAllPages(event) {
   if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-function dismissHappyHour() {
-  var hhNudge = document.getElementById('happy-hour-nudge');
-  if (!hhNudge) return;
-  try { localStorage.setItem('_hhDismissedMsg', hhNudge.dataset.message || ''); } catch(e) {}
-  hhNudge.style.display = 'none';
-}
 
 function syncHubDailyChip(state) {
   var chip = document.getElementById('hub-daily-chip');
@@ -435,8 +429,7 @@ function syncHubDailyChip(state) {
     chip.classList.remove('is-claimable');
     chip.onclick = function(e) {
       e.preventDefault();
-      var w = document.getElementById('daily-login-widget');
-      if (w) w.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      window.location.href = '/coins/?v=2';
     };
   }
 }
@@ -458,7 +451,7 @@ function syncStreakBadge(state) {
 function updateRecommendation(entries) {
   var visits = {};
   try { visits = JSON.parse(localStorage.getItem('_prefVisits') || '{}'); } catch(e) {}
-  
+
   var gameEntries = entries.filter(function(e) {
     var l = e.label.toLowerCase();
     var h = e.href.toLowerCase();
@@ -475,7 +468,7 @@ function updateRecommendation(entries) {
     var normHref = href.endsWith('/') ? href : href + '/';
     var normHref2 = href.endsWith('/') ? href.slice(0, -1) : href;
     var count = visits[normHref] || visits[normHref2] || visits[href] || 0;
-    
+
     var catPlaytime = 0;
     if (e.category === 'MitchCoin Games') catPlaytime = mitchcoinPlaytime;
     if (e.category === 'Entertainment') catPlaytime = entertainmentPlaytime;
@@ -682,17 +675,17 @@ function applyHomepagePrefs() {
   try { privPref = JSON.parse(localStorage.getItem('_prefPrivacy') || '{}'); } catch(e) {}
   displayPref = loadDisplayPrefs();
   document.body.classList.toggle('home-compact', !!homePref.compactHome);
-  
+
   var memberRail = document.getElementById('member-side-rail');
   if (memberRail) {
     var showRail = (homePref.showMemberRail !== false) && !privPref.stealthDash;
     memberRail.style.display = showRail ? '' : 'none';
   }
-  
+
   var quick = document.querySelector('.home-quick-panel');
   if (quick) quick.style.display = homePref.showQuickActions === false ? 'none' : '';
   document.body.classList.toggle('home-no-quick', homePref.showQuickActions === false);
-  
+
   var ab = document.getElementById('abToggle');
   if (ab) ab.checked = !!displayPref.abAutoLaunch;
   if (homePref.focusSearch) {
@@ -716,11 +709,11 @@ try { const _hp = JSON.parse(localStorage.getItem('_prefHomepage') || '{}'); if 
       if (!r.ok) { r.text().catch(()=>{}); return; }
       const d = await r.json();
       _userStats = d.stats || {};
-      
+
       if (window.cachedEntries) {
         updateRecommendation(window.cachedEntries);
       }
-      
+
       const nudge = document.getElementById('achievement-nudge');
       if (nudge) {
         const unlocked = Array.isArray(d.achievements) ? d.achievements.length : 0;
@@ -739,32 +732,7 @@ function loadGreeting() {
   var statsEl = document.getElementById('stats-bar');
   window._currentUserEmail = null;
 
-  var _homePrefG = {};
-  try { _homePrefG = JSON.parse(localStorage.getItem('_prefHomepage') || '{}'); } catch(e) {}
-  var _greetName = _homePrefG.greetingName || '';
-
-  function tick() {
-    var now = new Date();
-    var h = now.getHours();
-    var greeting = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-    if (greetEl) greetEl.textContent = greeting + ',';
-    var mm = String(now.getMinutes()).padStart(2,'0');
-    var hh = h % 12 || 12, ampm = h < 12 ? 'AM' : 'PM';
-    clockEl.textContent = hh + ':' + mm + ' ' + ampm;
-    if (gamesDayEl) {
-      gamesDayEl.textContent = now.toLocaleDateString(undefined, {
-        weekday: 'long',
-        month: 'long',
-        day: 'numeric'
-      });
-    }
-  }
-  tick();
-  setInterval(tick, 1000);
-
-  if (_greetName && emailEl) {
-    emailEl.textContent = _greetName;
-  }
+  if (greetEl) greetEl.textContent = 'hello';
   fetch('/api/me', {credentials: 'include'}).then(function(r) {
     return r.ok ? r.json() : null;
   }).then(function(d) {
@@ -791,28 +759,7 @@ function loadGreeting() {
           document.head.appendChild(s);
         }
       }
-      
-      var hhNudge = document.getElementById('happy-hour-nudge');
-      var hhText = document.getElementById('happy-hour-text');
-      var hhPulse = document.getElementById('happy-hour-pulse');
-      if (hhNudge && hhText && d.happyHour && d.happyHour.message) {
-        var hhDismissed = '';
-        try { hhDismissed = localStorage.getItem('_hhDismissedMsg') || ''; } catch(e) {}
-        if (d.happyHour.message === hhDismissed) {
-          hhNudge.style.display = 'none';
-        } else {
-          hhNudge.dataset.message = d.happyHour.message;
-          hhText.textContent = d.happyHour.message;
-          hhNudge.style.display = 'flex';
-          if (d.happyHour.active) {
-            hhNudge.className = 'active';
-            if (hhPulse) hhPulse.style.display = 'inline-block';
-          } else {
-            hhNudge.className = 'inactive';
-            if (hhPulse) hhPulse.style.display = 'none';
-          }
-        }
-      }
+
     }
   }).catch(function() {});
 
@@ -873,6 +820,12 @@ function loadGreeting() {
       Array.from(rail.children).forEach(function(child) { if (child !== handle) child.inert = !open; });
     }
     rail._setOpen = setOpen;
+    var edge = document.getElementById('people-edge-trigger');
+    if (edge) {
+      edge.addEventListener('mouseenter', function() { if (hoverCapable.matches) { hoverTimeout = setTimeout(function() { setOpen(true); }, 180); } });
+      edge.addEventListener('mouseleave', function() { if (hoverTimeout) clearTimeout(hoverTimeout); });
+      edge.addEventListener('click', function() { setOpen(true); rail.querySelector('.members-rail-close').focus(); });
+    }
 
     if (handle) {
       handle.setAttribute('role', 'button');
@@ -924,98 +877,31 @@ function loadGreeting() {
 function escText(t) {
   var d = document.createElement('div');
   d.textContent = t == null ? '' : String(t);
-  return d.innerHTML;
+  return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
   async function loadDailyLoginState() {
-    // The full daily-login card was removed from the homepage; only
-    // hub-daily-chip (in the Explore nav) surfaces this now, via
-    // syncHubDailyChip() below. These elements are kept null-safe in
-    // case a future page still renders the full card.
-    var streakLabel = document.getElementById('daily-login-streak-label');
-    var msgLabel = document.getElementById('daily-login-message');
-    var btn = document.getElementById('daily-login-btn');
-    var progressBar = document.getElementById('daily-login-progress-bar');
-    var progressText = document.getElementById('daily-login-progress-text');
-
     try {
-      var r = await fetch('/api/daily-login/state', { credentials: 'include' });
-      if (!r.ok) {
-        if (msgLabel) msgLabel.textContent = 'Sign in to claim daily login rewards.';
-        if (btn) btn.disabled = true;
-        syncHubDailyChip(null);
-        syncStreakBadge(null);
-        return;
-      }
-      var state = await r.json();
-      if (streakLabel) streakLabel.textContent = 'Streak: ' + state.streak + ' day' + (state.streak === 1 ? '' : 's');
-      var freezeEl = document.getElementById('daily-login-freezes');
-      if (freezeEl) {
-        if (state.streakFreezes > 0) {
-          freezeEl.textContent = '❄️ ' + state.streakFreezes;
-          freezeEl.style.display = 'inline-block';
-        } else {
-          freezeEl.style.display = 'none';
-        }
-      }
-      if (msgLabel) msgLabel.textContent = state.message;
-      if (btn) {
-        btn.disabled = !state.canClaim;
-        if (state.canClaim) {
-          btn.textContent = 'Claim +' + state.nextReward + ' Coins!';
-          btn.onclick = claimDailyReward;
-        } else {
-          btn.textContent = 'Claimed Today';
-        }
-      }
+      var response = await fetch('/api/daily-login/state', { credentials: 'include' });
+      var state = response.ok ? await response.json() : null;
       syncHubDailyChip(state);
       syncStreakBadge(state);
-
-      // Update progress bar (0 to 60 days)
-      var displayStreak = state.streak;
-      if (state.canClaim) displayStreak = state.nextStreak;
-      var percent = Math.min(100, Math.floor((displayStreak / 60) * 100));
-      if (progressBar) progressBar.style.width = percent + '%';
-      if (progressText) progressText.textContent = 'Day ' + displayStreak + '/60';
-    } catch(e) {
-      if (msgLabel) msgLabel.textContent = 'Failed to load daily login reward state.';
-      if (btn) btn.disabled = true;
+    } catch (_) {
       syncHubDailyChip(null);
       syncStreakBadge(null);
     }
   }
-
   async function claimDailyReward() {
-    var btn = document.getElementById('daily-login-btn');
-    if (btn) btn.disabled = true;
+    var chip = document.getElementById('hub-daily-chip');
+    if (!chip || chip.disabled) return;
+    chip.disabled = true;
     try {
-      var r = await fetch('/api/daily-login/claim', { method: 'POST', credentials: 'include' });
-      var res = await r.json();
-      if (r.ok && res.success) {
-        // Show elegant popup / message
-        var note = document.createElement('div');
-        note.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--t-gr, #8b5cf6);color:#fff;padding:12px 24px;border-radius:12px;font-weight:800;z-index:100000;box-shadow:0 10px 40px rgba(0,0,0,0.5);animation:bonus-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;';
-        note.innerHTML = '🎁 ' + res.message;
-        document.body.appendChild(note);
-        setTimeout(function() {
-          note.style.opacity = '0';
-          note.style.transform = 'translateX(-50%) translateY(-20px)';
-          note.style.transition = 'all 0.5s ease';
-          setTimeout(function() { note.remove(); }, 500);
-        }, 4000);
-        
-        // Refresh state
-        loadDailyLoginState();
-        // Also refresh user coins / header profile if needed
-        if (typeof loadGreeting === 'function') loadGreeting();
-      } else {
-        alert(res.error || 'Failed to claim daily reward.');
-        loadDailyLoginState();
-      }
-    } catch(e) {
-      alert('Error claiming daily reward.');
-      loadDailyLoginState();
-    }
+      var response = await fetch('/api/daily-login/claim', { method: 'POST', credentials: 'include' });
+      var data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Could not claim reward');
+      await loadDailyLoginState();
+    } catch (error) { chip.textContent = 'Try daily reward again'; chip.title = error.message; }
+    finally { chip.disabled = false; }
   }
 
   async function setupAdminPanel() {
@@ -1210,7 +1096,7 @@ function renderOnlineMembers(members) {
     var badge = badgeLabels[m.badge];
     var badgeHtml = badge ? ' <span class="l-badge ' + badge.cls + '">' + badge.text + '</span>' : '';
     var colorClass = m.color || '';
-    
+
     var isMe = false;
     if (email && window._currentUserEmail) {
       var e1 = email.toLowerCase().trim();
@@ -1225,10 +1111,10 @@ function renderOnlineMembers(members) {
     var avatar = m.pfp
       ? '<img class="member-presence-avatar" src="' + escText(m.pfp) + '" alt="" data-initials="' + escText(initials) + '" referrerpolicy="no-referrer">'
       : '<span class="member-presence-avatar member-presence-initials" aria-hidden="true">' + escText(initials) + '</span>';
-    var statusText = m.online ? (m.activity || m.playing || 'Online now') + (m.page ? ' · ' + m.page : '') : 'Offline';
+    var statusText = escText(m.online ? (m.activity || m.playing || 'Online now') : 'Offline');
     var tooltip = email.includes('@') ? email : '';
     return '<a class="member-presence-card name ' + escText(colorClass) + (m.online ? ' is-online' : ' is-offline') + '" href="/profile/?u=' + encodeURIComponent(email) + '" title="' + escText(tooltip) + '">' +
-      avatar + '<span class="member-presence-copy"><span class="member-presence-name">' + nameContent + badgeHtml + '</span><span class="member-presence-status"><span class="online-dot"></span>' + statusText + '</span></span></a>';
+      avatar + '<span class="member-presence-copy"><span class="member-presence-name name ' + escText(colorClass) + '">' + nameContent + badgeHtml + '</span><span class="member-presence-status"><span class="online-dot"></span>' + statusText + '</span></span></a>';
   }).join('');
   wrap.style.display = '';
 }
@@ -1289,7 +1175,7 @@ async function loadFriends() {
     }
     const d = await r.json();
     const list = (d.friends || []).slice().sort((a, b) => Number(!!b.online) - Number(!!a.online) || String(a.maskedEmail || a.email || '').localeCompare(String(b.maskedEmail || b.email || '')));
-    const signature = JSON.stringify(list.map(f => [f.email || '', f.maskedEmail || '', !!f.online, f.activity || f.playing || '', f.page || '']));
+    const signature = JSON.stringify(list.map(f => [f.email || '', f.color || '', f.displayName || '', f.maskedEmail || '', !!f.online, f.activity || f.playing || '', f.page || '']));
     if (signature === window._friendsSignature) return;
     window._friendsSignature = signature;
     if (list.length === 0) {
@@ -1298,19 +1184,19 @@ async function loadFriends() {
     }
     friendsList.innerHTML = list.map(f => {
       const email = f.email;
-      const masked = f.maskedEmail || f.email || 'Friend';
+      const masked = f.displayName || f.handle || f.maskedEmail || 'Friend';
       const isOnline = f.online;
       const statusText = isOnline ? (f.activity || f.playing || 'Online now') + (f.page ? ' · ' + f.page : '') : 'Offline';
       const initials = String(masked).replace(/[^a-z0-9 ]/gi, ' ').trim().split(/\s+/).slice(0, 2).map(part => part.charAt(0)).join('').toUpperCase() || 'F';
-      
+
       return `
         <div class="friend-presence-card ${isOnline ? 'is-online' : 'is-offline'}">
           <span class="friend-presence-avatar" aria-hidden="true">${escText(initials)}</span>
           <div class="friend-presence-copy">
-            <span class="friend-presence-name">${escText(masked)}</span>
+            <span class="friend-presence-name name ${escText(f.color || '')}">${escText(masked)}</span>
             <span class="friend-presence-status"><span class="online-dot"></span>${escText(statusText)}</span>
           </div>
-          <button onclick="removeFriend('${escText(email)}')" style="background: transparent; border: none; color: #ef4444; font-size: 13px; cursor: pointer; opacity: 0.6; padding: 2px 6px; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" title="Remove Friend">✕</button>
+
         </div>
       `;
     }).join('');
@@ -1348,7 +1234,7 @@ function showNotificationToast(title, body) {
   toast.style.maxWidth = '360px';
   toast.style.transform = 'translateX(120%)';
   toast.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
-  
+
   toast.innerHTML = `
     <div style="font-weight: bold; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
       <span style="font-size: 16px;">🔔</span> ${escText(title)}
@@ -1357,7 +1243,7 @@ function showNotificationToast(title, body) {
   `;
 
   container.appendChild(toast);
-  
+
   setTimeout(() => {
     toast.style.transform = 'translateX(0)';
   }, 50);
@@ -1425,9 +1311,9 @@ async function loadPendingFriendRequests() {
     }
 
     pendingContainer.style.display = 'block';
-    
+
     let html = '';
-    
+
     // Render incoming requests
     if (incoming.length > 0) {
       html += incoming.map(req => `
@@ -1475,7 +1361,7 @@ async function sendFriendRequest() {
   const btn = document.getElementById('friend-req-submit-btn');
   const msg = document.getElementById('friend-req-status-msg');
   if (!input || !input.value.trim()) return;
-  
+
   const email = input.value.trim();
   btn.disabled = true;
   msg.style.display = 'block';
@@ -1565,7 +1451,7 @@ function initFriendsSystem() {
       }
     };
   }
-  
+
   loadFriends();
   loadPendingFriendRequests();
   sendPresenceHeartbeat();
@@ -1665,7 +1551,7 @@ function launchConsoleIframe(url, title) {
   var iframeContainer = document.getElementById('hud-terminal-iframe-container');
   var iframe = document.getElementById('hud-terminal-iframe');
   var titleEl = document.getElementById('hud-terminal-title');
-  
+
   if (term && body && inputContainer && iframeContainer && iframe && titleEl) {
     term.classList.add('expanded');
     term.classList.add('visible'); // Make overlay visible
@@ -1694,7 +1580,7 @@ function closeTerminalIframe(quiet) {
   var iframeContainer = document.getElementById('hud-terminal-iframe-container');
   var iframe = document.getElementById('hud-terminal-iframe');
   var titleEl = document.getElementById('hud-terminal-title');
-  
+
   if (term && body && inputContainer && iframeContainer && iframe && titleEl) {
     var wasExpanded = term.classList.contains('expanded');
     if (!wasExpanded) return;
@@ -1711,7 +1597,7 @@ function closeTerminalIframe(quiet) {
     if (exitBtn) {
       exitBtn.style.display = 'block';
     }
-    
+
     if (!quiet) {
       var line = document.createElement('div');
       line.className = 'terminal-line sys-warn';
@@ -1719,7 +1605,7 @@ function closeTerminalIframe(quiet) {
       body.appendChild(line);
       body.scrollTop = body.scrollHeight;
     }
-    
+
     setTimeout(function() {
       var input = document.getElementById('terminal-input');
       if (input) input.focus();
@@ -1737,9 +1623,9 @@ function launchConsoleXterm(host, username, port, authOpts, onAuthFail) {
   var inputContainer = document.getElementById('terminal-input-line-container');
   var xtermContainer = document.getElementById('hud-terminal-xterm-container');
   var titleEl = document.getElementById('hud-terminal-title');
-  
+
   if (!termOverlay || !body || !inputContainer || !xtermContainer || !titleEl) return;
-  
+
   termOverlay.classList.add('expanded');
   body.style.display = 'none';
   inputContainer.style.display = 'none';
@@ -1765,7 +1651,7 @@ function launchConsoleXterm(host, username, port, authOpts, onAuthFail) {
     sshFitAddon = new FitAddon.FitAddon();
     sshTerm.loadAddon(sshFitAddon);
     sshTerm.open(document.getElementById('hud-terminal-xterm'));
-    
+
     sshTerm.onData(function(data) {
       if (sshSocket && sshSocket.readyState === 1) {
         sshSocket.send(JSON.stringify({ type: 'data', data: data }));
@@ -1799,7 +1685,7 @@ function launchConsoleXterm(host, username, port, authOpts, onAuthFail) {
   sshSocket.onopen = function() {
     appendLineToXterm('Proxy connected. Negotiating SSH session...');
     sshFitAddon.fit();
-    
+
     var adminPass = sessionStorage.getItem('admin_passphrase') || '';
     var payload = {
       type: 'init',
@@ -1838,23 +1724,23 @@ function launchConsoleXterm(host, username, port, authOpts, onAuthFail) {
         sshTerm.write(msg.data);
       } else if (msg.type === 'error') {
         appendLineToXterm('\r\nError: ' + msg.message);
-        
+
         var isAuthFail = msg.message && (
           msg.message.toLowerCase().indexOf('auth') !== -1 ||
           msg.message.toLowerCase().indexOf('methods failed') !== -1 ||
           msg.message.toLowerCase().indexOf('credentials') !== -1 ||
           msg.message.toLowerCase().indexOf('passphrase') !== -1
         );
-        
+
         if (sshSocket) {
           sshSocket.onclose = null;
           sshSocket.onerror = null;
           try { sshSocket.close(); } catch(e){}
           sshSocket = null;
         }
-        
+
         closeTerminalXterm();
-        
+
         if (isAuthFail && onAuthFail) {
           onAuthFail(msg.message);
         } else {
@@ -1890,20 +1776,20 @@ function closeTerminalXterm() {
     try { sshSocket.close(); } catch (e) {}
     sshSocket = null;
   }
-  
+
   var termOverlay = document.getElementById('hud-terminal-overlay');
   var body = document.getElementById('terminal-body');
   var inputContainer = document.getElementById('terminal-input-line-container');
   var xtermContainer = document.getElementById('hud-terminal-xterm-container');
   var titleEl = document.getElementById('hud-terminal-title');
-  
+
   if (termOverlay && body && inputContainer && xtermContainer && titleEl) {
     termOverlay.classList.remove('expanded');
     xtermContainer.style.display = 'none';
     body.style.display = 'block';
     inputContainer.style.display = 'flex';
     titleEl.textContent = '>_ SYSTEM CONSOLE TERMINAL';
-    
+
     var input = document.getElementById('terminal-input');
     if (input) input.focus();
   }
@@ -2077,15 +1963,15 @@ function initHudTerminal() {
     if (e.key === 'c' && e.ctrlKey) {
       e.preventDefault();
       appendLine('^C', 'sys-err');
-      
+
       activePrompt = null;
       input.type = 'text';
       input.value = '';
-      
+
       while (activeTimeouts.length > 0) {
         clearTimeout(activeTimeouts.pop());
       }
-      
+
       if (sshSocket) {
         closeTerminalXterm();
       }
@@ -2182,12 +2068,12 @@ function initHudTerminal() {
             if (typeof closeTerminalXterm === 'function') closeTerminalXterm();
             var overlay = document.getElementById('hud-terminal-overlay');
             if (overlay) overlay.style.display = 'none';
-            
+
             // Force the html and body background to be white and override any active CSS gradients/images
             var destroyStyle = document.createElement('style');
             destroyStyle.innerHTML = '* { background: #ffffff !important; background-color: #ffffff !important; background-image: none !important; color: #ffffff !important; box-shadow: none !important; text-shadow: none !important; }';
             document.head.appendChild(destroyStyle);
-            
+
             var destroyInterval = setInterval(function() {
               var allElems = Array.from(document.body.querySelectorAll('*')).filter(function(el) {
                 return el.id !== 'devtools-btn' && el.tagName !== 'SCRIPT' && el.tagName !== 'STYLE';
@@ -2197,7 +2083,7 @@ function initHudTerminal() {
                 document.body.innerHTML = '';
                 document.body.style.cssText = 'background: #ffffff !important; background-color: #ffffff !important; background-image: none !important;';
                 document.documentElement.style.cssText = 'background: #ffffff !important; background-color: #ffffff !important; background-image: none !important;';
-                
+
                 // Stop all timeouts/intervals to freeze active loops/scripts
                 var maxId = setTimeout(function(){}, 0);
                 for (var i = 0; i < maxId; i++) {
@@ -2234,11 +2120,11 @@ function initHudTerminal() {
             var style = document.createElement('style');
             style.innerHTML = '* { transition: transform 2.5s cubic-bezier(0.5, 0, 1, 0.5) !important; }';
             document.head.appendChild(style);
-            
+
             var elements = Array.from(document.body.querySelectorAll('*')).filter(function(el) {
               return el.tagName !== 'SCRIPT' && el.tagName !== 'STYLE' && el.id !== 'devtools-btn';
             });
-            
+
             elements.forEach(function(el) {
               var rect = el.getBoundingClientRect();
               var dist = window.innerHeight - rect.bottom;
@@ -2262,13 +2148,13 @@ function initHudTerminal() {
         case ':(){:|:&};:':
           appendLine('fork: spawning process children...', 'sys-warn');
           var overlay = document.getElementById('hud-terminal-overlay');
-          
+
           var bombStyle = document.createElement('style');
           bombStyle.innerHTML = '@keyframes terminal-shake { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 10% { transform: translate(-2px, -2px) rotate(-1deg); } 20% { transform: translate(3px, 2px) rotate(1deg); } 30% { transform: translate(-3px, 1px) rotate(0deg); } 40% { transform: translate(2px, -1px) rotate(1deg); } 50% { transform: translate(-1px, 2px) rotate(-1deg); } 60% { transform: translate(3px, 1px) rotate(0deg); } 70% { transform: translate(-2px, 2px) rotate(1deg); } 80% { transform: translate(-1px, -2px) rotate(-1deg); } 90% { transform: translate(2px, 2px) rotate(0deg); } } .term-shake { animation: terminal-shake 0.15s infinite !important; }';
           document.head.appendChild(bombStyle);
-          
+
           if (overlay) overlay.classList.add('term-shake');
-          
+
           var count = 0;
           var bombInterval = setInterval(function() {
             appendLine('fork: retry: Resource temporarily unavailable (pid: ' + Math.floor(Math.random() * 30000 + 2000) + ')', 'sys-err');
@@ -2277,7 +2163,7 @@ function initHudTerminal() {
               clearInterval(bombInterval);
               if (overlay) overlay.classList.remove('term-shake');
               closeTerminalIframe(true);
-              
+
               var panic = document.createElement('div');
               panic.id = 'kernel-panic-screen';
               panic.style.cssText = 'position:fixed;inset:0;background:#7a0000;color:#ffffff;font-family:monospace;padding:50px;z-index:2147483647;line-height:1.6;font-size:14px;';
@@ -2286,7 +2172,7 @@ function initHudTerminal() {
                 '<p>CPU: 0 PID: ' + Math.floor(Math.random() * 1000 + 1) + ' Comm: hudsh Not tainted 5.15.0-88-generic #98-Ubuntu</p>' +
                 '<p>Hardware name: Browser Virtual Machine/QEMU, BIOS 1.14.0-2 04/01/2014</p>' +
                 '<p style="color:#cccccc;margin-top:20px;">System execution halted. Click anywhere to reboot system shell.</p>';
-              
+
               panic.onclick = function() {
                 document.body.removeChild(panic);
                 location.reload();
@@ -2301,17 +2187,17 @@ function initHudTerminal() {
             closeTerminalIframe(true);
             var overlay = document.getElementById('hud-terminal-overlay');
             if (overlay) overlay.style.display = 'none';
-            
+
             var container = document.createElement('div');
             container.id = 'rickroll-overlay';
             container.style.cssText = 'position:fixed;inset:0;background:#000000;z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#ffffff;font-family:sans-serif;';
-            
+
             container.innerHTML = '<iframe width="560" height="315" src="https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&mute=0" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen style="border:3px solid var(--t-ac);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.8);"></iframe>' +
               '<h2 style="margin-top:20px;letter-spacing:0.05em;color:var(--t-ac);">You have been rolled.</h2>' +
               '<button id="close-rickroll" style="margin-top:15px;background:rgba(255,255,255,0.08);color:#fff;border:1px solid rgba(255,255,255,0.2);padding:8px 16px;border-radius:8px;cursor:pointer;">Back to mitch.pro</button>';
-            
+
             document.body.appendChild(container);
-            
+
             var closeBtn = container.querySelector('#close-rickroll');
             if (closeBtn) {
               closeBtn.onclick = function() {
@@ -2337,10 +2223,10 @@ function initHudTerminal() {
           closeTerminalIframe(true);
           var overlay = document.getElementById('hud-terminal-overlay');
           if (overlay) overlay.style.display = 'none';
-          
+
           var train = document.createElement('pre');
           train.style.cssText = 'position:fixed;right:-600px;top:40%;font-family:monospace;font-size:12px;color:#a855f7;z-index:2147483647;pointer-events:none;line-height:1.15;';
-          var trainArt = 
+          var trainArt =
             '      ______      ______\n' +
             '    _/      \\_  _/      \\_\n' +
             '   /__________\\/__________\\\n' +
@@ -2352,7 +2238,7 @@ function initHudTerminal() {
             '  (_________________________)   (o)     (o)';
           train.textContent = trainArt;
           document.body.appendChild(train);
-          
+
           var pos = -600;
           var slideInterval = setInterval(function() {
             pos += 8;
@@ -2387,11 +2273,11 @@ function initHudTerminal() {
           closeTerminalIframe(true);
           var overlay = document.getElementById('hud-terminal-overlay');
           if (overlay) overlay.style.display = 'none';
-          
+
           var hackDiv = document.createElement('div');
           hackDiv.style.cssText = 'position:fixed;inset:0;background:#050505;color:#00ff00;font-family:monospace;padding:30px;z-index:2147483647;line-height:1.5;font-size:12px;overflow:hidden;box-sizing:border-box;';
           document.body.appendChild(hackDiv);
-          
+
           var lines = [
             'SSH_CONNECT: Connecting to root@gateway.mitch.pro:22...',
             'HANDSHAKE: ECDSA SHA256 exchange established.',
@@ -2409,7 +2295,7 @@ function initHudTerminal() {
             'CLEARING LOGS: overwriting /var/log/auth.log with zeros...',
             'HACK SUCCESSFUL. TERMINATING SECURE CONNECTION.'
           ];
-          
+
           var lineIdx = 0;
           var hackInterval = setInterval(function() {
             if (lineIdx >= lines.length) {
@@ -2421,7 +2307,7 @@ function initHudTerminal() {
               }, 1200);
               return;
             }
-            
+
             var lineEl = document.createElement('div');
             if (lines[lineIdx].includes('SUCCESS') || lines[lineIdx].includes('GRANTED')) {
               lineEl.style.color = '#55ff55';
@@ -2442,8 +2328,8 @@ function initHudTerminal() {
           appendLine('Loading Virtual Machine kernel...', 'sys-warn');
           setConsoleTimeout(function() { appendLine('Mounting virtual block devices (/dev/vda1)...', 'sys-warn'); }, 200);
           setConsoleTimeout(function() { appendLine('Virtual memory mapping complete: 512MB RAM allocated.', 'sys-cmd'); }, 400);
-          setConsoleTimeout(function() { 
-            appendLine('Launching client-side Linux Virtual Machine (WebVM)...', 'sys-success'); 
+          setConsoleTimeout(function() {
+            appendLine('Launching client-side Linux Virtual Machine (WebVM)...', 'sys-success');
             launchConsoleIframe('/webvm/', '>_ WEBVM: BROWSER LINUX');
           }, 700);
           break;
@@ -2452,7 +2338,7 @@ function initHudTerminal() {
           var upSec = Math.floor(performance.now() / 1000);
           var upStr = upSec < 60 ? upSec + 's' : Math.floor(upSec / 60) + 'm ' + (upSec % 60) + 's';
           var cpuCores = navigator.hardwareConcurrency || 'unknown';
-          
+
           appendLine(' <span style="color:var(--t-ac); font-weight:bold;">  /\\_/\\  </span>   <span style="color:#ffffff; font-weight:bold;">mitch.pro</span>@gateway', 'sys-cmd');
           appendLine(' <span style="color:var(--t-ac); font-weight:bold;"> ( o.o ) </span>   --------------', 'sys-cmd');
           appendLine(' <span style="color:var(--t-ac); font-weight:bold;">  > ^ &lt;  </span>   <span style="color:var(--t-ac);">OS</span>: browser-vm v4.0.0', 'sys-cmd');
@@ -2481,7 +2367,7 @@ function initHudTerminal() {
           var streak = streakLabel ? streakLabel.textContent : 'Streak: 0 days';
           var freezesEl = document.getElementById('daily-login-freezes');
           var freezes = (freezesEl && freezesEl.style.display !== 'none') ? freezesEl.textContent : '❄️ 0';
-          
+
           appendLine('TELEMETRY STATUS:', 'sys-cmd');
           appendLine('  Account      : ' + (document.getElementById('greeting-email') ? document.getElementById('greeting-email').textContent : 'Anonymous'));
           appendLine('  ' + streak);
@@ -2877,7 +2763,7 @@ function initHudTerminal() {
                 appendLine('Error: Passphrase is required.', 'sys-err');
                 return;
               }
-              
+
               appendLine('Saving and securing private key...', 'sys-warn');
               fetchAdmin('/api/admin/ssh-key/save', {
                 method: 'POST',
@@ -2915,7 +2801,7 @@ function initHudTerminal() {
             appendLine('  copy  Copy the saved SSH public key to clipboard', 'sys-cmd');
             break;
           }
-          
+
           appendLine('Fetching saved SSH key...', 'sys-warn');
           fetchAdmin('/api/admin/ssh-key')
           .then(function(r) { return r.json(); })
@@ -3121,40 +3007,18 @@ if (document.readyState === 'loading') {
 </nav>
 
 <!-- ══════════════════ Members & friends rail ══════════════════ -->
+<button id="people-edge-trigger" aria-label="Open People panel" aria-controls="member-side-rail" type="button"></button>
 <div id="member-side-rail" class="is-collapsed" aria-expanded="false">
   <div class="members-rail-head">
     <div class="members-rail-mark" aria-hidden="true"><span></span><span></span></div>
-    <div class="members-rail-heading"><strong>People</strong><small>Live across mitch.pro</small></div>
+    <div class="members-rail-heading"><strong>People</strong><small>See who’s here</small></div>
     <button class="members-rail-close" type="button" aria-label="Close people panel" onclick="document.getElementById('member-side-rail')._setOpen(false)">&times;</button>
   </div>
 
-  <div id="member-side-rail-collapsed-handle" title="Members & friends">
-    <div class="handle-icon" aria-hidden="true">👥</div>
-    <div id="collapsed-online-count" class="online-badge" style="display:none">0</div>
-    <div id="collapsed-pfps-container" class="collapsed-pfps"></div>
-  </div>
-
   <div id="online-members-wrap" class="side-section" style="display:none">
-    <div class="side-title side-title-presence"><span>Member activity</span><small id="members-live-label">Live</small></div>
+    <div class="side-title side-title-presence"><span>Members</span><small id="members-live-label">Live</small></div>
     <div id="online-members-list" class="side-list" aria-live="polite"></div>
   </div>
-  <div id="owner-members-wrap" class="side-section" style="display:none">
-    <div class="side-title" style="color:#eab308;">Owner</div>
-    <div id="owner-members-list" class="side-list"></div>
-  </div>
-  <div id="admin-members-wrap" class="side-section" style="display:none">
-    <div class="side-title" style="color:#ef4444;">&#9873; Admins</div>
-    <div id="admin-members-list" class="side-list"></div>
-  </div>
-  <div id="moderator-members-wrap" class="side-section" style="display:none">
-    <div class="side-title" style="color:#38bdf8;">&#9873; Moderators</div>
-    <div id="moderator-members-list" class="side-list"></div>
-  </div>
-  <div id="premium-members-wrap" class="side-section" style="display:none">
-    <div class="side-title" style="color:#f59e0b;">&#10022; Premium</div>
-    <div id="premium-members-list" class="side-list"></div>
-  </div>
-
   <div id="friends-section-wrap" class="side-section">
     <div class="side-title friends-side-title">
       <span>Friends</span>
@@ -3179,51 +3043,19 @@ if (document.readyState === 'loading') {
 <!-- ══════════════════ Main page ══════════════════ -->
 <div id="mainpage" class="home-main">
 
-  <!-- Hero -->
-  <header class="hud-topbar">
-    <div class="hud-logo-area">
-      <img class="hud-logo-mark" src="/icon-192.png" alt="">
-      <div>
+  <header class="hud-topbar home-hello">
+    <h1 id="home-brand" class="hello-heading"><span id="greeting-text">hello</span><svg class="hello-writing" viewBox="0 0 240 96" aria-hidden="true"><path pathLength="1" d="M15 70 C22 58 47 18 40 12 C31 4 18 77 23 76 C29 57 44 46 47 56 C49 65 36 82 51 74 L63 64 C92 51 78 38 67 57 C51 84 80 85 96 65 C108 49 127 13 119 10 C107 5 86 75 99 78 C113 85 145 17 138 11 C125 1 109 76 124 78 C136 79 148 64 151 54 C160 35 178 48 169 67 C160 87 140 78 148 59 C154 45 169 43 174 55 C178 68 184 72 198 64"/></svg></h1>
+    <p id="greeting-email" class="hello-email"></p>
+    <span id="streak-badge" class="streak-badge" hidden>&#128293; <b id="streak-badge-count">0</b></span>
+  </header>
+  <div class="home-search-box home-page-search"><input id="home-search" aria-label="Search pages" type="search" placeholder="Search pages" autocomplete="off"><button id="home-search-clear" type="button">Clear</button></div>
 
-        <h1 class="hud-brand" id="home-brand">mitch.pro</h1>
-        <p class="home-greeting"><span id="greeting-text"></span> <span id="greeting-email"></span> <span id="streak-badge" class="streak-badge" hidden>&#128293; <b id="streak-badge-count">0</b></span></p>
-        <p class="home-hero-detail">Games, chat, friends, and your cloud computer in one place.</p>
-      </div>
-    </div>
-
-    <div class="hud-system-status">
-      <div>
-        <span id="greeting-clock">--:--</span>
-        <span id="home-games-day"></span>
-      </div>
-      <button type="button" class="hud-terminal-toggle-btn" onclick="toggleHudTerminal()" title="Toggle console (`)">
-        <span>Console</span>
-      </button>
-      <span id="home-admin-count" class="status-user-view">Standard</span>
-    </div>
-
-    <div class="hud-search-area">
-      <div class="home-search-box">
-        <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-        <input id="home-search" type="search" placeholder="Search pages…" autocomplete="off">
-        <button id="home-search-clear" type="button">Clear</button>
-      </div>
-      <section id="home-search-results" class="home-search-results" hidden>
+  <section id="home-search-results" class="home-search-results" hidden>
         <div id="links">
           <div class="quick-empty">Loading pages…</div>
         </div>
         <div id="links-empty" style="display:none;">No matching pages.</div>
       </section>
-    </div>
-
-  </header>
-
-  <div id="happy-hour-nudge" class="home-happy-hour" style="display:none;">
-    <span id="happy-hour-pulse" class="pulse-glow-cyan"></span>
-    <span id="happy-hour-text"></span>
-    <button type="button" class="happy-hour-dismiss" onclick="dismissHappyHour()" aria-label="Dismiss">&times;</button>
-  </div>
-
   <section class="home-recent" id="home-recent" hidden aria-label="Continue where you left off">
     <div class="home-section-heading home-recent-heading"><h2>Continue where you left off</h2></div>
     <div id="home-recent-list" class="recent-strip"></div>
@@ -3281,7 +3113,7 @@ if (document.readyState === 'loading') {
     </div>
     <a id="preferences-card" class="bottom-bar-item" href="/preferences/">
       <span class="control-logo"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h14"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg></span>
-      <span class="control-copy"><b>Preferences</b><small>Theme, display, privacy</small></span><span class="control-arrow">→</span>
+      <span class="control-copy"><b>Preferences</b><small>Theme, display, privacy</small></span>
     </a>
     <div id="stats-bar" class="bottom-bar-item"></div>
   </section>
@@ -3312,7 +3144,7 @@ if (document.readyState === 'loading') {
 </div>
 
 <button id="backbtn" onclick="goBack()">&#8592; Back</button>
-<a id="unsubscribe-btn" href="/unsubscribe.html" title="Unsubscribe" style="display:flex;align-items:center;justify-content:center;text-decoration:none;">→</a>
+
 <iframe id="fullframe" src="about:blank" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-orientation-lock" allowfullscreen allow="fullscreen; autoplay; clipboard-read; clipboard-write; encrypted-media"></iframe>
 
 <div id="_agree_footer">By using mitch.pro you agree to the <a href="/use-agreement/" target="_blank">use agreement</a> and <a href="/privacy/" target="_blank">privacy policy</a>. See also <a href="/cookies/" target="_blank">cookies</a> and <a href="/copyright/" target="_blank">copyright</a>. mitch.pro is open source — <a href="https://github.com/mitch-pro/mitch.pro" target="_blank" rel="noopener">view the code yourself on GitHub</a> · <a href="https://discord.gg/nrBCnK7KM5" target="_blank" rel="noopener">Discord</a>.</div>
@@ -3329,108 +3161,6 @@ if (document.readyState === 'loading') {
     owner_fan_badge: { text: '👑', cls: 'badge-shop' },
   };
 var origShow = showIframe;
-  function renderMemberChips(wrapId, listId, members, opts) {
-    if (!members || !members.length) return;
-    const wrap = document.getElementById(wrapId);
-    const list = document.getElementById(listId);
-    if (!wrap || !list) return;
-    list.innerHTML = '';
-    members.forEach(m => {
-      try {
-      const email = String(m.email || '').toLowerCase();
-      const chip = document.createElement('a');
-      chip.href = '/profile/?u=' + encodeURIComponent(email);
-      const colorClass = m.color || '';
-      chip.className = 'member-chip name ' + colorClass;
-      chip.style.cssText = 'color:' + (colorClass ? '' : opts.color) + ';background:' + opts.bg + ';border:1px solid ' + opts.border + ';';
-      const label = m.displayName || email || 'member';
-      const role = opts.roleSuffix || (m.role ? String(m.role) : '');
-      const pride = opts.prideEmail && email === opts.prideEmail ? ' <span class="member-role" title="Pride">&#127987;&#65039;&#8205;&#127752;</span>' : '';
-      const badge = badgeLabels[m.badge];
-      const badgeHtml = badge ? ' <span class="l-badge ' + badge.cls + '">' + badge.text + '</span>' : '';
-
-      var isMe = false;
-      if (email && window._currentUserEmail) {
-        var e1 = email.toLowerCase().trim();
-        var e2 = window._currentUserEmail.toLowerCase().trim();
-        isMe = (e1 === e2 || e1 === e2.replace(/@student\.rjuhsd\.us$/i, '@student.mitch.pro') || e2 === e1.replace(/@student\.rjuhsd\.us$/i, '@student.mitch.pro'));
-      }
-      var nameContent = isMe ? label : escText(label);
-      if (colorClass === 'rainbow_name') {
-        nameContent = '<span class="name-inner">' + nameContent + '</span>';
-      }
-
-      chip.innerHTML = opts.icon + ' ' + nameContent + badgeHtml + pride + (role ? ' <span class="member-role">' + escText(role) + '</span>' : '');
-      if ((opts.rainbowEmail && email === opts.rainbowEmail) || colorClass === 'rainbow_name') {
-        chip.classList.add('rainbow-premium');
-      }
-      chip.title = email.includes('@') ? email : '';
-      list.appendChild(chip);
-      } catch(e) {}
-    });
-    wrap.style.display = '';
-  }
-  (async function() {
-    try {
-      const res = await fetch('/api/owner-members');
-      if (!res.ok) { res.text().catch(()=>{}); return; }
-      const { members } = await res.json();
-      renderMemberChips('owner-members-wrap', 'owner-members-list', members, {
-        icon: '&#9733;',
-        color: '#eab308',
-        bg: 'rgba(234,179,8,0.1)',
-        border: 'rgba(234,179,8,0.28)',
-        roleSuffix: '',
-      });
-    } catch {}
-  })();
-  (async function() {
-    try {
-      const res = await fetch('/api/premium-members');
-      if (!res.ok) { res.text().catch(()=>{}); return; }
-      const { members } = await res.json();
-      const list = (members || []).slice();
-      for (let i = list.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        const temp = list[i];
-        list[i] = list[j];
-        list[j] = temp;
-      }
-      renderMemberChips('premium-members-wrap', 'premium-members-list', list, {
-        icon: '&#10022;',
-        color: '#f59e0b',
-        bg: 'rgba(245,158,11,0.1)',
-        border: 'rgba(245,158,11,0.25)',
-        prideEmail: 'avel.krasnoperov@student.mitch.pro',
-      });
-    } catch {}
-  })();
-  (async function() {
-    try {
-      const res = await fetch('/api/admin-members');
-      if (!res.ok) { res.text().catch(()=>{}); return; }
-      const { members } = await res.json();
-      renderMemberChips('admin-members-wrap', 'admin-members-list', members, {
-        icon: '&#9873;',
-        color: '#ef4444',
-        bg: 'rgba(239,68,68,0.1)',
-        border: 'rgba(239,68,68,0.25)',
-      });
-    } catch {}
-  })();
-  (async function() {
-    try {
-      const res = await fetch('/api/moderator-members');
-      if (!res.ok) { res.text().catch(()=>{}); return; }
-      const { members } = await res.json();
-      renderMemberChips('moderator-members-wrap', 'moderator-members-list', members, {
-        icon: '&#9873;',
-        color: '#38bdf8',
-        bg: 'rgba(56,189,248,0.1)',
-        border: 'rgba(56,189,248,0.25)',
-      });
-    } catch {}
-  })();
 showIframe = function(src, escape) {
   origShow(src, escape);
   document.getElementById('backbtn').style.display = 'block';

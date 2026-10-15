@@ -88,6 +88,8 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/mitch-coins.css",
     "/mitchcoin.png",
     "/mitchcoin.webp",
+    "/mitchcoin.svg",
+    "/notifications/panel.css",
     "/app.css",
     "/auth-liquid.css",
     "/encrypt-galaxy.css",
@@ -96,6 +98,7 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/rjuhsd-assets/styles.css",
     "/rjuhsd-assets/reference-theme.css",
     "/rjuhsd-assets/redesign.css",
+    "/rjuhsd-assets/refresh.css",
     "/preferences/preferences-school.css",
     "/preferences/preferences-galaxy.css",
     "/rjuhsd-assets/woodcreek.png",
@@ -176,11 +179,11 @@ pub fn prepare_rjuhsd_html(
     cfg: &SiteConfig,
 ) -> String {
     let mut html = inject_shared_head(raw_html);
-    let mut primary_origin = "https://mitch.pro".to_string();
-    let mut primary_host = "mitch.pro".to_string();
+    let mut primary_origin = "https://mitchdog.com".to_string();
+    let mut primary_host = "mitchdog.com".to_string();
     if let Ok(pu) = url::Url::parse(&cfg.primary) {
         primary_origin = pu.origin().ascii_serialization();
-        primary_host = pu.host_str().unwrap_or("mitch.pro").to_string();
+        primary_host = pu.host_str().unwrap_or("mitchdog.com").to_string();
     }
 
     let mut alt_origin = String::new();
@@ -388,7 +391,7 @@ pub fn prepare_rjuhsd_html(
             .to_string();
     }
 
-    html
+    crate::inject::inject_credit(&html, true)
 }
 
 fn manifest_response(manifest: serde_json::Value) -> Response {
@@ -599,10 +602,7 @@ pub async fn handle(
         let canonical_destination = format!("https://mitchdog.com{path}{query_part}");
         if state.check_password_cookie(headers, None) {
             let encoded = encode_uri_component(&canonical_destination);
-            return redirect(
-                &format!("https://mitch.pro/api/sso/bridge?back={encoded}"),
-                302,
-            );
+            return crate::routes::auth::sso_bridge(&state, headers, &format!("back={encoded}"));
         }
         return redirect(&canonical_destination, 308);
     }
@@ -1941,6 +1941,7 @@ pub async fn handle(
 }
 
 fn html_response(html: String) -> Response {
+    let html = crate::inject::inject_credit(&html, false);
     Response::builder()
         .status(StatusCode::OK)
         .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")

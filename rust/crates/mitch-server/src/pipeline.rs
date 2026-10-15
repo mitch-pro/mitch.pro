@@ -228,6 +228,9 @@ pub fn inject_page(
             None => raw = format!("{raw}{agree}"),
         }
     }
+    if !is_embedded || is_standalone_game_portal {
+        raw = crate::inject::inject_credit(&raw, is_rjuhsd || path.starts_with("/rjuhsd/"));
+    }
     *html = raw.clone();
     raw
 }
@@ -251,6 +254,14 @@ pub fn serve_static_html(
         html = crate::inject::inject_broadcast(&html);
     } else {
         html = strip_broadcast(&html);
+    }
+    if !is_embedded {
+        let host = request_host(headers);
+        html = crate::inject::inject_credit(
+            &html,
+            is_host(host.split(':').next().unwrap_or(""), "rjuhsd.school")
+                || path.starts_with("/rjuhsd/"),
+        );
     }
     html
 }

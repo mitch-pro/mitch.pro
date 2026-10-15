@@ -16,21 +16,21 @@ const server = readFileSync('server.js', 'utf8');
 assert(friends.includes('class="friends-summary"') && friends.includes('class="friend-actions"'), 'Friends needs the game-style connections layout');
 assert(friends.includes("document.getElementById('onlineCount')"), 'Friends needs a live online count');
 assert((coins.match(/class="earn-card"/g) || []).length >= 10, 'Coin wallet needs at least ten visible earning paths');
-assert(coinWidget.includes("widget.href = status === 'guest' ? '/enroll/' : '/coins/'"), 'Global wallet must open the MitchCoins hub');
+assert(coinWidget.includes("widget.href = status === 'guest' ? '/enroll/' : '/coins/?v=2'"), 'Global wallet must open the MitchCoins hub');
 
 for (const game of ['rock-paper-scissors', 'lucky-seven', 'color-card', 'triple-dice', 'plinko']) {
   assert(server.includes(`/api/casino/${game}`), `${game} needs a server-side casino route`);
 }
 assert((casino.match(/data-category=/g) || []).length >= 15, 'Casino needs a large filterable game library');
 assert(casino.includes("$$('.casino-filter')") && casino.includes('id="card-plinko"'), 'Casino filters and new games must be wired');
-assert(casino.includes('/casino/casino-refresh.css?v=1') && casino.includes('id="casino-visible-count"'), 'Casino needs its new visual system and live library count');
+assert(casino.includes('/casino/casino-refresh.css?v=2') && casino.includes('id="casino-visible-count"'), 'Casino needs its new visual system and live library count');
 assert(casino.includes("id === 'card-blackjack' ? 'block' : 'none'"), 'Blackjack state must not appear in unrelated game rooms');
-assert(casinoStyles.includes('.fs-art') && casinoStyles.includes('@media (max-width: 760px)'), 'Casino rooms need an immersive and responsive layout');
+assert(casinoStyles.includes('.fs-layout') && casinoStyles.includes('@media(max-width:540px)'), 'Casino rooms need a responsive play layout');
 
 assert(notifications.includes('id="loadError"') && notifications.includes('async function boot()'), 'Notification settings need distinct login and load failures');
 assert(broadcast.includes('aria-controls="sw-notif-panel"') && broadcast.includes('sw-notif-type'), 'Notification tray needs accessible state and notification types');
 assert(broadcast.includes("type: 'presence_ping'") && broadcast.includes("page: path.slice(0, 180)") && broadcast.includes("fetch('/api/presence/heartbeat'"), 'Every authenticated page needs detailed WebSocket presence with an HTTP fallback');
-assert(broadcast.includes("root.id = 'site-presence'") && broadcast.includes("member.page || '/'") && broadcast.includes("' is-chat'"), 'The global online panel must show exact pages and prioritize chat activity');
+assert(!broadcast.includes("root.id = 'site-presence'"), 'The duplicate floating people widget must stay removed');
 assert(server.includes("touchUserPresence(activeMatrixNorm, 'Chatting in Matrix'"), 'Matrix traffic must keep chat users online in site presence');
 assert(server.includes('Date.now() - matrixSeen < PRESENCE_FALLBACK_TTL_MS'), 'Recent Matrix activity must outrank competing background-tab presence');
 assert(server.includes('MATRIX_MESSAGE_EMAIL_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000') && server.includes('MATRIX_MESSAGE_EMAIL_DELAY_MS = 10 * 60 * 1000'), 'Ordinary Matrix email alerts must be delayed and limited to a weekly cadence');

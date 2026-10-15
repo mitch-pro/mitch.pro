@@ -61,10 +61,8 @@ pub fn default_shop_catalog() -> Value {
       { "id": "quick_access_pass", "name": "Quick Access Pass", "section": "Passes", "type": "cosmetic", "costType": "canvas_tool", "cost": 800, "desc": "Unlocks a quick-access preference toggle." },
       { "id": "daily_bonus_plus", "name": "Daily Bonus Plus", "section": "Passes", "type": "cosmetic", "costType": "canvas_tool", "cost": 1500, "premiumOnly": true, "desc": "Unlocks a premium daily-bonus preference toggle." },
       { "id": "streak_freeze", "name": "Streak Freeze", "section": "Utility", "type": "utility", "costType": "streak_freeze", "cost": 150, "desc": "Automatically saves your Daily Login streak if you miss a day!" },
-      { "id": "happy_hour_ticket", "name": "Personal Happy Hour (30m)", "section": "Utility", "type": "utility", "costType": "happy_hour_ticket", "cost": 350, "desc": "Trigger a personal 30-minute Happy Hour for 2X coins on all games and canvas!" },
       { "id": "double_down_ticket", "name": "Double Down Ticket (30m)", "section": "Utility", "type": "utility", "costType": "double_down_ticket", "cost": 500, "desc": "Active for 30 minutes. Doubles the payout of any casino game wins!" },
       { "id": "bad_beat_insurance", "name": "Bad Beat Insurance (30m)", "section": "Utility", "type": "utility", "costType": "bad_beat_insurance", "cost": 300, "desc": "Active for 30 minutes. Refunds your entire bet if you lose any casino game round." },
-      { "id": "happy_hour_extension", "name": "Happy Hour Extension (15m)", "section": "Utility", "type": "utility", "costType": "happy_hour_extension", "cost": 250, "desc": "Extends your active Personal Happy Hour by an additional 15 minutes. Requires active Happy Hour to purchase." },
       { "id": "slots_free_spin", "name": "Slots Free Spins (5x)", "section": "Utility", "type": "utility", "costType": "slots_free_spin", "cost": 200, "desc": "Adds 5 free spins to your account. Free spins let you play slots with zero coins at risk while keeping all winnings!" }
     ])
 }
@@ -77,7 +75,14 @@ pub fn load_shop_catalog(store: &DataStore, data_dir: &Path) -> Vec<Value> {
         if !arr.is_empty() {
             return arr
                 .iter()
-                .filter(|item| item.get("id").and_then(|v| v.as_str()) != Some("og_badge"))
+                .filter(|item| {
+                    item.get("id").and_then(|v| v.as_str()) != Some("og_badge")
+                        && !item
+                            .get("costType")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .starts_with("happy_hour")
+                })
                 .cloned()
                 .collect();
         }
@@ -494,7 +499,17 @@ pub fn public_active_color(store: &DataStore, email: &str, color: &Value) -> Opt
     if active == "rainbow_name" && !auth::is_admin_email(store, email) {
         return None;
     }
-    if active.is_empty() {
+    if !matches!(
+        active.as_str(),
+        "neon_purple"
+            | "electric_blue"
+            | "mint_flash"
+            | "rose_spark"
+            | "ember_red"
+            | "void_white"
+            | "gold_glow"
+            | "rainbow_name"
+    ) {
         None
     } else {
         Some(active)
@@ -608,7 +623,6 @@ pub fn build_inventory(
         "items": items,
         "status": {
             "vipUntil": stats.get("vip_casino_until").cloned().unwrap_or(json!(0)),
-            "happyHourUntil": stats.get("personal_happy_hour_until").cloned().unwrap_or(json!(0)),
             "doubleDownUntil": stats.get("double_down_until").cloned().unwrap_or(json!(0)),
             "badBeatInsuranceUntil": stats.get("bad_beat_insurance_until").cloned().unwrap_or(json!(0)),
             "slotsFreeSpins": stats.get("slots_free_spins").cloned().unwrap_or(json!(0)),
@@ -660,7 +674,7 @@ pub fn owns_shop_item(
             .unwrap_or(0.0);
         return until > now_ms;
     }
-    if cost_type == "streak_freeze" || cost_type == "happy_hour_ticket" {
+    if cost_type == "streak_freeze" {
         return false;
     }
     match shop_type_config(cost_type) {
@@ -690,6 +704,50 @@ mod tests {
 
     fn catalog() -> Vec<Value> {
         default_shop_catalog_vec()
+    }
+
+    #[test]
+    fn retired_boosts_are_unavailable_even_in_legacy_catalogs() {
+        let base = std::env::temp_dir().join(format!(
+            "mitch-retired-catalog-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let data = base.join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let store = DataStore::open(&base, &data).unwrap();
+        assert!(catalog().iter().all(|item| !item["costType"]
+            .as_str()
+            .unwrap_or("")
+            .starts_with("happy_hour")));
+        store
+            .write_document(
+                &data.join("shop_catalog.json"),
+                &json!([
+                    {"id":"retired", "costType":"happy_hour_ticket"},
+                    {"id":"retired_extension", "costType":"happy_hour_extension"},
+                    {"id":"neon_purple", "costType":"name_color"}
+                ]),
+            )
+            .unwrap();
+        let active = load_shop_catalog(&store, &data);
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0]["id"], "neon_purple");
+        assert_eq!(
+            public_active_color(&store, "member@example.com", &json!("neon_purple")),
+            Some("neon_purple".into())
+        );
+        assert_eq!(
+            public_active_color(
+                &store,
+                "member@example.com",
+                &json!("bad\" onmouseover=alert(1)")
+            ),
+            None
+        );
+        std::fs::remove_dir_all(base).ok();
     }
 
     #[test]
