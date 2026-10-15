@@ -367,13 +367,28 @@
 
         function isMatrixStoreAccountMismatch(value) {
           const message = String(value?.message || value || '');
-          // matrix-sdk-crypto-wasm words this identity/device-key mismatch a
-          // few different ways depending on exactly where it trips (the
-          // account constructor check, cross-signing, or imported-key
-          // verification) - catch the whole family so the local store always
-          // gets cleared and a fresh device re-established, instead of the
-          // error surfacing raw on one wording and not the others.
-          return /account in the store doesn't match the account in the constructor|mismatchedidentitykeys|mismatched keypair detected|user id mismatch in/i.test(message);
+          // "account in the store doesn't match the account in the
+          // constructor: expected @admin:mitch.pro:AAAA, got @admin:mitch.pro:BBBB"
+          // carries both identities. In every real occurrence of this we've
+          // seen, the Matrix username (@admin:mitch.pro) is identical on
+          // both sides - only the trailing device id differs, which is
+          // ordinary device churn, not a broken account. Only treat it as a
+          // real identity change (e.g. admin vs admin-2) worth wiping local
+          // storage and reloading for - a username-equal device mismatch is
+          // left alone, since resetting storage for it only destroys E2EE
+          // keys for no reason.
+          const storeVsConstructor = /account in the store doesn.t match the account in the constructor: expected ([^,]+), got (\S+)/i.exec(message);
+          if (storeVsConstructor) {
+            const matrixUserId = token => {
+              const parts = token.split(':');
+              return parts.length >= 2 ? `${parts[0]}:${parts[1]}` : token;
+            };
+            return matrixUserId(storeVsConstructor[1]) !== matrixUserId(storeVsConstructor[2]);
+          }
+          // The remaining wordings (cross-signing/keypair/user-id mismatches)
+          // don't carry a comparable pair of identities to narrow the same
+          // way, and are a different failure shape - leave those as-is.
+          return /mismatchedidentitykeys|mismatched keypair detected|user id mismatch in/i.test(message);
         }
 
         function beginMatrixStoreRecovery() {
