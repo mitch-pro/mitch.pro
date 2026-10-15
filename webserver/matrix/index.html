@@ -365,6 +365,41 @@
         ];
         let matrixStoreRecoveryStarted = false;
 
+        // Persistent (survives reloads) attempt cap shared by every path that
+        // can trigger a recovery reload. Without this, a clear that keeps
+        // failing (e.g. an IndexedDB delete that never resolves because
+        // something still has that database open) has nothing to stop it
+        // from reloading forever - this happened in production even after
+        // beginMatrixStoreRecovery() got its own cap, because the *other*
+        // reload path (the pending-recovery-didn't-clear branch in
+        // initMitchSSO) had none of its own.
+        const RECOVERY_ATTEMPT_KEY = 'mitch_matrix_store_recovery_attempts_v1';
+        const RECOVERY_ATTEMPT_WINDOW_MS = 60000;
+        const RECOVERY_ATTEMPT_LIMIT = 3;
+
+        function recordRecoveryAttempt() {
+          let attempts = { count: 0, since: Date.now() };
+          try {
+            const raw = JSON.parse(localStorage.getItem(RECOVERY_ATTEMPT_KEY) || 'null');
+            if (raw && typeof raw.count === 'number' && Date.now() - raw.since < RECOVERY_ATTEMPT_WINDOW_MS) attempts = raw;
+          } catch (e) {}
+          attempts.count += 1;
+          const exceeded = attempts.count > RECOVERY_ATTEMPT_LIMIT;
+          try {
+            if (exceeded) localStorage.removeItem(RECOVERY_ATTEMPT_KEY);
+            else localStorage.setItem(RECOVERY_ATTEMPT_KEY, JSON.stringify(attempts));
+          } catch (e) {}
+          return exceeded;
+        }
+
+        function giveUpRecovery() {
+          matrixStoreRecoveryStarted = true;
+          try { localStorage.removeItem(MATRIX_STORE_RECOVERY_KEY); } catch (e) {}
+          if (banner) banner.style.display = 'flex';
+          const message = document.getElementById('mitch-sso-msg');
+          if (message) message.textContent = 'Chat storage keeps failing to reset automatically. Use your browser\'s "Clear site data" for this page (a hard reload alone won\'t fix it - the stuck state is in storage a reload doesn\'t touch), then reopen chat. If it still fails, this needs a manual fix.';
+        }
+
         function isMatrixStoreAccountMismatch(value) {
           const message = String(value?.message || value || '');
           // matrix-sdk-crypto-wasm has a whole family of "X doesn't match Y"
@@ -382,27 +417,10 @@
 
         function beginMatrixStoreRecovery() {
           if (matrixStoreRecoveryStarted) return;
-          // Persistent (survives the reload) attempt cap - matrixStoreRecoveryStarted
-          // alone only blocks re-triggering within the same page load, so a
-          // false positive (or a genuinely unrecoverable state) that fires
-          // again right after each reload could otherwise loop forever.
-          const ATTEMPT_KEY = 'mitch_matrix_store_recovery_attempts_v1';
-          const WINDOW_MS = 60000;
-          let attempts = { count: 0, since: Date.now() };
-          try {
-            const raw = JSON.parse(localStorage.getItem(ATTEMPT_KEY) || 'null');
-            if (raw && typeof raw.count === 'number' && Date.now() - raw.since < WINDOW_MS) attempts = raw;
-          } catch (e) {}
-          attempts.count += 1;
-          if (attempts.count > 3) {
-            matrixStoreRecoveryStarted = true;
-            try { localStorage.removeItem(ATTEMPT_KEY); } catch (e) {}
-            if (banner) banner.style.display = 'flex';
-            const message = document.getElementById('mitch-sso-msg');
-            if (message) message.textContent = 'Chat storage keeps failing to reset automatically. Close any other mitch.pro chat tabs, then try a hard reload (Ctrl/Cmd+Shift+R). If it still fails, this needs a manual fix.';
+          if (recordRecoveryAttempt()) {
+            giveUpRecovery();
             return;
           }
-          try { localStorage.setItem(ATTEMPT_KEY, JSON.stringify(attempts)); } catch (e) {}
           matrixStoreRecoveryStarted = true;
           localStorage.setItem(MATRIX_STORE_RECOVERY_KEY, '1');
           setTimeout(() => window.location.reload(), 50);
@@ -491,16 +509,34 @@
               const request = indexedDB.deleteDatabase(name);
               request.onsuccess = () => finish(true);
               request.onerror = () => finish(false);
+              // A real "someone else has it open" block resolves fast once
+              // they close it, so keep that follow-up short. The overall
+              // fallback below is much longer: deleting the crypto store can
+              // legitimately take a few seconds, and a false "failed" here
+              // is what used to send this into an uncapped reload loop.
               request.onblocked = () => setTimeout(() => finish(false), 1500);
-              setTimeout(() => finish(false), 3000);
+              setTimeout(() => finish(false), 8000);
             } catch (_) {
               finish(false);
             }
           });
         }
 
+        async function unregisterMatrixServiceWorker() {
+          if (!('serviceWorker' in navigator)) return;
+          try {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            // Cinny's own /matrix/-scoped service worker can hold an open
+            // connection to the crypto IndexedDB that outlives a page reload,
+            // which is exactly what blocks the deletes below from ever
+            // resolving. Drop it before attempting them.
+            await Promise.all(regs.filter(r => r.scope.includes('/matrix/')).map(r => r.unregister()));
+          } catch (_) {}
+        }
+
         async function resetMatrixClientStores() {
           if (!('indexedDB' in window)) return true;
+          await unregisterMatrixServiceWorker();
           const results = await Promise.all(MATRIX_DATABASES.map(deleteMatrixDatabase));
           return results.every(Boolean);
         }
@@ -559,6 +595,15 @@
             const recovery = await completePendingMatrixStoreRecovery();
             if (recovery.pending && !recovery.cleared) {
               shouldBootCinny = false;
+              // This path used to reload on a plain 2s timer with no cap at
+              // all - if the clear keeps failing (e.g. the crypto database's
+              // delete never resolves) it looped forever, every load, with
+              // no way out even via a hard reload. Route it through the same
+              // shared attempt cap as the other recovery trigger instead.
+              if (recordRecoveryAttempt()) {
+                giveUpRecovery();
+                return;
+              }
               if (banner) banner.style.display = 'flex';
               const message = document.getElementById('mitch-sso-msg');
               if (message) message.textContent = 'Repairing encrypted chat storage… close other chat tabs if this page keeps reloading.';
