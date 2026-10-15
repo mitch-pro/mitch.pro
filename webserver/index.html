@@ -13,7 +13,7 @@
 <title>mitch.pro</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"></noscript>
 <link rel="stylesheet" href="/app.css">
-<link rel="stylesheet" href="/home.css?v=6">
+<link rel="stylesheet" href="/home.css?v=7">
 <script src="/app-shell.js" defer></script>
 <script src="/home-friends.js?v=3" defer></script>
 <script>
@@ -537,11 +537,13 @@ function filterHomeLinks() {
   var input = document.getElementById('home-search');
   var empty = document.getElementById('links-empty');
   var clear = document.getElementById('home-search-clear');
+  var results = document.getElementById('home-search-results');
   if (!input) return;
   var q = input.value.trim().toLowerCase();
   if (clear) {
     clear.style.display = q ? '' : 'none';
   }
+  if (results) results.hidden = !q;
   var visibleCount = 0;
   document.querySelectorAll('.category-group').forEach(function(group) {
     var groupVisible = 0;
@@ -552,11 +554,6 @@ function filterHomeLinks() {
     });
     group.style.display = groupVisible ? '' : 'none';
     visibleCount += groupVisible;
-  });
-  document.querySelectorAll('#popular-strip a.site-link').forEach(function(link) {
-    var visible = !q || (link.dataset.search || '').includes(q);
-    link.classList.toggle('is-filter-hidden', !visible);
-    if (visible) visibleCount++;
   });
   if (empty) empty.style.display = visibleCount ? 'none' : '';
 }
@@ -810,43 +807,6 @@ function applyHomepagePrefs() {
   }
 }
 
-const DEFAULT_HOME_BACKGROUND_BLUR = 8;
-
-function applyHomeBackgroundBlur(value) {
-  const px = Math.max(0, Math.min(40, Math.round(Number(value) || 0)));
-  // theme.js paints the wallpaper on html[data-bglayer]::before with
-  // filter:blur(var(--t-bg-blur)). Route through __theme.setBlur so this slider,
-  // the preferences-page slider, and drag-to-blur all share the one theme_bgblur
-  // pref instead of drifting apart.
-  if (window.__theme && typeof window.__theme.setBlur === 'function') {
-    window.__theme.setBlur(px);
-  } else {
-    document.documentElement.style.setProperty('--t-bg-blur', px + 'px');
-    try { localStorage.setItem('theme_bgblur', String(px)); } catch(e) {}
-  }
-  const range = document.getElementById('home-background-range');
-  const label = document.getElementById('home-background-value');
-  if (range) range.value = String(px);
-  if (label) label.textContent = `${px}px blur`;
-}
-
-function setupHomeBackgroundControl() {
-  const range = document.getElementById('home-background-range');
-  const reset = document.getElementById('home-background-reset');
-  if (!range) return;
-  let saved = null;
-  try { saved = localStorage.getItem('theme_bgblur'); } catch(e) {}
-  const initial = saved === null ? DEFAULT_HOME_BACKGROUND_BLUR
-    : Math.max(0, Math.min(40, Math.round(Number(saved) || 0)));
-  applyHomeBackgroundBlur(initial);
-  range.addEventListener('input', function() {
-    applyHomeBackgroundBlur(range.value);
-  });
-  if (reset) reset.addEventListener('click', function() {
-    applyHomeBackgroundBlur(DEFAULT_HOME_BACKGROUND_BLUR);
-  });
-}
-
 // The old control stored a transparency value here; drop it so it can't be
 // misread by anything else.
 try { const _hp = JSON.parse(localStorage.getItem('_prefHomepage') || '{}'); if (_hp.backgroundTransparency !== undefined) { delete _hp.backgroundTransparency; localStorage.setItem('_prefHomepage', JSON.stringify(_hp)); } } catch(e) {}
@@ -1065,18 +1025,21 @@ function escText(t) {
 }
 
   async function loadDailyLoginState() {
+    // The full daily-login card was removed from the homepage; only
+    // hub-daily-chip (in the Explore nav) surfaces this now, via
+    // syncHubDailyChip() below. These elements are kept null-safe in
+    // case a future page still renders the full card.
     var streakLabel = document.getElementById('daily-login-streak-label');
     var msgLabel = document.getElementById('daily-login-message');
     var btn = document.getElementById('daily-login-btn');
     var progressBar = document.getElementById('daily-login-progress-bar');
     var progressText = document.getElementById('daily-login-progress-text');
-    if (!btn || !msgLabel) return;
 
     try {
       var r = await fetch('/api/daily-login/state', { credentials: 'include' });
       if (!r.ok) {
-        msgLabel.textContent = 'Sign in to claim daily login rewards.';
-        btn.disabled = true;
+        if (msgLabel) msgLabel.textContent = 'Sign in to claim daily login rewards.';
+        if (btn) btn.disabled = true;
         syncHubDailyChip(null);
         return;
       }
@@ -1091,13 +1054,15 @@ function escText(t) {
           freezeEl.style.display = 'none';
         }
       }
-      msgLabel.textContent = state.message;
-      btn.disabled = !state.canClaim;
-      if (state.canClaim) {
-        btn.textContent = 'Claim +' + state.nextReward + ' Coins!';
-        btn.onclick = claimDailyReward;
-      } else {
-        btn.textContent = 'Claimed Today';
+      if (msgLabel) msgLabel.textContent = state.message;
+      if (btn) {
+        btn.disabled = !state.canClaim;
+        if (state.canClaim) {
+          btn.textContent = 'Claim +' + state.nextReward + ' Coins!';
+          btn.onclick = claimDailyReward;
+        } else {
+          btn.textContent = 'Claimed Today';
+        }
       }
       syncHubDailyChip(state);
 
@@ -1108,8 +1073,8 @@ function escText(t) {
       if (progressBar) progressBar.style.width = percent + '%';
       if (progressText) progressText.textContent = 'Day ' + displayStreak + '/60';
     } catch(e) {
-      msgLabel.textContent = 'Failed to load daily login reward state.';
-      btn.disabled = true;
+      if (msgLabel) msgLabel.textContent = 'Failed to load daily login reward state.';
+      if (btn) btn.disabled = true;
       syncHubDailyChip(null);
     }
   }
@@ -1731,7 +1696,6 @@ async function initHome() {
   applyWidgetOrder();
   setupHomeSearch();
   setupAboutBlankToggle();
-  setupHomeBackgroundControl();
   applyHomepagePrefs();
   loadSites();
   loadTopGames();
@@ -1744,203 +1708,6 @@ async function initHome() {
   setInterval(loadOnlineMembers, 15000);
   initFriendsSystem();
   initHudTerminal();
-  initVmWorkspaceDashboard();
-}
-
-let currentVmStatus = null;
-let currentVmIp = null;
-let currentVmTier = null;
-let currentVmPassword = null;
-let vmStatusInterval = null;
-
-async function initVmWorkspaceDashboard() {
-  await pollVmStatus();
-  vmStatusInterval = setInterval(pollVmStatus, 10000);
-}
-
-async function pollVmStatus() {
-  try {
-    const res = await fetch('/api/vm/status');
-    if (!res.ok) { res.text().catch(()=>{}); return; }
-    const data = await res.json();
-    
-    const panel = document.getElementById('vm-workspace-panel');
-    const advert = document.querySelector('.site-advert-banner');
-    
-    if (!data || data.status === 'none') {
-      panel.style.display = 'none';
-      if (advert) advert.style.display = 'flex';
-      return;
-    }
-    
-    if (advert) advert.style.display = 'none';
-    panel.style.display = 'block';
-    
-    const indicator = document.getElementById('vm-dashboard-status-indicator');
-    const dot = document.getElementById('vm-dashboard-status-dot');
-    const info = document.getElementById('vm-dashboard-info');
-    
-    const powerBtn = document.getElementById('vm-power-btn');
-    const sshBtn = document.getElementById('vm-ssh-btn');
-    const vncBtn = document.getElementById('vm-vnc-btn');
-    const resetBtn = document.getElementById('vm-reset-btn');
-    
-    currentVmStatus = data.vmStatus;
-    currentVmIp = data.ip;
-    currentVmTier = data.tier;
-    currentVmPassword = data.password;
-    
-    if (data.status === 'pending') {
-      indicator.style.color = '#ffaf3f';
-      dot.style.background = '#ffaf3f';
-      indicator.innerHTML = `<span id="vm-dashboard-status-dot" style="width:8px; height:8px; border-radius:50%; background:#ffaf3f; display:inline-block; margin-right:4px;"></span>Pending Approval`;
-      info.textContent = `Your ${data.tier === 'paid' ? 'Dedicated VM' : 'Linux container'} application is pending Mitch's review.`;
-      powerBtn.style.display = 'none';
-      sshBtn.style.display = 'none';
-      vncBtn.style.display = 'none';
-      if (resetBtn) resetBtn.style.display = 'none';
-      return;
-    }
-    
-    if (data.vmStatus === 'running') {
-      indicator.style.color = '#8b5cf6';
-      dot.style.background = '#8b5cf6';
-      indicator.innerHTML = `<span id="vm-dashboard-status-dot" style="width:8px; height:8px; border-radius:50%; background:#8b5cf6; display:inline-block; margin-right:4px; box-shadow: 0 0 8px #8b5cf6;"></span>Running`;
-      
-      const ipText = data.ip ? `IP Address: <strong>${data.ip}</strong>` : 'IP Address: <em>Obtaining network link...</em>';
-      info.innerHTML = `${ipText} &middot; Tier: ${data.tier === 'paid' ? 'KVM VM' : 'Linux container'}`;
-      
-      powerBtn.textContent = 'Power Off';
-      powerBtn.style.background = 'rgba(239, 68, 68, 0.1)';
-      powerBtn.style.borderColor = 'rgba(239, 68, 68, 0.3)';
-      powerBtn.style.color = '#ef4444';
-      powerBtn.style.display = 'inline-block';
-      
-      if (data.ip) {
-        sshBtn.style.display = 'inline-block';
-        if (data.tier === 'paid') {
-          vncBtn.style.display = 'inline-block';
-        } else {
-          vncBtn.style.display = 'none';
-        }
-      } else {
-        sshBtn.style.display = 'none';
-        vncBtn.style.display = 'none';
-      }
-      if (resetBtn) {
-        resetBtn.style.display = (data.tier === 'free') ? 'inline-block' : 'none';
-      }
-    } else {
-      indicator.style.color = '#EF4444';
-      dot.style.background = '#EF4444';
-      indicator.innerHTML = `<span id="vm-dashboard-status-dot" style="width:8px; height:8px; border-radius:50%; background:#EF4444; display:inline-block; margin-right:4px;"></span>Offline / Stopped`;
-      info.innerHTML = `Virtual machine is offline. Start it to access files and services.`;
-      
-      powerBtn.textContent = 'Power On';
-      powerBtn.style.background = '';
-      powerBtn.style.borderColor = '';
-      powerBtn.style.color = '';
-      powerBtn.style.display = 'inline-block';
-      sshBtn.style.display = 'none';
-      vncBtn.style.display = 'none';
-      if (resetBtn) {
-        resetBtn.style.display = (data.tier === 'free') ? 'inline-block' : 'none';
-      }
-    }
-  } catch (err) {
-    console.error('Failed to poll VM status:', err);
-  }
-}
-
-async function controlVmPower() {
-  const btn = document.getElementById('vm-power-btn');
-  const action = currentVmStatus === 'running' ? 'stop' : 'start';
-  btn.disabled = true;
-  btn.textContent = action === 'start' ? 'Booting...' : 'Stopping...';
-  
-  try {
-    const res = await fetch('/api/vm/power', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Mitch-Requested-With': '1',
-        'X-CSRF-Token': getCsrfToken()
-      },
-      body: JSON.stringify({ action })
-    });
-    const data = await res.json();
-    if (data.error) {
-      alert('Error: ' + data.error);
-    } else {
-      await pollVmStatus();
-    }
-  } catch (err) {
-    alert('Power command failed: ' + err.message);
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-async function resetFreeVm() {
-  const btn = document.getElementById('vm-reset-btn');
-  if (!btn) return;
-  if (!(await customConfirm('Reset Sandbox', 'Are you sure you want to reset your sandbox? This will delete your current container and files, and create a fresh one immediately.'))) {
-    return;
-  }
-  
-  btn.disabled = true;
-  const originalText = btn.textContent;
-  btn.textContent = 'Resetting Sandbox...';
-  
-  try {
-    const res = await fetch('/api/vm/free/reset', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Mitch-Requested-With': '1',
-        'X-CSRF-Token': getCsrfToken()
-      }
-    });
-    const data = await res.json();
-    if (data.error) {
-      alert('Reset failed: ' + data.error);
-    } else {
-      alert('Sandbox reset successfully! Booting up your new terminal...');
-      await pollVmStatus();
-      connectVmSsh();
-    }
-  } catch (err) {
-    alert('Reset error: ' + err.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = originalText;
-  }
-}
-
-function openVmConsole(url) {
-  const ab = document.getElementById('abToggle');
-  if (ab && ab.checked) {
-    openAboutBlank(url);
-  } else {
-    openInNewTab(url);
-  }
-}
-
-function connectVmSsh() {
-  if (!currentVmIp) return;
-  const username = (currentVmTier === 'free' || currentVmTier === 'premium') ? 'root' : 'debian';
-  const pass = currentVmPassword || 'password';
-  const consoleUrl = `/ssh/index.html?host=${currentVmIp}&username=${username}&port=22&auth=password&password=${pass}&connect=true`;
-  openVmConsole(consoleUrl);
-}
-
-function connectVmVnc() {
-  openVmConsole('/vms/');
-}
-
-function getCsrfToken() {
-  const match = document.cookie.match(new RegExp('(^| )_csrf=([^;]+)'));
-  return match ? decodeURIComponent(match[2]) : '';
 }
 
 function toggleHudTerminal() {
@@ -3507,6 +3274,12 @@ if (document.readyState === 'loading') {
         <input id="home-search" type="search" placeholder="Search pages…" autocomplete="off">
         <button id="home-search-clear" type="button">Clear</button>
       </div>
+      <section id="home-search-results" class="home-search-results" hidden>
+        <div id="links">
+          <div class="quick-empty">Loading pages…</div>
+        </div>
+        <div id="links-empty" style="display:none;">No matching pages.</div>
+      </section>
     </div>
 
   </header>
@@ -3547,137 +3320,28 @@ if (document.readyState === 'loading') {
         <button type="button" class="hub-action hub-daily mitch-coin-amount" id="hub-daily-chip" hidden>Daily claim</button>
       </nav>
 
-  <!-- Workspace -->
-  <div class="hud-workspace">
-    <main class="hud-pane-main">
-
-      <!-- Cloud VM active workspace dashboard -->
-      <section id="vm-workspace-panel" style="display:none;">
-        <div>
-          <div>
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-              <span class="vm-dashboard-tag">Cloud VM</span>
-              <span id="vm-dashboard-status-indicator" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#ffaf3f;">
-                <span id="vm-dashboard-status-dot" style="width:8px;height:8px;border-radius:50%;background:#ffaf3f;display:inline-block;"></span>
-                Checking…
-              </span>
-            </div>
-            <h3>My Linux workspace</h3>
-            <p id="vm-dashboard-info">Retrieving network allocation details…</p>
-          </div>
-          <div class="vm-actions">
-            <button id="vm-power-btn" onclick="controlVmPower()" class="btn-ghost" style="display:none;">Power On</button>
-            <button id="vm-ssh-btn" onclick="connectVmSsh()" class="btn-primary" style="display:none;">Terminal Console</button>
-            <button id="vm-vnc-btn" onclick="connectVmVnc()" class="btn-primary" style="display:none;">Open Desktop</button>
-            <button id="vm-reset-btn" onclick="resetFreeVm()" class="btn-primary" style="display:none;">Reset Sandbox</button>
-          </div>
-        </div>
-      </section>
-
-      <!-- System nudges -->
-      <div class="hud-notifications-row">
-        <div id="happy-hour-nudge" class="hud-nudge-card">
-          <span id="happy-hour-pulse" class="pulse-glow-cyan"></span>
-          <span id="happy-hour-text"></span>
-        </div>
-        <div id="achievement-nudge" class="hud-nudge-card">
-          <span class="nudge-star">★</span>
-          <span>Achievement progress</span>
-        </div>
+  <!-- Bottom bar: quick controls, stats, and popular launches - one horizontal strip -->
+  <section class="home-bottom-bar" aria-label="Quick controls and popular launches">
+    <div id="abToggleBar" class="bottom-bar-item">
+      <span class="control-logo"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
+      <span class="control-copy"><b>Stealth launch</b><small>Open in about:blank</small></span>
+      <label class="toggle-switch">
+        <input type="checkbox" id="abToggle">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <a id="preferences-card" class="bottom-bar-item" href="/preferences/">
+      <span class="control-logo"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h14"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg></span>
+      <span class="control-copy"><b>Preferences</b><small>Theme, display, privacy</small></span><span class="control-arrow">→</span>
+    </a>
+    <div id="stats-bar" class="bottom-bar-item"></div>
+    <div class="bottom-bar-item bottom-bar-popular">
+      <span class="bottom-bar-label">Popular</span>
+      <div id="popular-strip" class="popular-strip">
+        <p class="popular-empty">Loading…</p>
       </div>
-
-      <!-- Catalog -->
-      <section class="home-links-panel">
-        <div class="panel-heading">
-
-          <h3>Explore everything</h3>
-          <p>Every destination on mitch.pro, grouped and searchable.</p>
-        </div>
-        <div id="links">
-          <div class="quick-empty">Loading pages…</div>
-        </div>
-        <div id="links-empty" style="display:none;">No matching pages.</div>
-      </section>
-    </main>
-
-    <!-- Aside: command deck -->
-    <aside class="hud-pane-aside">
-      <div class="command-deck-heading">
-        <span><b>Your account</b><small>Rewards &amp; activity</small></span>
-      </div>
-
-      <!-- Daily streak -->
-      <div id="daily-login-widget" class="daily-login-card daily-login-inline hud-widget-card">
-        <div class="daily-login-inline-main">
-          <div class="panel-heading daily-login-inline-head">
-            <span class="widget-title"><span class="widget-logo">✦</span><span>Daily Streak</span></span>
-            <div class="daily-login-inline-meta">
-              <span id="daily-login-freezes" title="Streak freezes owned" style="display:none;">❄️ 0</span>
-              <small id="daily-login-streak-label">Streak: 0 days</small>
-            </div>
-          </div>
-          <div id="daily-login-message" class="daily-login-msg">Loading daily rewards status…</div>
-          <div id="daily-login-progress-wrap" class="daily-login-progress-container">
-            <div class="progress-bar-bg">
-              <div id="daily-login-progress-bar" class="progress-bar-fill" style="width:0%;"></div>
-            </div>
-            <div class="progress-labels">
-              <span id="daily-login-progress-text">Day 0/60</span>
-              <span>Premium unlock</span>
-            </div>
-          </div>
-        </div>
-        <button id="daily-login-btn" class="daily-login-claim-btn mitch-coin-amount" disabled>Claim</button>
-      </div>
-
-      <section class="account-perks" aria-labelledby="account-perks-title">
-        <div class="account-perks-head"><span>PERKS</span><h3 id="account-perks-title">Your perks</h3></div>
-        <div class="account-perk-grid">
-          <a href="/shop/" class="account-perk perk-premium"><span>&#10022;</span><b>Premium</b><small>Boosted rewards and exclusive drops</small></a>
-          <a href="/inventory/" class="account-perk perk-inventory"><span>&#9670;</span><b>Inventory</b><small>Equip colors, badges, and effects</small></a>
-          <a href="/profile/" class="account-perk perk-achievement"><span>&#9733;</span><b>Achievements</b><small>Track unlocks and progress</small></a>
-        </div>
-      </section>
-
-      <!-- Quick controls -->
-      <div class="hud-preferences-widget hud-widget-card">
-        <div class="widget-heading">
-          <span class="widget-title"><span class="widget-logo">⌘</span><span>Quick Controls</span></span>
-        </div>
-        <div class="home-toolbar">
-          <div id="abToggleBar">
-            <span class="control-logo"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
-            <span class="control-copy"><b>Stealth launch</b><small>Open in about:blank</small></span>
-            <label class="toggle-switch">
-              <input type="checkbox" id="abToggle">
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-          <div id="home-background-control">
-            <span class="control-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z"/></svg></span>
-            <span class="control-copy"><b>Background</b><small id="home-background-value">8px blur</small></span>
-            <input class="home-background-range" id="home-background-range" type="range" min="0" max="40" step="1" value="8" aria-label="Homepage background blur">
-            <button id="home-background-reset" type="button" title="Reset background blur" aria-label="Reset background blur">↺</button>
-          </div>
-          <a id="preferences-card" href="/preferences/">
-            <span class="control-logo"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h14"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg></span>
-            <span class="control-copy"><b>Preferences</b><small>Theme, display, privacy</small></span><span class="control-arrow">→</span>
-          </a>
-          <div id="stats-bar"></div>
-        </div>
-      </div>
-
-      <!-- Popular launches -->
-      <section id="popular-hub" class="hud-widget-card popular-hub" aria-label="Popular and frequent">
-        <div class="popular-hub-head">
-          <span class="widget-title"><span>Popular Launches</span></span>
-        </div>
-        <div id="popular-strip" class="popular-strip">
-          <p class="popular-empty">Loading…</p>
-        </div>
-      </section>
-    </aside>
-  </div>
+    </div>
+  </section>
 </div>
 
 <!-- ══════════════════ Console overlay ══════════════════ -->

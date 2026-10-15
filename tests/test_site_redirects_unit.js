@@ -39,10 +39,10 @@ const homeCss = readFileSync('webserver/home.css', 'utf8');
 for (const destination of ['/game-portal/', '/matrix/', '/vms/', '/members/', '/preferences/', '/shop/', '/casino/']) {
   assert(home.includes(`href="${destination}"`), `Homepage must preserve ${destination} navigation`);
 }
-for (const id of ['home-search', 'links', 'daily-login-widget', 'member-side-rail', 'vm-workspace-panel']) {
+for (const id of ['home-search', 'home-search-results', 'links', 'member-side-rail']) {
   assert(home.includes(`id="${id}"`), `Homepage must preserve the ${id} integration`);
 }
-assert(home.includes('/home.css?v=6') && home.includes('/home-friends.js?v=3'), 'Homepage assets need cache-busted URLs');
+assert(home.includes('/home.css?v=7') && home.includes('/home-friends.js?v=3'), 'Homepage assets need cache-busted URLs');
 assert(homeFriends.includes("hero.after(section)"), 'Friends activity should live inside the dashboard');
 assert(homeCss.includes('prefers-reduced-motion') && homeCss.includes('--mh-bg: var(--t-bg)') && readFileSync('webserver/app.css', 'utf8').includes('prefers-color-scheme'), 'Homepage styles must inherit the shared theme and respect motion preferences');
 const location = { href: 'https://mitch.pro/' };
