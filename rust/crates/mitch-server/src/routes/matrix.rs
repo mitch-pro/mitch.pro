@@ -318,14 +318,7 @@ async fn rotate_matrix_password(username: &str, old_password: &str, new_password
     if let Ok(val) = HeaderValue::from_str(&format!("Bearer {token}")) {
         auth_header.insert("Authorization", val);
     }
-    let change_body = json!({
-        "new_password": new_password,
-        "auth": {
-            "type": "m.login.password",
-            "identifier": { "type": "m.id.user", "user": username },
-            "password": old_password
-        }
-    });
+    let change_body = account_password_change_body(username, old_password, new_password);
     let _ = call_conduit(
         "/_matrix/client/v3/account/password",
         Method::POST,
@@ -335,6 +328,24 @@ async fn rotate_matrix_password(username: &str, old_password: &str, new_password
         )),
     )
     .await;
+}
+
+/// Body for the UIA-protected `account/password` call. `logout_devices`
+/// must stay `false`: the spec default (`true`) would log out every
+/// device on the account the moment this one-time migration runs -
+/// including whatever browser session is actively using Matrix chat
+/// right now - which then surfaces client-side as a crypto store/account
+/// mismatch on that device's next reconnect.
+fn account_password_change_body(username: &str, old_password: &str, new_password: &str) -> Value {
+    json!({
+        "new_password": new_password,
+        "logout_devices": false,
+        "auth": {
+            "type": "m.login.password",
+            "identifier": { "type": "m.id.user", "user": username },
+            "password": old_password
+        }
+    })
 }
 
 pub fn sanitize_matrix_device_id(value: &str) -> String {
@@ -7228,6 +7239,19 @@ mod tests {
 
         let p3 = get_matrix_password_for_email("b@student.rjuhsd.us", b"secret-salt");
         assert_ne!(p1, p3);
+    }
+
+    /// Regression test: the one-time password-migration rotation must not
+    /// log the account's existing devices out from under it (Matrix's
+    /// spec default for `account/password` with no `logout_devices` field
+    /// is `true`), or every migrated account's live Matrix session breaks
+    /// the moment the migration runs.
+    #[test]
+    fn account_password_change_body_keeps_existing_devices_logged_in() {
+        let body = account_password_change_body("drift", "old-pw", "new-pw");
+        assert_eq!(body["logout_devices"], json!(false));
+        assert_eq!(body["new_password"], json!("new-pw"));
+        assert_eq!(body["auth"]["password"], json!("old-pw"));
     }
 
     /// An account with an existing (not-yet-migrated, still-current-uid)
