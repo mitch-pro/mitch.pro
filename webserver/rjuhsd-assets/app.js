@@ -14,7 +14,9 @@ function remember(key,value){try{localStorage.setItem(key,value)}catch{}}
 // Clean path (/woodcreek/) is the real, canonical, indexable URL now —
 // ?school= is only a legacy/compat input (old links get 301'd server-side,
 // but this still reads it client-side just in case something bypasses that).
-let school = location.pathname.replace(/^\/|\/$/g,"") || new URLSearchParams(location.search).get("school") || saved("rjuhsd_school","woodcreek");
+const schoolPath = location.pathname.replace(/^\/|\/$/g,"");
+const schoolHost = /(^|\.)rjuhsd\.school$/.test(location.hostname);
+let school = (SCHOOLS[schoolPath] ? schoolPath : null) || new URLSearchParams(location.search).get("school") || saved("rjuhsd_school","woodcreek");
 if(!SCHOOLS[school]) school="woodcreek";
 let events=[],requestVersion=0,scheduleMode="auto",includePeriod0=false,calendarVerified=false,bellOverride=null;
 function schoolName(){return SCHOOLS[school].name+" High School"}
@@ -135,10 +137,10 @@ function switchSchool(s){
  render();
  load();
  loadWeather();
- try{const url=new URL(location.href);url.search="";url.pathname=school==="woodcreek"?"/":"/"+school+"/";history.replaceState(null,"",url)}catch{}
+ try{const url=new URL(location.href);url.search="";url.pathname=schoolHost?(school==="woodcreek"?"/":"/"+school+"/"):"/rjuhsd/";if(!schoolHost&&school!=="woodcreek")url.searchParams.set("school",school);history.replaceState(null,"",url)}catch{}
 }
 $("school-select").addEventListener("change",()=>switchSchool($("school-select").value));
-document.addEventListener("click",e=>{const b=e.target.closest("[data-switch-school]");if(b){const s=b.dataset.switchSchool;if(s){switchSchool(s)}}});
+document.addEventListener("click",e=>{const b=e.target.closest("[data-switch-school]");if(b){const s=b.dataset.switchSchool;if(s){e.preventDefault();switchSchool(s);document.getElementById("schedule-panel")?.scrollIntoView({block:"start"})}}});
 $("schedule-mode").addEventListener("change",()=>{scheduleMode=$("schedule-mode").value;data=buildData();render()});
 $("include-period0").addEventListener("change",()=>{includePeriod0=$("include-period0").checked;data=buildData();render()});
 applySchoolIdentity();

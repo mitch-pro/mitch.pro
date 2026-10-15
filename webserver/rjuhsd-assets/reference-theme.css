@@ -1124,3 +1124,12 @@ nav[aria-label="Primary navigation"] a svg { display: inline-block; vertical-ali
     gap: 8px;
   }
 }
+
+@media (max-width: 360px) {
+  .site-header { padding-inline: 10px; gap: 6px; }
+  .site-header .brand { flex-shrink: 1; min-width: 0; gap: 5px; }
+  .site-header .brand-copy { min-width: 0; }
+  .site-header .brand-copy strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+  .site-header .header-actions { gap: 4px; }
+  .school-choice select { max-width: 112px; }
+}

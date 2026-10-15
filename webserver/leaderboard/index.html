@@ -8,7 +8,7 @@
   <script src="/api.js"></script>
   <script src="/app-shell.js" defer></script>
   <style>
-    .rank-shell{width:min(1180px,100%)}
+    .rank-shell{width:min(1180px,calc(100% - 40px))}
     .rank-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}
     .rank-head-copy{max-width:690px}
     .season-chip{display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border:2px solid var(--t-ac);background:transparent;color:var(--t-ac);font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;border-radius:0}
@@ -26,7 +26,7 @@
     .podium-name{max-width:100%;overflow:hidden;color:var(--t-fg);font-size:.92rem;font-weight:800;text-overflow:ellipsis;white-space:nowrap}
     .podium-score{margin-top:5px;color:var(--t-fg2);font-size:.72rem}.podium-score b{color:var(--t-ac)}.first .podium-score b{color:var(--t-ac)}
     .my-rank{display:flex;min-height:252px;flex-direction:column;justify-content:space-between;padding:20px;border:1px solid var(--t-bd);border-radius:10px;background:var(--t-bg2)}
-    .my-rank small{color:var(--t-ac);font-size:10px;font-weight:800;letter-spacing:.14em}
+    .my-rank small{color:var(--t-ac);font-size:10px;font-weight:800;letter-spacing:0}
     .my-rank strong{display:block;margin-top:8px;font:700 clamp(2.2rem,5vw,3.4rem)/.95 inherit;font-style:normal;letter-spacing:-.04em}
     .my-rank h2{margin:10px 0 0;font-size:1.1rem}.my-rank p{margin:5px 0;color:var(--t-fg2);font-size:.78rem}
     .my-rank-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -56,17 +56,29 @@
     .rank-empty{padding:54px 20px;color:var(--t-fg2);text-align:center}
     .l-badge{margin-left:5px;font-size:.68rem}
     .you-pill{margin-left:6px;padding:2px 5px;border:1px solid var(--t-ac);color:var(--t-ac);font-size:7px;text-transform:uppercase}
+    .podium:has(.podium-card:only-child){grid-template-columns:1fr}
+    @media(max-width:700px){
+      .rank-head{align-items:flex-start;flex-direction:column}
+      .rank-overview{grid-template-columns:minmax(0,1fr)}
+      .rank-controls{flex-direction:column;align-items:stretch}
+      .metric-tabs{flex-wrap:wrap;min-width:0}
+      .metric-tab{text-transform:none;letter-spacing:0}
+      .rank-search{flex:auto;width:100%}
+      .rank-row{grid-template-columns:30px minmax(0,1fr) minmax(65px,auto);padding:10px 8px}
+      .rank-row .metric:not(.primary){display:none}
+      .rank-user-copy small{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+    }
   </style>
 </head>
 <body class="leaderboard-page">
   <main class="app-main rank-shell">
     <header class="page-head rank-head">
       <div class="rank-head-copy"><h1>Leaderboard</h1><p class="page-sub">Coins, wins, and scores — ranked live.</p></div>
-      <span class="season-chip"><i></i> Season live</span>
+
     </header>
     <section class="rank-overview" aria-label="Leaderboard highlights">
       <div class="podium" id="podium"><div class="rank-empty">Building the podium…</div></div>
-      <aside class="my-rank" id="my-rank"><div><small>YOUR POSITION</small><strong>--</strong><h2>Loading profile</h2><p>Your live standing appears here.</p></div><div class="my-rank-stats"><span><b>--</b><small>COINS</small></span><span><b>--</b><small>WINS</small></span></div></aside>
+      <aside class="my-rank" id="my-rank"><div><small>Your position</small><strong>--</strong><h2>Loading profile</h2><p>Your live standing appears here.</p></div><div class="my-rank-stats"><span><b>--</b><small>COINS</small></span><span><b>--</b><small>WINS</small></span></div></aside>
     </section>
     <section class="rank-controls" aria-label="Leaderboard controls">
       <div class="metric-tabs" id="metric-tabs"></div>
@@ -86,7 +98,7 @@
     function renderTabs(){document.getElementById('metric-tabs').innerHTML=metrics.map(([key,label])=>`<button type="button" class="metric-tab ${key===activeMetric?'active':''}" data-key="${key}">${label}</button>`).join('');document.querySelectorAll('.metric-tab').forEach(b=>b.onclick=()=>{activeMetric=b.dataset.key;renderTabs();renderAll()})}
     function podiumCard(u,index){if(!u)return'';const cls=['first','second','third'][index];const rank=[1,2,3][index];return `<article class="podium-card ${cls}"><span class="podium-rank">#${rank}</span><span class="podium-avatar">${esc(initials(u.name))}</span><a class="podium-name" href="/profile/?u=${encodeURIComponent(u.email||u.name)}">${esc(u.name)}</a><span class="podium-score"><b>${fmt(score(u,activeMetric))}</b> ${esc(metrics.find(m=>m[0]===activeMetric)?.[1]||'points')}</span></article>`}
     function renderPodium(sorted){const top=sorted.slice(0,3);document.getElementById('podium').innerHTML=(top[1]?podiumCard(top[1],1):'')+(top[0]?podiumCard(top[0],0):'')+(top[2]?podiumCard(top[2],2):'')||'<div class="rank-empty">No players ranked yet.</div>'}
-    function renderMine(){const box=document.getElementById('my-rank');if(isTester){box.innerHTML='<div><small style="color:#c084fc">YOUR POSITION</small><strong style="font-size:clamp(1.8rem,4vw,2.4rem);color:#c084fc">TESTER</strong><h2>Beta Tester</h2><p>Testers enjoy unlimited sandbox coins and perks, and are excluded from public ranks.</p></div><div class="my-rank-stats"><a href="/tester/" style="grid-column:span 2;display:flex;align-items:center;justify-content:center;padding:10px;border:1px solid rgba(168,85,247,0.45);border-radius:8px;background:rgba(168,85,247,0.15);color:#d8b4fe;font-weight:700;font-size:0.85rem;text-decoration:none">🧪 Open Tester Hub &rarr;</a></div>';return}const u=myUser||users.find(x=>x.isMe);if(!u){box.innerHTML='<div><small>YOUR POSITION</small><strong>--</strong><h2>Not ranked yet</h2><p>Play a game or earn coins to enter the board.</p></div>';return}box.innerHTML=`<div><small>YOUR POSITION</small><strong>#${esc(u.rank||users.findIndex(x=>x.email===u.email)+1)}</strong><h2>${esc(u.name)}</h2><p>Keep climbing—the board updates live.</p></div><div class="my-rank-stats"><span><b>${fmt(u.coins)}</b><small>COINS</small></span><span><b>${fmt(u.wins)}</b><small>WINS</small></span></div>`}
+    function renderMine(){const box=document.getElementById('my-rank');if(isTester){box.innerHTML='<div><small style="color:#c084fc">Your position</small><strong style="font-size:clamp(1.8rem,4vw,2.4rem);color:#c084fc">TESTER</strong><h2>Beta Tester</h2><p>Testers enjoy unlimited sandbox coins and perks, and are excluded from public ranks.</p></div><div class="my-rank-stats"><a href="/tester/" style="grid-column:span 2;display:flex;align-items:center;justify-content:center;padding:10px;border:1px solid rgba(168,85,247,0.45);border-radius:8px;background:rgba(168,85,247,0.15);color:#d8b4fe;font-weight:700;font-size:0.85rem;text-decoration:none">🧪 Open Tester Hub &rarr;</a></div>';return}const u=myUser||users.find(x=>x.isMe);if(!u){box.innerHTML='<div><small>Your position</small><strong>--</strong><h2>Not ranked yet</h2><p>Play a game or earn coins to enter the board.</p></div>';return}box.innerHTML=`<div><small>Your position</small><strong>#${esc(u.rank||users.findIndex(x=>x.email===u.email)+1)}</strong><h2>${esc(u.name)}</h2><p>Your current standing.</p></div><div class="my-rank-stats"><span><b>${fmt(u.coins)}</b><small>COINS</small></span><span><b>${fmt(u.wins)}</b><small>WINS</small></span></div>`}
     function metricHtml(u,key,label,primary){return `<span class="metric ${primary?'primary':''}"><small>${esc(label.toUpperCase())}</small><b class="${key==='coins'?'mitch-coin-amount':''}">${fmt(u[key])}</b></span>`}
     function renderRows(sorted){const visible=sorted.filter(u=>!query||String(u.name||'').toLowerCase().includes(query)||String(u.email||'').toLowerCase().includes(query));const html=visible.map((u,i)=>{const boardRank=i+1;const badge=u.badge?`<span class="l-badge" title="${esc(u.badge.replace(/_/g,' '))}">${esc(badgeLabels[u.badge]||'◆')}</span>`:'';const you=u.isMe?'<span class="you-pill">You</span>':'';const other=metrics.filter(m=>m[0]!==activeMetric).slice(0,3);return `<article class="rank-row ${u.isMe?'me':''}"><span class="rank-number ${boardRank<=3?'top':''}">#${boardRank}</span><span class="rank-user"><span class="rank-user-avatar">${esc(initials(u.name))}</span><span class="rank-user-copy"><a href="/profile/?u=${encodeURIComponent(u.email||u.name)}">${esc(u.name)}${badge}${you}</a><small>${esc(u.email||'community player')}</small></span></span>${metricHtml(u,activeMetric,metrics.find(m=>m[0]===activeMetric)[1],true)}${other.map(m=>metricHtml(u,m[0],m[1],false)).join('')}</article>`}).join('');document.getElementById('rank-list').innerHTML=html||'<div class="rank-empty">No players match that search.</div>'}
     function renderAll(){const sorted=[...users].sort((a,b)=>score(b,activeMetric)-score(a,activeMetric)||String(a.name).localeCompare(String(b.name)));renderPodium(sorted);renderRows(sorted);renderMine()}

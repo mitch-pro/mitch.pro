@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-<meta name="theme-color" content="#08051a">
+<meta name="theme-color" content="#17191b">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -59,7 +59,7 @@ async function loadSites() {
       return;
     }
     if (!data.success) {
-      document.getElementById('links').innerHTML = '<a class="home-schedule-button" href="/game-portal/">Play games <b aria-hidden="true">↗</b></a>';
+      document.getElementById('links').innerHTML = '<a class="home-schedule-button" href="/game-portal/">Play games </a>';
       return;
     }
     parseSites(data.content || '');
@@ -77,6 +77,14 @@ function showBannedPopup(reason) {
 
 function launchSite(type, href) {
   href = href || '/';
+  try {
+    var siteUrl = new URL(href, location.href);
+    var isGameRuntime = (siteUrl.pathname.startsWith('/games/') && !['/games/', '/games/index.html'].includes(siteUrl.pathname)) || siteUrl.pathname.startsWith('/proxy/');
+    if (siteUrl.origin === location.origin && !isGameRuntime) {
+      window.location.href = siteUrl.href;
+      return;
+    }
+  } catch (_) {}
   if (/^https:\/\/(?:rjuhsd\.school|woodcreek\.site)(?:[/?#]|$)/i.test(href)) {
     window.location.href = href;
     return;
@@ -114,6 +122,7 @@ function openInNewTab(href) {
 }
 
 function openHomeHref(event, href) {
+  if (event && (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button > 0)) return;
   if (event) event.preventDefault();
   try {
     launchSite('url', href);
@@ -3392,7 +3401,7 @@ if (document.readyState === 'loading') {
 <nav class="home-masthead" aria-label="Primary">
   <a class="home-wordmark" href="/" aria-label="mitch.pro home"><img class="site-logo" src="/icon-192.png" alt="" width="35" height="35">mitch<span>.pro</span></a>
   <div class="home-masthead-links"><a href="/" aria-current="page">Home</a><a href="/vms/" class="nav-vm-link">VM Lab <span class="nav-pill-free">FREE</span></a><a href="/matrix/">Chat</a><a href="/game-portal/">Games</a><a href="/members/">People</a><a href="https://rjuhsd.school/">Schedule</a></div>
-  <a class="home-account-link" href="/profile/">My account <span aria-hidden="true">↗</span></a>
+  <a class="home-account-link" href="/profile/">My account </a>
 </nav>
 
 <nav class="staff-access-rail" id="staff-access-rail" aria-label="Staff tools">
@@ -3474,7 +3483,7 @@ if (document.readyState === 'loading') {
     <div class="hud-logo-area">
       <img class="hud-logo-mark" src="/icon-192.png" alt="">
       <div>
-        <span class="home-hero-kicker"><span aria-hidden="true"></span> YOUR SPACE / MITCH.PRO</span>
+
         <h1 class="hud-brand" id="home-brand">mitch.pro</h1>
         <p class="home-greeting"><span id="greeting-text"></span> <span id="greeting-email"></span></p>
         <p class="home-hero-detail">Games, chat, friends, and your cloud computer in one place.</p>
@@ -3502,37 +3511,37 @@ if (document.readyState === 'loading') {
 
   </header>
 
-  <div class="home-section-heading"><span>01 / PICK UP HERE</span><p>Everything you use most</p></div>
+  <div class="home-section-heading"><h2>Shortcuts</h2></div>
   <section class="home-features" aria-label="Start here">
     <a class="home-feature feature-vms" href="/vms/" onclick="openHomeHref(event, '/vms/');">
-      <span class="feature-eyebrow">01 / VM LAB · FREE CLOUD LINUX</span>
+
       <h2>Cloud Linux</h2>
-      <span class="feature-bottom">Full in-browser GUI desktop with root access &amp; persistent storage <b aria-hidden="true">↗</b></span>
+      <span class="feature-bottom">Full in-browser GUI desktop with root access &amp; persistent storage </span>
       <div class="feature-vm-art" aria-hidden="true">
         <svg viewBox="0 0 160 130"><rect x="15" y="15" width="130" height="85" rx="8"/><path d="M50 115h60M80 100v15"/><path d="m35 45 15 15-15 15M62 75h25"/></svg>
       </div>
     </a>
     <a class="home-feature feature-chat" href="/matrix/" onclick="openHomeHref(event, '/matrix/');">
-      <span class="feature-eyebrow">02 / CHAT</span>
+
       <h2>Matrix chat</h2>
-      <span class="feature-bottom">Decentralized E2E channels &amp; direct messages <b aria-hidden="true">↗</b></span>
+      <span class="feature-bottom">Decentralized E2E channels &amp; direct messages </span>
       <svg class="feature-chat-art" viewBox="0 0 200 160" fill="none" aria-hidden="true"><path d="M28 25h109a12 12 0 0 1 12 12v61a12 12 0 0 1-12 12H75l-28 22v-22H28a12 12 0 0 1-12-12V37a12 12 0 0 1 12-12Z"/><path d="M43 51h77M43 70h51"/><rect x="110" y="87" width="60" height="50" rx="9"/><path d="M129 88V77a13 13 0 0 1 26 0v11M142 107v12"/></svg>
     </a>
     <a class="home-feature feature-games" href="/game-portal/" onclick="openHomeHref(event, '/game-portal/');">
-      <span class="feature-eyebrow">03 / GAMES</span>
+
       <h2>Play games</h2>
-      <span class="feature-bottom">Browse all games <b aria-hidden="true">↗</b></span>
+      <span class="feature-bottom">Browse all games </span>
       <div class="feature-game-art" aria-hidden="true"><span>♞</span></div>
     </a>
   </section>
 
-      <div class="home-section-heading home-tools-heading"><span>02 / AROUND MITCH.PRO</span><p>People, account, market, and casino</p></div>
+      <div class="home-section-heading home-tools-heading"><h2>Explore</h2></div>
       <nav class="home-actions" aria-label="Quick actions">
         <a class="hub-action hub-action-vms" href="/vms/" onclick="openHomeHref(event, '/vms/');"><span class="action-logo"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="m7 8 3 3-3 3M13 14h4"/></svg></span><span class="action-copy"><b>VM Lab</b><small>Cloud Linux PC · Free</small></span></a>
         <a class="hub-action hub-action-primary" href="/matrix/" onclick="openHomeHref(event, '/matrix/');"><span class="action-logo"><svg viewBox="0 0 24 24"><path d="M5 5h14v10H9l-4 4V5Z"/><path d="M9 9h6M9 12h4"/></svg></span><span class="action-copy"><b>Matrix Chat</b><small>Open secure messages</small></span></a>
         <button type="button" class="hub-action" id="hub-friends-btn" onclick="openMembersRail(event)"><span class="action-logo"><svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="3"/><circle cx="16.5" cy="10" r="2.3"/><path d="M3.5 19c.5-3.3 2.2-5 5.5-5s5 1.7 5.5 5M14 15c3.5-.5 5.5.8 6 3.5"/></svg></span><span class="action-copy"><b>People</b><small>See who's here</small></span></button>
         <a class="hub-action" href="/preferences/" onclick="openHomeHref(event, '/preferences/');"><span class="action-logo"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M5 20c.6-4.2 2.9-6.3 7-6.3s6.4 2.1 7 6.3"/></svg></span><span class="action-copy"><b>Account</b><small>Profile and preferences</small></span></a>
-        <a class="hub-action" href="/shop/" onclick="openHomeHref(event, '/shop/');"><span class="action-logo"><svg viewBox="0 0 24 24"><path d="m12 3 6 6-6 12L6 9z"/><path d="M6 9h12M9 9l3-6 3 6-3 12z"/></svg></span><span class="action-copy"><b>Market</b><small>Browse drops</small></span></a>
+        <a class="hub-action" href="/shop/" onclick="openHomeHref(event, '/shop/');"><span class="action-logo"><svg viewBox="0 0 24 24"><path d="m12 3 6 6-6 12L6 9z"/><path d="M6 9h12M9 9l3-6 3 6-3 12z"/></svg></span><span class="action-copy"><b>Market</b><small>Cosmetics and upgrades</small></span></a>
         <a class="hub-action hub-action-casino" href="/casino/" onclick="openHomeHref(event, '/casino/');"><span class="action-logo"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1"/><circle cx="16" cy="8" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="8" cy="16" r="1"/><circle cx="16" cy="16" r="1"/></svg></span><span class="action-copy"><b>Casino</b><small>MitchCoins only</small></span></a>
         <a class="hub-action" href="/game-portal/" onclick="openHomeHref(event, '/game-portal/');"><span class="action-logo"><svg viewBox="0 0 24 24"><path d="M8 8h8c3 0 5 2.5 5 6s-2 6-4.5 6c-2 0-2.5-2.5-4.5-2.5S9.5 20 7.5 20C5 20 3 17.5 3 14s2-6 5-6Z"/><path d="M7 12v4m-2-2h4m7-1h.01m2 3h.01"/></svg></span><span class="action-copy"><b>Games</b><small>Choose your arcade</small></span></a>
         <button type="button" class="hub-action hub-daily mitch-coin-amount" id="hub-daily-chip" hidden>Daily claim</button>
@@ -3541,43 +3550,6 @@ if (document.readyState === 'loading') {
   <!-- Workspace -->
   <div class="hud-workspace">
     <main class="hud-pane-main">
-
-
-      <!-- Cloud VM promo -->
-      <section class="site-advert-banner vm-lab-spotlight">
-        <div class="vm-spotlight-content">
-          <div class="vm-spotlight-badges">
-            <span class="vm-badge-chip live"><i></i> In-Browser Linux</span>
-            <span class="vm-badge-chip free">Free computer · No payment required</span>
-          </div>
-          <h3>VM Lab: Your Personal Cloud Computer</h3>
-          <p class="vm-spotlight-lead">
-            Turn your school Chromebook, phone, or laptop into a full Linux workstation with zero downloads. Streamed GUI desktop with root access, persistent storage, and pre-installed developer tools.
-          </p>
-          <div class="vm-spotlight-perks">
-            <div class="vm-perk-item">
-              <span class="vm-perk-icon">🖥️</span>
-              <div><b>Web Desktop</b><small>Low-latency streamed GUI in browser</small></div>
-            </div>
-            <div class="vm-perk-item">
-              <span class="vm-perk-icon">⚡</span>
-              <div><b>Root &amp; Sudo</b><small>Install packages via apt, Python, Node</small></div>
-            </div>
-            <div class="vm-perk-item">
-              <span class="vm-perk-icon">💾</span>
-              <div><b>Persistent Storage</b><small>Keep your projects between sessions; back up before a reset</small></div>
-            </div>
-            <div class="vm-perk-item">
-              <span class="vm-perk-icon">🪙</span>
-              <div><b>MitchCoin Upgrades</b><small>Boost to 6 CPU cores &amp; 16GB RAM</small></div>
-            </div>
-          </div>
-        </div>
-        <div class="vm-spotlight-actions">
-          <a href="/vms/" class="btn-primary vm-launch-cta"><span>Launch VM Lab</span> <b aria-hidden="true">→</b></a>
-          <a href="/vms/#upgrades" class="vm-sub-link">Explore Hardware Upgrades ↗</a>
-        </div>
-      </section>
 
       <!-- Cloud VM active workspace dashboard -->
       <section id="vm-workspace-panel" style="display:none;">
@@ -3617,7 +3589,7 @@ if (document.readyState === 'loading') {
       <!-- Catalog -->
       <section class="home-links-panel">
         <div class="panel-heading">
-          <span class="section-index">CATALOG</span>
+
           <h3>Explore everything</h3>
           <p>Every destination on mitch.pro, grouped and searchable.</p>
         </div>
@@ -3698,7 +3670,7 @@ if (document.readyState === 'loading') {
       <!-- Popular launches -->
       <section id="popular-hub" class="hud-widget-card popular-hub" aria-label="Popular and frequent">
         <div class="popular-hub-head">
-          <span class="widget-title"><span class="widget-logo">↗</span><span>Popular Launches</span></span>
+          <span class="widget-title"><span>Popular Launches</span></span>
         </div>
         <div id="popular-strip" class="popular-strip">
           <p class="popular-empty">Loading…</p>

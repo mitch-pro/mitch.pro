@@ -1,171 +1,16 @@
-/* ==========================================================================
-   mitch.pro — home page (EXPERIMENTAL minimal redesign)
-
-   Scrapped theme.js on purpose: no dynamic accent/wallpaper/dark-light
-   toggle, no --t-* tokens. This page now carries its own small, fixed
-   palette and renders the same regardless of what the rest of the site's
-   theme system is doing — closer to claude.ai or duckduckgo.com than to
-   a customizable dashboard. One accent (the brand pink, sampled from
-   icon-192.png), near-white paper background, a single type family, wide
-   margins, thin borders instead of shadows or gradients.
-
-   This is explicitly a throwaway experiment per the user's own framing —
-   if it doesn't land, `git checkout -- webserver/home.css webserver/index.html`
-   (or reset the whole working tree) restores the shipped flat-dark design
-   with zero trace of this attempt. Nothing here has been committed.
-   ========================================================================== */
-
+/* Homepage layout; colors follow the shared site theme. */
 :root {
-  --mh-bg: #ffffff;
-  --mh-bg-soft: #faf9fb;
-  --mh-ink: #1c1c22;
-  --mh-ink-soft: #6e6e78;
-  --mh-ink-faint: #a3a2ab;
-  --mh-border: #e8e7ec;
-  --mh-border-strong: #d7d6dd;
-  --mh-accent: #f75383;
-  --mh-accent-hover: #e03d6c;
-  --mh-accent-soft: #fdeef3;
-  --mh-accent-ink: #ffffff;
-  --mh-radius: 12px;
-  --mh-radius-sm: 8px;
-  --mh-maxw: 1040px;
-  --mh-maxw-narrow: 720px;
-  --mh-font: "DM Sans", system-ui, -apple-system, sans-serif;
-  --mh-mono: ui-monospace, "Cascadia Code", Menlo, monospace;
-  --mh-gap: clamp(2.5rem, 5vw, 4rem);
-  --mh-motion: 0.14s;
+  --mh-bg: var(--t-bg); --mh-bg-soft: var(--t-bg2);
+  --mh-ink: var(--t-fg); --mh-ink-soft: var(--t-fg2); --mh-ink-faint: var(--t-fg3);
+  --mh-border: var(--t-bd); --mh-border-strong: var(--t-bda);
+  --mh-accent: var(--t-ac); --mh-accent-hover: var(--t-ac2);
+  --mh-accent-soft: var(--t-gls); --mh-accent-ink: var(--t-ac-ink);
+  --mh-radius: var(--t-radius); --mh-radius-sm: var(--t-radius-sm);
+  --mh-maxw: 1200px; --mh-maxw-narrow: 760px;
+  --mh-font: var(--t-font);
+  --mh-mono: ui-monospace, monospace;
+  --mh-gap: 30px; --mh-motion: .15s;
 }
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --mh-bg: #17171a;
-    --mh-bg-soft: #1e1e22;
-    --mh-ink: #f0f0f3;
-    --mh-ink-soft: #9b9aa4;
-    --mh-ink-faint: #6b6a73;
-    --mh-border: #2b2b30;
-    --mh-border-strong: #38383f;
-    --mh-accent: #ff6f99;
-    --mh-accent-hover: #ff8bad;
-    --mh-accent-soft: #332127;
-    --mh-accent-ink: #1c1c22;
-  }
-}
-
-/* Manual light/dark override (site-theme.js, driven from the preferences
-   page's Theme Preset) — this page keeps its own --mh-* palette instead of
-   reading app.css's --t-* tokens, so the override has to be mirrored here
-   too or the homepage would just ignore the preset. */
-:root[data-theme="light"] {
-  --mh-bg: #ffffff;
-  --mh-bg-soft: #faf9fb;
-  --mh-ink: #1c1c22;
-  --mh-ink-soft: #6e6e78;
-  --mh-ink-faint: #a3a2ab;
-  --mh-border: #e8e7ec;
-  --mh-border-strong: #d7d6dd;
-  --mh-accent: #f75383;
-  --mh-accent-hover: #e03d6c;
-  --mh-accent-soft: #fdeef3;
-  --mh-accent-ink: #ffffff;
-}
-:root[data-theme="dark"] {
-  --mh-bg: #17171a;
-  --mh-bg-soft: #1e1e22;
-  --mh-ink: #f0f0f3;
-  --mh-ink-soft: #9b9aa4;
-  --mh-ink-faint: #6b6a73;
-  --mh-border: #2b2b30;
-  --mh-border-strong: #38383f;
-  --mh-accent: #ff6f99;
-  --mh-accent-hover: #ff8bad;
-  --mh-accent-soft: #332127;
-  --mh-accent-ink: #1c1c22;
-}
-
-/* High contrast mode — mirrors app.css's :root[data-contrast="high"]. */
-:root[data-contrast="high"] {
-  --mh-ink: #000000;
-  --mh-ink-soft: #1a1a1a;
-  --mh-ink-faint: #000000;
-  --mh-border: #3d3d42;
-  --mh-border-strong: #19191c;
-  --mh-accent: #c81855;
-  --mh-accent-hover: #a10f43;
-}
-@media (prefers-color-scheme: dark) {
-  :root[data-contrast="high"] {
-    --mh-ink: #ffffff;
-    --mh-ink-soft: #f0f0f0;
-    --mh-ink-faint: #ffffff;
-    --mh-border: #9a9aa0;
-    --mh-border-strong: #c7c7cc;
-    --mh-accent: #ffb3c9;
-    --mh-accent-hover: #ffd1df;
-  }
-}
-:root[data-theme="light"][data-contrast="high"] {
-  --mh-ink: #000000;
-  --mh-ink-soft: #1a1a1a;
-  --mh-ink-faint: #000000;
-  --mh-border: #3d3d42;
-  --mh-border-strong: #19191c;
-  --mh-accent: #c81855;
-  --mh-accent-hover: #a10f43;
-}
-:root[data-theme="dark"][data-contrast="high"] {
-  --mh-ink: #ffffff;
-  --mh-ink-soft: #f0f0f0;
-  --mh-ink-faint: #ffffff;
-  --mh-border: #9a9aa0;
-  --mh-border-strong: #c7c7cc;
-  --mh-accent: #ffb3c9;
-  --mh-accent-hover: #ffd1df;
-}
-
-/* app.css AND portal-redesign.css both declare sitewide --t-* tokens (their
-   own dark-purple-galaxy defaults, normally overwritten at runtime by
-   theme.js) — and portal-redesign.css additionally forces every `.mitch-design`
-   page's tokens to `inherit !important` from <html>, specifically so a page
-   can't set its own local overrides and drift from the global theme. That's
-   exactly what this page needs to stop doing, so beating it takes matching
-   its specificity: `html body.home.mitch-design` (2 type + 2 class) outranks
-   its `html body.mitch-design` (2 type + 1 class), and !important is required
-   since that's what it uses. Once these win, every shared component that
-   reads "the accent color" or "the background" — the notification bell, the
-   MitchCoins avatar ring, the masthead-unifier app-shell.js applies to every
-   page — gets this page's palette instead of app.css's fallback purple. */
-html body.home.mitch-design {
-  --t-bg: var(--mh-bg) !important;
-  --t-bg2: var(--mh-bg-soft) !important;
-  --t-bg3: var(--mh-border) !important;
-  --t-fg: var(--mh-ink) !important;
-  --t-fg2: var(--mh-ink-soft) !important;
-  --t-ac: var(--mh-accent) !important;
-  --t-ac2: var(--mh-accent-hover) !important;
-  --t-ac3: var(--mh-accent-hover) !important;
-  --t-bd: var(--mh-border) !important;
-  --t-bda: var(--mh-border-strong) !important;
-  --t-gl: transparent !important;
-  --t-gls: transparent !important;
-  --t-gr: var(--mh-accent) !important;
-  --t-bgr: none !important;
-  --t-radius: var(--mh-radius) !important;
-  --t-motion: var(--mh-motion) !important;
-  --t-display: var(--mh-font) !important;
-  --t-font: var(--mh-font) !important;
-  --ink-shadow: none !important;
-  background-color: var(--mh-bg) !important;
-  color: var(--mh-ink) !important;
-  /* mitch-ui.css's "mitch-next" layer (app-shell.js's unified masthead,
-     glass-card surfaces) reads these too. */
-  --next-panel: var(--mh-bg);
-  --next-edge: var(--mh-border);
-  --next-shadow: none;
-}
-html:has(body.home) { background: var(--mh-bg) !important; }
-
 /* --------------------------------------------------------------------------
    Foundations
    -------------------------------------------------------------------------- */
@@ -354,7 +199,7 @@ body.home:is(.is-staff, .is-admin) .staff-access-rail { display: flex; }
 
 .home-hero-kicker, .home-card-head small, .widget-title, .panel-heading p,
 .category-title, .side-title, .progress-labels, .section-index, #home-games-day {
-  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mh-ink-faint);
+  font-size: 12px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--mh-ink-faint);
 }
 
 /* --------------------------------------------------------------------------
@@ -366,14 +211,14 @@ body.home:is(.is-staff, .is-admin) .staff-access-rail { display: flex; }
 .hud-topbar {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 1.1rem;
-  max-width: var(--mh-maxw-narrow);
-  margin: 0 auto;
-  padding: clamp(3.5rem, 8vw, 5.5rem) 0 2.5rem;
+  align-items: flex-start;
+  text-align: left;
+  gap: 18px;
+  max-width: none;
+  margin: 0;
+  padding: 38px 0 26px;
 }
-.hud-logo-area { order: 1; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+.hud-logo-area { order: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; }
 .hud-logo-mark { display: none; }
 .home-hero-kicker { display: inline-flex; align-items: center; gap: 7px; color: var(--mh-ink-faint); }
 .home-hero-kicker > span:first-child { width: 5px; height: 5px; border-radius: 50%; background: var(--mh-accent); }
@@ -385,20 +230,20 @@ body.home:is(.is-staff, .is-admin) .staff-access-rail { display: flex; }
 .hud-search-area { order: 2; width: 100%; margin-top: 0.4rem; }
 .home-search-box {
   display: flex; align-items: center; gap: 0.7rem;
-  background: var(--mh-bg); border: 1px solid var(--mh-border-strong); border-radius: 999px;
-  padding: 0.2rem 1.2rem; box-shadow: 0 1px 2px rgba(20, 16, 24, 0.04);
+  background: var(--mh-bg-soft); border: 1px solid var(--mh-border-strong); border-radius: 8px;
+  padding: 0.2rem .85rem; box-shadow: 0 1px 2px rgba(20, 16, 24, 0.04);
   transition: border-color var(--mh-motion), box-shadow var(--mh-motion);
 }
 .home-search-box:focus-within { border-color: var(--mh-accent); box-shadow: 0 0 0 3px var(--mh-accent-soft); }
 .home-search-box svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--mh-ink-faint); }
-.home-search-box input { flex: 1; min-width: 0; background: none; border: none; padding: 0.85rem 0; font-size: 0.98rem; }
+.home-search-box input { flex: 1; min-width: 0; background: none; border: none; box-shadow: none; padding: 0.65rem 0; font-size: 0.98rem; }
 .home-search-box input:focus { box-shadow: none; }
 #home-search-clear { border: none; background: none; color: var(--mh-ink-faint); font-size: 0.75rem; font-weight: 600; padding: 0.2rem 0.4rem; }
 #home-search-clear:hover { color: var(--mh-ink); background: none; }
 
 .hud-system-status {
   order: 3;
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.4rem 1rem;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 0.4rem 1rem;
   margin-top: 0.3rem; color: var(--mh-ink-faint); font-size: 0.78rem;
 }
 .hud-system-status > div { display: flex; align-items: baseline; gap: 0.5rem; }
@@ -413,6 +258,7 @@ body.home:is(.is-staff, .is-admin) .staff-access-rail { display: flex; }
    -------------------------------------------------------------------------- */
 
 .home-section-heading { display: flex; align-items: baseline; gap: 0.9rem; margin: var(--mh-gap) 0 1.1rem; }
+.home-section-heading h2 { margin: 0; font-size: 21px; font-weight: 600; letter-spacing: -.02em; }
 .home-section-heading span { font-family: var(--mh-mono); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em; color: var(--mh-accent); white-space: nowrap; }
 .home-section-heading p { margin: 0; font-size: 0.82rem; color: var(--mh-ink-soft); }
 
@@ -424,7 +270,7 @@ body.home:is(.is-staff, .is-admin) .staff-access-rail { display: flex; }
 .home-feature {
   display: flex; flex-direction: column; justify-content: space-between; gap: 1.4rem;
   min-height: 150px; padding: 1.5rem;
-  background: var(--mh-bg); border: 1px solid var(--mh-border); border-radius: var(--mh-radius);
+  background: var(--mh-bg-soft); border: 1px solid var(--mh-border); border-radius: var(--mh-radius);
   color: var(--mh-ink); text-decoration: none;
   transition: border-color var(--mh-motion), transform var(--mh-motion);
 }
@@ -585,7 +431,7 @@ body.home:is(.is-staff, .is-admin) .staff-access-rail { display: flex; }
 .progress-labels { display: flex; justify-content: space-between; margin-top: 0.3rem; font-variant-numeric: tabular-nums; }
 body.home .daily-login-claim-btn {
   width: 100%; min-height: 2.2rem; margin-top: 0.75rem; border: none; border-radius: 999px;
-  background: var(--mh-accent); color: #fff; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+  background: var(--mh-accent); color: var(--mh-accent-ink); font-size: 0.82rem; font-weight: 600; cursor: pointer;
 }
 body.home .daily-login-claim-btn:hover:not(:disabled) { background: var(--mh-accent-hover); }
 

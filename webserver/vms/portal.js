@@ -71,7 +71,7 @@
     const previewTag = open ? 'a' : 'div';
     const previewLink = open ? ` href="/vms/desktop/?id=${encodeURIComponent(vm.id)}" aria-label="Open ${esc(vm.name || 'My Computer')}"` : '';
     const primaryAction = running
-      ? open ? `<a class="primary-button main-action" href="/vms/desktop/?id=${encodeURIComponent(vm.id)}">Open Desktop <span aria-hidden="true">↗</span></a>`
+      ? open ? `<a class="primary-button main-action" href="/vms/desktop/?id=${encodeURIComponent(vm.id)}">Open Desktop </a>`
         : `<button class="primary-button main-action" disabled>${esc(busy ? status : 'Desktop unavailable')}</button>`
       : `<button class="primary-button main-action" data-action="start" ${startDisabled ? 'disabled' : ''}>${esc(startLabel)}</button>`;
     return `<article class="computer-card" data-id="${esc(vm.id)}">
@@ -99,7 +99,7 @@
           </dl>
         </section>
         <section class="detail-section resources-section" aria-labelledby="resources-${esc(vm.id)}">
-          <div class="section-heading"><h3 id="resources-${esc(vm.id)}">Resources</h3><button type="button" class="text-button" data-action="open-upgrade" title="Upgrade CPU, RAM, Disk, or Session Time with MitchCoins">Edit specs <span aria-hidden="true">↗</span></button></div>
+          <div class="section-heading"><h3 id="resources-${esc(vm.id)}">Resources</h3><button type="button" class="text-button" data-action="open-upgrade" title="Upgrade CPU, RAM, Disk, or Session Time with MitchCoins">Edit specs </button></div>
           <div class="resource-grid">
             ${resourceMeter('CPU', (vm.cpuCores || vm.upgrades?.cpuCores || '—') + ' cores', cpuLoad, running)}
             ${resourceMeter('Memory', running && memoryTotal ? bytes(vm.memoryUsed) + ' / ' + bytes(memoryTotal) : bytes(memoryTotal), memoryLoad, running && memoryTotal > 0)}

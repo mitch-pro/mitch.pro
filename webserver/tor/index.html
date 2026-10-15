@@ -13,8 +13,8 @@
     }
 
     body {
-      background: #070510;
-      color: #faf7ff;
+      background: var(--t-bg);
+      color: var(--t-fg);
       font-family: var(--t-font, system-ui, -apple-system, sans-serif);
       height: 100vh;
       display: flex;
@@ -24,9 +24,9 @@
 
     /* Top Chrome / Header */
     .tor-chrome {
-      background: rgba(18, 12, 38, 0.92);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      background: var(--t-bg2);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
       border-bottom: 1px solid rgba(224, 198, 255, 0.14);
       display: flex;
       flex-direction: column;
@@ -50,7 +50,7 @@
       gap: 10px;
       font-weight: 700;
       font-family: var(--t-display, inherit);
-      color: #e47cff;
+      color: var(--t-fg);
       text-decoration: none;
       font-size: 15px;
     }
@@ -61,6 +61,9 @@
     }
 
     .tor-meta {
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      min-width: 0;
       display: flex;
       align-items: center;
       gap: 12px;
@@ -70,21 +73,21 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      background: rgba(184, 108, 255, 0.12);
+      background: var(--t-bg2);
       border: 1px solid rgba(184, 108, 255, 0.28);
       padding: 3px 10px;
       border-radius: 20px;
       font-size: 11px;
-      color: #dfc8ff;
+      color: var(--t-fg);
       font-weight: 500;
     }
 
     .pulse-dot {
       width: 7px;
       height: 7px;
-      background: #39e58c;
+      background: var(--t-bg2);
       border-radius: 50%;
-      box-shadow: 0 0 6px #39e58c;
+      box-shadow: none;
       animation: pulse 2s infinite ease-in-out;
     }
 
@@ -97,9 +100,9 @@
       display: flex;
       align-items: center;
       gap: 5px;
-      background: rgba(255, 255, 255, 0.06);
+      background: var(--t-bg2);
       border: 1px solid rgba(255, 255, 255, 0.15);
-      color: #b4a9c9;
+      color: var(--t-fg);
       padding: 4px 10px;
       border-radius: 6px;
       font-size: 11px;
@@ -109,9 +112,9 @@
     }
 
     .btn-new-circuit:hover {
-      background: rgba(184, 108, 255, 0.2);
+      background: var(--t-bg2);
       border-color: rgba(184, 108, 255, 0.5);
-      color: #fff;
+      color: var(--t-fg);
     }
 
     /* Navigation toolbar */
@@ -128,9 +131,9 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: rgba(255, 255, 255, 0.06);
+      background: var(--t-bg2);
       border: 1px solid rgba(255, 255, 255, 0.12);
-      color: #e0d8f0;
+      color: var(--t-fg);
       border-radius: 8px;
       cursor: pointer;
       font-size: 14px;
@@ -139,9 +142,9 @@
     }
 
     .nav-btn:hover {
-      background: rgba(184, 108, 255, 0.22);
+      background: var(--t-bg2);
       border-color: rgba(184, 108, 255, 0.45);
-      color: #fff;
+      color: var(--t-fg);
     }
 
     /* URL Bar */
@@ -149,7 +152,7 @@
       flex: 1;
       display: flex;
       align-items: center;
-      background: rgba(10, 6, 22, 0.75);
+      background: var(--t-bg2);
       border: 1px solid rgba(224, 198, 255, 0.22);
       border-radius: 10px;
       padding: 3px 6px 3px 12px;
@@ -158,12 +161,12 @@
 
     .tor-url-form:focus-within {
       border-color: #b86cff;
-      box-shadow: 0 0 14px rgba(184, 108, 255, 0.3);
-      background: rgba(15, 9, 32, 0.95);
+      box-shadow: none;
+      background: var(--t-bg2);
     }
 
     .tor-shield-icon {
-      color: #39e58c;
+      color: var(--t-fg);
       font-size: 13px;
       margin-right: 8px;
     }
@@ -173,19 +176,19 @@
       background: transparent;
       border: none;
       outline: none;
-      color: #faf7ff;
+      color: var(--t-fg);
       font-size: 13.5px;
       font-family: inherit;
     }
 
     .tor-url-input::placeholder {
-      color: rgba(180, 169, 201, 0.5);
+      color: var(--t-fg);
     }
 
     .tor-go-btn {
-      background: linear-gradient(135deg, #7957f1, #ca57f5);
+      background: var(--t-bg2);
       border: none;
-      color: #fff;
+      color: var(--t-fg);
       padding: 6px 14px;
       border-radius: 7px;
       font-size: 12px;
@@ -196,7 +199,7 @@
 
     .tor-go-btn:hover {
       filter: brightness(1.15);
-      box-shadow: 0 0 10px rgba(202, 87, 245, 0.45);
+      box-shadow: none;
     }
 
     /* Quick Shortcuts Bar */
@@ -210,45 +213,47 @@
     }
 
     .quick-tag {
+      max-width: 100%;
+      white-space: normal;
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      background: rgba(30, 20, 56, 0.6);
+      background: var(--t-bg2);
       border: 1px solid rgba(224, 198, 255, 0.12);
-      color: #dfc8ff;
+      color: var(--t-fg);
       padding: 4px 11px;
       border-radius: 14px;
       font-size: 11.5px;
       font-weight: 600;
       text-decoration: none;
       cursor: pointer;
-      white-space: nowrap;
+      white-space: normal;
       transition: all 0.18s ease;
     }
 
     .quick-tag:hover {
-      background: rgba(184, 108, 255, 0.25);
+      background: var(--t-bg2);
       border-color: rgba(184, 108, 255, 0.45);
-      color: #fff;
+      color: var(--t-fg);
       transform: translateY(-1px);
     }
 
     .quick-tag.dread {
-      background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(185, 28, 28, 0.35));
+      background: var(--t-bg2);
       border-color: rgba(239, 68, 68, 0.45);
-      color: #ff9999;
+      color: var(--t-fg);
     }
 
     .quick-tag.dread:hover {
-      background: linear-gradient(135deg, rgba(239, 68, 68, 0.45), rgba(185, 28, 28, 0.55));
-      color: #fff;
+      background: var(--t-bg2);
+      color: var(--t-fg);
     }
 
     /* Main Viewport */
     .tor-viewport {
       flex: 1;
       position: relative;
-      background: #090614;
+      background: var(--t-bg2);
       display: flex;
       flex-direction: column;
     }
@@ -258,7 +263,7 @@
       width: 100%;
       height: 100%;
       border: none;
-      background: #ffffff;
+      background: var(--t-bg2);
       display: none;
     }
 
@@ -296,14 +301,14 @@
       font-size: 32px;
       font-weight: 800;
       font-family: var(--t-display, sans-serif);
-      background: linear-gradient(135deg, #faf7ff 20%, #ca57f5 80%);
+      background: var(--t-bg2);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       margin-bottom: 8px;
     }
 
     .dash-subtitle {
-      color: #b4a9c9;
+      color: var(--t-fg);
       font-size: 14.5px;
       line-height: 1.5;
     }
@@ -317,16 +322,16 @@
     }
 
     .feature-pill {
-      background: rgba(255, 255, 255, 0.05);
+      background: var(--t-bg2);
       border: 1px solid rgba(255, 255, 255, 0.1);
       padding: 4px 12px;
       border-radius: 12px;
       font-size: 11.5px;
-      color: #d1c7e6;
+      color: var(--t-fg);
     }
 
     .feature-pill b {
-      color: #39e58c;
+      color: var(--t-fg);
     }
 
     /* Cards Grid */
@@ -339,7 +344,7 @@
     }
 
     .dash-card {
-      background: rgba(22, 14, 46, 0.7);
+      background: var(--t-bg2);
       border: 1px solid rgba(224, 198, 255, 0.14);
       border-radius: 16px;
       padding: 20px;
@@ -354,10 +359,10 @@
     }
 
     .dash-card:hover {
-      background: rgba(35, 20, 72, 0.85);
+      background: var(--t-bg2);
       border-color: rgba(184, 108, 255, 0.5);
       transform: translateY(-3px);
-      box-shadow: 0 10px 24px rgba(184, 108, 255, 0.18);
+      box-shadow: none;
     }
 
     .card-top {
@@ -373,28 +378,28 @@
     .card-title {
       font-weight: 700;
       font-size: 16px;
-      color: #faf7ff;
+      color: var(--t-fg);
     }
 
     .dash-card.card-dread {
       border-color: rgba(239, 68, 68, 0.35);
-      background: rgba(38, 14, 22, 0.7);
+      background: var(--t-bg2);
     }
 
     .dash-card.card-dread:hover {
       border-color: rgba(239, 68, 68, 0.7);
-      box-shadow: 0 10px 24px rgba(239, 68, 68, 0.2);
+      box-shadow: none;
     }
 
     .card-desc {
       font-size: 12.5px;
-      color: #b4a9c9;
+      color: var(--t-fg);
       line-height: 1.4;
     }
 
     .card-onion-url {
       font-size: 11px;
-      color: #ca57f5;
+      color: var(--t-fg);
       font-family: monospace;
       margin-top: 4px;
       overflow: hidden;
@@ -406,8 +411,8 @@
     .tor-loader {
       position: absolute;
       inset: 0;
-      background: rgba(7, 5, 16, 0.88);
-      backdrop-filter: blur(8px);
+      background: var(--t-bg2);
+      backdrop-filter: none;
       display: none;
       flex-direction: column;
       align-items: center;
@@ -431,13 +436,13 @@
 
     .tor-load-text {
       font-size: 14px;
-      color: #e0d8f0;
+      color: var(--t-fg);
       font-weight: 600;
     }
 
     .tor-load-sub {
       font-size: 12px;
-      color: #b4a9c9;
+      color: var(--t-fg);
       max-width: 400px;
       text-align: center;
     }

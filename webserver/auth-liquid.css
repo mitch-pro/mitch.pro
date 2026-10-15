@@ -14,7 +14,7 @@
   --auth-radius: 30px;
 }
 
-html { background: #07091c; }
+html { background: var(--t-bg2); }
 
 body.enroll-page,
 body.auth-claim-page {
@@ -22,10 +22,7 @@ body.auth-claim-page {
   margin: 0;
   color: var(--auth-ink);
   background:
-    radial-gradient(circle at 14% 18%, rgba(66, 102, 255, 0.3), transparent 34rem),
-    radial-gradient(circle at 88% 12%, rgba(255, 82, 172, 0.2), transparent 30rem),
-    radial-gradient(circle at 68% 88%, rgba(54, 220, 255, 0.17), transparent 32rem),
-    linear-gradient(145deg, #07091c 0%, #10143d 48%, #08091b 100%) !important;
+    var(--t-bg) !important;
   background-attachment: fixed !important;
   font-family: "Manrope", ui-sans-serif, system-ui, sans-serif !important;
   overflow-x: clip;
@@ -35,20 +32,19 @@ body.auth-claim-page {
 
 body.enroll-page::before,
 body.auth-claim-page::before {
-  content: "";
+  content: none;
   position: fixed;
   inset: 0;
   z-index: -3;
   pointer-events: none;
   opacity: 0.55;
-  background-image:
-    linear-gradient(rgba(255,255,255,.026) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.026) 1px, transparent 1px);
+  background:
+    var(--t-bg);
   background-size: 54px 54px;
   mask-image: linear-gradient(to bottom, black, transparent 88%);
 }
 
-.auth-aurora { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: -2; }
+.auth-aurora { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: -2; display: none; }
 .auth-orb {
   position: absolute;
   width: clamp(18rem, 37vw, 34rem);
@@ -57,6 +53,7 @@ body.auth-claim-page::before {
   filter: blur(3px);
   opacity: .5;
   animation: auth-drift 15s ease-in-out infinite alternate;
+  display: none;
 }
 .auth-orb::after {
   content: "";
@@ -64,18 +61,21 @@ body.auth-claim-page::before {
   inset: 17%;
   border-radius: inherit;
   border: 1px solid rgba(255,255,255,.24);
-  box-shadow: inset 18px 12px 45px rgba(255,255,255,.12);
+  box-shadow: none;
+  display: none;
 }
 .auth-orb.one {
   top: -12rem;
   right: -6rem;
-  background: radial-gradient(circle at 32% 30%, #ffc4ec 0, #8b5cff 34%, rgba(57, 30, 162, .06) 72%);
+  background: var(--t-bg2);
+  display: none;
 }
 .auth-orb.two {
   left: -14rem;
   bottom: -15rem;
-  background: radial-gradient(circle at 62% 35%, #9af3ff 0, #2169ff 35%, rgba(24, 33, 150, .05) 73%);
+  background: var(--t-bg2);
   animation-delay: -6s;
+  display: none;
 }
 @keyframes auth-drift {
   from { transform: translate3d(-1.5rem, -1rem, 0) scale(.96) rotate(-4deg); }
@@ -122,11 +122,11 @@ body.auth-claim-page::before {
   width: 2.65rem;
   height: 2.65rem;
   border-radius: 14px;
-  color: #0a0d29;
+  color: var(--t-fg);
   font-size: 1.25rem;
   font-weight: 800;
-  background: linear-gradient(135deg, #baf7ff 0%, #7f8cff 48%, #ff92ce 100%);
-  box-shadow: 0 12px 38px rgba(93, 128, 255, .38), inset 0 1px rgba(255,255,255,.8);
+  background: var(--t-bg2);
+  box-shadow: none;
 }
 
 .auth-eyebrow {
@@ -136,15 +136,15 @@ body.auth-claim-page::before {
   margin-bottom: 1.15rem;
   padding: .48rem .78rem;
   border: 1px solid rgba(255,255,255,.14);
-  border-radius: 999px;
-  color: rgba(239,242,255,.78);
-  background: rgba(255,255,255,.065);
-  box-shadow: inset 0 1px rgba(255,255,255,.1);
+  border-radius: 10px;
+  color: var(--t-fg);
+  background: var(--t-bg2);
+  box-shadow: none;
   font-size: .68rem;
   font-weight: 800;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  backdrop-filter: blur(18px) saturate(145%);
+  letter-spacing: 0;
+  text-transform: none;
+  backdrop-filter: none;
 }
 .auth-eyebrow::before {
   content: "";
@@ -152,7 +152,7 @@ body.auth-claim-page::before {
   height: .48rem;
   border-radius: 50%;
   background: var(--auth-blue);
-  box-shadow: 0 0 0 4px rgba(94,231,255,.12), 0 0 18px rgba(94,231,255,.8);
+  box-shadow: none;
 }
 .enroll-hero h1,
 .claim-hero h1 {
@@ -166,10 +166,7 @@ body.auth-claim-page::before {
   color: white !important;
 }
 .auth-gradient-text {
-  color: transparent;
-  background: linear-gradient(95deg, var(--auth-blue), #a7a0ff 45%, var(--auth-pink));
-  background-clip: text;
-  -webkit-background-clip: text;
+  color: var(--t-ac);
 }
 .enroll-hero > p,
 .claim-hero > p {
@@ -190,10 +187,10 @@ body.auth-claim-page::before {
 .auth-benefit {
   padding: .9rem .95rem;
   border: 1px solid rgba(255,255,255,.1);
-  border-radius: 18px;
-  background: linear-gradient(135deg, rgba(255,255,255,.08), rgba(255,255,255,.025));
-  box-shadow: inset 0 1px rgba(255,255,255,.09);
-  backdrop-filter: blur(18px) saturate(130%);
+  border-radius: 10px;
+  background: var(--t-bg2);
+  box-shadow: none;
+  backdrop-filter: none;
 }
 .auth-benefit strong {
   display: block;
@@ -209,7 +206,7 @@ body.auth-claim-page::before {
   min-height: auto !important;
   padding: .38rem .68rem !important;
   border: 1px solid transparent;
-  border-radius: 999px !important;
+  border-radius: 10px !important;
   color: var(--auth-faint) !important;
   font-size: .72rem !important;
   text-decoration: none;
@@ -217,8 +214,8 @@ body.auth-claim-page::before {
 .enroll-links a:hover,
 .claim-help-links a:hover {
   color: white !important;
-  border-color: rgba(255,255,255,.12);
-  background: rgba(255,255,255,.07) !important;
+  border-color: var(--t-bd);
+  background: var(--t-bg2) !important;
 }
 
 .auth-panel,
@@ -229,10 +226,10 @@ body.auth-claim-page::before {
   padding: clamp(1.25rem, 3vw, 2rem) !important;
   border: 1px solid rgba(255,255,255,.16) !important;
   border-radius: var(--auth-radius) !important;
-  background: linear-gradient(145deg, rgba(255,255,255,.12), rgba(255,255,255,.025) 38%), var(--auth-glass) !important;
-  box-shadow: 0 35px 90px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.2), inset 0 -1px 0 rgba(255,255,255,.04) !important;
-  backdrop-filter: blur(34px) saturate(155%) !important;
-  -webkit-backdrop-filter: blur(34px) saturate(155%) !important;
+  background: var(--t-bg2) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
   animation: auth-rise .72s cubic-bezier(.2,.8,.2,1) .08s both !important;
 }
 .auth-panel::before,
@@ -242,7 +239,7 @@ body.auth-claim-page::before {
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: radial-gradient(circle at 14% 0%, rgba(255,255,255,.18), transparent 34%);
+  background: var(--t-bg2);
   mask-image: linear-gradient(black, transparent 70%);
 }
 @keyframes auth-rise {
@@ -257,9 +254,9 @@ body.auth-claim-page::before {
   margin-bottom: 1.8rem !important;
   padding: .36rem !important;
   border: 1px solid rgba(255,255,255,.1) !important;
-  border-radius: 18px !important;
-  background: rgba(2,5,22,.35) !important;
-  box-shadow: inset 0 1px 8px rgba(0,0,0,.22);
+  border-radius: 10px !important;
+  background: var(--t-bg2) !important;
+  box-shadow: none;
 }
 .auth-tab-btn {
   min-height: 2.8rem !important;
@@ -273,8 +270,8 @@ body.auth-claim-page::before {
 .auth-tab-btn:hover { color: white !important; transform: translateY(-1px); }
 .auth-tab-btn.active {
   color: white !important;
-  background: linear-gradient(135deg, rgba(94,231,255,.18), rgba(155,123,255,.22), rgba(255,111,181,.13)) !important;
-  box-shadow: inset 0 1px rgba(255,255,255,.18), 0 8px 22px rgba(33,26,105,.24) !important;
+  background: var(--t-bg2) !important;
+  box-shadow: none !important;
 }
 .tab-pane { position: relative; z-index: 1; }
 .tab-pane.active { animation: auth-pane .32s ease both !important; }
@@ -303,11 +300,11 @@ body.auth-claim-page::before {
 .claim-card .field-label {
   display: block;
   margin: 0 0 .48rem;
-  color: rgba(235,238,255,.7) !important;
+  color: var(--t-fg) !important;
   font-size: .67rem !important;
   font-weight: 800 !important;
-  letter-spacing: .075em !important;
-  text-transform: uppercase;
+  letter-spacing: 0 !important;
+  text-transform: none;
 }
 .auth-panel input:not([type="checkbox"]),
 .auth-panel select,
@@ -320,27 +317,27 @@ body.auth-claim-page::before {
   margin: 0 0 1.05rem !important;
   padding: .82rem 1rem !important;
   border: 1px solid rgba(255,255,255,.12) !important;
-  border-radius: 15px !important;
+  border-radius: 10px !important;
   outline: none !important;
   color: white !important;
-  background: rgba(3,6,27,.4) !important;
-  box-shadow: inset 0 1px 5px rgba(0,0,0,.17), 0 1px rgba(255,255,255,.04) !important;
+  background: var(--t-bg2) !important;
+  box-shadow: none !important;
   font-family: "Manrope", sans-serif !important;
   font-size: .89rem !important;
   transition: border-color .2s, box-shadow .2s, background .2s, transform .2s !important;
 }
 .auth-panel input::placeholder,
 .auth-panel textarea::placeholder,
-.claim-card input::placeholder { color: rgba(220,225,255,.29) !important; }
+.claim-card input::placeholder { color: var(--t-fg2) !important; }
 .auth-panel input:not([type="checkbox"]):focus,
 .auth-panel select:focus,
 .auth-panel textarea:focus,
 .claim-card input:not([type="checkbox"]):focus {
-  border-color: rgba(94,231,255,.68) !important;
-  background: rgba(6,10,37,.68) !important;
-  box-shadow: 0 0 0 4px rgba(94,231,255,.1), 0 12px 30px rgba(15,31,100,.2) !important;
+  border-color: var(--t-bd) !important;
+  background: var(--t-bg2) !important;
+  box-shadow: none !important;
 }
-.auth-panel select option { color: #12152f; background: #eef0ff; }
+.auth-panel select option { color: var(--t-fg); background: var(--t-bg2); }
 
 .auth-panel .btn,
 .auth-panel .btn-primary,
@@ -354,10 +351,10 @@ body.auth-claim-page::before {
   min-height: 3.25rem !important;
   box-sizing: border-box;
   border: 1px solid rgba(255,255,255,.24) !important;
-  border-radius: 15px !important;
-  color: #090c25 !important;
-  background: linear-gradient(105deg, #76ecff 0%, #9197ff 48%, #ff8bc8 100%) !important;
-  box-shadow: 0 14px 32px rgba(60,82,210,.3), inset 0 1px rgba(255,255,255,.75) !important;
+  border-radius: 10px !important;
+  color: var(--t-ac-ink) !important;
+  background: var(--t-ac) !important;
+  box-shadow: none !important;
   font-family: "Space Grotesk", sans-serif !important;
   font-size: .88rem !important;
   font-weight: 700 !important;
@@ -371,16 +368,16 @@ body.auth-claim-page::before {
 .claim-card .claim-action:hover {
   filter: brightness(1.08) saturate(1.06);
   transform: translateY(-2px);
-  box-shadow: 0 18px 38px rgba(70,86,220,.38), inset 0 1px rgba(255,255,255,.8) !important;
+  box-shadow: none !important;
 }
 .auth-panel button:disabled,
 .claim-card button:disabled { opacity: .5; cursor: not-allowed; transform: none !important; }
-.forgot-link { color: #8cecff !important; font-weight: 700 !important; }
+.forgot-link { color: var(--t-fg) !important; font-weight: 700 !important; }
 .agree-row,
 .warning-alert,
 #no-email-form {
   border: 1px solid rgba(255,255,255,.11) !important;
-  border-radius: 16px !important;
+  border-radius: 10px !important;
   background: rgba(255,255,255,.05) !important;
 }
 .warning-alert {
@@ -393,10 +390,10 @@ body.auth-claim-page::before {
 #no-email-form p { color: var(--auth-muted) !important; }
 .agree-row a,
 #no-email-link,
-#support-actions a { color: #8cecff !important; }
+#support-actions a { color: var(--t-fg) !important; }
 .pw-strength { margin: -.48rem 0 1.05rem !important; }
 .pw-strength-bars { gap: 5px !important; background: transparent !important; }
-.pw-strength-bars > div { border-radius: 999px; background: rgba(255,255,255,.08); }
+.pw-strength-bars > div { border-radius: 10px; background: var(--t-bg2); }
 #login-msg, #msg, #tmsg, #rtmsg, #claim-msg {
   min-height: 1.4rem;
   margin-top: .8rem;
@@ -416,12 +413,12 @@ body.auth-claim-page::before {
   margin: -2rem auto 0 !important;
   padding: 0 0 1.4rem !important;
   border: 0 !important;
-  color: rgba(224,228,255,.36) !important;
+  color: var(--t-fg) !important;
   font-size: .68rem !important;
   text-align: left !important;
 }
 .enroll-foot a,
-.claim-footer a { color: rgba(190,231,255,.62) !important; }
+.claim-footer a { color: var(--t-fg) !important; }
 
 .claim-card-head { margin-bottom: 1.5rem; }
 .claim-card-icon {
@@ -431,10 +428,10 @@ body.auth-claim-page::before {
   height: 3rem;
   margin-bottom: 1.2rem;
   border: 1px solid rgba(255,255,255,.16);
-  border-radius: 16px;
-  background: linear-gradient(135deg, rgba(94,231,255,.2), rgba(155,123,255,.24));
-  box-shadow: inset 0 1px rgba(255,255,255,.18), 0 12px 32px rgba(44,50,180,.2);
-  color: #b9f5ff;
+  border-radius: 10px;
+  background: var(--t-bg2);
+  box-shadow: none;
+  color: var(--t-fg);
 }
 .claim-warning {
   display: flex;
@@ -442,7 +439,7 @@ body.auth-claim-page::before {
   margin: 0 0 1.25rem;
   padding: .9rem;
   border: 1px solid rgba(255,130,156,.2);
-  border-radius: 16px;
+  border-radius: 10px;
   color: var(--auth-muted);
   background: rgba(255,91,135,.065);
   font-size: .74rem;
@@ -478,7 +475,7 @@ body.auth-claim-page::before {
   .auth-benefits { grid-template-columns: 1fr 1fr; }
   .auth-benefit:last-child { display: none; }
   .auth-panel,
-  .claim-card { padding: 1rem !important; border-radius: 24px !important; }
+  .claim-card { padding: 1rem !important; border-radius: 10px !important; }
   .auth-tabs { margin-bottom: 1.35rem !important; }
   .auth-tab-btn { min-height: 2.65rem !important; font-size: .7rem !important; }
 }
@@ -488,7 +485,7 @@ body.auth-claim-page::before {
   .claim-hero,
   .auth-panel,
   .claim-card,
-  .tab-pane.active { animation: none !important; }
+  .tab-pane.active { animation: none !important; display: none; }
   .auth-panel *, .claim-card * { scroll-behavior: auto !important; }
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -510,26 +507,24 @@ body.auth-claim-page {
   --auth-cobalt: #2448f5;
   --auth-orange: #ff5c35;
   --auth-acid: #d9ff52;
-  color: #fff;
-  background: #0b0e1a !important;
-  font-family: "DM Sans", sans-serif !important;
+  color: var(--t-fg);
+  background: var(--t-bg) !important;
+  font-family: var(--t-font) !important;
 }
 
 body.enroll-page::before,
 body.auth-claim-page::before {
   opacity: 1;
   background:
-    linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px),
-    linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
-    var(--auth-cobalt);
+    var(--t-bg);
   background-size: 84px 84px, 84px 84px, auto;
   clip-path: polygon(0 0, 51% 0, 58% 100%, 0 100%);
   mask-image: none;
 }
 
-.auth-aurora { z-index: -2; }
-.auth-orb { animation: none; filter: none; opacity: 1; }
-.auth-orb::after { display: none; }
+.auth-aurora { z-index: -2; display: none; }
+.auth-orb { animation: none; filter: none; opacity: 1; display: none; }
+.auth-orb::after { display: none; display: none; }
 .auth-orb.one {
   width: min(43vw, 42rem);
   height: min(43vw, 42rem);
@@ -541,6 +536,7 @@ body.auth-claim-page::before {
   background: transparent;
   transform: translateY(-17%);
   mix-blend-mode: hard-light;
+  display: none;
 }
 .auth-orb.two {
   width: clamp(9rem, 16vw, 15rem);
@@ -548,10 +544,11 @@ body.auth-claim-page::before {
   left: 38%;
   bottom: 11%;
   border: 2px solid rgba(255,255,255,.75);
-  border-radius: 999px;
+  border-radius: 10px;
   background: var(--auth-orange);
   transform: rotate(-13deg);
-  box-shadow: 0 0 0 9px rgba(11,14,26,.17);
+  box-shadow: none;
+  display: none;
 }
 
 .enroll-main,
@@ -583,7 +580,7 @@ body.auth-claim-page::before {
   height: 2.5rem;
   border: 1px solid rgba(255,255,255,.65);
   border-radius: 50%;
-  color: #fff;
+  color: var(--t-fg);
   background: transparent;
   box-shadow: none;
   font-family: "Bricolage Grotesque", sans-serif;
@@ -595,13 +592,13 @@ body.auth-claim-page::before {
   padding: 0;
   border: 0;
   border-radius: 0;
-  color: rgba(255,255,255,.72);
+  color: var(--t-fg);
   background: transparent;
   box-shadow: none;
   backdrop-filter: none;
   font-family: "IBM Plex Mono", monospace;
   font-size: .64rem;
-  letter-spacing: .13em;
+  letter-spacing: 0;
 }
 .auth-eyebrow::before {
   width: 1.8rem;
@@ -621,7 +618,7 @@ body.auth-claim-page::before {
   font-weight: 700 !important;
   letter-spacing: -.085em !important;
   line-height: .78 !important;
-  text-transform: uppercase;
+  text-transform: none;
 }
 .auth-gradient-text {
   color: var(--auth-acid);
@@ -633,7 +630,7 @@ body.auth-claim-page::before {
 .claim-hero > p {
   max-width: 35rem !important;
   padding-left: clamp(2rem, 8vw, 7rem);
-  color: rgba(255,255,255,.74) !important;
+  color: var(--t-fg) !important;
   font-size: .92rem !important;
   line-height: 1.62 !important;
 }
@@ -660,9 +657,9 @@ body.auth-claim-page::before {
   color: var(--auth-acid);
   font-family: "IBM Plex Mono", monospace;
   font-size: .58rem;
-  letter-spacing: .08em;
+  letter-spacing: 0;
 }
-.auth-benefit span { color: rgba(255,255,255,.6); font-size: .66rem; }
+.auth-benefit span { color: var(--t-fg); font-size: .66rem; }
 
 .enroll-links,
 .claim-help-links { margin-top: 1.1rem !important; }
@@ -672,11 +669,11 @@ body.auth-claim-page::before {
   margin-right: .95rem;
   border: 0;
   border-radius: 0 !important;
-  color: rgba(255,255,255,.56) !important;
+  color: var(--t-fg) !important;
   font-family: "IBM Plex Mono", monospace;
   font-size: .59rem !important;
-  text-transform: uppercase;
-  letter-spacing: .06em;
+  text-transform: none;
+  letter-spacing: 0;
 }
 .enroll-links a:hover,
 .claim-help-links a:hover { color: var(--auth-acid) !important; background: none !important; }
@@ -689,15 +686,15 @@ body.auth-claim-page::before {
   border: 1px solid rgba(255,255,255,.7) !important;
   border-radius: 42px 42px 12px 42px !important;
   color: var(--auth-dark) !important;
-  background: linear-gradient(145deg, rgba(255,255,255,.96), rgba(237,239,249,.78)) !important;
-  box-shadow: 0 30px 100px rgba(0,0,0,.5), inset 0 1px rgba(255,255,255,1) !important;
-  backdrop-filter: blur(28px) saturate(125%) !important;
-  -webkit-backdrop-filter: blur(28px) saturate(125%) !important;
+  background: var(--t-bg2) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 .auth-panel::before,
 .claim-card::before {
   inset: 0;
-  background: linear-gradient(118deg, rgba(255,255,255,.5), transparent 36%);
+  background: var(--t-bg2);
   mask-image: none;
 }
 .auth-panel::after,
@@ -708,13 +705,13 @@ body.auth-claim-page::before {
   right: 0;
   padding: .65rem 1.1rem .7rem 1.4rem;
   border-radius: 0 40px 0 20px;
-  color: rgba(255,255,255,.72);
+  color: var(--t-fg);
   background: var(--auth-dark);
   font-family: "IBM Plex Mono", monospace;
   font-size: .56rem;
-  letter-spacing: .12em;
+  letter-spacing: 0;
 }
-.claim-card::after { content: "INVITE / CLAIM"; }
+.claim-card::after { content: none; }
 
 .auth-tabs {
   gap: 1rem !important;
@@ -731,9 +728,9 @@ body.auth-claim-page::before {
   min-height: 2rem !important;
   padding: .25rem 0 !important;
   border-radius: 0 !important;
-  color: rgba(16,20,38,.42) !important;
+  color: var(--t-fg) !important;
   background: transparent !important;
-  font-family: "DM Sans", sans-serif !important;
+  font-family: var(--t-font) !important;
   font-size: .76rem !important;
   font-weight: 700 !important;
   white-space: nowrap;
@@ -741,14 +738,14 @@ body.auth-claim-page::before {
 .auth-tab-btn span {
   display: block;
   margin-bottom: .08rem;
-  color: rgba(16,20,38,.33);
+  color: var(--t-fg);
   font-family: "IBM Plex Mono", monospace;
   font-size: .5rem;
 }
 .auth-tab-btn.active {
   color: var(--auth-dark) !important;
   background: transparent !important;
-  box-shadow: inset 0 -2px var(--auth-orange) !important;
+  box-shadow: none !important;
 }
 .auth-tab-btn.active span { color: var(--auth-orange); }
 
@@ -763,13 +760,13 @@ body.auth-claim-page::before {
 }
 .panel-head p,
 #claim-desc,
-.claim-card .auth-card-copy { color: rgba(16,20,38,.58) !important; }
+.claim-card .auth-card-copy { color: var(--t-fg) !important; }
 .auth-panel .field-label,
 .claim-card .field-label {
-  color: rgba(16,20,38,.63) !important;
+  color: var(--t-fg) !important;
   font-family: "IBM Plex Mono", monospace;
   font-size: .59rem !important;
-  letter-spacing: .075em !important;
+  letter-spacing: 0 !important;
 }
 .auth-panel input:not([type="checkbox"]),
 .auth-panel select,
@@ -780,22 +777,22 @@ body.auth-claim-page::before {
   border-bottom: 1px solid rgba(16,20,38,.2) !important;
   border-radius: 0 !important;
   color: var(--auth-dark) !important;
-  background: rgba(255,255,255,.36) !important;
+  background: var(--t-bg2) !important;
   box-shadow: none !important;
-  font-family: "DM Sans", sans-serif !important;
+  font-family: var(--t-font) !important;
 }
 .auth-panel input::placeholder,
 .auth-panel textarea::placeholder,
-.claim-card input::placeholder { color: rgba(16,20,38,.27) !important; }
+.claim-card input::placeholder { color: var(--t-fg2) !important; }
 .auth-panel input:not([type="checkbox"]):focus,
 .auth-panel select:focus,
 .auth-panel textarea:focus,
 .claim-card input:not([type="checkbox"]):focus {
   border-bottom-color: var(--auth-cobalt) !important;
-  background: rgba(255,255,255,.72) !important;
-  box-shadow: inset 4px 0 var(--auth-cobalt) !important;
+  background: var(--t-bg2) !important;
+  box-shadow: none !important;
 }
-.auth-panel select option { color: var(--auth-dark); background: #f5f5f7; }
+.auth-panel select option { color: var(--auth-dark); background: var(--t-bg2); }
 .forgot-link { color: var(--auth-cobalt) !important; }
 
 .auth-panel .btn,
@@ -806,20 +803,20 @@ body.auth-claim-page::before {
   min-height: 3.35rem !important;
   border: 0 !important;
   border-radius: 6px 18px 6px 18px !important;
-  color: #fff !important;
+  color: var(--t-ac-ink) !important;
   background: var(--auth-orange) !important;
-  box-shadow: 0 12px 24px rgba(255,92,53,.22) !important;
+  box-shadow: none !important;
   font-family: "IBM Plex Mono", monospace !important;
   font-size: .72rem !important;
-  letter-spacing: .06em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .auth-panel .btn:hover,
 .auth-panel .btn-primary:hover,
 .claim-card .claim-action:hover {
   filter: none;
   background: var(--auth-dark) !important;
-  box-shadow: 0 14px 28px rgba(16,20,38,.25) !important;
+  box-shadow: none !important;
 }
 .agree-row,
 .warning-alert,
@@ -838,22 +835,22 @@ body.auth-claim-page::before {
 .agree-row a,
 #no-email-link,
 #support-actions a { color: var(--auth-cobalt) !important; }
-#login-msg, #msg, #tmsg, #rtmsg, #claim-msg { color: rgba(16,20,38,.62); }
-.pw-strength-bars > div { background: rgba(16,20,38,.1); }
+#login-msg, #msg, #tmsg, #rtmsg, #claim-msg { color: var(--t-fg); }
+.pw-strength-bars > div { background: var(--t-bg2); }
 .claim-card-icon {
   border: 0;
   border-radius: 50%;
-  color: #fff;
+  color: var(--t-fg);
   background: var(--auth-cobalt);
-  box-shadow: 8px 8px 0 var(--auth-acid);
+  box-shadow: none;
 }
 
 .enroll-foot,
 .claim-footer {
-  color: rgba(255,255,255,.34) !important;
+  color: var(--t-fg) !important;
   font-family: "IBM Plex Mono", monospace;
-  text-transform: uppercase;
-  letter-spacing: .06em;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 body:has(#pane-invite.active) .enroll-main,
@@ -900,8 +897,8 @@ body:has(#pane-reset.active) .enroll-hero { position: sticky !important; top: 1r
 @media (max-width: 860px) {
   body.enroll-page::before,
   body.auth-claim-page::before { clip-path: polygon(0 0, 100% 0, 100% 35%, 0 43%); }
-  .auth-orb.one { width: 26rem; height: 26rem; top: 3rem; left: 55%; border-width: 4rem; opacity: .48; }
-  .auth-orb.two { left: 67%; top: 18rem; bottom: auto; }
+  .auth-orb.one { width: 26rem; height: 26rem; top: 3rem; left: 55%; border-width: 4rem; opacity: .48; display: none; }
+  .auth-orb.two { left: 67%; top: 18rem; bottom: auto; display: none; }
   .enroll-main,
   .claim-layout {
     grid-template-columns: 1fr !important;
@@ -962,86 +959,78 @@ body.auth-claim-page {
   --auth-cobalt: #b52f70;
   --auth-orange: #f23f83;
   --auth-acid: #ff6ca7;
-  --t-bgr:
-    linear-gradient(90deg, rgba(3,5,18,.7) 0%, rgba(3,5,18,.34) 45%, rgba(3,5,18,.76) 100%),
-    linear-gradient(0deg, rgba(3,4,16,.52) 0%, transparent 56%),
-    url('/home-burning-cherry.webp') center 48% / cover no-repeat !important;
 }
 
 body.enroll-page::before,
 body.auth-claim-page::before {
   opacity: .32;
   background:
-    linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px),
-    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px);
+    var(--t-bg);
   background-size: 84px 84px;
   clip-path: none;
 }
 
-.auth-orb { display: none; }
+.auth-orb { display: none; display: none; }
 
-.auth-gradient-text { color: #ff75ac; text-shadow: 0 0 38px rgba(239,54,127,.26); }
-.auth-eyebrow::before { background: #ff5a9c; }
-.auth-benefit strong { color: #ff82b3; }
+.auth-gradient-text { color: var(--t-fg); text-shadow: none; }
+.auth-eyebrow::before { background: var(--t-bg2); }
+.auth-benefit strong { color: var(--t-fg); }
 
 .auth-panel,
 .claim-card {
-  border-color: rgba(255,255,255,.2) !important;
-  color: #f8f4ff !important;
+  border-color: var(--t-bd) !important;
+  color: var(--t-fg) !important;
   background:
-    linear-gradient(145deg, rgba(255,255,255,.12), transparent 38%),
-    rgba(10, 8, 28, .72) !important;
+    var(--t-bg2) !important;
   box-shadow:
-    0 38px 110px rgba(0,0,0,.58),
-    inset 0 1px rgba(255,255,255,.2),
-    0 0 0 1px rgba(230,64,137,.08) !important;
-  backdrop-filter: blur(30px) saturate(140%) !important;
-  -webkit-backdrop-filter: blur(30px) saturate(140%) !important;
+    none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 .auth-panel::before,
-.claim-card::before { background: radial-gradient(circle at 8% 0%, rgba(255,130,184,.17), transparent 36%); }
+.claim-card::before { background: var(--t-bg2); }
 .auth-panel::after,
-.claim-card::after { color: rgba(255,255,255,.7); background: rgba(3,3,14,.72); }
+.claim-card::after { color: var(--t-fg); background: var(--t-bg2); }
 
-.auth-tabs { border-bottom-color: rgba(255,255,255,.14) !important; }
-.auth-tab-btn { color: rgba(255,255,255,.4) !important; }
-.auth-tab-btn span { color: rgba(255,255,255,.28); }
-.auth-tab-btn.active { color: #fff !important; box-shadow: inset 0 -2px #f24a8c !important; }
-.auth-tab-btn.active span { color: #ff75ac; }
+.auth-tabs { border-bottom-color: var(--t-bd) !important; }
+.auth-tab-btn { color: var(--t-fg) !important; }
+.auth-tab-btn span { color: var(--t-fg); }
+.auth-tab-btn.active { color: var(--t-fg) !important; box-shadow: none !important; }
+.auth-tab-btn.active span { color: var(--t-fg); }
 
 .panel-head h2,
 .claim-card h2,
-#claim-title { color: #fff !important; }
+#claim-title { color: var(--t-fg) !important; }
 .panel-head p,
 #claim-desc,
-.claim-card .auth-card-copy { color: rgba(239,232,250,.62) !important; }
+.claim-card .auth-card-copy { color: var(--t-fg) !important; }
 .auth-panel .field-label,
-.claim-card .field-label { color: rgba(245,238,255,.68) !important; }
+.claim-card .field-label { color: var(--t-fg) !important; }
 
 .auth-panel input:not([type="checkbox"]),
 .auth-panel select,
 .auth-panel textarea,
 .claim-card input:not([type="checkbox"]) {
-  border-bottom-color: rgba(255,255,255,.18) !important;
-  color: #fff !important;
-  background: rgba(255,255,255,.045) !important;
+  border-bottom-color: var(--t-bd) !important;
+  color: var(--t-fg) !important;
+  background: var(--t-bg2) !important;
 }
 .auth-panel input::placeholder,
 .auth-panel textarea::placeholder,
-.claim-card input::placeholder { color: rgba(240,232,255,.26) !important; }
+.claim-card input::placeholder { color: var(--t-fg2) !important; }
 .auth-panel input:not([type="checkbox"]):focus,
 .auth-panel select:focus,
 .auth-panel textarea:focus,
 .claim-card input:not([type="checkbox"]):focus {
-  border-bottom-color: #ff65a4 !important;
-  background: rgba(255,255,255,.09) !important;
-  box-shadow: inset 4px 0 #f4478a !important;
+  border-bottom-color: var(--t-bd) !important;
+  background: var(--t-bg2) !important;
+  box-shadow: none !important;
 }
-.auth-panel select option { color: #171024; background: #f7eff5; }
+.auth-panel select option { color: var(--t-fg); background: var(--t-bg2); }
 .forgot-link,
 .agree-row a,
 #no-email-link,
-#support-actions a { color: #ff82b3 !important; }
+#support-actions a { color: var(--t-fg) !important; }
 .agree-row,
 .warning-alert,
 #no-email-form,
@@ -1056,34 +1045,31 @@ body.auth-claim-page::before {
 .claim-warning span { color: rgba(244,235,255,.65) !important; }
 .warning-alert strong,
 .claim-warning strong { color: #ff9fbd !important; }
-#login-msg, #msg, #tmsg, #rtmsg, #claim-msg { color: rgba(245,237,255,.64); }
-.pw-strength-bars > div { background: rgba(255,255,255,.11); }
-.claim-card-icon { background: #d83378; box-shadow: 8px 8px 0 rgba(255,116,172,.22); }
+#login-msg, #msg, #tmsg, #rtmsg, #claim-msg { color: var(--t-fg); }
+.pw-strength-bars > div { background: var(--t-bg2); }
+.claim-card-icon { background: var(--t-bg2); box-shadow: none; }
 
 .auth-panel .btn,
 .auth-panel .btn-primary,
 .auth-panel .btn-ghost,
 .claim-card .btn-primary,
 .claim-card .claim-action {
-  color: #fff !important;
-  background: #d9367a !important;
-  box-shadow: 0 12px 28px rgba(207,39,109,.3) !important;
+  color: var(--t-ac-ink) !important;
+  background: var(--t-ac) !important;
+  box-shadow: none !important;
 }
 .auth-panel .btn:hover,
 .auth-panel .btn-primary:hover,
 .claim-card .claim-action:hover {
-  color: #180915 !important;
-  background: #ff86b5 !important;
-  box-shadow: 0 14px 34px rgba(232,61,130,.32) !important;
+  color: var(--t-ac-ink) !important;
+  background: var(--t-ac) !important;
+  box-shadow: none !important;
 }
 
 @media (max-width: 860px) {
   body.enroll-page,
   body.auth-claim-page {
-    background-color: #080919;
-    --t-bgr:
-      linear-gradient(180deg, rgba(3,5,18,.38) 0%, rgba(3,5,18,.72) 42%, rgba(3,5,18,.92) 100%),
-      url('/home-burning-cherry.webp') center top / auto max(42rem, 72vh) no-repeat !important;
+    background: var(--t-bg);
   }
   body.enroll-page::before,
   body.auth-claim-page::before { clip-path: none; }
@@ -1092,10 +1078,7 @@ body.auth-claim-page::before {
 @media (max-width: 520px) {
   body.enroll-page,
   body.auth-claim-page {
-    background-color: #080919;
-    --t-bgr:
-      linear-gradient(180deg, rgba(3,5,18,.32) 0%, rgba(3,5,18,.78) 34rem, #080919 48rem),
-      url('/home-burning-cherry.webp') center top / auto 36rem no-repeat !important;
+    background: var(--t-bg);
   }
 }
 
@@ -1118,12 +1101,12 @@ body.auth-claim-page::before {
   min-height: 2.7rem;
   padding: .48rem .62rem .48rem .72rem;
   border: 1px solid rgba(255,255,255,.25);
-  border-radius: 999px;
-  color: #fff;
-  background: rgba(8,6,25,.56);
-  box-shadow: 0 14px 38px rgba(0,0,0,.38), inset 0 1px rgba(255,255,255,.14);
-  backdrop-filter: blur(18px) saturate(150%);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  border-radius: 10px;
+  color: var(--t-fg);
+  background: var(--t-bg2);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   font-family: "IBM Plex Mono", monospace;
   font-size: .68rem;
   font-weight: 600;
@@ -1133,35 +1116,35 @@ body.auth-claim-page::before {
 }
 #dev-test-btn small {
   padding: .35rem .55rem;
-  border-radius: 999px;
-  color: #1a0713;
-  background: #ff82b3;
+  border-radius: 10px;
+  color: var(--t-fg2);
+  background: var(--t-bg2);
   font-size: .54rem;
   font-weight: 700;
-  letter-spacing: .05em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .dev-test-dot {
   width: .48rem;
   height: .48rem;
   border-radius: 50%;
-  background: #d9ff52;
-  box-shadow: 0 0 0 4px rgba(217,255,82,.11), 0 0 14px rgba(217,255,82,.7);
+  background: var(--t-bg2);
+  box-shadow: none;
 }
 #dev-test-btn:hover {
   transform: translateY(-2px);
-  background: rgba(17,10,40,.78);
-  box-shadow: 0 18px 42px rgba(0,0,0,.46), inset 0 1px rgba(255,255,255,.2);
+  background: var(--t-bg2);
+  box-shadow: none;
 }
 #dev-test-btn:disabled { cursor: wait; opacity: .72; }
 #dev-test-btn.is-loading .dev-test-dot { animation: dev-test-pulse .7s ease-in-out infinite alternate; }
 #dev-test-msg {
   min-height: 1rem;
   margin-top: .3rem;
-  color: rgba(255,255,255,.72);
+  color: var(--t-fg);
   font-family: "IBM Plex Mono", monospace;
   font-size: .52rem;
-  text-shadow: 0 2px 8px #000;
+  text-shadow: none;
 }
 @keyframes dev-test-pulse { to { opacity: .3; transform: scale(.7); } }
 @media (max-width: 520px) {
@@ -1205,14 +1188,11 @@ body.auth-claim-page::before {
   padding: .8rem 4rem .8rem 1.3rem !important;
   border: 1px solid rgba(255,169,210,.42) !important;
   border-radius: 8px 22px 8px 22px !important;
-  color: #fff !important;
+  color: var(--t-ac-ink) !important;
   background:
-    linear-gradient(110deg, rgba(255,255,255,.15), transparent 34%),
-    linear-gradient(100deg, #e82f78 0%, #c526a8 55%, #7834e7 100%) !important;
+    var(--t-ac) !important;
   box-shadow:
-    0 14px 34px rgba(202,38,137,.32),
-    inset 0 1px rgba(255,255,255,.36),
-    inset 0 -1px rgba(62,11,74,.28) !important;
+    none !important;
   text-align: left;
   transition: transform .22s cubic-bezier(.2,.8,.2,1), box-shadow .22s ease, filter .22s ease !important;
 }
@@ -1227,13 +1207,13 @@ body.auth-claim-page::before {
   left: -35%;
   width: 28%;
   transform: rotate(18deg);
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,.5), transparent);
+  background: var(--t-ac);
   transition: left .5s cubic-bezier(.2,.8,.2,1);
 }
 .auth-panel .btn-primary::after,
 .claim-card .btn-primary::after,
 .claim-card .claim-action::after {
-  content: "↗";
+  content: none;
   position: absolute;
   top: 50%;
   right: .72rem;
@@ -1243,10 +1223,10 @@ body.auth-claim-page::before {
   height: 2.15rem;
   border: 1px solid rgba(255,255,255,.3);
   border-radius: 50%;
-  color: #fff;
-  background: rgba(8,6,25,.2);
-  box-shadow: inset 0 1px rgba(255,255,255,.18);
-  font-family: "DM Sans", sans-serif;
+  color: var(--t-ac-ink);
+  background: var(--t-ac);
+  box-shadow: none;
+  font-family: var(--t-font);
   font-size: 1rem;
   transform: translateY(-50%);
   transition: transform .22s ease, background .22s ease;
@@ -1254,13 +1234,12 @@ body.auth-claim-page::before {
 .auth-panel .btn-primary:hover,
 .claim-card .btn-primary:hover,
 .claim-card .claim-action:hover {
-  color: #fff !important;
+  color: var(--t-ac-ink) !important;
   filter: saturate(1.15) brightness(1.08);
   transform: translateY(-3px) !important;
   background:
-    linear-gradient(110deg, rgba(255,255,255,.18), transparent 34%),
-    linear-gradient(100deg, #f43782 0%, #d32ab3 55%, #873df1 100%) !important;
-  box-shadow: 0 20px 42px rgba(203,40,143,.43), inset 0 1px rgba(255,255,255,.4) !important;
+    var(--t-ac) !important;
+  box-shadow: none !important;
 }
 .auth-panel .btn-primary:hover::before,
 .claim-card .btn-primary:hover::before,
@@ -1268,7 +1247,7 @@ body.auth-claim-page::before {
 .auth-panel .btn-primary:hover::after,
 .claim-card .btn-primary:hover::after,
 .claim-card .claim-action:hover::after {
-  background: rgba(8,6,25,.38);
+  background: var(--t-ac);
   transform: translateY(-50%) rotate(45deg);
 }
 .auth-panel .btn-primary:active,
@@ -1286,14 +1265,14 @@ body.auth-claim-page::before {
   padding: .75rem 1rem !important;
   border: 1px solid rgba(255,255,255,.14) !important;
   border-radius: 8px 16px 8px 16px !important;
-  color: rgba(255,255,255,.82) !important;
-  background: rgba(255,255,255,.065) !important;
-  box-shadow: inset 0 1px rgba(255,255,255,.08) !important;
+  color: var(--t-ac-ink) !important;
+  background: var(--t-ac) !important;
+  box-shadow: none !important;
   text-align: center;
 }
 .auth-panel .btn:not(.btn-primary):hover {
-  color: #fff !important;
-  background: rgba(255,255,255,.12) !important;
+  color: var(--t-ac-ink) !important;
+  background: var(--t-ac) !important;
   transform: translateY(-2px);
 }
 
@@ -1314,48 +1293,43 @@ body.auth-claim-page::before {
 /* Clear-glass variant: keep the supplied landscape visible through the form. */
 .auth-panel,
 .claim-card {
-  border-color: rgba(255,255,255,.24) !important;
+  border-color: var(--t-bd) !important;
   background:
-    linear-gradient(145deg, rgba(255,255,255,.1), transparent 34%),
-    rgba(7, 6, 24, .4) !important;
+    var(--t-bg2) !important;
   box-shadow:
-    0 35px 100px rgba(0,0,0,.45),
-    inset 0 1px rgba(255,255,255,.24),
-    inset 0 0 45px rgba(219,47,124,.045) !important;
-  backdrop-filter: blur(18px) saturate(135%) !important;
-  -webkit-backdrop-filter: blur(18px) saturate(135%) !important;
+    none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 .auth-panel::before,
 .claim-card::before {
   background:
-    linear-gradient(118deg, rgba(255,255,255,.1), transparent 35%),
-    radial-gradient(circle at 8% 0%, rgba(255,95,163,.1), transparent 38%);
+    var(--t-bg2);
 }
-.auth-tabs { background: rgba(4,3,17,.08) !important; }
+.auth-tabs { background: var(--t-bg2) !important; }
 .auth-panel input:not([type="checkbox"]),
 .auth-panel select,
 .auth-panel textarea,
-.claim-card input:not([type="checkbox"]) { background: rgba(5,4,20,.12) !important; }
+.claim-card input:not([type="checkbox"]) { background: var(--t-bg2) !important; }
 .auth-panel input:not([type="checkbox"]):focus,
 .auth-panel select:focus,
 .auth-panel textarea:focus,
-.claim-card input:not([type="checkbox"]):focus { background: rgba(7,5,24,.3) !important; }
+.claim-card input:not([type="checkbox"]):focus { background: var(--t-bg2) !important; }
 
 @media (max-width: 520px) {
   .auth-panel,
   .claim-card {
     background:
-      linear-gradient(145deg, rgba(255,255,255,.1), transparent 34%),
-      rgba(7, 6, 24, .56) !important;
-    backdrop-filter: blur(20px) saturate(130%) !important;
-    -webkit-backdrop-filter: blur(20px) saturate(130%) !important;
+      var(--t-bg2) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
 }
 
 /* ── Light mode ─────────────────────────────────────────────────────────────
    The night artwork and dark glass above are hardcoded, so re-skin every
    surface under html.theme-light with the shared light palette. */
-html.theme-light { background: #eef0f8; }
+html.theme-light { background: var(--t-bg2); }
 
 html.theme-light body.enroll-page,
 html.theme-light body.auth-claim-page {
@@ -1370,118 +1344,113 @@ html.theme-light body.auth-claim-page {
   --auth-acid: #db2777;
   --auth-error: #dc2626;
   --auth-success: #059669;
-  color: #10142c;
+  color: var(--t-fg);
   background:
-    radial-gradient(circle at 12% 14%, rgba(79, 70, 229, .07), transparent 30rem),
-    radial-gradient(circle at 88% 10%, rgba(219, 39, 119, .05), transparent 26rem),
-    radial-gradient(circle at 80% 92%, rgba(8, 145, 178, .05), transparent 28rem),
-    linear-gradient(165deg, #eef0f8 0%, #f7f8fd 55%, #eef1f9 100%) !important;
+    var(--t-bg) !important;
   background-attachment: fixed !important;
 }
 
 html.theme-light body.enroll-page::before,
 html.theme-light body.auth-claim-page::before {
   opacity: .4;
-  background-image:
-    linear-gradient(rgba(16, 20, 44, .045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(16, 20, 44, .045) 1px, transparent 1px);
+  background:
+    var(--t-bg);
   clip-path: none;
 }
 
 html.theme-light .enroll-brand,
-html.theme-light .claim-brand { color: #10142c !important; }
+html.theme-light .claim-brand { color: var(--t-fg) !important; }
 
-html.theme-light .auth-eyebrow { color: rgba(22, 27, 54, .62); }
-html.theme-light .auth-eyebrow::before { background: #db2777; }
+html.theme-light .auth-eyebrow { color: var(--t-fg); }
+html.theme-light .auth-eyebrow::before { background: var(--t-bg2); }
 
 html.theme-light .enroll-hero h1,
-html.theme-light .claim-hero h1 { color: #10142c !important; }
+html.theme-light .claim-hero h1 { color: var(--t-fg) !important; }
 html.theme-light .auth-gradient-text {
-  color: #db2777;
+  color: var(--t-fg);
   text-shadow: none;
 }
 html.theme-light .enroll-hero > p,
-html.theme-light .claim-hero > p { color: rgba(22, 27, 54, .68) !important; }
+html.theme-light .claim-hero > p { color: var(--t-fg) !important; }
 
 html.theme-light .auth-benefits {
-  border-top-color: rgba(16, 20, 44, .22);
-  border-bottom-color: rgba(16, 20, 44, .22);
+  border-top-color: var(--t-bd);
+  border-bottom-color: var(--t-bd);
 }
-html.theme-light .auth-benefit { border-right-color: rgba(16, 20, 44, .16); }
-html.theme-light .auth-benefit strong { color: #db2777; }
-html.theme-light .auth-benefit span { color: rgba(22, 27, 54, .6); }
+html.theme-light .auth-benefit { border-right-color: var(--t-bd); }
+html.theme-light .auth-benefit strong { color: var(--t-fg); }
+html.theme-light .auth-benefit span { color: var(--t-fg); }
 
 html.theme-light .enroll-links a,
-html.theme-light .claim-help-links a { color: rgba(22, 27, 54, .52) !important; }
+html.theme-light .claim-help-links a { color: var(--t-fg) !important; }
 html.theme-light .enroll-links a:hover,
-html.theme-light .claim-help-links a:hover { color: #db2777 !important; }
+html.theme-light .claim-help-links a:hover { color: var(--t-fg) !important; }
 
 html.theme-light .auth-panel,
 html.theme-light .claim-card {
-  border-color: rgba(16, 20, 44, .12) !important;
-  color: #10142c !important;
+  border-color: var(--t-bd) !important;
+  color: var(--t-fg) !important;
   background:
-    linear-gradient(150deg, rgba(255, 255, 255, .96), rgba(244, 245, 251, .88)) !important;
+    var(--t-bg2) !important;
   box-shadow:
-    0 30px 80px rgba(16, 20, 44, .12),
-    inset 0 1px rgba(255, 255, 255, 1) !important;
-  backdrop-filter: blur(26px) saturate(135%) !important;
-  -webkit-backdrop-filter: blur(26px) saturate(135%) !important;
+    none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 html.theme-light .auth-panel::before,
 html.theme-light .claim-card::before {
-  background: linear-gradient(120deg, rgba(255, 255, 255, .7), transparent 40%);
+  background: var(--t-bg2);
 }
 html.theme-light .auth-panel::after,
 html.theme-light .claim-card::after {
-  color: rgba(255, 255, 255, .78);
-  background: #10142c;
+  color: var(--t-fg);
+  background: var(--t-bg2);
 }
 
-html.theme-light .auth-tabs { border-bottom-color: rgba(16, 20, 44, .14) !important; background: transparent !important; }
-html.theme-light .auth-tab-btn { color: rgba(16, 20, 44, .42) !important; background: transparent !important; }
-html.theme-light .auth-tab-btn span { color: rgba(16, 20, 44, .34); }
-html.theme-light .auth-tab-btn:hover { color: #10142c !important; }
+html.theme-light .auth-tabs { border-bottom-color: var(--t-bd) !important; background: transparent !important; }
+html.theme-light .auth-tab-btn { color: var(--t-fg) !important; background: transparent !important; }
+html.theme-light .auth-tab-btn span { color: var(--t-fg); }
+html.theme-light .auth-tab-btn:hover { color: var(--t-fg) !important; }
 html.theme-light .auth-tab-btn.active {
-  color: #10142c !important;
-  box-shadow: inset 0 -2px #db2777 !important;
+  color: var(--t-fg) !important;
+  box-shadow: none !important;
 }
-html.theme-light .auth-tab-btn.active span { color: #db2777; }
+html.theme-light .auth-tab-btn.active span { color: var(--t-fg); }
 
 html.theme-light .panel-head h2,
 html.theme-light .claim-card h2,
-html.theme-light #claim-title { color: #10142c !important; }
+html.theme-light #claim-title { color: var(--t-fg) !important; }
 html.theme-light .panel-head p,
 html.theme-light #claim-desc,
-html.theme-light .claim-card .auth-card-copy { color: rgba(16, 20, 44, .58) !important; }
+html.theme-light .claim-card .auth-card-copy { color: var(--t-fg) !important; }
 html.theme-light .auth-panel .field-label,
-html.theme-light .claim-card .field-label { color: rgba(16, 20, 44, .62) !important; }
+html.theme-light .claim-card .field-label { color: var(--t-fg) !important; }
 
 html.theme-light .auth-panel input:not([type="checkbox"]),
 html.theme-light .auth-panel select,
 html.theme-light .auth-panel textarea,
 html.theme-light .claim-card input:not([type="checkbox"]) {
-  border-bottom-color: rgba(16, 20, 44, .22) !important;
-  color: #10142c !important;
-  background: rgba(255, 255, 255, .6) !important;
+  border-bottom-color: var(--t-bd) !important;
+  color: var(--t-fg) !important;
+  background: var(--t-bg2) !important;
 }
 html.theme-light .auth-panel input::placeholder,
 html.theme-light .auth-panel textarea::placeholder,
-html.theme-light .claim-card input::placeholder { color: rgba(16, 20, 44, .34) !important; }
+html.theme-light .claim-card input::placeholder { color: var(--t-fg2) !important; }
 html.theme-light .auth-panel input:not([type="checkbox"]):focus,
 html.theme-light .auth-panel select:focus,
 html.theme-light .auth-panel textarea:focus,
 html.theme-light .claim-card input:not([type="checkbox"]):focus {
-  border-bottom-color: #4f46e5 !important;
-  background: #fff !important;
-  box-shadow: inset 4px 0 #4f46e5 !important;
+  border-bottom-color: var(--t-bd) !important;
+  background: var(--t-bg2) !important;
+  box-shadow: none !important;
 }
-html.theme-light .auth-panel select option { color: #10142c; background: #f5f6fb; }
+html.theme-light .auth-panel select option { color: var(--t-fg); background: var(--t-bg2); }
 
 html.theme-light .forgot-link,
 html.theme-light .agree-row a,
 html.theme-light #no-email-link,
-html.theme-light #support-actions a { color: #4f46e5 !important; }
+html.theme-light #support-actions a { color: var(--t-fg) !important; }
 
 html.theme-light .agree-row,
 html.theme-light .warning-alert,
@@ -1499,57 +1468,52 @@ html.theme-light .warning-alert strong,
 html.theme-light .claim-warning strong { color: #b91c1c !important; }
 html.theme-light .warning-alert svg,
 html.theme-light .claim-warning svg { color: #dc2626; }
-#login-msg, #msg, #tmsg, #rtmsg, #claim-msg { color: rgba(16, 20, 44, .62); }
-html.theme-light .pw-strength-bars > div { background: rgba(16, 20, 44, .12); }
+#login-msg, #msg, #tmsg, #rtmsg, #claim-msg { color: var(--t-fg); }
+html.theme-light .pw-strength-bars > div { background: var(--t-bg2); }
 html.theme-light .claim-card-icon {
-  color: #fff;
-  background: #4f46e5;
-  box-shadow: 8px 8px 0 rgba(219, 39, 119, .18);
+  color: var(--t-fg);
+  background: var(--t-bg2);
+  box-shadow: none;
 }
 
 html.theme-light .auth-panel .btn:not(.btn-primary) {
-  color: #10142c !important;
-  border-color: rgba(16, 20, 44, .16) !important;
-  background: rgba(255, 255, 255, .8) !important;
-  box-shadow: inset 0 1px rgba(255, 255, 255, 1) !important;
+  color: var(--t-ac-ink) !important;
+  border-color: var(--t-ac) !important;
+  background: var(--t-ac) !important;
+  box-shadow: none !important;
 }
 html.theme-light .auth-panel .btn:not(.btn-primary):hover {
-  color: #4f46e5 !important;
-  background: #f2f3fa !important;
+  color: var(--t-ac-ink) !important;
+  background: var(--t-ac) !important;
 }
 
 html.theme-light .enroll-foot,
-html.theme-light .claim-footer { color: rgba(16, 20, 44, .44) !important; }
+html.theme-light .claim-footer { color: var(--t-fg) !important; }
 html.theme-light .enroll-foot a,
-html.theme-light .claim-footer a { color: rgba(16, 20, 44, .58) !important; }
+html.theme-light .claim-footer a { color: var(--t-fg) !important; }
 
-html.theme-light .ok { color: #059669 !important; }
-html.theme-light .err { color: #dc2626 !important; }
+html.theme-light .ok { color: var(--t-fg) !important; }
+html.theme-light .err { color: var(--t-fg) !important; }
 
 /* Light mode: keep the login button's shine/arrow light on hover. */
 html.theme-light .auth-panel .btn-primary::after,
 html.theme-light .claim-card .btn-primary::after,
 html.theme-light .claim-card .claim-action::after {
-  color: #fff;
-  border-color: rgba(255, 255, 255, .45);
-  background: rgba(219, 39, 119, .22);
+  color: var(--t-ac-ink);
+  border-color: var(--t-ac);
+  background: var(--t-ac);
 }
 html.theme-light .auth-panel .btn-primary:hover::after,
 html.theme-light .claim-card .btn-primary:hover::after,
-html.theme-light .claim-card .claim-action:hover::after { background: rgba(219, 39, 119, .38); }
+html.theme-light .claim-card .claim-action:hover::after { background: var(--t-ac); }
 html.theme-light .auth-panel .btn-primary:hover,
 html.theme-light .claim-card .btn-primary:hover,
 html.theme-light .claim-card .claim-action:hover {
-  color: #fff !important;
+  color: var(--t-ac-ink) !important;
   background:
-    linear-gradient(110deg, rgba(255, 255, 255, .18), transparent 34%),
-    linear-gradient(100deg, #f43782 0%, #d32ab3 55%, #873df1 100%) !important;
+    var(--t-ac) !important;
 }
 
 /* Light mode: the cherry night artwork is a dark print — ink text can't live
    on it. Swap to the light theme's plain wash (beats the !important dark
    values above by cascade order + html.theme-light specificity). */
-html.theme-light body.enroll-page,
-html.theme-light body.auth-claim-page {
-  --t-bgr: linear-gradient(160deg, #f3f5fa, #e9edf6) !important;
-}

@@ -44,6 +44,11 @@
       root.removeAttribute('data-theme');
     }
     root.style.colorScheme = isDarkMode(mode) ? 'dark' : 'light';
+    var themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) {
+      var background = getComputedStyle(root).getPropertyValue('--t-bg').trim();
+      if (background) themeColor.setAttribute('content', background);
+    }
     // Legacy event name a couple of pages (Matrix) still listen for to
     // react live instead of only reading the mode on load.
     window.dispatchEvent(new CustomEvent('themechange', { detail: isDarkMode(mode) ? 'dark' : 'light' }));
@@ -51,10 +56,7 @@
 
   function applyAccent(hex) {
     var root = document.documentElement;
-    // --mh-* is the homepage's own token namespace (home.css) — it forces
-    // its own --mh-accent into the shared --t-ac with !important, so a
-    // custom accent has to win there too, not just on --t-ac.
-    var props = ['--t-ac', '--t-ac2', '--t-ac3', '--t-gr', '--t-gls', '--mh-accent', '--mh-accent-hover', '--mh-accent-soft'];
+    var props = ['--t-ac', '--t-ac2', '--t-ac3', '--t-gr', '--t-gls', '--t-ac-ink'];
     if (!hex || !/^#[0-9a-f]{6}$/i.test(hex)) {
       props.forEach(function (p) { root.style.removeProperty(p); });
       return;
@@ -66,9 +68,12 @@
     root.style.setProperty('--t-ac3', hover);
     root.style.setProperty('--t-gr', hex);
     root.style.setProperty('--t-gls', shade(hex, dark ? -0.82 : 0.9));
-    root.style.setProperty('--mh-accent', hex);
-    root.style.setProperty('--mh-accent-hover', hover);
-    root.style.setProperty('--mh-accent-soft', shade(hex, dark ? -0.82 : 0.9));
+    var rgb = hex.slice(1).match(/.{2}/g).map(function (channel) {
+      var value = parseInt(channel, 16) / 255;
+      return value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+    });
+    var luminance = rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
+    root.style.setProperty('--t-ac-ink', luminance > 0.179 ? '#000000' : '#ffffff');
   }
 
   function applyContrast(level) {
@@ -80,10 +85,42 @@
     }
   }
 
+  function applyLayout() {
+    function preference(name, fallback) {
+      try { return localStorage.getItem('theme_' + name) || fallback; }
+      catch (_) { return fallback; }
+    }
+    var root = document.documentElement;
+    var sizes = { compact: 0.9, normal: 1, comfy: 1.05, huge: 1.1 };
+    var corners = { sharp: '0px', soft: '10px', round: '14px', bubble: '22px' };
+    var fonts = {
+      system: "'DM Sans', system-ui, sans-serif",
+      mono: 'ui-monospace, monospace',
+      rounded: "'Arial Rounded MT Bold', 'Trebuchet MS', sans-serif",
+      serif: 'Georgia, serif',
+      futuristic: "'Trebuchet MS', system-ui, sans-serif"
+    };
+    var size = sizes[preference('density', 'normal')] || 1;
+    var radius = preference('radius', 'soft');
+    var font = fonts[preference('font', 'system')] || fonts.system;
+    var reducedMotion = preference('motion', 'on') === 'off';
+    root.style.fontSize = (16 * size) + 'px';
+    root.style.setProperty('--t-ui-scale', String(size));
+    root.style.setProperty('--t-radius', corners[radius] || corners.soft);
+    root.style.setProperty('--t-radius-sm', radius === 'sharp' ? '0px' : '7px');
+    root.style.setProperty('--t-font', font);
+    root.style.setProperty('--t-display', font);
+    root.style.setProperty('--t-motion', reducedMotion ? '0s' : '.15s');
+    root.dataset.radius = Object.hasOwn(corners, radius) ? radius : 'soft';
+    root.dataset.material = preference('material', 'auto') === 'glass' ? 'glass' : 'solid';
+    root.classList.toggle('theme-no-motion', reducedMotion);
+  }
+
   function apply() {
     applyMode(readCookie('theme'));
     applyAccent(readCookie('accent'));
     applyContrast(readCookie('contrast'));
+    applyLayout();
   }
 
   apply();

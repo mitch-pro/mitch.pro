@@ -93,11 +93,11 @@
   .balance-hint { color: var(--t-fg2); font-size: 0.75rem; }
   .layout {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 1.25rem;
   }
   @media (min-width: 768px) {
-    .layout { grid-template-columns: min(20rem, 34%) 1fr; }
+    .layout { grid-template-columns: minmax(0, min(20rem, 34%)) minmax(0, 1fr); }
   }
   .card {
     background: var(--card-bg);
@@ -107,7 +107,10 @@
     height: fit-content;
     box-shadow: 0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset;
   }
+  .layout > *, .card, .listings-grid { min-width: 0; }
   .card-title {
+    gap: 12px;
+    flex-wrap: wrap;
     font-family: var(--t-display, Fraunces, Georgia, serif);
     font-size: 1rem;
     font-weight: 750;
@@ -209,7 +212,7 @@
     border-color: color-mix(in srgb, var(--t-ac) 45%, var(--t-bd));
     color: var(--t-fg);
   }
-  .listings-grid { display: grid; grid-template-columns: 1fr; gap: 0.85rem; }
+  .listings-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.85rem; }
   @media (min-width: 900px) {
     .listings-grid { grid-template-columns: 1fr 1fr; }
   }
@@ -528,7 +531,7 @@
       }
 
       card.innerHTML = `
-        <div class="listing-art" aria-hidden="true"><span>${l.type === 'cosmetic' ? '◆' : '↗'}</span></div>
+        <div class="listing-art" aria-hidden="true"><span>${l.type === 'cosmetic' ? '◆' : ''}</span></div>
         <div>
           ${statusTag}
           <div class="listing-header">

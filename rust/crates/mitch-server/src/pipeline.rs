@@ -95,9 +95,9 @@ pub fn inject_page(
         inject_str.push_str("<script src=\"/guest-preview.js?v=1\" defer></script>\n");
     }
 
-    if is_authenticated_html && !is_embedded && !raw.contains("/broadcast.js") {
+    if is_authenticated_html && !is_embedded && !is_onboarding && !raw.contains("/broadcast.js") {
         inject_str.push_str("<script src=\"/broadcast.js?v=9\" defer></script>\n");
-    } else if !is_authenticated_html && raw.contains("/broadcast.js") {
+    } else if (!is_authenticated_html || is_onboarding) && raw.contains("/broadcast.js") {
         raw = strip_broadcast(&raw);
     }
 
@@ -217,8 +217,12 @@ pub fn inject_page(
     let is_rjuhsd = is_host(req_host_name, "rjuhsd.school");
     let is_encrypt_app_page =
         path == "/encrypt" || path == "/encrypt/" || path == "/encrypt/index.html";
-    if !is_onboarding && !raw.contains("_agree_footer") && !(is_encrypt_app_page && !is_rjuhsd) {
-        let agree = "<div id=\"_agree_footer\" style=\"position:fixed;bottom:5px;left:0;right:0;text-align:center;pointer-events:none;z-index:2147483647;font-size:.65rem;color:rgba(255,255,255,.15);font-family:system-ui,sans-serif;letter-spacing:.01em;\">By using mitch.pro you agree to the <a href=\"/use-agreement.html\" style=\"color:rgba(255,255,255,.15);pointer-events:all;\" target=\"_blank\">use agreement</a> and <a href=\"/privacy.html\" style=\"color:rgba(255,255,255,.15);pointer-events:all;\" target=\"_blank\">privacy policy</a>.</div>";
+    if !is_onboarding
+        && !is_embedded
+        && !raw.contains("_agree_footer")
+        && !(is_encrypt_app_page && !is_rjuhsd)
+    {
+        let agree = "<footer id=\"_agree_footer\" class=\"app-footer\">By using mitch.pro you agree to the <a href=\"/use-agreement/\">use agreement</a> and <a href=\"/privacy/\">privacy policy</a>.</footer>";
         match raw.rfind("</body>") {
             Some(i) => raw = format!("{}{}{}", &raw[..i], agree, &raw[i..]),
             None => raw = format!("{raw}{agree}"),
@@ -235,14 +239,15 @@ pub fn serve_static_html(
     path: &str,
     html: String,
 ) -> String {
-    let mut html = if html.contains("data-presentation=\"onboarding\"") {
+    let is_onboarding = html.contains("data-presentation=\"onboarding\"");
+    let mut html = if is_onboarding {
         html
     } else {
         inject_readability(&html, path)
     };
     let is_authenticated = state.check_password_cookie(headers, None);
     let is_embedded = is_embedded_game_runtime(path);
-    if is_authenticated && !is_embedded {
+    if is_authenticated && !is_embedded && !is_onboarding {
         html = crate::inject::inject_broadcast(&html);
     } else {
         html = strip_broadcast(&html);

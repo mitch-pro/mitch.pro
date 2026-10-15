@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>Admin Command Center</title>
+  <title>Administration — mitch.pro</title>
   <link rel="stylesheet" href="/app.css">
   <script src="/api.js"></script>
   <script src="/app-shell.js" defer></script>
@@ -503,7 +503,7 @@
       <img class="staff-logo" src="/icon-192.png" alt="mitch.pro">
       <div class="staff-heading">
         <span class="staff-eyebrow">mitch.pro / admin</span>
-        <h1>Command <span class="command-title-accent">Center</span></h1>
+        <h1>Administration</h1>
 
       </div>
       <div class="status"><span class="dot"></span><span id="access-status">Checking access</span></div>
@@ -568,7 +568,7 @@
             <span id="admin-bell-countdown">Pacific time</span>
           </div>
           <ol class="admin-periods" id="admin-periods"></ol>
-          <footer><span id="admin-bell-note">Period names only — no personal class data</span><a href="https://rjuhsd.school/">Open bell schedule ↗</a></footer>
+          <footer><span id="admin-bell-note">Period names only — no personal class data</span><a href="https://rjuhsd.school/">Open bell schedule </a></footer>
         </article>
       </div>
     </section>
@@ -673,7 +673,7 @@
         <p role="status" aria-live="polite"></p>
       </section>
       <script src="/admin/owner-accounts.js?v=1" defer></script>
-      <div class="owner-shortcuts"><a href="#people-tools">Accounts &amp; roles ↗</a><a href="#content-tools">Site content ↗</a><a href="#logs-tools">System logs ↗</a><a href="#audit-tools">Activity history ↗</a></div>
+      <div class="owner-shortcuts"><a href="#people-tools">Accounts &amp; roles </a><a href="#content-tools">Site content </a><a href="#logs-tools">System logs </a><a href="#audit-tools">Activity history </a></div>
     </section>
     <section class="tool-group active" id="approval-tools">
       <div class="section-head">
@@ -916,7 +916,7 @@
             Matrix Chat Moderation &amp; Staff
           </h2>
           <div style="display:flex; gap:8px;">
-            <a href="/matrix/" target="_blank" style="font-size:0.8rem; color:var(--t-ac); text-decoration:none; border:1px solid var(--t-bd); padding:4px 10px; border-radius:6px; background:var(--t-bg3);">Open Web Chat ↗</a>
+            <a href="/matrix/" target="_blank" style="font-size:0.8rem; color:var(--t-ac); text-decoration:none; border:1px solid var(--t-bd); padding:4px 10px; border-radius:6px; background:var(--t-bg3);">Open Web Chat </a>
             <button type="button" class="mini" onclick="loadMatrixModeration()">Refresh</button>
           </div>
         </div>
@@ -2416,7 +2416,7 @@
         ['Cheat Logs', s.cheatLogs || 0],
       ];
       document.getElementById('cards').innerHTML = cards.map((c, i) =>
-        '<div class="card"><span class="metric-mark" aria-hidden="true">' + ['↗','✉','⚑','◇','●','⊘','≡'][i] + '</span><div class="label">' + esc(c[0]) + '</div><div class="value">' + esc(c[1]) + '</div></div>'
+        '<div class="card"><span class="metric-mark" aria-hidden="true">' + ['','✉','⚑','◇','●','⊘','≡'][i] + '</span><div class="label">' + esc(c[0]) + '</div><div class="value">' + esc(c[1]) + '</div></div>'
       ).join('');
     }
 

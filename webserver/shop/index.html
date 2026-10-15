@@ -388,13 +388,13 @@
 <main class="app-main" id="market-page">
   <header class="page-head">
     <div class="shop-intro">
-      <span class="shop-eyebrow">MITCH.PRO / SHOP</span>
-      <h1>Spend coins.<br><em>Make it yours.</em></h1>
+
+      <h1>Shop</h1>
       <p class="subline" id="shop-note">Loading the shop…</p>
-      <div class="shop-hero-links"><a href="/inventory/">Your inventory ↗</a><a href="/casino/">Try the casino ↗</a></div>
+      <div class="shop-hero-links"><a href="/inventory/">Your inventory </a><a href="/casino/">Try the casino </a></div>
     </div>
     <div class="panel balance-panel">
-      <div class="balance-label">AVAILABLE TO SPEND</div>
+      <div class="balance-label">Balance</div>
       <div class="balance-value mitch-coin-amount"><span id="balance">...</span> <small>MitchCoins</small></div>
       <div class="state-row">
         <span class="pill" id="premium-pill">checking premium</span>
@@ -402,15 +402,15 @@
         <span class="pill" id="discount-pill" style="display:none;"></span>
       </div>
       <div class="panel-actions" style="margin-top:0.75rem;display:flex;gap:0.45rem;flex-wrap:wrap;">
-        <a class="mini-btn btn" href="/inventory/">View inventory ↗</a>
-        <a class="mini-btn btn" href="/vms/#upgrades">Cloud PC upgrades ↗</a>
+        <a class="mini-btn btn" href="/inventory/">View inventory </a>
+        <a class="mini-btn btn" href="/vms/#upgrades">Cloud PC upgrades </a>
       </div>
     </div>
   </header>
 
   <div id="active-buffs-bar" class="panel" style="display:none;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem;">
-      <strong style="font-size:0.85rem;color:var(--t-ac);text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;gap:0.4rem;">
+      <strong style="font-size:0.85rem;color:var(--t-ac);text-transform:none;letter-spacing:0;display:flex;align-items:center;gap:0.4rem;">
         Active perks
       </strong>
       <span id="active-buffs-count" class="pill good">0 Active</span>
@@ -419,11 +419,11 @@
   </div>
 
   <section class="shop-feature" aria-label="Featured perks">
-    <div class="shop-feature-heading"><div><span class="shop-eyebrow">GOOD PLACE TO START</span><h2>Picked for your next session.</h2></div><span class="shop-feature-aside">01 / 03</span></div>
+    <div class="shop-feature-heading"><div><h2>Featured items</h2></div></div>
     <div class="shop-feature-grid" id="shop-feature-grid"></div>
   </section>
 
-  <div class="shop-catalog-heading"><div><span class="shop-eyebrow">THE FULL SHELF</span><h2>Find your thing.</h2></div><span class="shop-stock"><b id="shop-stock-count">0</b> items</span></div>
+  <div class="shop-catalog-heading"><div><h2>Browse items</h2></div><span class="shop-stock"><b id="shop-stock-count">0</b> items</span></div>
   <div class="shop-tools"><label><span aria-hidden="true">⌕</span><input id="shop-search" type="search" placeholder="Search the shop" autocomplete="off" aria-label="Search the shop"></label></div>
   <div id="tabs" class="tabs"></div>
   <div id="market"></div>
@@ -673,9 +673,9 @@
     const featureGrid = document.getElementById('shop-feature-grid');
     featureGrid.innerHTML = picks.map((item, index) => `
       <button type="button" class="feature-item" data-feature="${esc(item.id)}" aria-label="Details for ${esc(item.name)}">
-        <span class="feature-index">${String(index + 1).padStart(2, '0')} / ${esc(item.section)}</span>
+        <span class="feature-index">${esc(item.section)}</span>
         <span class="feature-name">${esc(item.name)}</span>
-        <span class="feature-bottom"><b>${esc(item.cost)} MitchCoins</b><span aria-hidden="true">↗</span></span>
+        <span class="feature-bottom"><b>${esc(item.cost)} MitchCoins</b></span>
       </button>
     `).join('');
     document.querySelector('.shop-feature').style.display = picks.length ? '' : 'none';
@@ -953,8 +953,8 @@
       <div class="modal-actions">
         <div class="price mitch-coin-price" style="font-size: 1.35rem;">${priceHtml(item)} <small>MitchCoins</small></div>
         <div style="flex-grow: 1; max-width: 12.5rem;">
-          <button class="btn-buy ${item.type === 'premium' || (!owned && !locked(item)) ? 'primary' : ''} ${active ? 'active' : ''}" 
-                  onclick="handleModalBuy('${esc(item.id)}')" 
+          <button class="btn-buy ${item.type === 'premium' || (!owned && !locked(item)) ? 'primary' : ''} ${active ? 'active' : ''}"
+                  onclick="handleModalBuy('${esc(item.id)}')"
                   ${disabled ? 'disabled' : ''}
                   style="margin-top: 0;">
             ${buttonLabel(item, owned, active)}

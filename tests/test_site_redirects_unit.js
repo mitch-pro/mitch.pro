@@ -44,7 +44,7 @@ for (const id of ['home-search', 'links', 'daily-login-widget', 'member-side-rai
 }
 assert(home.includes('/home.css?v=6') && home.includes('/home-friends.js?v=3'), 'Homepage assets need cache-busted URLs');
 assert(homeFriends.includes("hero.after(section)"), 'Friends activity should live inside the dashboard');
-assert(homeCss.includes('prefers-reduced-motion') && homeCss.includes('prefers-color-scheme'), 'Homepage styles must respect motion and theme preferences');
+assert(homeCss.includes('prefers-reduced-motion') && homeCss.includes('--mh-bg: var(--t-bg)') && readFileSync('webserver/app.css', 'utf8').includes('prefers-color-scheme'), 'Homepage styles must inherit the shared theme and respect motion preferences');
 const location = { href: 'https://mitch.pro/' };
 const context = vm.createContext({ URL, location, window: { location }, localStorage: { getItem() { throw new Error('School links must bypass game launch preferences'); } } });
 vm.runInContext(home.slice(home.indexOf('function launchSite('), home.indexOf('function openInNewTab(')), context);
@@ -66,7 +66,7 @@ const preferencesHtml = readFileSync('webserver/preferences/index.html', 'utf8')
 const preferencesSchoolCss = readFileSync('webserver/preferences/preferences-school.css', 'utf8');
 assert(rjuhsdHtml.includes('<a class="brand" href="/" aria-label="rjuhsd.school home"><span class="brand-logo"><img class="site-logo" src="/icon-192.png"'), 'rjuhsd top left brand must use mitch.pro logo');
 assert(rjuhsdHtml.includes('/rjuhsd-assets/redesign.css?v=3'), 'rjuhsd must load the schedule-first redesign');
-assert(rjuhsdHtml.includes('/rjuhsd-assets/reference-theme.css?v=10'), 'rjuhsd must load updated reference-theme.css?v=10');
+assert(rjuhsdHtml.includes('/rjuhsd-assets/reference-theme.css?v=12'), 'rjuhsd must load updated reference-theme.css?v=12');
 const referenceThemeCss = readFileSync('webserver/rjuhsd-assets/reference-theme.css', 'utf8');
 assert(referenceThemeCss.includes('.calendar-days>button:hover:not(.today)'), 'dark calendar date hover must be styled without white box');
 assert(referenceThemeCss.includes('body.dark .calendar-days>button:not(.today):nth-child(7n+1)'), 'weekend styling must not clobber today highlight');
@@ -115,14 +115,14 @@ assert(rjuhsdHtml.includes('id="schools"'), 'rjuhsd/index.html must have #school
 assert(rjuhsdHtml.includes('id="faq"'), 'rjuhsd/index.html must have #faq section');
 
 const sitemap = readFileSync('webserver/sitemap.xml', 'utf8');
-assert(sitemap.includes('https://rjuhsd.school/'), 'sitemap.xml must include rjuhsd.school');
-// Woodcreek's schedule is the default content at the bare URL, so it
-// canonicalizes there instead of getting its own ?school=woodcreek entry —
-// listing both would contradict the canonical and confuse indexing.
-for (const s of schools.filter((school) => school !== 'woodcreek')) {
-  assert(sitemap.includes(`https://rjuhsd.school/?school=${s}`), `sitemap.xml must include ${s}`);
+const schoolSitemap = readFileSync('webserver/rjuhsd/sitemap.xml', 'utf8');
+assert(sitemap.includes('https://mitchdog.com/'), 'Main sitemap must use the public canonical host');
+assert(!sitemap.includes('https://rjuhsd.school/'), 'School URLs belong in the school host sitemap');
+assert(schoolSitemap.includes('https://rjuhsd.school/'), 'School sitemap must include its bare root');
+for (const school of schools.filter(school => school !== 'woodcreek')) {
+  assert(schoolSitemap.includes(`https://rjuhsd.school/${school}/`), `School sitemap must include ${school}`);
 }
-assert(!sitemap.includes('https://rjuhsd.school/?school=woodcreek'), 'sitemap.xml must not list a separate woodcreek URL that duplicates the bare canonical');
+assert(!schoolSitemap.includes('?school='), 'School sitemap must use canonical paths rather than duplicate query URLs');
 
 const robots = readFileSync('webserver/robots.txt', 'utf8');
 assert(robots.includes('Allow: /?school=*'), 'robots.txt must allow school queries');

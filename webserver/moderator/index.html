@@ -102,7 +102,7 @@
       html += '<div class="links">';
       html += '<a class="primary-staff-link" href="/admin/#moderation-tools"><span class="link-icon">&#128737;</span><span class="link-copy"><b>Safety &amp; reports</b><small>Direct safety tools</small></span><span class="link-arrow">&rarr;</span></a>';
       html += '<a href="/matrix/" target="_blank"><span class="link-icon">💬</span><span class="link-copy"><b>Matrix Chat</b><small>Official staff &amp; general chat</small></span><span class="link-arrow">&rarr;</span></a>';
-      html += '<a href="/admin/#approval-tools"><span class="link-icon">✓</span><span class="link-copy"><b>Requests</b><small>Track approvals and decisions</small></span><span class="link-arrow">↗</span></a><a href="/admin/#audit-tools"><span class="link-icon">≡</span><span class="link-copy"><b>Activity</b><small>Review moderation history</small></span><span class="link-arrow">↗</span></a>';
+      html += '<a href="/admin/#approval-tools"><span class="link-icon">✓</span><span class="link-copy"><b>Requests</b><small>Track approvals and decisions</small></span></a><a href="/admin/#audit-tools"><span class="link-icon">≡</span><span class="link-copy"><b>Activity</b><small>Review moderation history</small></span></a>';
       if (links.length) {
         html += links.map(link =>
           '<a href="' + safeHref(link.href) + '"><span class="link-icon">&#10022;</span><span class="link-copy"><b>' + esc(link.label) + '</b><small>Moderator shortcut</small></span><span class="link-arrow">&rarr;</span></a>'

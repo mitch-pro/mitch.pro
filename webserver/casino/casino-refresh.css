@@ -87,7 +87,7 @@ body.casino-page .controls { margin-top: auto; }
 body.casino-page .card .controls > .btn.primary,
 .theme-light body.casino-page .card .controls > .btn.primary { width: auto; min-height: 39px; justify-self: start; padding: 8px 14px; border: 1px solid color-mix(in srgb,var(--room) 55%,transparent); border-radius: 8px; background: color-mix(in srgb,var(--room) 17%,#1b1a25); color: #fff; box-shadow: none; font-size: 11px; font-weight: 700; }
 body.casino-page .card .controls > .btn.primary:hover { background: color-mix(in srgb,var(--room) 32%,#1b1a25); }
-body.casino-page .card .controls > .btn.primary::after { content: ' ↗'; font-size: 14px; }
+body.casino-page .card .controls > .btn.primary::after { content: none; font-size: 14px; }
 body.casino-page .side { top: 86px; gap: 13px; }
 body.casino-page .cpanel,
 .theme-light body.casino-page .cpanel { padding: 19px; border: 1px solid var(--casino-line); border-radius: 15px; background: #1b1d2a; box-shadow: none; backdrop-filter: none; }

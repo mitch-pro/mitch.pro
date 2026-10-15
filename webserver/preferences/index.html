@@ -753,7 +753,7 @@
   <header class="page-head">
     <a class="school-prefs-back" href="/">← Schedule</a>
     <h1>Preferences</h1>
-    <p class="page-sub"><span class="default-prefs-copy">Theme, account, privacy, and sync — tune how mitch.pro feels and behaves.</span><span class="school-prefs-copy">Make rjuhsd.school look and work the way you want.</span></p>
+    <p class="page-sub"><span class="default-prefs-copy">Theme, account, privacy, and sync settings.</span><span class="school-prefs-copy">Make rjuhsd.school look and work the way you want.</span></p>
   </header>
 
   <div class="pref-summary" aria-label="Current preference snapshot">
@@ -769,7 +769,7 @@
   <div class="pref-stack">
   <section class="pref-section" id="appearance">
     <h2>Appearance</h2>
-    <p class="section-sub">Control the theme, background, spacing, corners, fonts, and motion across the whole site.</p>
+    <p class="section-sub">Choose the theme, text size, corners, fonts, and motion.</p>
 
     <div class="field">
       <label>Theme Preset</label>
@@ -784,8 +784,8 @@
       <div class="field">
         <label>Custom Accent</label>
         <div class="inline-color">
-          <input id="accentColor" type="color" value="#f75383">
-          <input id="accentText" type="text" placeholder="#f75383">
+          <input id="accentColor" type="color" value="#c4df9b">
+          <input id="accentText" type="text" placeholder="#c4df9b">
           <button class="soft-btn" type="button" id="accentClear">Clear</button>
         </div>
       </div>
@@ -1974,7 +1974,7 @@ function syncAppearanceControls() {
   refreshThemeButtons();
   var accent = getThemePref('accent', '');
   document.getElementById('accentText').value = accent;
-  document.getElementById('accentColor').value = /^#[0-9a-f]{6}$/i.test(accent) ? accent : '#f75383';
+  document.getElementById('accentColor').value = /^#[0-9a-f]{6}$/i.test(accent) ? accent : getComputedStyle(document.documentElement).getPropertyValue('--t-ac').trim();
   document.getElementById('densitySelect').value = getThemePref('density', 'normal');
   document.getElementById('radiusSelect').value = getThemePref('radius', 'soft');
   document.getElementById('fontSelect').value = getThemePref('font', 'system');
@@ -2001,7 +2001,7 @@ function setupAppearanceControls() {
   document.getElementById('accentText').addEventListener('change', function() {
     var v = this.value.trim();
     if (v && !/^#[0-9a-f]{6}$/i.test(v)) {
-      setStatus('appearanceStatus', 'Use a hex color like #f75383.');
+      setStatus('appearanceStatus', 'Use a hex color like #c4df9b.');
       return;
     }
     setThemePref('accent', v);
@@ -2123,7 +2123,7 @@ function setupAccordions() {
     target.classList.add('open');
     var h = target.querySelector('h2');
     if (h) h.setAttribute('aria-expanded', 'true');
-  } else if (document.documentElement.classList.contains('school-preferences')) {
+  } else {
     var appearance = document.getElementById('appearance');
     var appearanceHeading = appearance && appearance.querySelector('h2');
     if (appearance) appearance.classList.add('open');

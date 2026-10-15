@@ -53,4 +53,4 @@ Disallow: /assistant.js
 Disallow: /broadcast.js
  
 Sitemap: https://rjuhsd.school/sitemap.xml
-Sitemap: https://mitch.pro/sitemap.xml
+Sitemap: https://mitchdog.com/sitemap.xml

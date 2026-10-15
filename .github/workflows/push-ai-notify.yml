@@ -31,7 +31,8 @@ jobs:
       - name: Collect diff
         run: |
           set -euo pipefail
-          git diff -U3 "${{ github.event.before }}" "${{ github.sha }}" | head -c 60000 > diff.txt
+          git diff -U3 "${{ github.event.before }}" "${{ github.sha }}" > full-diff.txt
+          head -c 60000 full-diff.txt > diff.txt
           echo "Diff captured: $(wc -c < diff.txt) bytes"
 
       - name: Run AI summary via GitHub Models

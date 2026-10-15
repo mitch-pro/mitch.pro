@@ -35,7 +35,7 @@
 
   var NAV_MITCH = [
     { href: '/', label: 'Home', icon: '⌂', match: function (p) { return p === '/' || p === '/index.html'; } },
-    { href: '/vms/', label: 'VM Lab', badge: 'FREE', icon: '▣', match: function (p) { return p.indexOf('/vms') === 0; } },
+    { href: '/vms/', label: 'VM Lab', badge: 'Free', icon: '▣', match: function (p) { return p.indexOf('/vms') === 0; } },
     { href: '/matrix/', label: 'Chat', icon: '◉', match: function (p) { return p.indexOf('/matrix') === 0 || p.indexOf('/encrypt') === 0 || p.indexOf('/public-chat') === 0; } },
     { href: '/game-portal/', label: 'Games', icon: '◆', match: function (p) { return p.indexOf('/games') === 0 || p.indexOf('/game-portal') === 0; } },
     { href: '/members/', label: 'People', icon: '●', match: function (p) { return p.indexOf('/members') === 0 || p.indexOf('/friends') === 0 || p.indexOf('/profile') === 0; } },
@@ -110,19 +110,20 @@
     more.innerHTML = icon('more') + '<span>More</span>';
     more.setAttribute('aria-haspopup', 'dialog');
     more.setAttribute('aria-controls', 'mobile-menu');
+    more.setAttribute('aria-expanded', 'false');
     dock.appendChild(more);
     var menu = document.createElement('dialog');
     menu.id = 'mobile-menu';
     menu.setAttribute('aria-labelledby', 'mobile-menu-title');
     menu.innerHTML = '<header><h2 id="mobile-menu-title">mitch.pro</h2><button type="button" aria-label="Close menu">×</button></header><nav aria-label="All sections"></nav>';
     var links = menu.querySelector('nav');
-    [['https://woodcreek.site/', 'Blooket Bot'], ['/profile/', 'My profile'], ['/preferences/', 'Customizer'], ['/friends/', 'Friends'], ['/coins/', 'MitchCoins'], ['/shop/', 'Shop'], ['/marketplace/', 'Marketplace'], ['/inventory/', 'Inventory'], ['/leaderboard/', 'Leaderboard'], ['https://rjuhsd.school/', 'Bell schedule'], ['/public-chat/', 'Public chat'], ['/canvas/', 'Canvas'], ['/vms/', 'VM Lab'], ['/notifications/', 'Notifications'], ['/blog/', 'Blog'], ['/invite/', 'Invite friends'], ['/feedback/', 'Feedback'], ['/faq/', 'Help']].forEach(function (item) {
+    [['https://woodcreek.site/', 'Blooket Bot'], ['/profile/', 'My profile'], ['/preferences/', 'Customizer'], ['/friends/', 'Friends'], ['https://beatdash.win/', 'BeatDash'], ['/shop/', 'Shop'], ['/marketplace/', 'Marketplace'], ['/inventory/', 'Inventory'], ['/leaderboard/', 'Leaderboard'], ['https://rjuhsd.school/', 'Bell schedule'], ['/public-chat/', 'Public chat'], ['/canvas/', 'Canvas'], ['/vms/', 'VM Lab'], ['/notifications/', 'Notifications'], ['/blog/', 'Blog'], ['/invite/', 'Invite friends'], ['/feedback/', 'Feedback'], ['/faq/', 'Help']].forEach(function (item) {
       var link = document.createElement('a'); link.href = item[0]; link.textContent = item[1]; links.appendChild(link);
     });
-    more.addEventListener('click', function () { menu.showModal(); });
+    more.addEventListener('click', function () { menu.showModal(); more.setAttribute('aria-expanded', 'true'); });
     menu.querySelector('button').addEventListener('click', function () { menu.close(); });
     menu.addEventListener('click', function (event) { if (event.target === menu) { var box = menu.getBoundingClientRect(); if (event.clientY < box.top || event.clientY > box.bottom || event.clientX < box.left || event.clientX > box.right) menu.close(); } });
-    menu.addEventListener('close', function () { more.focus(); });
+    menu.addEventListener('close', function () { more.setAttribute('aria-expanded', 'false'); more.focus(); });
     var mobile = matchMedia('(max-width: 760px)');
     mobile.addEventListener('change', function () { if (!mobile.matches && menu.open) menu.close(); });
     document.body.appendChild(dock);
@@ -165,7 +166,7 @@
 
   function ensureInstallMetadata() {
     var metas = {
-      'theme-color': IS_RJUHSD ? '#0c0809' : '#0b0e14',
+      'theme-color': IS_RJUHSD ? '#0c0809' : getComputedStyle(document.documentElement).getPropertyValue('--t-bg').trim() || '#17191b',
       'mobile-web-app-capable': 'yes',
       'apple-mobile-web-app-capable': 'yes',
       'apple-mobile-web-app-status-bar-style': 'black-translucent',
@@ -191,17 +192,6 @@
       touchIcon.href = IS_RJUHSD ? '/rjuhsd-assets/apple-touch-icon.png' : '/apple-touch-icon.png';
       document.head.appendChild(touchIcon);
     }
-  }
-
-  function ensureFonts() {
-    if (document.getElementById('app-fonts')) return;
-    if (document.querySelector('link[href*="fonts.googleapis.com"][href*="Figtree"]')) return;
-    var link = document.createElement('link');
-    link.id = 'app-fonts';
-    link.rel = 'stylesheet';
-    link.href = 'https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap';
-    var head = document.head || document.getElementsByTagName('head')[0];
-    if (head) head.appendChild(link);
   }
 
   function currentPath() {
@@ -328,7 +318,6 @@
       window.MitchShell = { ready: true, injected: false };
       return;
     }
-    ensureFonts();
     enhanceMobileShell();
     enhanceInterface();
     if (!IS_RJUHSD && !document.querySelector('script[src^="/mitch-coins.js"]')) {

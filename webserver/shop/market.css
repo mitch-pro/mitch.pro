@@ -7,17 +7,17 @@ html body.shop-page #market-page {
   padding: 0 0 100px !important;
   color: var(--t-fg);
 }
-#market-page .shop-eyebrow { display: block; color: var(--t-ac); font-size: 10px; font-weight: 750; letter-spacing: .18em; }
+#market-page .shop-eyebrow { display: block; color: var(--t-ac); font-size: 10px; font-weight: 750; letter-spacing: 0; }
 #market-page .page-head { display: grid; grid-template-columns: minmax(0, 1fr) 390px; align-items: stretch; gap: 32px; margin: 0 0 34px; padding: 52px 0 40px; border-bottom: 1px solid var(--t-bd); }
 #market-page .shop-intro { display: flex; flex-direction: column; align-items: flex-start; }
-#market-page .page-head h1 { margin: 20px 0 0; max-width: 720px; color: var(--t-fg); font-size: clamp(44px, 5.5vw, 82px) !important; font-weight: 760; line-height: .98; letter-spacing: -.07em; }
+#market-page .page-head h1 { margin: 20px 0 0; max-width: 720px; color: var(--t-fg); font-size: clamp(34px, 4vw, 48px) !important; font-weight: 760; line-height: .98; letter-spacing: -.07em; }
 #market-page .page-head h1 em { color: var(--t-ac); font-style: normal; }
 #market-page .subline { margin: 18px 0 0; max-width: 55ch; color: var(--t-fg2); font-size: 13px; line-height: 1.6; }
 #market-page .shop-hero-links { display: flex; flex-wrap: wrap; gap: 18px; margin-top: auto; padding-top: 28px; }
 #market-page .shop-hero-links a { color: var(--t-fg); font-size: 12px; font-weight: 680; text-decoration: none; border-bottom: 1px solid var(--t-bd); padding-bottom: 7px; }
 #market-page .shop-hero-links a:hover { color: var(--t-ac); border-color: var(--t-ac); }
 #market-page .balance-panel { display: flex; flex-direction: column; min-width: 0; min-height: 285px; padding: 26px !important; border: 1px solid var(--t-bd) !important; border-radius: 12px !important; background: var(--t-bg2) !important; box-shadow: none !important; }
-#market-page .balance-label { color: var(--t-fg2); font-size: 10px; letter-spacing: .16em; }
+#market-page .balance-label { color: var(--t-fg2); font-size: 10px; letter-spacing: 0; }
 #market-page .balance-value { display: flex; align-items: baseline; gap: 8px; margin: 18px 0 0; color: var(--t-fg); font-family: inherit; font-size: clamp(38px, 4vw, 60px) !important; font-weight: 730; line-height: 1; letter-spacing: -.065em; overflow-wrap: anywhere; }
 #market-page .balance-value::before { content: ''; flex: 0 0 34px; width: 34px; height: 34px; background: url('/mitchcoin.webp') center/contain no-repeat; }
 #market-page .balance-value small { color: var(--t-fg2); font-size: 11px; font-weight: 500; letter-spacing: 0; }
@@ -37,10 +37,10 @@ html body.shop-page #market-page {
 #market-page .shop-feature-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 #market-page .feature-item { min-width: 0; min-height: 245px; display: flex; flex-direction: column; align-items: flex-start; padding: 24px; border: 1px solid var(--t-bd); border-radius: 10px; background: var(--t-bg2); text-align: left; color: var(--t-fg); cursor: pointer; transition: transform .18s ease, border-color .18s ease; }
 #market-page .feature-item:hover { transform: translateY(-3px); border-color: var(--t-ac); }
-#market-page .feature-item:nth-child(1) { background: color-mix(in srgb, #493288 55%, var(--t-bg2)); color: #fff; border-color: transparent; }
-#market-page .feature-item:nth-child(2) { background: color-mix(in srgb, #116a9a 46%, var(--t-bg2)); color: #fff; border-color: transparent; }
-#market-page .feature-item:nth-child(3) { background: color-mix(in srgb, #91406c 48%, var(--t-bg2)); color: #fff; border-color: transparent; }
-#market-page .feature-item .feature-index { font-size: 10px; font-weight: 750; letter-spacing: .14em; opacity: .8; }
+#market-page .feature-item:nth-child(1) { background: var(--t-bg2); color: var(--t-fg); border-color: var(--t-bd); }
+#market-page .feature-item:nth-child(2) { background: var(--t-bg2); color: var(--t-fg); border-color: var(--t-bd); }
+#market-page .feature-item:nth-child(3) { background: var(--t-bg2); color: var(--t-fg); border-color: var(--t-bd); }
+#market-page .feature-item .feature-index { font-size: 10px; font-weight: 750; letter-spacing: 0; opacity: .8; }
 #market-page .feature-item .feature-name { display: block; margin-top: auto; font-size: clamp(22px, 2.5vw, 31px); font-weight: 730; line-height: 1.12; letter-spacing: -.05em; }
 #market-page .feature-item .feature-bottom { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding-top: 22px; font-size: 12px; }
 #market-page .feature-item .feature-bottom b { font-weight: 700; }
@@ -90,7 +90,7 @@ html body.shop-page #market-page .market-grid .card { min-width: 0; min-height: 
 @media (max-width: 740px) {
   html body.shop-page #market-page { width: calc(100% - 32px) !important; }
   #market-page .page-head { grid-template-columns: 1fr; gap: 25px; padding: 30px 0 28px; }
-  #market-page .page-head h1 { font-size: clamp(42px, 12vw, 64px) !important; }
+  #market-page .page-head h1 { font-size: 36px !important; }
   #market-page .balance-panel { min-height: 0; padding: 20px !important; }
   #market-page .balance-value { font-size: 42px !important; }
   #market-page .shop-feature-grid { grid-template-columns: 1fr; gap: 9px; }
@@ -103,6 +103,8 @@ html body.shop-page #market-page .market-grid .card { min-width: 0; min-height: 
   html body.shop-page #market-page .market-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
   html body.shop-page #market-page .market-grid .card { padding: 13px; min-height: 215px; }
   #market-page .item-title { font-size: 14px; }
+  #market-page .price-row { flex-wrap: wrap; }
+  #market-page .item-info { padding: 4px 0; min-height: 28px; }
   #market-page .admin-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 380px) { html body.shop-page #market-page .market-grid { grid-template-columns: 1fr; } }

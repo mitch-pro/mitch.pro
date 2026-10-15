@@ -20,7 +20,7 @@ assert(home.includes('/home.css?v=6'), 'Homepage must load its consolidated styl
 assert(homeCss.includes('.home-features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }'), 'VM Lab, Matrix Chat, and Play Games must stay three equal-width tiles');
 assert(home.match(/class="home-feature feature-(vms|chat|games)"/g)?.length === 3, 'Homepage must keep all three start-here tiles');
 assert(homeCss.includes('body.home:is(.is-staff, .is-admin) .staff-access-rail'), 'Staff rail must only appear for staff');
-assert(homeCss.includes('.staff-access-rail:focus-within'), 'Staff rail must expand for keyboard users');
+assert(homeCss.includes('.staff-access-copy, .staff-tester-copy') && homeCss.includes('display: flex; flex-direction: column; gap: 1px;'), 'Staff labels must remain visible without hovering');
 assert(staffCss.includes('#command-center #owner-tools'), 'Owner tools need their own visual treatment');
 assert(staffCss.includes('@media (max-width: 700px)'), 'Staff panels need a dedicated mobile layout');
 assert(staffCss.includes('@media (prefers-reduced-motion: reduce)'), 'Staff motion must honor reduced-motion preferences');
