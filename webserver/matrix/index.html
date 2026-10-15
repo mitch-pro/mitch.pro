@@ -365,62 +365,19 @@
         ];
         let matrixStoreRecoveryStarted = false;
 
-        // Persistent (survives reloads) attempt cap shared by every path that
-        // can trigger a recovery reload. Without this, a clear that keeps
-        // failing (e.g. an IndexedDB delete that never resolves because
-        // something still has that database open) has nothing to stop it
-        // from reloading forever - this happened in production even after
-        // beginMatrixStoreRecovery() got its own cap, because the *other*
-        // reload path (the pending-recovery-didn't-clear branch in
-        // initMitchSSO) had none of its own.
-        const RECOVERY_ATTEMPT_KEY = 'mitch_matrix_store_recovery_attempts_v1';
-        const RECOVERY_ATTEMPT_WINDOW_MS = 60000;
-        const RECOVERY_ATTEMPT_LIMIT = 3;
-
-        function recordRecoveryAttempt() {
-          let attempts = { count: 0, since: Date.now() };
-          try {
-            const raw = JSON.parse(localStorage.getItem(RECOVERY_ATTEMPT_KEY) || 'null');
-            if (raw && typeof raw.count === 'number' && Date.now() - raw.since < RECOVERY_ATTEMPT_WINDOW_MS) attempts = raw;
-          } catch (e) {}
-          attempts.count += 1;
-          const exceeded = attempts.count > RECOVERY_ATTEMPT_LIMIT;
-          try {
-            if (exceeded) localStorage.removeItem(RECOVERY_ATTEMPT_KEY);
-            else localStorage.setItem(RECOVERY_ATTEMPT_KEY, JSON.stringify(attempts));
-          } catch (e) {}
-          return exceeded;
-        }
-
-        function giveUpRecovery() {
-          matrixStoreRecoveryStarted = true;
-          try { localStorage.removeItem(MATRIX_STORE_RECOVERY_KEY); } catch (e) {}
-          if (banner) banner.style.display = 'flex';
-          const message = document.getElementById('mitch-sso-msg');
-          if (message) message.textContent = 'Chat storage keeps failing to reset automatically. Use your browser\'s "Clear site data" for this page (a hard reload alone won\'t fix it - the stuck state is in storage a reload doesn\'t touch), then reopen chat. If it still fails, this needs a manual fix.';
-        }
-
         function isMatrixStoreAccountMismatch(value) {
           const message = String(value?.message || value || '');
-          // matrix-sdk-crypto-wasm has a whole family of "X doesn't match Y"
-          // errors (account/constructor, cross-signing, imported keys,
-          // session config, keypairs, user IDs...) depending on exactly
-          // where a stale local crypto store collides with a device's real
-          // identity. Match the specific known sentences, not a loose
-          // "match-word + crypto-word anywhere" combo - a two-part AND over
-          // a whole-page text scan is too easy to satisfy by coincidence
-          // (e.g. an unrelated "passwords do not match" validation message
-          // next to an unrelated "session"/"account" heading elsewhere on
-          // the page), which caused a reload loop in production.
-          return /account in the store doesn.t match the account in the constructor|mismatchedidentitykeyserror|user id mismatch in (one of the cross signing keys|our user-signing key)|mismatched keypair detected|the session config doesn.t match the one used for the pre-key message|the public key of the imported private key doesn.t match|the public key that was part of the message doesn.t match the key we have stored|the parity byte of the recovery key doesn.t match/i.test(message);
+          // matrix-sdk-crypto-wasm words this identity/device-key mismatch a
+          // few different ways depending on exactly where it trips (the
+          // account constructor check, cross-signing, or imported-key
+          // verification) - catch the whole family so the local store always
+          // gets cleared and a fresh device re-established, instead of the
+          // error surfacing raw on one wording and not the others.
+          return /account in the store doesn't match the account in the constructor|mismatchedidentitykeys|mismatched keypair detected|user id mismatch in/i.test(message);
         }
 
         function beginMatrixStoreRecovery() {
           if (matrixStoreRecoveryStarted) return;
-          if (recordRecoveryAttempt()) {
-            giveUpRecovery();
-            return;
-          }
           matrixStoreRecoveryStarted = true;
           localStorage.setItem(MATRIX_STORE_RECOVERY_KEY, '1');
           setTimeout(() => window.location.reload(), 50);
@@ -435,21 +392,9 @@
 
         // Cinny catches startup failures and renders them instead of leaving an
         // unhandled rejection, so also watch its error panel for this exact
-        // Matrix crypto-store identity failure. React may update an
-        // already-mounted error node's text in place (a characterData
-        // mutation) rather than mounting a brand new element (childList) -
-        // watch both, and fall back to a plain polling scan of the page
-        // text for the first stretch after load so the exact DOM update
-        // strategy Cinny happens to use can never cause this to be missed.
+        // Matrix crypto-store identity failure.
         new MutationObserver(mutations => {
           for (const mutation of mutations) {
-            if (mutation.type === 'characterData') {
-              if (isMatrixStoreAccountMismatch(mutation.target.data)) {
-                beginMatrixStoreRecovery();
-                return;
-              }
-              continue;
-            }
             for (const node of mutation.addedNodes) {
               const message = node.nodeType === Node.TEXT_NODE ? node.nodeValue : node.textContent;
               if (isMatrixStoreAccountMismatch(message)) {
@@ -458,20 +403,7 @@
               }
             }
           }
-        }).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
-
-        let pollAttempts = 0;
-        const pollTimer = setInterval(() => {
-          pollAttempts++;
-          if (matrixStoreRecoveryStarted || pollAttempts > 40) {
-            clearInterval(pollTimer);
-            return;
-          }
-          if (isMatrixStoreAccountMismatch(document.body && document.body.textContent)) {
-            clearInterval(pollTimer);
-            beginMatrixStoreRecovery();
-          }
-        }, 500);
+        }).observe(document.documentElement, { childList: true, subtree: true });
 
         function bootCinny() {
           if (window.__cinnyLoaded) return;
@@ -509,34 +441,16 @@
               const request = indexedDB.deleteDatabase(name);
               request.onsuccess = () => finish(true);
               request.onerror = () => finish(false);
-              // A real "someone else has it open" block resolves fast once
-              // they close it, so keep that follow-up short. The overall
-              // fallback below is much longer: deleting the crypto store can
-              // legitimately take a few seconds, and a false "failed" here
-              // is what used to send this into an uncapped reload loop.
               request.onblocked = () => setTimeout(() => finish(false), 1500);
-              setTimeout(() => finish(false), 8000);
+              setTimeout(() => finish(false), 3000);
             } catch (_) {
               finish(false);
             }
           });
         }
 
-        async function unregisterMatrixServiceWorker() {
-          if (!('serviceWorker' in navigator)) return;
-          try {
-            const regs = await navigator.serviceWorker.getRegistrations();
-            // Cinny's own /matrix/-scoped service worker can hold an open
-            // connection to the crypto IndexedDB that outlives a page reload,
-            // which is exactly what blocks the deletes below from ever
-            // resolving. Drop it before attempting them.
-            await Promise.all(regs.filter(r => r.scope.includes('/matrix/')).map(r => r.unregister()));
-          } catch (_) {}
-        }
-
         async function resetMatrixClientStores() {
           if (!('indexedDB' in window)) return true;
-          await unregisterMatrixServiceWorker();
           const results = await Promise.all(MATRIX_DATABASES.map(deleteMatrixDatabase));
           return results.every(Boolean);
         }
@@ -595,15 +509,6 @@
             const recovery = await completePendingMatrixStoreRecovery();
             if (recovery.pending && !recovery.cleared) {
               shouldBootCinny = false;
-              // This path used to reload on a plain 2s timer with no cap at
-              // all - if the clear keeps failing (e.g. the crypto database's
-              // delete never resolves) it looped forever, every load, with
-              // no way out even via a hard reload. Route it through the same
-              // shared attempt cap as the other recovery trigger instead.
-              if (recordRecoveryAttempt()) {
-                giveUpRecovery();
-                return;
-              }
               if (banner) banner.style.display = 'flex';
               const message = document.getElementById('mitch-sso-msg');
               if (message) message.textContent = 'Repairing encrypted chat storage… close other chat tabs if this page keeps reloading.';
@@ -637,17 +542,6 @@
               ? stored.deviceId
               : '';
             if (stored.token || stored.userId) clearStoredSession();
-            // If we're about to stop carrying forward the cached device id
-            // (e.g. the server now resolves a different Matrix identity for
-            // this session than what's cached), the IndexedDB crypto store
-            // still has that old device's pickled account under its old id.
-            // Booting Cinny with a new device id on top of it is exactly
-            // the "account in the store doesn't match the account in the
-            // constructor" failure - clear it now, before that can happen,
-            // instead of only cleaning up reactively after the error fires.
-            if (stored.deviceId && stored.deviceId !== reusableDeviceId) {
-              await resetMatrixClientStores();
-            }
 
             if (!status.authenticated) {
               if (banner) banner.style.display = 'flex';
