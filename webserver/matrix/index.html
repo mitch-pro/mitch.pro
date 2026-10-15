@@ -371,19 +371,38 @@
           // errors (account/constructor, cross-signing, imported keys,
           // session config, keypairs, user IDs...) depending on exactly
           // where a stale local crypto store collides with a device's real
-          // identity. The word is usually "doesn't match"/"does not match",
-          // NOT "mismatch" - e.g. the account/constructor error (the one
-          // actually seen in production) reads "...doesn't match the
-          // account in the constructor: expected @admin:mitch.pro:XXXXXXXXXX,
-          // got @admin:mitch.pro:YYYYYYYYYY". Catch both spellings, paired
-          // with a crypto/identity term, deliberately broad: any device
-          // logging in should just get a fresh, working session instead of
-          // surfacing raw crypto errors, full stop.
-          return /doesn.t match|does not match|mismatch/i.test(message) && /key|account|session|identity|device|signing|crypto|olm|megolm/i.test(message);
+          // identity. Match the specific known sentences, not a loose
+          // "match-word + crypto-word anywhere" combo - a two-part AND over
+          // a whole-page text scan is too easy to satisfy by coincidence
+          // (e.g. an unrelated "passwords do not match" validation message
+          // next to an unrelated "session"/"account" heading elsewhere on
+          // the page), which caused a reload loop in production.
+          return /account in the store doesn.t match the account in the constructor|mismatchedidentitykeyserror|user id mismatch in (one of the cross signing keys|our user-signing key)|mismatched keypair detected|the session config doesn.t match the one used for the pre-key message|the public key of the imported private key doesn.t match|the public key that was part of the message doesn.t match the key we have stored|the parity byte of the recovery key doesn.t match/i.test(message);
         }
 
         function beginMatrixStoreRecovery() {
           if (matrixStoreRecoveryStarted) return;
+          // Persistent (survives the reload) attempt cap - matrixStoreRecoveryStarted
+          // alone only blocks re-triggering within the same page load, so a
+          // false positive (or a genuinely unrecoverable state) that fires
+          // again right after each reload could otherwise loop forever.
+          const ATTEMPT_KEY = 'mitch_matrix_store_recovery_attempts_v1';
+          const WINDOW_MS = 60000;
+          let attempts = { count: 0, since: Date.now() };
+          try {
+            const raw = JSON.parse(localStorage.getItem(ATTEMPT_KEY) || 'null');
+            if (raw && typeof raw.count === 'number' && Date.now() - raw.since < WINDOW_MS) attempts = raw;
+          } catch (e) {}
+          attempts.count += 1;
+          if (attempts.count > 3) {
+            matrixStoreRecoveryStarted = true;
+            try { localStorage.removeItem(ATTEMPT_KEY); } catch (e) {}
+            if (banner) banner.style.display = 'flex';
+            const message = document.getElementById('mitch-sso-msg');
+            if (message) message.textContent = 'Chat storage keeps failing to reset automatically. Close any other mitch.pro chat tabs, then try a hard reload (Ctrl/Cmd+Shift+R). If it still fails, this needs a manual fix.';
+            return;
+          }
+          try { localStorage.setItem(ATTEMPT_KEY, JSON.stringify(attempts)); } catch (e) {}
           matrixStoreRecoveryStarted = true;
           localStorage.setItem(MATRIX_STORE_RECOVERY_KEY, '1');
           setTimeout(() => window.location.reload(), 50);
