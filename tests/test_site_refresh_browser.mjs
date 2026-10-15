@@ -22,7 +22,23 @@ try {
  for(const path of ['/','/coins/?v=2','/casino/','/enroll/','/game-portal/','/team/','/friends/','/members/','/rjuhsd/']) {
   await page.goto(base+path);assert.equal(await page.locator('#site-credit').count(),1,path);
   assert.equal(await page.locator('#site-credit').innerText(),path==='/rjuhsd/'?'Made by Tyler and Mitch.':'Created by Mitch and Tyler');
+  for(const width of [1440,390]) {
+   await page.setViewportSize({width,height:844});
+   for(const fraction of [0,.5,1]) {
+    await page.evaluate(fraction=>window.scrollTo({top:(document.documentElement.scrollHeight-innerHeight)*fraction,behavior:'instant'}),fraction);
+    const rect=await page.locator('#site-credit').boundingBox();
+    assert(rect && Math.abs(rect.x)<1 && Math.abs(rect.width-width)<1 && Math.abs(rect.y+rect.height-844)<1,`${path}: credit must stay across the viewport at scroll ${fraction}, width ${width}`);
+   }
+   for(const selector of ['#mobile-dock','.mobile-nav-dock']) {
+    const dock=page.locator(selector);
+    if(await dock.count() && await dock.isVisible()) {
+     const nav=await dock.boundingBox(),credit=await page.locator('#site-credit').boundingBox();
+     assert(nav.y+nav.height<=credit.y,`${path}: navigation must stay above the credit`);
+    }
+   }
+  }
  }
+ await page.setViewportSize({width:1440,height:1000});
  await page.goto(base+'/enroll/');assert(await page.locator('video').evaluate(el=>Boolean(el.controls&&el.compareDocumentPosition(document.querySelector('#account-access'))&Node.DOCUMENT_POSITION_FOLLOWING)));
  await page.goto(base+'/coins/?v=2');assert.equal(await page.title(),'MitchCoins — mitch.pro');assert.equal(await page.locator('.coin-destination').count(),4);
  const inventory=await get('/api/me/inventory');

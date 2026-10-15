@@ -91,7 +91,17 @@ pub fn inject_credit(html: &str, school: bool) -> String {
     } else {
         "Created by Mitch and Tyler"
     };
-    let band = format!("<div id=\"site-credit\" style=\"box-sizing:border-box;clear:both;width:100%;padding:10px 16px;margin-top:24px;border-top:1px solid #8882;border-bottom:1px solid #8882;background:#8888880d;color:inherit;text-align:center;font:400 11px/1.5 system-ui,sans-serif;opacity:.7\">{text}</div>");
+    let band = format!(
+        r#"<style>
+:root {{ --site-credit-height: calc(29px + env(safe-area-inset-bottom, 0px)); }}
+#site-credit-space {{ clear:both; height:var(--site-credit-height); flex:0 0 var(--site-credit-height); grid-column:1 / -1; pointer-events:none; }}
+#site-credit {{ box-sizing:border-box; position:fixed; inset:auto 0 0; z-index:100000; width:100%; height:var(--site-credit-height); margin:0; padding:6px 16px calc(6px + env(safe-area-inset-bottom, 0px)); border-top:1px solid #8883; background:#88888818; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); color:inherit; text-align:center; font:400 11px/16px system-ui,sans-serif; pointer-events:none; }}
+#site-credit span {{ opacity:.7; }}
+body #mobile-dock {{ bottom:calc(var(--site-credit-height) + 10px); }}
+body .mobile-nav-dock {{ bottom:var(--site-credit-height); padding-bottom:6px; }}
+@media print {{ #site-credit {{ position:static; height:auto; padding:6px 16px; }} #site-credit-space {{ display:none; }} }}
+</style><div id="site-credit-space" aria-hidden="true"></div><div id="site-credit"><span>{text}</span></div>"#
+    );
     match html.rfind("</body>") {
         Some(i) => format!("{}{}{}", &html[..i], band, &html[i..]),
         None => html.to_string(),
