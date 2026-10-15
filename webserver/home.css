@@ -311,7 +311,11 @@ body.home:is(.is-staff, .is-admin) .staff-access-rail { display: flex; }
 .home-friends { margin-top: var(--mh-gap); padding: 1.1rem 0; border-top: 1px solid var(--mh-border); border-bottom: 1px solid var(--mh-border); }
 .home-friends header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 0.8rem; }
 .home-friends h2 { margin: 0; font-size: 0.95rem; font-weight: 700; letter-spacing: -0.01em; color: var(--mh-ink); }
-.home-friend-count { color: var(--mh-ink-soft); font-weight: 500; }
+.home-friend-count { color: var(--mh-ink-soft); font-weight: 500; font-size: 0.78rem; }
+.home-friend-count:not(:empty)::before {
+  content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 5px;
+  border-radius: 50%; background: #16a34a; vertical-align: middle;
+}
 .home-friends header a { font-size: 0.76rem; font-weight: 600; color: var(--mh-ink-soft); }
 .home-friends header a:hover { color: var(--mh-accent); }
 .home-friend-list { display: flex; gap: 1.2rem; overflow-x: auto; padding: 2px 1px 6px; scrollbar-width: thin; }
@@ -342,6 +346,34 @@ body.home:is(.is-staff, .is-admin) .staff-access-rail { display: flex; }
 .home-schedule-button span { color: var(--mh-ink-soft); font-size: 0.76rem; font-weight: 400; }
 .home-schedule-button b { margin-left: auto; color: var(--mh-accent); font-weight: 400; }
 .home-schedule-button:hover { color: var(--mh-accent); }
+
+/* --------------------------------------------------------------------------
+   Happy hour banner — one dismissible line, not a card
+   -------------------------------------------------------------------------- */
+
+.home-happy-hour {
+  display: none; align-items: center; gap: 0.6rem;
+  margin-top: 0.9rem; padding: 0.6rem 0.9rem;
+  background: var(--mh-accent-soft); border: 1px solid var(--mh-border); border-radius: var(--mh-radius-sm);
+  font-size: 0.82rem; color: var(--mh-ink);
+}
+.home-happy-hour.inactive { background: var(--mh-bg-soft); color: var(--mh-ink-soft); }
+#happy-hour-text { flex: 1; min-width: 0; }
+.pulse-glow-cyan { display: inline-block; flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: #2563eb; }
+.happy-hour-dismiss {
+  flex-shrink: 0; width: 22px; height: 22px; padding: 0; border: 0; background: none;
+  color: var(--mh-ink-faint); font-size: 1rem; line-height: 1; cursor: pointer;
+}
+.happy-hour-dismiss:hover { color: var(--mh-ink); background: none; }
+
+/* --------------------------------------------------------------------------
+   Continue where you left off
+   -------------------------------------------------------------------------- */
+
+.home-recent { margin-top: var(--mh-gap); }
+.home-recent-heading { margin: 0 0 0.9rem; }
+.recent-strip { display: flex; align-items: center; gap: 1.4rem; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.recent-strip .site-link { flex-shrink: 0; padding: 0; }
 
 /* --------------------------------------------------------------------------
    Search results — shown inline under the search box while searching
@@ -381,8 +413,14 @@ body.home:is(.is-staff, .is-admin) .staff-access-rail { display: flex; }
   margin-top: var(--mh-gap); padding-top: 1.1rem; border-top: 1px solid var(--mh-border);
 }
 .bottom-bar-item { display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; }
-#abToggleBar, #preferences-card { flex: 0 0 auto; }
+#abToggleBar, #preferences-card, #vm-status-chip { flex: 0 0 auto; }
 #preferences-card:hover { color: var(--mh-accent); }
+#vm-status-chip { color: var(--mh-ink); }
+#vm-status-chip:hover { color: var(--mh-accent); }
+.status-dot { display: inline-block; flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: var(--mh-ink-faint); }
+.status-dot.status-running { background: #16a34a; }
+.status-dot.status-pending { background: #d97706; }
+.status-dot.status-stopped { background: var(--mh-ink-faint); }
 .control-logo { display: inline-flex; width: 14px; height: 14px; color: var(--mh-ink-faint); flex-shrink: 0; }
 .control-logo svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .control-copy { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }

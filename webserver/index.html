@@ -13,9 +13,9 @@
 <title>mitch.pro</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"></noscript>
 <link rel="stylesheet" href="/app.css">
-<link rel="stylesheet" href="/home.css?v=8">
+<link rel="stylesheet" href="/home.css?v=9">
 <script src="/app-shell.js" defer></script>
-<script src="/home-friends.js?v=3" defer></script>
+<script src="/home-friends.js?v=4" defer></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
@@ -121,9 +121,27 @@ function openInNewTab(href) {
   if (!w) window.location.href = href;
 }
 
+function recordRecentVisit(href, label) {
+  if (!href) return;
+  try {
+    var list = JSON.parse(localStorage.getItem('_prefRecent') || '[]');
+    if (!Array.isArray(list)) list = [];
+    list = list.filter(function(e) { return e && e.href !== href; });
+    list.unshift({ href: href, label: label || href, ts: Date.now() });
+    localStorage.setItem('_prefRecent', JSON.stringify(list.slice(0, 8)));
+  } catch(e) {}
+}
+
+function labelFromLink(el) {
+  if (!el) return '';
+  var named = el.querySelector && el.querySelector('h2, b');
+  return String((named ? named.textContent : el.textContent) || '').trim();
+}
+
 function openHomeHref(event, href) {
   if (event && (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button > 0)) return;
   if (event) event.preventDefault();
+  recordRecentVisit(href, event && event.currentTarget ? labelFromLink(event.currentTarget) : '');
   try {
     launchSite('url', href);
   } catch (e) {
@@ -172,6 +190,7 @@ function makeSiteLink(type, href, label, extraClass) {
       visits[href] = (visits[href] || 0) + 1;
       localStorage.setItem('_prefVisits', JSON.stringify(visits));
     } catch(err) {}
+    recordRecentVisit(href, label);
     try {
       e.preventDefault();
       launchSite(type, href);
@@ -180,6 +199,22 @@ function makeSiteLink(type, href, label, extraClass) {
     }
   };
   return a;
+}
+
+function renderRecentVisits() {
+  var wrap = document.getElementById('home-recent');
+  var list = document.getElementById('home-recent-list');
+  if (!wrap || !list) return;
+  var recent = [];
+  try { recent = JSON.parse(localStorage.getItem('_prefRecent') || '[]'); } catch(e) {}
+  if (!Array.isArray(recent)) recent = [];
+  recent = recent.filter(function(e) { return e && e.href && e.label; });
+  if (!recent.length) { wrap.hidden = true; return; }
+  list.innerHTML = '';
+  recent.slice(0, 6).forEach(function(e) {
+    list.appendChild(makeSiteLink('url', e.href, e.label, 'recent-site-link'));
+  });
+  wrap.hidden = false;
 }
 
 function artForDestination(label, href) {
@@ -371,6 +406,13 @@ function focusAllPages(event) {
   if (event) event.preventDefault();
   var target = document.getElementById('home-catalog') || document.getElementById('links');
   if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function dismissHappyHour() {
+  var hhNudge = document.getElementById('happy-hour-nudge');
+  if (!hhNudge) return;
+  try { localStorage.setItem('_hhDismissedMsg', hhNudge.dataset.message || ''); } catch(e) {}
+  hhNudge.style.display = 'none';
 }
 
 function syncHubDailyChip(state) {
@@ -739,15 +781,22 @@ function loadGreeting() {
       var hhNudge = document.getElementById('happy-hour-nudge');
       var hhText = document.getElementById('happy-hour-text');
       var hhPulse = document.getElementById('happy-hour-pulse');
-      if (hhNudge && hhText && d.happyHour) {
-        hhText.textContent = d.happyHour.message;
-        hhNudge.style.display = 'flex';
-        if (d.happyHour.active) {
-          hhNudge.className = 'active';
-          if (hhPulse) hhPulse.style.display = 'inline-block';
+      if (hhNudge && hhText && d.happyHour && d.happyHour.message) {
+        var hhDismissed = '';
+        try { hhDismissed = localStorage.getItem('_hhDismissedMsg') || ''; } catch(e) {}
+        if (d.happyHour.message === hhDismissed) {
+          hhNudge.style.display = 'none';
         } else {
-          hhNudge.className = 'inactive';
-          if (hhPulse) hhPulse.style.display = 'none';
+          hhNudge.dataset.message = d.happyHour.message;
+          hhText.textContent = d.happyHour.message;
+          hhNudge.style.display = 'flex';
+          if (d.happyHour.active) {
+            hhNudge.className = 'active';
+            if (hhPulse) hhPulse.style.display = 'inline-block';
+          } else {
+            hhNudge.className = 'inactive';
+            if (hhPulse) hhPulse.style.display = 'none';
+          }
         }
       }
     }
@@ -1537,6 +1586,7 @@ async function initHome() {
   setupHomeSearch();
   setupAboutBlankToggle();
   applyHomepagePrefs();
+  renderRecentVisits();
   loadSites();
   loadGreeting();
   setupAdminPanel();
@@ -1547,6 +1597,34 @@ async function initHome() {
   setInterval(loadOnlineMembers, 15000);
   initFriendsSystem();
   initHudTerminal();
+  loadVmStatusChip();
+  setInterval(loadVmStatusChip, 30000);
+}
+
+async function loadVmStatusChip() {
+  var chip = document.getElementById('vm-status-chip');
+  var text = document.getElementById('vm-status-text');
+  var dot = document.getElementById('vm-status-dot');
+  if (!chip) return;
+  try {
+    var res = await fetch('/api/vm/status');
+    if (!res.ok) { res.text().catch(function(){}); chip.hidden = true; return; }
+    var data = await res.json();
+    if (!data || data.status === 'none') { chip.hidden = true; return; }
+    chip.hidden = false;
+    if (data.status === 'pending') {
+      if (text) text.textContent = 'VM: Pending approval';
+      if (dot) dot.className = 'status-dot status-pending';
+    } else if (data.vmStatus === 'running') {
+      if (text) text.textContent = 'VM: Running';
+      if (dot) dot.className = 'status-dot status-running';
+    } else {
+      if (text) text.textContent = 'VM: Stopped';
+      if (dot) dot.className = 'status-dot status-stopped';
+    }
+  } catch(e) {
+    chip.hidden = true;
+  }
 }
 
 function toggleHudTerminal() {
@@ -3123,6 +3201,17 @@ if (document.readyState === 'loading') {
 
   </header>
 
+  <div id="happy-hour-nudge" class="home-happy-hour" style="display:none;">
+    <span id="happy-hour-pulse" class="pulse-glow-cyan"></span>
+    <span id="happy-hour-text"></span>
+    <button type="button" class="happy-hour-dismiss" onclick="dismissHappyHour()" aria-label="Dismiss">&times;</button>
+  </div>
+
+  <section class="home-recent" id="home-recent" hidden aria-label="Continue where you left off">
+    <div class="home-section-heading home-recent-heading"><h2>Continue where you left off</h2></div>
+    <div id="home-recent-list" class="recent-strip"></div>
+  </section>
+
   <div class="home-section-heading"><h2>Shortcuts</h2></div>
   <section class="home-features" aria-label="Start here">
     <a class="home-feature feature-vms" href="/vms/" onclick="openHomeHref(event, '/vms/');">
@@ -3161,6 +3250,10 @@ if (document.readyState === 'loading') {
 
   <!-- Bottom bar: quick controls and stats, one horizontal strip -->
   <section class="home-bottom-bar" aria-label="Quick controls">
+    <a id="vm-status-chip" class="bottom-bar-item" href="/vms/" hidden>
+      <span class="status-dot" id="vm-status-dot"></span>
+      <span class="control-copy"><b id="vm-status-text">VM</b></span>
+    </a>
     <div id="abToggleBar" class="bottom-bar-item">
       <span class="control-logo"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
       <span class="control-copy"><b>Stealth launch</b><small>Open in about:blank</small></span>
