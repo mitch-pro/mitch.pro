@@ -447,25 +447,6 @@ fn blooket_bot_redirect(path: &str, method: &Method, search: &str) -> Option<Res
     None
 }
 
-fn coins_redirect(path: &str, method: &Method) -> Option<Response> {
-    if (method == Method::GET || method == Method::HEAD)
-        && matches!(
-            path,
-            "/coins"
-                | "/coins/"
-                | "/coins.html"
-                | "/coins.htm"
-                | "/coins/index"
-                | "/coins/index/"
-                | "/coins/index.html"
-                | "/coins/index.htm"
-        )
-    {
-        return Some(redirect("https://beatdash.win/", 301));
-    }
-    None
-}
-
 /// `getRealIp(req)` — precedence: public socket peer -> CF-Connecting-IP ->
 /// True-Client-IP -> X-Mitch-Client-IP -> first public XFF -> X-Real-IP ->
 /// X-Client-IP -> RFC 7239 Forwarded -> private fallbacks -> 127.0.0.1.
@@ -631,9 +612,6 @@ pub async fn handle(
         return resp;
     }
     if let Some(resp) = blooket_bot_redirect(&path, &method, &search) {
-        return resp;
-    }
-    if let Some(resp) = coins_redirect(&path, &method) {
         return resp;
     }
 
@@ -2434,49 +2412,6 @@ fn unsubscribe_invalid_html() -> Response {
         .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")
         .body(axum::body::Body::from(html))
         .unwrap_or_else(|_| crate::errors::err_resp(500, None, None))
-}
-
-#[cfg(test)]
-mod coins_redirect_tests {
-    use super::*;
-
-    #[test]
-    fn retired_coins_page_aliases_redirect_to_beatdash() {
-        for path in [
-            "/coins",
-            "/coins/",
-            "/coins.html",
-            "/coins.htm",
-            "/coins/index",
-            "/coins/index/",
-            "/coins/index.html",
-            "/coins/index.htm",
-        ] {
-            for method in [Method::GET, Method::HEAD] {
-                let response = coins_redirect(path, &method).expect("coins page must redirect");
-                assert_eq!(response.status(), StatusCode::MOVED_PERMANENTLY);
-                assert_eq!(response.headers()["location"], "https://beatdash.win/");
-            }
-        }
-    }
-
-    #[test]
-    fn coins_redirect_does_not_capture_apis_assets_or_mutations() {
-        for path in [
-            "/",
-            "/api/me/coins",
-            "/api/game-portal/heartbeat",
-            "/mitch-coins.js",
-            "/mitch-coins.css",
-            "/coins/other",
-            "/coins/index.html/other",
-        ] {
-            assert!(coins_redirect(path, &Method::GET).is_none());
-        }
-        for method in [Method::POST, Method::PUT, Method::PATCH, Method::DELETE] {
-            assert!(coins_redirect("/coins/", &method).is_none());
-        }
-    }
 }
 
 #[cfg(test)]
