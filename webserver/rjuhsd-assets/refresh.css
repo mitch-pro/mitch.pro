@@ -43,4 +43,4 @@
 
 html:has(body.school-hub)::before{background:var(--paper,#17171a)!important;filter:none!important}
 body.school-hub{background:var(--paper,#17171a)!important}
-.school-hub #weather-widget{position:relative;inset:auto;width:min(100%,360px);margin:24px auto;box-shadow:none}
+.school-hub #weather-widget{position:relative!important;inset:auto!important;width:min(calc(100% - 32px),360px)!important;margin:24px auto!important;box-shadow:none!important}
