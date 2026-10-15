@@ -19,7 +19,10 @@
   }
   function render(friends) {
     list.replaceChildren();
-    section.querySelector('.home-friend-count').textContent = friends.length ? `(${friends.length})` : '';
+    const onlineCount = friends.filter(f => f.online).length;
+    const countEl = section.querySelector('.home-friend-count');
+    countEl.textContent = onlineCount ? `${onlineCount} online` : '';
+    countEl.title = friends.length ? `${friends.length} total friend${friends.length === 1 ? '' : 's'}` : '';
     section.classList.toggle('is-empty',!friends.length);
     if (!friends.length) {
       const empty = document.createElement('div'); empty.className = 'home-friends-empty';

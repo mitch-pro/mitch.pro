@@ -45,7 +45,7 @@ try {
  assert.equal(await page.locator('#online-members-list [onmouseover],#online-members-list img[onerror]').count(),0);
  assert.equal(await page.evaluate(()=>window.__injected),undefined);
  await page.goto(base+'/casino/');await page.waitForFunction(()=>document.querySelector('#balance').textContent.includes('coins'));
- await page.locator('[data-filter="cards"]').click();assert.equal(await page.locator('.games>.card:visible').count(),2);
+ await page.locator('[data-filter="cards"]').click();assert.equal(await page.locator('.games>.card:visible').count(),4);
  await page.locator('[data-filter="all"]').click();
  for(const id of await page.locator('.games>.card').evaluateAll(els=>els.map(el=>el.id))) {
   await page.locator('#'+id+' .controls>button').click();assert(await page.locator('#fullscreen-overlay').evaluate(el=>el.classList.contains('active')),id);

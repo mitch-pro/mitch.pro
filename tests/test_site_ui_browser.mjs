@@ -12,7 +12,7 @@ try {
   await page.goto(base + '/');
   await page.waitForFunction(() => window.MitchShell?.ready);
   assert(await page.locator('#backbtn').isHidden(), 'Frame back button must stay hidden until a game opens.');
-  assert.equal(await page.locator('.home-section-heading').first().innerText(), 'Shortcuts');
+  assert.equal(await page.locator('.home-section-heading').filter({hasText:'Shortcuts'}).innerText(), 'Shortcuts');
   assert.equal(await page.locator('.feature-eyebrow, .home-hero-kicker').count(), 0);
   assert.equal(await page.locator('#_agree_footer').evaluate(el => getComputedStyle(el).position), 'static');
   await page.evaluate(() => localStorage.setItem('_prefDisplay', JSON.stringify({ gameLaunch: 'iframe' })));

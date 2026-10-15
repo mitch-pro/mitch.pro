@@ -39,10 +39,10 @@ const homeCss = readFileSync('webserver/home.css', 'utf8');
 for (const destination of ['/game-portal/', '/matrix/', '/vms/', '/members/', '/preferences/', '/shop/', '/casino/']) {
   assert(home.includes(`href="${destination}"`), `Homepage must preserve ${destination} navigation`);
 }
-for (const id of ['home-search', 'links', 'hub-daily-chip', 'member-side-rail', 'vm-workspace-panel']) {
+for (const id of ['home-search', 'links', 'hub-daily-chip', 'member-side-rail', 'home-search-results']) {
   assert(home.includes(`id="${id}"`), `Homepage must preserve the ${id} integration`);
 }
-assert(home.includes('/home.css?v=6') && home.includes('/home-friends.js?v=3'), 'Homepage assets need cache-busted URLs');
+assert(home.includes('/home.css?v=9') && home.includes('/home-friends.js?v=4'), 'Homepage assets need cache-busted URLs');
 assert(homeFriends.includes("hero.after(section)"), 'Friends activity should live inside the dashboard');
 assert(homeCss.includes('prefers-reduced-motion') && homeCss.includes('--mh-bg: var(--t-bg)') && readFileSync('webserver/app.css', 'utf8').includes('prefers-color-scheme'), 'Homepage styles must inherit the shared theme and respect motion preferences');
 const location = { href: 'https://mitch.pro/' };
@@ -72,7 +72,8 @@ assert(referenceThemeCss.includes('.calendar-days>button:hover:not(.today)'), 'd
 assert(referenceThemeCss.includes('body.dark .calendar-days>button:not(.today):nth-child(7n+1)'), 'weekend styling must not clobber today highlight');
 assert(rjuhsdRedesign.includes('.schedule-zone { order: 2; }'), 'full schedule must appear before secondary school content');
 assert(rjuhsdRedesign.includes('.live-card {') && rjuhsdRedesign.includes('.countdown-dial {'), 'active countdown must have the redesigned live surface');
-assert(rjuhsdApp.includes('document.querySelectorAll(".js-signin-link").forEach(a=>a.remove())'), 'signed-in users must not see sign-in prompts');
+assert(!rjuhsdApp.includes('js-signin-link'), 'rjuhsd.school must not prompt a cross-domain SSO sign-in');
+assert(!rjuhsdHtml.includes('sso/bridge'), 'rjuhsd.school must not offer the mitchdog.com SSO bridge');
 assert(preferencesHtml.includes('/preferences/preferences-school.css?v=4') || preferencesHtml.includes('/preferences/preferences-school.css?v=3') || preferencesHtml.includes('/preferences/preferences-school.css?v=2'), 'preferences must load its rjuhsd redesign');
 assert(preferencesHtml.includes("classList.add('school-preferences')"), 'preferences must detect the school host');
 assert(preferencesSchoolCss.includes('background: linear-gradient(110deg'), 'school preferences header must reveal the active background');

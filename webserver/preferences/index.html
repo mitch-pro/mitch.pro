@@ -2073,10 +2073,22 @@ function setupAppearanceControls() {
 
 function setupAccordions() {
   if (document.documentElement.classList.contains('school-preferences')) {
-    var sections = Array.from(document.querySelectorAll('.pref-section'));
-    var links = Array.from(document.querySelectorAll('.prefs-jump-nav a'));
+    // rjuhsd.school's preferences are appearance-only - every other section
+    // (account, privacy, security, homepage, display, sync, data) needs a
+    // real session and doesn't belong on an anonymous school site.
+    var SCHOOL_CATEGORIES = ['appearance', 'effects'];
+    var allSections = Array.from(document.querySelectorAll('.pref-section'));
+    var sections = allSections.filter(function(section) { return SCHOOL_CATEGORIES.indexOf(section.id) !== -1; });
+    allSections.forEach(function(section) {
+      if (SCHOOL_CATEGORIES.indexOf(section.id) === -1) section.hidden = true;
+    });
+    var allLinks = Array.from(document.querySelectorAll('.prefs-jump-nav a'));
+    var links = allLinks.filter(function(link) { return SCHOOL_CATEGORIES.indexOf(link.hash.slice(1)) !== -1; });
+    allLinks.forEach(function(link) {
+      if (SCHOOL_CATEGORIES.indexOf(link.hash.slice(1)) === -1) link.hidden = true;
+    });
     function showCategory(id) {
-      if (!sections.some(function(section) { return section.id === id; })) id = 'appearance';
+      if (SCHOOL_CATEGORIES.indexOf(id) === -1) id = 'appearance';
       sections.forEach(function(section) {
         section.hidden = section.id !== id;
         section.classList.add('open');
@@ -2085,7 +2097,6 @@ function setupAccordions() {
         if (link.hash === '#' + id) link.setAttribute('aria-current', 'page');
         else link.removeAttribute('aria-current');
       });
-      if (id === 'homepage' && typeof ensurePinnedGamesLoaded === 'function') ensurePinnedGamesLoaded();
     }
     links.forEach(function(link) {
       link.addEventListener('click', function(event) {
@@ -2519,9 +2530,10 @@ async function deleteAccount() {
 }
 
 (function init() {
+  var schoolPrefs = document.documentElement.classList.contains('school-preferences');
   setupAccordions();
   setupAppearanceControls();
-  loadAccountProfile();
+  if (!schoolPrefs) loadAccountProfile();
   document.getElementById('saveProfileBtn').onclick = saveAccountProfile;
   document.getElementById('profilePfpFile').addEventListener('change', async function() {
     if (!this.files || !this.files[0]) return;
@@ -2538,7 +2550,7 @@ async function deleteAccount() {
   document.getElementById('enableEmail2faBtn').onclick = function() { enable2fa('email'); };
   document.getElementById('disable2faBtn').onclick = disable2fa;
   document.getElementById('passkeyAddBtn').onclick = enrollPasskey;
-  loadPasskeyList();
+  if (!schoolPrefs) loadPasskeyList();
 
   var vk = load(VFX_CONFIG_KEY, { snow: true, stars: true, rain: true, particles: true });
   document.getElementById('vfxSnowToggle').checked      = !!vk.snow;
@@ -2552,12 +2564,14 @@ async function deleteAccount() {
   document.getElementById('privNoHistoryToggle').checked    = !!pk.noHistory;
   document.getElementById('privNewsletterToggle').checked   = pk.newsletter !== false;
   document.getElementById('privBlockProfileToggle').checked = !!pk.blockProfile;
-  loadBlogAlerts();
-  loadNtfyTopic();
+  if (!schoolPrefs) {
+    loadBlogAlerts();
+    loadNtfyTopic();
 
-  fetch('/api/me').then(function(r){return r.ok ? r.json() : {};}).then(function(me){
-    if (me.email) myEmail = me.email;
-  }).catch(function(){});
+    fetch('/api/me').then(function(r){return r.ok ? r.json() : {};}).then(function(me){
+      if (me.email) myEmail = me.email;
+    }).catch(function(){});
+  }
 
   var hc = load(HOME_CONFIG_KEY, {
     topCount: 5,
@@ -2607,14 +2621,16 @@ async function deleteAccount() {
   document.getElementById('prefQuickAccess').checked = !!tc.quickAccess;
   document.getElementById('prefDailyBonus').checked = !!tc.dailyBonus;
 
-  fetch('/api/me/inventory').then(function(r){return r.ok ? r.json() : {};}).then(function(inv){
-    var tools = inv.cosmetics && inv.cosmetics.tools ? inv.cosmetics.tools : [];
-    var any = false;
-    if (tools.includes('canvas_lock_pass')) { document.getElementById('toolCanvasLock').style.display = 'block'; any = true; }
-    if (tools.includes('quick_access_pass')) { document.getElementById('toolQuickAccess').style.display = 'block'; any = true; }
-    if (tools.includes('daily_bonus_plus')) { document.getElementById('toolDailyBonus').style.display = 'block'; any = true; }
-    if (any) document.getElementById('specialToolsSection').style.display = 'block';
-  }).catch(function(){});
+  if (!schoolPrefs) {
+    fetch('/api/me/inventory').then(function(r){return r.ok ? r.json() : {};}).then(function(inv){
+      var tools = inv.cosmetics && inv.cosmetics.tools ? inv.cosmetics.tools : [];
+      var any = false;
+      if (tools.includes('canvas_lock_pass')) { document.getElementById('toolCanvasLock').style.display = 'block'; any = true; }
+      if (tools.includes('quick_access_pass')) { document.getElementById('toolQuickAccess').style.display = 'block'; any = true; }
+      if (tools.includes('daily_bonus_plus')) { document.getElementById('toolDailyBonus').style.display = 'block'; any = true; }
+      if (any) document.getElementById('specialToolsSection').style.display = 'block';
+    }).catch(function(){});
+  }
 
   ['vfxSnowToggle','vfxStarsToggle','vfxRainToggle','vfxParticlesToggle',
    'privHideOnlineToggle','privStealthToggle','privNoHistoryToggle','privNewsletterToggle','privBlockProfileToggle',

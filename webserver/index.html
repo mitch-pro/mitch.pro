@@ -13,9 +13,9 @@
 <title>mitch.pro</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"></noscript>
 <link rel="stylesheet" href="/app.css">
-<link rel="stylesheet" href="/home.css?v=6">
+<link rel="stylesheet" href="/home.css?v=9">
 <script src="/app-shell.js" defer></script>
-<script src="/home-friends.js?v=3" defer></script>
+<script src="/home-friends.js?v=4" defer></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
@@ -121,9 +121,27 @@ function openInNewTab(href) {
   if (!w) window.location.href = href;
 }
 
+function recordRecentVisit(href, label) {
+  if (!href) return;
+  try {
+    var list = JSON.parse(localStorage.getItem('_prefRecent') || '[]');
+    if (!Array.isArray(list)) list = [];
+    list = list.filter(function(e) { return e && e.href !== href; });
+    list.unshift({ href: href, label: label || href, ts: Date.now() });
+    localStorage.setItem('_prefRecent', JSON.stringify(list.slice(0, 8)));
+  } catch(e) {}
+}
+
+function labelFromLink(el) {
+  if (!el) return '';
+  var named = el.querySelector && el.querySelector('h2, b');
+  return String((named ? named.textContent : el.textContent) || '').trim();
+}
+
 function openHomeHref(event, href) {
   if (event && (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button > 0)) return;
   if (event) event.preventDefault();
+  recordRecentVisit(href, event && event.currentTarget ? labelFromLink(event.currentTarget) : '');
   try {
     launchSite('url', href);
   } catch (e) {
@@ -172,6 +190,7 @@ function makeSiteLink(type, href, label, extraClass) {
       visits[href] = (visits[href] || 0) + 1;
       localStorage.setItem('_prefVisits', JSON.stringify(visits));
     } catch(err) {}
+    recordRecentVisit(href, label);
     try {
       e.preventDefault();
       launchSite(type, href);
@@ -180,6 +199,22 @@ function makeSiteLink(type, href, label, extraClass) {
     }
   };
   return a;
+}
+
+function renderRecentVisits() {
+  var wrap = document.getElementById('home-recent');
+  var list = document.getElementById('home-recent-list');
+  if (!wrap || !list) return;
+  var recent = [];
+  try { recent = JSON.parse(localStorage.getItem('_prefRecent') || '[]'); } catch(e) {}
+  if (!Array.isArray(recent)) recent = [];
+  recent = recent.filter(function(e) { return e && e.href && e.label; });
+  if (!recent.length) { wrap.hidden = true; return; }
+  list.innerHTML = '';
+  recent.slice(0, 6).forEach(function(e) {
+    list.appendChild(makeSiteLink('url', e.href, e.label, 'recent-site-link'));
+  });
+  wrap.hidden = false;
 }
 
 function artForDestination(label, href) {
@@ -203,7 +238,6 @@ function categoryForLabel(label, isAdmin) {
 
 function describeCategory(cat) {
   return ({
-    'Popular & Frequent': 'Your most used and globally popular pages',
     'Admin': 'Private controls and advanced tools',
     'MitchCoin Games': 'Play and earn verified MitchCoins',
     'Entertainment': 'Games, canvas, media, and fun stuff',
@@ -301,30 +335,9 @@ function parseSites(text) {
     categories[cat].push(makeSiteLink(type, href, label, isAdmin ? 'admin-site-link' : ''));
   }
 
-  // ── Popular & Frequent links ──
-  var popularHrefs = [
-    '/blooket-bot/', '/blooket-bot',
-    '/preferences/', '/preferences',
-    '/inventory/', '/inventory',
-    '/blog/', '/blog',
-    '/members/', '/members',
-    '/feedback/', '/feedback',
-    '/friends/', '/friends',
-    '/leaderboard/', '/leaderboard',
-    '/games/jeopardy-battle/', '/games/jeopardy-battle',
-    '/games/battleship/', '/games/battleship',
-    '/casino/', '/casino',
-    '/canvas/', '/canvas',
-    '/matrix/', '/matrix',
-    '/encrypt/', '/encrypt',
-    '/shop/', '/shop',
-    '/public-chat/', '/public-chat',
-    '/marketplace/', '/marketplace'
-  ];
   updateHomeCounts(entries, categories);
   renderQuickActions(entries);
   window.cachedEntries = entries;
-  updatePopularLaunches();
 
   var categoryPriority = {
     'Social & Chat': 0,
@@ -335,8 +348,6 @@ function parseSites(text) {
     'Admin': 5
   };
   var sortedCats = Object.keys(categories).sort(function(a, b) {
-    if (a === 'Popular & Frequent') return -1;
-    if (b === 'Popular & Frequent') return 1;
     var priorityA = Object.prototype.hasOwnProperty.call(categoryPriority, a) ? categoryPriority[a] : 99;
     var priorityB = Object.prototype.hasOwnProperty.call(categoryPriority, b) ? categoryPriority[b] : 99;
     if (priorityA !== priorityB) return priorityA - priorityB;
@@ -348,8 +359,6 @@ function parseSites(text) {
   for (var j = 0; j < sortedCats.length; j++) {
     var catName = sortedCats[j];
     if (categories[catName].length === 0) continue;
-    // Popular lives in the hub strip — avoid duplicating the full list below
-    if (catName === 'Popular & Frequent') continue;
     var catDiv = document.createElement('section');
     catDiv.className = 'category-group' + (catName === 'Admin' ? ' admin-category' : '');
     catDiv.dataset.category = catName.toLowerCase();
@@ -368,23 +377,6 @@ function parseSites(text) {
   filterHomeLinks();
   window.cachedEntries = entries;
   updateRecommendation(entries);
-}
-
-function renderPopularStrip(entries) {
-  var strip = document.getElementById('popular-strip');
-  var wrap = document.getElementById('popular-hub');
-  if (!strip) return;
-  strip.innerHTML = '';
-  var list = (entries || []).slice(0, 30);
-  if (!list.length) {
-    strip.innerHTML = '<p class="popular-empty">Your frequent pages will show up here.</p>';
-    if (wrap) wrap.hidden = false;
-    return;
-  }
-  list.forEach(function(e) {
-    strip.appendChild(makeSiteLink(e.type, e.href, e.label, 'popular-site-link hub-popular-link'));
-  });
-  if (wrap) wrap.hidden = false;
 }
 
 function openMembersRail(event) {
@@ -415,6 +407,7 @@ function focusAllPages(event) {
   var target = document.getElementById('home-catalog') || document.getElementById('links');
   if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
 
 function syncHubDailyChip(state) {
   var chip = document.getElementById('hub-daily-chip');
@@ -536,11 +529,13 @@ function filterHomeLinks() {
   var input = document.getElementById('home-search');
   var empty = document.getElementById('links-empty');
   var clear = document.getElementById('home-search-clear');
+  var results = document.getElementById('home-search-results');
   if (!input) return;
   var q = input.value.trim().toLowerCase();
   if (clear) {
     clear.style.display = q ? '' : 'none';
   }
+  if (results) results.hidden = !q;
   var visibleCount = 0;
   document.querySelectorAll('.category-group').forEach(function(group) {
     var groupVisible = 0;
@@ -551,11 +546,6 @@ function filterHomeLinks() {
     });
     group.style.display = groupVisible ? '' : 'none';
     visibleCount += groupVisible;
-  });
-  document.querySelectorAll('#popular-strip a.site-link').forEach(function(link) {
-    var visible = !q || (link.dataset.search || '').includes(q);
-    link.classList.toggle('is-filter-hidden', !visible);
-    if (visible) visibleCount++;
   });
   if (empty) empty.style.display = visibleCount ? 'none' : '';
 }
@@ -657,123 +647,6 @@ document.addEventListener('keydown', function(e) {
   }
 });
 
-var _topEntries = [], _topStats = {}, _featuredGame = '';
-
-function updatePopularLaunches() {
-  var visits = {};
-  try { visits = JSON.parse(localStorage.getItem('_prefVisits') || '{}'); } catch(e) {}
-  var _homePref = {};
-  try { _homePref = JSON.parse(localStorage.getItem('_prefHomepage') || '{}'); } catch(e) {}
-  var _pinned = new Set(_homePref.pinnedGames || []);
-
-  var popularHrefs = [
-    '/chat/', '/chat',
-    '/blooket-bot/', '/blooket-bot',
-    '/preferences/', '/preferences',
-    '/inventory/', '/inventory',
-    '/blog/', '/blog',
-    '/members/', '/members',
-    '/feedback/', '/feedback',
-    '/friends/', '/friends',
-    '/leaderboard/', '/leaderboard',
-    '/games/jeopardy-battle/', '/games/jeopardy-battle',
-    '/games/battleship/', '/games/battleship',
-    '/casino/', '/casino',
-    '/canvas/', '/canvas',
-    '/matrix/', '/matrix',
-    '/encrypt/', '/encrypt',
-    '/shop/', '/shop',
-    '/public-chat/', '/public-chat',
-    '/marketplace/', '/marketplace',
-    '/tabs/', '/tabs',
-    'https://rjuhsd.school/', 'https://rjuhsd.school',
-    '/games/adrian-clicker/', '/games/adrian-clicker',
-    '/games/kodys-keyboard/', '/games/kodys-keyboard',
-    '/games/lillians-logic/', '/games/lillians-logic',
-    '/games/richards-riches/', '/games/richards-riches',
-    '/games/pennys-piano-keys/', '/games/pennys-piano-keys',
-    '/games/sebastians-piccolo/', '/games/sebastians-piccolo'
-  ];
-
-  var allEntries = [];
-  var seenHrefs = new Set();
-  function addEntry(e) {
-    if (!e || !e.href) return;
-    var norm = e.href.replace(/\/$/, '');
-    if (seenHrefs.has(norm)) return;
-    seenHrefs.add(norm);
-    allEntries.push(e);
-  }
-
-  (window.cachedEntries || []).forEach(addEntry);
-  (_topEntries || []).forEach(addEntry);
-
-  function getScore(entry) {
-    var href = entry.href;
-    var normHref = href.endsWith('/') ? href : href + '/';
-    var normHref2 = href.endsWith('/') ? href.slice(0, -1) : href;
-    var rawHref = href.replace(/^\/games\//, '').replace(/\/$/, '');
-
-    var isPinned = _pinned.has(href) || _pinned.has(normHref) || _pinned.has(normHref2) || _pinned.has(rawHref);
-    if (isPinned) return 10000000;
-
-    var localVisits = visits[normHref] || visits[normHref2] || visits[href] || visits[rawHref] || 0;
-    var globalVisits = _gameVisits(href) || _gameVisits(normHref) || _gameVisits(normHref2) || _gameVisits(rawHref) || 0;
-    var isDefaultPopular = popularHrefs.includes(normHref) || popularHrefs.includes(normHref2) || popularHrefs.includes(href);
-
-    return (localVisits * 20) + globalVisits + (isDefaultPopular ? 100 : 0);
-  }
-
-  var candidates = allEntries.filter(function(e) {
-    if (e.isAdmin) return false;
-    return getScore(e) > 0;
-  }).sort(function(a, b) {
-    return getScore(b) - getScore(a);
-  });
-
-  renderPopularStrip(candidates);
-}
-
-async function loadTopGames() {
-  var c = new URLSearchParams(document.cookie.replaceAll('; ', '&'));
-  var hash = c.get('studentId') || c.get('password');
-  var [gamesRes, statsRes] = await Promise.all([
-    fetch('/api/games', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({hash, limit: 100})}).catch(()=>null),
-    fetch('/api/game-stats').catch(()=>null),
-  ]);
-  if (statsRes) {
-    if (statsRes.ok) _topStats = ((await statsRes.json().catch(()=>({}))).stats) || {};
-    else statsRes.text().catch(()=>{});
-  }
-  if (gamesRes) {
-    if (gamesRes.ok) {
-      var gameData = await gamesRes.json().catch(()=>({}));
-      var text = gameData.content || '';
-      _topEntries = [];
-      text.split('\n').forEach(function(line) {
-        line = line.trim();
-        if (!line) return;
-        var parts = line.split(' ');
-        if (parts.length < 3) return;
-        var type = parts[0], href = parts[1];
-        var label = parts.slice(2).join(' ').replace(/<[^>]*>/g, '').trim();
-        if (!label || href === '/report-game.html') return;
-        _topEntries.push({type: type, href: _gameHref(href), label: label, isAdmin: false, category: 'MitchCoin Games'});
-      });
-    }
-    updatePopularLaunches();
-  }
-}
-
-function _gameVisits(href) {
-  return _topStats['/games/' + href] || _topStats[href] || 0;
-}
-
-function _gameHref(href) {
-  if (href.startsWith('http') || href.startsWith('/')) return href;
-  return '/games/' + href;
-}
-
 function renderTopGames() {
 }
 
@@ -807,43 +680,6 @@ function applyHomepagePrefs() {
       if (search) search.focus();
     }, 600);
   }
-}
-
-const DEFAULT_HOME_BACKGROUND_BLUR = 8;
-
-function applyHomeBackgroundBlur(value) {
-  const px = Math.max(0, Math.min(40, Math.round(Number(value) || 0)));
-  // theme.js paints the wallpaper on html[data-bglayer]::before with
-  // filter:blur(var(--t-bg-blur)). Route through __theme.setBlur so this slider,
-  // the preferences-page slider, and drag-to-blur all share the one theme_bgblur
-  // pref instead of drifting apart.
-  if (window.__theme && typeof window.__theme.setBlur === 'function') {
-    window.__theme.setBlur(px);
-  } else {
-    document.documentElement.style.setProperty('--t-bg-blur', px + 'px');
-    try { localStorage.setItem('theme_bgblur', String(px)); } catch(e) {}
-  }
-  const range = document.getElementById('home-background-range');
-  const label = document.getElementById('home-background-value');
-  if (range) range.value = String(px);
-  if (label) label.textContent = `${px}px blur`;
-}
-
-function setupHomeBackgroundControl() {
-  const range = document.getElementById('home-background-range');
-  const reset = document.getElementById('home-background-reset');
-  if (!range) return;
-  let saved = null;
-  try { saved = localStorage.getItem('theme_bgblur'); } catch(e) {}
-  const initial = saved === null ? DEFAULT_HOME_BACKGROUND_BLUR
-    : Math.max(0, Math.min(40, Math.round(Number(saved) || 0)));
-  applyHomeBackgroundBlur(initial);
-  range.addEventListener('input', function() {
-    applyHomeBackgroundBlur(range.value);
-  });
-  if (reset) reset.addEventListener('click', function() {
-    applyHomeBackgroundBlur(DEFAULT_HOME_BACKGROUND_BLUR);
-  });
 }
 
 // The old control stored a transparency value here; drop it so it can't be
@@ -1633,10 +1469,9 @@ async function initHome() {
   applyWidgetOrder();
   setupHomeSearch();
   setupAboutBlankToggle();
-  setupHomeBackgroundControl();
   applyHomepagePrefs();
+  renderRecentVisits();
   loadSites();
-  loadTopGames();
   loadGreeting();
   setupAdminPanel();
   loadDailyLoginState();
@@ -1646,203 +1481,34 @@ async function initHome() {
   setInterval(loadOnlineMembers, 15000);
   initFriendsSystem();
   initHudTerminal();
-  initVmWorkspaceDashboard();
+  loadVmStatusChip();
+  setInterval(loadVmStatusChip, 30000);
 }
 
-let currentVmStatus = null;
-let currentVmIp = null;
-let currentVmTier = null;
-let currentVmPassword = null;
-let vmStatusInterval = null;
-
-async function initVmWorkspaceDashboard() {
-  await pollVmStatus();
-  vmStatusInterval = setInterval(pollVmStatus, 10000);
-}
-
-async function pollVmStatus() {
+async function loadVmStatusChip() {
+  var chip = document.getElementById('vm-status-chip');
+  var text = document.getElementById('vm-status-text');
+  var dot = document.getElementById('vm-status-dot');
+  if (!chip) return;
   try {
-    const res = await fetch('/api/vm/status');
-    if (!res.ok) { res.text().catch(()=>{}); return; }
-    const data = await res.json();
-
-    const panel = document.getElementById('vm-workspace-panel');
-    const advert = document.querySelector('.site-advert-banner');
-
-    if (!data || data.status === 'none') {
-      panel.style.display = 'none';
-      if (advert) advert.style.display = 'flex';
-      return;
-    }
-
-    if (advert) advert.style.display = 'none';
-    panel.style.display = 'block';
-
-    const indicator = document.getElementById('vm-dashboard-status-indicator');
-    const dot = document.getElementById('vm-dashboard-status-dot');
-    const info = document.getElementById('vm-dashboard-info');
-
-    const powerBtn = document.getElementById('vm-power-btn');
-    const sshBtn = document.getElementById('vm-ssh-btn');
-    const vncBtn = document.getElementById('vm-vnc-btn');
-    const resetBtn = document.getElementById('vm-reset-btn');
-
-    currentVmStatus = data.vmStatus;
-    currentVmIp = data.ip;
-    currentVmTier = data.tier;
-    currentVmPassword = data.password;
-
+    var res = await fetch('/api/vm/status');
+    if (!res.ok) { res.text().catch(function(){}); chip.hidden = true; return; }
+    var data = await res.json();
+    if (!data || data.status === 'none') { chip.hidden = true; return; }
+    chip.hidden = false;
     if (data.status === 'pending') {
-      indicator.style.color = '#ffaf3f';
-      dot.style.background = '#ffaf3f';
-      indicator.innerHTML = `<span id="vm-dashboard-status-dot" style="width:8px; height:8px; border-radius:50%; background:#ffaf3f; display:inline-block; margin-right:4px;"></span>Pending Approval`;
-      info.textContent = `Your ${data.tier === 'paid' ? 'Dedicated VM' : 'Linux container'} application is pending Mitch's review.`;
-      powerBtn.style.display = 'none';
-      sshBtn.style.display = 'none';
-      vncBtn.style.display = 'none';
-      if (resetBtn) resetBtn.style.display = 'none';
-      return;
-    }
-
-    if (data.vmStatus === 'running') {
-      indicator.style.color = '#8b5cf6';
-      dot.style.background = '#8b5cf6';
-      indicator.innerHTML = `<span id="vm-dashboard-status-dot" style="width:8px; height:8px; border-radius:50%; background:#8b5cf6; display:inline-block; margin-right:4px; box-shadow: 0 0 8px #8b5cf6;"></span>Running`;
-
-      const ipText = data.ip ? `IP Address: <strong>${data.ip}</strong>` : 'IP Address: <em>Obtaining network link...</em>';
-      info.innerHTML = `${ipText} &middot; Tier: ${data.tier === 'paid' ? 'KVM VM' : 'Linux container'}`;
-
-      powerBtn.textContent = 'Power Off';
-      powerBtn.style.background = 'rgba(239, 68, 68, 0.1)';
-      powerBtn.style.borderColor = 'rgba(239, 68, 68, 0.3)';
-      powerBtn.style.color = '#ef4444';
-      powerBtn.style.display = 'inline-block';
-
-      if (data.ip) {
-        sshBtn.style.display = 'inline-block';
-        if (data.tier === 'paid') {
-          vncBtn.style.display = 'inline-block';
-        } else {
-          vncBtn.style.display = 'none';
-        }
-      } else {
-        sshBtn.style.display = 'none';
-        vncBtn.style.display = 'none';
-      }
-      if (resetBtn) {
-        resetBtn.style.display = (data.tier === 'free') ? 'inline-block' : 'none';
-      }
+      if (text) text.textContent = 'VM: Pending approval';
+      if (dot) dot.className = 'status-dot status-pending';
+    } else if (data.vmStatus === 'running') {
+      if (text) text.textContent = 'VM: Running';
+      if (dot) dot.className = 'status-dot status-running';
     } else {
-      indicator.style.color = '#EF4444';
-      dot.style.background = '#EF4444';
-      indicator.innerHTML = `<span id="vm-dashboard-status-dot" style="width:8px; height:8px; border-radius:50%; background:#EF4444; display:inline-block; margin-right:4px;"></span>Offline / Stopped`;
-      info.innerHTML = `Virtual machine is offline. Start it to access files and services.`;
-
-      powerBtn.textContent = 'Power On';
-      powerBtn.style.background = '';
-      powerBtn.style.borderColor = '';
-      powerBtn.style.color = '';
-      powerBtn.style.display = 'inline-block';
-      sshBtn.style.display = 'none';
-      vncBtn.style.display = 'none';
-      if (resetBtn) {
-        resetBtn.style.display = (data.tier === 'free') ? 'inline-block' : 'none';
-      }
+      if (text) text.textContent = 'VM: Stopped';
+      if (dot) dot.className = 'status-dot status-stopped';
     }
-  } catch (err) {
-    console.error('Failed to poll VM status:', err);
+  } catch(e) {
+    chip.hidden = true;
   }
-}
-
-async function controlVmPower() {
-  const btn = document.getElementById('vm-power-btn');
-  const action = currentVmStatus === 'running' ? 'stop' : 'start';
-  btn.disabled = true;
-  btn.textContent = action === 'start' ? 'Booting...' : 'Stopping...';
-
-  try {
-    const res = await fetch('/api/vm/power', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Mitch-Requested-With': '1',
-        'X-CSRF-Token': getCsrfToken()
-      },
-      body: JSON.stringify({ action })
-    });
-    const data = await res.json();
-    if (data.error) {
-      alert('Error: ' + data.error);
-    } else {
-      await pollVmStatus();
-    }
-  } catch (err) {
-    alert('Power command failed: ' + err.message);
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-async function resetFreeVm() {
-  const btn = document.getElementById('vm-reset-btn');
-  if (!btn) return;
-  if (!(await customConfirm('Reset Sandbox', 'Are you sure you want to reset your sandbox? This will delete your current container and files, and create a fresh one immediately.'))) {
-    return;
-  }
-
-  btn.disabled = true;
-  const originalText = btn.textContent;
-  btn.textContent = 'Resetting Sandbox...';
-
-  try {
-    const res = await fetch('/api/vm/free/reset', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Mitch-Requested-With': '1',
-        'X-CSRF-Token': getCsrfToken()
-      }
-    });
-    const data = await res.json();
-    if (data.error) {
-      alert('Reset failed: ' + data.error);
-    } else {
-      alert('Sandbox reset successfully! Booting up your new terminal...');
-      await pollVmStatus();
-      connectVmSsh();
-    }
-  } catch (err) {
-    alert('Reset error: ' + err.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = originalText;
-  }
-}
-
-function openVmConsole(url) {
-  const ab = document.getElementById('abToggle');
-  if (ab && ab.checked) {
-    openAboutBlank(url);
-  } else {
-    openInNewTab(url);
-  }
-}
-
-function connectVmSsh() {
-  if (!currentVmIp) return;
-  const username = (currentVmTier === 'free' || currentVmTier === 'premium') ? 'root' : 'debian';
-  const pass = currentVmPassword || 'password';
-  const consoleUrl = `/ssh/index.html?host=${currentVmIp}&username=${username}&port=22&auth=password&password=${pass}&connect=true`;
-  openVmConsole(consoleUrl);
-}
-
-function connectVmVnc() {
-  openVmConsole('/vms/');
-}
-
-function getCsrfToken() {
-  const match = document.cookie.match(new RegExp('(^| )_csrf=([^;]+)'));
-  return match ? decodeURIComponent(match[2]) : '';
 }
 
 function toggleHudTerminal() {
@@ -3330,12 +2996,6 @@ if (document.readyState === 'loading') {
     <button class="members-rail-close" type="button" aria-label="Close people panel" onclick="document.getElementById('member-side-rail')._setOpen(false)">&times;</button>
   </div>
 
-  <div id="member-side-rail-collapsed-handle" title="Members & friends">
-    <div class="handle-icon" aria-hidden="true">👥</div>
-    <div id="collapsed-online-count" class="online-badge" style="display:none">0</div>
-    <div id="collapsed-pfps-container" class="collapsed-pfps"></div>
-  </div>
-
   <div id="online-members-wrap" class="side-section" style="display:none">
     <div class="side-title side-title-presence"><span>Members</span><small id="members-live-label">Live</small></div>
     <div id="online-members-list" class="side-list" aria-live="polite"></div>
@@ -3369,6 +3029,18 @@ if (document.readyState === 'loading') {
     <p id="greeting-email" class="hello-email"></p>
   </header>
   <div class="home-search-box home-page-search"><input id="home-search" aria-label="Search pages" type="search" placeholder="Search pages" autocomplete="off"><button id="home-search-clear" type="button">Clear</button></div>
+
+
+      <section id="home-search-results" class="home-search-results" hidden>
+        <div id="links">
+          <div class="quick-empty">Loading pages…</div>
+        </div>
+        <div id="links-empty" style="display:none;">No matching pages.</div>
+      </section>
+  <section class="home-recent" id="home-recent" hidden aria-label="Continue where you left off">
+    <div class="home-section-heading home-recent-heading"><h2>Continue where you left off</h2></div>
+    <div id="home-recent-list" class="recent-strip"></div>
+  </section>
 
   <div class="home-section-heading"><h2>Shortcuts</h2></div>
   <section class="home-features" aria-label="Start here">
@@ -3406,49 +3078,26 @@ if (document.readyState === 'loading') {
         <button type="button" class="hub-action hub-daily mitch-coin-amount" id="hub-daily-chip" hidden>Daily claim</button>
       </nav>
 
-  <!-- Workspace -->
-  <div class="hud-workspace">
-    <main class="hud-pane-main">
-
-      <!-- Cloud VM active workspace dashboard -->
-      <section id="vm-workspace-panel" style="display:none;">
-        <div>
-          <div>
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-              <span class="vm-dashboard-tag">Cloud VM</span>
-              <span id="vm-dashboard-status-indicator" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#ffaf3f;">
-                <span id="vm-dashboard-status-dot" style="width:8px;height:8px;border-radius:50%;background:#ffaf3f;display:inline-block;"></span>
-                Checking…
-              </span>
-            </div>
-            <h3>My Linux workspace</h3>
-            <p id="vm-dashboard-info">Retrieving network allocation details…</p>
-          </div>
-          <div class="vm-actions">
-            <button id="vm-power-btn" onclick="controlVmPower()" class="btn-ghost" style="display:none;">Power On</button>
-            <button id="vm-ssh-btn" onclick="connectVmSsh()" class="btn-primary" style="display:none;">Terminal Console</button>
-            <button id="vm-vnc-btn" onclick="connectVmVnc()" class="btn-primary" style="display:none;">Open Desktop</button>
-            <button id="vm-reset-btn" onclick="resetFreeVm()" class="btn-primary" style="display:none;">Reset Sandbox</button>
-          </div>
-        </div>
-      </section>
-
-      <!-- Catalog -->
-      <section class="home-links-panel">
-        <div class="panel-heading">
-
-          <h3>Explore everything</h3>
-          <p>Find a page or tool.</p>
-        </div>
-        <div id="links">
-          <div class="quick-empty">Loading pages…</div>
-        </div>
-        <div id="links-empty" style="display:none;">No matching pages.</div>
-      </section>
-    </main>
-
-
-  </div>
+  <!-- Bottom bar: quick controls and stats, one horizontal strip -->
+  <section class="home-bottom-bar" aria-label="Quick controls">
+    <a id="vm-status-chip" class="bottom-bar-item" href="/vms/" hidden>
+      <span class="status-dot" id="vm-status-dot"></span>
+      <span class="control-copy"><b id="vm-status-text">VM</b></span>
+    </a>
+    <div id="abToggleBar" class="bottom-bar-item">
+      <span class="control-logo"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
+      <span class="control-copy"><b>Stealth launch</b><small>Open in about:blank</small></span>
+      <label class="toggle-switch">
+        <input type="checkbox" id="abToggle">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <a id="preferences-card" class="bottom-bar-item" href="/preferences/">
+      <span class="control-logo"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h14"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg></span>
+      <span class="control-copy"><b>Preferences</b><small>Theme, display, privacy</small></span>
+    </a>
+    <div id="stats-bar" class="bottom-bar-item"></div>
+  </section>
 </div>
 
 <!-- ══════════════════ Console overlay ══════════════════ -->
