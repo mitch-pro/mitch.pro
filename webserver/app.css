@@ -584,3 +584,12 @@ html.theme-light body .name.mint_flash, html[data-theme="light"] body .name.mint
 html.theme-light body .name.rose_spark, html[data-theme="light"] body .name.rose_spark {color:#aa3f69!important}
 html.theme-light body .name.ember_red, html[data-theme="light"] body .name.ember_red {color:#ae392f!important}
 html.theme-light body .name.gold_glow, html[data-theme="light"] body .name.gold_glow {color:#856019!important}
+
+@media (prefers-color-scheme:light) {
+  html:not([data-theme="dark"]) body .name.neon_purple { color:#7840b3!important; }
+  html:not([data-theme="dark"]) body .name.electric_blue { color:#215dab!important; }
+  html:not([data-theme="dark"]) body .name.mint_flash { color:#24734f!important; }
+  html:not([data-theme="dark"]) body .name.rose_spark { color:#aa3f69!important; }
+  html:not([data-theme="dark"]) body .name.ember_red { color:#ae392f!important; }
+  html:not([data-theme="dark"]) body .name.gold_glow { color:#856019!important; }
+}
