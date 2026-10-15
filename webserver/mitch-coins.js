@@ -2,7 +2,7 @@
   'use strict';
   if (window.MitchCoins || /(^|\.)rjuhsd\.school$/.test(location.hostname) || location.pathname.startsWith('/rjuhsd/')) return;
 
-  const icon = '/mitchcoin.png';
+  const icon = '/mitchcoin.svg';
   const widgets = [];
   const fullFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
   const compactFormat = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 });
