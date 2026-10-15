@@ -578,9 +578,9 @@ html body .name.ember_red {color:#f69689!important;}
 html body .name.void_white {color:var(--t-fg)!important;}
 html body .name.gold_glow {color:#e8c578!important;}
 html body .name.rainbow_name {color:var(--t-ac);}
-html.theme-light body .name.neon_purple {color:#7840b3!important}
-html.theme-light body .name.electric_blue {color:#215dab!important}
-html.theme-light body .name.mint_flash {color:#24734f!important}
-html.theme-light body .name.rose_spark {color:#aa3f69!important}
-html.theme-light body .name.ember_red {color:#ae392f!important}
-html.theme-light body .name.gold_glow {color:#856019!important}
+html.theme-light body .name.neon_purple, html[data-theme="light"] body .name.neon_purple {color:#7840b3!important}
+html.theme-light body .name.electric_blue, html[data-theme="light"] body .name.electric_blue {color:#215dab!important}
+html.theme-light body .name.mint_flash, html[data-theme="light"] body .name.mint_flash {color:#24734f!important}
+html.theme-light body .name.rose_spark, html[data-theme="light"] body .name.rose_spark {color:#aa3f69!important}
+html.theme-light body .name.ember_red, html[data-theme="light"] body .name.ember_red {color:#ae392f!important}
+html.theme-light body .name.gold_glow, html[data-theme="light"] body .name.gold_glow {color:#856019!important}
