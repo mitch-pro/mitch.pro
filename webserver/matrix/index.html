@@ -398,9 +398,21 @@
 
         // Cinny catches startup failures and renders them instead of leaving an
         // unhandled rejection, so also watch its error panel for this exact
-        // Matrix crypto-store identity failure.
+        // Matrix crypto-store identity failure. React may update an
+        // already-mounted error node's text in place (a characterData
+        // mutation) rather than mounting a brand new element (childList) -
+        // watch both, and fall back to a plain polling scan of the page
+        // text for the first stretch after load so the exact DOM update
+        // strategy Cinny happens to use can never cause this to be missed.
         new MutationObserver(mutations => {
           for (const mutation of mutations) {
+            if (mutation.type === 'characterData') {
+              if (isMatrixStoreAccountMismatch(mutation.target.data)) {
+                beginMatrixStoreRecovery();
+                return;
+              }
+              continue;
+            }
             for (const node of mutation.addedNodes) {
               const message = node.nodeType === Node.TEXT_NODE ? node.nodeValue : node.textContent;
               if (isMatrixStoreAccountMismatch(message)) {
@@ -409,7 +421,20 @@
               }
             }
           }
-        }).observe(document.documentElement, { childList: true, subtree: true });
+        }).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+
+        let pollAttempts = 0;
+        const pollTimer = setInterval(() => {
+          pollAttempts++;
+          if (matrixStoreRecoveryStarted || pollAttempts > 40) {
+            clearInterval(pollTimer);
+            return;
+          }
+          if (isMatrixStoreAccountMismatch(document.body && document.body.textContent)) {
+            clearInterval(pollTimer);
+            beginMatrixStoreRecovery();
+          }
+        }, 500);
 
         function bootCinny() {
           if (window.__cinnyLoaded) return;
@@ -548,6 +573,17 @@
               ? stored.deviceId
               : '';
             if (stored.token || stored.userId) clearStoredSession();
+            // If we're about to stop carrying forward the cached device id
+            // (e.g. the server now resolves a different Matrix identity for
+            // this session than what's cached), the IndexedDB crypto store
+            // still has that old device's pickled account under its old id.
+            // Booting Cinny with a new device id on top of it is exactly
+            // the "account in the store doesn't match the account in the
+            // constructor" failure - clear it now, before that can happen,
+            // instead of only cleaning up reactively after the error fires.
+            if (stored.deviceId && stored.deviceId !== reusableDeviceId) {
+              await resetMatrixClientStores();
+            }
 
             if (!status.authenticated) {
               if (banner) banner.style.display = 'flex';
