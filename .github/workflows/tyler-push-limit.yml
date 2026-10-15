@@ -24,7 +24,6 @@ jobs:
     permissions:
       contents: read
       actions: read
-      administration: write
     steps:
       - name: Count this actor's pushes to master in the last hour
         id: count
@@ -45,9 +44,20 @@ jobs:
       - name: Downgrade admin back to push-only over the limit
         if: fromJSON(steps.count.outputs.count) >= 4
         env:
-          GH_TOKEN: ${{ github.token }}
+          # Changing a collaborator's permission is a repo-administration
+          # action; the default GITHUB_TOKEN can never be granted that
+          # scope, regardless of the `permissions:` block above - this
+          # needs a personal access token (classic, scope: repo; or
+          # fine-grained with Administration: Read & write on this repo)
+          # from an account that already owns/admins the repo, stored as
+          # the OWNER_ADMIN_PAT secret.
+          GH_TOKEN: ${{ secrets.OWNER_ADMIN_PAT }}
         run: |
           set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::warning title=Tyler Push Limit::OWNER_ADMIN_PAT secret not set - cannot downgrade access. Pushes are only being counted/notified, not restricted."
+            exit 0
+          fi
           gh api -X PUT "repos/${{ github.repository }}/collaborators/tylerthompson3725" -f permission=push
           echo "::notice title=Tyler Push Limit::Downgraded tylerthompson3725 from admin to push-only after ${{ steps.count.outputs.count }} pushes in the trailing hour. Branch protection (required PR + review) now applies to his pushes again until an owner restores admin."
 
