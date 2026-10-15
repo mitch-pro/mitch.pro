@@ -385,12 +385,21 @@ async fn approve(state: &Arc<AppState>, body: &Value) -> Response {
             json_response(200, json!({ "ok": true }))
         }
         "blacklist" => {
+            if mitch_lib::auth::is_admin_email(&state.store, email) {
+                return json_response(
+                    403,
+                    json!({ "error":"cannot ban admins or owners from this panel" }),
+                );
+            }
             let reason = body
                 .get("reason")
                 .and_then(|v| v.as_str())
                 .unwrap_or("no reason given");
+            if mitch_lib::bans::blacklist_insert(&state.store, email, reason, "admin").is_err() {
+                return json_response(500, json!({ "error":"Could not save account ban" }));
+            }
+            crate::ws::disconnect_banned_user(state, email, reason);
             mitch_lib::tokens::token_remove(&state.store, tok);
-            mitch_lib::bans::blacklist_insert(&state.store, email, reason, "admin");
             let site_name = site_name(state);
             let subject = format!("Your {site_name} Access Request Was Not Approved");
             let html = super::legacy::make_access_status_html(

@@ -14,7 +14,7 @@
 #command-center .back { border-radius:50%;width:40px;height:40px;flex-basis:40px; }
 #command-center .status { padding:10px 16px;border-radius:10px;background:var(--t-bg2)!important;color:var(--t-fg);font-size:13px; }
 #command-center.admin-locked .topbar .staff-heading,#command-center.admin-locked .topbar .status { display:block!important; }
-#command-center .staff-panel-switcher { gap:12px;margin:6px 0 22px; }
+#command-center .staff-panel-switcher { grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:6px 0 22px; }
 #command-center .staff-panel-switcher a { position:relative;min-height:84px;padding:16px 20px;border:1px solid var(--cmd-edge);border-radius:10px;box-shadow:none;background:var(--cmd-surface); }
 #command-center .staff-panel-switcher a.active { background:var(--t-bg2);border-color:var(--t-ac);box-shadow:none; }
 #command-center .staff-panel-switcher a>span { background:var(--t-bg3);color:var(--cmd-accent);box-shadow:none;border:1px solid var(--cmd-edge); }

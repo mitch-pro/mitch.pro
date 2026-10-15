@@ -558,7 +558,14 @@ pub fn banned_info_for_ip(store: &DataStore, ip: &str) -> Option<Value> {
     if ip.is_empty() {
         return None;
     }
-    crate::bans::banned_ips_get(store, ip)
+    crate::bans::banned_ips_get(store, ip).filter(|ban| {
+        // Old account bans also recorded the school's shared IP. Account
+        // access is enforced separately; only explicit network bans belong here.
+        ban.get("email")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .is_empty()
+    })
 }
 
 /// `emailFromSid(sid)` — names.json first, then tokens.json (incl. infinite

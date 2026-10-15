@@ -47,6 +47,7 @@ pub enum WsRecipients {
 pub struct WsEnvelope {
     payload: String,
     recipients: WsRecipients,
+    close: bool,
 }
 
 /// A connected broadcast socket (server.js `ws.data` for `isBroadcast`).
@@ -62,7 +63,28 @@ pub fn broadcast(state: &Arc<AppState>, recipients: WsRecipients, payload: Strin
     let _ = state.ws_tx.send(Arc::new(WsEnvelope {
         payload,
         recipients,
+        close: false,
     }));
+}
+
+pub fn disconnect_banned_user(state: &Arc<AppState>, email: &str, reason: &str) {
+    let norm = mitch_lib::auth::normalize_email(email);
+    state
+        .ws_broadcasts
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .retain(|_, client| client.email_norm != norm);
+    state
+        .user_presence
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(&norm);
+    let _ = state.ws_tx.send(Arc::new(WsEnvelope {
+        payload: json!({ "type": "account_banned", "reason": reason }).to_string(),
+        recipients: WsRecipients::Emails([norm.clone()].into_iter().collect()),
+        close: true,
+    }));
+    broadcast_presence_changed(state, &norm, false, "");
 }
 
 /// `broadcastProfileChange` (server.js:8669-8683).
@@ -247,6 +269,7 @@ pub fn trigger_notification_refresh(state: &AppState) {
     let _ = state.ws_tx.send(Arc::new(WsEnvelope {
         payload: payload.to_string(),
         recipients: WsRecipients::All,
+        close: false,
     }));
 }
 
@@ -408,6 +431,10 @@ async fn run_broadcast_socket(
                         if send {
                             // JS `try { ws.send(payload) } catch {}`.
                             let _ = socket.send(Message::Text(env.payload.clone().into())).await;
+                            if env.close {
+                                let _ = socket.send(Message::Close(Some(CloseFrame { code:1008, reason:"Account banned".into() }))).await;
+                                break;
+                            }
                         }
                         continue;
                     }
@@ -463,6 +490,7 @@ fn handle_presence_ping(state: &Arc<AppState>, email_norm: &str, sid: &str, text
         || is_revoked_id(state, sid)
         || ping_email.is_empty()
         || ping_email != mitch_lib::auth::normalize_email(email_norm)
+        || mitch_lib::auth::banned_info_for_email(&state.store, email_norm).is_some()
     {
         return false;
     }
@@ -503,6 +531,14 @@ async fn close_leg(state: &Arc<AppState>, email_norm: &str, socket_id: u64) {
             .lock()
             .unwrap_or_else(|e| e.into_inner());
         sockets.remove(&socket_id);
+    }
+    if mitch_lib::auth::banned_info_for_email(&state.store, email_norm).is_some() {
+        state
+            .user_presence
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(email_norm);
+        return;
     }
     if !has_authenticated_broadcast_socket(state, email_norm) {
         let now = now_millis();

@@ -4601,7 +4601,12 @@ async fn mod_unban(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> 
     let associated_emails =
         resolve_all_emails_for_target(&state.store, state.data_dir(), &state.id_secret, raw_input);
     for email in &associated_emails {
-        mitch_lib::bans::blacklist_remove(&state.store, email, &email.to_lowercase());
+        if mitch_lib::bans::blacklist_remove(&state.store, email, &email.to_lowercase()).is_err() {
+            return crate::errors::json_resp(
+                500,
+                json!({ "error":"Could not remove website account ban" }),
+            );
+        }
 
         {
             let mut bans = state.shadow_bans.write().unwrap_or_else(|e| e.into_inner());
@@ -7737,7 +7742,8 @@ mod tests {
             "long.tran@student.rjuhsd.us",
             "banned",
             "admin",
-        );
+        )
+        .unwrap();
 
         // 4. Perform unban
         unban_matrix_user_from_room(

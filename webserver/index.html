@@ -930,6 +930,8 @@ function escText(t) {
       document.body.classList.add('is-staff');
       ownerWrap.style.display = 'block';
     }
+    var bansWrap = document.getElementById('bans-action-wrap');
+    if (bansWrap && (me.isAdmin || me.isOwner || me.isCoOwner)) bansWrap.hidden = false;
     if (!me.isAdmin && !me.canGrantPremium && !me.isOwner && !me.isCoOwner) return;
     document.body.classList.add('is-admin');
     var wrap = document.getElementById('admin-action-wrap');
@@ -2997,6 +2999,9 @@ if (document.readyState === 'loading') {
   </div>
   <div id="admin-action-wrap">
     <a id="admin-action-btn" class="staff-access-button staff-admin" href="/admin/#approval-tools" title="Admin tools"><span aria-hidden="true">&#9881;</span><span class="staff-access-copy"><b>Admin tools</b><small>Command center</small></span></a>
+  </div>
+  <div id="bans-action-wrap" hidden>
+    <a id="bans-action-btn" class="staff-access-button staff-admin" href="/admin/bans/" title="Manage bans"><span aria-hidden="true">&#8856;</span><span class="staff-access-copy"><b>Bans</b><small>Account access</small></span></a>
   </div>
   <div id="moderator-action-wrap">
     <a id="moderator-action-btn" class="staff-access-button staff-moderator" href="/moderator/" title="Moderator tools"><span aria-hidden="true">&#10003;</span><span class="staff-access-copy"><b>Moderator tools</b><small>Safety workspace</small></span></a>

@@ -511,6 +511,7 @@
     <nav class="staff-panel-switcher" aria-label="Staff workspaces">
       <a class="owner-switch" href="#owner-tools" hidden><span>&#9733;</span><b>Owner tools</b><small>Site operations</small></a>
       <a class="active" href="#approval-tools"><span>&#9881;</span><b>Admin tools</b><small>Full control center</small></a>
+      <a href="/admin/bans/"><span aria-hidden="true">&#8856;</span><b>Bans</b><small>Account access</small></a>
       <a href="/moderator/"><span>&#10003;</span><b>Moderator tools</b><small>Safety workspace</small></a>
     </nav>
 
@@ -885,15 +886,7 @@
         <button type="submit">Apply Shadow-Ban</button>
         <div id="shadow-status" class="form-status"></div>
       </form>
-      <form class="action-card danger" onsubmit="banAccount(event)">
-        <h2>Ban Account</h2>
-        <p>Blocks a non-admin account at the server and shows a banned-account popup.</p>
-        <input id="ban-email" type="email" placeholder="user@email.com" required>
-        <input id="ban-reason" type="text" maxlength="200" placeholder="Reason" required>
-        <button type="submit">Ban Account</button>
-        <button type="button" onclick="unbanAccount()">Unban Account</button>
-        <div id="ban-status" class="form-status"></div>
-      </form>
+      <div class="action-card"><h2>Account bans</h2><p>Review banned accounts, block access, or restore an account.</p><a class="btn" href="/admin/bans/">Manage bans</a></div>
       <div class="action-card">
         <h2>Live Traffic Feed</h2>
         <p>Real-time page visits.</p>
@@ -1913,44 +1906,6 @@
         if (d.pending) loadModeratorRequests();
       } catch (err) {
         setStatus('shadow-status', err.message, 'err');
-      }
-    }
-
-    async function banAccount(e) {
-      e.preventDefault();
-      setStatus('ban-status', 'Banning...', '');
-      try {
-        const d = await postAdmin('/api/admin/ban-account', {
-          email: document.getElementById('ban-email').value.trim(),
-          reason: document.getElementById('ban-reason').value.trim(),
-        });
-        if (d.pending) {
-          setStatus('ban-status', pendingText(d), 'ok');
-          loadModeratorRequests();
-          return;
-        }
-        setStatus('ban-status', 'Banned ' + d.targetEmail + '.', 'ok');
-        loadData();
-      } catch (err) {
-        setStatus('ban-status', err.message, 'err');
-      }
-    }
-
-    async function unbanAccount() {
-      setStatus('ban-status', 'Unbanning...', '');
-      try {
-        const d = await postAdmin('/api/admin/unban-account', {
-          email: document.getElementById('ban-email').value.trim(),
-        });
-        if (d.pending) {
-          setStatus('ban-status', pendingText(d), 'ok');
-          loadModeratorRequests();
-          return;
-        }
-        setStatus('ban-status', (d.existed ? 'Unbanned ' : 'No ban existed for ') + d.targetEmail + '.', 'ok');
-        loadData();
-      } catch (err) {
-        setStatus('ban-status', err.message, 'err');
       }
     }
 

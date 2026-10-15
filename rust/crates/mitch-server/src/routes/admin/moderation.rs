@@ -34,6 +34,9 @@ fn spawn_matrix_unban(
     data_dir: std::path::PathBuf,
     matrix_user_id: String,
 ) {
+    if std::env::var("NODE_ENV").unwrap_or_default() == "test" {
+        return;
+    }
     if let Ok(handle) = tokio::runtime::Handle::try_current() {
         handle.spawn(async move {
             crate::routes::matrix::unban_matrix_user_all_rooms(
@@ -55,6 +58,21 @@ pub fn handle(
     body: &Value,
     ctx: &AdminCtx,
 ) -> Resp {
+    if path == "/api/admin/bans" && *method == Method::GET {
+        if !ctx.is_admin(state) {
+            return Some(forbidden());
+        }
+        let mut seen = std::collections::HashSet::new();
+        let bans: Vec<Value> = mitch_lib::bans::blacklist_all(&state.store)
+            .into_iter()
+            .filter(|ban| {
+                seen.insert(mitch_lib::auth::normalize_email(
+                    ban["email"].as_str().unwrap_or(""),
+                ))
+            })
+            .collect();
+        return Some(json_response(200, json!({ "bans": bans })));
+    }
     // POST /api/admin/moderators (admins only).
     if path == "/api/admin/moderators" && *method == Method::POST {
         if !ctx.is_admin(state) {
@@ -189,28 +207,34 @@ pub fn handle(
     }
 
     // POST /api/admin/shadow-ban & /api/admin/restricted-mode (toggles).
-    if path == "/api/admin/shadow-ban" || path == "/api/admin/restricted-mode" {
+    if (path == "/api/admin/shadow-ban" || path == "/api/admin/restricted-mode")
+        && *method == Method::POST
+    {
         if !ctx.is_any_admin(state) {
             return Some(forbidden());
         }
         let target = mitch_lib::auth::normalize_email(
             body.get("email").and_then(|v| v.as_str()).unwrap_or(""),
         );
-        let active;
-        {
-            let mut bans = state.shadow_bans.write().unwrap_or_else(|e| e.into_inner());
-            if bans.contains(&target) {
-                bans.remove(&target);
-            } else {
-                bans.insert(target.clone());
-            }
-            active = bans.contains(&target);
-            let arr: Vec<Value> = bans.iter().map(|b| json!(b)).collect();
-            let _ = state.store.write_document(
-                &state.cfg.base_dir.join("data/shadow_bans.json"),
-                &json!(arr),
-            );
+        if !valid_email(&target) {
+            return Some(json_response(
+                400,
+                json!({ "error":"valid email required" }),
+            ));
         }
+        if mitch_lib::auth::is_admin_email(&state.store, &target) {
+            return Some(json_response(
+                403,
+                json!({ "error":"cannot restrict admins or owners" }),
+            ));
+        }
+        if !ctx.is_admin(state) {
+            return Some(queue_account_action(state, ctx, "shadow_ban", body));
+        }
+        let active = match toggle_shadow_ban(state, &target) {
+            Ok(active) => active,
+            Err((status, error)) => return Some(json_response(status, json!({ "error":error }))),
+        };
         let actor = mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, &ctx.sid)
             .unwrap_or_else(|| "moderator".to_string());
         let role = if ctx.is_admin(state) {
@@ -1108,176 +1132,186 @@ fn toggle_ban_set(
     json_response(200, json!({ "ok": true, "active": active }))
 }
 
-fn ban_account(
+fn toggle_shadow_ban(state: &Arc<AppState>, target: &str) -> Result<bool, (u16, String)> {
+    if !valid_email(target) {
+        return Err((400, "valid email required".into()));
+    }
+    if mitch_lib::auth::is_admin_email(&state.store, target) {
+        return Err((403, "cannot restrict admins or owners".into()));
+    }
+    let mut bans = state.shadow_bans.write().unwrap_or_else(|e| e.into_inner());
+    let mut updated = bans.clone();
+    let was_restricted = updated
+        .iter()
+        .any(|email| mitch_lib::auth::normalize_email(email) == target);
+    updated.retain(|email| mitch_lib::auth::normalize_email(email) != target);
+    if !was_restricted {
+        updated.insert(target.to_string());
+    }
+    let entries: Vec<&String> = updated.iter().collect();
+    state
+        .store
+        .write_document(
+            &state.cfg.data_dir.join("shadow_bans.json"),
+            &json!(entries),
+        )
+        .map_err(|_| (500, "Could not save the account restriction.".to_string()))?;
+    *bans = updated;
+    Ok(!was_restricted)
+}
+
+fn queue_account_action(
     state: &Arc<AppState>,
-    body: &Value,
     ctx: &AdminCtx,
-    headers: &HeaderMap,
+    action: &str,
+    body: &Value,
 ) -> Response {
-    let admin_email = mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, &ctx.sid)
-        .unwrap_or_else(|| "moderator".to_string());
-    let email_raw = body
-        .get("email")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_lowercase()
-        .trim()
-        .to_string();
-    let target_email = mitch_lib::auth::normalize_email(&email_raw);
-    let reason = body
-        .get("reason")
-        .and_then(|v| v.as_str())
-        .unwrap_or("Banned by staff")
-        .trim()
-        .chars()
-        .take(200)
-        .collect::<String>();
+    match mitch_lib::admin::create_moderator_action_request(
+        &state.store,
+        &state.id_secret,
+        &state.cfg.data_dir,
+        &ctx.sid,
+        &json!({ "action":action, "payload":body }),
+    ) {
+        Ok(request) => json_response(202, json!({ "ok":true, "pending":true, "request":request })),
+        Err(error) => json_response(error.status, json!({ "error":error.message })),
+    }
+}
+
+fn apply_account_ban(
+    state: &Arc<AppState>,
+    raw_email: &str,
+    reason: &str,
+    actor: &str,
+) -> Result<Value, (u16, String)> {
+    if !valid_email(raw_email.trim()) {
+        return Err((400, "valid email required".into()));
+    }
+    let target = mitch_lib::auth::normalize_email(raw_email);
+    if mitch_lib::auth::is_admin_email(&state.store, &target) {
+        return Err((403, "cannot ban admins or owners from this panel".into()));
+    }
+    let reason = reason.trim().chars().take(200).collect::<String>();
     let reason = if reason.is_empty() {
         "Banned by staff".to_string()
     } else {
         reason
     };
-    if !valid_email(&email_raw) {
-        return json_response(400, json!({ "error": "valid email required" }));
-    }
-    if mitch_lib::auth::is_admin_email(&state.store, &target_email) {
-        return json_response(
-            403,
-            json!({ "error": "cannot ban admins or owners from this panel" }),
-        );
-    }
-    mitch_lib::bans::blacklist_insert(&state.store, &target_email, &reason, &admin_email);
-
-    // If their last known IP isn't whitelisted, IP-ban them too.
-    let last_known = state
-        .store
-        .read_document(&state.cfg.data_dir.join("last_known_ips.json"), json!({}));
-    if let Some(target_ip) = last_known
-        .get(target_email.as_str())
-        .and_then(|v| v.as_str())
-        .map(str::to_string)
-    {
-        if !mitch_lib::auth::WHITELISTED_IPS.contains(&target_ip.as_str()) {
-            mitch_lib::bans::banned_ips_insert(
-                &state.store,
-                &target_ip,
-                &format!("IP associated with banned account {target_email}. Reason: {reason}"),
-                &admin_email,
-                &target_email,
-            );
-        }
-    }
-
+    mitch_lib::bans::blacklist_insert(&state.store, &target, &reason, actor)
+        .map_err(|_| (500, "Could not save the account ban. Try again.".into()))?;
+    crate::ws::disconnect_banned_user(state, &target, &reason);
     mitch_lib::coins::add_admin_notification(
         &state.store,
         &state.cfg.data_dir,
-        &target_email,
+        &target,
         "Account banned",
         &format!("Your account was banned. Reason: {reason}"),
-        &admin_email,
+        actor,
         "",
         "",
     );
-    let role = if ctx.is_admin(state) {
-        "admin"
-    } else {
-        "moderator"
-    };
-    mitch_lib::admin::log_admin_action(
-        &state.store,
-        &state.cfg.data_dir,
-        &admin_email,
-        "ban_account",
-        json!({
-            "targetEmail": target_email,
-            "reason": reason,
-            "ip": ctx.ip,
-            "userAgent": user_agent(headers),
-            "role": role,
-        }),
-    );
-    json_response(200, json!({ "ok": true, "targetEmail": target_email }))
+    Ok(json!({ "ok":true, "targetEmail":target, "reason":reason }))
 }
 
-/// `POST /api/admin/unban-account` — server.js:10682-10725.
-fn unban_account(
-    state: &Arc<AppState>,
-    body: &Value,
-    ctx: &AdminCtx,
-    headers: &HeaderMap,
-) -> Response {
-    let admin_email = mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, &ctx.sid)
-        .unwrap_or_else(|| "moderator".to_string());
-    let email_raw = body
-        .get("email")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_lowercase()
-        .trim()
-        .to_string();
-    let target_email = mitch_lib::auth::normalize_email(&email_raw);
-    if !valid_email(&email_raw) {
-        return json_response(400, json!({ "error": "valid email required" }));
+fn restore_account_access(state: &Arc<AppState>, raw_email: &str) -> Result<Value, (u16, String)> {
+    if !valid_email(raw_email.trim()) {
+        return Err((400, "valid email required".into()));
     }
-    let existed = mitch_lib::bans::blacklist_remove(&state.store, &target_email, &email_raw);
-
-    // Remove from shadow bans
+    let target = mitch_lib::auth::normalize_email(raw_email);
+    let mut existed =
+        mitch_lib::bans::blacklist_remove(&state.store, &target, raw_email).map_err(|_| {
+            (
+                500,
+                "Could not remove the account ban. Try again.".to_string(),
+            )
+        })?;
     {
         let mut bans = state.shadow_bans.write().unwrap_or_else(|e| e.into_inner());
-        bans.remove(&target_email);
-        bans.remove(&email_raw);
-        let arr: Vec<Value> = bans.iter().map(|b| json!(b)).collect();
-        let _ = state.store.write_document(
-            &state.cfg.base_dir.join("data/shadow_bans.json"),
-            &json!(arr),
-        );
+        let mut updated = bans.clone();
+        updated.retain(|email| mitch_lib::auth::normalize_email(email) != target);
+        existed |= updated.len() != bans.len();
+        let entries: Vec<&String> = updated.iter().collect();
+        state
+            .store
+            .write_document(
+                &state.cfg.data_dir.join("shadow_bans.json"),
+                &json!(entries),
+            )
+            .map_err(|_| {
+                (
+                    500,
+                    "Could not finish restoring account access. Try again.".to_string(),
+                )
+            })?;
+        *bans = updated;
     }
-
-    // Remove any IP bans associated with this email or last known IP
-    let last_known = state
-        .store
-        .read_document(&state.cfg.data_dir.join("last_known_ips.json"), json!({}));
-    let target_ip = last_known
-        .get(target_email.as_str())
-        .or_else(|| last_known.get(email_raw.as_str()))
-        .and_then(|v| v.as_str());
-    mitch_lib::bans::banned_ips_remove_for_account(
-        &state.store,
-        &target_email,
-        &email_raw,
-        target_ip,
-    );
-
-    let matrix_user_id =
-        crate::routes::matrix::resolve_matrix_user_id_for_email(state, &target_email);
+    let removed_ips =
+        mitch_lib::bans::banned_ips_remove_for_account(&state.store, &target, raw_email, None);
+    existed |= !removed_ips.is_empty();
+    let matrix_user_id = crate::routes::matrix::resolve_matrix_user_id_for_email(state, &target);
     spawn_matrix_unban(
         state.id_secret.clone(),
         state.store.clone(),
         state.cfg.data_dir.clone(),
         matrix_user_id,
     );
+    Ok(json!({ "ok":true, "targetEmail":target, "existed":existed }))
+}
 
-    let role = if ctx.is_admin(state) {
-        "admin"
+fn account_action(
+    state: &Arc<AppState>,
+    body: &Value,
+    ctx: &AdminCtx,
+    headers: &HeaderMap,
+    ban: bool,
+) -> Response {
+    let action = if ban { "ban_account" } else { "unban_account" };
+    if !ctx.is_admin(state) {
+        return queue_account_action(state, ctx, action, body);
+    }
+    let actor = ctx.email(state);
+    let email = body.get("email").and_then(Value::as_str).unwrap_or("");
+    let result = if ban {
+        apply_account_ban(
+            state,
+            email,
+            body.get("reason").and_then(Value::as_str).unwrap_or(""),
+            &actor,
+        )
     } else {
-        "moderator"
+        restore_account_access(state, email)
     };
-    mitch_lib::admin::log_admin_action(
-        &state.store,
-        &state.cfg.data_dir,
-        &admin_email,
-        "unban_account",
-        json!({
-            "targetEmail": target_email,
-            "ip": ctx.ip,
-            "userAgent": user_agent(headers),
-            "role": role,
-        }),
-    );
-    json_response(
-        200,
-        json!({ "ok": true, "targetEmail": target_email, "existed": existed }),
-    )
+    match result {
+        Ok(result) => {
+            mitch_lib::admin::log_admin_action(
+                &state.store,
+                &state.cfg.data_dir,
+                &actor,
+                action,
+                json!({ "targetEmail":result["targetEmail"], "reason":result.get("reason"), "ip":ctx.ip, "userAgent":user_agent(headers), "role":"admin" }),
+            );
+            json_response(200, result)
+        }
+        Err((status, error)) => json_response(status, json!({ "error":error })),
+    }
+}
+
+fn ban_account(
+    state: &Arc<AppState>,
+    body: &Value,
+    ctx: &AdminCtx,
+    headers: &HeaderMap,
+) -> Response {
+    account_action(state, body, ctx, headers, true)
+}
+
+fn unban_account(
+    state: &Arc<AppState>,
+    body: &Value,
+    ctx: &AdminCtx,
+    headers: &HeaderMap,
+) -> Response {
+    account_action(state, body, ctx, headers, false)
 }
 
 /// `POST /api/admin/chat-reports/resolve` — action 'delete' or resolve.
@@ -1547,21 +1581,7 @@ pub fn execute_moderator_approved_action(
         }
         "shadow_ban" => {
             let target = mitch_lib::auth::normalize_email(s("email").as_str().unwrap_or(""));
-            let active;
-            {
-                let mut bans = state.shadow_bans.write().unwrap_or_else(|e| e.into_inner());
-                if bans.contains(&target) {
-                    bans.remove(&target);
-                } else {
-                    bans.insert(target.clone());
-                }
-                active = bans.contains(&target);
-                let arr: Vec<Value> = bans.iter().map(|b| json!(b)).collect();
-                let _ = state.store.write_document(
-                    &state.cfg.base_dir.join("data/shadow_bans.json"),
-                    &json!(arr),
-                );
-            }
+            let active = toggle_shadow_ban(state, &target)?;
             mitch_lib::admin::log_admin_action(
                 &state.store,
                 &state.cfg.data_dir,
@@ -1571,90 +1591,27 @@ pub fn execute_moderator_approved_action(
             );
             Ok(json!({ "ok": true, "active": active }))
         }
-        "ban_account" => {
-            let target_email = mitch_lib::auth::normalize_email(s("email").as_str().unwrap_or(""));
-            if mitch_lib::auth::is_admin_email(&state.store, &target_email) {
-                return Err((403, "cannot ban admins or owners from this panel".into()));
-            }
-            let reason = s("reason")
-                .as_str()
-                .unwrap_or("Banned by admin")
-                .to_string();
-            mitch_lib::bans::blacklist_insert(&state.store, &target_email, &reason, actor);
-            mitch_lib::coins::add_admin_notification(
-                &state.store,
-                &state.cfg.data_dir,
-                &target_email,
-                "Account banned",
-                &format!("Your account was banned. Reason: {reason}"),
-                actor,
-                "",
-                "",
-            );
+        "ban_account" | "unban_account" => {
+            let email = payload.get("email").and_then(Value::as_str).unwrap_or("");
+            let result = if action == "ban_account" {
+                apply_account_ban(
+                    state,
+                    email,
+                    payload.get("reason").and_then(Value::as_str).unwrap_or(""),
+                    actor,
+                )?
+            } else {
+                restore_account_access(state, email)?
+            };
             mitch_lib::admin::log_admin_action(
                 &state.store,
                 &state.cfg.data_dir,
                 actor,
-                "ban_account",
-                json!({ "targetEmail": target_email, "reason": reason }).merge(requested_by()),
+                action,
+                json!({ "targetEmail":result["targetEmail"], "reason":result.get("reason") })
+                    .merge(requested_by()),
             );
-            Ok(json!({ "ok": true, "targetEmail": target_email }))
-        }
-        "unban_account" => {
-            let email_raw = s("email")
-                .as_str()
-                .unwrap_or("")
-                .to_lowercase()
-                .trim()
-                .to_string();
-            let target_email = mitch_lib::auth::normalize_email(&email_raw);
-            let existed =
-                mitch_lib::bans::blacklist_remove(&state.store, &target_email, &email_raw);
-
-            // Remove from shadow bans
-            {
-                let mut bans = state.shadow_bans.write().unwrap_or_else(|e| e.into_inner());
-                bans.remove(&target_email);
-                bans.remove(&email_raw);
-                let arr: Vec<Value> = bans.iter().map(|b| json!(b)).collect();
-                let _ = state.store.write_document(
-                    &state.cfg.base_dir.join("data/shadow_bans.json"),
-                    &json!(arr),
-                );
-            }
-
-            // Remove any IP bans
-            let last_known = state
-                .store
-                .read_document(&state.cfg.data_dir.join("last_known_ips.json"), json!({}));
-            let target_ip = last_known
-                .get(target_email.as_str())
-                .or_else(|| last_known.get(email_raw.as_str()))
-                .and_then(|v| v.as_str());
-            mitch_lib::bans::banned_ips_remove_for_account(
-                &state.store,
-                &target_email,
-                &email_raw,
-                target_ip,
-            );
-
-            let matrix_user_id =
-                crate::routes::matrix::resolve_matrix_user_id_for_email(state, &target_email);
-            spawn_matrix_unban(
-                state.id_secret.clone(),
-                state.store.clone(),
-                state.cfg.data_dir.clone(),
-                matrix_user_id,
-            );
-
-            mitch_lib::admin::log_admin_action(
-                &state.store,
-                &state.cfg.data_dir,
-                actor,
-                "unban_account",
-                json!({ "targetEmail": target_email, "existed": existed }).merge(requested_by()),
-            );
-            Ok(json!({ "ok": true, "targetEmail": target_email, "existed": existed }))
+            Ok(result)
         }
         "casino_rig" => {
             let chance = s("chance").as_f64().unwrap_or(f64::NAN);
@@ -2081,6 +2038,195 @@ pub async fn lookup_profile(state: &Arc<AppState>, search: &str) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn ban_test_state() -> (Arc<AppState>, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!(
+            "mitch-account-ban-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("data")).unwrap();
+        let store = Arc::new(mitch_lib::data::DataStore::open(&dir, &dir.join("data")).unwrap());
+        let cfg = crate::hosts::SiteConfig {
+            base_dir: dir.clone(),
+            data_dir: dir.join("data"),
+            ..crate::hosts::SiteConfig::load()
+        };
+        store
+            .write_document(
+                &cfg.data_dir.join("admins.json"),
+                &json!({ "owners":["owner@example.com"], "admins":["admin@example.com"] }),
+            )
+            .unwrap();
+        store
+            .write_document(
+                &cfg.data_dir.join("moderators.json"),
+                &json!(["moderator@example.com"]),
+            )
+            .unwrap();
+        (Arc::new(AppState::new(cfg, store)), dir)
+    }
+
+    fn ban_test_ctx(state: &AppState, email: &str) -> AdminCtx {
+        let sid = mitch_lib::auth::make_email_id(email, 0, &state.id_secret);
+        mitch_lib::auth::names_set(&state.store, &sid, email);
+        AdminCtx {
+            cookies: mitch_lib::auth::Cookies::default(),
+            sid,
+            ip: "192.0.2.1".into(),
+        }
+    }
+
+    #[test]
+    fn account_bans_disconnect_presence_and_restore_aliases_without_network_bans() {
+        let (state, dir) = ban_test_state();
+        let email = "firstlast@student.rjuhsd.us";
+        state.user_presence.lock().unwrap().insert(
+            email.into(),
+            crate::state::UserPresence {
+                last_seen: now_millis(),
+                playing: "Dashboard".into(),
+            },
+        );
+        state.ws_broadcasts.lock().unwrap().insert(
+            1,
+            crate::ws::WsClient {
+                email_norm: email.into(),
+            },
+        );
+        state
+            .store
+            .write_document(
+                &state.cfg.data_dir.join("last_known_ips.json"),
+                &json!({email:"192.0.2.1"}),
+            )
+            .unwrap();
+        let result = apply_account_ban(
+            &state,
+            "First.Last+alias@student.mitch.pro",
+            "  Repeated spam  ",
+            "owner@example.com",
+        )
+        .unwrap();
+        assert_eq!(result["reason"], "Repeated spam");
+        assert!(mitch_lib::auth::banned_info_for_email(&state.store, email).is_some());
+        assert_eq!(crate::ws::active_user_count(&state, now_millis()), 0);
+        assert!(mitch_lib::bans::banned_ips_get(&state.store, "192.0.2.1").is_none());
+        state
+            .shadow_bans
+            .write()
+            .unwrap()
+            .insert("First.Last+legacy@student.mitch.pro".into());
+        mitch_lib::bans::banned_ips_insert(
+            &state.store,
+            "192.0.2.1",
+            "another account",
+            "owner",
+            "other@example.com",
+        );
+        let restored = restore_account_access(&state, "First.Last@student.mitch.pro").unwrap();
+        assert_eq!(restored["existed"], true);
+        assert!(mitch_lib::auth::banned_info_for_email(&state.store, email).is_none());
+        assert!(state.shadow_bans.read().unwrap().is_empty());
+        assert!(mitch_lib::bans::banned_ips_get(&state.store, "192.0.2.1").is_some());
+        drop(state);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn moderators_queue_bans_and_admin_approval_uses_the_same_flow() {
+        let (state, dir) = ban_test_state();
+        let owner = ban_test_ctx(&state, "owner@example.com");
+        let moderator = ban_test_ctx(&state, "moderator@example.com");
+        let headers = HeaderMap::new();
+        let body = json!({ "email":"student@example.com", "reason":"spam" });
+        let pending = handle(
+            &state,
+            &Method::POST,
+            "/api/admin/ban-account",
+            &headers,
+            &body,
+            &moderator,
+        )
+        .unwrap();
+        assert_eq!(pending.status(), 202);
+        assert!(
+            mitch_lib::auth::banned_info_for_email(&state.store, "student@example.com").is_none()
+        );
+        let requests = mitch_lib::admin::load_moderator_requests(&state.store, &state.cfg.data_dir);
+        let request = requests.first().unwrap();
+        let approved = resolve_moderator_request(
+            &state,
+            &json!({ "id":request["id"], "decision":"approve" }),
+            &owner,
+        );
+        assert_eq!(approved.status(), 200);
+        assert!(
+            mitch_lib::auth::banned_info_for_email(&state.store, "student@example.com").is_some()
+        );
+        assert_eq!(
+            handle(
+                &state,
+                &Method::GET,
+                "/api/admin/bans",
+                &headers,
+                &json!({}),
+                &moderator
+            )
+            .unwrap()
+            .status(),
+            403
+        );
+        assert_eq!(
+            handle(
+                &state,
+                &Method::GET,
+                "/api/admin/bans",
+                &headers,
+                &json!({}),
+                &owner
+            )
+            .unwrap()
+            .status(),
+            200
+        );
+        assert_eq!(unban_account(&state, &body, &owner, &headers).status(), 200);
+        assert!(
+            mitch_lib::auth::banned_info_for_email(&state.store, "student@example.com").is_none()
+        );
+        assert!(handle(
+            &state,
+            &Method::GET,
+            "/api/admin/restricted-mode",
+            &headers,
+            &body,
+            &owner
+        )
+        .is_none());
+        drop(state);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn bans_reject_staff_and_invalid_targets() {
+        let (state, dir) = ban_test_state();
+        assert_eq!(
+            apply_account_ban(&state, "owner@example.com", "reason", "admin")
+                .unwrap_err()
+                .0,
+            403
+        );
+        assert_eq!(
+            apply_account_ban(&state, "not-an-email", "reason", "admin")
+                .unwrap_err()
+                .0,
+            400
+        );
+        drop(state);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn test_set_admin_add_and_remove() {

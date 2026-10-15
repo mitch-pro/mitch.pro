@@ -54,6 +54,10 @@
       return false;
     }
     function handleMessage(data) {
+      if (data.type === 'account_banned') {
+        location.replace('/');
+        return;
+      }
       if (data.type === 'admin_broadcast' && data.createdAt && Number(data.createdAt) < pageOpenedAt) {
         return;
       }
