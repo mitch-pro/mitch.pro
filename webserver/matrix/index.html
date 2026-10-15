@@ -367,13 +367,15 @@
 
         function isMatrixStoreAccountMismatch(value) {
           const message = String(value?.message || value || '');
-          // matrix-sdk-crypto-wasm words this identity/device-key mismatch a
-          // few different ways depending on exactly where it trips (the
-          // account constructor check, cross-signing, or imported-key
-          // verification) - catch the whole family so the local store always
-          // gets cleared and a fresh device re-established, instead of the
-          // error surfacing raw on one wording and not the others.
-          return /account in the store doesn't match the account in the constructor|mismatchedidentitykeys|mismatched keypair detected|user id mismatch in/i.test(message);
+          // matrix-sdk-crypto-wasm has a whole family of "X doesn't match Y"
+          // errors (account/constructor, cross-signing, imported keys,
+          // session config, keypairs, user IDs...) depending on exactly
+          // where a stale local crypto store collides with a device's real
+          // identity. Rather than chase each exact wording, catch the shape:
+          // any mismatch that mentions a crypto/identity term. Deliberately
+          // broad - any device logging in should just get a fresh, working
+          // session instead of surfacing raw crypto errors, full stop.
+          return /mismatch/i.test(message) && /key|account|session|identity|device|signing|crypto|olm|megolm/i.test(message);
         }
 
         function beginMatrixStoreRecovery() {
