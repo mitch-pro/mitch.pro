@@ -75,8 +75,10 @@ jobs:
             echo "AI summary request failed with HTTP $HTTP_CODE" >&2
             cat response.json >&2 || true
             echo "AI summary unavailable (HTTP $HTTP_CODE) - check the Actions log." > ai_summary.txt
-          else
-            jq -r '.choices[0].message.content' response.json > ai_summary.txt
+          elif ! jq -re '.choices[0].message.content' response.json > ai_summary.txt 2>/dev/null; then
+            echo "AI summary response had an unexpected shape:" >&2
+            cat response.json >&2 || true
+            echo "AI summary unavailable (unexpected response shape) - check the Actions log." > ai_summary.txt
           fi
 
       - name: Notify via ntfy (direct push to master)
