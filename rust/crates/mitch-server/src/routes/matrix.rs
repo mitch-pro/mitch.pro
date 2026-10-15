@@ -2711,7 +2711,7 @@ pub async fn handle_api(
     }
 
     if path == "/api/matrix/sso-status" && method == Method::GET {
-        return Some(api_sso_status(state, headers));
+        return Some(api_sso_status(state, headers).await);
     }
     if path == "/api/matrix/sso-login" && method == Method::POST {
         return Some(api_sso_login(state, headers, body_bytes).await);
@@ -2785,7 +2785,7 @@ pub async fn handle_api(
     None
 }
 
-fn api_sso_status(state: &AppState, headers: &HeaderMap) -> Response {
+async fn api_sso_status(state: &AppState, headers: &HeaderMap) -> Response {
     let cookies = crate::routes::me::cookies_of(state, headers);
     let uid = cookies
         .get("studentId")
@@ -2814,12 +2814,19 @@ fn api_sso_status(state: &AppState, headers: &HeaderMap) -> Response {
             }
         });
 
-    let matrix_users_file = state.data_dir().join("matrix_users.json");
-    let matrix_users = state.store.read_document(&matrix_users_file, json!({}));
-    let assigned_username = matrix_users
-        .get(uid)
-        .and_then(|v| v.as_str())
-        .unwrap_or(username);
+    // matrix_username_for_email() is the canonical source of truth for this -
+    // it's what actually logs the account into Matrix and what migrated this
+    // account's matrix_users.json entry from being keyed by uid to being
+    // keyed by normalized email. A plain matrix_users.get(uid) lookup here
+    // (the old way) goes stale the moment that migration runs: the uid-keyed
+    // entry is gone, so it silently fell back to the profile's own "username"
+    // field, which can be a completely different string than the account's
+    // real, already-established Matrix username. That mismatch is what was
+    // making every page load look like a different Matrix account and
+    // destroying the local E2EE session on every single reload.
+    let assigned_username = matrix_username_for_email(state, &norm)
+        .await
+        .unwrap_or_else(|| username.to_string());
     let display_name = prof
         .get("displayName")
         .or_else(|| prof.get("nickname"))
