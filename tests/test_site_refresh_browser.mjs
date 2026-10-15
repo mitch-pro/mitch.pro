@@ -21,7 +21,9 @@ try {
  assert.equal(await page.locator('#sw-push-prompt').count(),0,'Push permission must not interrupt a visit.');
  for(const path of ['/','/coins/?v=2','/casino/','/enroll/','/game-portal/','/team/','/friends/','/members/','/rjuhsd/']) {
   await page.goto(base+path);assert.equal(await page.locator('#site-credit').count(),1,path);
-  assert.equal(await page.locator('#site-credit').innerText(),path==='/rjuhsd/'?'Made by Tyler and Mitch.':'Created by Mitch and Tyler');
+  assert.equal(await page.locator('#site-credit-copy').innerText(),path==='/rjuhsd/'?'Made by Tyler and Mitch.':'Created by Mitch and Tyler');
+  await page.locator('#site-active').waitFor();
+  assert.match(await page.locator('#site-active').innerText(),/^[\d,]+ active$/);
   for(const width of [1440,390]) {
    await page.setViewportSize({width,height:844});
    for(const fraction of [0,.5,1]) {

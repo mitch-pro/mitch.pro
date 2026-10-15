@@ -107,6 +107,12 @@ pub async fn handle(
     if path == "/api/games" && (*method == Method::GET || *method == Method::POST) {
         return Some(games(state, body, headers));
     }
+    if path == "/api/presence/count" && *method == Method::GET {
+        return Some(json_response(
+            200,
+            json!({ "count": crate::ws::active_user_count(state, mitch_lib::school::now_millis()) }),
+        ));
+    }
     // POST /api/presence/heartbeat (server.js:16307-16316) — the Step 11
     // presence writer; POST-only, everything else falls through.
     if path == "/api/presence/heartbeat" && *method == Method::POST {

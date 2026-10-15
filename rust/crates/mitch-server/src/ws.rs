@@ -108,6 +108,24 @@ pub fn is_user_present(state: &Arc<AppState>, email: &str, now: i64) -> bool {
     }
 }
 
+pub fn active_user_count(state: &Arc<AppState>, now: i64) -> usize {
+    let mut online: HashSet<String> = state
+        .user_presence
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .iter()
+        .filter(|(_, p)| now - p.last_seen < PRESENCE_FALLBACK_TTL_MS)
+        .map(|(email, _)| email.clone())
+        .collect();
+    let sockets = state
+        .ws_broadcasts
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    online.extend(sockets.values().map(|client| client.email_norm.clone()));
+    online.remove("");
+    online.len()
+}
+
 /// `broadcastPresenceChanged(email, online, playing)` (server.js:1086-1103) —
 /// friends of `email` plus the user themself receive the payload.
 pub fn broadcast_presence_changed(state: &Arc<AppState>, email: &str, online: bool, playing: &str) {
@@ -537,6 +555,57 @@ fn now_millis() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn active_count_deduplicates_tabs_and_expires_heartbeats() {
+        let dir = std::env::temp_dir().join(format!(
+            "mitch-presence-count-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("data")).unwrap();
+        let cfg = crate::hosts::SiteConfig {
+            data_dir: dir.join("data"),
+            ..crate::hosts::SiteConfig::load()
+        };
+        let store = Arc::new(mitch_lib::data::DataStore::open(&dir, &cfg.data_dir).unwrap());
+        let state = Arc::new(AppState::new(cfg, store));
+        let now = 100_000;
+        assert_eq!(active_user_count(&state, now), 0);
+        for (email, last_seen) in [
+            ("alice@example.com", now),
+            ("bob@example.com", now),
+            ("expired@example.com", now - PRESENCE_FALLBACK_TTL_MS),
+        ] {
+            state.user_presence.lock().unwrap().insert(
+                email.into(),
+                UserPresence {
+                    last_seen,
+                    playing: String::new(),
+                },
+            );
+        }
+        for (id, email) in [
+            (1, "alice@example.com"),
+            (2, "alice@example.com"),
+            (3, "socket@example.com"),
+        ] {
+            state.ws_broadcasts.lock().unwrap().insert(
+                id,
+                WsClient {
+                    email_norm: email.into(),
+                },
+            );
+        }
+        assert_eq!(active_user_count(&state, now), 3);
+        assert_eq!(active_user_count(&state, now + PRESENCE_FALLBACK_TTL_MS), 2);
+        state.ws_broadcasts.lock().unwrap().clear();
+        assert_eq!(active_user_count(&state, now + PRESENCE_FALLBACK_TTL_MS), 0);
+        drop(state);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     /// recipients-at-send-time semantics: the envelope model must reduce to
     /// the JS per-socket predicate for the shipped fan-outs.
