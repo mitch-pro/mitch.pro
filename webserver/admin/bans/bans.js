@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  let bans = [], busy = false, setup = false, pendingBan = null;
+  let bans = [], busy = false, setup = false, timedBansReady = false, pendingBan = null;
   function headers() {
     const result = {'Content-Type':'application/json','X-Mitch-Requested-With':'1'};
     const pass = sessionStorage.getItem('admin_passphrase');
@@ -25,6 +25,7 @@
   function setBusy(value) {
     busy = value;
     $('bans-workspace').querySelectorAll('button').forEach(button => {button.disabled=value;});
+    $('ban-form').querySelector('button').disabled=value||!timedBansReady;
   }
   function showLock() {
     $('bans-workspace').hidden = true;
@@ -66,13 +67,18 @@
   async function loadBans() {
     const data = await request('/api/admin/bans');
     bans = data.bans || [];
+    const wasReady = timedBansReady;
+    timedBansReady = data.supportsTimedBans === true;
+    $('ban-form').querySelector('button').disabled = busy || !timedBansReady;
+    if (!timedBansReady) status('ban-status','Ban management is updating. Use Refresh in a moment to continue.');
+    else if (!wasReady) status('ban-status','');
     render();
     $('passphrase-lock').hidden = true;
     $('bans-workspace').hidden = false;
     status('access-status','Admin access verified.');
   }
   async function changeBan(ban, email, reason, output, duration) {
-    if (busy) return;
+    if (busy || (ban && !timedBansReady)) return;
     setBusy(true);status(output,ban?'Saving ban…':'Restoring access…');
     try {
       const data = await request(ban?'/api/admin/ban-account':'/api/admin/unban-account',{method:'POST',body:JSON.stringify({email,reason,...(ban?{duration}:{})})});
@@ -87,7 +93,7 @@
   }
   $('ban-form').addEventListener('submit',event=>{
     event.preventDefault();
-    if (busy) return;
+    if (busy || !timedBansReady) return;
     const email=$('ban-email').value.trim(),reason=$('ban-reason').value.trim(),duration=$('ban-duration').value;
     if (!reason) {status('ban-status','Enter a reason for the ban.',true);$('ban-reason').focus();return;}
     pendingBan={email,reason,duration};

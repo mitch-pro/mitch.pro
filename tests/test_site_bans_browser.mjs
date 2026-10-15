@@ -12,6 +12,7 @@ const pass='FixtureBansPassphrase37';
 try {
  const makeContext=async email=>{
   const context=await browser.newContext({serviceWorkers:'block',viewport:{width:1440,height:1000}});
+  context.setDefaultTimeout(20000);
   await context.route('**/*',route=>new URL(route.request().url()).origin===base?route.continue():route.abort());
   if(email){
    const raw='e'+createHash('sha256').update(email).digest('hex').slice(0,24);
@@ -32,6 +33,15 @@ try {
  await page.waitForFunction(()=>document.getElementById('unlock-status').textContent.includes('Incorrect'));
  assert(!await page.locator('#bans-workspace').isVisible());
  await page.locator('#admin-passphrase').fill(pass);await page.locator('#unlock-button').click();await page.locator('#bans-workspace').waitFor();
+ const oldServer=route=>route.fulfill({json:{bans:[]}});
+ await page.route('**/api/admin/bans',oldServer);
+ await page.locator('#refresh-bans').click();
+ await page.waitForFunction(()=>document.getElementById('ban-status').textContent.includes('updating'));
+ assert(await page.locator('#ban-form button').isDisabled(),'Old servers must not accept new duration choices.');
+ assert(await page.locator('#restore-form button').isEnabled(),'Restoring access should remain available during a rollout.');
+ await page.unroute('**/api/admin/bans',oldServer);
+ await page.locator('#refresh-bans').click();
+ await page.waitForFunction(()=>!document.querySelector('#ban-form button').disabled);
  await page.goto(base+'/');await page.locator('#bans-action-btn').waitFor();assert(await page.locator('#bans-action-btn').isVisible());
  await page.locator('#bans-action-btn').click();await page.locator('#bans-workspace').waitFor();
  const otherPage=await neighbor.newPage();await otherPage.goto(base+'/');await otherPage.waitForFunction(()=>window.MitchShell?.ready);
@@ -132,5 +142,5 @@ try {
  assert(await page.locator('.staff-panel-switcher a[href="/admin/bans/"]').isVisible());
  assert.equal(await page.locator('#ban-email').count(),0,'The main panel should link to the dedicated ban page.');
  assert.deepEqual(errors,[]);
- console.log('PASS: separate admin button, role/passphrase gates, real ban/unban, live disconnect, shared-network access, required duration/reason, confirmation/cancel, Roblox-style notice, working appeal form, automatic expiry, alias restore, staff protection, and responsive themes.');
+ console.log('PASS: separate admin button, role/passphrase gates, real ban/unban, live disconnect, shared-network access, safe mixed-version rollout, required duration/reason, confirmation/cancel, Roblox-style notice, working appeal form, automatic expiry, alias restore, staff protection, and responsive themes.');
 }finally{await browser.close();}

@@ -71,7 +71,10 @@ pub fn handle(
                 ))
             })
             .collect();
-        return Some(json_response(200, json!({ "bans": bans })));
+        return Some(json_response(
+            200,
+            json!({ "bans": bans, "supportsTimedBans":true }),
+        ));
     }
     // POST /api/admin/moderators (admins only).
     if path == "/api/admin/moderators" && *method == Method::POST {
