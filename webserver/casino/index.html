@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>The Casino — mitch.pro</title>
+<title>Casino — mitch.pro</title>
 <link rel="stylesheet" href="/app.css">
 <script src="/api.js"></script>
 <script src="/app-shell.js" defer></script>
@@ -603,29 +603,21 @@
     body.casino-page .card { padding: 14px; }
   }
 </style>
-<link rel="stylesheet" href="/casino/casino-refresh.css?v=1">
+<link rel="stylesheet" href="/casino/casino-refresh.css?v=2">
 </head>
 <body class="casino-page">
 <main class="app-main casino-main">
   <header class="page-head">
     <div>
-      <div class="casino-kicker">MITCH.PRO / THE ARCADE FLOOR</div>
-      <h1>The Casino<span>.</span></h1>
-      <p class="page-sub">Sixteen games. One MitchCoins wallet. No real-money betting.</p>
+      <h1>Casino</h1>
+      <p class="page-sub">Play with MitchCoins. Choose a game and set your bet.</p>
     </div>
     <div class="wallet"><img src="/mitchcoin.png" alt=""><span>Your MitchCoins</span><strong id="balance" class="mitch-coin-amount">Loading...</strong></div>
   </header>
 
   <section class="hero">
-    <div class="hero-copy">
-      <div class="hero-overline"><span></span> OPEN FLOOR / 16 GAMES</div>
-      <h2>Pick your game.<br>Set your wager.</h2>
-      <p>Your wager follows you between rooms. Every result uses your virtual MitchCoins balance.</p>
-      <div class="hero-reels" aria-hidden="true"><span>7</span><span>7</span><span>7</span></div>
-      <small class="hero-fineprint">MitchCoins have no cash value and cannot be redeemed for money.</small>
-    </div>
+    <div class="hero-copy"><div class="casino-table-art" aria-hidden="true"><span>♠</span><span>♡</span></div><h2>A seat at the table</h2><p>Cards, reels, and quick games, all using the coins you earn here.</p><a href="/coins/?v=2">Your MitchCoins</a><small class="hero-fineprint">Virtual coins only. No cash value.</small></div>
     <aside class="betbox">
-      <div class="kicker">THE WAGER DESK</div>
       <h2>Set your wager</h2>
       <div>
         <label for="bet">Bet amount</label>
@@ -640,11 +632,11 @@
         <button class="btn" data-bet="1000" type="button">1000</button>
         <button class="btn" id="bet-max" type="button">Max</button>
       </div>
-      <div class="meta">Bet up to your available balance. Keno picks: <strong id="keno-count">0 / 10</strong>.</div>
+      <div class="meta" id="bet-limit">Up to 500 coins per bet. VIP passes raise the limit.</div>
     </aside>
   </section>
 
-  <div class="casino-library-head"><div><span class="casino-kicker">GAME LIBRARY / 01</span><h2>Choose a room</h2></div><span id="casino-visible-count">16 games</span></div>
+  <div class="casino-library-head"><div><h2>Games</h2></div><span id="casino-visible-count">16 games</span></div>
   <nav class="casino-filterbar" aria-label="Filter casino games">
     <button class="casino-filter active" type="button" data-filter="all">All games</button>
     <button class="casino-filter" type="button" data-filter="quick">Quick</button>
@@ -812,7 +804,7 @@
         <div class="controls">
           <button class="btn primary" onclick="goFullscreen('card-keno')" type="button">Play Keno Rush</button>
           <div style="display:none;">
-            <div id="keno-board" class="keno"></div>
+            <p>Selected: <strong id="keno-count">0 / 10</strong></p><div id="keno-board" class="keno"></div>
             <div class="quick-row">
               <button class="choice" id="keno-clear" type="button">Clear Picks</button>
               <button class="btn primary" id="keno" type="button">Play Keno</button>
@@ -840,7 +832,7 @@
 
 <script>
 (function () {
-  var state = { coinSide: "heads", diceSide: "under", highLow: "higher", rps: "rock", cardColor: "red", keno: new Set(), bjBet: 0, busy: false, balance: null };
+  var state = { coinSide: "heads", diceSide: "under", highLow: "higher", rps: "rock", cardColor: "red", keno: new Set(), bjBet: 0, busy: false, balance: null, vipUntil: 0 };
   var $ = function (sel, root) { return (root || document).querySelector(sel); };
   var $$ = function (sel, root) { return Array.from((root || document).querySelectorAll(sel)); };
 
@@ -858,6 +850,7 @@
     if (!Number.isFinite(n) || n < 1) throw new Error("Enter a bet of at least 1 coin.");
     n = Number(n.toFixed(2));
     if (state.balance !== null && n > state.balance) throw new Error("Your bet cannot exceed your coin balance.");
+    if (state.vipUntil <= Date.now() && n > 500) throw new Error("Maximum bet is 500 coins. VIP Casino Passes raise this limit.");
     return n;
   }
   function showToast(msg) {
@@ -1057,8 +1050,20 @@
   $("#bet-max").onclick = function () {
     if (state.balance === null) return showToast("Sign in to see your available balance.");
     if (state.balance < 1) return showToast("You need at least 1 coin to place a bet.");
-    $("#bet").value = Math.floor(state.balance * 100) / 100;
+    $("#bet").value = Math.floor(Math.min(state.balance, state.vipUntil > Date.now() ? state.balance : 500) * 100) / 100;
   };
+  async function refreshLimits() {
+    try {
+      var response = await fetch('/api/me/inventory', { credentials: 'include' });
+      if (!response.ok) return;
+      var inventory = await response.json();
+      state.vipUntil = Number(inventory.status?.vipUntil || 0);
+      var vip = state.vipUntil > Date.now();
+      document.querySelectorAll('[data-bet]').forEach(function(button) { button.disabled = !vip && Number(button.dataset.bet) > 500; });
+      $('#bet-limit').textContent = vip ? 'Bet up to your available balance.' : 'Up to 500 coins per bet. VIP passes raise the limit.';
+    } catch (_) {}
+  }
+  refreshLimits();
   bindChoices();
   buildKeno();
   function updateVisibleCount() {
@@ -1215,12 +1220,12 @@
     var overlay = document.getElementById('fullscreen-overlay');
     
     // Clear and build console layout
-    overlay.innerHTML = '<button class="fs-close" id="fs-close-btn">← Back to Casino</button>' +
+    overlay.innerHTML = '<button class="fs-close" id="fs-close-btn">Back to casino</button>' +
       '<div class="fs-layout" style="width: min(1200px, 100%); margin: 60px auto;">' +
         '<div class="fs-main"></div>' +
         '<div class="fs-side">' +
-          '<div class="fs-wallet"><span>Your Bankroll</span><strong class="fs-bal-val"></strong></div>' +
-          '<div class="fs-results-box"><div class="kicker">Session Outcome</div><div class="fs-res-target" style="margin-top:20px;"></div><div class="fs-bj-target" style="margin-top:20px;"></div></div>' +
+          '<div class="fs-wallet"><span>Your MitchCoins</span><strong class="fs-bal-val"></strong></div>' +
+          '<div class="fs-results-box"><div class="kicker">Result</div><div class="fs-res-target" style="margin-top:20px;"></div><div class="fs-bj-target" style="margin-top:20px;"></div></div>' +
           '<div class="fs-controls-box"></div>' +
         '</div>' +
       '</div>';

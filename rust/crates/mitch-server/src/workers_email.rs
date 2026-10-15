@@ -340,7 +340,7 @@ pub(crate) fn site_url(state: &AppState, email: &str) -> String {
         }
     };
     let (primary, alternate) = (
-        get("primary", "https://mitch.pro"),
+        get("primary", "https://mitchdog.com"),
         get("alternate", "https://mitch.88chan.me"),
     );
     if email.to_lowercase().ends_with("@student.rjuhsd.us") {

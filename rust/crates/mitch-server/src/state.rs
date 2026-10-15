@@ -74,12 +74,6 @@ pub struct AppState {
     pub sso_bridge_tokens: std::sync::Mutex<std::collections::HashMap<String, SsoBridgeToken>>,
     /// `lastRecaptchaSuccess` (server.js:3597) — sid -> last success ms.
     pub last_recaptcha_success: std::sync::Mutex<std::collections::HashMap<String, i64>>,
-    /// `happyHourActive` (server.js:1188) — starts false; the Step 11 worker
-    /// flips it inside the school-hour window.
-    pub happy_hour_active: std::sync::atomic::AtomicBool,
-    /// `computedHappyHour` (server.js:1189) — computed once at boot from the
-    /// session log (server.js:25249).
-    pub computed_happy_hour: std::sync::atomic::AtomicI64,
     /// `lastDailySummarySentDate` (server.js:4156) — e.g. '2026-05-27'; the
     /// daily-summary scheduler's once-per-date dedupe.
     pub last_daily_summary_sent_date: std::sync::Mutex<String>,
@@ -355,13 +349,6 @@ impl AppState {
                     .collect()
             })
             .unwrap_or_default();
-        // `computedHappyHour = getLeastUsedSchoolHour()` at boot
-        // (server.js:25249). Uses the same now_ms the boot run would see.
-        let computed_happy_hour = mitch_lib::school::get_least_used_school_hour(
-            &store,
-            &cfg.base_dir.join("data"),
-            mitch_lib::school::now_millis(),
-        );
         let canvas = crate::routes::canvas::CanvasState::load(&store, &cfg.data_dir.clone());
         let logic_dictionary = Self::load_logic_dictionary(&cfg.data_dir);
         let cv_games_map = Self::load_cv_games(&store, &cfg.data_dir);
@@ -404,8 +391,6 @@ impl AppState {
             pending_two_factor: std::sync::Mutex::new(std::collections::HashMap::new()),
             sso_bridge_tokens: std::sync::Mutex::new(std::collections::HashMap::new()),
             last_recaptcha_success: std::sync::Mutex::new(std::collections::HashMap::new()),
-            happy_hour_active: std::sync::atomic::AtomicBool::new(false),
-            computed_happy_hour: std::sync::atomic::AtomicI64::new(computed_happy_hour),
             last_daily_summary_sent_date: std::sync::Mutex::new(String::new()),
             canvas,
             e2e_users: std::sync::Mutex::new(Vec::new()),
@@ -477,14 +462,6 @@ impl AppState {
             .map(|w| w.trim().to_lowercase())
             .filter(|w| w.chars().count() == 5)
             .collect()
-    }
-
-    /// The boot-computed `computedHappyHour` value.
-    pub fn happy_hour(&self) -> i64 {
-        std::sync::atomic::AtomicI64::load(
-            &self.computed_happy_hour,
-            std::sync::atomic::Ordering::Relaxed,
-        )
     }
 
     /// `globalCoinMultiplier` as f64.

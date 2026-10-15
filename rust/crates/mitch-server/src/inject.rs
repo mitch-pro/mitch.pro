@@ -82,9 +82,37 @@ pub fn is_embedded_game_runtime(path: &str) -> bool {
     path.starts_with("/games/") && path != "/games/" && path != "/games/index.html"
 }
 
+pub fn inject_credit(html: &str, school: bool) -> String {
+    if html.contains("id=\"site-credit\"") {
+        return html.to_string();
+    }
+    let text = if school {
+        "Made by Tyler and Mitch."
+    } else {
+        "Created by Mitch and Tyler"
+    };
+    let band = format!("<div id=\"site-credit\" style=\"box-sizing:border-box;clear:both;width:100%;padding:10px 16px;margin-top:24px;border-top:1px solid #8882;border-bottom:1px solid #8882;background:#8888880d;color:inherit;text-align:center;font:400 11px/1.5 system-ui,sans-serif;opacity:.7\">{text}</div>");
+    match html.rfind("</body>") {
+        Some(i) => format!("{}{}{}", &html[..i], band, &html[i..]),
+        None => html.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn credits_are_idempotent_and_use_school_wording() {
+        let html = "<html><body><main>Sign up</main></body></html>";
+        let main = inject_credit(html, false);
+        assert!(main.contains("Created by Mitch and Tyler"));
+        assert_eq!(main, inject_credit(&main, false));
+        let school = inject_credit(html, true);
+        assert!(school.contains("Made by Tyler and Mitch."));
+        assert!(!school.contains("Created by"));
+        assert!(school.find("site-credit").unwrap() < school.find("</body>").unwrap());
+    }
 
     #[test]
     fn shared_head_injects_before_head_close_once() {

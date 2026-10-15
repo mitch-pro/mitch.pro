@@ -3,8 +3,6 @@
 //! - `scheduleDailySummary` 30s tick, 4:00 PM local send (server.js:4151-4218)
 //! - `premiumMaintenanceWorker` 6h + one immediate call (server.js:4230-4325,
 //!   registered at server.js:26783-26784)
-//! - `happyHourWorker` 60s + one immediate call (server.js:26948-26999,
-//!   registered at server.js:26805-26807)
 //!
 //! The nudge worker (server.js:4326-4329) is DISABLED in the JS (the
 //! function body is `return;`) and no interval registers it — not ported,
@@ -15,11 +13,10 @@
 
 use crate::routes::push::{ntfy_notify, send_email_bg};
 use crate::state::AppState;
-use crate::ws::{broadcast, WsRecipients};
 use serde_json::{json, Value};
 
 /// Starts the Step 13 batch 3 worker tasks, mirroring the JS boot block
-/// (server.js:26779-26807): the happy-hour/premium pieces run inside a
+/// (server.js:26779-26807): the premium maintenance tasks run inside a
 /// 100ms-delayed task, the immediate calls fire there, and the interval
 /// tasks register after.
 pub fn spawn(state: std::sync::Arc<AppState>) {
@@ -36,21 +33,10 @@ pub fn spawn(state: std::sync::Arc<AppState>) {
             }
         });
     }
-    // ── premiumMaintenanceWorker + happyHourWorker inside the boot block ───
+    // ── Premium maintenance inside the boot block ─────────────────────────
     tokio::spawn(async move {
         // JS: setTimeout(() => { ...workers... }, 100).
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-
-        // computedHappyHour = getLeastUsedSchoolHour(); happyHourWorker();
-        let hour = mitch_lib::school::get_least_used_school_hour(
-            &state.store,
-            state.data_dir(),
-            mitch_lib::school::now_millis(),
-        );
-        state
-            .computed_happy_hour
-            .store(hour, std::sync::atomic::Ordering::SeqCst);
-        happy_hour_worker(&state);
 
         // setInterval(premiumMaintenanceWorker, 6h); premiumMaintenanceWorker();
         premium_maintenance_tick(&state).await;
@@ -62,19 +48,6 @@ pub fn spawn(state: std::sync::Arc<AppState>) {
                 loop {
                     tick.tick().await;
                     premium_maintenance_tick(&state).await;
-                }
-            });
-        }
-
-        // setInterval(happyHourWorker, 60000) — first fire one period in.
-        {
-            let state = state.clone();
-            let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
-            tick.tick().await;
-            tokio::spawn(async move {
-                loop {
-                    tick.tick().await;
-                    happy_hour_worker(&state);
                 }
             });
         }
@@ -334,83 +307,6 @@ async fn premium_maintenance_worker(state: &std::sync::Arc<AppState>) -> Result<
     Ok(())
 }
 
-// ── Happy hour (server.js:26830-27000) ───────────────────────────────────────
-
-/// `happyHourWorker()` — the 60s tick body (server.js:26948-26999).
-pub(crate) fn happy_hour_worker(state: &std::sync::Arc<AppState>) {
-    happy_hour_worker_at(state, mitch_lib::school::now_millis());
-}
-
-pub(crate) fn happy_hour_worker_at(state: &std::sync::Arc<AppState>, now_ms: i64) {
-    // JS reads every part from the same `now = new Date()`.
-    let (_, _, _, _, minute) = local_now_parts_at(now_ms);
-    // `now.getMinutes() === 0 || typeof computedHappyHour === 'undefined'` —
-    // the JS recompute happens on the hour (minute 0).
-    if minute == 0 {
-        let hour =
-            mitch_lib::school::get_least_used_school_hour(&state.store, state.data_dir(), now_ms);
-        state
-            .computed_happy_hour
-            .store(hour, std::sync::atomic::Ordering::SeqCst);
-    }
-
-    // LA wall clock: (year, month 1-12, day, hour, weekday 0=Sun, minute).
-    let (_, _, _, la_hour, la_day, _) = mitch_lib::school::la_local_parts(now_ms);
-    let computed = state
-        .computed_happy_hour
-        .load(std::sync::atomic::Ordering::SeqCst);
-    let is_hh_day_and_hour = (1..=5).contains(&la_day) && la_hour == computed;
-
-    if is_hh_day_and_hour {
-        if !state
-            .happy_hour_active
-            .load(std::sync::atomic::Ordering::SeqCst)
-        {
-            state
-                .happy_hour_active
-                .store(true, std::sync::atomic::Ordering::SeqCst);
-            set_coin_multiplier(state, 2.0);
-            tracing::info!("[happy-hour] Activated for designated hour: {computed}");
-            broadcast(
-                state,
-                WsRecipients::All,
-                json!({
-                    "type": "admin_broadcast",
-                    "message": format!(
-                        "HAPPY HOUR ACTIVATED! 2X Coins for everyone! (Runs {}) 🎰",
-                        mitch_lib::school::format_school_hour(computed)
-                    )
-                })
-                .to_string(),
-            );
-        }
-    } else if state
-        .happy_hour_active
-        .load(std::sync::atomic::Ordering::SeqCst)
-    {
-        state
-            .happy_hour_active
-            .store(false, std::sync::atomic::Ordering::SeqCst);
-        set_coin_multiplier(state, 1.0);
-        tracing::info!("[happy-hour] Deactivated.");
-        broadcast(
-            state,
-            WsRecipients::All,
-            json!({
-                "type": "admin_broadcast",
-                "message": "Happy Hour has ended. 🍻"
-            })
-            .to_string(),
-        );
-    }
-}
-
-/// `globalCoinMultiplier = 2.0` / `1.0` — the AtomicU64 bit-exact f64.
-fn set_coin_multiplier(state: &std::sync::Arc<AppState>, value: f64) {
-    state
-        .coin_multiplier
-        .store(value.to_bits(), std::sync::atomic::Ordering::SeqCst);
-}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -595,69 +491,5 @@ mod tests {
         assert!((0..=23).contains(&h));
         assert!((0..=59).contains(&min));
         assert!((2020..=2100).contains(&y));
-    }
-
-    #[test]
-    fn happy_hour_activate_and_deactivate_broadcasts() {
-        let (state, _dir) = test_state();
-        // Pick a fixed LA school-day morning instant and derive its parts.
-        // 2026-09-16 10:00:00 UTC = 03:00 PDT (Wednesday) — hour 3, weekday 3.
-        let ms = 1_789_615_200_000i64;
-        let (_, _, _, hour, weekday, _) = mitch_lib::school::la_local_parts(ms);
-        assert_eq!(weekday, 3); // Wednesday — inside the day 1-5 gate.
-        state
-            .computed_happy_hour
-            .store(hour, std::sync::atomic::Ordering::SeqCst);
-        happy_hour_worker_at(&state, ms);
-        assert!(state
-            .happy_hour_active
-            .load(std::sync::atomic::Ordering::SeqCst));
-        assert_eq!(
-            f64::from_bits(
-                state
-                    .coin_multiplier
-                    .load(std::sync::atomic::Ordering::SeqCst)
-            ),
-            2.0
-        );
-
-        // One second past the hour: deactivates with the end broadcast.
-        let after = ms + 3_600_000;
-        happy_hour_worker_at(&state, after);
-        assert!(!state
-            .happy_hour_active
-            .load(std::sync::atomic::Ordering::SeqCst));
-        assert_eq!(
-            f64::from_bits(
-                state
-                    .coin_multiplier
-                    .load(std::sync::atomic::Ordering::SeqCst)
-            ),
-            1.0
-        );
-    }
-
-    #[test]
-    fn happy_hour_stays_quiet_outside_school_days() {
-        let (state, _dir) = test_state();
-        // 2026-09-20 10:00 UTC is a Sunday — weekday 0, outside 1-5.
-        let ms = 1_789_963_200_000i64;
-        let (_, _, _, _, weekday, _) = mitch_lib::school::la_local_parts(ms);
-        assert_eq!(weekday, 0);
-        state
-            .happy_hour_active
-            .store(true, std::sync::atomic::Ordering::SeqCst);
-        happy_hour_worker_at(&state, ms);
-        assert!(!state
-            .happy_hour_active
-            .load(std::sync::atomic::Ordering::SeqCst));
-        assert_eq!(
-            f64::from_bits(
-                state
-                    .coin_multiplier
-                    .load(std::sync::atomic::Ordering::SeqCst)
-            ),
-            1.0
-        );
     }
 }

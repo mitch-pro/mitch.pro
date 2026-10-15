@@ -151,7 +151,7 @@ fn site_info(state: &Arc<AppState>) -> Response {
     json_response(
         200,
         json!({
-            "primary": site.get("primary").and_then(|v| v.as_str()).unwrap_or("https://mitch.pro"),
+            "primary": site.get("primary").and_then(|v| v.as_str()).unwrap_or("https://mitchdog.com"),
             "alternate": site.get("alternate").and_then(|v| v.as_str()).unwrap_or(""),
             "name": site.get("name").and_then(|v| v.as_str()).unwrap_or("mitch.pro"),
         }),

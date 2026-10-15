@@ -608,7 +608,6 @@
     if (item.costType === 'vip_casino_pass') return (s.vipUntil || 0) > now || vipUntil > now;
     if (item.costType === 'bad_beat_insurance') return (s.badBeatInsuranceUntil || 0) > now;
     if (item.costType === 'double_down_ticket') return (s.doubleDownUntil || 0) > now;
-    if (item.costType === 'happy_hour_ticket') return (s.happyHourUntil || 0) > now;
     return false;
   }
 
@@ -669,7 +668,7 @@
 
   function render() {
     renderTabs();
-    const picks = ['happy_hour_sprint', 'neon_purple', 'vip_hour'].map(id => items.find(item => item.id === id)).filter(Boolean);
+    const picks = ['neon_purple', 'vip_hour', 'streak_freeze'].map(id => items.find(item => item.id === id)).filter(Boolean);
     const featureGrid = document.getElementById('shop-feature-grid');
     featureGrid.innerHTML = picks.map((item, index) => `
       <button type="button" class="feature-item" data-feature="${esc(item.id)}" aria-label="Details for ${esc(item.name)}">
@@ -890,10 +889,7 @@
         const mins = Math.max(1, Math.ceil((status.badBeatInsuranceUntil - now) / 60000));
         activeBuffs.push(`<span class="pill good">🛡️ Bad Beat Insurance (${mins}m left: 100% Refund)</span>`);
       }
-      if ((status.happyHourUntil || 0) > now) {
-        const mins = Math.max(1, Math.ceil((status.happyHourUntil - now) / 60000));
-        activeBuffs.push(`<span class="pill good">🔥 Personal Happy Hour (${mins}m left: 2X Coins)</span>`);
-      }
+
       if ((status.slotsFreeSpins || 0) > 0) {
         activeBuffs.push(`<span class="pill good">🎰 ${status.slotsFreeSpins} Free Spins Available</span>`);
       }

@@ -36,7 +36,7 @@
         if (avatar.firstChild.nodeType === Node.TEXT_NODE) avatar.firstChild.remove();
         img.onerror = () => { avatar.textContent = name.slice(0,1).toUpperCase(); };
       }
-      const title = document.createElement('strong'); title.textContent = name;
+      const title = document.createElement('strong'); title.textContent = name; title.className = 'name ' + (friend.color || '');
       const activity = document.createElement('small');
       const activityText = document.createElement('span'); activityText.textContent = activityLabel(friend);
       const activityIcon = document.createElement('i'); activityIcon.setAttribute('aria-hidden','true');

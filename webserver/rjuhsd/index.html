@@ -23,7 +23,7 @@
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#0c0809">
   <script src="/theme.js?v=13" defer></script>
-  <link rel="stylesheet" href="/rjuhsd-assets/styles.css?v=5"><link rel="stylesheet" href="/rjuhsd-assets/reference-theme.css?v=12"><link rel="stylesheet" href="/rjuhsd-assets/redesign.css?v=3"><style>.countdown-details{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.countdown-details>span,.countdown-details small,.countdown-details strong{display:block;text-align:center}.header-portal-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;font-size:13px;font-weight:700;border-radius:999px;background:var(--school-primary, #6366f1);color:#fff!important;text-decoration:none;border:1px solid rgba(255,255,255,0.18);box-shadow:0 2px 10px rgba(0,0,0,0.3);transition:all .15s ease;}.header-portal-btn:hover{filter:brightness(1.18);transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,0.4);}.nav-mitchpro{color:var(--school-primary,#818cf8)!important;font-weight:700!important;}</style>
+  <link rel="stylesheet" href="/rjuhsd-assets/styles.css?v=5"><link rel="stylesheet" href="/rjuhsd-assets/reference-theme.css?v=12"><link rel="stylesheet" href="/rjuhsd-assets/redesign.css?v=3"><link rel="stylesheet" href="/rjuhsd-assets/refresh.css?v=1"><style>.countdown-details{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.countdown-details>span,.countdown-details small,.countdown-details strong{display:block;text-align:center}.header-portal-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;font-size:13px;font-weight:700;border-radius:999px;background:var(--school-primary, #6366f1);color:#fff!important;text-decoration:none;border:1px solid rgba(255,255,255,0.18);box-shadow:0 2px 10px rgba(0,0,0,0.3);transition:all .15s ease;}.header-portal-btn:hover{filter:brightness(1.18);transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,0.4);}.nav-mitchpro{color:var(--school-primary,#818cf8)!important;font-weight:700!important;}</style>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {
@@ -196,121 +196,31 @@
   <div class="announcement-bar"><div class="announcement-inner"><span class="pulse-dot"></span><strong>RJUHSD.SCHOOL</strong><span id="announcement-text">Loading today’s campus schedule…</span><button id="pwa-install-btn" class="pwa-install-btn" type="button" style="display:none;" aria-label="Install App"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Install App</button><span class="announcement-time" id="header-clock">--:-- --</span></div></div>
   <header class="site-header">
     <a class="brand" href="/" aria-label="rjuhsd.school home"><span class="brand-logo"><img class="site-logo" src="/icon-192.png" alt="mitch.pro" width="35" height="35"></span><span class="brand-copy"><strong>Woodcreek High School</strong><small>woodcreek now</small></span></a>
-    <nav aria-label="Primary navigation"><a href="#today">Today</a><a href="#schedule-panel">Schedule</a><a href="#schools">Schools</a><a href="/matrix/">Chat</a><a href="/preferences/">Preferences</a><a href="https://mitch.pro" class="nav-mitchpro" target="_blank" rel="noopener" title="Go to mitch.pro (mitchdog.com)">mitch.pro </a></nav>
+    <nav aria-label="Primary navigation"><a href="#today">Today</a><a href="#schedule-panel">Schedule</a><a href="#schools">Schools</a></nav>
     <div class="header-actions">
-      <a href="https://mitch.pro" class="header-portal-btn" target="_blank" rel="noopener" title="Visit mitch.pro (mitchdog.com)"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg><strong>mitch.pro</strong></a>
       <a href="https://mitchdog.com/api/sso/bridge?back=https%3A%2F%2Frjuhsd.school%2F" class="header-signin-btn js-signin-link" hidden>Sign in with mitchdog.com</a>
-      <a href="/matrix/" class="header-chat-btn" title="Open Matrix Encrypted Chat"><span class="chat-badge-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><rect x="9" y="8" width="6" height="5" rx="1"/></svg></span><strong>Chat</strong><small class="e2e-badge">Matrix</small></a>
       <label class="school-choice">School<select id="school-select" aria-label="Choose school"></select></label>
-      <button class="lunch-status" id="change-lunch" type="button"><span>MY SCHEDULE</span><strong id="header-lunch">Lunch —</strong></button>
       <button class="icon-button" id="theme-btn" type="button" aria-label="Switch color theme"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.5 1.5m11.2 11.2 1.5 1.5M2 12h2m16 0h2M4.9 19.1l1.5-1.5M17.6 6.4l1.5-1.5"/></svg></button>
     </div>
   </header>
   <main id="main">
     <section class="hero" id="today">
       <div class="hero-graphic" aria-hidden="true"><img src="/rjuhsd-assets/woodcreek.png" alt=""><i class="ring ring-one"></i><i class="ring ring-two"></i><i class="ring ring-three"></i></div>
-      <div class="hero-content"><time class="hero-date-panel" id="hero-date" datetime="2026-09-01"><span class="hero-weekday" id="hero-weekday">TUESDAY</span><span class="hero-date-main"><strong id="hero-date-day">01</strong><span><b id="hero-date-month">September</b><small id="hero-date-year">2026</small></span></span></time><p class="hero-overline" id="hero-overline">WOODCREEK HIGH SCHOOL</p><h1><span id="school-heading">Woodcreek</span><br><em>bell schedule</em></h1><p class="hero-summary" id="hero-summary">Loading today’s schedule.</p><div class="hero-actions"><a class="primary-button" href="#schedule-panel">View schedule <span>↓</span></a><a class="hero-chat-btn" href="/matrix/" title="Matrix End-to-End Encrypted Chat"><span class="hero-btn-icon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><rect x="9" y="8" width="6" height="5" rx="1"/><path d="M10 8V6.5a2 2 0 0 1 4 0V8"/></svg></span> Matrix Chat</a><a class="secondary-button" href="/public-chat/" title="Public Campus Chat"><span class="hero-btn-icon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8m-8 4h5"/></svg></span> Public Chat</a><button class="secondary-button" id="hero-change-lunch" type="button">Change lunch</button></div></div>
+      <div class="hero-content"><time class="hero-date-panel" id="hero-date" datetime="2026-09-01"><span class="hero-weekday" id="hero-weekday">TUESDAY</span><span class="hero-date-main"><strong id="hero-date-day">01</strong><span><b id="hero-date-month">September</b><small id="hero-date-year">2026</small></span></span></time><p class="hero-overline" id="hero-overline">WOODCREEK HIGH SCHOOL</p><h1><span id="school-heading">Woodcreek</span><br><em>bell schedule</em></h1><p class="hero-summary" id="hero-summary">Loading today’s schedule.</p><div class="hero-actions"><a class="primary-button" href="#schedule-panel">View schedule </a><a class="hero-chat-btn" href="/matrix/" title="Matrix End-to-End Encrypted Chat"><span class="hero-btn-icon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><rect x="9" y="8" width="6" height="5" rx="1"/><path d="M10 8V6.5a2 2 0 0 1 4 0V8"/></svg></span> Matrix Chat</a><a class="secondary-button" href="/public-chat/" title="Public Campus Chat"><span class="hero-btn-icon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8m-8 4h5"/></svg></span> Public Chat</a><button class="secondary-button" id="hero-change-lunch" type="button">Change lunch</button></div></div>
       <article class="live-card" aria-label="Current period and countdown"><img class="live-wolf" src="/rjuhsd-assets/woodcreek.png" alt=""><div class="live-card-top"><span><i></i><b id="live-mode">LIVE</b></span><time id="live-clock">--:-- --</time></div><div class="live-card-body"><div class="period-badge" id="period-badge">—</div><p id="current-eyebrow">CHECKING THE BELL</p><h2 id="current-period">Loading…</h2><span class="period-range" id="current-range">Woodcreek High School</span><div class="countdown-dial"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="dial-track" cx="60" cy="60" r="52"></circle><circle class="dial-value" id="countdown-ring" cx="60" cy="60" r="52"></circle></svg><div class="countdown-center"><div class="countdown" id="countdown">--:--</div><p class="countdown-copy" id="countdown-copy">until the next bell</p></div></div><div class="countdown-details"><span><small>ENDS AT</small><strong id="countdown-end">—</strong></span><span><small>COMPLETE</small><strong id="countdown-percent">0%</strong></span><span><small>STATUS</small><strong id="countdown-context">Loading</strong></span></div><div class="progress"><span id="live-progress"></span></div></div><div class="live-next"><span>UP NEXT</span><strong id="next-period">—</strong><time id="next-time">—</time></div></article>
     </section>
     <section class="snapshot" aria-label="Today at a glance"><article><span class="snapshot-icon wine">◷</span><div><small>FIRST BELL</small><strong id="snapshot-first">—</strong></div></article><article><span class="snapshot-icon amber">⌁</span><div><small>DISMISSAL</small><strong id="snapshot-last">—</strong></div></article><article><span class="snapshot-icon blue">✓</span><div><small>DAY PROGRESS</small><strong id="snapshot-progress">—</strong></div></article><article><span class="snapshot-icon green">✦</span><div><small>SCHEDULE</small><strong id="snapshot-type">Loading</strong></div></article></section>
 
     <section class="dashboard-section schedule-zone" id="schedule-panel">
       <div class="section-title-row"><div><p class="section-label">BELL SCHEDULE</p><h2>Today’s schedule</h2><p id="schedule-note">Times match your selected lunch.</p></div><div class="date-tile"><span id="date-month">SEP</span><strong id="date-day">01</strong><small id="date-year">2026</small></div></div>
-      <div class="schedule-controls"><label>Schedule <select id="schedule-mode" aria-label="Schedule type"><option value="auto">Automatic</option></select></label><label id="period0-label" hidden><input id="include-period0" type="checkbox"> Include optional Period 0</label><span id="source-status" role="status">Checking the official calendar…</span></div><div class="schedule-grid"><div class="timeline" id="timeline"><div class="skeleton tall"></div></div><aside class="day-brief"><div class="brief-heading"><span>DAY INFORMATION</span><b id="brief-lunch">LUNCH —</b></div><div class="brief-stat"><small>Time on campus</small><strong id="day-length">—</strong></div><div class="brief-stat"><small>Class periods</small><strong id="period-count">—</strong></div><div class="brief-stat"><small>Advisory / intervention</small><strong id="pack-placement">—</strong></div><div class="brief-message"><span>LUNCH SETTING</span><p id="brief-tip">Your lunch choice is saved on this device.</p></div><button id="brief-change-lunch" type="button">Change lunch <span>→</span></button></aside></div>
+      <div class="schedule-controls"><button class="lunch-status" id="change-lunch" type="button"><span>MY SCHEDULE</span><strong id="header-lunch">Lunch —</strong></button><label>Schedule <select id="schedule-mode" aria-label="Schedule type"><option value="auto">Automatic</option></select></label><label id="period0-label" hidden><input id="include-period0" type="checkbox"> Include optional Period 0</label><span id="source-status" role="status">Checking the official calendar…</span></div><div class="schedule-grid"><div class="timeline" id="timeline"><div class="skeleton tall"></div></div><aside class="day-brief"><div class="brief-heading"><span>DAY INFORMATION</span><b id="brief-lunch">LUNCH —</b></div><div class="brief-stat"><small>Time on campus</small><strong id="day-length">—</strong></div><div class="brief-stat"><small>Class periods</small><strong id="period-count">—</strong></div><div class="brief-stat"><small>Advisory / intervention</small><strong id="pack-placement">—</strong></div><div class="brief-message"><span>LUNCH SETTING</span><p id="brief-tip">Your lunch choice is saved on this device.</p></div><button id="brief-change-lunch" type="button">Change lunch </button></aside></div>
     </section>
 
     <section class="dashboard-section week-zone" id="week"><div class="section-title-row compact"><div><p class="section-label">CALENDAR</p><h2>This week</h2></div><span class="timezone-chip">PACIFIC TIME</span></div><div class="week-grid" id="week-grid"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div></section>
 
     <section class="dashboard-section events-zone" id="events"><div class="section-title-row compact"><div><p class="section-label">OFFICIAL CALENDAR</p><h2>Upcoming events</h2><p>See the month and the next Woodcreek dates together.</p></div><a class="outline-link" href="https://woodcreek.rjuhsd.us/calendar" target="_blank" rel="noopener">Full calendar </a></div><div class="woodcreek-calendar"><div class="calendar-main"><div class="calendar-toolbar"><div><small>WOODCREEK HIGH SCHOOL</small><h3 id="calendar-title">September 2026</h3></div><div class="calendar-nav"><button id="calendar-prev" type="button" aria-label="Previous month">‹</button><button id="calendar-today" type="button">Today</button><button id="calendar-next" type="button" aria-label="Next month">›</button></div></div><div class="calendar-weekdays" aria-hidden="true"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div><div class="calendar-days" id="calendar-days" aria-label="Month calendar"></div></div><aside class="calendar-agenda"><div class="agenda-heading"><span>UPCOMING AT WOODCREEK</span><b id="calendar-source"><i></i> OFFICIAL FEED</b></div><ol id="event-list"><li class="agenda-loading">Loading calendar…</li></ol><a href="https://woodcreek.rjuhsd.us/calendar" target="_blank" rel="noopener">View all school events </a></aside></div></section>
 
-    <section class="dashboard-section apps-zone" id="apps">
-      <div class="section-title-row compact">
-        <div>
-          <p class="section-label">STUDENT HUB &amp; MESSAGING</p>
-          <h2>Campus Apps &amp; Chat</h2>
-          <p>Secure peer-to-peer student chat, district boards, bell countdowns, and dashboard personalization.</p>
-        </div>
-      </div>
-      <div class="apps-grid">
-        <a href="https://mitch.pro" class="app-card highlight-app" target="_blank" rel="noopener">
-          <span class="app-card-badge"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> STUDENT PORTAL &amp; ARCADE</span>
-          <div class="app-card-head">
-            <span class="app-icon"><img src="/icon-192.png" width="22" height="22" alt="mitch.pro" style="border-radius:6px;display:block;"></span>
-            <div>
-              <h3>mitch.pro</h3>
-              <small>Arcade, VMs, Chat &amp; Community</small>
-            </div>
-          </div>
-          <p>Access the complete student hub with 50+ unblocked arcade games, free virtual machines, Matrix chat, custom shop, and social economy (also available at mitchdog.com).</p>
-          <span class="app-card-cta">Visit mitch.pro </span>
-        </a>
-
-        <a href="/matrix/" class="app-card highlight-app">
-          <span class="app-card-badge"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> MATRIX E2E ENCRYPTED</span>
-          <div class="app-card-head">
-            <span class="app-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><rect x="9" y="8" width="6" height="5" rx="1"/><path d="M10 8V6.5a2 2 0 0 1 4 0V8"/></svg></span>
-            <div>
-              <h3>Matrix Chat</h3>
-              <small>Decentralized DMs &amp; rooms</small>
-            </div>
-          </div>
-          <p>Decentralized, end-to-end encrypted messaging with channels, direct messages, and real-time push notifications.</p>
-          <span class="app-card-cta">Open Matrix Chat <span>→</span></span>
-        </a>
-
-        <a href="/public-chat/" class="app-card">
-          <span class="app-card-badge"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8m-8 4h5"/></svg> DISTRICT CHAT</span>
-          <div class="app-card-head">
-            <span class="app-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-            <div>
-              <h3>Public School Chat</h3>
-              <small>Real-time campus community</small>
-            </div>
-          </div>
-          <p>Instant district-wide messaging room for homework help, club updates, game day alerts, and live campus conversation.</p>
-          <span class="app-card-cta">Join Public Chat <span>→</span></span>
-        </a>
-
-        <a href="#schedule-panel" class="app-card">
-          <span class="app-card-badge"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg> AUDIO &amp; TIMERS</span>
-          <div class="app-card-head">
-            <span class="app-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
-            <div>
-              <h3>Bell Schedules</h3>
-              <small>Period clocks &amp; audio chimes</small>
-            </div>
-          </div>
-          <p>Full-screen period clocks, passing period alerts, custom lunch schedules, and classroom bell audio chimes for all RJUHSD campuses.</p>
-          <span class="app-card-cta">Open Bell App <span>→</span></span>
-        </a>
-
-        <a href="/preferences/" class="app-card">
-          <span class="app-card-badge"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24m5.66 5.66 4.24 4.24M12 2v6m0 8v6M2 12h6m8 0h6"/></svg> CUSTOMIZATION</span>
-          <div class="app-card-head">
-            <span class="app-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
-            <div>
-              <h3>Themes &amp; Wallpapers</h3>
-              <small>Personalize your experience</small>
-            </div>
-          </div>
-          <p>Select custom wallpaper backgrounds, animated video backdrops, glassmorphism blur intensity, and dark/light color modes.</p>
-          <span class="app-card-cta">Customize Themes <span>→</span></span>
-        </a>
-
-        <a href="https://github.com/mitch-pro/mitch.pro" target="_blank" rel="noopener" class="app-card">
-          <span class="app-card-badge"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg> 100% FREE &amp; OPEN SOURCE</span>
-          <div class="app-card-head">
-            <span class="app-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg></span>
-            <div>
-              <h3>Open Source</h3>
-              <small>Public on GitHub</small>
-            </div>
-          </div>
-          <p>The bell schedule, encrypted chat, and every tool here are free and open source — read the code, file issues, or contribute.</p>
-          <span class="app-card-cta">View on GitHub </span>
-        </a>
-      </div>
-    </section>
+    <section class="campus-links" id="apps" aria-label="Community links"><a href="https://mitchdog.com/">mitchdog.com</a><a href="https://mitchdog.com/matrix/">Chat</a><a href="/preferences/">Preferences</a></section>
 
 
 
@@ -343,7 +253,7 @@
             </ul>
           </div>
           <div class="school-card-actions">
-            <a href="/#schedule-panel" class="primary-button school-switch-btn" data-switch-school="woodcreek">View Woodcreek Schedule <span>→</span></a>
+            <a href="/#schedule-panel" class="primary-button school-switch-btn" data-switch-school="woodcreek">View Woodcreek Schedule </a>
             <a href="https://woodcreek.rjuhsd.us/about/bell-schedules" target="_blank" rel="noopener" class="outline-link">Official Woodcreek Bells </a>
           </div>
         </article>
@@ -368,7 +278,7 @@
             </ul>
           </div>
           <div class="school-card-actions">
-            <a href="https://rjuhsd.school/roseville/#schedule-panel" class="primary-button school-switch-btn" data-switch-school="roseville">View Roseville Schedule <span>→</span></a>
+            <a href="https://rjuhsd.school/roseville/#schedule-panel" class="primary-button school-switch-btn" data-switch-school="roseville">View Roseville Schedule </a>
             <a href="https://roseville.rjuhsd.us/about/bell-schedules" target="_blank" rel="noopener" class="outline-link">Official Roseville Bells </a>
           </div>
         </article>
@@ -393,7 +303,7 @@
             </ul>
           </div>
           <div class="school-card-actions">
-            <a href="https://rjuhsd.school/granitebay/#schedule-panel" class="primary-button school-switch-btn" data-switch-school="granitebay">View Granite Bay Schedule <span>→</span></a>
+            <a href="https://rjuhsd.school/granitebay/#schedule-panel" class="primary-button school-switch-btn" data-switch-school="granitebay">View Granite Bay Schedule </a>
             <a href="https://granitebay.rjuhsd.us/about/bell-schedules" target="_blank" rel="noopener" class="outline-link">Official Granite Bay Bells </a>
           </div>
         </article>
@@ -417,7 +327,7 @@
             </ul>
           </div>
           <div class="school-card-actions">
-            <a href="https://rjuhsd.school/antelope/#schedule-panel" class="primary-button school-switch-btn" data-switch-school="antelope">View Antelope Schedule <span>→</span></a>
+            <a href="https://rjuhsd.school/antelope/#schedule-panel" class="primary-button school-switch-btn" data-switch-school="antelope">View Antelope Schedule </a>
             <a href="https://antelope.rjuhsd.us/about/bell-schedule" target="_blank" rel="noopener" class="outline-link">Official Antelope Bells </a>
           </div>
         </article>
@@ -442,7 +352,7 @@
             </ul>
           </div>
           <div class="school-card-actions">
-            <a href="https://rjuhsd.school/westpark/#schedule-panel" class="primary-button school-switch-btn" data-switch-school="westpark">View West Park Schedule <span>→</span></a>
+            <a href="https://rjuhsd.school/westpark/#schedule-panel" class="primary-button school-switch-btn" data-switch-school="westpark">View West Park Schedule </a>
             <a href="https://westpark.rjuhsd.us/about/bell-schedules" target="_blank" rel="noopener" class="outline-link">Official West Park Bells </a>
           </div>
         </article>
@@ -466,7 +376,7 @@
             </ul>
           </div>
           <div class="school-card-actions">
-            <a href="https://rjuhsd.school/oakmont/#schedule-panel" class="primary-button school-switch-btn" data-switch-school="oakmont">View Oakmont Schedule <span>→</span></a>
+            <a href="https://rjuhsd.school/oakmont/#schedule-panel" class="primary-button school-switch-btn" data-switch-school="oakmont">View Oakmont Schedule </a>
             <a href="https://oakmont.rjuhsd.us/about/bell-schedules" target="_blank" rel="noopener" class="outline-link">Official Oakmont Bells </a>
           </div>
         </article>
@@ -537,32 +447,7 @@
     <div class="footer-bottom"><span>Unofficial student schedule · Powered by mitch.pro</span><a id="official-bells" href="https://woodcreek.rjuhsd.us/about/bell-schedule" target="_blank" rel="noopener">Official bell schedules </a><span>Regular weekly times · Check school announcements for special days</span></div>
   </footer>
 
-  <nav class="mobile-nav-dock" aria-label="Mobile Navigation Dock">
-    <a href="#today" class="dock-item active">
-      <span class="dock-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg></span>
-      <span>Schedule</span>
-    </a>
-    <a href="#apps" class="dock-item">
-      <span class="dock-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="14" rx="1.5"/><rect width="7" height="7" x="3" y="14" rx="1.5"/></svg></span>
-      <span>Apps</span>
-    </a>
-    <a href="/matrix/" class="dock-item highlight-dock">
-      <span class="dock-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><rect x="9" y="8" width="6" height="5" rx="1"/></svg></span>
-      <span>Matrix</span>
-    </a>
-    <a href="https://mitch.pro" class="dock-item" target="_blank" rel="noopener">
-      <span class="dock-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></span>
-      <span>mitch.pro</span>
-    </a>
-    <a href="/public-chat/" class="dock-item">
-      <span class="dock-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8m-8 4h5"/></svg></span>
-      <span>Public</span>
-    </a>
-    <a href="/preferences/" class="dock-item">
-      <span class="dock-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.5 1.5m11.2 11.2 1.5 1.5M2 12h2m16 0h2M4.9 19.1l1.5-1.5M17.6 6.4l1.5-1.5"/></svg></span>
-      <span>Theme</span>
-    </a>
-  </nav>
+<nav class="mobile-nav-dock" aria-label="Mobile navigation"><a class="dock-item" href="#today">Today</a><a class="dock-item" href="#schedule-panel">Schedule</a><a class="dock-item" href="#schools">Schools</a></nav>
 
   <div class="onboarding" id="onboarding" role="dialog" aria-modal="true" aria-labelledby="onboarding-title" hidden><div class="onboarding-backdrop"></div><div class="onboarding-card"><div class="onboarding-art" aria-hidden="true"><img src="/rjuhsd-assets/woodcreek.png" alt=""><i></i><b>BELL SCHEDULE</b></div><div class="onboarding-content"><p class="section-label">LUNCH SCHEDULE</p><h2 id="onboarding-title">Which lunch are you?</h2><p id="onboarding-description">Choose once and every bell, countdown, and timeline will match your actual school day. You can change this anytime.</p><div class="lunch-options"><button type="button" data-choose-lunch="1"><span class="choice-number">1</span><span><strong>Lunch 1</strong><small>I eat before Period 3</small></span><b>→</b></button><button type="button" data-choose-lunch="2"><span class="choice-number">2</span><span><strong>Lunch 2</strong><small>I eat after Period 3</small></span><b>→</b></button></div><small class="privacy-note">Saved only on this device. Your lunch choice is remembered for each school.</small></div></div></div>
   <aside class="weather-widget" id="weather-widget"><button class="weather-summary" id="weather-toggle" type="button" aria-expanded="false" aria-controls="weather-details"><span class="weather-symbol" id="weather-symbol" aria-hidden="true">☀</span><span class="weather-place"><small>LIVE WEATHER</small><strong>Roseville</strong><span id="weather-condition">Loading forecast</span></span><strong class="weather-temperature" id="weather-temperature">--°</strong><span class="weather-chevron" aria-hidden="true">⌃</span></button><div class="weather-details" id="weather-details" hidden><div class="weather-now-details"><span><small>FEELS LIKE</small><strong id="weather-feels">--°</strong></span><span><small>WIND</small><strong id="weather-wind">-- mph</strong></span><span><small>TODAY</small><strong id="weather-range">--° / --°</strong></span></div><div class="weather-forecast" id="weather-forecast"></div><p id="weather-updated">Connecting to Roseville weather…</p></div></aside>

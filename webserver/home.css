@@ -306,9 +306,6 @@ body.home:is(.is-staff, .is-admin) .staff-access-rail { display: flex; }
 
 .hud-notifications-row { display: flex; flex-direction: column; gap: 0.4rem; margin-top: var(--mh-gap); }
 .hud-nudge-card { background: none; border: none; padding: 0.2rem 0; font-size: 0.84rem; color: var(--mh-ink-soft); }
-#happy-hour-nudge { display: none; }
-#happy-hour-nudge.active { color: var(--mh-ink); }
-#happy-hour-nudge.inactive { color: var(--mh-ink-soft); }
 .nudge-star { color: #b45309; font-size: 0.9rem; margin-right: 0.45rem; }
 .pulse-glow-cyan { display: inline-block; width: 6px; height: 6px; margin-right: 0.5rem; border-radius: 50%; background: #2563eb; }
 
@@ -594,3 +591,40 @@ body.home .daily-login-claim-btn:hover:not(:disabled) { background: var(--mh-acc
 @media (prefers-reduced-motion: reduce) {
   body.home *, body.home *::before, body.home *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+.home-hello { display:block; min-height:0; padding:28px 0 22px; border:0; background:none; }
+.hello-heading { margin:0; font-weight:500; line-height:1; }
+.hello-heading #greeting-text { position:absolute; width:1px;height:1px;overflow:hidden;clip-path:inset(50%); }
+.hello-writing { display:block; width:220px; height:88px; overflow:visible; }
+.hello-writing path { fill:none; stroke:var(--t-fg); stroke-width:3.3; stroke-linecap:round; stroke-linejoin:round; stroke-dasharray:1; animation:hello-write 2s ease both; }
+.hello-email { margin:6px 0 0; font-size:clamp(.95rem,2.8vw,1.2rem);color:var(--t-fg2);overflow-wrap:anywhere;animation:hello-email .6s .9s both; }
+@keyframes hello-write { from {stroke-dashoffset:1} to {stroke-dashoffset:0} }
+@keyframes hello-email { from {opacity:0;transform:translateY(5px)} to {opacity:1;transform:translateY(0)} }
+.home-page-search { max-width:440px; margin:0 0 28px;display:flex; }
+.home-page-search input { width:100%;min-width:0; }
+.home-actions { gap:10px; }
+.home-actions .hub-action { border:1px solid color-mix(in srgb,var(--t-fg) 12%,transparent);background:color-mix(in srgb,var(--t-fg) 3%,transparent);border-radius:12px;padding:15px;min-width:0;min-height:76px; }
+.home-actions .hub-action:hover { background:color-mix(in srgb,var(--t-fg) 6%,transparent);border-color:var(--t-bda); }
+#member-side-rail { width:336px; max-width:calc(100vw - 18px);top:12px;bottom:12px;left:12px;border:1px solid var(--t-bd);border-radius:18px;background:var(--t-bg2);box-shadow:0 18px 60px #0004;z-index:1500;transform:translateX(calc(-100% - 24px)); }
+#member-side-rail.is-open {transform:translateX(0)}
+#member-side-rail-collapsed-handle,.members-rail-mark {display:none!important}
+.members-rail-head {padding:20px;gap:10px}
+.members-rail-heading strong {font-size:1.05rem}
+.members-rail-heading small {font-size:.78rem;margin-top:3px}
+#member-side-rail .side-section { padding:16px 20px; }
+#online-members-wrap {min-height:0;flex:1;display:flex!important;flex-direction:column;}
+#online-members-list {max-height:none;min-height:0;overflow:auto;gap:4px;}
+#member-side-rail .member-presence-card {padding:9px 0;gap:11px;}
+#member-side-rail .member-presence-avatar {width:34px;height:34px;display:grid;place-items:center;object-fit:cover;background:var(--t-bg3);font-size:.75rem;}
+#member-side-rail .member-presence-name {font-size:.84rem;color:inherit}
+#member-side-rail .member-presence-status {font-size:.73rem;margin-top:3px;}
+#member-side-rail .is-offline {opacity:.65}
+#friends-section-wrap {max-height:32%;overflow:auto}
+#member-side-rail .friend-request-form,#member-side-rail #friend-pending-container {display:none!important}
+body.members-rail-open .home-main {padding-left:0;max-width:var(--mh-maxw)}
+#people-edge-trigger {position:fixed;left:0;top:18%;bottom:18%;width:10px;z-index:1490;background:transparent;border:0;border-radius:0;}
+#people-edge-trigger:focus-visible {width:14px;background:var(--t-bg3);outline:2px solid var(--t-ac)}
+@media(prefers-reduced-motion:reduce){.hello-writing path,.hello-email{animation:none}}
+.theme-no-motion .hello-writing path,.theme-no-motion .hello-email{animation:none}
+
+.home-main .hud-workspace{display:block}.home-main .hud-pane-main{width:100%;min-width:0}.home-search-box.home-page-search{border:0;padding:0;background:none}.home-search-box.home-page-search input{margin:0}.home-actions .hub-daily{border:1px solid var(--t-bd);background:var(--t-bg2);padding:15px;justify-content:center;font-size:.85rem}

@@ -364,7 +364,10 @@ fn friends_list(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             } else {
                 String::new()
             };
+            let cosm = mitch_lib::shop::cosmetics_get(&state.store, &f_norm).unwrap_or(json!({}));
             json!({
+                "color": mitch_lib::shop::public_active_color(&state.store, &f_norm, cosm.get("activeColor").unwrap_or(&Value::Null)),
+                "badge": cosm.get("activeBadge").cloned().unwrap_or(Value::Null),
                 "email": f,
                 "maskedEmail": mitch_lib::admin::mask_email(f),
                 "handle": username,

@@ -120,3 +120,7 @@ html body.onboarding-page::before, html body.onboarding-page::after { display: n
 @media(max-width: 760px) { .ob-ring-outer { inset: 35px 30px; } }
 
 .ob-auth-benefits li { grid-template-columns: minmax(0, 1fr); }
+
+.signup-tour {margin:24px auto 0;max-width:920px;}
+.signup-tour video {display:block;width:100%;height:auto;max-height:440px;border:1px solid var(--ob-line,#8883);border-radius:16px;background:#17191b;aspect-ratio:1440/726;}
+.enroll-page .ob-auth-layout {padding-top:30px;}

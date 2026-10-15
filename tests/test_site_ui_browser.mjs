@@ -73,7 +73,7 @@ try {
   await more.click();
   assert.equal(await more.getAttribute('aria-expanded'), 'true');
   assert(await page.locator('#mobile-menu').evaluate(el => el.open));
-  assert.equal(await page.locator('#mobile-menu a').filter({ hasText: 'BeatDash' }).getAttribute('href'), 'https://beatdash.win/');
+  assert.equal(await page.locator('#mobile-menu a').filter({ hasText: 'MitchCoins' }).getAttribute('href'), '/coins/?v=2');
   await page.getByRole('button', { name: 'Close menu', exact: true }).click();
   await page.waitForFunction(() => document.querySelector('#mobile-dock button').getAttribute('aria-expanded') === 'false');
   for (const path of ['/', '/preferences/', '/shop/', '/marketplace/', '/leaderboard/', '/rjuhsd/', '/tor/']) {

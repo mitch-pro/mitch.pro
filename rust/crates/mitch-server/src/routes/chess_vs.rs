@@ -326,7 +326,7 @@ fn site_url_of(state: &AppState, email: &str) -> String {
     let primary = site
         .get("primary")
         .and_then(|v| v.as_str())
-        .unwrap_or("https://mitch.pro");
+        .unwrap_or("https://mitchdog.com");
     let alternate = site.get("alternate").and_then(|v| v.as_str()).unwrap_or("");
     if norm.ends_with("student.rjuhsd.us") && !alternate.is_empty() {
         alternate.to_string()

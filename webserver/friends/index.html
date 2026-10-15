@@ -567,7 +567,7 @@ async function loadFriends() {
         <article class="friend-item">
           <a class="friend-avatar" href="${escText(profileUrl)}">${pfp ? `<img src="${escText(pfp)}" alt="" loading="lazy" decoding="async" onerror="this.classList.add('is-broken')"><span class="avatar-fallback">${escText(friendInitials(name))}</span>` : `<span class="avatar-fallback">${escText(friendInitials(name))}</span>`}</a>
           <div class="friend-info">
-            <a class="friend-name" href="${escText(profileUrl)}">${escText(name)}</a>
+            <a class="friend-name name ${escText(f.color || '')}" href="${escText(profileUrl)}">${escText(name)}</a>
             <span class="friend-email">${escText(masked)}</span>
             <span class="friend-status ${statusClass}">
               <span class="status-dot"></span>

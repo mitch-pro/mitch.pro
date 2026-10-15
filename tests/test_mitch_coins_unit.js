@@ -34,7 +34,7 @@ assert.equal(children.length, 1);
 assert.equal(children[0].value.textContent, '1,250.25');
 assert.equal(children[0].dataset.state, 'ready');
 assert(children[0].innerHTML.includes('/mitchcoin.png'));
-assert.equal(children[0].href, '/coins/');
+assert.equal(children[0].href, '/coins/?v=2');
 vm.runInContext(source, context);
 assert.equal(children.length, 1, 'Repeated loading must not duplicate wallets');
 assert.equal(intervals.size, 1, 'Repeated loading must not duplicate polling');

@@ -26,7 +26,7 @@ impl SiteConfig {
             .unwrap_or_else(|_| base_dir.join("data"));
         let webroot = base_dir.join("webserver");
         let (mut primary, mut alternate) = (
-            "https://mitch.pro".to_string(),
+            "https://mitchdog.com".to_string(),
             "https://mitch.88chan.me".to_string(),
         );
         if let Ok(raw) = std::fs::read_to_string(data_dir.join("site.json")) {
