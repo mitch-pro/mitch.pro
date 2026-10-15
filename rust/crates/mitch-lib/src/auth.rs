@@ -922,6 +922,7 @@ pub fn rate_limit_for(endpoint: &str) -> (u32, u32) {
         "/api/e2e/verify-password" => (5, 60),
         "/api/content" => (120, 60),
         "/api/ping" => (120, 60),
+        "/api/presence/count" => (6000, 60),
         "/api/me/notif-prefs" => (30, 60),
         "/api/ai" => (20, 60),
         "/api/script" => (600, 60),
@@ -1174,7 +1175,10 @@ pub fn check_rate_limit(
     if WHITELISTED_IPS.contains(&ip) {
         return None;
     }
-    if limiter.rate_limited(&format!("ip:{ip}"), endpoint) || limiter.rate_limited(id_key, endpoint)
+    // Public presence polling must not share one anonymous bucket across all visitors.
+    let public_presence = endpoint == "/api/presence/count";
+    if limiter.rate_limited(&format!("ip:{ip}"), endpoint)
+        || (!public_presence && limiter.rate_limited(id_key, endpoint))
     {
         return Some((429, "Too many requests, slow down"));
     }
@@ -1728,6 +1732,29 @@ mod tests {
         assert!(rl3.rate_limited("ip:1.2.3.4", "/api/dm/send"));
         // Different endpoints have independent buckets.
         assert!(!rl3.rate_limited("ip:1.2.3.4", "/api/ping"));
+    }
+
+    #[test]
+    fn public_presence_polling_is_limited_per_ip_instead_of_globally() {
+        let limiter = RateLimiter::new();
+        for _ in 0..30 {
+            assert!(
+                check_rate_limit(&limiter, "203.0.113.1", "anon", "/api/presence/count").is_none()
+            );
+            assert!(
+                check_rate_limit(&limiter, "203.0.113.2", "anon", "/api/presence/count").is_none()
+            );
+        }
+        for _ in 30..6000 {
+            assert!(
+                check_rate_limit(&limiter, "203.0.113.1", "anon", "/api/presence/count").is_none()
+            );
+        }
+        assert_eq!(
+            check_rate_limit(&limiter, "203.0.113.1", "anon", "/api/presence/count"),
+            Some((429, "Too many requests, slow down"))
+        );
+        assert!(check_rate_limit(&limiter, "203.0.113.2", "anon", "/api/presence/count").is_none());
     }
 
     #[test]
