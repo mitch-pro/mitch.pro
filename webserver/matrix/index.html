@@ -405,10 +405,62 @@
           if (isMatrixStoreAccountMismatch(event.reason)) beginMatrixStoreRecovery();
         });
 
+        // A same-username/different-device store mismatch (the common case -
+        // see isMatrixStoreAccountMismatch) is deliberately NOT auto-recovered
+        // from anymore, since that's what caused the reload loop. But Cinny
+        // still hard-fails and shows its own dead-end error panel for it, with
+        // no way out besides the "Log out" buried in its own account menu.
+        // Add an obvious button right on that panel that triggers that same
+        // real Cinny logout (confirmed working: clears the stuck local crypto
+        // state cleanly, in place, with no page reload, and keeps E2EE keys -
+        // unlike a raw storage wipe, which can get stuck behind a crypto
+        // IndexedDB connection Cinny itself still has open). This is a
+        // one-shot, user-initiated click, so it can't loop like the automatic
+        // version did.
+        async function manualStoreRecoveryClick(btn) {
+          btn.disabled = true;
+          btn.textContent = 'Logging out…';
+          try {
+            const overflowBtn = Array.from(document.querySelectorAll('button')).find(b => {
+              const rect = b.getBoundingClientRect();
+              return b.querySelector('svg') && !b.textContent.trim() && rect.top < 120 && rect.width > 0;
+            });
+            if (overflowBtn) {
+              overflowBtn.click();
+              await new Promise(r => setTimeout(r, 250));
+              const logoutBtn = Array.from(document.querySelectorAll('button'))
+                .find(b => b.textContent.trim() === 'Logout');
+              if (logoutBtn) {
+                logoutBtn.click();
+                return;
+              }
+            }
+          } catch (_) {}
+          // Cinny's menu structure wasn't found (layout change upstream) -
+          // fall back to a raw local reset instead of leaving the button inert.
+          clearStoredSession();
+          resetMatrixClientStores().finally(() => window.location.reload());
+        }
+
+        function ensureManualRecoveryButton() {
+          const retryBtn = Array.from(document.querySelectorAll('button'))
+            .find(b => b.textContent.trim() === 'Retry' && !b.dataset.mitchRecoveryInjected);
+          if (!retryBtn) return;
+          retryBtn.dataset.mitchRecoveryInjected = '1';
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.textContent = 'Log Out (Can fix issue)';
+          btn.className = retryBtn.className;
+          btn.style.marginTop = '8px';
+          btn.addEventListener('click', () => manualStoreRecoveryClick(btn));
+          retryBtn.insertAdjacentElement('afterend', btn);
+        }
+
         // Cinny catches startup failures and renders them instead of leaving an
         // unhandled rejection, so also watch its error panel for this exact
         // Matrix crypto-store identity failure.
         new MutationObserver(mutations => {
+          ensureManualRecoveryButton();
           for (const mutation of mutations) {
             for (const node of mutation.addedNodes) {
               const message = node.nodeType === Node.TEXT_NODE ? node.nodeValue : node.textContent;
