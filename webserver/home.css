@@ -225,6 +225,11 @@ body.home:is(.is-staff, .is-admin) .staff-access-rail { display: flex; }
 .hud-brand { margin: 0; font-family: var(--mh-font); font-size: clamp(1.9rem, 4vw, 2.4rem); font-weight: 700; letter-spacing: -0.025em; color: var(--mh-ink); }
 .home-greeting { margin: 0; font-size: 1rem; color: var(--mh-ink-soft); }
 .home-greeting #greeting-email { color: var(--mh-ink); font-weight: 600; }
+.streak-badge {
+  display: inline-flex; align-items: center; gap: 0.3rem; margin-left: 0.3rem;
+  padding: 0.1rem 0.5rem; border-radius: 999px; vertical-align: middle;
+  background: var(--mh-accent-soft); font-size: 0.78rem; font-weight: 700; color: var(--mh-ink);
+}
 .home-hero-detail { margin: 0; max-width: 32rem; font-size: 0.92rem; color: var(--mh-ink-soft); }
 
 .hud-search-area { order: 2; width: 100%; margin-top: 0.4rem; }

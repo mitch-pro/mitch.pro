@@ -13,7 +13,7 @@
 <title>mitch.pro</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"></noscript>
 <link rel="stylesheet" href="/app.css">
-<link rel="stylesheet" href="/home.css?v=9">
+<link rel="stylesheet" href="/home.css?v=10">
 <script src="/app-shell.js" defer></script>
 <script src="/home-friends.js?v=4" defer></script>
 <script>
@@ -439,6 +439,20 @@ function syncHubDailyChip(state) {
       if (w) w.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     };
   }
+}
+
+function syncStreakBadge(state) {
+  var badge = document.getElementById('streak-badge');
+  var count = document.getElementById('streak-badge-count');
+  if (!badge) return;
+  if (!state || !state.streak) {
+    badge.hidden = true;
+    return;
+  }
+  if (count) count.textContent = state.streak;
+  badge.title = 'Streak: ' + state.streak + ' day' + (state.streak === 1 ? '' : 's') +
+    (state.streakFreezes > 0 ? ' · ' + state.streakFreezes + ' freeze' + (state.streakFreezes === 1 ? '' : 's') : '');
+  badge.hidden = false;
 }
 
 function updateRecommendation(entries) {
@@ -930,6 +944,7 @@ function escText(t) {
         if (msgLabel) msgLabel.textContent = 'Sign in to claim daily login rewards.';
         if (btn) btn.disabled = true;
         syncHubDailyChip(null);
+        syncStreakBadge(null);
         return;
       }
       var state = await r.json();
@@ -954,6 +969,7 @@ function escText(t) {
         }
       }
       syncHubDailyChip(state);
+      syncStreakBadge(state);
 
       // Update progress bar (0 to 60 days)
       var displayStreak = state.streak;
@@ -965,6 +981,7 @@ function escText(t) {
       if (msgLabel) msgLabel.textContent = 'Failed to load daily login reward state.';
       if (btn) btn.disabled = true;
       syncHubDailyChip(null);
+      syncStreakBadge(null);
     }
   }
 
@@ -3169,7 +3186,7 @@ if (document.readyState === 'loading') {
       <div>
 
         <h1 class="hud-brand" id="home-brand">mitch.pro</h1>
-        <p class="home-greeting"><span id="greeting-text"></span> <span id="greeting-email"></span></p>
+        <p class="home-greeting"><span id="greeting-text"></span> <span id="greeting-email"></span> <span id="streak-badge" class="streak-badge" hidden>&#128293; <b id="streak-badge-count">0</b></span></p>
         <p class="home-hero-detail">Games, chat, friends, and your cloud computer in one place.</p>
       </div>
     </div>
