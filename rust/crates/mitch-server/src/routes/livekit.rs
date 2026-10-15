@@ -86,6 +86,42 @@ pub fn generate_livekit_token(
     format!("{header}.{payload}.{sig}")
 }
 
+pub fn verified_token_email(state: &AppState, search: &str) -> Option<String> {
+    let token = form_urlencoded::parse(search.trim_start_matches('?').as_bytes())
+        .find(|(key, _)| key == "access_token")?
+        .1
+        .into_owned();
+    let mut parts = token.split('.');
+    let header = parts.next()?;
+    let payload = parts.next()?;
+    let signature = parts.next()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    let signature = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(signature)
+        .ok()?;
+    let expected = mitch_lib::crypto::hmac_sha256(
+        &api_secret_bytes(&state.id_secret),
+        format!("{header}.{payload}").as_bytes(),
+    );
+    if !mitch_lib::crypto::timing_safe_equal(&signature, &expected) {
+        return None;
+    }
+    let payload: Value = serde_json::from_slice(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(payload)
+            .ok()?,
+    )
+    .ok()?;
+    if payload.get("iss").and_then(Value::as_str) != Some(api_key().as_str())
+        || payload.get("exp").and_then(Value::as_i64)? <= mitch_lib::school::now_millis() / 1000
+    {
+        return None;
+    }
+    crate::routes::matrix::email_for_user_id(state, payload.get("sub")?.as_str()?)
+}
+
 // ── pre-gate HTTP dispatch (server.js:9637-9698) ─────────────────────────────
 
 fn cors_headers() -> Vec<(&'static str, HeaderValue)> {
@@ -262,6 +298,9 @@ fn token_endpoint(
         raw_user_id = format!("@user_{}:mitch.pro", String::from_utf8_lossy(&s));
     }
 
+    if !norm_email.is_empty() {
+        raw_user_id = crate::routes::matrix::resolve_matrix_user_id_for_email(state, &norm_email);
+    }
     // JS: startsWith('@') ? raw : `@${raw.replace(/[^a-zA-Z0-9._=-]/g,'')}:mitch.pro`.
     let identity = if raw_user_id.starts_with('@') {
         raw_user_id
@@ -329,6 +368,7 @@ pub fn handle_rtc_upgrade(
     state: &Arc<AppState>,
     path: &str,
     search: &str,
+    headers: &HeaderMap,
     upgrade: Option<WebSocketUpgrade>,
 ) -> Option<Response> {
     if !path.starts_with("/livekit/rtc") {
@@ -342,10 +382,18 @@ pub fn handle_rtc_upgrade(
             json!({ "error": "websocket upgrade failed" }),
         ));
     };
-    let _ = state;
+    let state = Arc::clone(state);
+    let cookies = crate::routes::me::cookies_of(&state, headers);
+    let sid = cookies
+        .get("studentId")
+        .or_else(|| cookies.get("id"))
+        .unwrap_or("");
+    let email = mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, sid)
+        .or_else(|| verified_token_email(&state, search))
+        .unwrap_or_default();
     let search = search.to_string();
     Some(on_upgrade.on_upgrade(move |socket| async move {
-        run_rtc_proxy(socket, search).await;
+        run_rtc_proxy(state, socket, search, email).await;
     }))
 }
 
@@ -453,7 +501,7 @@ pub async fn handle_http_passthrough(
         })
 }
 
-async fn run_rtc_proxy(client: WebSocket, search: String) {
+async fn run_rtc_proxy(state: Arc<AppState>, client: WebSocket, search: String, email: String) {
     let (livekit_host, livekit_port) = livekit_upstream_addr();
     let query_part = if search.is_empty() {
         String::new()
@@ -487,9 +535,17 @@ async fn run_rtc_proxy(client: WebSocket, search: String) {
     // The JS runs two independent event pumps; the select below is the same
     // shape, biased to the upstream leg so echoes never starve behind a
     // busy client.
+    let mut ban_check = tokio::time::interval(std::time::Duration::from_secs(1));
     loop {
         tokio::select! {
             biased;
+            _ = ban_check.tick() => {
+                if mitch_lib::auth::banned_info_for_email(&state.store, &email).is_some() {
+                    let _ = client_sink.send(Message::Close(Some(CloseFrame {code:1008, reason:"Account banned".into()}))).await;
+                    break;
+                }
+            }
+
             frame = upstream_stream.next() => match frame {
                 // JS upstream.onmessage → ws.send(e.data) — raw forward.
                 Some(Ok(tokio_tungstenite::tungstenite::Message::Text(t))) => {

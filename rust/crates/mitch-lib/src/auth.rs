@@ -929,7 +929,7 @@ pub fn rate_limit_for(endpoint: &str) -> (u32, u32) {
         "/api/e2e/verify-password" => (5, 60),
         "/api/content" => (120, 60),
         "/api/ping" => (120, 60),
-        "/api/presence/count" => (6000, 60),
+        "/api/presence/count" | "/api/access/status" => (6000, 60),
         "/api/me/notif-prefs" => (30, 60),
         "/api/ai" => (20, 60),
         "/api/script" => (600, 60),
@@ -1184,7 +1184,7 @@ pub fn check_rate_limit(
         return None;
     }
     // Public presence polling must not share one anonymous bucket across all visitors.
-    let public_presence = endpoint == "/api/presence/count";
+    let public_presence = matches!(endpoint, "/api/presence/count" | "/api/access/status");
     if limiter.rate_limited(&format!("ip:{ip}"), endpoint)
         || (!public_presence && limiter.rate_limited(id_key, endpoint))
     {

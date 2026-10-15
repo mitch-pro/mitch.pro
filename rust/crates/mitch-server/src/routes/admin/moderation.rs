@@ -2051,7 +2051,8 @@ mod tests {
 
     fn ban_test_state() -> (Arc<AppState>, std::path::PathBuf) {
         let dir = std::env::temp_dir().join(format!(
-            "mitch-account-ban-test-{}",
+            "mitch-account-ban-test-{}-{}",
+            mitch_lib::crypto::random_bytes_hex(8),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()

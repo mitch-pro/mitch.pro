@@ -86,6 +86,7 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/app-shell.js",
     "/site-theme.js",
     "/site-status.js",
+    "/ban-guard.js",
     "/mitch-coins.js",
     "/mitch-coins.css",
     "/mitchcoin.png",
@@ -572,6 +573,10 @@ pub async fn handle(
     let path = uri.path().to_string();
     let search = uri.query().unwrap_or("").to_string();
 
+    if let Some(response) = crate::access::enforce_ban(&state, headers, &path, &search).await {
+        return response;
+    }
+
     // 0. mitch.pro canonical redirect (server.js:9285-9295).
     let incoming_host = request_host(headers)
         .split(':')
@@ -659,11 +664,8 @@ pub async fn handle(
         }
     }
 
-    // 3b1. LiveKit HTTP surface — server.js:9637-9698. The JS runs the
-    // /livekit* OPTIONS preflight and the token endpoints (9636) BEFORE the
-    // maintenance (10500), ban (10525) and password (10557) gates, so this
-    // must dispatch before the gates below: anonymous token generation
-    // succeeds (live-verified divergence bun 200 / rust 302 otherwise).
+    // LiveKit dispatch follows the global ban check. Guest call support
+    // remains available; known banned identities cannot use these routes.
     if path.starts_with("/livekit") {
         if let Some(resp) = crate::routes::livekit::handle_http(
             &state, &method, &path, headers, &search, body_bytes,
@@ -692,8 +694,8 @@ pub async fn handle(
     }
 
     // Matrix client/server discovery, Conduit reverse-proxy, and Cinny config
-    // (server.js:7433-7667). Runs before IP ban and password gates so clients
-    // and federation peers can connect.
+    // (server.js:7433-7667). The global ban check covers these proxy routes
+    // while discovery and federation remain available to other clients.
     if path.starts_with("/.well-known/matrix/")
         || path.starts_with("/_matrix/")
         || path == "/matrix/config.json"
@@ -709,16 +711,9 @@ pub async fn handle(
         }
     }
 
-    // 3b2. IP ban gate — server.js:7677-7684, immediately after getRealIp.
-    // Bans apply to every path except the appeal set.
+    // Track the last known IP after the global ban check.
     {
         let ip = get_real_ip(headers, None);
-        if let Some(ip_ban) = mitch_lib::auth::banned_info_for_ip(&state.store, &ip) {
-            if !ban_open_path(&path) {
-                return crate::errors::banned_response(&ip_ban, is_rjuhsd_host(headers));
-            }
-        }
-
         // Dynamically track the user's last known IP address (server.js:10478-10495)
         let cookie_header = headers
             .get(axum::http::header::COOKIE)
@@ -892,54 +887,6 @@ pub async fn handle(
         }
     }
 
-    // 4a. Account-ban gate — server.js:8256-8271, between maintenance and
-    // password enforcement. Banned sessions get the ban page (HTML) or a JSON
-    // error for /api/ paths, except on the appeal paths.
-    {
-        let cookie_header = headers
-            .get(axum::http::header::COOKIE)
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("");
-        let cookies = mitch_lib::auth::get_cookies_from_header_value(
-            cookie_header,
-            &state.store,
-            &state.id_secret,
-            node_env_test,
-        );
-        let sid = cookies
-            .get("studentId")
-            .filter(|s| !s.is_empty())
-            .or_else(|| cookies.get("id"))
-            .unwrap_or("")
-            .to_string();
-        if let Some(ban) =
-            mitch_lib::auth::banned_info_for_sid(&state.store, &state.id_secret, &sid)
-        {
-            if !ban_open_path(&path) {
-                if path.starts_with("/api/") {
-                    let reason = ban
-                        .get("reason")
-                        .and_then(|v| v.as_str())
-                        .filter(|s| !s.is_empty())
-                        .unwrap_or("This account is banned from the website.");
-                    let code = if path == "/api/pass" { 200 } else { 403 };
-                    return json_resp(
-                        code,
-                        serde_json::json!({
-                            "success": false,
-                            "banned": true,
-                            "error": "account banned",
-                            "reason": reason,
-                            "bannedAt": ban.get("banned_at"),
-                            "expiresAt": ban.get("expires_at"),
-                        }),
-                    );
-                }
-                return crate::errors::banned_response(&ban, is_rjuhsd_host(headers));
-            }
-        }
-    }
-
     let cfg = &state.cfg;
     let webroot = cfg.webroot.clone();
 
@@ -1075,7 +1022,7 @@ pub async fn handle(
     // handle_rtc_upgrade returns Some for every /livekit/rtc path.
     if is_upgrade && path.starts_with("/livekit/rtc") {
         if let Some(resp) =
-            crate::routes::livekit::handle_rtc_upgrade(&state, &path, &search, ws_upgrade)
+            crate::routes::livekit::handle_rtc_upgrade(&state, &path, &search, headers, ws_upgrade)
         {
             return resp;
         }
@@ -1638,7 +1585,8 @@ pub async fn handle(
             .unwrap_or("");
         if let Some(ban) = mitch_lib::auth::banned_info_for_sid(&state.store, &state.id_secret, sid)
         {
-            return crate::errors::banned_response(&ban, is_rjuhsd_host(headers));
+            let email = mitch_lib::auth::names_get_email(&state.store, sid).unwrap_or_default();
+            return crate::access::account_response(&state, headers, &path, &email, &ban);
         }
         if !state.check_password_cookie(headers, None)
             && path != "/"
@@ -1785,8 +1733,11 @@ pub async fn handle(
                         return Response::builder()
                             .status(StatusCode::OK)
                             .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")
-                            .header(axum::http::header::CACHE_CONTROL, "public, max-age=86400")
-                            .body(axum::body::Body::from(raw))
+                            .header(axum::http::header::CACHE_CONTROL, "private, no-store")
+                            .header(axum::http::header::VARY, "Cookie")
+                            .body(axum::body::Body::from(crate::inject::inject_access_guard(
+                                &String::from_utf8_lossy(&raw),
+                            )))
                             .expect("vm desktop response");
                     }
                     if let Ok(mut html) = String::from_utf8(raw) {
@@ -1873,7 +1824,8 @@ pub async fn handle(
             .unwrap_or("");
         if let Some(ban) = mitch_lib::auth::banned_info_for_sid(&state.store, &state.id_secret, sid)
         {
-            return crate::errors::banned_response(&ban, is_rjuhsd_host(headers));
+            let email = mitch_lib::auth::names_get_email(&state.store, sid).unwrap_or_default();
+            return crate::access::account_response(&state, headers, &path, &email, &ban);
         }
         return redirect("/enroll/", 302);
     }
@@ -1904,33 +1856,10 @@ fn html_response(html: String) -> Response {
     Response::builder()
         .status(StatusCode::OK)
         .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")
+        .header(axum::http::header::CACHE_CONTROL, "private, no-store")
+        .header(axum::http::header::VARY, "Cookie")
         .body(axum::body::Body::from(html))
         .expect("static response")
-}
-
-/// `banOpenPaths` — server.js:7605. Exact-path matches only.
-fn ban_open_path(path: &str) -> bool {
-    matches!(
-        path,
-        "/appeal"
-            | "/appeal/"
-            | "/appeal/index.html"
-            | "/appeal.html"
-            | "/api/appeal"
-            | "/api/pass"
-            | "/open.css"
-            | "/app.css"
-            | "/popup.js"
-            | "/pwa-install.js"
-            | "/site-theme.js"
-            | "/theme.js"
-            | "/cookie-consent.js"
-            | "/site-status.js"
-            | "/favicon.ico"
-            | "/icon-192.png"
-            | "/apple-touch-icon.png"
-            | "/manifest.json"
-    )
 }
 
 /// `authenticatedVmActor(req)` — server.js:25606. Valid non-revoked sid whose

@@ -399,8 +399,20 @@ async fn run_client_socket(
     let mut ms_tx: Option<mpsc::UnboundedSender<MsCommand>> = None;
     let is_admin = mitch_lib::auth::is_admin_email(&state.store, &email);
 
+    let mut ban_check = tokio::time::interval(std::time::Duration::from_secs(1));
     loop {
+        if mitch_lib::auth::banned_info_for_email(&state.store, &email).is_some() {
+            let _ = client_sink
+                .send(Message::Close(Some(CloseFrame {
+                    code: 1008,
+                    reason: "Account banned".into(),
+                })))
+                .await;
+            break;
+        }
         tokio::select! {
+            _ = ban_check.tick() => continue,
+
             ctl = ctl_rx.recv() => match ctl {
                 Some(BlooketCtl::Send(text)) => {
                     if client_sink.send(Message::Text(text.into())).await.is_err() {

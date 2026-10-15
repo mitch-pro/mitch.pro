@@ -2983,11 +2983,19 @@ async fn run_desktop_bridge(
     let (mut client_sink, mut client_stream) = client_ws.split();
     let (mut upstream_sink, mut upstream_stream) = upstream_ws.split();
 
+    let mut ban_check = tokio::time::interval(std::time::Duration::from_secs(1));
     let mut last_auth_check = now_ms();
 
     loop {
         tokio::select! {
             biased;
+            _ = ban_check.tick() => {
+                if !vm_desktop_socket_authorized(&state, &data) {
+                    let _ = client_sink.send(axum::extract::ws::Message::Close(Some(CloseFrame {code:1008, reason:"Desktop access expired".into()}))).await;
+                    break;
+                }
+            }
+
 
             Some((code, reason)) = close_rx.recv() => {
                 let _ = client_sink

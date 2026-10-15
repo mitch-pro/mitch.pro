@@ -34,6 +34,12 @@ pub async fn handle(
     body: &serde_json::Value,
     body_bytes: &[u8],
 ) -> Option<Response> {
+    if path == "/api/access/status" && *method == Method::GET {
+        return Some(json_resp(
+            200,
+            json!({"ok":true, "authenticated":state.check_password_cookie(headers, None)}),
+        ));
+    }
     if path == "/api/site-info" && *method == Method::GET {
         return Some(site_info(state));
     }

@@ -12,6 +12,37 @@ use crate::data::DataStore;
 use rusqlite::OptionalExtension;
 use serde_json::{json, Value};
 
+/// Signed identity marker used only to deny access, never to authenticate.
+pub fn signed_ban_marker(email: &str, secret: &[u8]) -> String {
+    use base64::Engine;
+    let email = crate::auth::normalize_email(email);
+    let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(email);
+    let signature = crate::crypto::hmac_sha256(secret, format!("account-ban:{payload}").as_bytes());
+    format!(
+        "{payload}.{}",
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(signature)
+    )
+}
+
+pub fn verify_ban_marker(value: &str, secret: &[u8]) -> Option<String> {
+    use base64::Engine;
+    use hmac::{Hmac, Mac};
+    let (payload, signature) = value.split_once('.')?;
+    let signature = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(signature)
+        .ok()?;
+    let mut mac = <Hmac<sha2::Sha256> as Mac>::new_from_slice(secret).ok()?;
+    mac.update(format!("account-ban:{payload}").as_bytes());
+    mac.verify_slice(&signature).ok()?;
+    let email = String::from_utf8(
+        base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(payload)
+            .ok()?,
+    )
+    .ok()?;
+    Some(crate::auth::normalize_email(&email))
+}
+
 fn now_millis() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -289,6 +320,22 @@ mod tests {
         ));
         std::fs::create_dir_all(base.join("data")).unwrap();
         DataStore::open(&base, &base.join("data")).unwrap()
+    }
+
+    #[test]
+    fn ban_markers_reject_forged_identity_or_signature() {
+        let marker = signed_ban_marker("First.Last+alias@student.mitch.pro", b"secret");
+        assert_eq!(
+            verify_ban_marker(&marker, b"secret").as_deref(),
+            Some("firstlast@student.rjuhsd.us")
+        );
+        assert!(verify_ban_marker(&marker, b"different secret").is_none());
+        let signature = marker.split_once('.').unwrap().1;
+        assert!(
+            verify_ban_marker(&format!("Zm9yZ2VkQGV4YW1wbGUuY29t.{signature}"), b"secret")
+                .is_none()
+        );
+        assert!(verify_ban_marker("invalid", b"secret").is_none());
     }
 
     #[test]

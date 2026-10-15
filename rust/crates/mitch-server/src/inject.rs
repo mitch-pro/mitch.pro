@@ -82,7 +82,23 @@ pub fn is_embedded_game_runtime(path: &str) -> bool {
     path.starts_with("/games/") && path != "/games/" && path != "/games/index.html"
 }
 
+pub fn inject_access_guard(html: &str) -> String {
+    if html.contains("/ban-guard.js") {
+        return html.to_string();
+    }
+    match html.rfind("</body>") {
+        Some(index) => format!(
+            "{}<script src=\"/ban-guard.js\" defer></script>{}",
+            &html[..index],
+            &html[index..]
+        ),
+        None => html.to_string(),
+    }
+}
+
 pub fn inject_credit(html: &str, school: bool) -> String {
+    let guarded = inject_access_guard(html);
+    let html = guarded.as_str();
     if html.contains("id=\"site-credit\"") {
         return html.to_string();
     }

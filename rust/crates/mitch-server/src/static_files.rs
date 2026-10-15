@@ -385,7 +385,7 @@ fn is_hashed_asset(url_path: &str) -> bool {
 }
 
 fn cache_control_for(ext: &str, content_type: &str, url_path: &str) -> Vec<(HeaderName, String)> {
-    if is_hashed_asset(url_path) {
+    if is_hashed_asset(url_path) && !content_type.contains("text/html") {
         return vec![(
             header::CACHE_CONTROL,
             "public, max-age=31536000, immutable".to_string(),
@@ -619,6 +619,14 @@ mod tests {
 
     #[test]
     fn cache_control_classes_match_js() {
+        assert!(cache_control_for(
+            "html",
+            "text/html; charset=utf-8",
+            "/matrix/assets/old-page.html"
+        )[0]
+        .1
+        .contains("no-store"));
+
         assert_eq!(
             cache_control_for("html", "text/html; charset=utf-8", "/index.html")[0].1,
             "no-cache, no-store, must-revalidate"

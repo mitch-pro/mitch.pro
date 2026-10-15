@@ -55,7 +55,8 @@
     }
     function handleMessage(data) {
       if (data.type === 'account_banned') {
-        location.replace('/');
+        if (window.MitchBanGuard) window.MitchBanGuard.showBan();
+        else location.replace('/');
         return;
       }
       if (data.type === 'admin_broadcast' && data.createdAt && Number(data.createdAt) < pageOpenedAt) {

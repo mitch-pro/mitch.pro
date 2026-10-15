@@ -246,6 +246,7 @@ pub fn inject_page(
     if !is_embedded || is_standalone_game_portal {
         raw = crate::inject::inject_credit(&raw, is_rjuhsd || path.starts_with("/rjuhsd/"));
     }
+    raw = crate::inject::inject_access_guard(&raw);
     *html = raw.clone();
     raw
 }
@@ -278,5 +279,5 @@ pub fn serve_static_html(
                 || path.starts_with("/rjuhsd/"),
         );
     }
-    html
+    crate::inject::inject_access_guard(&html)
 }

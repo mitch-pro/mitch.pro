@@ -2302,6 +2302,32 @@ pub fn is_matrix_staff_member(
     false
 }
 
+pub fn email_for_user_id(state: &AppState, user_id: &str) -> Option<String> {
+    let (username, domain) = user_id.strip_prefix('@')?.split_once(':')?;
+    if !domain.eq_ignore_ascii_case("mitch.pro") {
+        return None;
+    }
+    let users = state
+        .store
+        .read_document(&state.data_dir().join("matrix_users.json"), json!({}));
+    if let Some(users) = users.as_object() {
+        for (key, value) in users {
+            if value
+                .as_str()
+                .is_some_and(|value| value.eq_ignore_ascii_case(username))
+            {
+                return if key.contains('@') {
+                    Some(mitch_lib::auth::normalize_email(key))
+                } else {
+                    mitch_lib::auth::names_get_email(&state.store, key)
+                        .map(|email| mitch_lib::auth::normalize_email(&email))
+                };
+            }
+        }
+    }
+    crate::routes::auth::resolve_login_identifier(state, username)
+}
+
 pub async fn resolve_matrix_account(
     state: &AppState,
     headers: &HeaderMap,
@@ -7221,6 +7247,95 @@ pub async fn admin_conduit_health(state: &Arc<AppState>) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn banned_matrix_tokens_cannot_bypass_using_headers_or_query_parameters() {
+        let (state, dir) = test_state();
+        let token = format!("fixture-{}", mitch_lib::crypto::random_bytes_hex(12));
+        let other = format!("fixture-{}", mitch_lib::crypto::random_bytes_hex(12));
+        {
+            let mut cache = token_to_account_map().lock().unwrap();
+            cache.insert(
+                token.clone(),
+                MatrixAccount {
+                    uid: String::new(),
+                    norm_email: "blocked@example.com".into(),
+                    user_id: "@blocked:mitch.pro".into(),
+                },
+            );
+            cache.insert(
+                other.clone(),
+                MatrixAccount {
+                    uid: String::new(),
+                    norm_email: "other@example.com".into(),
+                    user_id: "@other:mitch.pro".into(),
+                },
+            );
+        }
+        mitch_lib::bans::blacklist_insert(&state.store, "blocked@example.com", "Spam", "admin")
+            .unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "authorization",
+            HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
+        );
+        assert_eq!(
+            crate::access::enforce_ban(&state, &headers, "/_matrix/client/v3/sync", "")
+                .await
+                .unwrap()
+                .status(),
+            403
+        );
+        headers.insert(
+            "authorization",
+            HeaderValue::from_str(&format!("Bearer {other}")).unwrap(),
+        );
+        assert_eq!(
+            crate::access::enforce_ban(
+                &state,
+                &headers,
+                "/_matrix/client/v3/sync",
+                &format!("access_token={token}")
+            )
+            .await
+            .unwrap()
+            .status(),
+            403
+        );
+        assert_eq!(
+            crate::access::enforce_ban(
+                &state,
+                &HeaderMap::new(),
+                "/_matrix/client/v3/sync",
+                &format!("access_token={token}")
+            )
+            .await
+            .unwrap()
+            .status(),
+            403
+        );
+        mitch_lib::bans::blacklist_remove(
+            &state.store,
+            "blocked@example.com",
+            "blocked@example.com",
+        )
+        .unwrap();
+        assert!(crate::access::enforce_ban(
+            &state,
+            &headers,
+            "/_matrix/client/v3/sync",
+            &format!("access_token={token}")
+        )
+        .await
+        .is_none());
+        {
+            let mut cache = token_to_account_map().lock().unwrap();
+            cache.remove(&token);
+            cache.remove(&other);
+        }
+        drop(state);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn test_sanitize_matrix_device_id() {

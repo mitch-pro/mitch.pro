@@ -312,7 +312,7 @@ async function loadRequests() {
     html += '<h2 style="font-size:.95rem;margin:.8rem 0 .6rem;color:rgba(200,200,220,.7)">Appeals</h2>';
     html += '<table><thead><tr><th>Email</th><th>Reason</th><th>Submitted</th><th>Actions</th></tr></thead><tbody>';
     d.appeals.forEach(function(a) {
-      var dt = a.submitted_at ? new Date(a.submitted_at*1000).toLocaleString() : '—';
+      var dt = a.submitted_at ? new Date(Number(a.submitted_at) < 1e12 ? a.submitted_at*1000 : Number(a.submitted_at)).toLocaleString() : '—';
       html += '<tr><td>'+esc(a.email)+'</td>';
       html += '<td class="dim">'+esc((a.reason||a.text||'').slice(0,80))+'</td>';
       html += '<td class="dim" style="white-space:nowrap">'+esc(dt)+'</td>';

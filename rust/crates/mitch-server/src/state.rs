@@ -558,6 +558,7 @@ impl AppState {
 
 /// `PUBLIC_API_PATHS` — verbatim.
 pub const PUBLIC_API_PATHS: &[&str] = &[
+    "/api/access/status",
     "/api/appeal",
     "/api/webauthn/login/options",
     "/api/webauthn/login/verify",

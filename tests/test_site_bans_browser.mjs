@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFile,mkdir} from 'node:fs/promises';
-import {createHash,createHmac} from 'node:crypto';
+import {createHash,createHmac,randomBytes} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE || '@playwright/test');
 const base=process.env.SITE_AUDIT_BASE_URL || 'http://127.0.0.1:4320';
@@ -17,7 +17,10 @@ try {
   if(email){
    const raw='e'+createHash('sha256').update(email).digest('hex').slice(0,24);
    const sid=raw+'.'+createHmac('sha256',secret).update(raw).digest('hex').slice(0,16);
-   await context.addCookies([{name:'studentId',value:sid,url:base}]);
+   const token=randomBytes(32).toString('base64url'),key=createHash('sha256').update(token).digest('hex'),now=Date.now();
+   const record={email,normEmail:email,sid,gen:0,createdAt:now,lastSeen:now,expiresAt:now+86400000,userAgent:'Fixture',ip:'127.0.0.1',devSuperuser:false};
+   execFileSync('python3',['-c',"import sqlite3,json,sys,time; c=sqlite3.connect(sys.argv[1]); c.execute('BEGIN IMMEDIATE'); row=c.execute('SELECT content FROM json_documents WHERE path = ?', ('data/auth_sessions.json',)).fetchone(); doc=json.loads(row[0]) if row else {}; doc[sys.argv[2]]=json.loads(sys.argv[3]); c.execute('INSERT INTO json_documents(path,content,updated_at) VALUES (?,?,?) ON CONFLICT(path) DO UPDATE SET content=excluded.content,updated_at=excluded.updated_at', ('data/auth_sessions.json',json.dumps(doc),int(time.time()*1000))); c.commit(); c.close()",fixture+'/data/mitchpro.db',key,JSON.stringify(record)]);
+   await context.addCookies([{name:'mitch_session',value:token,url:base,httpOnly:true,sameSite:'Lax'}]);
   }
   return context;
  };
@@ -46,7 +49,16 @@ try {
  await page.locator('#bans-action-btn').click();await page.locator('#bans-workspace').waitFor();
  const otherPage=await neighbor.newPage();await otherPage.goto(base+'/');await otherPage.waitForFunction(()=>window.MitchShell?.ready);
  assert(!await otherPage.locator('#bans-action-btn').isVisible(),'Ordinary members must not see the admin button.');
- const targetPage=await student.newPage();await targetPage.goto(base+'/enroll/');
+ const targetPage=await student.newPage();
+ await targetPage.route('**/ban-guard.js',route=>route.fulfill({contentType:'application/javascript',body:''}));
+ await targetPage.goto(base+'/enroll/');
+ const gamePage=await student.newPage();await gamePage.goto(base+'/games/kodys-keyboard/index.html');
+ assert(await gamePage.locator('script[src="/ban-guard.js"]').count());
+ await targetPage.evaluate(()=>new Promise((resolve,reject)=>{
+  const socket=new WebSocket(location.origin.replace(/^http/,'ws')+'/ssh/ws');
+  socket.onopen=resolve;socket.onerror=()=>reject(new Error('Fixture terminal socket failed'));
+  socket.onclose=event=>{window.__terminalBanClosed=event.code===1008;};window.__fixtureTerminal=socket;
+ }));
  await targetPage.evaluate(()=>new Promise((resolve,reject)=>{
   const socket=new WebSocket(location.origin.replace(/^http/,'ws')+'/ws');
   socket.onopen=()=>resolve(true);socket.onerror=()=>reject(new Error('Fixture WebSocket failed'));
@@ -73,7 +85,15 @@ try {
  await page.waitForFunction(()=>document.getElementById('ban-status').textContent.startsWith('Banned '));
  await page.locator('.ban-entry').waitFor();assert((await page.locator('.ban-entry').innerText()).includes(reason));
  assert.equal(await page.locator('.ban-entry img').count(),0);assert.equal(await page.evaluate(()=>window.__injected),undefined);
- await targetPage.waitForFunction(()=>window.__banClosed&&window.__banNotice);
+ await targetPage.waitForFunction(()=>window.__banClosed&&window.__banNotice&&window.__terminalBanClosed);
+ await gamePage.waitForURL(base+'/');await gamePage.locator('#ban-title').waitFor();
+ for(const path of ['/','/enroll/','/api/madlibs/random','/api/pass','/matrix/config.json','/_matrix/client/v3/sync','/livekit/get_token','/proxy/luma/test.html','/verify-open.json','/games/kodys-keyboard/index.html','/swiftonion.onion']){
+  const response=await student.request.get(base+path);assert.equal(response.status(),403,'Banned access to '+path);
+ }
+ const marker=(await student.cookies()).find(cookie=>cookie.name==='mitch_ban');assert(marker?.httpOnly,'Ban marker must be HttpOnly.');
+ const markerOnly=await makeContext();await markerOnly.addCookies([marker]);
+ assert.equal((await markerOnly.request.get(base+'/game-portal/')).status(),403,'Removing the login cookie must not clear a ban.');
+ assert((await anon.request.get(base+'/game-portal/')).ok(),'Guest access must remain available.');
  const blocked=await student.request.get(base+'/api/presence/count');assert.equal(blocked.status(),403);
  const blockedData=await blocked.json();assert.equal(blockedData.banned,true);assert(blockedData.expiresAt>Date.now());
  assert((await page.locator('.ban-expiry').innerText()).startsWith('Ends '));
@@ -110,6 +130,7 @@ try {
  await page.locator('.ban-entry button').click();await page.waitForFunction(()=>document.getElementById('list-status').textContent.startsWith('Restored access'));
  await page.waitForFunction(()=>document.querySelectorAll('.ban-entry').length===0);
  assert((await student.request.get(base+'/api/presence/count')).ok(),'The same session must work after an unban.');
+ assert((await markerOnly.request.get(base+'/game-portal/')).ok(),'The ban marker must stop restricting access after an unban.');
  const noPass=await admin.request.post(base+'/api/admin/ban-account',{data:{email:'banstudent@student.rjuhsd.us',reason:'test'},headers:{'X-Mitch-Requested-With':'1'}});assert.equal(noPass.status(),403);
  const rebanned=await admin.request.post(base+'/api/admin/ban-account',{headers,data:{email:'banstudent@student.rjuhsd.us',reason:'alias restore test'}});assert(rebanned.ok());
  await page.locator('#restore-email').fill('Ban.Student+alias@student.mitch.pro');await page.locator('#restore-form button').click();
@@ -142,5 +163,5 @@ try {
  assert(await page.locator('.staff-panel-switcher a[href="/admin/bans/"]').isVisible());
  assert.equal(await page.locator('#ban-email').count(),0,'The main panel should link to the dedicated ban page.');
  assert.deepEqual(errors,[]);
- console.log('PASS: separate admin button, role/passphrase gates, real ban/unban, live disconnect, shared-network access, safe mixed-version rollout, required duration/reason, confirmation/cancel, Roblox-style notice, working appeal form, automatic expiry, alias restore, staff protection, and responsive themes.');
+ console.log('PASS: separate admin button, role/passphrase gates, real session cookies, ban/unban, live game and terminal disconnects, global route checks, login-cookie removal protection, guest access, shared-network access, safe mixed-version rollout, required duration/reason, confirmation/cancel, Roblox-style notice, working appeal form, automatic expiry, alias restore, staff protection, and responsive themes.');
 }finally{await browser.close();}

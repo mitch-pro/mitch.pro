@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mitch-pro-cache-v52';
+const CACHE_NAME = 'mitch-pro-cache-v53';
 const ASSETS = [
   '/favicon.ico',
   '/manifest.json',
@@ -41,6 +41,12 @@ self.addEventListener('activate', (e) => {
 // moves a waiting worker into control (activate's cleanup then purges old caches).
 self.addEventListener('message', (e) => {
   if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
+  if (e.data && e.data.type === 'ACCOUNT_BANNED') {
+    e.waitUntil(Promise.all([
+      caches.keys().then(keys => Promise.all(keys.map(key => caches.delete(key)))),
+      clients.matchAll({type:'window',includeUncontrolled:true}).then(windows => Promise.all(windows.filter(client => !/^\/appeal(?:\/|\.html|$)/.test(new URL(client.url).pathname)).map(client => client.navigate('/').catch(() => {}))))
+    ]));
+  }
 });
 
 function isHtmlRequest(request) {
@@ -89,23 +95,11 @@ const isThemeJs = requestUrl.pathname === '/theme.js';
       })
     );
   } else if (isHtmlRequest(e.request)) {
-    // Network-first for HTML pages — always get fresh content
-    e.respondWith(
-      fetch(e.request).then((response) => {
-        if (response && response.status === 200 && response.type === 'basic') {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
-        }
-        return response;
-      }).catch(async () => {
-        // Offline fallback: serve cached version if available
-        const cached = await caches.match(e.request);
-        return cached || new Response('<!DOCTYPE html><html><body>Offline</body></html>', {
-          status: 503,
-          headers: { 'Content-Type': 'text/html' }
-        });
-      })
-    );
+    // Page access must be checked by the server, including when offline.
+    e.respondWith(fetch(e.request, {cache:'no-store'}).catch(() => new Response(
+      '<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline</title><body><p>Connect to the internet to load this page.</p></body></html>',
+      {status:503,headers:{'Content-Type':'text/html','Cache-Control':'no-store'}}
+    )));
   } else {
     const pathname = requestUrl.pathname;
     const isCode = /\.(css|js|mjs|json)(\?|$)/.test(pathname);

@@ -129,22 +129,38 @@ async fn run_session(state: Arc<AppState>, socket: WebSocket, mut sess: SshSess)
         mpsc::UnboundedReceiver<GwEvent>,
     )> = None;
 
+    let mut ban_check = tokio::time::interval(Duration::from_secs(1));
     loop {
+        if mitch_lib::auth::banned_info_for_email(&state.store, &sess.email).is_some() {
+            let _ = client_sink
+                .send(Message::Close(Some(CloseFrame {
+                    code: 1008,
+                    reason: "Account banned".into(),
+                })))
+                .await;
+            break;
+        }
         // One select step; processing happens after the borrows are released.
         enum Step {
+            Tick,
             Gw(Option<GwEvent>),
             Client(Option<Result<Message, axum::Error>>),
         }
         let step = if let Some((_, gw_rx)) = gw.as_mut() {
             tokio::select! {
+                _ = ban_check.tick() => Step::Tick,
                 ev = gw_rx.recv() => Step::Gw(ev),
                 frame = client_stream.next() => Step::Client(frame),
             }
         } else {
-            Step::Client(client_stream.next().await)
+            tokio::select! {
+                _ = ban_check.tick() => Step::Tick,
+                frame = client_stream.next() => Step::Client(frame),
+            }
         };
 
         match step {
+            Step::Tick => continue,
             Step::Gw(Some(GwEvent::Frame(text))) => {
                 // JS upstream.onmessage → `ws.send(...)`.
                 if client_sink.send(Message::Text(text.into())).await.is_err() {

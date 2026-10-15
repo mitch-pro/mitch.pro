@@ -20,6 +20,7 @@ use axum::response::Response;
 use axum::Router;
 use std::sync::Arc;
 
+mod access;
 mod env_file;
 mod errors;
 mod handler;
