@@ -15,8 +15,8 @@ const server = readFileSync('server.js', 'utf8');
 
 assert(friends.includes('class="friends-summary"') && friends.includes('class="friend-actions"'), 'Friends needs the game-style connections layout');
 assert(friends.includes("document.getElementById('onlineCount')"), 'Friends needs a live online count');
-assert((coins.match(/class="earn-card"/g) || []).length >= 10, 'Coin wallet needs at least ten visible earning paths');
-assert(coinWidget.includes("widget.href = status === 'guest' ? '/enroll/' : '/coins/'"), 'Global wallet must open the MitchCoins hub');
+assert(coins.includes('http-equiv="refresh" content="0;url=https://beatdash.win/"'), 'Retired coin wallet must redirect to BeatDash');
+assert(coinWidget.includes("widget.href = status === 'guest' ? '/enroll/' : '/coins/'"), 'Global wallet must preserve its /coins/ entry point');
 
 for (const game of ['rock-paper-scissors', 'lucky-seven', 'color-card', 'triple-dice', 'plinko']) {
   assert(server.includes(`/api/casino/${game}`), `${game} needs a server-side casino route`);
