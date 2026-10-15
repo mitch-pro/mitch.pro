@@ -13,7 +13,7 @@
 <title>mitch.pro</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"></noscript>
 <link rel="stylesheet" href="/app.css">
-<link rel="stylesheet" href="/home.css?v=7">
+<link rel="stylesheet" href="/home.css?v=8">
 <script src="/app-shell.js" defer></script>
 <script src="/home-friends.js?v=3" defer></script>
 <script>
@@ -203,7 +203,6 @@ function categoryForLabel(label, isAdmin) {
 
 function describeCategory(cat) {
   return ({
-    'Popular & Frequent': 'Your most used and globally popular pages',
     'Admin': 'Private controls and advanced tools',
     'MitchCoin Games': 'Play and earn verified MitchCoins',
     'Entertainment': 'Games, canvas, media, and fun stuff',
@@ -301,30 +300,9 @@ function parseSites(text) {
     categories[cat].push(makeSiteLink(type, href, label, isAdmin ? 'admin-site-link' : ''));
   }
 
-  // ── Popular & Frequent links ──
-  var popularHrefs = [
-    '/blooket-bot/', '/blooket-bot',
-    '/preferences/', '/preferences',
-    '/inventory/', '/inventory',
-    '/blog/', '/blog',
-    '/members/', '/members',
-    '/feedback/', '/feedback',
-    '/friends/', '/friends',
-    '/leaderboard/', '/leaderboard',
-    '/games/jeopardy-battle/', '/games/jeopardy-battle',
-    '/games/battleship/', '/games/battleship',
-    '/casino/', '/casino',
-    '/canvas/', '/canvas',
-    '/matrix/', '/matrix',
-    '/encrypt/', '/encrypt',
-    '/shop/', '/shop',
-    '/public-chat/', '/public-chat',
-    '/marketplace/', '/marketplace'
-  ];
   updateHomeCounts(entries, categories);
   renderQuickActions(entries);
   window.cachedEntries = entries;
-  updatePopularLaunches();
 
   var categoryPriority = {
     'Social & Chat': 0,
@@ -335,8 +313,6 @@ function parseSites(text) {
     'Admin': 5
   };
   var sortedCats = Object.keys(categories).sort(function(a, b) {
-    if (a === 'Popular & Frequent') return -1;
-    if (b === 'Popular & Frequent') return 1;
     var priorityA = Object.prototype.hasOwnProperty.call(categoryPriority, a) ? categoryPriority[a] : 99;
     var priorityB = Object.prototype.hasOwnProperty.call(categoryPriority, b) ? categoryPriority[b] : 99;
     if (priorityA !== priorityB) return priorityA - priorityB;
@@ -348,8 +324,6 @@ function parseSites(text) {
   for (var j = 0; j < sortedCats.length; j++) {
     var catName = sortedCats[j];
     if (categories[catName].length === 0) continue;
-    // Popular lives in the hub strip — avoid duplicating the full list below
-    if (catName === 'Popular & Frequent') continue;
     var catDiv = document.createElement('section');
     catDiv.className = 'category-group' + (catName === 'Admin' ? ' admin-category' : '');
     catDiv.dataset.category = catName.toLowerCase();
@@ -368,23 +342,6 @@ function parseSites(text) {
   filterHomeLinks();
   window.cachedEntries = entries;
   updateRecommendation(entries);
-}
-
-function renderPopularStrip(entries) {
-  var strip = document.getElementById('popular-strip');
-  var wrap = document.getElementById('popular-hub');
-  if (!strip) return;
-  strip.innerHTML = '';
-  var list = (entries || []).slice(0, 30);
-  if (!list.length) {
-    strip.innerHTML = '<p class="popular-empty">Your frequent pages will show up here.</p>';
-    if (wrap) wrap.hidden = false;
-    return;
-  }
-  list.forEach(function(e) {
-    strip.appendChild(makeSiteLink(e.type, e.href, e.label, 'popular-site-link hub-popular-link'));
-  });
-  if (wrap) wrap.hidden = false;
 }
 
 function openMembersRail(event) {
@@ -654,123 +611,6 @@ document.addEventListener('keydown', function(e) {
     eSuppressed = true;
   }
 });
-
-var _topEntries = [], _topStats = {}, _featuredGame = '';
-
-function updatePopularLaunches() {
-  var visits = {};
-  try { visits = JSON.parse(localStorage.getItem('_prefVisits') || '{}'); } catch(e) {}
-  var _homePref = {};
-  try { _homePref = JSON.parse(localStorage.getItem('_prefHomepage') || '{}'); } catch(e) {}
-  var _pinned = new Set(_homePref.pinnedGames || []);
-
-  var popularHrefs = [
-    '/chat/', '/chat',
-    '/blooket-bot/', '/blooket-bot',
-    '/preferences/', '/preferences',
-    '/inventory/', '/inventory',
-    '/blog/', '/blog',
-    '/members/', '/members',
-    '/feedback/', '/feedback',
-    '/friends/', '/friends',
-    '/leaderboard/', '/leaderboard',
-    '/games/jeopardy-battle/', '/games/jeopardy-battle',
-    '/games/battleship/', '/games/battleship',
-    '/casino/', '/casino',
-    '/canvas/', '/canvas',
-    '/matrix/', '/matrix',
-    '/encrypt/', '/encrypt',
-    '/shop/', '/shop',
-    '/public-chat/', '/public-chat',
-    '/marketplace/', '/marketplace',
-    '/tabs/', '/tabs',
-    'https://rjuhsd.school/', 'https://rjuhsd.school',
-    '/games/adrian-clicker/', '/games/adrian-clicker',
-    '/games/kodys-keyboard/', '/games/kodys-keyboard',
-    '/games/lillians-logic/', '/games/lillians-logic',
-    '/games/richards-riches/', '/games/richards-riches',
-    '/games/pennys-piano-keys/', '/games/pennys-piano-keys',
-    '/games/sebastians-piccolo/', '/games/sebastians-piccolo'
-  ];
-
-  var allEntries = [];
-  var seenHrefs = new Set();
-  function addEntry(e) {
-    if (!e || !e.href) return;
-    var norm = e.href.replace(/\/$/, '');
-    if (seenHrefs.has(norm)) return;
-    seenHrefs.add(norm);
-    allEntries.push(e);
-  }
-
-  (window.cachedEntries || []).forEach(addEntry);
-  (_topEntries || []).forEach(addEntry);
-
-  function getScore(entry) {
-    var href = entry.href;
-    var normHref = href.endsWith('/') ? href : href + '/';
-    var normHref2 = href.endsWith('/') ? href.slice(0, -1) : href;
-    var rawHref = href.replace(/^\/games\//, '').replace(/\/$/, '');
-
-    var isPinned = _pinned.has(href) || _pinned.has(normHref) || _pinned.has(normHref2) || _pinned.has(rawHref);
-    if (isPinned) return 10000000;
-
-    var localVisits = visits[normHref] || visits[normHref2] || visits[href] || visits[rawHref] || 0;
-    var globalVisits = _gameVisits(href) || _gameVisits(normHref) || _gameVisits(normHref2) || _gameVisits(rawHref) || 0;
-    var isDefaultPopular = popularHrefs.includes(normHref) || popularHrefs.includes(normHref2) || popularHrefs.includes(href);
-
-    return (localVisits * 20) + globalVisits + (isDefaultPopular ? 100 : 0);
-  }
-
-  var candidates = allEntries.filter(function(e) {
-    if (e.isAdmin) return false;
-    return getScore(e) > 0;
-  }).sort(function(a, b) {
-    return getScore(b) - getScore(a);
-  });
-
-  renderPopularStrip(candidates);
-}
-
-async function loadTopGames() {
-  var c = new URLSearchParams(document.cookie.replaceAll('; ', '&'));
-  var hash = c.get('studentId') || c.get('password');
-  var [gamesRes, statsRes] = await Promise.all([
-    fetch('/api/games', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({hash, limit: 100})}).catch(()=>null),
-    fetch('/api/game-stats').catch(()=>null),
-  ]);
-  if (statsRes) {
-    if (statsRes.ok) _topStats = ((await statsRes.json().catch(()=>({}))).stats) || {};
-    else statsRes.text().catch(()=>{});
-  }
-  if (gamesRes) {
-    if (gamesRes.ok) {
-      var gameData = await gamesRes.json().catch(()=>({}));
-      var text = gameData.content || '';
-      _topEntries = [];
-      text.split('\n').forEach(function(line) {
-        line = line.trim();
-        if (!line) return;
-        var parts = line.split(' ');
-        if (parts.length < 3) return;
-        var type = parts[0], href = parts[1];
-        var label = parts.slice(2).join(' ').replace(/<[^>]*>/g, '').trim();
-        if (!label || href === '/report-game.html') return;
-        _topEntries.push({type: type, href: _gameHref(href), label: label, isAdmin: false, category: 'MitchCoin Games'});
-      });
-    }
-    updatePopularLaunches();
-  }
-}
-
-function _gameVisits(href) {
-  return _topStats['/games/' + href] || _topStats[href] || 0;
-}
-
-function _gameHref(href) {
-  if (href.startsWith('http') || href.startsWith('/')) return href;
-  return '/games/' + href;
-}
 
 function renderTopGames() {
 }
@@ -1698,7 +1538,6 @@ async function initHome() {
   setupAboutBlankToggle();
   applyHomepagePrefs();
   loadSites();
-  loadTopGames();
   loadGreeting();
   setupAdminPanel();
   loadDailyLoginState();
@@ -3320,8 +3159,8 @@ if (document.readyState === 'loading') {
         <button type="button" class="hub-action hub-daily mitch-coin-amount" id="hub-daily-chip" hidden>Daily claim</button>
       </nav>
 
-  <!-- Bottom bar: quick controls, stats, and popular launches - one horizontal strip -->
-  <section class="home-bottom-bar" aria-label="Quick controls and popular launches">
+  <!-- Bottom bar: quick controls and stats, one horizontal strip -->
+  <section class="home-bottom-bar" aria-label="Quick controls">
     <div id="abToggleBar" class="bottom-bar-item">
       <span class="control-logo"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
       <span class="control-copy"><b>Stealth launch</b><small>Open in about:blank</small></span>
@@ -3335,12 +3174,6 @@ if (document.readyState === 'loading') {
       <span class="control-copy"><b>Preferences</b><small>Theme, display, privacy</small></span><span class="control-arrow">→</span>
     </a>
     <div id="stats-bar" class="bottom-bar-item"></div>
-    <div class="bottom-bar-item bottom-bar-popular">
-      <span class="bottom-bar-label">Popular</span>
-      <div id="popular-strip" class="popular-strip">
-        <p class="popular-empty">Loading…</p>
-      </div>
-    </div>
   </section>
 </div>
 

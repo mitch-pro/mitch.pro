@@ -369,11 +369,11 @@ body.home:is(.is-staff, .is-admin) .staff-access-rail { display: flex; }
 .site-link.admin-site-link { color: #dc2626; }
 .site-link.admin-site-link .icon { color: #dc2626; }
 .site-link.disabled-site-link { opacity: 0.4; pointer-events: none; }
-.quick-helper, .quick-empty, .popular-empty, .side-empty, #links-empty { font-size: 0.78rem; color: var(--mh-ink-soft); }
+.quick-helper, .quick-empty, .side-empty, #links-empty { font-size: 0.78rem; color: var(--mh-ink-soft); }
 
 /* --------------------------------------------------------------------------
-   Bottom bar — quick controls, stats, and popular launches, one
-   horizontal strip instead of a vertical aside column.
+   Bottom bar — quick controls and stats, one horizontal strip instead
+   of a vertical aside column.
    -------------------------------------------------------------------------- */
 
 .home-bottom-bar {
@@ -397,11 +397,6 @@ body.home:is(.is-staff, .is-admin) .staff-access-rail { display: flex; }
 .toggle-switch input:checked + .toggle-slider { background: var(--mh-accent); }
 .toggle-switch input:checked + .toggle-slider::before { transform: translate(14px, -50%); }
 .toggle-switch input:focus-visible + .toggle-slider { outline: 2px solid var(--mh-accent); outline-offset: 2px; }
-
-.bottom-bar-popular { flex: 1 1 260px; min-width: 0; gap: 0.7rem; }
-.bottom-bar-label { flex-shrink: 0; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mh-ink-faint); }
-.popular-strip { display: flex; align-items: center; gap: 1rem; min-width: 0; overflow-x: auto; }
-.popular-strip .site-link { flex-shrink: 0; padding: 0; }
 
 /* --------------------------------------------------------------------------
    Member rail (left flyover)
@@ -511,7 +506,6 @@ body.home:is(.is-staff, .is-admin) .staff-access-rail { display: flex; }
   .home-features { grid-template-columns: 1fr; }
   .category-grid { grid-template-columns: 1fr 1fr; }
   .home-bottom-bar { flex-direction: column; align-items: stretch; gap: 1rem; }
-  .bottom-bar-popular { flex-basis: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
