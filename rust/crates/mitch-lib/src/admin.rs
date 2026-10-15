@@ -572,10 +572,17 @@ pub fn clean_moderator_action_payload(
             "type": trim_slice(s("type").trim(), 30),
         })),
         "shadow_ban" => Ok(json!({ "email": canonical_email(p.get("email"), "email")? })),
-        "ban_account" => Ok(json!({
-            "email": canonical_email(p.get("email"), "email")?,
-            "reason": trim_slice(s("reason").trim(), 200),
-        })),
+        "ban_account" => {
+            crate::bans::duration_millis(p.get("duration"))
+                .map_err(|error| AdminActionError::new(400, error))?;
+            let reason = crate::bans::required_reason(s("reason"))
+                .map_err(|error| AdminActionError::new(400, error))?;
+            Ok(json!({
+                "email": canonical_email(p.get("email"), "email")?,
+                "reason": reason,
+                "duration": p.get("duration").and_then(Value::as_str).unwrap_or("permanent"),
+            }))
+        }
         "unban_account" => Ok(json!({ "email": canonical_email(p.get("email"), "email")? })),
         "casino_rig" => Ok(json!({
             "chance": p.get("chance").and_then(|v| v.as_f64()).unwrap_or(f64::NAN),

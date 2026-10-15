@@ -118,6 +118,13 @@ impl DataStore {
         conn.pragma_update(None, "synchronous", "NORMAL")?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
 
+        // A pre-existing table has already imported legacy bans. Reimporting
+        // the old document would reinstate accounts that staff restored.
+        let import_legacy_bans = !conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'blacklist')",
+            [], |row| row.get::<_, bool>(0),
+        )?;
+
         // initTablesWithRetry: 10 attempts, 100ms * attempt backoff on BUSY.
         let init_tables = |conn: &rusqlite::Connection| -> Result<(), rusqlite::Error> {
             for attempt in 0..10u32 {
@@ -228,7 +235,8 @@ impl DataStore {
                         email TEXT PRIMARY KEY,
                         reason TEXT NOT NULL DEFAULT 'Banned by admin',
                         banned_at INTEGER NOT NULL,
-                        banned_by TEXT NOT NULL DEFAULT 'admin'
+                        banned_by TEXT NOT NULL DEFAULT 'admin',
+                        expires_at INTEGER
                     );
                     CREATE TABLE IF NOT EXISTS banned_ips (
                         ip TEXT PRIMARY KEY,
@@ -386,6 +394,15 @@ impl DataStore {
             Ok(())
         };
         init_tables(&conn)?;
+        let has_ban_expiry = conn
+            .prepare("PRAGMA table_info(blacklist)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+            .iter()
+            .any(|name| name == "expires_at");
+        if !has_ban_expiry {
+            conn.execute("ALTER TABLE blacklist ADD COLUMN expires_at INTEGER", [])?;
+        }
 
         // Repairs rows written before upsert_values' INSERT started
         // wrapping template_vmid in NULLIF(?, '') — a record with no
@@ -411,7 +428,9 @@ impl DataStore {
             app_log_writes: std::sync::atomic::AtomicUsize::new(0),
         };
         store.backfill_coins_table_from_json();
-        store.backfill_blacklist_table_from_json();
+        if import_legacy_bans {
+            store.backfill_blacklist_table_from_json()?;
+        }
         store.backfill_banned_ips_table_from_json();
         store.backfill_names_table_from_json();
         store.backfill_invite_tables_from_json();
@@ -472,16 +491,17 @@ impl DataStore {
     /// `by` vs `admin`) and units (`banned_at` was always milliseconds, but
     /// one `blacklisted_at` writer used seconds) — `normalize_legacy_ts`
     /// below resolves both.
-    fn backfill_blacklist_table_from_json(&self) {
+    fn backfill_blacklist_table_from_json(&self) -> rusqlite::Result<()> {
         let bl = self.read_document(&self.base_dir.join("data/blacklist.json"), Value::Null);
         let Some(map) = bl.as_object() else {
-            return;
+            return Ok(());
         };
         if map.is_empty() {
-            return;
+            return Ok(());
         }
         let now = now_millis();
         let conn = self.conn();
+        let tx = conn.unchecked_transaction()?;
         for (email, info) in map {
             let reason = info
                 .get("reason")
@@ -500,11 +520,12 @@ impl DataStore {
                 .and_then(|v| v.as_str())
                 .unwrap_or("admin")
                 .to_string();
-            let _ = conn.execute(
+            tx.execute(
                 "INSERT OR IGNORE INTO blacklist (email, reason, banned_at, banned_by) VALUES (?1, ?2, ?3, ?4)",
                 rusqlite::params![email, reason, banned_at, banned_by],
-            );
+            )?;
         }
+        tx.commit()
     }
 
     /// One-time (idempotent) backfill from banned_ips.json into the real

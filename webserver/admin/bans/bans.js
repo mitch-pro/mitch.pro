@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  let bans = [], busy = false, setup = false;
+  let bans = [], busy = false, setup = false, pendingBan = null;
   function headers() {
     const result = {'Content-Type':'application/json','X-Mitch-Requested-With':'1'};
     const pass = sessionStorage.getItem('admin_passphrase');
@@ -54,7 +54,10 @@
       const meta = document.createElement('small');
       const date = new Date(ban.bannedAt);
       meta.textContent = [ban.by ? 'By '+ban.by : '', Number.isFinite(date.getTime()) ? date.toLocaleString() : ''].filter(Boolean).join(' · ');
-      copy.append(email,reason,meta);
+      const expiry = document.createElement('small');
+      expiry.className = 'ban-expiry';
+      expiry.textContent = ban.expiresAt ? 'Ends '+new Date(ban.expiresAt).toLocaleString() : 'Permanent ban';
+      copy.append(email,reason,meta,expiry);
       const restore = document.createElement('button');restore.type='button';restore.textContent='Restore access';restore.disabled=busy;
       restore.addEventListener('click',()=>changeBan(false,ban.email,'','list-status'));
       row.append(copy,restore);list.append(row);
@@ -68,12 +71,11 @@
     $('bans-workspace').hidden = false;
     status('access-status','Admin access verified.');
   }
-  async function changeBan(ban, email, reason, output) {
+  async function changeBan(ban, email, reason, output, duration) {
     if (busy) return;
-    if (ban && !confirm('Ban '+email+'? This account will lose website access until restored.')) return;
     setBusy(true);status(output,ban?'Saving ban…':'Restoring access…');
     try {
-      const data = await request(ban?'/api/admin/ban-account':'/api/admin/unban-account',{method:'POST',body:JSON.stringify({email,reason})});
+      const data = await request(ban?'/api/admin/ban-account':'/api/admin/unban-account',{method:'POST',body:JSON.stringify({email,reason,...(ban?{duration}:{})})});
       if (data.pending) throw new Error('This action requires admin approval.');
       status(output,ban?'Banned '+data.targetEmail+'.':(data.existed?'Restored access for ':'No account ban found for ')+data.targetEmail+'.');
       if (ban) $('ban-form').reset();
@@ -83,7 +85,22 @@
       if (['invalid_passphrase','passphrase_not_configured'].includes(error.code)) {setup=error.code==='passphrase_not_configured';showLock();}
     } finally {setBusy(false);}
   }
-  $('ban-form').addEventListener('submit',event=>{event.preventDefault();changeBan(true,$('ban-email').value.trim(),$('ban-reason').value.trim(),'ban-status');});
+  $('ban-form').addEventListener('submit',event=>{
+    event.preventDefault();
+    if (busy) return;
+    const email=$('ban-email').value.trim(),reason=$('ban-reason').value.trim(),duration=$('ban-duration').value;
+    if (!reason) {status('ban-status','Enter a reason for the ban.',true);$('ban-reason').focus();return;}
+    pendingBan={email,reason,duration};
+    $('confirm-email').textContent=email;
+    $('confirm-duration').textContent=$('ban-duration').selectedOptions[0].textContent;
+    $('confirm-reason').textContent=reason;
+    $('ban-confirm').returnValue='cancel';
+    $('ban-confirm').showModal();
+  });
+  $('ban-confirm').addEventListener('close',()=>{
+    const ban=pendingBan;pendingBan=null;
+    if ($('ban-confirm').returnValue==='ban'&&ban) changeBan(true,ban.email,ban.reason,'ban-status',ban.duration);
+  });
   $('restore-form').addEventListener('submit',event=>{event.preventDefault();changeBan(false,$('restore-email').value.trim(),'','restore-status');});
   $('ban-search').addEventListener('input',render);
   $('refresh-bans').addEventListener('click',async()=>{

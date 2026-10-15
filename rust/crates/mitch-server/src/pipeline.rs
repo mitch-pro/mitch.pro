@@ -21,6 +21,21 @@ pub fn inject_page(
 ) -> String {
     let cfg: &SiteConfig = &state.cfg;
     let mut raw = std::mem::take(html);
+    if raw.contains("data-presentation=\"account-notice\"") {
+        let key = std::env::var("RECAPTCHA_SITE_KEY").unwrap_or_default();
+        if !key.trim().is_empty() {
+            let host = std::env::var("RECAPTCHA_SCRIPT_HOST")
+                .unwrap_or_else(|_| "www.recaptcha.net".into());
+            raw = raw.replacen(
+                "</head>",
+                &format!("{}</head>", recaptcha_loader_str(&host, key.trim())),
+                1,
+            );
+        }
+        raw = crate::inject::inject_credit(&raw, crate::hosts::is_rjuhsd_host(headers));
+        *html = raw.clone();
+        return raw;
+    }
     let is_onboarding = raw.contains("data-presentation=\"onboarding\"");
 
     let mut inject_str = String::new();

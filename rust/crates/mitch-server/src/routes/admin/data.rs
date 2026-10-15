@@ -433,6 +433,9 @@ async fn appeal(state: &Arc<AppState>, body: &Value) -> Response {
         .cloned()
         .unwrap_or_default();
     if action == "approve" {
+        if let Err((status, error)) = super::moderation::restore_account_access(state, email) {
+            return json_response(status, json!({ "error":error }));
+        }
         let revoked = mitch_lib::revoked::revoked_all(&state.store);
         if let Some(map) = revoked.as_object() {
             for (sid, rec) in map {

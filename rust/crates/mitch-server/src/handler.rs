@@ -26,6 +26,7 @@ pub const HTML_OPEN: &[&str] = &[
     "/claim",
     "/password",
     "/appeal",
+    "/appeal/index",
     "/unsubscribe",
     "/admin",
     "/faq",
@@ -713,18 +714,8 @@ pub async fn handle(
     {
         let ip = get_real_ip(headers, None);
         if let Some(ip_ban) = mitch_lib::auth::banned_info_for_ip(&state.store, &ip) {
-            if !BAN_OPEN_PATHS.contains(&path.as_str()) {
-                let reason = ip_ban
-                    .get("reason")
-                    .and_then(|v| v.as_str())
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or("This IP address is banned from the website.");
-                let by = ip_ban
-                    .get("by")
-                    .and_then(|v| v.as_str())
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or("site admin");
-                return banned_response(reason, by);
+            if !ban_open_path(&path) {
+                return crate::errors::banned_response(&ip_ban, is_rjuhsd_host(headers));
             }
         }
 
@@ -924,7 +915,7 @@ pub async fn handle(
         if let Some(ban) =
             mitch_lib::auth::banned_info_for_sid(&state.store, &state.id_secret, &sid)
         {
-            if !BAN_OPEN_PATHS.contains(&path.as_str()) {
+            if !ban_open_path(&path) {
                 if path.starts_with("/api/") {
                     let reason = ban
                         .get("reason")
@@ -939,25 +930,12 @@ pub async fn handle(
                             "banned": true,
                             "error": "account banned",
                             "reason": reason,
+                            "bannedAt": ban.get("banned_at"),
+                            "expiresAt": ban.get("expires_at"),
                         }),
                     );
                 }
-                let reason = ban
-                    .get("reason")
-                    .and_then(|v| v.as_str())
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or("This account is banned from the website.");
-                let by = ban
-                    .get("by")
-                    .and_then(|v| v.as_str())
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or_else(|| {
-                        ban.get("admin")
-                            .and_then(|v| v.as_str())
-                            .filter(|s| !s.is_empty())
-                            .unwrap_or("site admin")
-                    });
-                return banned_response(reason, by);
+                return crate::errors::banned_response(&ban, is_rjuhsd_host(headers));
             }
         }
     }
@@ -1016,7 +994,7 @@ pub async fn handle(
         .unwrap_or(public_help_base);
     let is_exempt = matches!(
         public_help_base,
-        "/faq" | "/privacy" | "/use-agreement" | "/cookies" | "/copyright"
+        "/faq" | "/privacy" | "/use-agreement" | "/cookies" | "/copyright" | "/appeal"
     ) || clean_path == "/enroll"
         || clean_path == "/api/me/coins"
         || clean_path == "/larp"
@@ -1660,17 +1638,7 @@ pub async fn handle(
             .unwrap_or("");
         if let Some(ban) = mitch_lib::auth::banned_info_for_sid(&state.store, &state.id_secret, sid)
         {
-            let reason = ban
-                .get("reason")
-                .and_then(|v| v.as_str())
-                .filter(|s| !s.is_empty())
-                .unwrap_or("This account is banned from the website.");
-            let by = ban
-                .get("by")
-                .and_then(|v| v.as_str())
-                .filter(|s| !s.is_empty())
-                .unwrap_or("site admin");
-            return banned_response(reason, by);
+            return crate::errors::banned_response(&ban, is_rjuhsd_host(headers));
         }
         if !state.check_password_cookie(headers, None)
             && path != "/"
@@ -1905,17 +1873,7 @@ pub async fn handle(
             .unwrap_or("");
         if let Some(ban) = mitch_lib::auth::banned_info_for_sid(&state.store, &state.id_secret, sid)
         {
-            let reason = ban
-                .get("reason")
-                .and_then(|v| v.as_str())
-                .filter(|s| !s.is_empty())
-                .unwrap_or("This account is banned from the website.");
-            let by = ban
-                .get("by")
-                .and_then(|v| v.as_str())
-                .filter(|s| !s.is_empty())
-                .unwrap_or("site admin");
-            return banned_response(reason, by);
+            return crate::errors::banned_response(&ban, is_rjuhsd_host(headers));
         }
         return redirect("/enroll/", 302);
     }
@@ -1951,7 +1909,29 @@ fn html_response(html: String) -> Response {
 }
 
 /// `banOpenPaths` — server.js:7605. Exact-path matches only.
-const BAN_OPEN_PATHS: &[&str] = &["/appeal.html", "/api/appeal", "/api/pass"];
+fn ban_open_path(path: &str) -> bool {
+    matches!(
+        path,
+        "/appeal"
+            | "/appeal/"
+            | "/appeal/index.html"
+            | "/appeal.html"
+            | "/api/appeal"
+            | "/api/pass"
+            | "/open.css"
+            | "/app.css"
+            | "/popup.js"
+            | "/pwa-install.js"
+            | "/site-theme.js"
+            | "/theme.js"
+            | "/cookie-consent.js"
+            | "/site-status.js"
+            | "/favicon.ico"
+            | "/icon-192.png"
+            | "/apple-touch-icon.png"
+            | "/manifest.json"
+    )
+}
 
 /// `authenticatedVmActor(req)` — server.js:25606. Valid non-revoked sid whose
 /// password cookie matches, with a normalized email; returns (sid, email,
@@ -1994,47 +1974,6 @@ fn authenticated_vm_actor(
     let is_admin =
         mitch_lib::auth::is_admin_id(&state.store, &state.id_secret, &sid, node_env_test);
     Some((sid, norm, is_admin))
-}
-
-/// `bannedResponse(info)` — server.js:5004. 403 HTML ban page with an alert
-/// script; `reason`/`by` are HTML-escaped, the alert text is JSON-escaped
-/// with `<` rewritten to the `<` sequence (matching the JS).
-fn banned_response(reason: &str, by: &str) -> Response {
-    let reason_esc = crate::errors::html_esc(reason);
-    let by_esc = crate::errors::html_esc(by);
-    let alert_raw = format!("This account is banned from the website. Reason: {reason}");
-    let alert_json = serde_json::to_string(&alert_raw).unwrap_or("\"\"".into());
-    let alert_text = alert_json.replace('<', "\\u003c");
-    let html = format!(
-        r#"<!DOCTYPE html><html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Account Banned</title>
-<style>
-body{{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#111318;color:#f8fafc;font-family:system-ui,sans-serif;padding:24px;}}
-.modal{{width:min(440px,100%);background:#1b1f2a;border:1px solid rgba(248,113,113,.35);border-radius:14px;box-shadow:0 24px 80px rgba(0,0,0,.45);padding:24px;text-align:center;}}
-.badge{{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:999px;background:rgba(239,68,68,.14);color:#fecaca;font-weight:900;margin-bottom:14px;}}
-h1{{font-size:1.35rem;margin:0 0 10px;}}
-p{{color:#cbd5e1;line-height:1.5;margin:0 0 12px;font-size:.94rem;}}
-.reason{{background:#111827;border:1px solid rgba(148,163,184,.18);border-radius:10px;padding:12px;margin:14px 0;color:#e5e7eb;text-align:left;}}
-.small{{font-size:.78rem;color:#94a3b8;}}
-button{{margin-top:8px;border:0;border-radius:9px;background:#ef4444;color:white;padding:10px 16px;font-weight:700;cursor:pointer;}}
-</style></head><body>
-<div class="modal" role="dialog" aria-modal="true" aria-labelledby="ban-title">
-  <div class="badge">!</div>
-  <h1 id="ban-title">This account is banned from the website</h1>
-  <p>Your account cannot access mitch.pro right now.</p>
-  <div class="reason"><strong>Reason:</strong><br>{reason_esc}</div>
-  <p class="small">Issued by {by_esc}. Contact site staff if you think this was a mistake.</p>
-  <button onclick="location.href='/appeal.html'">Appeal ban</button>
-</div>
-<script>alert({alert_text});</script>
-</body></html>"#,
-    );
-    Response::builder()
-        .status(StatusCode::FORBIDDEN)
-        .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")
-        .body(axum::body::Body::from(html))
-        .expect("static response")
 }
 
 /// `csrfFailureIfUnsafe` — only mutating /api/ requests, minus the exempt set.

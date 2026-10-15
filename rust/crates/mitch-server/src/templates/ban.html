@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>{{title}} — mitch.pro</title>
+<style>
+:root{color-scheme:light;font-family:Arial,Helvetica,sans-serif;color:#24262a;background:#f2f3f5}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;flex-direction:column}
+header{min-height:62px;padding:19px 28px;background:#fff;border-bottom:1px solid #d8dadd;font-size:21px;font-weight:800;letter-spacing:-.7px}
+main{width:min(620px,calc(100% - 32px));margin:64px auto;flex:1}
+.notice{background:#fff;border:1px solid #d4d6d9;border-radius:4px;padding:32px}
+h1{font-size:32px;line-height:1.15;margin:0 0 22px;font-weight:800;letter-spacing:-.6px}
+p{font-size:15px;line-height:1.6;margin:16px 0}
+.review{color:#555960;font-size:13px}
+.reason{border:1px solid #d4d6d9;background:#f7f7f8;padding:18px 20px;margin:22px 0}
+.reason strong{font-size:14px}
+.reason p{margin:8px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
+.actions a{min-height:42px;display:inline-flex;align-items:center;justify-content:center;padding:10px 20px;border:1px solid #a9acb2;border-radius:5px;color:#303238;text-decoration:none;font-size:14px;font-weight:700}
+.actions .primary{background:#303238;border-color:#303238;color:#fff}
+.actions a:hover{background:#e9eaec}.actions .primary:hover{background:#45484e}
+a:focus-visible{outline:3px solid #3276d2;outline-offset:3px}
+.help{font-size:13px;color:#62666d;margin:22px 0 0}
+@media(max-width:520px){header{padding-inline:20px}main{margin:28px auto}.notice{padding:24px 20px}h1{font-size:28px}.reason{padding:16px}.actions a{flex:1}}
+</style>
+</head>
+<body>
+<header>mitch.pro</header>
+<main>
+<section class="notice" aria-labelledby="ban-title">
+<h1 id="ban-title">{{title}}</h1>
+<p>Your account has been suspended from mitchdog.com.</p>
+{{review}}
+<div class="reason"><strong>Moderator note</strong><p id="ban-reason">{{reason}}</p></div>
+<p>{{return}}</p>
+<p class="help">If you think this was a mistake, you can ask staff to review your ban.</p>
+<div class="actions"><a class="primary" href="/appeal/">Appeal ban</a><a href="/">Check access</a></div>
+</section>
+</main>
+</body>
+</html>

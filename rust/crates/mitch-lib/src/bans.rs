@@ -9,6 +9,7 @@
 //! not) and existing rows are carried over as-is rather than rekeyed.
 
 use crate::data::DataStore;
+use rusqlite::OptionalExtension;
 use serde_json::{json, Value};
 
 fn now_millis() -> i64 {
@@ -25,18 +26,57 @@ pub fn blacklist_insert(
     reason: &str,
     banned_by: &str,
 ) -> rusqlite::Result<()> {
+    blacklist_insert_until(store, email, reason, banned_by, None)
+}
+
+/// Replace an account's ban, including legacy aliases. None means permanent.
+pub fn blacklist_insert_until(
+    store: &DataStore,
+    email: &str,
+    reason: &str,
+    banned_by: &str,
+    expires_at: Option<i64>,
+) -> rusqlite::Result<()> {
     let conn = store.conn();
-    conn.execute(
-        "INSERT INTO blacklist (email, reason, banned_at, banned_by) VALUES (?1, ?2, ?3, ?4)
-         ON CONFLICT(email) DO UPDATE SET reason = ?2, banned_at = ?3, banned_by = ?4",
-        rusqlite::params![
-            crate::auth::normalize_email(email),
-            reason,
-            now_millis(),
-            banned_by
-        ],
+    let keys = matching_keys(&conn, email)?;
+    let tx = conn.unchecked_transaction()?;
+    for key in keys {
+        tx.execute("DELETE FROM blacklist WHERE email = ?1", [key])?;
+    }
+    tx.execute(
+        "INSERT INTO blacklist (email, reason, banned_at, banned_by, expires_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![crate::auth::normalize_email(email), reason, now_millis(), banned_by, expires_at],
     )?;
-    Ok(())
+    tx.commit()
+}
+
+/// Missing duration keeps older admin clients' permanent-ban behavior.
+pub fn duration_millis(value: Option<&Value>) -> Result<Option<i64>, &'static str> {
+    let duration = match value {
+        None => "permanent",
+        Some(value) => value.as_str().ok_or("Choose a valid ban duration.")?,
+    };
+    let hours = match duration {
+        "1h" => 1,
+        "1d" => 24,
+        "3d" => 72,
+        "7d" => 168,
+        "14d" => 336,
+        "permanent" => return Ok(None),
+        _ => return Err("Choose a valid ban duration."),
+    };
+    Ok(Some(hours * 60 * 60 * 1000))
+}
+
+pub fn required_reason(reason: &str) -> Result<String, &'static str> {
+    let reason = reason.trim();
+    if reason.is_empty() {
+        return Err("Enter a reason for the ban.");
+    }
+    if reason.chars().count() > 200 {
+        return Err("Keep the ban reason to 200 characters or fewer.");
+    }
+    Ok(reason.to_string())
 }
 
 fn matching_keys(conn: &rusqlite::Connection, email: &str) -> rusqlite::Result<Vec<String>> {
@@ -73,13 +113,14 @@ pub fn blacklist_get(store: &DataStore, norm_email: &str, raw_email: &str) -> Op
     let conn = store.conn();
     let lookup = |key: &str| -> Option<Value> {
         conn.query_row(
-            "SELECT reason, banned_by, banned_at FROM blacklist WHERE email = ?1",
-            rusqlite::params![key],
+            "SELECT reason, banned_by, banned_at, expires_at FROM blacklist WHERE email = ?1 AND (expires_at IS NULL OR expires_at > ?2)",
+            rusqlite::params![key, now_millis()],
             |r| {
                 Ok(json!({
                     "reason": r.get::<_, String>(0)?,
                     "by": r.get::<_, String>(1)?,
                     "banned_at": r.get::<_, i64>(2)?,
+                    "expires_at": r.get::<_, Option<i64>>(3)?,
                 }))
             },
         )
@@ -99,23 +140,65 @@ pub fn blacklist_get(store: &DataStore, norm_email: &str, raw_email: &str) -> Op
 pub fn blacklist_all(store: &DataStore) -> Vec<Value> {
     let conn = store.conn();
     let mut stmt = match conn.prepare(
-        "SELECT email, reason, banned_at, banned_by FROM blacklist ORDER BY banned_at DESC",
+        "SELECT email, reason, banned_at, banned_by, expires_at FROM blacklist WHERE expires_at IS NULL OR expires_at > ?1 ORDER BY banned_at DESC",
     ) {
         Ok(s) => s,
         Err(_) => return Vec::new(),
     };
-    let rows = stmt.query_map([], |r| {
+    let rows = stmt.query_map([now_millis()], |r| {
         Ok(json!({
             "email": r.get::<_, String>(0)?,
             "reason": r.get::<_, String>(1)?,
             "bannedAt": r.get::<_, i64>(2)?,
             "by": r.get::<_, String>(3)?,
+            "expiresAt": r.get::<_, Option<i64>>(4)?,
         }))
     });
     match rows {
         Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
         Err(_) => Vec::new(),
     }
+}
+
+/// Keep one pending appeal per account, with atomic updates across requests.
+pub fn submit_appeal(
+    store: &DataStore,
+    data_dir: &std::path::Path,
+    email: &str,
+    reason: &str,
+) -> rusqlite::Result<()> {
+    let path = data_dir.join("appeals.json");
+    let key = store.relative_key(&path);
+    let fallback = store.read_document(&path, json!([]));
+    let conn = store.conn();
+    let tx = conn.unchecked_transaction()?;
+    let content: Option<String> = tx
+        .query_row(
+            "SELECT content FROM json_documents WHERE path = ?1",
+            [&key],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let mut appeals = content
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        .unwrap_or(fallback)
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let email = crate::auth::normalize_email(email);
+    if !appeals.iter().any(|appeal| {
+        appeal
+            .get("email")
+            .and_then(Value::as_str)
+            .is_some_and(|value| crate::auth::normalize_email(value) == email)
+    }) {
+        let now = now_millis();
+        appeals.push(json!({ "email":email, "reason":reason, "submitted_at":now }));
+        tx.execute("INSERT INTO json_documents (path, content, updated_at) VALUES (?1, ?2, ?3)
+            ON CONFLICT(path) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at",
+            rusqlite::params![key, json!(appeals).to_string(), now])?;
+    }
+    tx.commit()
 }
 
 /// Bans (or re-bans) one IP, optionally associated with the account whose
@@ -206,6 +289,102 @@ mod tests {
         ));
         std::fs::create_dir_all(base.join("data")).unwrap();
         DataStore::open(&base, &base.join("data")).unwrap()
+    }
+
+    #[test]
+    fn temporary_bans_expire_and_replace_legacy_permanent_aliases() {
+        let store = temp_store("expiry");
+        let email = "firstlast@student.rjuhsd.us";
+        store.conn().execute("INSERT INTO blacklist (email, reason, banned_at, banned_by) VALUES ('First.Last@student.mitch.pro', 'legacy', 1, 'admin')", []).unwrap();
+        let expiry = now_millis() + 86_400_000;
+        blacklist_insert_until(&store, email, "Spam", "admin", Some(expiry)).unwrap();
+        let info = crate::auth::banned_info_for_email(&store, "First.Last+test@student.mitch.pro")
+            .unwrap();
+        assert_eq!(info["expires_at"], expiry);
+        assert_eq!(blacklist_all(&store).len(), 1);
+        store
+            .conn()
+            .execute("UPDATE blacklist SET expires_at = ?1", [now_millis() - 1])
+            .unwrap();
+        assert!(crate::auth::banned_info_for_email(&store, email).is_none());
+        assert!(blacklist_all(&store).is_empty());
+        blacklist_insert(&store, email, "Permanent", "admin").unwrap();
+        assert!(crate::auth::banned_info_for_email(&store, email).unwrap()["expires_at"].is_null());
+    }
+
+    #[test]
+    fn legacy_document_does_not_reinstate_expired_or_removed_bans_on_restart() {
+        let store = temp_store("legacy-restart");
+        let base = store.base_dir.clone();
+        store
+            .write_document(
+                &base.join("data/blacklist.json"),
+                &json!({
+                    "First.Last@student.mitch.pro":{"reason":"Legacy ban"},
+                    "removed@example.com":{"reason":"Legacy ban"}
+                }),
+            )
+            .unwrap();
+        store.conn().execute("DROP TABLE blacklist", []).unwrap();
+        drop(store);
+        let store = DataStore::open(&base, &base.join("data")).unwrap();
+        assert_eq!(blacklist_all(&store).len(), 2);
+        blacklist_insert_until(
+            &store,
+            "firstlast@student.rjuhsd.us",
+            "Temporary",
+            "admin",
+            Some(1),
+        )
+        .unwrap();
+        blacklist_remove(&store, "removed@example.com", "removed@example.com").unwrap();
+        drop(store);
+        let store = DataStore::open(&base, &base.join("data")).unwrap();
+        assert!(blacklist_all(&store).is_empty());
+        assert!(
+            crate::auth::banned_info_for_email(&store, "First.Last@student.mitch.pro").is_none()
+        );
+        assert!(crate::auth::banned_info_for_email(&store, "removed@example.com").is_none());
+    }
+
+    #[test]
+    fn old_database_migration_keeps_permanent_bans() {
+        let store = temp_store("migration");
+        let base = store.base_dir.clone();
+        blacklist_insert(&store, "student@example.com", "Existing ban", "admin").unwrap();
+        store
+            .conn()
+            .execute("ALTER TABLE blacklist DROP COLUMN expires_at", [])
+            .unwrap();
+        drop(store);
+        let store = DataStore::open(&base, &base.join("data")).unwrap();
+        let info = crate::auth::banned_info_for_email(&store, "student@example.com").unwrap();
+        assert_eq!(info["reason"], "Existing ban");
+        assert!(info["expires_at"].is_null());
+    }
+
+    #[test]
+    fn appeals_deduplicate_account_aliases_and_keep_other_accounts() {
+        let store = temp_store("appeals");
+        let data = store.base_dir.join("data");
+        submit_appeal(
+            &store,
+            &data,
+            "First.Last@student.mitch.pro",
+            "Review my ban",
+        )
+        .unwrap();
+        submit_appeal(
+            &store,
+            &data,
+            "firstlast+alias@student.rjuhsd.us",
+            "Duplicate",
+        )
+        .unwrap();
+        submit_appeal(&store, &data, "other@example.com", "Another appeal").unwrap();
+        let appeals = store.read_document(&data.join("appeals.json"), json!([]));
+        assert_eq!(appeals.as_array().unwrap().len(), 2);
+        assert_eq!(appeals[0]["reason"], "Review my ban");
     }
 
     #[test]

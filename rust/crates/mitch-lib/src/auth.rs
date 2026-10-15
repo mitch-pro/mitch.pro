@@ -958,6 +958,7 @@ pub fn rate_limit_for(endpoint: &str) -> (u32, u32) {
         "/api/invite/set-code" => (3, 60),
         "/api/apply" => (2, 3600),
         "/api/suggest" => (3, 60),
+        "/api/appeal" => (3, 600),
         "/api/migrateid" => (20, 60),
         "/api/vpn-check" => (30, 60),
         "/api/me/coins" => (30, 60),

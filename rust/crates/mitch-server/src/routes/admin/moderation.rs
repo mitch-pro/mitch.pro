@@ -1182,6 +1182,7 @@ fn apply_account_ban(
     state: &Arc<AppState>,
     raw_email: &str,
     reason: &str,
+    duration: Option<&Value>,
     actor: &str,
 ) -> Result<Value, (u16, String)> {
     if !valid_email(raw_email.trim()) {
@@ -1191,13 +1192,12 @@ fn apply_account_ban(
     if mitch_lib::auth::is_admin_email(&state.store, &target) {
         return Err((403, "cannot ban admins or owners from this panel".into()));
     }
-    let reason = reason.trim().chars().take(200).collect::<String>();
-    let reason = if reason.is_empty() {
-        "Banned by staff".to_string()
-    } else {
-        reason
-    };
-    mitch_lib::bans::blacklist_insert(&state.store, &target, &reason, actor)
+    let reason =
+        mitch_lib::bans::required_reason(reason).map_err(|error| (400, error.to_string()))?;
+    let duration_ms =
+        mitch_lib::bans::duration_millis(duration).map_err(|error| (400, error.to_string()))?;
+    let expires_at = duration_ms.map(|ms| now_millis() + ms);
+    mitch_lib::bans::blacklist_insert_until(&state.store, &target, &reason, actor, expires_at)
         .map_err(|_| (500, "Could not save the account ban. Try again.".into()))?;
     crate::ws::disconnect_banned_user(state, &target, &reason);
     mitch_lib::coins::add_admin_notification(
@@ -1210,10 +1210,15 @@ fn apply_account_ban(
         "",
         "",
     );
-    Ok(json!({ "ok":true, "targetEmail":target, "reason":reason }))
+    Ok(
+        json!({ "ok":true, "targetEmail":target, "reason":reason, "duration":duration.and_then(Value::as_str).unwrap_or("permanent"), "expiresAt":expires_at }),
+    )
 }
 
-fn restore_account_access(state: &Arc<AppState>, raw_email: &str) -> Result<Value, (u16, String)> {
+pub(super) fn restore_account_access(
+    state: &Arc<AppState>,
+    raw_email: &str,
+) -> Result<Value, (u16, String)> {
     if !valid_email(raw_email.trim()) {
         return Err((400, "valid email required".into()));
     }
@@ -1276,6 +1281,7 @@ fn account_action(
             state,
             email,
             body.get("reason").and_then(Value::as_str).unwrap_or(""),
+            body.get("duration"),
             &actor,
         )
     } else {
@@ -1288,7 +1294,7 @@ fn account_action(
                 &state.cfg.data_dir,
                 &actor,
                 action,
-                json!({ "targetEmail":result["targetEmail"], "reason":result.get("reason"), "ip":ctx.ip, "userAgent":user_agent(headers), "role":"admin" }),
+                json!({ "targetEmail":result["targetEmail"], "reason":result.get("reason"), "duration":result.get("duration"), "expiresAt":result.get("expiresAt"), "ip":ctx.ip, "userAgent":user_agent(headers), "role":"admin" }),
             );
             json_response(200, result)
         }
@@ -1598,6 +1604,7 @@ pub fn execute_moderator_approved_action(
                     state,
                     email,
                     payload.get("reason").and_then(Value::as_str).unwrap_or(""),
+                    payload.get("duration"),
                     actor,
                 )?
             } else {
@@ -1608,7 +1615,7 @@ pub fn execute_moderator_approved_action(
                 &state.cfg.data_dir,
                 actor,
                 action,
-                json!({ "targetEmail":result["targetEmail"], "reason":result.get("reason") })
+                json!({ "targetEmail":result["targetEmail"], "reason":result.get("reason"), "duration":result.get("duration"), "expiresAt":result.get("expiresAt") })
                     .merge(requested_by()),
             );
             Ok(result)
@@ -2107,6 +2114,7 @@ mod tests {
             &state,
             "First.Last+alias@student.mitch.pro",
             "  Repeated spam  ",
+            None,
             "owner@example.com",
         )
         .unwrap();
@@ -2141,7 +2149,7 @@ mod tests {
         let owner = ban_test_ctx(&state, "owner@example.com");
         let moderator = ban_test_ctx(&state, "moderator@example.com");
         let headers = HeaderMap::new();
-        let body = json!({ "email":"student@example.com", "reason":"spam" });
+        let body = json!({ "email":"student@example.com", "reason":"spam", "duration":"3d" });
         let pending = handle(
             &state,
             &Method::POST,
@@ -2157,6 +2165,7 @@ mod tests {
         );
         let requests = mitch_lib::admin::load_moderator_requests(&state.store, &state.cfg.data_dir);
         let request = requests.first().unwrap();
+        assert_eq!(request["payload"]["duration"], "3d");
         let approved = resolve_moderator_request(
             &state,
             &json!({ "id":request["id"], "decision":"approve" }),
@@ -2192,6 +2201,11 @@ mod tests {
             .status(),
             200
         );
+        let entry =
+            mitch_lib::auth::banned_info_for_email(&state.store, "student@example.com").unwrap();
+        assert!(
+            (entry["expires_at"].as_i64().unwrap() - now_millis() - 3 * 86_400_000).abs() < 1000
+        );
         assert_eq!(unban_account(&state, &body, &owner, &headers).status(), 200);
         assert!(
             mitch_lib::auth::banned_info_for_email(&state.store, "student@example.com").is_none()
@@ -2210,16 +2224,55 @@ mod tests {
     }
 
     #[test]
+    fn bans_require_a_reason_and_validate_duration_before_saving() {
+        let (state, dir) = ban_test_state();
+        for (reason, duration) in [
+            ("   ", json!("1d")),
+            ("Spam", json!("forever")),
+            ("Spam", json!(24)),
+            ("Spam", Value::Null),
+        ] {
+            assert_eq!(
+                apply_account_ban(
+                    &state,
+                    "student@example.com",
+                    reason,
+                    Some(&duration),
+                    "admin"
+                )
+                .unwrap_err()
+                .0,
+                400
+            );
+            assert!(
+                mitch_lib::auth::banned_info_for_email(&state.store, "student@example.com")
+                    .is_none()
+            );
+        }
+        let result = apply_account_ban(
+            &state,
+            "student@example.com",
+            "Spam",
+            Some(&json!("1d")),
+            "admin",
+        )
+        .unwrap();
+        assert!((result["expiresAt"].as_i64().unwrap() - now_millis() - 86_400_000).abs() < 1000);
+        drop(state);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn bans_reject_staff_and_invalid_targets() {
         let (state, dir) = ban_test_state();
         assert_eq!(
-            apply_account_ban(&state, "owner@example.com", "reason", "admin")
+            apply_account_ban(&state, "owner@example.com", "reason", None, "admin")
                 .unwrap_err()
                 .0,
             403
         );
         assert_eq!(
-            apply_account_ban(&state, "not-an-email", "reason", "admin")
+            apply_account_ban(&state, "not-an-email", "reason", None, "admin")
                 .unwrap_err()
                 .0,
             400

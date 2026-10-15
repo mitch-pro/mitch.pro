@@ -1,390 +1,57 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Submit Account Appeal — mitch.pro</title>
-<meta name="description" content="Submit an appeal for your mitch.pro student account. Secure processing of student status and community reinstatements.">
-<meta name="keywords" content="mitch.pro appeal, submit appeal, student account appeal">
-<link rel="canonical" href="https://mitchdog.com/appeal/" />
-<link rel="stylesheet" href="/open.css">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Appeal a ban — mitch.pro</title>
+<link rel="canonical" href="https://mitchdog.com/appeal/">
 <style>
-  :root {
-    --panel: rgba(255,255,255,.06);
-    --panel-strong: rgba(255,255,255,.09);
-    --line: rgba(255,255,255,.12);
-    --line-hot: rgba(96,165,250,.42);
-    --cyan: #22d3ee;
-    --green: #d8b4fe;
-    --gold: #facc15;
-    --rose: #fb7185;
-    --ac: #22d3ee;
-  }
-
-  body {
-    min-height: 100vh;
-    background: var(--t-bg, var(--bg));
-    color: var(--t-fg, var(--fg));
-    overflow-x: hidden;
-    display: flex;
-    flex-direction: column;
-  }
-
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background:
-      linear-gradient(rgba(255,255,255,.032) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255,255,255,.026) 1px, transparent 1px),
-      var(--t-bgr, #0a0a0c);
-    background-size: 42px 42px, 42px 42px, auto;
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  body::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background: linear-gradient(180deg, rgba(0,0,0,.05), rgba(0,0,0,.42));
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  .enroll-shell {
-    position: relative;
-    z-index: 1;
-    width: min(620px, calc(100vw - 24px));
-    margin: 0 auto;
-    padding: 24px 0 44px;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .topbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 24px;
-  }
-
-  .brand {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    color: var(--t-fg, var(--fg));
-    text-decoration: none;
-    font-weight: 950;
-  }
-
-  .brand img {
-    width: 34px;
-    height: 34px;
-    border-radius: 8px;
-    border: 1px solid var(--line);
-    background: rgba(255,255,255,.08);
-  }
-
-  .top-links {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-  }
-
-  .top-links a {
-    min-height: 36px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 12px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: rgba(255,255,255,.045);
-    color: var(--t-fg2, var(--fg-dim));
-    text-decoration: none;
-    font-size: .78rem;
-    font-weight: 900;
-  }
-
-  .top-links a:hover {
-    color: var(--t-fg, var(--fg));
-    border-color: var(--line-hot);
-    text-decoration: none;
-  }
-
-  .appeal-container {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 20px 0;
-  }
-
-  .appeal-panel {
-    width: 100%;
-    border: 1px solid var(--t-bd, var(--line));
-    border-radius: 12px;
-    background:
-      linear-gradient(135deg, rgba(255,255,255,.075), rgba(255,255,255,.025)),
-      var(--t-bg2, var(--panel));
-    box-shadow: 0 20px 70px rgba(0,0,0,.34), inset 0 1px 0 rgba(255,255,255,.06);
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
-    padding: 32px clamp(16px, 5vw, 40px);
-    text-align: center;
-  }
-
-  .badge {
-    display: inline-block;
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 0.72rem;
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: .08em;
-    background: rgba(34,211,238,.1);
-    border: 1px solid rgba(34,211,238,.38);
-    color: var(--cyan);
-    margin-bottom: 16px;
-  }
-
-  h1 {
-    color: #fff;
-    font-size: clamp(2rem, 5vw, 2.8rem);
-    line-height: 1.1;
-    font-weight: 950;
-    text-transform: uppercase;
-    margin-bottom: 12px;
-    background: none;
-    -webkit-text-fill-color: currentColor;
-    background-clip: unset;
-  }
-
-  .subtitle {
-    color: var(--t-fg2, var(--fg-dim));
-    font-size: 0.94rem;
-    line-height: 1.5;
-    margin-bottom: 28px;
-    font-weight: 700;
-    max-width: 480px;
-    margin-left: auto;
-    margin-right: auto;
-  }
-
-  .field-label {
-    display: block;
-    width: 100%;
-    color: var(--t-fg2, var(--fg-dim));
-    font-size: .68rem;
-    font-weight: 950;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    margin-bottom: 7px;
-    text-align: left;
-  }
-
-  input[type=email], textarea {
-    display: block;
-    width: 100%;
-    box-sizing: border-box;
-    min-height: 48px;
-    margin-bottom: 20px;
-    border-radius: 8px;
-    background: rgba(0,0,0,.24);
-    border: 1px solid var(--line);
-    color: var(--t-fg, var(--fg));
-    font-weight: 750;
-    padding: 12px 14px;
-    font-size: 0.95rem;
-    outline: none;
-    font-family: inherit;
-    transition: border-color 0.15s, background-color 0.15s;
-  }
-
-  textarea {
-    height: 140px;
-    resize: vertical;
-  }
-
-  input[type=email]:focus, textarea:focus {
-    border-color: var(--line-hot);
-    background: rgba(255,255,255,.07);
-  }
-
-  .recaptcha-wrap {
-    display: flex;
-    justify-content: center;
-    margin: 6px 0 20px;
-    overflow: hidden;
-  }
-
-  .btn {
-    width: 100%;
-    min-height: 48px;
-    border-radius: 8px;
-    background: linear-gradient(135deg, rgba(34,211,238,.92), rgba(96,165,250,.92), rgba(250,204,21,.82));
-    color: #061018;
-    font-weight: 950;
-    font-size: 0.98rem;
-    cursor: pointer;
-    border: none;
-    box-shadow: 0 14px 32px rgba(0,0,0,.25);
-    transition: transform 0.1s, filter 0.15s;
-  }
-
-  .btn:hover:not(:disabled) {
-    filter: brightness(1.08);
-  }
-
-  .btn:active:not(:disabled) {
-    transform: scale(0.98);
-  }
-
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
-
-  #msg {
-    min-height: 22px;
-    margin-top: 14px;
-    font-size: .88rem;
-    text-align: center;
-    font-weight: 850;
-  }
-
-  .ok { color: var(--green); }
-  .err { color: #f87171; }
-
-  .footer {
-    position: relative;
-    z-index: 1;
-    border-top: 0;
-    padding: 22px 12px 34px;
-    opacity: .55;
-    font-size: .8rem;
-    text-align: center;
-    color: var(--t-fg2, var(--fg-dim));
-  }
-
-  .footer a {
-    color: var(--cyan);
-    text-decoration: none;
-    font-weight: 800;
-  }
-
-  .footer a:hover {
-    text-decoration: underline;
-  }
-
-  @media (max-width: 620px) {
-    .enroll-shell {
-      width: min(100%, calc(100vw - 12px));
-      padding-top: 8px;
-    }
-
-    .topbar {
-      align-items: stretch;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    .top-links {
-      justify-content: flex-start;
-    }
-
-    .appeal-panel {
-      padding: 24px 16px;
-    }
-
-    .recaptcha-wrap {
-      transform: scale(.88);
-      transform-origin: center;
-      margin-left: -20px;
-      margin-right: -20px;
-    }
-  }
+:root{color-scheme:light;font-family:Arial,Helvetica,sans-serif;color:#24262a;background:#f2f3f5}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;flex-direction:column}
+header{padding:19px 28px;background:#fff;border-bottom:1px solid #d8dadd;font-size:21px;font-weight:800;letter-spacing:-.7px}
+main{width:min(620px,calc(100% - 32px));margin:48px auto;flex:1}
+.panel{background:#fff;border:1px solid #d4d6d9;border-radius:4px;padding:32px}
+h1{font-size:30px;margin:0 0 18px;letter-spacing:-.6px}p{font-size:15px;line-height:1.6;color:#555960}
+label{display:block;font-size:14px;font-weight:700;margin:24px 0 8px}
+input,textarea{display:block;width:100%;padding:12px;font-family:inherit;font-size:15px;line-height:1.5;color:#24262a;background:#fafafb;border:1px solid #bfc2c7;border-radius:4px}
+textarea{resize:vertical;min-height:150px}button{margin-top:22px;min-height:44px;padding:11px 22px;border:1px solid #303238;border-radius:5px;background:#303238;color:white;font:700 14px Arial,sans-serif;cursor:pointer}
+button:hover{background:#45484e}button:disabled{opacity:.6;cursor:wait}
+:is(input,textarea,button,a):focus-visible{outline:3px solid #3276d2;outline-offset:3px}
+#message{font-size:14px;overflow-wrap:anywhere}#message:empty{display:none}#message[data-error=true]{color:#a62536}
+.back{display:inline-block;margin-top:24px;color:#555960;font-size:14px}
+@media(max-width:520px){header{padding-inline:20px}main{margin:28px auto}.panel{padding:24px 20px}}
 </style>
 </head>
-<body>
-  <main class="enroll-shell">
-    <nav class="topbar">
-      <a class="brand" href="/">
-        <img src="/icon-192.png" alt="">
-        <span>mitch.pro</span>
-      </a>
-      <div class="top-links">
-        <a href="/enroll.html">Enroll</a>
-        <a href="/faq.html">FAQ</a>
-        <a href="/use-agreement.html">Use Agreement</a>
-      </div>
-    </nav>
-
-    <div class="appeal-container">
-      <section class="appeal-panel">
-        <div class="badge">Security</div>
-        <h1>Access Revoked</h1>
-        <p class="subtitle">If you believe your access was revoked in error, please submit an appeal.</p>
-
-        <label class="field-label" for="email">Your Email Address</label>
-        <input id="email" type="email" autocomplete="email" placeholder="your@email.com">
-
-        <label class="field-label" for="reason">Why should access be restored?</label>
-        <textarea id="reason" placeholder="Explain the situation in detail..."></textarea>
-
-        <button id="btn" class="btn" onclick="submit()">Submit Appeal</button>
-        <div id="msg"></div>
-      </section>
-    </div>
-
-    <footer class="footer">
-      &copy; 2026 mitch.pro &middot; <a href="mailto:support@mitch.pro">Contact Support</a>
-    </footer>
-  </main>
-
+<body data-presentation="account-notice">
+<header>mitch.pro</header>
+<main><section class="panel" aria-labelledby="appeal-title">
+<h1 id="appeal-title">Appeal a ban</h1>
+<p>Explain why you think your ban should be reviewed. Staff will review your appeal before making a decision.</p>
+<form id="appeal-form">
+<label for="email">Account email</label><input id="email" name="email" type="email" maxlength="254" autocomplete="email" required>
+<label for="reason">Your appeal</label><textarea id="reason" name="reason" maxlength="2000" required></textarea>
+<button type="submit" id="submit-appeal">Submit appeal</button>
+<p id="message" role="status"></p>
+</form>
+<a class="back" href="/">Back to account status</a>
+</section></main>
 <script>
-async function submit() {
-  const email = document.getElementById('email').value.trim();
-  const reason = document.getElementById('reason').value.trim();
-  const btn = document.getElementById('btn');
-  const msg = document.getElementById('msg');
-  if (!email || !reason) return;
-
-  btn.disabled = true;
-  msg.textContent = 'Sending...';
-  msg.className = '';
-
-  let recaptcha_token = '';
-  if (window.getCaptchaToken) {
-    recaptcha_token = await window.getCaptchaToken('submit_appeal') || '';
-  }
-
-  try {
-    const r = await fetch('/api/appeal', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ email, reason, recaptcha_token })
-    });
-    const d = await r.json();
-    if (d.success || d.ok) {
-      msg.className = 'ok';
-      msg.textContent = 'Appeal submitted. We will review it shortly.';
-    } else {
-      msg.className = 'err';
-      msg.textContent = d.message || d.error || 'Error submitting appeal.';
-      btn.disabled = false;
-    }
-  } catch (e) {
-    msg.className = 'err';
-    msg.textContent = 'Server error.';
-    btn.disabled = false;
-  }
-}
+document.getElementById('appeal-form').addEventListener('submit',async event=>{
+  event.preventDefault();
+  const email=document.getElementById('email').value.trim(),reason=document.getElementById('reason').value.trim();
+  const button=document.getElementById('submit-appeal'),message=document.getElementById('message');
+  if(!reason){message.textContent='Please explain why your ban should be reviewed.';message.dataset.error='true';return;}
+  button.disabled=true;message.textContent='Submitting…';message.dataset.error='false';
+  try{
+    const recaptcha_token=window.getCaptchaToken?await window.getCaptchaToken('submit_appeal') || '':'';
+    const response=await fetch('/api/appeal',{method:'POST',headers:{'Content-Type':'application/json','X-Mitch-Requested-With':'1'},body:JSON.stringify({email,reason,recaptcha_token})});
+    const data=await response.json();
+    if(!response.ok)throw new Error(data.error || 'Could not submit your appeal. Please try again.');
+    message.textContent='Your appeal has been submitted for staff review.';
+    button.textContent='Appeal submitted';
+  }catch(error){message.textContent=error.message;message.dataset.error='true';button.disabled=false;}
+});
 </script>
-<script src="/cookie-consent.js" defer></script>
 </body>
 </html>

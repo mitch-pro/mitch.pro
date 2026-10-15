@@ -1,5 +1,4 @@
 //! `errorPage`, `errResp`, `bannedResponse`, `jsonResp` — byte-faithful ports
-//! `errorPage`, `errResp`, `bannedResponse`, `jsonResp` — byte-faithful ports
 //! from server.js (canned titles/copy per code, Content-Type only header).
 #![allow(clippy::expect_used)] // infallible static responses
 
@@ -12,7 +11,6 @@ fn error_page(code: u16, title: &str, detail_html: &str) -> String {
     )
 }
 
-#[allow(dead_code)] // used by the ban gate, wired with sessions at Step 6
 pub fn html_esc(v: &str) -> String {
     v.replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -21,30 +19,56 @@ pub fn html_esc(v: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-/// `bannedResponse` — the 403 ban page (wired with sessions at Step 6).
-#[allow(dead_code)]
-pub fn banned_response(info: Option<(&str, &str)>) -> Response {
-    let (reason_text, by) = match info {
-        Some((r, b)) => (r.to_string(), b.to_string()),
-        None => (
-            "This account is banned from the website.".to_string(),
-            "site admin".to_string(),
-        ),
+/// Shared account/network ban notice. Staff-supplied text is always escaped.
+pub fn banned_response(info: &serde_json::Value, school: bool) -> Response {
+    let reason = info
+        .get("reason")
+        .and_then(serde_json::Value::as_str)
+        .filter(|reason| !reason.trim().is_empty())
+        .unwrap_or("Your account has been banned by site staff.");
+    let reviewed = info.get("banned_at").and_then(serde_json::Value::as_i64);
+    let expiry = info.get("expires_at").and_then(serde_json::Value::as_i64);
+    let date = |ms: i64| {
+        chrono::DateTime::from_timestamp_millis(ms)
+            .map(|date| date.format("%B %-d, %Y at %H:%M UTC").to_string())
     };
-    let reason = html_esc(&reason_text);
-    let by = html_esc(&by);
-    let alert_text = serde_json::to_string(&format!(
-        "This account is banned from the website. Reason: {reason_text}"
-    ))
-    .unwrap_or_default()
-    .replace('<', "\\u003c");
-    let body = format!(
-        "<!DOCTYPE html><html><head><meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Account Banned</title>\n<style>\nbody{{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#111318;color:#f8fafc;font-family:system-ui,sans-serif;padding:24px;}}\n.modal{{width:min(440px,100%);background:#1b1f2a;border:1px solid rgba(248,113,113,.35);border-radius:14px;box-shadow:0 24px 80px rgba(0,0,0,.45);padding:24px;text-align:center;}}\n.badge{{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:999px;background:rgba(239,68,68,.14);color:#fecaca;font-weight:900;margin-bottom:14px;}}\nh1{{font-size:1.35rem;margin:0 0 10px;}}\np{{color:#cbd5e1;line-height:1.5;margin:0 0 12px;font-size:.94rem;}}\n.reason{{background:#111827;border:1px solid rgba(148,163,184,.18);border-radius:10px;padding:12px;margin:14px 0;color:#e5e7eb;text-align:left;}}\n.small{{font-size:.78rem;color:#94a3b8;}}\nbutton{{margin-top:8px;border:0;border-radius:9px;background:#ef4444;color:white;padding:10px 16px;font-weight:700;cursor:pointer;}}\n</style></head><body>\n<div class=\"modal\" role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"ban-title\">\n  <div class=\"badge\">!</div>\n  <h1 id=\"ban-title\">This account is banned from the website</h1>\n  <p>Your account cannot access mitch.pro right now.</p>\n  <div class=\"reason\"><strong>Reason:</strong><br>{reason}</div>\n  <p class=\"small\">Issued by {by}. Contact site staff if you think this was a mistake.</p>\n  <button onclick=\"location.href='/appeal.html'\">Appeal ban</button>\n</div>\n<script>alert({alert_text});</script>\n</body></html>"
-    );
+    let title = match (reviewed, expiry) {
+        (Some(start), Some(end)) => {
+            let hours = (end - start + 30_000) / 3_600_000;
+            if hours < 24 {
+                format!(
+                    "Banned for {} hour{}",
+                    hours.max(1),
+                    if hours <= 1 { "" } else { "s" }
+                )
+            } else {
+                let days = hours / 24;
+                format!("Banned for {days} day{}", if days == 1 { "" } else { "s" })
+            }
+        }
+        _ => "Permanently banned".to_string(),
+    };
+    let review = reviewed
+        .and_then(date)
+        .map(|date| format!("<p class=\"review\">Reviewed: {date}</p>"))
+        .unwrap_or_default();
+    let return_text = match expiry.and_then(date) {
+        Some(date) => format!("You can use your account again after {date}. Access returns automatically when the ban ends."),
+        None => "This ban has no end date. Your account can only be restored by site staff.".to_string(),
+    };
+    let html = include_str!("templates/ban.html")
+        .replace("{{title}}", &title)
+        .replace("{{review}}", &review)
+        .replace("{{return}}", &return_text)
+        .replace("{{reason}}", &html_esc(reason));
+    let html = crate::inject::inject_credit(&html, school);
     Response::builder()
         .status(403)
         .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-        .body(axum::body::Body::from(body))
+        .header(header::CACHE_CONTROL, "private, no-store")
+        .header(header::VARY, "Cookie")
+        .header("x-content-type-options", "nosniff")
+        .body(axum::body::Body::from(html))
         .expect("static response")
 }
 

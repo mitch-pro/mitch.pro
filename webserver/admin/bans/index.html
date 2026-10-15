@@ -37,9 +37,19 @@
           <form id="ban-form">
             <label for="ban-email">Account email</label>
             <input id="ban-email" type="email" autocomplete="off" placeholder="name@student.rjuhsd.us" required>
-            <label for="ban-reason">Reason</label>
+            <label for="ban-duration">Ban duration</label>
+            <select id="ban-duration" required>
+              <option value="" disabled selected>Choose a duration</option>
+              <option value="1h">1 hour</option>
+              <option value="1d">1 day</option>
+              <option value="3d">3 days</option>
+              <option value="7d">7 days</option>
+              <option value="14d">14 days</option>
+              <option value="permanent">Permanent</option>
+            </select>
+            <label for="ban-reason">Reason shown to this person</label>
             <textarea id="ban-reason" rows="3" maxlength="200" required></textarea>
-            <button class="ban-submit" type="submit">Ban account</button>
+            <button class="ban-submit" type="submit">Review ban</button>
             <p id="ban-status" class="bans-status" role="status"></p>
           </form>
         </section>
@@ -64,5 +74,13 @@
       </section>
     </div>
   </main>
+  <dialog id="ban-confirm" aria-labelledby="confirm-title" aria-describedby="confirm-description">
+    <form method="dialog">
+      <h2 id="confirm-title">Confirm ban</h2>
+      <p id="confirm-description">This account will lose access to the website.</p>
+      <dl><dt>Account</dt><dd id="confirm-email"></dd><dt>Duration</dt><dd id="confirm-duration"></dd><dt>Reason</dt><dd id="confirm-reason"></dd></dl>
+      <div class="confirm-actions"><button value="cancel" autofocus>Cancel</button><button value="ban" class="ban-submit">Ban account</button></div>
+    </form>
+  </dialog>
 </body>
 </html>

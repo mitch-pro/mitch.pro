@@ -24,6 +24,54 @@ use crate::routes::me::security::{save_two_factor_config, two_factor_config};
 use crate::routes::push::{ntfy_notify, send_email_bg, verify_recaptcha};
 use crate::state::{AppState, PendingTwoFactor, SsoBridgeToken};
 
+async fn submit_appeal(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Response {
+    let Some(body) = parse_body(body_bytes) else {
+        return json_resp(400, json!({"error":"Invalid request."}));
+    };
+    let email = body
+        .get("email")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
+    let reason = body
+        .get("reason")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
+    if !email.split_once('@').is_some_and(|(local, domain)| {
+        !local.is_empty()
+            && domain.contains('.')
+            && !domain.contains('@')
+            && !email.contains(char::is_whitespace)
+    }) || email.len() > 254
+        || reason.is_empty()
+        || reason.chars().count() > 2000
+    {
+        return json_resp(
+            400,
+            json!({"error":"Enter your email and an appeal of up to 2,000 characters."}),
+        );
+    }
+    let ip = get_real_ip(headers, None);
+    let token = body
+        .get("recaptcha_token")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    if !verify_recaptcha(state, token, &ip, "").await {
+        return json_resp(
+            400,
+            json!({"error":"Verification failed. Please try again."}),
+        );
+    }
+    match mitch_lib::bans::submit_appeal(&state.store, &state.cfg.data_dir, email, reason) {
+        Ok(()) => json_resp(200, json!({"success":true})),
+        Err(_) => json_resp(
+            500,
+            json!({"error":"Could not save your appeal. Please try again."}),
+        ),
+    }
+}
+
 fn is_invalidated(state: &AppState, id: &str) -> bool {
     if id.is_empty() {
         return false;
@@ -47,6 +95,9 @@ pub async fn handle(
     search: &str,
     body_bytes: &[u8],
 ) -> Option<Response> {
+    if path == "/api/appeal" && *method == Method::POST {
+        return Some(submit_appeal(state, headers, body_bytes).await);
+    }
     if path == "/api/signup" && *method == Method::POST {
         return Some(signup(state, headers, body_bytes).await);
     }
@@ -1788,6 +1839,43 @@ mod tests {
                 .unwrap_or_else(|e| panic!("store: {e}")),
         );
         (Arc::new(AppState::new(cfg, Arc::clone(&store))), dir)
+    }
+
+    #[tokio::test]
+    async fn appeals_validate_input_and_save_for_banned_accounts() {
+        std::env::set_var("NODE_ENV", "test");
+        let (state, dir) = test_state();
+        let headers = HeaderMap::new();
+        mitch_lib::bans::blacklist_insert(&state.store, "student@example.com", "Spam", "admin")
+            .unwrap();
+        let body = json!({"email":"student@example.com", "reason":"Please review this ban."});
+        assert_eq!(
+            submit_appeal(&state, &headers, body.to_string().as_bytes())
+                .await
+                .status(),
+            200
+        );
+        let appeals = state
+            .store
+            .read_document(&state.cfg.data_dir.join("appeals.json"), json!([]));
+        assert_eq!(appeals[0]["email"], "student@example.com");
+        assert!(
+            mitch_lib::auth::banned_info_for_email(&state.store, "student@example.com").is_some()
+        );
+        for body in [
+            json!({"email":"invalid","reason":"review"}),
+            json!({"email":"student@example.com","reason":"  "}),
+            json!({"email":"student@example.com","reason":"x".repeat(2001)}),
+        ] {
+            assert_eq!(
+                submit_appeal(&state, &headers, body.to_string().as_bytes())
+                    .await
+                    .status(),
+                400
+            );
+        }
+        drop(state);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[tokio::test]
