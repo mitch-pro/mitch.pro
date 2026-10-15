@@ -196,11 +196,9 @@
   <div class="announcement-bar"><div class="announcement-inner"><span class="pulse-dot"></span><strong>RJUHSD.SCHOOL</strong><span id="announcement-text">Loading today’s campus schedule…</span><button id="pwa-install-btn" class="pwa-install-btn" type="button" style="display:none;" aria-label="Install App"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Install App</button><span class="announcement-time" id="header-clock">--:-- --</span></div></div>
   <header class="site-header">
     <a class="brand" href="/" aria-label="rjuhsd.school home"><span class="brand-logo"><img class="site-logo" src="/icon-192.png" alt="mitch.pro" width="35" height="35"></span><span class="brand-copy"><strong>Woodcreek High School</strong><small>woodcreek now</small></span></a>
-    <nav aria-label="Primary navigation"><a href="#today">Today</a><a href="#schedule-panel">Schedule</a><a href="#schools">Schools</a><a href="/matrix/">Chat</a><a href="/preferences/">Preferences</a><a href="https://mitch.pro" class="nav-mitchpro" target="_blank" rel="noopener" title="Go to mitch.pro (mitchdog.com)">mitch.pro </a></nav>
+    <nav aria-label="Primary navigation"><a href="#today">Today</a><a href="#schedule-panel">Schedule</a><a href="#schools">Schools</a><a href="#tools">Tools</a><a href="/preferences/">Preferences</a><a href="https://mitch.pro" class="nav-mitchpro" target="_blank" rel="noopener" title="Go to mitch.pro (mitchdog.com)">mitch.pro ↗</a></nav>
     <div class="header-actions">
       <a href="https://mitch.pro" class="header-portal-btn" target="_blank" rel="noopener" title="Visit mitch.pro (mitchdog.com)"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg><strong>mitch.pro</strong></a>
-      <a href="https://mitchdog.com/api/sso/bridge?back=https%3A%2F%2Frjuhsd.school%2F" class="header-signin-btn js-signin-link" hidden>Sign in with mitchdog.com</a>
-      <a href="/matrix/" class="header-chat-btn" title="Open Matrix Encrypted Chat"><span class="chat-badge-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><rect x="9" y="8" width="6" height="5" rx="1"/></svg></span><strong>Chat</strong><small class="e2e-badge">Matrix</small></a>
       <label class="school-choice">School<select id="school-select" aria-label="Choose school"></select></label>
       <button class="lunch-status" id="change-lunch" type="button"><span>MY SCHEDULE</span><strong id="header-lunch">Lunch —</strong></button>
       <button class="icon-button" id="theme-btn" type="button" aria-label="Switch color theme"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.5 1.5m11.2 11.2 1.5 1.5M2 12h2m16 0h2M4.9 19.1l1.5-1.5M17.6 6.4l1.5-1.5"/></svg></button>
@@ -209,7 +207,7 @@
   <main id="main">
     <section class="hero" id="today">
       <div class="hero-graphic" aria-hidden="true"><img src="/rjuhsd-assets/woodcreek.png" alt=""><i class="ring ring-one"></i><i class="ring ring-two"></i><i class="ring ring-three"></i></div>
-      <div class="hero-content"><time class="hero-date-panel" id="hero-date" datetime="2026-09-01"><span class="hero-weekday" id="hero-weekday">TUESDAY</span><span class="hero-date-main"><strong id="hero-date-day">01</strong><span><b id="hero-date-month">September</b><small id="hero-date-year">2026</small></span></span></time><p class="hero-overline" id="hero-overline">WOODCREEK HIGH SCHOOL</p><h1><span id="school-heading">Woodcreek</span><br><em>bell schedule</em></h1><p class="hero-summary" id="hero-summary">Loading today’s schedule.</p><div class="hero-actions"><a class="primary-button" href="#schedule-panel">View schedule <span>↓</span></a><a class="hero-chat-btn" href="/matrix/" title="Matrix End-to-End Encrypted Chat"><span class="hero-btn-icon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><rect x="9" y="8" width="6" height="5" rx="1"/><path d="M10 8V6.5a2 2 0 0 1 4 0V8"/></svg></span> Matrix Chat</a><a class="secondary-button" href="/public-chat/" title="Public Campus Chat"><span class="hero-btn-icon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8m-8 4h5"/></svg></span> Public Chat</a><button class="secondary-button" id="hero-change-lunch" type="button">Change lunch</button></div></div>
+      <div class="hero-content"><time class="hero-date-panel" id="hero-date" datetime="2026-09-01"><span class="hero-weekday" id="hero-weekday">TUESDAY</span><span class="hero-date-main"><strong id="hero-date-day">01</strong><span><b id="hero-date-month">September</b><small id="hero-date-year">2026</small></span></span></time><p class="hero-overline" id="hero-overline">WOODCREEK HIGH SCHOOL</p><h1><span id="school-heading">Woodcreek</span><br><em>bell schedule</em></h1><p class="hero-summary" id="hero-summary">Loading today’s schedule.</p><div class="hero-actions"><a class="primary-button" href="#schedule-panel">View schedule <span>↓</span></a><a class="secondary-button" href="#tools" title="Student tools">Student tools</a><button class="secondary-button" id="hero-change-lunch" type="button">Change lunch</button></div></div>
       <article class="live-card" aria-label="Current period and countdown"><img class="live-wolf" src="/rjuhsd-assets/woodcreek.png" alt=""><div class="live-card-top"><span><i></i><b id="live-mode">LIVE</b></span><time id="live-clock">--:-- --</time></div><div class="live-card-body"><div class="period-badge" id="period-badge">—</div><p id="current-eyebrow">CHECKING THE BELL</p><h2 id="current-period">Loading…</h2><span class="period-range" id="current-range">Woodcreek High School</span><div class="countdown-dial"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="dial-track" cx="60" cy="60" r="52"></circle><circle class="dial-value" id="countdown-ring" cx="60" cy="60" r="52"></circle></svg><div class="countdown-center"><div class="countdown" id="countdown">--:--</div><p class="countdown-copy" id="countdown-copy">until the next bell</p></div></div><div class="countdown-details"><span><small>ENDS AT</small><strong id="countdown-end">—</strong></span><span><small>COMPLETE</small><strong id="countdown-percent">0%</strong></span><span><small>STATUS</small><strong id="countdown-context">Loading</strong></span></div><div class="progress"><span id="live-progress"></span></div></div><div class="live-next"><span>UP NEXT</span><strong id="next-period">—</strong><time id="next-time">—</time></div></article>
     </section>
     <section class="snapshot" aria-label="Today at a glance"><article><span class="snapshot-icon wine">◷</span><div><small>FIRST BELL</small><strong id="snapshot-first">—</strong></div></article><article><span class="snapshot-icon amber">⌁</span><div><small>DISMISSAL</small><strong id="snapshot-last">—</strong></div></article><article><span class="snapshot-icon blue">✓</span><div><small>DAY PROGRESS</small><strong id="snapshot-progress">—</strong></div></article><article><span class="snapshot-icon green">✦</span><div><small>SCHEDULE</small><strong id="snapshot-type">Loading</strong></div></article></section>
@@ -226,9 +224,9 @@
     <section class="dashboard-section apps-zone" id="apps">
       <div class="section-title-row compact">
         <div>
-          <p class="section-label">STUDENT HUB &amp; MESSAGING</p>
-          <h2>Campus Apps &amp; Chat</h2>
-          <p>Secure peer-to-peer student chat, district boards, bell countdowns, and dashboard personalization.</p>
+          <p class="section-label">STUDENT TOOLS</p>
+          <h2>Campus Apps</h2>
+          <p>Bell countdowns, study tools, and dashboard personalization.</p>
         </div>
       </div>
       <div class="apps-grid">
@@ -238,37 +236,37 @@
             <span class="app-icon"><img src="/icon-192.png" width="22" height="22" alt="mitch.pro" style="border-radius:6px;display:block;"></span>
             <div>
               <h3>mitch.pro</h3>
-              <small>Arcade, VMs, Chat &amp; Community</small>
+              <small>Arcade, VMs &amp; Community</small>
             </div>
           </div>
-          <p>Access the complete student hub with 50+ unblocked arcade games, free virtual machines, Matrix chat, custom shop, and social economy (also available at mitchdog.com).</p>
-          <span class="app-card-cta">Visit mitch.pro </span>
+          <p>Access the complete student hub with 50+ unblocked arcade games, free virtual machines, and a custom shop (also available at mitchdog.com).</p>
+          <span class="app-card-cta">Visit mitch.pro <span>↗</span></span>
         </a>
 
-        <a href="/matrix/" class="app-card highlight-app">
-          <span class="app-card-badge"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> MATRIX E2E ENCRYPTED</span>
+        <a href="#study-timer" class="app-card highlight-app">
+          <span class="app-card-badge"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> FOCUS TOOL</span>
           <div class="app-card-head">
-            <span class="app-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><rect x="9" y="8" width="6" height="5" rx="1"/><path d="M10 8V6.5a2 2 0 0 1 4 0V8"/></svg></span>
+            <span class="app-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
             <div>
-              <h3>Matrix Chat</h3>
-              <small>Decentralized DMs &amp; rooms</small>
+              <h3>Study Timer</h3>
+              <small>Pomodoro-style focus &amp; break timer</small>
             </div>
           </div>
-          <p>Decentralized, end-to-end encrypted messaging with channels, direct messages, and real-time push notifications.</p>
-          <span class="app-card-cta">Open Matrix Chat <span>→</span></span>
+          <p>Work/break interval timer to help you focus during study hall or homework time — no account needed.</p>
+          <span class="app-card-cta">Open Study Timer <span>→</span></span>
         </a>
 
-        <a href="/public-chat/" class="app-card">
-          <span class="app-card-badge"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8m-8 4h5"/></svg> DISTRICT CHAT</span>
+        <a href="#finals-countdown" class="app-card">
+          <span class="app-card-badge"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> CALENDAR</span>
           <div class="app-card-head">
-            <span class="app-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+            <span class="app-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
             <div>
-              <h3>Public School Chat</h3>
-              <small>Real-time campus community</small>
+              <h3>Finals Countdown</h3>
+              <small>Days until finals/semester end</small>
             </div>
           </div>
-          <p>Instant district-wide messaging room for homework help, club updates, game day alerts, and live campus conversation.</p>
-          <span class="app-card-cta">Join Public Chat <span>→</span></span>
+          <p>A live countdown to the next finals week or semester end, pulled from your school's published calendar.</p>
+          <span class="app-card-cta">Open Finals Countdown <span>→</span></span>
         </a>
 
         <a href="#schedule-panel" class="app-card">
@@ -306,13 +304,33 @@
               <small>Public on GitHub</small>
             </div>
           </div>
-          <p>The bell schedule, encrypted chat, and every tool here are free and open source — read the code, file issues, or contribute.</p>
-          <span class="app-card-cta">View on GitHub </span>
+          <p>The bell schedule and every tool here are free and open source — read the code, file issues, or contribute.</p>
+          <span class="app-card-cta">View on GitHub <span>↗</span></span>
         </a>
       </div>
     </section>
 
+    <section class="dashboard-section tools-zone" id="study-timer">
+      <div class="section-title-row compact"><div><p class="section-label">FOCUS TOOL</p><h2>Study timer</h2><p>Work/break interval timer. No account needed — stays on this device.</p></div></div>
+      <div class="study-timer-card">
+        <div class="study-timer-display"><span class="study-timer-mode" id="study-timer-mode">FOCUS</span><strong class="study-timer-clock" id="study-timer-clock">25:00</strong></div>
+        <div class="study-timer-controls">
+          <button class="primary-button" id="study-timer-toggle" type="button">Start</button>
+          <button class="secondary-button" id="study-timer-reset" type="button">Reset</button>
+        </div>
+        <div class="study-timer-lengths">
+          <label>Focus <input type="number" id="study-timer-focus-len" min="1" max="120" value="25" inputmode="numeric"> min</label>
+          <label>Break <input type="number" id="study-timer-break-len" min="1" max="60" value="5" inputmode="numeric"> min</label>
+        </div>
+      </div>
+    </section>
 
+    <section class="dashboard-section tools-zone" id="finals-countdown">
+      <div class="section-title-row compact"><div><p class="section-label">CALENDAR</p><h2>Finals &amp; semester countdown</h2><p>Pulled from your school's published calendar.</p></div></div>
+      <div class="finals-countdown-card">
+        <p id="finals-countdown-text">Checking the calendar…</p>
+      </div>
+    </section>
 
     <section class="dashboard-section district-schools-zone" id="schools">
       <div class="section-title-row">
@@ -474,10 +492,10 @@
     </section>
 
     <section class="dashboard-section tools-zone" id="tools"><div class="tools-heading"><div><p class="section-label">SCHOOL LINKS &amp; APPS</p><h2>Student tools</h2><p>Frequently used school websites and campus tools.</p></div></div><div class="tool-grid">
-      <a href="/matrix/"><i class="tool-logo tool-logo-encrypt" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><rect x="9" y="8" width="6" height="5" rx="1"/><path d="M10 8V6.5a2 2 0 0 1 4 0V8"/></svg></i><span><strong>Matrix Chat</strong><small>Decentralized E2E messenger</small></span></a>
-      <a href="/public-chat/"><i class="tool-logo tool-logo-public" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8m-8 4h5"/></svg></i><span><strong>Public Chat</strong><small>District chat room</small></span></a>
-      <a href="/preferences/"><i class="tool-logo tool-logo-theme" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></i><span><strong>Themes &amp; Wallpapers</strong><small>Dashboard preferences</small></span></a>
-      <a href="https://rjuhsd.instructure.com/" target="_blank" rel="noopener"><i class="tool-logo tool-logo-canvas" aria-hidden="true"><svg viewBox="0 0 32 32" width="24" height="24"><circle cx="16" cy="4.5" r="2.8" fill="#e02424"/><circle cx="24.1" cy="7.9" r="2.8" fill="#e02424"/><circle cx="27.5" cy="16" r="2.8" fill="#e02424"/><circle cx="24.1" cy="24.1" r="2.8" fill="#e02424"/><circle cx="16" cy="27.5" r="2.8" fill="#e02424"/><circle cx="7.9" cy="24.1" r="2.8" fill="#e02424"/><circle cx="4.5" cy="16" r="2.8" fill="#e02424"/><circle cx="7.9" cy="7.9" r="2.8" fill="#e02424"/></svg></i><span><strong>Canvas</strong><small>Classes and assignments</small></span></a><a href="https://rosevillejuhsd.aeries.net/student/LoginParent.aspx" target="_blank" rel="noopener"><i class="tool-logo tool-logo-aeries" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#0072ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/><rect x="6" y="13" width="3" height="5" rx=".5" fill="#0072ce"/><rect x="11" y="9" width="3" height="9" rx=".5" fill="#0072ce"/><rect x="16" y="6" width="3" height="12" rx=".5" fill="#0072ce"/></svg></i><span><strong>Aeries</strong><small>Grades and attendance</small></span></a><a href="https://mail.google.com/" target="_blank" rel="noopener"><i class="tool-logo tool-logo-mail" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none"><rect width="20" height="16" x="2" y="4" rx="2" stroke="#ea4335" stroke-width="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" stroke="#ea4335" stroke-width="2" stroke-linecap="round"/><path d="M2 7v11a2 2 0 0 0 2 2h2V10l-4-3Z" fill="#4285f4"/><path d="M22 7v11a2 2 0 0 1-2 2h-2V10l4-3Z" fill="#34a853"/></svg></i><span><strong>School email</strong><small>District inbox</small></span></a><a href="https://drive.google.com/" target="_blank" rel="noopener"><i class="tool-logo tool-logo-drive" aria-hidden="true"><svg viewBox="0 0 87.3 78" width="22" height="20"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44c-.8 1.4-1.2 2.95-1.2 4.5h27.5z" fill="#00ac47"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.5l5.85 10.15z" fill="#ea4335"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.25z" fill="#00832d"/><path d="m59.8 53h27.5c0-1.55-.4-3.1-1.2-4.5l-13.75-23.8c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8z" fill="#ffba00"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.1 27.9h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg></i><span><strong>Google Drive</strong><small>Files and shared work</small></span></a><a href="https://woodcreek.rjuhsd.us/" target="_blank" rel="noopener" data-school-link><i class="tool-logo tool-logo-school" aria-hidden="true"><img src="/rjuhsd-assets/woodcreek.png" alt="Woodcreek High School" width="28" height="28"></i><span><strong>Woodcreek website</strong><small>School news and resources</small></span></a><a href="https://www.google.com/maps/search/?api=1&query=Woodcreek+High+School+Roseville" target="_blank" rel="noopener"><i class="tool-logo tool-logo-map" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#ea4335" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3" fill="#ea4335"/></svg></i><span><strong>Campus map</strong><small>Directions to Woodcreek</small></span></a>
+      <a href="#study-timer"><i class="tool-logo tool-logo-encrypt" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></i><span><strong>Study Timer</strong><small>Focus &amp; break timer</small></span><b>↓</b></a>
+      <a href="#finals-countdown"><i class="tool-logo tool-logo-public" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></i><span><strong>Finals Countdown</strong><small>Days until finals</small></span><b>↓</b></a>
+      <a href="/preferences/"><i class="tool-logo tool-logo-theme" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></i><span><strong>Themes &amp; Wallpapers</strong><small>Dashboard preferences</small></span><b>↗</b></a>
+      <a href="https://rjuhsd.instructure.com/" target="_blank" rel="noopener"><i class="tool-logo tool-logo-canvas" aria-hidden="true"><svg viewBox="0 0 32 32" width="24" height="24"><circle cx="16" cy="4.5" r="2.8" fill="#e02424"/><circle cx="24.1" cy="7.9" r="2.8" fill="#e02424"/><circle cx="27.5" cy="16" r="2.8" fill="#e02424"/><circle cx="24.1" cy="24.1" r="2.8" fill="#e02424"/><circle cx="16" cy="27.5" r="2.8" fill="#e02424"/><circle cx="7.9" cy="24.1" r="2.8" fill="#e02424"/><circle cx="4.5" cy="16" r="2.8" fill="#e02424"/><circle cx="7.9" cy="7.9" r="2.8" fill="#e02424"/></svg></i><span><strong>Canvas</strong><small>Classes and assignments</small></span><b>↗</b></a><a href="https://rosevillejuhsd.aeries.net/student/LoginParent.aspx" target="_blank" rel="noopener"><i class="tool-logo tool-logo-aeries" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#0072ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/><rect x="6" y="13" width="3" height="5" rx=".5" fill="#0072ce"/><rect x="11" y="9" width="3" height="9" rx=".5" fill="#0072ce"/><rect x="16" y="6" width="3" height="12" rx=".5" fill="#0072ce"/></svg></i><span><strong>Aeries</strong><small>Grades and attendance</small></span><b>↗</b></a><a href="https://mail.google.com/" target="_blank" rel="noopener"><i class="tool-logo tool-logo-mail" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none"><rect width="20" height="16" x="2" y="4" rx="2" stroke="#ea4335" stroke-width="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" stroke="#ea4335" stroke-width="2" stroke-linecap="round"/><path d="M2 7v11a2 2 0 0 0 2 2h2V10l-4-3Z" fill="#4285f4"/><path d="M22 7v11a2 2 0 0 1-2 2h-2V10l4-3Z" fill="#34a853"/></svg></i><span><strong>School email</strong><small>District inbox</small></span><b>↗</b></a><a href="https://drive.google.com/" target="_blank" rel="noopener"><i class="tool-logo tool-logo-drive" aria-hidden="true"><svg viewBox="0 0 87.3 78" width="22" height="20"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44c-.8 1.4-1.2 2.95-1.2 4.5h27.5z" fill="#00ac47"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.5l5.85 10.15z" fill="#ea4335"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.25z" fill="#00832d"/><path d="m59.8 53h27.5c0-1.55-.4-3.1-1.2-4.5l-13.75-23.8c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8z" fill="#ffba00"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.1 27.9h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg></i><span><strong>Google Drive</strong><small>Files and shared work</small></span><b>↗</b></a><a href="https://woodcreek.rjuhsd.us/" target="_blank" rel="noopener" data-school-link><i class="tool-logo tool-logo-school" aria-hidden="true"><img src="/rjuhsd-assets/woodcreek.png" alt="Woodcreek High School" width="28" height="28"></i><span><strong>Woodcreek website</strong><small>School news and resources</small></span><b>↗</b></a><a href="https://www.google.com/maps/search/?api=1&query=Woodcreek+High+School+Roseville" target="_blank" rel="noopener"><i class="tool-logo tool-logo-map" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#ea4335" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3" fill="#ea4335"/></svg></i><span><strong>Campus map</strong><small>Directions to Woodcreek</small></span><b>↗</b></a>
     </div></section>
 
     <section class="dashboard-section faq-zone" id="faq">
@@ -546,17 +564,13 @@
       <span class="dock-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="14" rx="1.5"/><rect width="7" height="7" x="3" y="14" rx="1.5"/></svg></span>
       <span>Apps</span>
     </a>
-    <a href="/matrix/" class="dock-item highlight-dock">
-      <span class="dock-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><rect x="9" y="8" width="6" height="5" rx="1"/></svg></span>
-      <span>Matrix</span>
+    <a href="#tools" class="dock-item highlight-dock">
+      <span class="dock-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+      <span>Tools</span>
     </a>
     <a href="https://mitch.pro" class="dock-item" target="_blank" rel="noopener">
       <span class="dock-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></span>
       <span>mitch.pro</span>
-    </a>
-    <a href="/public-chat/" class="dock-item">
-      <span class="dock-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8m-8 4h5"/></svg></span>
-      <span>Public</span>
     </a>
     <a href="/preferences/" class="dock-item">
       <span class="dock-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.5 1.5m11.2 11.2 1.5 1.5M2 12h2m16 0h2M4.9 19.1l1.5-1.5M17.6 6.4l1.5-1.5"/></svg></span>

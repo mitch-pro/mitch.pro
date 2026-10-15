@@ -32,7 +32,7 @@ pub fn rjuhsd_manifest() -> serde_json::Value {
     serde_json::json!({
         "name": "RJUHSD Hub",
         "short_name": "RJUHSD",
-        "description": "The Roseville Joint Union High School District hub: bell schedules, news, and encrypted chat.",
+        "description": "The Roseville Joint Union High School District hub: bell schedules, news, and student tools.",
         "id": "/",
         "start_url": "/?utm_source=pwa",
         "scope": "/",
@@ -41,7 +41,7 @@ pub fn rjuhsd_manifest() -> serde_json::Value {
         "background_color": "#0c0809",
         "theme_color": "#0c0809",
         "orientation": "any",
-        "categories": ["education", "social", "productivity"],
+        "categories": ["education", "productivity"],
         "icons": [
             { "src": "/rjuhsd-assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
             { "src": "/rjuhsd-assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
@@ -49,7 +49,7 @@ pub fn rjuhsd_manifest() -> serde_json::Value {
         ],
         "shortcuts": [
             { "name": "Bell Schedule", "short_name": "Bells", "description": "Live RJUHSD bell schedules", "url": "/?utm_source=pwa-shortcut#schedule-panel", "icons": [{ "src": "/rjuhsd-assets/icon-192.png", "sizes": "192x192" }] },
-            { "name": "Matrix Chat", "short_name": "Matrix", "description": "Open end-to-end encrypted Matrix chat", "url": "/matrix/?utm_source=pwa-shortcut", "icons": [{ "src": "/rjuhsd-assets/icon-192.png", "sizes": "192x192" }] }
+            { "name": "Student Tools", "short_name": "Tools", "description": "Study timer, finals countdown, and more", "url": "/?utm_source=pwa-shortcut#tools", "icons": [{ "src": "/rjuhsd-assets/icon-192.png", "sizes": "192x192" }] }
         ]
     })
 }

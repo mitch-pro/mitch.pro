@@ -91,7 +91,8 @@ function renderNowAdvanced(){
   if(next){const sec=Math.max(0,Math.round((mins(next.start)-now)*60)),before=now<mins(s[0].start),previous=[...s].reverse().find(x=>mins(x.end)<=now),start=previous?mins(previous.end):now,total=Math.max(1,mins(next.start)-start),pct=before?0:(now-start)/total*100;$("live-mode").textContent=before?"STARTING SOON":"PASSING";$("current-eyebrow").textContent=before?"SCHOOL STARTS IN":"CLASS STARTS IN";$("current-period").textContent=before?"First bell":next.name;$("current-range").textContent=`Starts at ${time(next.start)}`;$("countdown").textContent=`${String(Math.floor(sec/60)).padStart(2,"0")}:${String(sec%60).padStart(2,"0")}`;$("countdown-copy").textContent="until it begins";$("period-badge").textContent="→";$("live-progress").style.width=`${pct}%`;$("next-period").textContent=next.name;$("next-time").textContent=time(next.start);setDial(pct,time(next.start),before?"Before school":"Passing period","STARTS AT");return}
   $("live-mode").textContent="DONE";$("current-eyebrow").textContent="SCHOOL DAY COMPLETE";$("current-period").textContent="Dismissed";$("current-range").textContent=`Last bell at ${time(s.at(-1).end)}`;$("countdown").textContent="DONE";$("countdown-copy").textContent="See you next school day";$("period-badge").textContent="✓";$("live-progress").style.width="100%";$("next-period").textContent="Next school day";$("next-time").textContent="—";setDial(100,time(s.at(-1).end),"School is out","DISMISSED")
 }
-function render(){renderIdentity();renderTimeline();renderWeek();renderEvents();renderNowAdvanced()}
+function renderFinalsCountdown(){const el=$("finals-countdown-text");if(!el)return;const today=data.now?.iso||pacific().date,match=eventData().find(x=>x.date>=today&&/final|semester/i.test(x.text));if(!match){el.textContent="No finals or semester date published yet — check back closer to the end of the term.";return}const days=Math.round((new Date(`${match.date}T12:00:00`)-new Date(`${today}T12:00:00`))/86400000);el.textContent=days<=0?`${safe(match.text)} is today!`:`${days} day${days===1?"":"s"} until ${safe(match.text)} (${new Date(`${match.date}T12:00:00`).toLocaleDateString("en-US",{month:"short",day:"numeric"})}).`}
+function render(){renderIdentity();renderTimeline();renderWeek();renderEvents();renderNowAdvanced();renderFinalsCountdown()}
 async function load(){
  const version=++requestVersion,selected=school;
  calendarVerified=false;$("source-status").textContent="Checking the official calendar · Published weekly times shown";
@@ -145,14 +146,22 @@ $("schedule-mode").addEventListener("change",()=>{scheduleMode=$("schedule-mode"
 $("include-period0").addEventListener("change",()=>{includePeriod0=$("include-period0").checked;data=buildData();render()});
 applySchoolIdentity();
 document.querySelectorAll("[data-choose-lunch]").forEach(b=>b.addEventListener("click",()=>chooseLunch(b.dataset.chooseLunch)));["change-lunch","hero-change-lunch","brief-change-lunch"].forEach(id=>$(id).addEventListener("click",openLunch));$("calendar-prev").addEventListener("click",()=>moveCalendar(-1));$("calendar-next").addEventListener("click",()=>moveCalendar(1));$("calendar-today").addEventListener("click",()=>{const d=new Date(`${data.now?.iso||pacific().date}T12:00:00`);calendarCursor={year:d.getFullYear(),month:d.getMonth()};renderEvents()});$("weather-toggle").addEventListener("click",()=>{const open=$("weather-toggle").getAttribute("aria-expanded")!=="true";$("weather-toggle").setAttribute("aria-expanded",String(open));$("weather-details").hidden=!open;$("weather-widget").classList.toggle("expanded",open)});function syncRjuhsdTheme(){const isLight=document.documentElement.classList.contains("theme-light")||(window.__theme&&window.__theme.get()==="light");document.body.classList.toggle("dark",!isLight);const tc=document.querySelector('meta[name="theme-color"]');if(tc)tc.content=isLight?"#f7f4f4":"#0c0809";const b=$("theme-btn")||$("theme-toggle");if(b){const sun='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.5 1.5m11.2 11.2 1.5 1.5M2 12h2m16 0h2M4.9 19.1l1.5-1.5M17.6 6.4l1.5-1.5"/></svg>';const moon='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';b.innerHTML=isLight?moon:sun;b.setAttribute("title",isLight?"Switch to dark theme":"Switch to light theme");b.setAttribute("aria-label",isLight?"Switch to dark theme":"Switch to light theme")}}syncRjuhsdTheme();window.addEventListener("themechange",syncRjuhsdTheme);const tb=$("theme-btn")||$("theme-toggle");if(tb){tb.addEventListener("click",()=>{const isLight=document.documentElement.classList.contains("theme-light");const next=isLight?"dark":"light";document.cookie="theme="+encodeURIComponent(next)+";path=/;max-age=31536000";if(window.__theme&&typeof window.__theme.apply==="function"){window.__theme.apply(next)}else{document.documentElement.classList.toggle("theme-light",next==="light");document.body.classList.toggle("dark",next==="dark")}syncRjuhsdTheme()})}load();loadWeather();setInterval(renderNowAdvanced,1000);setInterval(load,120000);setInterval(loadWeather,600000);
-// Keep auth prompts out of the way for signed-in visitors. Controls remain
-// hidden until the session check finishes so they never flash on screen.
-try{
- const meCtl=new AbortController();const meTimer=setTimeout(()=>meCtl.abort(),6000);
- fetch("/api/me",{credentials:"include",signal:meCtl.signal}).then(r=>{if(!r.ok){r.text().catch(()=>{});return null;}return r.json();}).then(me=>{
-  clearTimeout(meTimer);
-  if(!me||!me.email){document.body.classList.add("auth-guest");document.querySelectorAll(".js-signin-link").forEach(a=>a.hidden=false);return}
-  document.querySelectorAll(".js-signin-link").forEach(a=>a.remove());
- }).catch(()=>{clearTimeout(meTimer)});
-}catch(e){}
+
+// ── Study timer (focus/break interval timer, client-side only) ───────
+(function(){
+ const modeEl=$("study-timer-mode"),clockEl=$("study-timer-clock"),toggleBtn=$("study-timer-toggle"),resetBtn=$("study-timer-reset"),focusInput=$("study-timer-focus-len"),breakInput=$("study-timer-break-len");
+ if(!modeEl||!clockEl||!toggleBtn||!resetBtn||!focusInput||!breakInput)return;
+ let mode="focus",remaining=0,running=false,tickId=null;
+ function fmt(sec){sec=Math.max(0,Math.round(sec));return `${String(Math.floor(sec/60)).padStart(2,"0")}:${String(sec%60).padStart(2,"0")}`}
+ function lengthFor(m){const v=Number(m==="focus"?focusInput.value:breakInput.value);return(Number.isFinite(v)&&v>0?v:(m==="focus"?25:5))*60}
+ function paint(){modeEl.textContent=mode==="focus"?"FOCUS":"BREAK";clockEl.textContent=fmt(remaining);toggleBtn.textContent=running?"Pause":"Start"}
+ function switchMode(next){mode=next;remaining=lengthFor(mode);paint()}
+ function pause(){running=false;if(tickId){clearInterval(tickId);tickId=null}paint()}
+ function tick(){remaining-=1;if(remaining<=0){pause();switchMode(mode==="focus"?"break":"focus");return}paint()}
+ function start(){if(running)return;running=true;tickId=setInterval(tick,1000);paint()}
+ toggleBtn.addEventListener("click",()=>running?pause():start());
+ resetBtn.addEventListener("click",()=>{pause();switchMode("focus")});
+ [focusInput,breakInput].forEach(inp=>inp.addEventListener("change",()=>{if(!running)switchMode(mode)}));
+ switchMode("focus");
+})();
 })();

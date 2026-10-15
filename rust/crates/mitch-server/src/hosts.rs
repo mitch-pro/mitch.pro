@@ -136,7 +136,9 @@ pub fn same_origin_request(headers: &axum::http::HeaderMap, cfg: Option<&SiteCon
 
 /// `ssoBackAllowed()`: resolve `rawBack` against the request host origin
 /// (exactly `new URL(rawBack, 'https://' + requestHost)`), require https and
-/// an allowed host (rjuhsd/pickle/mitch-SSO).
+/// an allowed host (pickle/mitch-SSO). rjuhsd.school is deliberately not a
+/// valid bridge target: it only ever gets a local `/enroll/` account, never
+/// a cross-domain SSO session bridged in from mitchdog.com.
 pub fn sso_back_allowed(cfg: &SiteConfig, raw_back: &str, req_host: &str) -> Option<url::Url> {
     let host_name = req_host.split(':').next().unwrap_or("");
     let host_name = if host_name.is_empty() {
@@ -150,10 +152,7 @@ pub fn sso_back_allowed(cfg: &SiteConfig, raw_back: &str, req_host: &str) -> Opt
         return None;
     }
     let h = back.host_str().unwrap_or("").to_lowercase();
-    if is_host(&h, "rjuhsd.school")
-        || is_host(&h, "sexypickleclub.com")
-        || is_mitch_sso_host(cfg, &h)
-    {
+    if is_host(&h, "sexypickleclub.com") || is_mitch_sso_host(cfg, &h) {
         return Some(back);
     }
     None

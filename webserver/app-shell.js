@@ -44,7 +44,6 @@
 
   var NAV_RJUHSD = [
     { href: '/', label: 'Home', icon: '⌂', match: function (p) { return p === '/' || p === '/index.html'; } },
-    { href: '/matrix/', label: 'Chat', icon: '◉', match: function (p) { return p.indexOf('/matrix') === 0 || p.indexOf('/encrypt') === 0 || p.indexOf('/public-chat') === 0; } },
     { href: '/#schedule-panel', label: 'Bell', icon: '◷', match: function () { return false; } },
     { href: '/preferences/', label: 'Settings', icon: '⚙', match: function (p) { return p.indexOf('/preferences') === 0; } }
   ];

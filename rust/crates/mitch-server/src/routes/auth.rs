@@ -1491,7 +1491,7 @@ fn sso_bridge(state: &Arc<AppState>, headers: &HeaderMap, search: &str) -> Respo
     let back_param = query_map
         .get("back")
         .cloned()
-        .unwrap_or_else(|| "https://rjuhsd.school/".to_string());
+        .unwrap_or_else(|| state.cfg.primary.clone());
     let Some(back_url) = sso_back_allowed(&state.cfg, &back_param, &req_h) else {
         return json_resp(400, json!({ "error": "Invalid back URL." }));
     };
@@ -2213,7 +2213,11 @@ mod tests {
             HeaderValue::from_static("mitchdog.com"),
         );
 
-        let resp_bridge = sso_bridge(&state, &headers, "back=https%3A%2F%2Frjuhsd.school%2Fgames");
+        let resp_bridge = sso_bridge(
+            &state,
+            &headers,
+            "back=https%3A%2F%2Fsexypickleclub.com%2Fgames",
+        );
         assert_eq!(resp_bridge.status(), StatusCode::FOUND);
         let loc = resp_bridge
             .headers()
@@ -2236,13 +2240,13 @@ mod tests {
         let mut dest_headers = HeaderMap::new();
         dest_headers.insert(
             axum::http::header::HOST,
-            HeaderValue::from_static("rjuhsd.school"),
+            HeaderValue::from_static("sexypickleclub.com"),
         );
         let resp_exchange = sso_exchange(
             &state,
             &Method::GET,
             &dest_headers,
-            &format!("token={token}&back=https%3A%2F%2Frjuhsd.school%2Fgames"),
+            &format!("token={token}&back=https%3A%2F%2Fsexypickleclub.com%2Fgames"),
             &[],
         );
         assert_eq!(resp_exchange.status(), StatusCode::FOUND);
@@ -2252,6 +2256,30 @@ mod tests {
             .unwrap()
             .to_str()
             .unwrap();
-        assert_eq!(redir, "https://rjuhsd.school/games");
+        assert_eq!(redir, "https://sexypickleclub.com/games");
+    }
+
+    #[test]
+    fn sso_back_allowed_rejects_rjuhsd_school() {
+        let (state, _dir) = test_state();
+        // rjuhsd.school only ever gets a local /enroll/ account - never a
+        // cross-domain SSO session bridged in from mitchdog.com.
+        assert!(crate::hosts::sso_back_allowed(
+            &state.cfg,
+            "https://rjuhsd.school/games",
+            "mitchdog.com"
+        )
+        .is_none());
+        // Pickle and the Mitch SSO hosts stay valid bridge targets.
+        assert!(crate::hosts::sso_back_allowed(
+            &state.cfg,
+            "https://sexypickleclub.com/barrel",
+            "mitchdog.com"
+        )
+        .is_some());
+        assert!(
+            crate::hosts::sso_back_allowed(&state.cfg, "https://mitch.pro/", "mitchdog.com")
+                .is_some()
+        );
     }
 }
