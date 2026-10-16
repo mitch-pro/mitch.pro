@@ -29,11 +29,11 @@ FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
 RUN --mount=type=cache,target=/app/target \
     --mount=type=cache,target=/usr/local/cargo/registry \
-    cargo chef cook --release --recipe-path recipe.json -j 2
+    cargo chef cook --release --recipe-path recipe.json
 COPY . .
 RUN --mount=type=cache,target=/app/target \
     --mount=type=cache,target=/usr/local/cargo/registry \
-    cargo build --release --workspace -j 2 && \
+    cargo build --release --workspace && \
     mkdir -p /app/bin && \
     cp /app/target/release/mitch-* /app/bin/
 
