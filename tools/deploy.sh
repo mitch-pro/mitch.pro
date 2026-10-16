@@ -118,12 +118,6 @@ main() {
         fi
     }
 
-    # Plain docker compose, no doppler wrapper - see run_docker_compose's
-    # comment above for which operations actually need one.
-    run_docker_compose_nosecrets() {
-        docker compose "$@"
-    }
-
     # Helper: return 0 if all changed files are static webroot assets or doc files
     is_only_static() {
         local files="$1"
@@ -267,7 +261,7 @@ main() {
     # Conduit changed in this push (or when explicitly requested).
     if echo "$CHANGED_FILES" | grep -qE '^(conduit\.toml|docker-compose\.yml)$' || [ "${FORCE_FULL_DEPLOY:-0}" = "1" ]; then
         echo "[deploy] conduit.toml or docker-compose.yml changed — restarting conduit to pick up the new config..."
-        run_docker_compose_nosecrets restart conduit 2>/dev/null || true
+        docker restart mitch-matrix-conduit 2>/dev/null || true
     else
         echo "[deploy] No conduit-affecting config changed — leaving the running conduit container untouched (no Matrix downtime this deploy)."
     fi
@@ -293,7 +287,7 @@ main() {
     HEALTHY=false
 
     while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-        HTTP_STATUS=$(run_docker_compose_nosecrets exec -T "webserver-$ACTIVE_SLOT" curl -s -o /dev/null -w "%{http_code}" "http://webserver-$INACTIVE_SLOT:6800/enroll/" 2>/dev/null || echo "000")
+        HTTP_STATUS=$(docker exec "mitch-webserver-$ACTIVE_SLOT" curl -s -o /dev/null -w "%{http_code}" "http://webserver-$INACTIVE_SLOT:6800/enroll/" 2>/dev/null || echo "000")
         if [ "$HTTP_STATUS" = "200" ]; then
             echo "[deploy] Health check passed (HTTP 200 via webserver-$INACTIVE_SLOT:6800, the Caddy-equivalent path)!"
             HEALTHY=true
@@ -322,10 +316,20 @@ main() {
     # the exact path Caddy uses (step 4), so this reload is expected to be the
     # genuinely ~0ms swap Caddy's own hot-reload is designed to be - timed
     # below so the final notification reports what actually happened instead
-    # of a hardcoded claim.
+    # of a hardcoded claim. Plain `docker exec` by container name, not
+    # `docker compose exec` - compose has to load/parse the compose file(s)
+    # and resolve the service name to a container before it can even start,
+    # overhead a raw exec by the (static, known) container name skips
+    # entirely. Note that this reload command's own elapsed time isn't real
+    # user-facing downtime regardless: Caddy's reload keeps the OLD config
+    # (and the still-running old container behind it) serving every request
+    # the whole time this is in flight - it only swaps once the new config
+    # is confirmed ready, with no gap where neither is listening. What this
+    # actually measures is how long our own verification takes, not an
+    # outage window.
     echo "[deploy] Reloading Caddy proxy configuration..."
     SWAP_START_MS=$(date +%s%3N)
-    run_docker_compose_nosecrets exec -T reverse-proxy caddy reload --config /etc/caddy/Caddyfile
+    docker exec mitch-caddy-proxy caddy reload --config /etc/caddy/Caddyfile
     RELOAD_DONE_MS=$(date +%s%3N)
     echo "[deploy] Caddy reload command returned in $((RELOAD_DONE_MS - SWAP_START_MS))ms"
 
@@ -368,7 +372,7 @@ main() {
 
     # 8. Tear down the old container slot
     echo "[deploy] Stopping and tearing down the old webserver-$ACTIVE_SLOT..."
-    run_docker_compose_nosecrets stop "webserver-$ACTIVE_SLOT"
+    docker stop "mitch-webserver-$ACTIVE_SLOT"
 
     if [ "$(id -u)" -eq 0 ] && [ "$REPO_OWNER" != "root" ]; then
         chown -R "$REPO_OWNER:$REPO_OWNER" "$CADDYFILE_PATH" 2>/dev/null || true
