@@ -216,7 +216,8 @@ pub fn handle(
         if !ctx.is_any_admin(state) {
             return Some(forbidden());
         }
-        let target = mitch_lib::auth::normalize_email(
+        let target = super::resolve_admin_target(
+            state,
             body.get("email").and_then(|v| v.as_str()).unwrap_or(""),
         );
         if !valid_email(&target) {
@@ -488,7 +489,7 @@ pub fn handle(
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .trim();
-        let target = mitch_lib::auth::normalize_email(target_raw);
+        let target = super::resolve_admin_target(state, target_raw);
         if target.is_empty() || !target.contains('@') {
             return Some(json_response(
                 400,
@@ -547,6 +548,7 @@ fn set_moderator(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Respons
         .unwrap_or("")
         .trim()
         .to_string();
+    let target_raw = super::resolve_admin_target(state, &target_raw);
     let target = mitch_lib::auth::normalize_email(&target_raw);
     let active = body.get("active").and_then(|v| v.as_bool()) == Some(true);
     let mut mods = mitch_lib::auth::moderator_emails(&state.store);
@@ -595,6 +597,7 @@ fn set_admin(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response {
     if target_raw.is_empty() {
         return json_response(400, json!({ "error": "email required" }));
     }
+    let target_raw = super::resolve_admin_target(state, &target_raw);
     let target = mitch_lib::auth::normalize_email(&target_raw);
     let active = body.get("active").and_then(|v| v.as_bool()) == Some(true);
     if !active && mitch_lib::auth::is_owner_email(&state.store, &target) {
@@ -657,6 +660,7 @@ fn set_co_owner(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response
     if target_raw.is_empty() {
         return json_response(400, json!({ "error": "email required" }));
     }
+    let target_raw = super::resolve_admin_target(state, &target_raw);
     let target = mitch_lib::auth::normalize_email(&target_raw);
     if mitch_lib::auth::is_owner_email(&state.store, &target) {
         return json_response(
@@ -1188,10 +1192,11 @@ fn apply_account_ban(
     duration: Option<&Value>,
     actor: &str,
 ) -> Result<Value, (u16, String)> {
+    let raw_email = super::resolve_admin_target(state, raw_email);
     if !valid_email(raw_email.trim()) {
         return Err((400, "valid email required".into()));
     }
-    let target = mitch_lib::auth::normalize_email(raw_email);
+    let target = mitch_lib::auth::normalize_email(&raw_email);
     if mitch_lib::auth::is_admin_email(&state.store, &target) {
         return Err((403, "cannot ban admins or owners from this panel".into()));
     }
@@ -1222,12 +1227,13 @@ pub(super) fn restore_account_access(
     state: &Arc<AppState>,
     raw_email: &str,
 ) -> Result<Value, (u16, String)> {
+    let raw_email = super::resolve_admin_target(state, raw_email);
     if !valid_email(raw_email.trim()) {
         return Err((400, "valid email required".into()));
     }
-    let target = mitch_lib::auth::normalize_email(raw_email);
-    let mut existed =
-        mitch_lib::bans::blacklist_remove(&state.store, &target, raw_email).map_err(|_| {
+    let target = mitch_lib::auth::normalize_email(&raw_email);
+    let mut existed = mitch_lib::bans::blacklist_remove(&state.store, &target, &raw_email)
+        .map_err(|_| {
             (
                 500,
                 "Could not remove the account ban. Try again.".to_string(),
@@ -1254,7 +1260,7 @@ pub(super) fn restore_account_access(
         *bans = updated;
     }
     let removed_ips =
-        mitch_lib::bans::banned_ips_remove_for_account(&state.store, &target, raw_email, None);
+        mitch_lib::bans::banned_ips_remove_for_account(&state.store, &target, &raw_email, None);
     existed |= !removed_ips.is_empty();
     let matrix_user_id = crate::routes::matrix::resolve_matrix_user_id_for_email(state, &target);
     spawn_matrix_unban(
@@ -1496,6 +1502,7 @@ pub fn execute_moderator_approved_action(
                 return Err((403, "approver cannot grant premium".into()));
             }
             let target_raw = s("targetEmail").as_str().unwrap_or("").to_string();
+            let target_raw = super::resolve_admin_target(state, &target_raw);
             let target_email = mitch_lib::auth::normalize_email(&target_raw);
             let reason = s("reason")
                 .as_str()
@@ -1519,6 +1526,7 @@ pub fn execute_moderator_approved_action(
                 return Err((403, "approver cannot revoke premium".into()));
             }
             let email_raw = s("email").as_str().unwrap_or("").to_string();
+            let email_raw = super::resolve_admin_target(state, &email_raw);
             let norm = mitch_lib::auth::normalize_email(&email_raw);
             let reason = s("reason")
                 .as_str()
@@ -1589,7 +1597,7 @@ pub fn execute_moderator_approved_action(
             Ok(json!({ "ok": true }))
         }
         "shadow_ban" => {
-            let target = mitch_lib::auth::normalize_email(s("email").as_str().unwrap_or(""));
+            let target = super::resolve_admin_target(state, s("email").as_str().unwrap_or(""));
             let active = toggle_shadow_ban(state, &target)?;
             mitch_lib::admin::log_admin_action(
                 &state.store,
@@ -1748,6 +1756,7 @@ pub fn execute_moderator_approved_action(
         }
         "moderator_role" => {
             let target_raw = s("email").as_str().unwrap_or("").trim().to_string();
+            let target_raw = super::resolve_admin_target(state, &target_raw);
             let target = mitch_lib::auth::normalize_email(&target_raw);
             let active = s("active").as_bool() == Some(true);
             let mut mods = mitch_lib::auth::moderator_emails(&state.store);
@@ -1785,6 +1794,7 @@ pub fn execute_moderator_approved_action(
         }
         "admin_role" => {
             let target_raw = s("email").as_str().unwrap_or("").trim().to_string();
+            let target_raw = super::resolve_admin_target(state, &target_raw);
             let target = mitch_lib::auth::normalize_email(&target_raw);
             let active = s("active").as_bool() == Some(true);
             let admins_file = state.cfg.base_dir.join("data/admins.json");

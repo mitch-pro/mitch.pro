@@ -171,6 +171,7 @@ body {
   margin: 0;
   min-height: 100vh;
   min-height: 100dvh;
+  padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   color: var(--t-fg);
   background-color: var(--t-bg);
@@ -206,7 +207,11 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--t-font); font-weight: 700; line-heig
 
 .app-topbar, #app-topbar {
   position: sticky;
-  top: 0;
+  /* body's own padding-top only covers this bar's initial, unstuck
+     position - once sticky kicks in on scroll it re-anchors to 0 from the
+     viewport, which on an installed iPhone PWA sits right under the
+     Dynamic Island. Keep the same clearance once stuck. */
+  top: env(safe-area-inset-top, 0px);
   z-index: 400;
   display: flex;
   align-items: center;
@@ -498,15 +503,15 @@ body.enroll-page { background: var(--t-bg); }
 #mobile-menu nav a:hover { border-color: var(--t-ac); background: var(--t-gls); }
 
 @media (max-width: 760px) {
-  body { --mobile-dock-space: calc(84px + env(safe-area-inset-bottom, 0px)); padding-bottom: var(--mobile-dock-space); }
+  body { --mobile-dock-space: calc(76px + env(safe-area-inset-bottom, 0px)); padding-bottom: var(--mobile-dock-space); }
   html:has(body.app-shell) { scroll-padding-top: 84px; }
-  .app-topbar, #app-topbar { position: sticky; top: 0; min-height: 3.2rem; padding: 0.5rem 1rem; gap: 10px; flex-wrap: nowrap; }
+  .app-topbar, #app-topbar { position: sticky; top: env(safe-area-inset-top, 0px); min-height: 3.2rem; padding: 0.5rem 1rem; gap: 10px; flex-wrap: nowrap; }
   .app-nav, .home-masthead-links { display: none !important; }
   .app-account-link { flex: 0 0 38px; width: 38px; min-height: 38px; display: grid; place-items: center; font-size: 0; padding: 0; }
   .app-account-link span { font-size: 22px; }
   #theme-btn, #sw-notif-btn { position: static; width: 38px; height: 38px; flex-shrink: 0; }
-  #mobile-dock { position: fixed; z-index: 9000; bottom: max(10px, env(safe-area-inset-bottom, 0px)); left: 12px; right: 12px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; padding: 6px; border: 1px solid var(--t-bd); border-radius: 23px; background: color-mix(in srgb, var(--t-bg) 95%, transparent); box-shadow: 0 8px 32px rgba(20, 16, 24, 0.12); backdrop-filter: blur(16px); }
-  #mobile-dock :is(a, button) { min-width: 0; min-height: 55px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 4px; border: 0; border-radius: 16px; background: none; color: var(--t-fg2); padding: 4px 2px; text-decoration: none; font: 650 12px/1.2 var(--t-font); cursor: pointer; }
+  #mobile-dock { position: fixed; z-index: 9000; bottom: max(10px, env(safe-area-inset-bottom, 0px)); left: 12px; right: 12px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; padding: 5px; border: 1px solid var(--t-bd); border-radius: 21px; background: color-mix(in srgb, var(--t-bg) 95%, transparent); box-shadow: 0 8px 32px rgba(20, 16, 24, 0.12); backdrop-filter: blur(16px); }
+  #mobile-dock :is(a, button) { min-width: 0; min-height: 50px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 4px; border: 0; border-radius: 16px; background: none; color: var(--t-fg2); padding: 4px 2px; text-decoration: none; font: 650 12px/1.2 var(--t-font); cursor: pointer; }
   #mobile-dock svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
   #mobile-dock [aria-current] { color: var(--t-ac-ink); background: var(--t-ac); }
   body.mobile-keyboard #mobile-dock { display: none; }

@@ -3347,10 +3347,103 @@ async fn api_gifs_trending(_state: &AppState, _headers: &HeaderMap, search: &str
     fetch_gif_page(None, giphy_offset).await
 }
 
+/// Explicit/NSFW search terms to block outright before ever hitting Giphy.
+/// `rating=g` on the upstream request (see `fetch_giphy_gifs`) is Giphy's
+/// own self-reported per-GIF rating and isn't reliable enough on its own -
+/// certain on-the-nose search terms still return explicit results under it,
+/// especially via the public fallback API key. This is a second, independent
+/// layer: block the query itself before it's ever sent upstream.
+const BLOCKED_GIF_QUERY_TERMS: &[&str] = &[
+    "porn",
+    "porno",
+    "pron",
+    "xxx",
+    "nsfw",
+    "nude",
+    "nudes",
+    "naked",
+    "boobs",
+    "boob",
+    "tits",
+    "titties",
+    "pussy",
+    "vagina",
+    "penis",
+    "cock",
+    "dick",
+    "anal",
+    "blowjob",
+    "deepthroat",
+    "cumshot",
+    "cum",
+    "creampie",
+    "orgasm",
+    "fap",
+    "fapping",
+    "masturbat",
+    "hentai",
+    "ecchi",
+    "rule34",
+    "rule 34",
+    "onlyfans",
+    "only fans",
+    "hardcore",
+    "threesome",
+    "gangbang",
+    "stripper",
+    "handjob",
+    "fellatio",
+    "sodomy",
+    "bukkake",
+    "bdsm",
+    "fetish",
+    "camgirl",
+    "escort",
+    "hooker",
+    "slut",
+    "whore",
+];
+
+/// Normalizes common evasion tricks (leetspeak substitutions, repeated/odd
+/// spacing, punctuation) before matching against the blocklist, so "p0rn" or
+/// "p.o.r.n" don't slip through a plain substring check.
+fn normalize_gif_query(q: &str) -> String {
+    q.to_lowercase()
+        .chars()
+        .filter_map(|c| match c {
+            '0' => Some('o'),
+            '1' | '!' => Some('i'),
+            '3' => Some('e'),
+            '4' | '@' => Some('a'),
+            '5' | '$' => Some('s'),
+            '7' => Some('t'),
+            c if c.is_alphanumeric() => Some(c),
+            _ => None,
+        })
+        .collect()
+}
+
+fn is_blocked_gif_query(q: &str) -> bool {
+    let normalized = normalize_gif_query(q);
+    BLOCKED_GIF_QUERY_TERMS
+        .iter()
+        .any(|term| normalized.contains(&normalize_gif_query(term)))
+}
+
 async fn api_gifs_search(_state: &AppState, _headers: &HeaderMap, search: &str) -> Response {
     let q = extract_matrix_query_param(search, "q").unwrap_or_default();
     if q.is_empty() {
         return api_gifs_trending(_state, _headers, search).await;
+    }
+    if is_blocked_gif_query(&q) {
+        // Same shape as a legitimate empty-first-page result (see
+        // fetch_gif_page) - the curated SFW fallback list, not a blank/
+        // broken-looking screen, and nothing that reveals the query was
+        // specifically blocked.
+        return cors_json_response(
+            200,
+            json!({ "results": curated_gifs(None), "giphyOffset": 0, "hasMore": false }),
+        );
     }
     let giphy_offset = extract_matrix_query_param(search, "giphyOffset")
         .and_then(|v| v.parse::<i64>().ok())
@@ -7355,6 +7448,18 @@ mod tests {
             ""
         );
         assert_eq!(sanitize_matrix_device_id(""), "");
+    }
+
+    #[test]
+    fn test_is_blocked_gif_query() {
+        assert!(is_blocked_gif_query("porn"));
+        assert!(is_blocked_gif_query("PORN compilation"));
+        assert!(is_blocked_gif_query("p0rn"));
+        assert!(is_blocked_gif_query("search nsfw stuff"));
+        assert!(is_blocked_gif_query("onlyfans leak"));
+        assert!(!is_blocked_gif_query("cat falling off table"));
+        assert!(!is_blocked_gif_query("sexy dance meme"));
+        assert!(!is_blocked_gif_query(""));
     }
 
     #[test]

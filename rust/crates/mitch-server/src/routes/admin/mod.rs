@@ -79,6 +79,23 @@ pub fn forbidden() -> Response {
     json_response(403, json!({ "error": "forbidden" }))
 }
 
+/// Resolves an admin-typed "target" field (email, username, display name,
+/// uid, or masked email - see `mitch_lib::profile::resolve_target_email`)
+/// down to the account's real email, so every admin tool that targets "an
+/// account" also accepts a username instead of requiring a literal email.
+/// Falls back to a plain normalized email when nothing resolves, preserving
+/// the existing behavior of targeting an email that has no account yet
+/// (e.g. pre-provisioning a coin gift before someone signs up).
+pub fn resolve_admin_target(state: &AppState, raw: &str) -> String {
+    mitch_lib::profile::resolve_target_email(
+        &state.store,
+        &state.cfg.data_dir,
+        &state.id_secret,
+        raw,
+    )
+    .unwrap_or_else(|| mitch_lib::auth::normalize_email(raw))
+}
+
 /// `getCookies(req)` + `sid = studentId || id` + `getRealIp(req)`.
 pub fn admin_ctx(state: &AppState, headers: &HeaderMap) -> AdminCtx {
     let node_env_test = std::env::var("NODE_ENV").unwrap_or_default() == "test";

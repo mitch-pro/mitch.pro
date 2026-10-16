@@ -210,6 +210,8 @@ pub async fn handle(
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .trim();
+        let target_email = super::resolve_admin_target(state, target_email);
+        let target_email = target_email.as_str();
         let new_passphrase = body
             .get("newPassphrase")
             .and_then(|v| v.as_str())

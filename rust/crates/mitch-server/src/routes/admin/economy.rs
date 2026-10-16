@@ -135,6 +135,7 @@ pub fn handle(
             .to_lowercase()
             .trim()
             .to_string();
+        let target_raw = super::resolve_admin_target(state, &target_raw);
         let target_email = mitch_lib::auth::normalize_email(&target_raw);
         let reason = body
             .get("reason")
@@ -212,6 +213,7 @@ pub fn handle(
             .to_lowercase()
             .trim()
             .to_string();
+        let target_raw = super::resolve_admin_target(state, &target_raw);
         let target_email = mitch_lib::auth::normalize_email(&target_raw);
         let amount = body.get("amount").and_then(|v| v.as_f64());
         let reason = body
@@ -309,7 +311,7 @@ pub fn handle(
         }
         let admin_email = ctx.email(state);
         let email = body.get("email").cloned().unwrap_or(Value::Null);
-        let target = mitch_lib::auth::normalize_email(email.as_str().unwrap_or(""));
+        let target = super::resolve_admin_target(state, email.as_str().unwrap_or(""));
         let amount = body
             .get("amount")
             .and_then(|v| v.as_str())
@@ -348,6 +350,7 @@ pub fn handle(
             .to_lowercase()
             .trim()
             .to_string();
+        let target_raw = super::resolve_admin_target(state, &target_raw);
         if !valid_email(&target_raw) {
             return Some(json_response(
                 400,
@@ -550,6 +553,7 @@ pub fn handle(
             .to_lowercase()
             .trim()
             .to_string();
+        let target_raw = super::resolve_admin_target(state, &target_raw);
         let title = body
             .get("title")
             .and_then(|v| v.as_str())
@@ -741,6 +745,7 @@ pub fn handle(
             .to_lowercase()
             .trim()
             .to_string();
+        let email_raw = super::resolve_admin_target(state, &email_raw);
         let reason = body
             .get("reason")
             .and_then(|v| v.as_str())
@@ -1039,13 +1044,15 @@ pub fn send_admin_notice(
             json!({ "ok": true, "allUsers": true, "count": targets.len(), "batchId": batch_id }),
         );
     }
-    let target = cleaned
+    let target_input = cleaned
         .get("targetEmail")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    if target.is_empty() {
+    if target_input.is_empty() {
         return Err((400, "valid target email required".into()));
     }
+    let target = super::resolve_admin_target(state, target_input);
+    let target = target.as_str();
     let notice = mitch_lib::coins::add_admin_notification(
         &state.store,
         &state.cfg.data_dir,
@@ -1132,6 +1139,7 @@ pub fn moderator_gift_coins(
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
+    let target = super::resolve_admin_target(state, &target);
     mitch_lib::coins::add_coins(
         &state.store,
         &state.cfg.data_dir,
@@ -1189,6 +1197,7 @@ pub fn moderator_burn_coins(
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
+    let target = super::resolve_admin_target(state, &target);
     mitch_lib::coins::add_coins(
         &state.store,
         &state.cfg.data_dir,
