@@ -56,7 +56,7 @@ let child;
 async function start(){
  const env={...process.env,NODE_ENV:'test',GOD_MODE:'0',MITCH_BASE:root,PORT:port,CONDUIT_HOST:'127.0.0.1',CONDUIT_PORT:mockPort,RUST_LOG:'error'};
  delete env.MITCH_DB_PATH;delete env.DATA_DIR;
- child=spawn(process.env.MITCH_SERVER_BINARY || resolve('rust/target/debug/mitch-server'),[],{env,stdio:['ignore',openSync('/tmp/mitch-chat-cleanup-child.log','a'),openSync('/tmp/mitch-chat-cleanup-child.log','a')]});
+ child=spawn(resolve('rust/target/debug/mitch-server'),[],{env,stdio:['ignore',openSync('/tmp/mitch-chat-cleanup-child.log','a'),openSync('/tmp/mitch-chat-cleanup-child.log','a')]});
  await until(async()=>{try{return (await fetch(base+'/api/access/status')).ok;}catch{return false;}});
 }
 async function stop(){if(child&&!child.killed){const done=new Promise(resolve=>child.once('exit',resolve));child.kill('SIGTERM');await done;}}
