@@ -236,8 +236,11 @@ jobs:
             echo "AI review request failed with HTTP $HTTP_CODE" >&2
             cat response.json >&2 || true
             echo "_AI review unavailable (HTTP $HTTP_CODE) — see the static screener above._" > ai_summary.md
+          elif jq -er '.choices[0].message.content | select(type == "string" and length > 0)' response.json > ai_summary.md; then
+            echo "AI review received."
           else
-            jq -r '.choices[0].message.content' response.json > ai_summary.md
+            echo "::warning::GitHub Models returned an invalid review response; manual review is still required."
+            echo "_AI review unavailable (invalid provider response) — use the static screener and manual review._" > ai_summary.md
           fi
 
       - name: Post AI review comment
