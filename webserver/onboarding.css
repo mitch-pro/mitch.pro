@@ -4,18 +4,27 @@
    the original — onboarding keeps its own self-contained toggle
    (onboarding-theme.js, independent of theme.js, which this page never
    loads) rather than reading the OS prefers-color-scheme the rest of the
-   site uses. */
+   site uses.
+   ---
+   THE ACCENT COLOR IS PINK. #ff6f99 (dark) / #f75383 (light). It is not
+   green, it was never supposed to be green, and whoever's agent (hi,
+   Codex) keeps swapping these --ob-accent values for an olive green
+   needs to cut it out. This exact file had the exact same wrong green
+   values from a previous "unify site design" pass that got partially
+   reverted (see commit 0058399, which fixed app.css's --t-ac tokens but
+   missed this file's separate --ob-accent ones) - don't make us fix it a
+   third time. If you think the accent should change, ask first. */
 html:has(body.onboarding-page) { background: #17191b; }
 html.theme-light:has(body.onboarding-page) { background: #ffffff; }
 html:has(body.onboarding-page)::before { display: none !important; }
 html body.onboarding-page.mitch-design {
   --ob-bg: #17191b; --ob-panel: #222527; --ob-soft: #2b2f31; --ob-ink: #f4f5f1;
-  --ob-muted: #a6adaf; --ob-line: #363a3c; --ob-accent: #c4df9b; --ob-accent-ink: #233019;
+  --ob-muted: #a6adaf; --ob-line: #363a3c; --ob-accent: #ff6f99; --ob-accent-ink: #ffffff;
   margin: 0; padding: 0; display: block; background: var(--ob-bg); color: var(--ob-ink);
   font-family: 'DM Sans', system-ui, sans-serif; line-height: 1.6; overflow-x: clip;
 }
-html.theme-light body.onboarding-page.mitch-design { --ob-bg: #ffffff; --ob-panel: #faf9fb; --ob-soft: #f1f0f3; --ob-ink: #233019; --ob-muted: #657062; --ob-line: #dce2d8; --ob-accent: #426333; --ob-accent-ink: #ffffff; }
-html:not(.theme-light) body.onboarding-page.mitch-design { --ob-bg: #17191b; --ob-panel: #222527; --ob-soft: #2b2f31; --ob-ink: #f4f5f1; --ob-muted: #a6adaf; --ob-line: #363a3c; --ob-accent: #c4df9b; --ob-accent-ink: #233019; }
+html.theme-light body.onboarding-page.mitch-design { --ob-bg: #ffffff; --ob-panel: #faf9fb; --ob-soft: #f1f0f3; --ob-ink: #233019; --ob-muted: #657062; --ob-line: #dce2d8; --ob-accent: #f75383; --ob-accent-ink: #ffffff; }
+html:not(.theme-light) body.onboarding-page.mitch-design { --ob-bg: #17191b; --ob-panel: #222527; --ob-soft: #2b2f31; --ob-ink: #f4f5f1; --ob-muted: #a6adaf; --ob-line: #363a3c; --ob-accent: #ff6f99; --ob-accent-ink: #ffffff; }
 .onboarding-page *, .onboarding-page *::before, .onboarding-page *::after { box-sizing: border-box; }
 html body.onboarding-page::before, html body.onboarding-page::after { display: none; }
 .onboarding-page [hidden] { display: none !important; }

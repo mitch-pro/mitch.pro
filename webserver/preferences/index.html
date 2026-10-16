@@ -784,8 +784,8 @@
       <div class="field">
         <label>Custom Accent</label>
         <div class="inline-color">
-          <input id="accentColor" type="color" value="#c4df9b">
-          <input id="accentText" type="text" placeholder="#c4df9b">
+          <input id="accentColor" type="color" value="#ff6f99">
+          <input id="accentText" type="text" placeholder="#ff6f99">
           <button class="soft-btn" type="button" id="accentClear">Clear</button>
         </div>
       </div>
@@ -2001,7 +2001,7 @@ function setupAppearanceControls() {
   document.getElementById('accentText').addEventListener('change', function() {
     var v = this.value.trim();
     if (v && !/^#[0-9a-f]{6}$/i.test(v)) {
-      setStatus('appearanceStatus', 'Use a hex color like #c4df9b.');
+      setStatus('appearanceStatus', 'Use a hex color like #ff6f99.');
       return;
     }
     setThemePref('accent', v);
