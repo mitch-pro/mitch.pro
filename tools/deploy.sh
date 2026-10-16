@@ -302,6 +302,8 @@ fi
 echo "[deploy] Reloading Caddy proxy configuration..."
 SWAP_START_MS=$(date +%s%3N)
 run_docker_compose exec -T reverse-proxy caddy reload --config /etc/caddy/Caddyfile
+RELOAD_DONE_MS=$(date +%s%3N)
+echo "[deploy] Caddy reload command returned in $((RELOAD_DONE_MS - SWAP_START_MS))ms"
 
 # 7. Absorb the first post-reload upstream connection inside the deploy. This also
 # verifies the public proxy path before the old slot is removed.
@@ -337,6 +339,8 @@ fi
 # overstate what was actually observed.
 SWAP_END_MS=$(date +%s%3N)
 SWAP_MS=$((SWAP_END_MS - SWAP_START_MS))
+RELOAD_MS=$((RELOAD_DONE_MS - SWAP_START_MS))
+WARM_MS=$((SWAP_END_MS - RELOAD_DONE_MS))
 
 # 8. Tear down the old container slot
 echo "[deploy] Stopping and tearing down the old webserver-$ACTIVE_SLOT..."
@@ -346,5 +350,5 @@ if [ "$(id -u)" -eq 0 ] && [ "$REPO_OWNER" != "root" ]; then
     chown -R "$REPO_OWNER:$REPO_OWNER" "$CADDYFILE_PATH" 2>/dev/null || true
 fi
 
-echo "[deploy] Deployment successfully completed! webserver-$INACTIVE_SLOT is now serving production traffic. (Caddy reload -> confirmed routing: ${SWAP_MS}ms)"
-send_notification "Successfully swapped traffic from webserver-$ACTIVE_SLOT to webserver-$INACTIVE_SLOT (Caddy reload -> confirmed routing: ${SWAP_MS}ms)!" "Swap Successful" "high"
+echo "[deploy] Deployment successfully completed! webserver-$INACTIVE_SLOT is now serving production traffic. (Caddy reload -> confirmed routing: ${SWAP_MS}ms total - reload command: ${RELOAD_MS}ms, warm-up confirmation: ${WARM_MS}ms)"
+send_notification "Successfully swapped traffic from webserver-$ACTIVE_SLOT to webserver-$INACTIVE_SLOT (${SWAP_MS}ms total - reload: ${RELOAD_MS}ms, warm-up: ${WARM_MS}ms)!" "Swap Successful" "high"
