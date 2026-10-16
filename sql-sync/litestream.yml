@@ -1,0 +1,23 @@
+# Litestream config for mitchpro.db. See sql-sync/entrypoint.sh for the
+# one-time legacy-database seed and tools/deploy.sh/docker-compose.yml for
+# how the ramdisk + replica paths are wired up.
+dbs:
+  - path: /ramdisk/mitchpro.db
+    # Restore from the replica automatically if the ramdisk ever comes up
+    # without a database already on it (e.g. tmpfs cleared by a host
+    # reboot) - no manual `litestream restore` step needed.
+    restore-if-db-not-exists: true
+    replica:
+      type: file
+      path: /replica
+
+# A fresh full snapshot once a day, kept for a week - gives seven days of
+# restore points without the replica directory growing unbounded.
+snapshot:
+  interval: 24h
+  retention: 168h
+
+# Finish flushing to the replica on SIGTERM (container stop/recreate)
+# before actually exiting, instead of cutting off mid-sync.
+shutdown-sync-timeout: 30s
+shutdown-sync-interval: 500ms

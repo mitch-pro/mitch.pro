@@ -12,6 +12,26 @@ services:
       - webserver-blue
       - webserver-green
 
+  # Litestream sidecar: replicates mitchpro.db between the shared tmpfs
+  # ramdisk (webserver-blue/green read/write it there) and the HDD-backed
+  # ./data mount. One shared ramdisk, one replication stream - see
+  # sql-sync/entrypoint.sh for why this has to be a standalone sidecar
+  # rather than wrapping each webserver process individually.
+  sql-sync:
+    build: ./sql-sync
+    container_name: mitch-sql-sync
+    restart: unless-stopped
+    volumes:
+      - sql_ramdisk:/ramdisk
+      - ./data/litestream-replica:/replica
+      - ./data:/legacy:ro
+    healthcheck:
+      test: ["CMD", "test", "-f", "/ramdisk/mitchpro.db"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 5s
+
   # Production Slot A: Blue Webserver
   webserver-blue:
     build:
@@ -20,15 +40,22 @@ services:
     container_name: mitch-webserver-blue
     restart: unless-stopped
     depends_on:
-      - conduit
-      - livekit
-      - mail-rs
-      - tor-browser
+      conduit:
+        condition: service_started
+      livekit:
+        condition: service_started
+      mail-rs:
+        condition: service_started
+      tor-browser:
+        condition: service_started
+      sql-sync:
+        condition: service_healthy
     ports:
       - "127.0.0.1:6811:6800"
     volumes:
       - ./server.js:/app/server.js
       - ./data:/app/data
+      - sql_ramdisk:/ramdisk
       - ./mail:/app/mail
       - ./logs:/app/logs
       - ./webserver:/app/webserver
@@ -42,6 +69,7 @@ services:
     environment:
       - MITCH_BASE=/app
       - MITCH_SERVICE=mitch-server
+      - MITCH_DB_PATH=/ramdisk/mitchpro.db
       - PORT=6800
       - TOR_SERVICE_URL=http://tor-browser:6840
       - PIA_USER
@@ -114,15 +142,22 @@ services:
     container_name: mitch-webserver-green
     restart: unless-stopped
     depends_on:
-      - conduit
-      - livekit
-      - mail-rs
-      - tor-browser
+      conduit:
+        condition: service_started
+      livekit:
+        condition: service_started
+      mail-rs:
+        condition: service_started
+      tor-browser:
+        condition: service_started
+      sql-sync:
+        condition: service_healthy
     ports:
       - "127.0.0.1:6812:6800"
     volumes:
       - ./server.js:/app/server.js
       - ./data:/app/data
+      - sql_ramdisk:/ramdisk
       - ./mail:/app/mail
       - ./logs:/app/logs
       - ./webserver:/app/webserver
@@ -132,6 +167,7 @@ services:
     environment:
       - MITCH_BASE=/app
       - MITCH_SERVICE=mitch-server
+      - MITCH_DB_PATH=/ramdisk/mitchpro.db
       - PORT=6800
       - TOR_SERVICE_URL=http://tor-browser:6840
       - PIA_USER
@@ -212,14 +248,19 @@ services:
       dockerfile: Dockerfile
     container_name: mitch-mail-rs
     restart: unless-stopped
+    depends_on:
+      sql-sync:
+        condition: service_healthy
     expose:
       - "6902"
     volumes:
       - ./data:/app/data
+      - sql_ramdisk:/ramdisk
       - ./.env:/app/.env:ro
     environment:
       - MITCH_SERVICE=mitch-mail
       - MITCH_BASE=/app
+      - MITCH_DB_PATH=/ramdisk/mitchpro.db
       - MAIL_RS_PORT=6902
       - PIA_USER
       - PIA_PASS
@@ -379,6 +420,22 @@ services:
     environment:
       - TOR_INTERFACE=${TOR_INTERFACE:-eth1}
       - PORT=6840
+
+volumes:
+  # Shared, tmpfs-backed named volume holding only mitchpro.db - created
+  # automatically by `docker compose up`, no host-level mount command.
+  # webserver-blue/green and mail-rs all mount this same volume (not
+  # independent per-container tmpfs, which Compose's own `tmpfs:` option
+  # would give each of them - a named volume with the tmpfs driver is what
+  # actually lets multiple containers share one memory-backed filesystem).
+  # sql-sync is the only thing that persists it to the HDD-backed
+  # ./data/litestream-replica directory.
+  sql_ramdisk:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "size=4g"
 
 
 

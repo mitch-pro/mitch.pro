@@ -105,13 +105,33 @@ fn static_regex(pattern: &str) -> regex::Regex {
     regex::Regex::new(pattern).expect("static regex")
 }
 
+/// Where the actual `mitchpro.db` SQLite file lives. `MITCH_DB_PATH`
+/// overrides this, decoupled from `data_dir` (which still holds everything
+/// else - uploads, `PRESERVED_DATA_FILES`, etc. - unchanged). Set in
+/// production to point at a shared tmpfs ramdisk a Litestream sidecar
+/// continuously replicates to disk; unset in local dev/tests, which keeps
+/// the plain `data_dir/mitchpro.db` behavior from before this existed.
+///
+/// Takes the env value as a parameter rather than reading `std::env`
+/// directly so it's safely unit-testable: env vars are process-global, and
+/// mutating one from a test would race every other test in this binary
+/// that calls `DataStore::open` concurrently.
+fn resolve_db_path(env_override: Option<std::ffi::OsString>, data_dir: &Path) -> PathBuf {
+    env_override
+        .map(PathBuf::from)
+        .unwrap_or_else(|| data_dir.join("mitchpro.db"))
+}
+
 impl DataStore {
     /// `configureDataStore()` — opens the DB, sets the exact pragmas, and
     /// creates all core tables + indexes with the same SQLITE_BUSY retry
     /// ladder (10 retries, 100ms * attempt).
     pub fn open(base_dir: &Path, data_dir: &Path) -> Result<Self, DataError> {
         std::fs::create_dir_all(data_dir)?;
-        let db_path = data_dir.join("mitchpro.db");
+        let db_path = resolve_db_path(std::env::var_os("MITCH_DB_PATH"), data_dir);
+        if let Some(parent) = db_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
         let conn = rusqlite::Connection::open(&db_path)?;
         conn.busy_timeout(std::time::Duration::from_millis(15_000))?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
@@ -1580,6 +1600,25 @@ pub fn js_quote(s: &str) -> String {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn resolve_db_path_falls_back_to_data_dir_when_unset() {
+        let data_dir = Path::new("/app/data");
+        assert_eq!(
+            resolve_db_path(None, data_dir),
+            PathBuf::from("/app/data/mitchpro.db")
+        );
+    }
+
+    #[test]
+    fn resolve_db_path_honors_override_when_set() {
+        let data_dir = Path::new("/app/data");
+        let over = std::ffi::OsString::from("/ramdisk/mitchpro.db");
+        assert_eq!(
+            resolve_db_path(Some(over), data_dir),
+            PathBuf::from("/ramdisk/mitchpro.db")
+        );
+    }
 
     #[test]
     fn js_to_fixed_matches_ecmascript() {
