@@ -189,7 +189,9 @@ jobs:
           BASE_SHA="${{ github.event.pull_request.base.sha }}"
           HEAD_SHA="${{ github.event.pull_request.head.sha }}"
           # Cap the diff so the prompt stays well inside model context limits.
-          git diff -U3 "$BASE_SHA" "$HEAD_SHA" | head -c 60000 > diff.txt
+          # Write first so head cannot SIGPIPE git under pipefail on large PRs.
+          git diff -U3 "$BASE_SHA" "$HEAD_SHA" > diff-full.txt
+          head -c 60000 diff-full.txt > diff.txt
           echo "Diff captured: $(wc -c < diff.txt) bytes"
 
       - name: Run AI review via GitHub Models
