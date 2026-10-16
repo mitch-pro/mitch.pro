@@ -18,7 +18,11 @@ pub fn load(path: &std::path::Path) {
             continue;
         };
         let key = key.trim();
-        if key.is_empty() || !key.chars().all(|c| c.is_ascii_uppercase() || c == '_') {
+        if key.is_empty()
+            || !key
+                .chars()
+                .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+        {
             continue;
         }
         let mut value = value.trim().to_string();

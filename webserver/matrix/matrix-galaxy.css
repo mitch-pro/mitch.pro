@@ -1394,5 +1394,21 @@ button[data-variant='critical'] {
   }
 }
 
+/* Installed-to-home-screen iOS/Android apps have no browser address bar to
+   dynamically avoid, so there is nothing for `dvh`/visualViewport-tracked
+   height to shrink around - but iOS has a known quirk where both still
+   under-report the true available height in standalone mode, reserving
+   dead space at the bottom for a toolbar that cannot appear there. Plain
+   100vh (the static, full viewport) is always correct here and replaces
+   the dynamic value, which stays in effect only in an actual browser tab. */
+@media (display-mode: standalone) {
+  html,
+  body,
+  #root {
+    height: 100vh !important;
+    max-height: 100vh !important;
+  }
+}
+
 
 .mitch-dm-notice{position:fixed;inset:72px 16px auto;z-index:10000;display:flex;align-items:center;gap:12px;max-width:700px;margin:auto;padding:14px 16px;border:1px solid var(--t-bd,#5d6265);border-radius:12px;background:var(--t-bg2,#202526);color:var(--t-fg,#fff);box-shadow:0 8px 30px #0003;font:14px/1.5 system-ui}.mitch-dm-notice span{flex:1}.mitch-dm-notice button{border:1px solid var(--t-bd,#5d6265);border-radius:8px;background:transparent;color:inherit;padding:8px 12px;cursor:pointer}@media(max-width:500px){.mitch-dm-notice{flex-wrap:wrap}.mitch-dm-notice span{flex-basis:100%}}

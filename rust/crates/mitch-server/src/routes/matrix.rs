@@ -3301,90 +3301,124 @@ fn extract_matrix_query_param(query: &str, key: &str) -> Option<String> {
 
 const GIF_PAGE_SIZE: i64 = 25;
 
-/// Giphy trending/search, one page.
-async fn fetch_giphy_gifs(query: Option<&str>, offset: i64) -> Vec<Value> {
-    let mut giphy_key = std::env::var("GIPHY_API_KEY")
-        .unwrap_or_default()
-        .trim()
-        .to_string();
-    if giphy_key.is_empty() {
-        giphy_key = "sXpGFDGZs0Dv1mmNFvYaGUvYwKX0PWIh".to_string();
-    }
-    let url = match query {
-        Some(q) => {
-            let enc_q = form_urlencoded::byte_serialize(q.as_bytes()).collect::<String>();
-            format!(
-                "https://api.giphy.com/v1/gifs/search?api_key={giphy_key}&q={enc_q}&limit={GIF_PAGE_SIZE}&offset={offset}&rating=g"
-            )
+static ACTIVE_GIPHY_KEY_IDX: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+fn collect_giphy_keys() -> Vec<String> {
+    let mut keys = Vec::new();
+    let mut push_key = |k: &str| {
+        let trimmed = k.trim();
+        if !trimmed.is_empty() && !keys.iter().any(|existing| existing == trimmed) {
+            keys.push(trimmed.to_string());
         }
-        None => format!(
-            "https://api.giphy.com/v1/gifs/trending?api_key={giphy_key}&limit={GIF_PAGE_SIZE}&offset={offset}&rating=g"
-        ),
     };
+
+    if let Ok(primary) = std::env::var("GIPHY_API_KEY") {
+        for part in primary.split(',') {
+            push_key(part);
+        }
+    }
+    if let Ok(extra) = std::env::var("GIPHY_API_KEYS") {
+        for part in extra.split(',') {
+            push_key(part);
+        }
+    }
+
+    for fallback in [
+        "0th30lq3DsB3YHbNOG0A5BoIhkK8Lgs1",
+        "SM50CmkA7CCGlD7jU5hIecSvqpGg7L69",
+        "a1vf3Unu3eEioyYKefQMdPcj2jx9bmoc",
+        "sXpGFDGZs0Dv1mmNFvYaGUvYwKX0PWIh",
+    ] {
+        push_key(fallback);
+    }
+
+    keys
+}
+
+/// Giphy trending/search, one page. Rotates to the next API key when one runs out.
+async fn fetch_giphy_gifs(query: Option<&str>, offset: i64) -> Vec<Value> {
+    let keys = collect_giphy_keys();
+    if keys.is_empty() {
+        return Vec::new();
+    }
+
     let Ok(client) = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(6))
         .build()
     else {
         return Vec::new();
     };
-    let Ok(resp) = client.get(&url).send().await else {
-        return Vec::new();
-    };
-    if !resp.status().is_success() {
-        return Vec::new();
+
+    let start_idx = ACTIVE_GIPHY_KEY_IDX.load(std::sync::atomic::Ordering::Relaxed) % keys.len();
+
+    for step in 0..keys.len() {
+        let idx = (start_idx + step) % keys.len();
+        let giphy_key = &keys[idx];
+        let url = match query {
+            Some(q) => {
+                let enc_q = form_urlencoded::byte_serialize(q.as_bytes()).collect::<String>();
+                format!(
+                    "https://api.giphy.com/v1/gifs/search?api_key={giphy_key}&q={enc_q}&limit={GIF_PAGE_SIZE}&offset={offset}&rating=g"
+                )
+            }
+            None => format!(
+                "https://api.giphy.com/v1/gifs/trending?api_key={giphy_key}&limit={GIF_PAGE_SIZE}&offset={offset}&rating=g"
+            ),
+        };
+
+        let Ok(resp) = client.get(&url).send().await else {
+            continue;
+        };
+        if !resp.status().is_success() {
+            continue;
+        }
+        let Ok(data) = resp.json::<Value>().await else {
+            continue;
+        };
+        let Some(results) = data.get("data").and_then(|r| r.as_array()) else {
+            continue;
+        };
+
+        if step > 0 {
+            ACTIVE_GIPHY_KEY_IDX.store(idx, std::sync::atomic::Ordering::Relaxed);
+        }
+
+        return results
+            .iter()
+            .filter_map(|item| {
+                let id = item.get("id")?.as_str()?;
+                let title = item.get("title").and_then(|c| c.as_str()).unwrap_or("");
+                let images = item.get("images")?.as_object()?;
+                let orig = images.get("original")?.as_object()?;
+                let gif_url = orig.get("url")?.as_str()?;
+                let preview = images
+                    .get("fixed_width_small")
+                    .or_else(|| images.get("fixed_width"))
+                    .or_else(|| images.get("downsized"))
+                    .and_then(|tg| tg.get("url"))
+                    .and_then(|u| u.as_str())
+                    .unwrap_or(gif_url);
+                Some(json!({
+                    "id": id,
+                    "title": title,
+                    "url": gif_url,
+                    "preview": preview,
+                    "width": orig.get("width").and_then(|w| w.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(320),
+                    "height": orig.get("height").and_then(|h| h.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(240),
+                }))
+            })
+            .collect();
     }
-    let Ok(data) = resp.json::<Value>().await else {
-        return Vec::new();
-    };
-    let Some(results) = data.get("data").and_then(|r| r.as_array()) else {
-        return Vec::new();
-    };
-    results
-        .iter()
-        .filter_map(|item| {
-            let id = item.get("id")?.as_str()?;
-            let title = item.get("title").and_then(|c| c.as_str()).unwrap_or("");
-            let images = item.get("images")?.as_object()?;
-            let orig = images.get("original")?.as_object()?;
-            let gif_url = orig.get("url")?.as_str()?;
-            let preview = images
-                .get("fixed_width_small")
-                .or_else(|| images.get("fixed_width"))
-                .or_else(|| images.get("downsized"))
-                .and_then(|tg| tg.get("url"))
-                .and_then(|u| u.as_str())
-                .unwrap_or(gif_url);
-            Some(json!({
-                "id": id,
-                "title": title,
-                "url": gif_url,
-                "preview": preview,
-                "width": orig.get("width").and_then(|w| w.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(320),
-                "height": orig.get("height").and_then(|h| h.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(240),
-            }))
-        })
-        .collect()
+
+    Vec::new()
 }
 
 /// Fetches one Giphy page and shapes it for the client's infinite scroll:
 /// `giphyOffset` is the offset to request next, `hasMore` tells the client
-/// whether to bother. Falls back to the small curated list only on a first
-/// page that comes back empty (key missing/rate-limited/offline) — a later
-/// empty page just means "no more," not a fallback trigger.
+/// whether to bother.
 async fn fetch_gif_page(query: Option<&str>, giphy_offset: i64) -> Response {
     let items = fetch_giphy_gifs(query, giphy_offset).await;
-
-    if items.is_empty() && giphy_offset == 0 {
-        return cors_json_response(
-            200,
-            json!({
-                "results": curated_gifs(query),
-                "giphyOffset": 0,
-                "hasMore": false,
-            }),
-        );
-    }
-
     let count = items.len() as i64;
     cors_json_response(
         200,
@@ -3492,13 +3526,9 @@ async fn api_gifs_search(_state: &AppState, _headers: &HeaderMap, search: &str) 
         return api_gifs_trending(_state, _headers, search).await;
     }
     if is_blocked_gif_query(&q) {
-        // Same shape as a legitimate empty-first-page result (see
-        // fetch_gif_page) - the curated SFW fallback list, not a blank/
-        // broken-looking screen, and nothing that reveals the query was
-        // specifically blocked.
         return cors_json_response(
             200,
-            json!({ "results": curated_gifs(None), "giphyOffset": 0, "hasMore": false }),
+            json!({ "results": [], "giphyOffset": 0, "hasMore": false }),
         );
     }
     let giphy_offset = extract_matrix_query_param(search, "giphyOffset")
@@ -3903,197 +3933,6 @@ async fn api_stickers_packs(_state: &AppState, _headers: &HeaderMap) -> Response
             "packs": curated_sticker_packs()
         }),
     )
-}
-
-fn curated_gifs(query: Option<&str>) -> Vec<Value> {
-    let all = vec![
-        json!({
-            "id": "cat-vibe",
-            "title": "Cat Vibing",
-            "url": "https://media.tenor.com/7wA2VwZt6xIAAAAC/cat-vibe.gif",
-            "preview": "https://media.tenor.com/7wA2VwZt6xIAAAAC/cat-vibe.gif",
-            "tags": "cat vibe dancing groove music lol",
-            "width": 320,
-            "height": 240
-        }),
-        json!({
-            "id": "pop-cat",
-            "title": "Pop Cat",
-            "url": "https://media.tenor.com/2lF8i8l1g3QAAAAC/pop-cat.gif",
-            "preview": "https://media.tenor.com/2lF8i8l1g3QAAAAC/pop-cat.gif",
-            "tags": "pop cat mouth meme sound funny",
-            "width": 320,
-            "height": 240
-        }),
-        json!({
-            "id": "this-is-fine",
-            "title": "This Is Fine",
-            "url": "https://media.tenor.com/E13yZ29v8-MAAAAC/this-is-fine-dog.gif",
-            "preview": "https://media.tenor.com/E13yZ29v8-MAAAAC/this-is-fine-dog.gif",
-            "tags": "this is fine dog fire burning ok chill calm",
-            "width": 320,
-            "height": 200
-        }),
-        json!({
-            "id": "bongo-cat",
-            "title": "Bongo Cat",
-            "url": "https://media.tenor.com/pM4bVpE0nHYAAAAC/bongo-cat.gif",
-            "preview": "https://media.tenor.com/pM4bVpE0nHYAAAAC/bongo-cat.gif",
-            "tags": "bongo cat cute drum music play",
-            "width": 320,
-            "height": 240
-        }),
-        json!({
-            "id": "gigachad",
-            "title": "Gigachad",
-            "url": "https://media.tenor.com/4Nn90E_r3iYAAAAC/gigachad-chad.gif",
-            "preview": "https://media.tenor.com/4Nn90E_r3iYAAAAC/gigachad-chad.gif",
-            "tags": "gigachad chad sigma based muscle handsome smile",
-            "width": 320,
-            "height": 320
-        }),
-        json!({
-            "id": "leo-cheers",
-            "title": "Leonardo Cheers",
-            "url": "https://media.tenor.com/6cE975J15sYAAAAC/leonardo-dicaprio-cheers.gif",
-            "preview": "https://media.tenor.com/6cE975J15sYAAAAC/leonardo-dicaprio-cheers.gif",
-            "tags": "cheers toast celebrate gatsby wine glass leonardo",
-            "width": 320,
-            "height": 180
-        }),
-        json!({
-            "id": "confused-travolta",
-            "title": "Confused Travolta",
-            "url": "https://media.tenor.com/gK9p9sA633QAAAAC/confused-travolta.gif",
-            "preview": "https://media.tenor.com/gK9p9sA633QAAAAC/confused-travolta.gif",
-            "tags": "confused where what lost john travolta pulp fiction",
-            "width": 320,
-            "height": 180
-        }),
-        json!({
-            "id": "kermit-excited",
-            "title": "Kermit Excited",
-            "url": "https://media.tenor.com/2s4f-tV26yIAAAAC/kermit-excited.gif",
-            "preview": "https://media.tenor.com/2s4f-tV26yIAAAAC/kermit-excited.gif",
-            "tags": "kermit yay excited scream happy hands frog",
-            "width": 320,
-            "height": 240
-        }),
-        json!({
-            "id": "mind-blown",
-            "title": "Mind Blown",
-            "url": "https://media.tenor.com/15Gf1f2h3YIAAAAC/mind-blown-explosion.gif",
-            "preview": "https://media.tenor.com/15Gf1f2h3YIAAAAC/mind-blown-explosion.gif",
-            "tags": "mind blown explosion galaxy wow shock insane",
-            "width": 320,
-            "height": 240
-        }),
-        json!({
-            "id": "frog-dance",
-            "title": "Dancing Frog",
-            "url": "https://media.tenor.com/hG9A9U00vYIAAAAC/frog-dance.gif",
-            "preview": "https://media.tenor.com/hG9A9U00vYIAAAAC/frog-dance.gif",
-            "tags": "dance frog groove rhythm vibe",
-            "width": 320,
-            "height": 240
-        }),
-        json!({
-            "id": "lmao-laughing",
-            "title": "Laughing LMAO",
-            "url": "https://media.tenor.com/41M5sNlB1GIAAAAC/lmao-laughing.gif",
-            "preview": "https://media.tenor.com/41M5sNlB1GIAAAAC/lmao-laughing.gif",
-            "tags": "laugh lmao lol haha funny crying laugh rolling",
-            "width": 320,
-            "height": 240
-        }),
-        json!({
-            "id": "facepalm",
-            "title": "Facepalm Picard",
-            "url": "https://media.tenor.com/u8w2vA515jAAAAAC/facepalm-picard.gif",
-            "preview": "https://media.tenor.com/u8w2vA515jAAAAAC/facepalm-picard.gif",
-            "tags": "facepalm fail star trek picard smh sigh",
-            "width": 320,
-            "height": 240
-        }),
-        json!({
-            "id": "spiderman-pointing",
-            "title": "Spider-Man Pointing",
-            "url": "https://media.tenor.com/qLqC_bXF7aUAAAAC/spiderman-pointing.gif",
-            "preview": "https://media.tenor.com/qLqC_bXF7aUAAAAC/spiderman-pointing.gif",
-            "tags": "spiderman pointing duplicate copy same you identical",
-            "width": 320,
-            "height": 240
-        }),
-        json!({
-            "id": "thumbs-up-seal",
-            "title": "Seal Thumbs Up",
-            "url": "https://media.tenor.com/K33d2k2LgJIAAAAC/thumbs-up-seal.gif",
-            "preview": "https://media.tenor.com/K33d2k2LgJIAAAAC/thumbs-up-seal.gif",
-            "tags": "seal thumbs up approve yes good great ok nice",
-            "width": 320,
-            "height": 240
-        }),
-        json!({
-            "id": "anya-heh",
-            "title": "Anya Smug Heh",
-            "url": "https://media.tenor.com/y2bC7_j231MAAAAC/anya-spy-x-family.gif",
-            "preview": "https://media.tenor.com/y2bC7_j231MAAAAC/anya-spy-x-family.gif",
-            "tags": "anya heh smug anime spy x family grin cute",
-            "width": 320,
-            "height": 240
-        }),
-        json!({
-            "id": "doge-nod",
-            "title": "Doge Nod",
-            "url": "https://media.tenor.com/86oY1c5e-0UAAAAC/doge-nod.gif",
-            "preview": "https://media.tenor.com/86oY1c5e-0UAAAAC/doge-nod.gif",
-            "tags": "doge nod yes agree dog shiba approve",
-            "width": 320,
-            "height": 240
-        }),
-        json!({
-            "id": "capybara-bath",
-            "title": "Capybara Chill",
-            "url": "https://media.tenor.com/B70uF848w4wAAAAC/capybara-bath.gif",
-            "preview": "https://media.tenor.com/B70uF848w4wAAAAC/capybara-bath.gif",
-            "tags": "capybara chill bath relax orange calm peaceful zen",
-            "width": 320,
-            "height": 240
-        }),
-        json!({
-            "id": "rickroll",
-            "title": "Rickroll Dance",
-            "url": "https://media.tenor.com/x8v1oNUOmg4AAAAd/rickroll-roll.gif",
-            "preview": "https://media.tenor.com/x8v1oNUOmg4AAAAd/rickroll-roll.gif",
-            "tags": "rickroll rick astley dance music meme troll never gonna give you up",
-            "width": 320,
-            "height": 240
-        }),
-    ];
-
-    if let Some(q) = query {
-        let q_lower = q.to_lowercase();
-        let terms: Vec<&str> = q_lower.split_whitespace().collect();
-        let filtered: Vec<Value> = all
-            .into_iter()
-            .filter(|item| {
-                let title = item
-                    .get("title")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_lowercase();
-                let tags = item
-                    .get("tags")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_lowercase();
-                terms.iter().all(|t| title.contains(t) || tags.contains(t))
-            })
-            .collect();
-        filtered
-    } else {
-        all
-    }
 }
 
 fn curated_sticker_packs() -> Vec<Value> {
