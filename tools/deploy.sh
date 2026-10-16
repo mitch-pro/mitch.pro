@@ -248,16 +248,30 @@ else
     echo "[deploy] No conduit-affecting config changed — leaving the running conduit container untouched (no Matrix downtime this deploy)."
 fi
 
-# 4. Poll the inactive container's health check until it is fully ready
-echo "[deploy] Waiting for webserver-$INACTIVE_SLOT to be fully started and responsive..."
+# 4. Poll the inactive container's health check until it is fully ready -
+# via the exact network path Caddy itself will use after reload
+# (webserver-$INACTIVE_SLOT:6800, the Docker-internal service DNS name),
+# NOT the host-mapped port (127.0.0.1:$INACTIVE_PORT). Those are two
+# different network paths: the host-mapped port can report healthy before
+# Caddy's own internal route to the container is actually ready, which is
+# what was causing several real seconds of 502s after reload - the swap
+# used to only confirm the host-mapped port, reload Caddy, and *hope*,
+# catching stragglers (if at all) in the post-reload warm-up loop below -
+# by which point real traffic was already being routed to the new slot.
+# Exec into the still-serving active container to run the check: it's the
+# same image as the inactive one (has curl - see rust/Dockerfile) and sits
+# on the same Docker network Caddy uses, so this is exactly equivalent to
+# testing reachability from Caddy's own perspective, before Caddy is ever
+# told to switch.
+echo "[deploy] Waiting for webserver-$INACTIVE_SLOT to be reachable via the internal Docker network (the path Caddy itself will use)..."
 MAX_ATTEMPTS=30
 ATTEMPT=0
 HEALTHY=false
 
 while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-    HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$INACTIVE_PORT/enroll/" || echo "000")
+    HTTP_STATUS=$(run_docker_compose exec -T "webserver-$ACTIVE_SLOT" curl -s -o /dev/null -w "%{http_code}" "http://webserver-$INACTIVE_SLOT:6800/enroll/" 2>/dev/null || echo "000")
     if [ "$HTTP_STATUS" = "200" ]; then
-        echo "[deploy] Health check passed (HTTP 200)!"
+        echo "[deploy] Health check passed (HTTP 200 via webserver-$INACTIVE_SLOT:6800, the Caddy-equivalent path)!"
         HEALTHY=true
         break
     fi
@@ -280,8 +294,13 @@ if ! grep -q "webserver-$INACTIVE_SLOT:6800" "$CADDYFILE_PATH"; then
     sed -i -E "s/webserver-[^:]+:6800/webserver-$INACTIVE_SLOT:6800/g" "$CADDYFILE_PATH"
 fi
 
-# 6. Hot-reload Caddy (0ms downtime swap)
+# 6. Hot-reload Caddy. The inactive slot was already proven reachable via
+# the exact path Caddy uses (step 4), so this reload is expected to be the
+# genuinely ~0ms swap Caddy's own hot-reload is designed to be - timed
+# below so the final notification reports what actually happened instead
+# of a hardcoded claim.
 echo "[deploy] Reloading Caddy proxy configuration..."
+SWAP_START_MS=$(date +%s%3N)
 run_docker_compose exec -T reverse-proxy caddy reload --config /etc/caddy/Caddyfile
 
 # 7. Absorb the first post-reload upstream connection inside the deploy. This also
@@ -317,5 +336,7 @@ if [ "$(id -u)" -eq 0 ] && [ "$REPO_OWNER" != "root" ]; then
     chown -R "$REPO_OWNER:$REPO_OWNER" "$CADDYFILE_PATH" 2>/dev/null || true
 fi
 
-echo "[deploy] Deployment successfully completed! webserver-$INACTIVE_SLOT is now serving production traffic."
-send_notification "Successfully swapped traffic from webserver-$ACTIVE_SLOT to webserver-$INACTIVE_SLOT (0ms downtime)!" "Swap Successful" "high"
+SWAP_END_MS=$(date +%s%3N)
+SWAP_MS=$((SWAP_END_MS - SWAP_START_MS))
+echo "[deploy] Deployment successfully completed! webserver-$INACTIVE_SLOT is now serving production traffic. (Caddy reload -> confirmed routing: ${SWAP_MS}ms)"
+send_notification "Successfully swapped traffic from webserver-$ACTIVE_SLOT to webserver-$INACTIVE_SLOT (Caddy reload -> confirmed routing: ${SWAP_MS}ms)!" "Swap Successful" "high"
