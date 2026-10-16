@@ -23,7 +23,6 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 
 pub mod accounts;
-pub mod chat;
 pub mod dashboard;
 pub mod data;
 pub mod economy;
@@ -197,10 +196,6 @@ pub async fn handle(
 ) -> Resp {
     let ctx = admin_ctx(state, headers);
     if let Some(response) = accounts::handle(state, method, path, search, &ctx) {
-        return Some(response);
-    }
-
-    if let Some(response) = chat::handle(state, method, path, body, &ctx) {
         return Some(response);
     }
 

@@ -37,7 +37,7 @@ pub async fn handle(
     if path == "/api/access/status" && *method == Method::GET {
         return Some(json_resp(
             200,
-            json!({"ok":true, "authenticated":state.check_password_cookie(headers, None), "chatResetAt":mitch_lib::chat_cleanup::history_reset_cutoff(&state.store)}),
+            json!({"ok":true, "authenticated":state.check_password_cookie(headers, None)}),
         ));
     }
     if path == "/api/site-info" && *method == Method::GET {

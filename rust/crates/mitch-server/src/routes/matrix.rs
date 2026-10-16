@@ -3299,15 +3299,100 @@ fn extract_matrix_query_param(query: &str, key: &str) -> Option<String> {
         .map(|(_, v)| v.into_owned())
 }
 
-async fn fetch_gif_page(query: Option<&str>, offset: i64) -> Response {
-    let results = if offset == 0 {
-        curated_gifs(query)
-    } else {
-        Vec::new()
+const GIF_PAGE_SIZE: i64 = 25;
+
+/// Giphy trending/search, one page.
+async fn fetch_giphy_gifs(query: Option<&str>, offset: i64) -> Vec<Value> {
+    let mut giphy_key = std::env::var("GIPHY_API_KEY")
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if giphy_key.is_empty() {
+        giphy_key = "sXpGFDGZs0Dv1mmNFvYaGUvYwKX0PWIh".to_string();
+    }
+    let url = match query {
+        Some(q) => {
+            let enc_q = form_urlencoded::byte_serialize(q.as_bytes()).collect::<String>();
+            format!(
+                "https://api.giphy.com/v1/gifs/search?api_key={giphy_key}&q={enc_q}&limit={GIF_PAGE_SIZE}&offset={offset}&rating=g"
+            )
+        }
+        None => format!(
+            "https://api.giphy.com/v1/gifs/trending?api_key={giphy_key}&limit={GIF_PAGE_SIZE}&offset={offset}&rating=g"
+        ),
     };
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(6))
+        .build()
+    else {
+        return Vec::new();
+    };
+    let Ok(resp) = client.get(&url).send().await else {
+        return Vec::new();
+    };
+    if !resp.status().is_success() {
+        return Vec::new();
+    }
+    let Ok(data) = resp.json::<Value>().await else {
+        return Vec::new();
+    };
+    let Some(results) = data.get("data").and_then(|r| r.as_array()) else {
+        return Vec::new();
+    };
+    results
+        .iter()
+        .filter_map(|item| {
+            let id = item.get("id")?.as_str()?;
+            let title = item.get("title").and_then(|c| c.as_str()).unwrap_or("");
+            let images = item.get("images")?.as_object()?;
+            let orig = images.get("original")?.as_object()?;
+            let gif_url = orig.get("url")?.as_str()?;
+            let preview = images
+                .get("fixed_width_small")
+                .or_else(|| images.get("fixed_width"))
+                .or_else(|| images.get("downsized"))
+                .and_then(|tg| tg.get("url"))
+                .and_then(|u| u.as_str())
+                .unwrap_or(gif_url);
+            Some(json!({
+                "id": id,
+                "title": title,
+                "url": gif_url,
+                "preview": preview,
+                "width": orig.get("width").and_then(|w| w.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(320),
+                "height": orig.get("height").and_then(|h| h.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(240),
+            }))
+        })
+        .collect()
+}
+
+/// Fetches one Giphy page and shapes it for the client's infinite scroll:
+/// `giphyOffset` is the offset to request next, `hasMore` tells the client
+/// whether to bother. Falls back to the small curated list only on a first
+/// page that comes back empty (key missing/rate-limited/offline) — a later
+/// empty page just means "no more," not a fallback trigger.
+async fn fetch_gif_page(query: Option<&str>, giphy_offset: i64) -> Response {
+    let items = fetch_giphy_gifs(query, giphy_offset).await;
+
+    if items.is_empty() && giphy_offset == 0 {
+        return cors_json_response(
+            200,
+            json!({
+                "results": curated_gifs(query),
+                "giphyOffset": 0,
+                "hasMore": false,
+            }),
+        );
+    }
+
+    let count = items.len() as i64;
     cors_json_response(
         200,
-        json!({"results":results,"giphyOffset":0,"hasMore":false,"reviewedOnly":true}),
+        json!({
+            "results": items,
+            "giphyOffset": giphy_offset + count,
+            "hasMore": count >= GIF_PAGE_SIZE,
+        }),
     )
 }
 
@@ -3319,7 +3404,11 @@ async fn api_gifs_trending(_state: &AppState, _headers: &HeaderMap, search: &str
 }
 
 /// Explicit/NSFW search terms to block outright before ever hitting Giphy.
-/// Search is limited to the reviewed collection; explicit queries return no results.
+/// `rating=g` on the upstream request (see `fetch_giphy_gifs`) is Giphy's
+/// own self-reported per-GIF rating and isn't reliable enough on its own -
+/// certain on-the-nose search terms still return explicit results under it,
+/// especially via the public fallback API key. This is a second, independent
+/// layer: block the query itself before it's ever sent upstream.
 const BLOCKED_GIF_QUERY_TERMS: &[&str] = &[
     "porn",
     "porno",
@@ -3409,7 +3498,7 @@ async fn api_gifs_search(_state: &AppState, _headers: &HeaderMap, search: &str) 
         // specifically blocked.
         return cors_json_response(
             200,
-            json!({ "results": [], "giphyOffset": 0, "hasMore": false, "reviewedOnly": true }),
+            json!({ "results": curated_gifs(None), "giphyOffset": 0, "hasMore": false }),
         );
     }
     let giphy_offset = extract_matrix_query_param(search, "giphyOffset")
@@ -3423,12 +3512,6 @@ async fn api_gifs_proxy(_state: &AppState, _headers: &HeaderMap, search: &str) -
     if url_str.is_empty() {
         return cors_json_response(400, json!({ "error": "url parameter is required" }));
     }
-    if approved_gif(&url_str).is_none() {
-        return cors_json_response(
-            403,
-            json!({"error":"Choose a GIF from the reviewed collection."}),
-        );
-    }
     let Ok(parsed_url) = url::Url::parse(&url_str) else {
         return cors_json_response(400, json!({ "error": "invalid url" }));
     };
@@ -3437,7 +3520,6 @@ async fn api_gifs_proxy(_state: &AppState, _headers: &HeaderMap, search: &str) -
     }
     let client = match reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
-        .redirect(reqwest::redirect::Policy::none())
         .build()
     {
         Ok(c) => c,
@@ -3512,13 +3594,10 @@ async fn api_gifs_send(_state: &AppState, headers: &HeaderMap, body_bytes: &[u8]
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .trim();
-    let Some(approved) = approved_gif(gif_url) else {
-        return cors_json_response(
-            403,
-            json!({"error":"Choose a GIF from the reviewed collection."}),
-        );
-    };
-    let title = approved["title"].as_str().unwrap_or("GIF");
+    let title = payload
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("GIF");
 
     if room_id.is_empty() || gif_url.is_empty() {
         return cors_json_response(400, json!({ "error": "roomId and url are required" }));
@@ -3586,7 +3665,6 @@ async fn api_gifs_send(_state: &AppState, headers: &HeaderMap, body_bytes: &[u8]
 
     let Ok(client) = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(12))
-        .redirect(reqwest::redirect::Policy::none())
         .build()
     else {
         return cors_json_response(500, json!({ "error": "Client build failed" }));
@@ -3739,7 +3817,6 @@ fn apply_gif_favorite_action(
             0,
             json!({
                 "id": gif_id,
-                "createdAt": now_millis(),
                 "title": g.get("title").and_then(|v| v.as_str()).unwrap_or(""),
                 "url": url,
                 "preview": g.get("preview").and_then(|v| v.as_str()).unwrap_or(""),
@@ -3762,18 +3839,7 @@ async fn api_gifs_favorites_get(state: &AppState, headers: &HeaderMap) -> Respon
     let all = state
         .store
         .read_document(&state.data_dir().join(GIF_FAVORITES_FILE), json!({}));
-    let results: Vec<_> = all
-        .get(&account.norm_email)
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|gif| {
-            gif["url"]
-                .as_str()
-                .is_some_and(|url| approved_gif(url).is_some())
-        })
-        .collect();
+    let results = all.get(&account.norm_email).cloned().unwrap_or(json!([]));
     cors_json_response(200, json!({ "results": results }))
 }
 
@@ -3816,15 +3882,7 @@ async fn api_gifs_favorites_post(
         .cloned()
         .unwrap_or_default();
 
-    let approved = gif.and_then(|g| g["url"].as_str()).and_then(approved_gif);
-    if action == "add" && approved.as_ref().and_then(|g| g["id"].as_str()) != Some(gif_id.as_str())
-    {
-        return cors_json_response(
-            403,
-            json!({"error":"Choose a GIF from the reviewed collection."}),
-        );
-    }
-    if let Err(msg) = apply_gif_favorite_action(&mut list, &gif_id, action, approved.as_ref()) {
+    if let Err(msg) = apply_gif_favorite_action(&mut list, &gif_id, action, gif) {
         return cors_json_response(400, json!({ "error": msg }));
     }
 
@@ -3848,77 +3906,245 @@ async fn api_stickers_packs(_state: &AppState, _headers: &HeaderMap) -> Response
 }
 
 fn curated_gifs(query: Option<&str>) -> Vec<Value> {
-    let query = query.unwrap_or("").to_lowercase();
-    [
-        (
-            "VbnUQpnihPSIgIXuZv",
-            "Typing cat",
-            200,
-            250,
-            "cat typing computer working",
-        ),
-        (
-            "13CoXDiaCcCoyk",
-            "Cat wiggle",
-            200,
-            166,
-            "cat happy dance smile",
-        ),
-        (
-            "111ebonMs90YLu",
-            "Thumbs up",
-            200,
-            150,
-            "yes ok thumbs up good nice",
-        ),
-        (
-            "26gsspfbt1HfVQ9va",
-            "Gorilla wave",
-            200,
-            144,
-            "hello wave hi zoo gorilla",
-        ),
-        (
-            "mCRJDo24UvJMA",
-            "Working dog",
-            200,
-            144,
-            "dog computer typing working",
-        ),
-        (
-            "3o7abB06u9bNzA8lu8",
-            "BB-8 thumbs up",
-            200,
-            108,
-            "robot yes thumbs up star wars",
-        ),
-    ]
-    .into_iter()
-    .filter(|(_, title, _, _, tags)| {
-        query.is_empty() || title.to_lowercase().contains(&query) || tags.contains(&query)
-    })
-    .map(|(id, title, width, height, _)| {
-        let url = format!("https://media.giphy.com/media/{id}/200w.gif");
-        json!({"id":id,"title":title,"url":url,"preview":url,"width":width,"height":height})
-    })
-    .collect()
-}
+    let all = vec![
+        json!({
+            "id": "cat-vibe",
+            "title": "Cat Vibing",
+            "url": "https://media.tenor.com/7wA2VwZt6xIAAAAC/cat-vibe.gif",
+            "preview": "https://media.tenor.com/7wA2VwZt6xIAAAAC/cat-vibe.gif",
+            "tags": "cat vibe dancing groove music lol",
+            "width": 320,
+            "height": 240
+        }),
+        json!({
+            "id": "pop-cat",
+            "title": "Pop Cat",
+            "url": "https://media.tenor.com/2lF8i8l1g3QAAAAC/pop-cat.gif",
+            "preview": "https://media.tenor.com/2lF8i8l1g3QAAAAC/pop-cat.gif",
+            "tags": "pop cat mouth meme sound funny",
+            "width": 320,
+            "height": 240
+        }),
+        json!({
+            "id": "this-is-fine",
+            "title": "This Is Fine",
+            "url": "https://media.tenor.com/E13yZ29v8-MAAAAC/this-is-fine-dog.gif",
+            "preview": "https://media.tenor.com/E13yZ29v8-MAAAAC/this-is-fine-dog.gif",
+            "tags": "this is fine dog fire burning ok chill calm",
+            "width": 320,
+            "height": 200
+        }),
+        json!({
+            "id": "bongo-cat",
+            "title": "Bongo Cat",
+            "url": "https://media.tenor.com/pM4bVpE0nHYAAAAC/bongo-cat.gif",
+            "preview": "https://media.tenor.com/pM4bVpE0nHYAAAAC/bongo-cat.gif",
+            "tags": "bongo cat cute drum music play",
+            "width": 320,
+            "height": 240
+        }),
+        json!({
+            "id": "gigachad",
+            "title": "Gigachad",
+            "url": "https://media.tenor.com/4Nn90E_r3iYAAAAC/gigachad-chad.gif",
+            "preview": "https://media.tenor.com/4Nn90E_r3iYAAAAC/gigachad-chad.gif",
+            "tags": "gigachad chad sigma based muscle handsome smile",
+            "width": 320,
+            "height": 320
+        }),
+        json!({
+            "id": "leo-cheers",
+            "title": "Leonardo Cheers",
+            "url": "https://media.tenor.com/6cE975J15sYAAAAC/leonardo-dicaprio-cheers.gif",
+            "preview": "https://media.tenor.com/6cE975J15sYAAAAC/leonardo-dicaprio-cheers.gif",
+            "tags": "cheers toast celebrate gatsby wine glass leonardo",
+            "width": 320,
+            "height": 180
+        }),
+        json!({
+            "id": "confused-travolta",
+            "title": "Confused Travolta",
+            "url": "https://media.tenor.com/gK9p9sA633QAAAAC/confused-travolta.gif",
+            "preview": "https://media.tenor.com/gK9p9sA633QAAAAC/confused-travolta.gif",
+            "tags": "confused where what lost john travolta pulp fiction",
+            "width": 320,
+            "height": 180
+        }),
+        json!({
+            "id": "kermit-excited",
+            "title": "Kermit Excited",
+            "url": "https://media.tenor.com/2s4f-tV26yIAAAAC/kermit-excited.gif",
+            "preview": "https://media.tenor.com/2s4f-tV26yIAAAAC/kermit-excited.gif",
+            "tags": "kermit yay excited scream happy hands frog",
+            "width": 320,
+            "height": 240
+        }),
+        json!({
+            "id": "mind-blown",
+            "title": "Mind Blown",
+            "url": "https://media.tenor.com/15Gf1f2h3YIAAAAC/mind-blown-explosion.gif",
+            "preview": "https://media.tenor.com/15Gf1f2h3YIAAAAC/mind-blown-explosion.gif",
+            "tags": "mind blown explosion galaxy wow shock insane",
+            "width": 320,
+            "height": 240
+        }),
+        json!({
+            "id": "frog-dance",
+            "title": "Dancing Frog",
+            "url": "https://media.tenor.com/hG9A9U00vYIAAAAC/frog-dance.gif",
+            "preview": "https://media.tenor.com/hG9A9U00vYIAAAAC/frog-dance.gif",
+            "tags": "dance frog groove rhythm vibe",
+            "width": 320,
+            "height": 240
+        }),
+        json!({
+            "id": "lmao-laughing",
+            "title": "Laughing LMAO",
+            "url": "https://media.tenor.com/41M5sNlB1GIAAAAC/lmao-laughing.gif",
+            "preview": "https://media.tenor.com/41M5sNlB1GIAAAAC/lmao-laughing.gif",
+            "tags": "laugh lmao lol haha funny crying laugh rolling",
+            "width": 320,
+            "height": 240
+        }),
+        json!({
+            "id": "facepalm",
+            "title": "Facepalm Picard",
+            "url": "https://media.tenor.com/u8w2vA515jAAAAAC/facepalm-picard.gif",
+            "preview": "https://media.tenor.com/u8w2vA515jAAAAAC/facepalm-picard.gif",
+            "tags": "facepalm fail star trek picard smh sigh",
+            "width": 320,
+            "height": 240
+        }),
+        json!({
+            "id": "spiderman-pointing",
+            "title": "Spider-Man Pointing",
+            "url": "https://media.tenor.com/qLqC_bXF7aUAAAAC/spiderman-pointing.gif",
+            "preview": "https://media.tenor.com/qLqC_bXF7aUAAAAC/spiderman-pointing.gif",
+            "tags": "spiderman pointing duplicate copy same you identical",
+            "width": 320,
+            "height": 240
+        }),
+        json!({
+            "id": "thumbs-up-seal",
+            "title": "Seal Thumbs Up",
+            "url": "https://media.tenor.com/K33d2k2LgJIAAAAC/thumbs-up-seal.gif",
+            "preview": "https://media.tenor.com/K33d2k2LgJIAAAAC/thumbs-up-seal.gif",
+            "tags": "seal thumbs up approve yes good great ok nice",
+            "width": 320,
+            "height": 240
+        }),
+        json!({
+            "id": "anya-heh",
+            "title": "Anya Smug Heh",
+            "url": "https://media.tenor.com/y2bC7_j231MAAAAC/anya-spy-x-family.gif",
+            "preview": "https://media.tenor.com/y2bC7_j231MAAAAC/anya-spy-x-family.gif",
+            "tags": "anya heh smug anime spy x family grin cute",
+            "width": 320,
+            "height": 240
+        }),
+        json!({
+            "id": "doge-nod",
+            "title": "Doge Nod",
+            "url": "https://media.tenor.com/86oY1c5e-0UAAAAC/doge-nod.gif",
+            "preview": "https://media.tenor.com/86oY1c5e-0UAAAAC/doge-nod.gif",
+            "tags": "doge nod yes agree dog shiba approve",
+            "width": 320,
+            "height": 240
+        }),
+        json!({
+            "id": "capybara-bath",
+            "title": "Capybara Chill",
+            "url": "https://media.tenor.com/B70uF848w4wAAAAC/capybara-bath.gif",
+            "preview": "https://media.tenor.com/B70uF848w4wAAAAC/capybara-bath.gif",
+            "tags": "capybara chill bath relax orange calm peaceful zen",
+            "width": 320,
+            "height": 240
+        }),
+        json!({
+            "id": "rickroll",
+            "title": "Rickroll Dance",
+            "url": "https://media.tenor.com/x8v1oNUOmg4AAAAd/rickroll-roll.gif",
+            "preview": "https://media.tenor.com/x8v1oNUOmg4AAAAd/rickroll-roll.gif",
+            "tags": "rickroll rick astley dance music meme troll never gonna give you up",
+            "width": 320,
+            "height": 240
+        }),
+    ];
 
-fn approved_gif(url: &str) -> Option<Value> {
-    curated_gifs(None)
-        .into_iter()
-        .find(|gif| gif["url"].as_str() == Some(url))
+    if let Some(q) = query {
+        let q_lower = q.to_lowercase();
+        let terms: Vec<&str> = q_lower.split_whitespace().collect();
+        let filtered: Vec<Value> = all
+            .into_iter()
+            .filter(|item| {
+                let title = item
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+                let tags = item
+                    .get("tags")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+                terms.iter().all(|t| title.contains(t) || tags.contains(t))
+            })
+            .collect();
+        filtered
+    } else {
+        all
+    }
 }
 
 fn curated_sticker_packs() -> Vec<Value> {
-    let stickers: Vec<_> = curated_gifs(None)
-        .into_iter()
-        .map(|gif| json!({"id":gif["id"],"name":gif["title"],"url":gif["url"]}))
-        .collect();
     vec![
-        json!({"id":"reviewed-reactions","name":"Reactions","thumbnail":stickers.first().map(|s|s["url"].clone()),"stickers":stickers}),
+        json!({
+            "id": "pepe",
+            "name": "Pepe & Memes",
+            "icon": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f438.png",
+            "stickers": [
+                { "id": "pepe-happy", "name": "Happy", "url": "https://media.tenor.com/z0w2yXN5m4EAAAAi/pepe-happy.gif" },
+                { "id": "pepe-dance", "name": "Dance", "url": "https://media.tenor.com/r_z_2U-L_YAAAAAi/pepe-dance.gif" },
+                { "id": "pepe-clap", "name": "Clap", "url": "https://media.tenor.com/o7sPq04sK04AAAAi/pepe-clap.gif" },
+                { "id": "pepe-hacker", "name": "Hacker", "url": "https://media.tenor.com/C_iJ5-oM1Z4AAAAi/pepe-typing.gif" },
+                { "id": "pepe-coffee", "name": "Coffee", "url": "https://media.tenor.com/Qh0b_O9u34sAAAAi/pepe-coffee.gif" },
+                { "id": "pepe-rain", "name": "Sad Rain", "url": "https://media.tenor.com/o1nK2K4uE5IAAAAi/pepe-sad-rain.gif" },
+                { "id": "pepe-cheer", "name": "Cheer", "url": "https://media.tenor.com/3Z6wTf2E9-AAAAAi/pepe-cheers.gif" },
+                { "id": "pepe-smug", "name": "Smug", "url": "https://media.tenor.com/aC3QZ9vjJ9AAAAAi/pepe-smug.gif" }
+            ]
+        }),
+        json!({
+            "id": "cats",
+            "name": "Cat Vibing",
+            "icon": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f431.png",
+            "stickers": [
+                { "id": "pop-cat", "name": "Pop Cat", "url": "https://media.tenor.com/2lF8i8l1g3QAAAAC/pop-cat.gif" },
+                { "id": "vibing-cat", "name": "Cat Vibe", "url": "https://media.tenor.com/7wA2VwZt6xIAAAAC/cat-vibe.gif" },
+                { "id": "bongo-cat", "name": "Bongo Cat", "url": "https://media.tenor.com/pM4bVpE0nHYAAAAC/bongo-cat.gif" },
+                { "id": "cat-jam", "name": "Cat Jam", "url": "https://media.tenor.com/j4uQ9_4y_rIAAAAi/cat-jam.gif" },
+                { "id": "cat-spin", "name": "Cat Spin", "url": "https://media.tenor.com/mOcf5uTf23IAAAAi/spinning-cat.gif" },
+                { "id": "cat-pat", "name": "Pat Pat", "url": "https://media.tenor.com/5lV5sP8iXnEAAAAi/cat-pat.gif" }
+            ]
+        }),
+        json!({
+            "id": "reactions",
+            "name": "Reactions & Emotes",
+            "icon": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f525.png",
+            "stickers": [
+                { "id": "fire", "name": "Fire", "url": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f525.png" },
+                { "id": "skull", "name": "Dead", "url": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f480.png" },
+                { "id": "100", "name": "100", "url": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4af.png" },
+                { "id": "party", "name": "Party", "url": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f389.png" },
+                { "id": "eyes", "name": "Eyes", "url": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f440.png" },
+                { "id": "sparkles", "name": "Sparkles", "url": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/2728.png" },
+                { "id": "clown", "name": "Clown", "url": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f921.png" },
+                { "id": "salute", "name": "Salute", "url": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1fae1.png" }
+            ]
+        }),
     ]
 }
+
+// ── Moderation endpoints ──
 
 async fn mod_overview(state: &AppState, headers: &HeaderMap) -> Response {
     let cookies = crate::routes::me::cookies_of(state, headers);
@@ -6790,21 +7016,6 @@ pub async fn handle_matrix_gateway(
         ));
     }
 
-    if method == Method::POST
-        && path.ends_with("/upload")
-        && (body_bytes.starts_with(b"GIF87a")
-            || body_bytes.starts_with(b"GIF89a")
-            || headers
-                .get("Content-Type")
-                .and_then(|v| v.to_str().ok())
-                .is_some_and(|value| value.split(';').next() == Some("image/gif")))
-    {
-        return Some(cors_json_response(
-            403,
-            json!({"errcode":"M_FORBIDDEN","error":"Use the reviewed GIF picker to share GIFs."}),
-        ));
-    }
-
     // Forward upstream to Conduit
     let full_path = if search.is_empty() {
         path.to_string()
@@ -7216,23 +7427,6 @@ pub async fn admin_conduit_health(state: &Arc<AppState>) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn reviewed_gif_urls_reject_unreviewed_ids_redirects_and_host_spoofs() {
-        let gif = &curated_gifs(None)[0];
-        let url = gif["url"].as_str().unwrap();
-        assert!(approved_gif(url).is_some());
-        for candidate in [
-            "http://127.0.0.1/private.gif",
-            "https://media.giphy.com.evil.test/media/VbnUQpnihPSIgIXuZv/200w.gif",
-            "https://media.giphy.com/media/unknown/200w.gif",
-            "https://media.giphy.com/media/VbnUQpnihPSIgIXuZv/200w.gif?redirect=1",
-        ] {
-            assert!(approved_gif(candidate).is_none());
-        }
-        assert!(!curated_gifs(Some("cat")).is_empty());
-        assert!(curated_gifs(Some("unknown search")).is_empty());
-    }
 
     #[test]
     fn destructive_cleanup_resolves_email_keys_without_matching_neighbor_names() {
@@ -7652,13 +7846,7 @@ mod tests {
         let val: Value = serde_json::from_slice(&body_bytes).unwrap();
         let packs = val.get("packs").unwrap().as_array().unwrap();
         assert!(!packs.is_empty());
-        assert!(packs
-            .iter()
-            .any(|p| p.get("id").unwrap() == "reviewed-reactions"));
-        assert!(packs
-            .iter()
-            .flat_map(|pack| pack["stickers"].as_array().unwrap())
-            .all(|sticker| approved_gif(sticker["url"].as_str().unwrap()).is_some()));
+        assert!(packs.iter().any(|p| p.get("id").unwrap() == "pepe"));
     }
 
     #[test]

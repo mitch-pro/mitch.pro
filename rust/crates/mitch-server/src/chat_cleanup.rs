@@ -59,16 +59,10 @@ fn redact_tree(
     value: &mut Value,
     cutoffs: &HashMap<String, (String, i64)>,
     media: &mut Vec<(String, String, i64)>,
-    global_cutoff: i64,
 ) {
     if message_event(value) {
         let sender = value.get("sender").and_then(Value::as_str).unwrap_or("");
-        let global = (String::from("site-reset"), global_cutoff);
-        if let Some((email, cutoff)) = cutoffs
-            .get(sender)
-            .filter(|(_, cutoff)| *cutoff >= global_cutoff)
-            .or_else(|| (global_cutoff > 0).then_some(&global))
-        {
+        if let Some((email, cutoff)) = cutoffs.get(sender) {
             let ts = value
                 .get("origin_server_ts")
                 .and_then(Value::as_i64)
@@ -85,25 +79,24 @@ fn redact_tree(
     match value {
         Value::Array(values) => values
             .iter_mut()
-            .for_each(|v| redact_tree(v, cutoffs, media, global_cutoff)),
+            .for_each(|v| redact_tree(v, cutoffs, media)),
         Value::Object(values) => values
             .values_mut()
-            .for_each(|v| redact_tree(v, cutoffs, media, global_cutoff)),
+            .for_each(|v| redact_tree(v, cutoffs, media)),
         _ => {}
     }
 }
 
 pub fn filter_matrix_response(state: &AppState, bytes: Bytes) -> Bytes {
     let cutoffs = sender_cutoffs(state);
-    let global_cutoff = data::history_reset_cutoff(&state.store);
-    if cutoffs.is_empty() && global_cutoff == 0 {
+    if cutoffs.is_empty() {
         return bytes;
     }
     let Ok(mut value) = serde_json::from_slice::<Value>(&bytes) else {
         return bytes;
     };
     let mut media = Vec::new();
-    redact_tree(&mut value, &cutoffs, &mut media, global_cutoff);
+    redact_tree(&mut value, &cutoffs, &mut media);
     for (uri, email, ts) in media {
         data::remember_media(&state.store, &uri, &email, ts, true);
     }
@@ -309,18 +302,6 @@ pub fn spawn(state: Arc<AppState>) {
 mod tests {
     use super::*;
     #[test]
-    fn global_reset_covers_unknown_senders_but_preserves_membership_and_new_messages() {
-        let mut value = json!({"chunk":[
-            {"event_id":"$old","sender":"@remote:elsewhere","origin_server_ts":5,"type":"m.room.encrypted","content":{"ciphertext":"old"}},
-            {"event_id":"$new","sender":"@remote:elsewhere","origin_server_ts":20,"type":"m.room.message","content":{"body":"new"}},
-            {"event_id":"$member","sender":"@remote:elsewhere","origin_server_ts":5,"type":"m.room.member","state_key":"@remote:elsewhere","content":{"membership":"join"}}
-        ]});
-        redact_tree(&mut value, &HashMap::new(), &mut Vec::new(), 10);
-        assert_eq!(value["chunk"][0]["content"], json!({}));
-        assert_eq!(value["chunk"][1]["content"]["body"], "new");
-        assert_eq!(value["chunk"][2]["content"]["membership"], "join");
-    }
-    #[test]
     fn tombstones_cover_encrypted_gifs_and_search_without_removing_new_messages_or_membership() {
         let mut value = json!({"chunk":[
             {"event_id":"$a","sender":"@bad:mitch.pro","origin_server_ts":5,"type":"m.room.message","content":{"body":"gif","url":"mxc://mitch.pro/gif"}},
@@ -334,7 +315,7 @@ mod tests {
             ("bad@example.com".to_string(), 10),
         )]);
         let mut media = Vec::new();
-        redact_tree(&mut value, &cutoffs, &mut media, 0);
+        redact_tree(&mut value, &cutoffs, &mut media);
         assert_eq!(value["chunk"][0]["content"], json!({}));
         assert_eq!(value["chunk"][1]["content"], json!({}));
         assert_eq!(value["chunk"][2]["content"]["body"], "keep");

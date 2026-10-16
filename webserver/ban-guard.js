@@ -7,8 +7,6 @@
   }
   if (/^\/appeal(?:\/|\.html|$)/.test(location.pathname)) return;
   let pending = false, blocked = false;
-  let chatResetAt = 0;
-  try { chatResetAt = Number(localStorage.getItem('mitch-chat-reset-at') || 0); } catch (_) {}
   async function showBan() {
     if (blocked) return;
     blocked = true;
@@ -26,21 +24,10 @@
       if (response.status === 403) {
         const data = await response.json();
         if (data.banned) await showBan();
-      } else if (response.ok && /^\/(?:matrix|dm|pickle)(?:\/|$)/.test(location.pathname)) {
-        const data = await response.json();
-        const cutoff = Number(data.chatResetAt || 0);
-        if (cutoff > chatResetAt) {
-          localStorage.setItem('mitch-chat-reset-at', String(cutoff));
-          chatResetAt = cutoff;
-          location.reload();
-        }
       }
     } catch (_) {} finally { pending = false; }
   }
-  addEventListener('storage', event => {
-    if (event.key === 'mitch-account-banned') showBan();
-    if (event.key === 'mitch-chat-reset-at' && Number(event.newValue) > chatResetAt && /^\/(?:matrix|dm|pickle)(?:\/|$)/.test(location.pathname)) location.reload();
-  });
+  addEventListener('storage', event => {if(event.key==='mitch-account-banned') showBan();});
   addEventListener('pageshow', check);
   document.addEventListener('visibilitychange', check);
   setInterval(check, 15000);
