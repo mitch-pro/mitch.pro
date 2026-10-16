@@ -402,6 +402,14 @@ main() {
 
     echo "[deploy] Deployment successfully completed! webserver-$INACTIVE_SLOT is now serving production traffic. (Caddy reload -> confirmed routing: ${SWAP_MS}ms total - reload command: ${RELOAD_MS}ms, warm-up confirmation: ${WARM_MS}ms)"
     send_notification "Successfully swapped traffic from webserver-$ACTIVE_SLOT to webserver-$INACTIVE_SLOT (${SWAP_MS}ms total - reload: ${RELOAD_MS}ms, warm-up: ${WARM_MS}ms)!" "Swap Successful" "high"
+
+    # 9. Prune unused Docker build cache. Without this, BuildKit's cache
+    # mounts accumulate indefinitely across deploys (643 entries / 35GB seen
+    # in production on 2026-10-15) instead of being reused in place, eating
+    # disk for no benefit. Runs after the deploy is already confirmed live,
+    # so a slow or failing prune can never block or affect traffic.
+    echo "[deploy] Pruning unused Docker build cache..."
+    docker builder prune -af || true
 }
 
 main "$@"
