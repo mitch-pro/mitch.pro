@@ -16,6 +16,11 @@
 # become part of a committed image layer — so the compiled binaries are
 # copied out to a plain (non-cache-mounted) directory inside the same RUN,
 # and the final stage copies from there instead of from /app/target.
+#
+# -j 6: an unbounded cargo build pegs every core it can see, which is fine
+# on a dedicated 48-core server but will max out and heat-throttle a dev
+# machine running the same build locally. 6 is enough parallelism to be
+# well past the old hardcoded -j 2 without saturating either host.
 
 FROM lukemathwalker/cargo-chef:latest-rust-1-alpine AS chef
 RUN apk add --no-cache pkgconfig openssl-dev openssl-libs-static musl-dev make perl
@@ -29,11 +34,11 @@ FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
 RUN --mount=type=cache,target=/app/target \
     --mount=type=cache,target=/usr/local/cargo/registry \
-    cargo chef cook --release --recipe-path recipe.json
+    cargo chef cook --release --recipe-path recipe.json -j 6
 COPY . .
 RUN --mount=type=cache,target=/app/target \
     --mount=type=cache,target=/usr/local/cargo/registry \
-    cargo build --release --workspace && \
+    cargo build --release --workspace -j 6 && \
     mkdir -p /app/bin && \
     cp /app/target/release/mitch-* /app/bin/
 
