@@ -13,7 +13,8 @@
 <title>mitch.pro</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"></noscript>
 <link rel="stylesheet" href="/app.css">
-<link rel="stylesheet" href="/home.css?v=10">
+<link rel="stylesheet" href="/home.css?v=11">
+<script src="/home-logo.js?v=1" defer></script>
 <script src="/app-shell.js" defer></script>
 <script src="/home-friends.js?v=4" defer></script>
 <script>
@@ -3049,9 +3050,24 @@ if (document.readyState === 'loading') {
 <div id="mainpage" class="home-main">
 
   <header class="hud-topbar home-hello">
+    <div class="hello-copy">
     <h1 id="home-brand" class="hello-heading"><span id="greeting-text">hello</span><svg class="hello-writing" viewBox="0 0 240 96" aria-hidden="true"><path pathLength="1" d="M15 70 C22 58 47 18 40 12 C31 4 18 77 23 76 C29 57 44 46 47 56 C49 65 36 82 51 74 L63 64 C92 51 78 38 67 57 C51 84 80 85 96 65 C108 49 127 13 119 10 C107 5 86 75 99 78 C113 85 145 17 138 11 C125 1 109 76 124 78 C136 79 148 64 151 54 C160 35 178 48 169 67 C160 87 140 78 148 59 C154 45 169 43 174 55 C178 68 184 72 198 64"/></svg></h1>
     <p id="greeting-email" class="hello-email"></p>
     <span id="streak-badge" class="streak-badge" hidden>&#128293; <b id="streak-badge-count">0</b></span>
+    </div>
+    <div class="hello-emblem" aria-hidden="true">
+      <div class="hello-logo-shadow"></div>
+      <div class="hello-logo-prism">
+        <div class="hello-logo-face hello-logo-back"></div>
+        <div class="hello-logo-edge hello-logo-notch-left"></div>
+        <div class="hello-logo-edge hello-logo-notch-right"></div>
+        <div class="hello-logo-edge hello-logo-right"></div>
+        <div class="hello-logo-edge hello-logo-bottom"></div>
+        <div class="hello-logo-edge hello-logo-left"></div>
+        <div class="hello-logo-face hello-logo-front"></div>
+      </div>
+      <span class="hello-logo-wordmark">mitch<span>.pro</span></span>
+    </div>
   </header>
   <div class="home-search-box home-page-search"><input id="home-search" aria-label="Search pages" type="search" placeholder="Search pages" autocomplete="off"><button id="home-search-clear" type="button">Clear</button></div>
 

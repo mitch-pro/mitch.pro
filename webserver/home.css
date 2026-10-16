@@ -536,7 +536,41 @@ body.home:is(.is-staff, .is-admin) .staff-access-rail { display: flex; }
   body.home *, body.home *::before, body.home *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 
-.home-hello { display:block; min-height:0; padding:28px 0 22px; border:0; background:none; }
+.home-hello { display:grid; grid-template-columns:minmax(0,1fr) minmax(200px,.9fr); align-items:center; gap:40px; min-height:0; padding:28px 0 22px; border:0; background:none; }
+.hello-copy { min-width:0; }
+.hello-emblem { --logo-size:130px; --logo-travel:44px; position:relative; width:100%; max-width:420px; height:200px; justify-self:end; perspective:700px; background:radial-gradient(ellipse at 50% 44%,color-mix(in srgb,var(--t-ac) 8%,transparent),transparent 66%); }
+.hello-logo-prism { position:absolute; top:12px; left:calc(50% - var(--logo-size)/2); width:var(--logo-size); height:var(--logo-size); transform-style:preserve-3d; transform:translateX(calc(0px - var(--logo-travel))) rotateX(-12deg) rotateY(-24deg) rotateZ(-7deg); animation:hello-logo-drift 12s ease-in-out infinite; animation-play-state:paused; }
+.hello-emblem[data-motion="active"] .hello-logo-prism { animation-play-state:running; }
+.hello-logo-face { position:absolute; inset:0; clip-path:polygon(0 0,50% 50%,100% 0,100% 100%,0 100%); backface-visibility:hidden; }
+.hello-logo-front { transform:translateZ(10px); background:linear-gradient(135deg,#ffc0d5 0%,#fa6497 26%,#f44180 62%,#b42360 100%); }
+.hello-logo-front::after { content:""; position:absolute; inset:0; background:linear-gradient(145deg,#fff6,transparent 38%); clip-path:polygon(0 0,50% 50%,100% 0,100% 1.5%,50% 51.5%,1.5% 3.5%,1.5% 100%,0 100%); }
+.hello-logo-back { transform:translateZ(-10px) rotateY(180deg); background:#b42360; }
+.hello-logo-edge { position:absolute; top:0; left:0; height:20px; width:var(--logo-size); transform-origin:0 0; background:linear-gradient(#a52859,#621d3d); }
+.hello-logo-notch-left { width:calc(var(--logo-size)*.70710678); transform:rotateZ(45deg) rotateX(90deg) translateY(-10px); background:linear-gradient(#ff9dbf,#d84c7e); }
+.hello-logo-notch-right { top:50%; left:50%; width:calc(var(--logo-size)*.70710678); transform:rotateZ(-45deg) rotateX(90deg) translateY(-10px); background:linear-gradient(#ffbdd3,#dd5689); }
+.hello-logo-right { left:100%; transform:rotateZ(90deg) rotateX(90deg) translateY(-10px); }
+.hello-logo-bottom { top:100%; left:100%; transform:rotateZ(180deg) rotateX(90deg) translateY(-10px); background:#621d3d; }
+.hello-logo-left { top:100%; transform:rotateZ(-90deg) rotateX(90deg) translateY(-10px); background:linear-gradient(#db4c7e,#8b2850); }
+.hello-logo-shadow { position:absolute; width:62%; height:26px; left:19%; bottom:38px; background:radial-gradient(ellipse,#0003,transparent 70%); }
+.hello-logo-wordmark { position:absolute; left:0; right:0; bottom:4px; text-align:center; font-size:22px; font-weight:700; letter-spacing:-.8px; color:var(--t-fg); }
+.hello-logo-wordmark span { color:var(--t-fg2); font-weight:500; }
+@keyframes hello-logo-drift {
+  0%,100% { transform:translateX(calc(0px - var(--logo-travel))) translateY(0) rotateX(-12deg) rotateY(-24deg) rotateZ(-7deg); }
+  50% { transform:translateX(var(--logo-travel)) translateY(-7px) rotateX(10deg) rotateY(27deg) rotateZ(6deg); }
+}
+@media(max-width:640px) {
+  .home-hello { grid-template-columns:minmax(0,1fr) 100px; column-gap:12px; row-gap:0; }
+  .hello-copy { display:contents; }
+  .hello-heading { grid-column:1; grid-row:1; }
+  .home-hello .hello-email { grid-column:1/-1; grid-row:2; margin:0; }
+  .home-hello .streak-badge { grid-column:1/-1; grid-row:3; justify-self:start; }
+  .hello-emblem { --logo-size:76px; --logo-travel:10px; height:142px; grid-column:2; grid-row:1; }
+  .hello-logo-prism { top:18px; }
+  .hello-logo-wordmark { font-size:17px; bottom:7px; }
+  .hello-logo-shadow { bottom:33px; height:16px; }
+}
+@media(prefers-reduced-motion:reduce) { .hello-emblem .hello-logo-prism { animation:none; transform:rotateX(-8deg) rotateY(-20deg); } }
+.theme-no-motion .hello-emblem .hello-logo-prism { animation:none; transform:rotateX(-8deg) rotateY(-20deg); }
 .hello-heading { margin:0; font-weight:500; line-height:1; }
 .hello-heading #greeting-text { position:absolute; width:1px;height:1px;overflow:hidden;clip-path:inset(50%); }
 .hello-writing { display:block; width:220px; height:88px; overflow:visible; }
