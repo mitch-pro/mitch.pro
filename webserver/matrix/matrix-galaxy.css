@@ -172,6 +172,17 @@ body {
   background: radial-gradient(700px circle at 50% 0, color-mix(in srgb, var(--t-ac) 8%, transparent), transparent 72%), var(--t-bg) !important;
   font-family: var(--t-font) !important;
   -webkit-font-smoothing: antialiased;
+  /* This page is served via serve_static_html (pipeline.rs), a lighter
+     injection path that never includes app.css - so the sitewide
+     safe-area-inset-top fix there doesn't reach Matrix at all. Matrix is
+     fully self-contained styling-wise by design, so fix it locally here
+     instead of pulling in app.css (which would drag in sitewide nav/dock
+     markup assumptions Matrix's own layout doesn't use). #matrix-site-bar
+     is a normal-flow (position: relative) flex child, so padding on this
+     flex container is enough - no separate sticky-bar fix needed the way
+     app.css's .app-topbar required. */
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 html:not([data-bglayer]) body::before,

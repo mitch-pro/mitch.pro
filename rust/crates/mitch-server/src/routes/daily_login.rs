@@ -51,6 +51,56 @@ pub fn get_daily_reward(streak: i64) -> DailyReward {
     }
 }
 
+pub struct StreakStatus {
+    pub can_claim: bool,
+    /// The streak that's actually current right now - 0 if a non-frozen
+    /// gap just broke it, same as `streak` otherwise. NOT the raw stored
+    /// streak; see daily_login_state's "streak" field comment.
+    pub effective_streak: i64,
+    pub next_streak: i64,
+    pub streak_frozen: bool,
+}
+
+/// Pulled out of daily_login_state so the "was the streak just broken"
+/// logic is unit-testable without an HTTP request/DataStore - this exact
+/// computation was the source of a real bug (the HTTP handler used to
+/// report the stale pre-reset `streak` instead of this `effective_streak`).
+pub fn compute_streak_status(
+    streak: i64,
+    freezes: i64,
+    last_claim_date: &str,
+    today_str: &str,
+    yesterday_str: &str,
+) -> StreakStatus {
+    let mut can_claim = false;
+    let mut effective_streak = streak;
+    let mut streak_frozen = false;
+
+    if last_claim_date != today_str {
+        can_claim = true;
+        if last_claim_date != yesterday_str && !last_claim_date.is_empty() {
+            if freezes > 0 {
+                streak_frozen = true;
+            } else {
+                effective_streak = 0;
+            }
+        }
+    }
+
+    let next_streak = if can_claim {
+        effective_streak + 1
+    } else {
+        effective_streak
+    };
+
+    StreakStatus {
+        can_claim,
+        effective_streak,
+        next_streak,
+        streak_frozen,
+    }
+}
+
 pub async fn handle(
     state: &Arc<AppState>,
     method: &Method,
@@ -114,26 +164,18 @@ fn daily_login_state(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         .format("%Y-%m-%d")
         .to_string();
 
-    let mut can_claim = false;
-    let mut effective_streak = streak;
-    let mut streak_frozen = false;
-
-    if last_claim_date != today_str {
-        can_claim = true;
-        if last_claim_date != yesterday_str && !last_claim_date.is_empty() {
-            if freezes > 0 {
-                streak_frozen = true;
-            } else {
-                effective_streak = 0;
-            }
-        }
-    }
-
-    let next_streak = if can_claim {
-        effective_streak + 1
-    } else {
-        effective_streak
-    };
+    let StreakStatus {
+        can_claim,
+        effective_streak,
+        next_streak,
+        streak_frozen,
+    } = compute_streak_status(
+        streak,
+        freezes,
+        &last_claim_date,
+        &today_str,
+        &yesterday_str,
+    );
     let reward_info = get_daily_reward(next_streak);
 
     let message = if can_claim {
@@ -155,7 +197,17 @@ fn daily_login_state(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         200,
         json!({
             "canClaim": can_claim,
-            "streak": streak,
+            // effective_streak, not the raw stored streak: when a streak
+            // was just broken (missed a day, no freeze) effective_streak
+            // is reset to 0 above but streak still holds the stale
+            // pre-reset count. The old UI never showed this (it hides the
+            // number whenever a claim is available), but the always-visible
+            // streak badge does - a broken streak would otherwise keep
+            // proudly displaying the old count. Identical to streak
+            // whenever can_claim is false (effective_streak is never
+            // reassigned in that branch), so this changes nothing for the
+            // already-claimed-today case.
+            "streak": effective_streak,
             "nextStreak": next_streak,
             "nextReward": reward_info.coins,
             "grantPremium": reward_info.grant_premium,
@@ -346,5 +398,53 @@ mod tests {
         let r61 = get_daily_reward(61);
         assert_eq!(r61.coins, 1100);
         assert!(!r61.grant_premium);
+    }
+
+    #[test]
+    fn streak_broken_by_a_missed_day_reports_zero_not_the_stale_count() {
+        // Claimed day-before-yesterday (2 days ago from "today"), not
+        // yesterday, no freeze - the streak should show as broken (0), not
+        // the old pre-break count (7).
+        let status = compute_streak_status(7, 0, "2026-01-01", "2026-01-04", "2026-01-03");
+        assert!(status.can_claim);
+        assert_eq!(status.effective_streak, 0);
+        assert_eq!(status.next_streak, 1);
+        assert!(!status.streak_frozen);
+    }
+
+    #[test]
+    fn streak_broken_but_frozen_keeps_the_count_and_flags_frozen() {
+        let status = compute_streak_status(7, 1, "2026-01-01", "2026-01-04", "2026-01-03");
+        assert!(status.can_claim);
+        assert_eq!(status.effective_streak, 7);
+        assert_eq!(status.next_streak, 8);
+        assert!(status.streak_frozen);
+    }
+
+    #[test]
+    fn streak_continues_normally_when_claimed_yesterday() {
+        let status = compute_streak_status(7, 0, "2026-01-03", "2026-01-04", "2026-01-03");
+        assert!(status.can_claim);
+        assert_eq!(status.effective_streak, 7);
+        assert_eq!(status.next_streak, 8);
+        assert!(!status.streak_frozen);
+    }
+
+    #[test]
+    fn already_claimed_today_reports_the_current_streak_unmodified() {
+        let status = compute_streak_status(7, 0, "2026-01-04", "2026-01-04", "2026-01-03");
+        assert!(!status.can_claim);
+        assert_eq!(status.effective_streak, 7);
+        assert_eq!(status.next_streak, 7);
+        assert!(!status.streak_frozen);
+    }
+
+    #[test]
+    fn never_claimed_before_starts_fresh() {
+        let status = compute_streak_status(0, 0, "", "2026-01-04", "2026-01-03");
+        assert!(status.can_claim);
+        assert_eq!(status.effective_streak, 0);
+        assert_eq!(status.next_streak, 1);
+        assert!(!status.streak_frozen);
     }
 }

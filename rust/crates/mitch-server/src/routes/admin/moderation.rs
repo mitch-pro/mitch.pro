@@ -133,6 +133,25 @@ pub fn handle(
         ));
     }
 
+    // POST /api/admin/testers (admins only).
+    if path == "/api/admin/testers" && *method == Method::POST {
+        if !ctx.is_admin(state) {
+            return Some(forbidden());
+        }
+        return Some(set_tester(state, body, ctx));
+    }
+
+    // GET /api/admin/testers (admins only).
+    if path == "/api/admin/testers" && *method == Method::GET {
+        if !ctx.is_admin(state) {
+            return Some(forbidden());
+        }
+        return Some(json_response(
+            200,
+            json!({ "testers": tester_emails(state) }),
+        ));
+    }
+
     // POST /api/admin/audit/revert (admins and owners).
     if path == "/api/admin/audit/revert" && *method == Method::POST {
         if !ctx.is_admin(state) {
@@ -583,6 +602,69 @@ fn set_moderator(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Respons
         state.cfg.data_dir.clone(),
     );
     json_response(200, json!({ "ok": true }))
+}
+
+/// Raw `data/testers.json` array - the admin panel's own tester list, read
+/// the same way `mitch_lib::auth::is_tester_email` reads it, just without
+/// collapsing to a single email's membership check.
+fn tester_emails(state: &Arc<AppState>) -> Vec<String> {
+    let raw = state
+        .store
+        .read_document(&state.cfg.base_dir.join("data/testers.json"), json!([]));
+    raw.as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// `POST /api/admin/testers` - add/remove from `data/testers.json`. Mirrors
+/// set_moderator(); this backend route never existed before (the frontend's
+/// Beta Testers panel called it and just got a 404), only the read side
+/// (is_tester_email) was ever ported.
+fn set_tester(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response {
+    let admin_email = ctx.email(state);
+    let target_raw = body
+        .get("email")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let target_raw = super::resolve_admin_target(state, &target_raw);
+    let target = mitch_lib::auth::normalize_email(&target_raw);
+    if target.is_empty() || !target.contains('@') {
+        return json_response(400, json!({ "error": "valid email required" }));
+    }
+    let active = body.get("active").and_then(|v| v.as_bool()) == Some(true);
+    let mut testers = tester_emails(state);
+    if active {
+        if !testers
+            .iter()
+            .any(|m| mitch_lib::auth::normalize_email(m) == target)
+        {
+            testers.push(target_raw.clone());
+        }
+    } else {
+        testers.retain(|m| mitch_lib::auth::normalize_email(m) != target);
+    }
+    let _ = state.store.write_document(
+        &state.cfg.base_dir.join("data/testers.json"),
+        &json!(testers),
+    );
+    mitch_lib::admin::log_admin_action(
+        &state.store,
+        &state.cfg.data_dir,
+        &admin_email,
+        if active {
+            "add_tester"
+        } else {
+            "remove_tester"
+        },
+        json!({ "target": target_raw }),
+    );
+    json_response(200, json!({ "ok": true, "testers": testers }))
 }
 
 /// `POST /api/admin/admins` (owners only). Updates `data/admins.json["admins"]`.

@@ -328,6 +328,16 @@ if [ "$WARMED" = false ]; then
     exit 1
 fi
 
+# Stop timing here, not after the old-slot teardown below: by this point
+# real traffic is already confirmed routing to the new slot, so this is the
+# actual swap window. Tearing down the old container can take several more
+# seconds (Docker waits out its graceful-shutdown grace period), but that
+# happens entirely after the cutover and isn't user-facing downtime - timing
+# through it previously made the reported number (e.g. "12000ms") wildly
+# overstate what was actually observed.
+SWAP_END_MS=$(date +%s%3N)
+SWAP_MS=$((SWAP_END_MS - SWAP_START_MS))
+
 # 8. Tear down the old container slot
 echo "[deploy] Stopping and tearing down the old webserver-$ACTIVE_SLOT..."
 run_docker_compose stop "webserver-$ACTIVE_SLOT"
@@ -336,7 +346,5 @@ if [ "$(id -u)" -eq 0 ] && [ "$REPO_OWNER" != "root" ]; then
     chown -R "$REPO_OWNER:$REPO_OWNER" "$CADDYFILE_PATH" 2>/dev/null || true
 fi
 
-SWAP_END_MS=$(date +%s%3N)
-SWAP_MS=$((SWAP_END_MS - SWAP_START_MS))
 echo "[deploy] Deployment successfully completed! webserver-$INACTIVE_SLOT is now serving production traffic. (Caddy reload -> confirmed routing: ${SWAP_MS}ms)"
 send_notification "Successfully swapped traffic from webserver-$ACTIVE_SLOT to webserver-$INACTIVE_SLOT (Caddy reload -> confirmed routing: ${SWAP_MS}ms)!" "Swap Successful" "high"
