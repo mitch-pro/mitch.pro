@@ -8,6 +8,12 @@ body.computer-portal {
   background: var(--t-bg);
   color: var(--t-fg);
 }
+.user-coin-badge[hidden] { display:none; }
+.owner-resource-form { padding:22px; border:1px solid var(--t-bd); border-radius:12px; background:var(--t-bg2); }
+.owner-resource-form label { display:block; margin-bottom:10px; font-weight:600; font-size:.9rem; }
+.owner-resource-form > div { display:flex; gap:12px; flex-wrap:wrap; }
+.owner-resource-form input { flex:1; min-width:110px; min-height:44px; border:1px solid var(--t-bd); border-radius:8px; background:var(--t-bg); color:var(--t-fg); padding:10px; font:inherit; }
+.owner-resource-form p,.owner-resource-note { font-size:.83rem; color:var(--t-fg2); line-height:1.6; }
 
 body.computer-portal .computer-shell { width: min(1220px, calc(100% - 64px)); padding: 105px 0 72px; }
 body.computer-portal .computer-hero { align-items: end; margin-bottom: 28px; }
@@ -217,3 +223,6 @@ body.computer-portal .computer-card:only-child {grid-column:1/-1;max-width:760px
   body.computer-portal .computer-hero>div:last-child {justify-content:flex-start;flex-wrap:nowrap;}
   body.computer-portal .computer-hero button {white-space:nowrap;}
 }
+
+#upgrade-dialog .upgrade-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;overflow:visible}
+#upgrade-dialog .upgrade-tab{padding:10px 4px;min-width:0;font-size:.8rem;text-align:center}

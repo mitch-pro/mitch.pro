@@ -13,7 +13,7 @@
 <title>mitch.pro</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"></noscript>
 <link rel="stylesheet" href="/app.css">
-<link rel="stylesheet" href="/home.css?v=11">
+<link rel="stylesheet" href="/home.css?v=12">
 <script src="/app-shell.js" defer></script>
 <script src="/home-friends.js?v=4" defer></script>
 <script>
@@ -247,48 +247,6 @@ function describeCategory(cat) {
   })[cat] || '';
 }
 
-function renderQuickActions(entries) {
-  var list = document.getElementById('quick-actions-list');
-  if (!list) return;
-  var used = new Set();
-  function pick(name, helper, test, className) {
-    var entry = entries.find(function(e) {
-      return !used.has(e.href + e.label) && test(e.label.toLowerCase(), e);
-    });
-    if (!entry) return null;
-    used.add(entry.href + entry.label);
-    var a = makeSiteLink(entry.type, entry.href, entry.label, 'quick-action ' + (className || ''));
-    a.insertAdjacentHTML('beforeend', '<span class="quick-helper">' + helper + '</span>');
-    return a;
-  }
-  var picks = [
-    pick("Tyler's Tabs", 'Multi-site viewing', function(l) { return l.includes('tabs'); }, 'tabs-action'),
-    pick('Market', 'Shop upgrades', function(l) { return l.includes('market') || l.includes('shop'); }, 'market-action'),
-    pick('Encrypted Chat', 'Chat with other students', function(l, e) { return l.includes('encrypted chat') || String(e.href || '').includes('encrypt'); }, 'student-chat-action'),
-    pick('Canvas', 'Draw or create', function(l) { return l.includes('pixelplace') || l.includes('canvas'); }),
-    pick('Chat', 'Message people', function(l) { return l.includes('chat') || l.includes('diffie'); }),
-    pick('Games', 'Play something', function(l) { return l.includes('games') || l.includes('casino'); }, 'games-action'),
-    pick('Account', 'Profile and settings', function(l, e) { return l.includes('profile') || l.includes('account') || String(e.href || '').includes('/preferences/'); }),
-    pick('Manage Friends', 'Connect with others', function(l) { return l.includes('friends'); })
-  ].filter(Boolean);
-  list.innerHTML = '';
-  if (!picks.length) {
-    list.innerHTML = '<div class="quick-empty">Your shortcuts will appear here after links load.</div>';
-    return;
-  }
-  picks.slice(0, 8).forEach(function(el) { list.appendChild(el); });
-}
-
-function updateHomeCounts(entries, categories) {
-  var count = document.getElementById('home-link-count');
-  var admin = document.getElementById('home-admin-count');
-  if (count) count.textContent = entries.length + ' links';
-  if (admin) {
-    var adminCount = (categories.Admin || []).length;
-    admin.textContent = adminCount ? adminCount + ' admin tools' : 'Standard user view';
-  }
-}
-
 function parseSites(text) {
   var lines = text.split('\n');
   var container = document.getElementById('links');
@@ -335,8 +293,6 @@ function parseSites(text) {
     categories[cat].push(makeSiteLink(type, href, label, isAdmin ? 'admin-site-link' : ''));
   }
 
-  updateHomeCounts(entries, categories);
-  renderQuickActions(entries);
   window.cachedEntries = entries;
 
   var categoryPriority = {
@@ -351,9 +307,7 @@ function parseSites(text) {
     var priorityA = Object.prototype.hasOwnProperty.call(categoryPriority, a) ? categoryPriority[a] : 99;
     var priorityB = Object.prototype.hasOwnProperty.call(categoryPriority, b) ? categoryPriority[b] : 99;
     if (priorityA !== priorityB) return priorityA - priorityB;
-    var timeA = (_userStats.playtime && _userStats.playtime[a]) || 0;
-    var timeB = (_userStats.playtime && _userStats.playtime[b]) || 0;
-    return timeB - timeA;
+    return a.localeCompare(b);
   });
 
   for (var j = 0; j < sortedCats.length; j++) {
@@ -376,7 +330,6 @@ function parseSites(text) {
   }
   filterHomeLinks();
   window.cachedEntries = entries;
-  updateRecommendation(entries);
 }
 
 function openMembersRail(event) {
@@ -448,82 +401,6 @@ function syncStreakBadge(state) {
   badge.hidden = false;
 }
 
-function updateRecommendation(entries) {
-  var visits = {};
-  try { visits = JSON.parse(localStorage.getItem('_prefVisits') || '{}'); } catch(e) {}
-
-  var gameEntries = entries.filter(function(e) {
-    var l = e.label.toLowerCase();
-    var h = e.href.toLowerCase();
-    return e.category === 'MitchCoin Games' || e.category === 'Entertainment' || h.includes('/games/') || l.includes('game');
-  });
-
-  if (gameEntries.length === 0) return;
-
-  var mitchcoinPlaytime = (_userStats.playtime && _userStats.playtime['MitchCoin Games']) || 0;
-  var entertainmentPlaytime = (_userStats.playtime && _userStats.playtime['Entertainment']) || 0;
-
-  var gameScores = gameEntries.map(function(e) {
-    var href = e.href;
-    var normHref = href.endsWith('/') ? href : href + '/';
-    var normHref2 = href.endsWith('/') ? href.slice(0, -1) : href;
-    var count = visits[normHref] || visits[normHref2] || visits[href] || 0;
-
-    var catPlaytime = 0;
-    if (e.category === 'MitchCoin Games') catPlaytime = mitchcoinPlaytime;
-    if (e.category === 'Entertainment') catPlaytime = entertainmentPlaytime;
-
-    var playtimeMinutes = Math.floor(catPlaytime / 60);
-    var score = (count * 50) + playtimeMinutes;
-    return { entry: e, count: count, score: score };
-  });
-
-  gameScores.sort(function(a, b) { return b.score - a.score; });
-
-  var recommended = null;
-  var recommendationReason = '';
-
-  if (gameScores[0].score > 0) {
-    var topGame = gameScores[0].entry;
-    var preferredCategory = topGame.category;
-    var categoryRecommendations = gameScores.filter(function(g) {
-      return g.entry.category === preferredCategory && g.entry.href !== topGame.href && g.count < 3;
-    });
-
-    if (categoryRecommendations.length > 0) {
-      recommended = categoryRecommendations[0].entry;
-      recommendationReason = 'Since you like ' + preferredCategory + ', try:';
-    } else {
-      var otherRecommendations = gameScores.filter(function(g) {
-        return g.entry.href !== topGame.href && g.count < 3;
-      });
-      if (otherRecommendations.length > 0) {
-        recommended = otherRecommendations[0].entry;
-        recommendationReason = 'Suggested new game to try:';
-      } else {
-        recommended = topGame;
-        recommendationReason = 'Keep playing your favorite:';
-      }
-    }
-  } else {
-    var defaultGame = gameEntries.find(function(e) { return e.href.includes('jeopardy'); }) || gameEntries[0];
-    recommended = defaultGame;
-    recommendationReason = 'Get started with a top game:';
-  }
-
-  if (recommended) {
-    var recNameEl = document.getElementById('recommended-game-name');
-    var recLinkEl = document.getElementById('recommended-game-link');
-    var recReasonEl = document.getElementById('recommended-game-reason');
-    if (recNameEl && recLinkEl && recReasonEl) {
-      recReasonEl.textContent = recommendationReason;
-      recNameEl.textContent = recommended.label;
-      recLinkEl.href = recommended.href;
-      recLinkEl.setAttribute('onclick', "openHomeHref(event, '" + recommended.href + "');");
-    }
-  }
-}
-
 function setupHomeSearch() {
   var input = document.getElementById('home-search');
   var clear = document.getElementById('home-search-clear');
@@ -549,7 +426,7 @@ function filterHomeLinks() {
   if (clear) {
     clear.style.display = q ? '' : 'none';
   }
-  if (results) results.hidden = !q;
+  if (results) results.hidden = false;
   var visibleCount = 0;
   document.querySelectorAll('.category-group').forEach(function(group) {
     var groupVisible = 0;
@@ -645,7 +522,7 @@ function goBack() {
     frame.style.display = 'none';
   }
   var main = document.getElementById('mainpage');
-  if (main) main.style.display = 'flex';
+  if (main) main.style.display = '';
   document.body.classList.remove('is-browsing-frame');
   iframeEscape = false;
   if (focusInterval) { clearInterval(focusInterval); focusInterval = null; }
@@ -660,12 +537,6 @@ document.addEventListener('keydown', function(e) {
     eSuppressed = true;
   }
 });
-
-function renderTopGames() {
-}
-
-function applyWidgetOrder() {
-}
 
 function applyHomepagePrefs() {
   var homePref = {};
@@ -682,7 +553,7 @@ function applyHomepagePrefs() {
     memberRail.style.display = showRail ? '' : 'none';
   }
 
-  var quick = document.querySelector('.home-quick-panel');
+  var quick = document.querySelector('.home-features');
   if (quick) quick.style.display = homePref.showQuickActions === false ? 'none' : '';
   document.body.classList.toggle('home-no-quick', homePref.showQuickActions === false);
 
@@ -702,34 +573,9 @@ try { const _hp = JSON.parse(localStorage.getItem('_prefHomepage') || '{}'); if 
 
 
 
-  /* TASK4 */ var _userStats = {};
-  /* TASK4 */ async function loadUserPersonalization() {
-    try {
-      const r = await fetch('/api/profile');
-      if (!r.ok) { r.text().catch(()=>{}); return; }
-      const d = await r.json();
-      _userStats = d.stats || {};
-
-      if (window.cachedEntries) {
-        updateRecommendation(window.cachedEntries);
-      }
-
-      const nudge = document.getElementById('achievement-nudge');
-      if (nudge) {
-        const unlocked = Array.isArray(d.achievements) ? d.achievements.length : 0;
-        const total = Number(d.totalAchievementsCount || 0);
-        nudge.style.display = total ? 'block' : 'none';
-        nudge.innerHTML = '<span class="nudge-star">★</span><span><strong>' + unlocked + '</strong> of ' + total + ' achievements unlocked</span>';
-      }
-    } catch(e) {}
-  }
-
 function loadGreeting() {
   var greetEl = document.getElementById('greeting-text');
   var emailEl = document.getElementById('greeting-email');
-  var clockEl = document.getElementById('greeting-clock');
-  var gamesDayEl = document.getElementById('home-games-day');
-  var statsEl = document.getElementById('stats-bar');
   window._currentUserEmail = null;
 
   if (greetEl) greetEl.textContent = 'hello';
@@ -763,28 +609,7 @@ function loadGreeting() {
     }
   }).catch(function() {});
 
-  var stats = [];
-  try {
-    var elo = JSON.parse(localStorage.getItem('chess_elo') || 'null');
-    if (elo && elo.elo) {
-      stats.push('&#9823; ELO ' + elo.elo + ' (' + (elo.wins||0) + 'W ' + (elo.losses||0) + 'L)');
-    }
-  } catch(e) {}
-  try {
-    var cc = localStorage.getItem('CookieClickerGame');
-    if (!cc) cc = localStorage.getItem('cookie-clicker');
-    if (cc) {
-      var cookies = JSON.parse(cc);
-      var count = cookies.cookies || cookies.cookieCount || cookies.cps || null;
-      if (count && count > 0) stats.push('&#127850; ' + Math.floor(count).toLocaleString() + ' cookies');
-    }
-  } catch(e) {}
-  if (stats.length && statsEl) {
-    statsEl.style.display = 'flex';
-    statsEl.innerHTML = stats.map(function(s) {
-      return '<span style="padding:2px 8px;background:var(--t-bg3);border:1px solid var(--t-bd);border-radius:5px;">' + s + '</span>';
-    }).join('');
-  }
+
 }
 
 
@@ -903,50 +728,6 @@ function escText(t) {
     } catch (error) { chip.textContent = 'Try daily reward again'; chip.title = error.message; }
     finally { chip.disabled = false; }
   }
-
-  async function setupAdminPanel() {
-    try {
-      var r = await fetch('/api/me', { credentials: 'include' });
-      if (!r.ok) return;
-      var me = await r.json();
-    var modWrap = document.getElementById('moderator-action-wrap');
-    if (modWrap && (me.isModerator || me.isAdmin || me.isOwner || me.isCoOwner)) {
-      document.body.classList.add('is-staff');
-      modWrap.style.display = 'block';
-      document.getElementById('moderator-action-btn').onclick = function() {
-        window.location.href = '/moderator/';
-      };
-    }
-    var testerWrap = document.getElementById('tester-action-wrap');
-    if (testerWrap && (me.isTester || me.isAdmin || me.isOwner || me.isCoOwner)) {
-      document.body.classList.add('is-staff');
-      testerWrap.style.display = 'block';
-      document.getElementById('tester-action-btn').onclick = function() {
-        window.location.href = '/tester/';
-      };
-    }
-    var ownerWrap = document.getElementById('owner-action-wrap');
-    if (ownerWrap && (me.isOwner || me.isCoOwner)) {
-      document.body.classList.add('is-staff');
-      ownerWrap.style.display = 'block';
-    }
-    var bansWrap = document.getElementById('bans-action-wrap');
-    if (bansWrap && (me.isAdmin || me.isOwner || me.isCoOwner)) bansWrap.hidden = false;
-    if (!me.isAdmin && !me.canGrantPremium && !me.isOwner && !me.isCoOwner) return;
-    document.body.classList.add('is-admin');
-    var wrap = document.getElementById('admin-action-wrap');
-    wrap.style.display = 'block';
-    var adminCard = document.getElementById('admin-dashboard-card');
-    var adminName = document.getElementById('admin-dashboard-name');
-    var adminCount = document.getElementById('home-admin-count');
-    if (adminCard) adminCard.style.display = 'flex';
-    if (adminName) adminName.textContent = me.email || 'Admin access';
-    if (adminCount) adminCount.textContent = me.isCoOwner ? 'Co-owner access' : (me.canGrantPremium ? 'Admin + premium grants' : 'Admin view');
-    document.getElementById('admin-action-btn').onclick = function() {
-      window.location.href = '/admin/#approval-tools';
-    };
-  } catch(e) {}
-}
 
 async function grantFreePremium() {
   var status = document.getElementById('grant-premium-status');
@@ -1486,15 +1267,12 @@ function initFriendsSystem() {
 
 async function initHome() {
     /* TASK4 */ optimizeForDevice();
-    /* TASK4 */ loadUserPersonalization();
-  applyWidgetOrder();
   setupHomeSearch();
   setupAboutBlankToggle();
   applyHomepagePrefs();
-  renderRecentVisits();
+  try { if (JSON.parse(localStorage.getItem('_prefHomepage') || '{}').showRecent !== false) renderRecentVisits(); } catch (_) {}
   loadSites();
   loadGreeting();
-  setupAdminPanel();
   loadDailyLoginState();
   setupAdminNotificationMode();
   loadOnlineMembers();
@@ -1518,13 +1296,13 @@ async function loadVmStatusChip() {
     if (!data || data.status === 'none') { chip.hidden = true; return; }
     chip.hidden = false;
     if (data.status === 'pending') {
-      if (text) text.textContent = 'VM: Pending approval';
+      if (text) text.textContent = 'Pending approval';
       if (dot) dot.className = 'status-dot status-pending';
     } else if (data.vmStatus === 'running') {
-      if (text) text.textContent = 'VM: Running';
+      if (text) text.textContent = 'Running';
       if (dot) dot.className = 'status-dot status-running';
     } else {
-      if (text) text.textContent = 'VM: Stopped';
+      if (text) text.textContent = 'Stopped';
       if (dot) dot.className = 'status-dot status-stopped';
     }
   } catch(e) {
@@ -2993,23 +2771,7 @@ if (document.readyState === 'loading') {
   <a class="home-account-link" href="/profile/">My account </a>
 </nav>
 
-<nav class="staff-access-rail" id="staff-access-rail" aria-label="Staff tools">
-  <div id="owner-action-wrap">
-    <a class="staff-access-button staff-owner" href="/admin/#owner-tools" title="Owner tools"><span aria-hidden="true">&#9733;</span><span class="staff-access-copy"><b>Owner tools</b><small>Site operations</small></span></a>
-  </div>
-  <div id="admin-action-wrap">
-    <a id="admin-action-btn" class="staff-access-button staff-admin" href="/admin/#approval-tools" title="Admin tools"><span aria-hidden="true">&#9881;</span><span class="staff-access-copy"><b>Admin tools</b><small>Command center</small></span></a>
-  </div>
-  <div id="bans-action-wrap" hidden>
-    <a id="bans-action-btn" class="staff-access-button staff-admin" href="/admin/bans/" title="Manage bans"><span aria-hidden="true">&#8856;</span><span class="staff-access-copy"><b>Bans</b><small>Account access</small></span></a>
-  </div>
-  <div id="moderator-action-wrap">
-    <a id="moderator-action-btn" class="staff-access-button staff-moderator" href="/moderator/" title="Moderator tools"><span aria-hidden="true">&#10003;</span><span class="staff-access-copy"><b>Moderator tools</b><small>Safety workspace</small></span></a>
-  </div>
-  <div id="tester-action-wrap" style="display:none">
-    <a id="tester-action-btn" class="staff-access-button staff-tester" href="/tester/" title="Tester tools"><span aria-hidden="true">🧪</span><span class="staff-tester-copy"><b>Tester hub</b><small>QA &amp; sandbox</small></span></a>
-  </div>
-</nav>
+
 
 <!-- ══════════════════ Members & friends rail ══════════════════ -->
 <button id="people-edge-trigger" aria-label="Open People panel" aria-controls="member-side-rail" type="button"></button>
@@ -3068,14 +2830,6 @@ if (document.readyState === 'loading') {
       <span class="hello-logo-wordmark">mitch<span>.pro</span></span>
     </div>
   </header>
-  <div class="home-search-box home-page-search"><input id="home-search" aria-label="Search pages" type="search" placeholder="Search pages" autocomplete="off"><button id="home-search-clear" type="button">Clear</button></div>
-
-  <section id="home-search-results" class="home-search-results" hidden>
-        <div id="links">
-          <div class="quick-empty">Loading pages…</div>
-        </div>
-        <div id="links-empty" style="display:none;">No matching pages.</div>
-      </section>
   <section class="home-recent" id="home-recent" hidden aria-label="Continue where you left off">
     <div class="home-section-heading home-recent-heading"><h2>Continue where you left off</h2></div>
     <div id="home-recent-list" class="recent-strip"></div>
@@ -3086,57 +2840,47 @@ if (document.readyState === 'loading') {
     <a class="home-feature feature-vms" href="/vms/" onclick="openHomeHref(event, '/vms/');">
 
       <h2>Cloud Linux</h2>
-      <span class="feature-bottom">Full in-browser GUI desktop with root access &amp; persistent storage </span>
-      <div class="feature-vm-art" aria-hidden="true">
-        <svg viewBox="0 0 160 130"><rect x="15" y="15" width="130" height="85" rx="8"/><path d="M50 115h60M80 100v15"/><path d="m35 45 15 15-15 15M62 75h25"/></svg>
-      </div>
+      <span class="feature-bottom">Your Linux desktop, files, and apps. </span>
     </a>
     <a class="home-feature feature-chat" href="/matrix/" onclick="openHomeHref(event, '/matrix/');">
 
       <h2>Matrix chat</h2>
-      <span class="feature-bottom">Decentralized E2E channels &amp; direct messages </span>
-      <svg class="feature-chat-art" viewBox="0 0 200 160" fill="none" aria-hidden="true"><path d="M28 25h109a12 12 0 0 1 12 12v61a12 12 0 0 1-12 12H75l-28 22v-22H28a12 12 0 0 1-12-12V37a12 12 0 0 1 12-12Z"/><path d="M43 51h77M43 70h51"/><rect x="110" y="87" width="60" height="50" rx="9"/><path d="M129 88V77a13 13 0 0 1 26 0v11M142 107v12"/></svg>
+      <span class="feature-bottom">Rooms and private conversations. </span>
     </a>
     <a class="home-feature feature-games" href="/game-portal/" onclick="openHomeHref(event, '/game-portal/');">
 
       <h2>Play games</h2>
       <span class="feature-bottom">Browse all games </span>
-      <div class="feature-game-art" aria-hidden="true"><span>♞</span></div>
     </a>
   </section>
 
       <div class="home-section-heading home-tools-heading"><h2>Explore</h2></div>
       <nav class="home-actions" aria-label="Quick actions">
-        <a class="hub-action hub-action-vms" href="/vms/" onclick="openHomeHref(event, '/vms/');"><span class="action-logo"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="m7 8 3 3-3 3M13 14h4"/></svg></span><span class="action-copy"><b>VM Lab</b><small>Cloud Linux PC · Free</small></span></a>
-        <a class="hub-action hub-action-primary" href="/matrix/" onclick="openHomeHref(event, '/matrix/');"><span class="action-logo"><svg viewBox="0 0 24 24"><path d="M5 5h14v10H9l-4 4V5Z"/><path d="M9 9h6M9 12h4"/></svg></span><span class="action-copy"><b>Matrix Chat</b><small>Open secure messages</small></span></a>
         <button type="button" class="hub-action" id="hub-friends-btn" onclick="openMembersRail(event)"><span class="action-logo"><svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="3"/><circle cx="16.5" cy="10" r="2.3"/><path d="M3.5 19c.5-3.3 2.2-5 5.5-5s5 1.7 5.5 5M14 15c3.5-.5 5.5.8 6 3.5"/></svg></span><span class="action-copy"><b>People</b><small>See who's here</small></span></button>
-        <a class="hub-action" href="/preferences/" onclick="openHomeHref(event, '/preferences/');"><span class="action-logo"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M5 20c.6-4.2 2.9-6.3 7-6.3s6.4 2.1 7 6.3"/></svg></span><span class="action-copy"><b>Account</b><small>Profile and preferences</small></span></a>
+        <a class="hub-action" href="/profile/" onclick="openHomeHref(event, '/profile/');"><span class="action-logo"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M5 20c.6-4.2 2.9-6.3 7-6.3s6.4 2.1 7 6.3"/></svg></span><span class="action-copy"><b>Account</b><small>Your profile and activity</small></span></a>
         <a class="hub-action" href="/shop/" onclick="openHomeHref(event, '/shop/');"><span class="action-logo"><svg viewBox="0 0 24 24"><path d="m12 3 6 6-6 12L6 9z"/><path d="M6 9h12M9 9l3-6 3 6-3 12z"/></svg></span><span class="action-copy"><b>Market</b><small>Cosmetics and upgrades</small></span></a>
         <a class="hub-action hub-action-casino" href="/casino/" onclick="openHomeHref(event, '/casino/');"><span class="action-logo"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1"/><circle cx="16" cy="8" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="8" cy="16" r="1"/><circle cx="16" cy="16" r="1"/></svg></span><span class="action-copy"><b>Casino</b><small>MitchCoins only</small></span></a>
-        <a class="hub-action" href="/game-portal/" onclick="openHomeHref(event, '/game-portal/');"><span class="action-logo"><svg viewBox="0 0 24 24"><path d="M8 8h8c3 0 5 2.5 5 6s-2 6-4.5 6c-2 0-2.5-2.5-4.5-2.5S9.5 20 7.5 20C5 20 3 17.5 3 14s2-6 5-6Z"/><path d="M7 12v4m-2-2h4m7-1h.01m2 3h.01"/></svg></span><span class="action-copy"><b>Games</b><small>Choose your arcade</small></span></a>
         <button type="button" class="hub-action hub-daily mitch-coin-amount" id="hub-daily-chip" hidden>Daily claim</button>
       </nav>
 
-  <!-- Bottom bar: quick controls and stats, one horizontal strip -->
-  <section class="home-bottom-bar" aria-label="Quick controls">
-    <a id="vm-status-chip" class="bottom-bar-item" href="/vms/" hidden>
-      <span class="status-dot" id="vm-status-dot"></span>
-      <span class="control-copy"><b id="vm-status-text">VM</b></span>
-    </a>
-    <div id="abToggleBar" class="bottom-bar-item">
-      <span class="control-logo"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
-      <span class="control-copy"><b>Stealth launch</b><small>Open in about:blank</small></span>
-      <label class="toggle-switch">
-        <input type="checkbox" id="abToggle">
-        <span class="toggle-slider"></span>
-      </label>
-    </div>
-    <a id="preferences-card" class="bottom-bar-item" href="/preferences/">
-      <span class="control-logo"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h14"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg></span>
-      <span class="control-copy"><b>Preferences</b><small>Theme, display, privacy</small></span>
-    </a>
-    <div id="stats-bar" class="bottom-bar-item"></div>
+  <section class="home-directory" aria-labelledby="directory-title">
+  <div class="directory-heading"><div><h2 id="directory-title">All pages</h2><p>Games, tools, and places around the site.</p></div>
+  <div class="home-search-box home-page-search"><input id="home-search" aria-label="Search pages" type="search" placeholder="Search pages" autocomplete="off"><button id="home-search-clear" type="button">Clear</button></div>
+
+  </div>
+  <div id="home-search-results" class="home-search-results">
+        <div id="links">
+          <div class="quick-empty">Loading pages…</div>
+        </div>
+        <div id="links-empty" style="display:none;">No matching pages.</div>
+      </div>
   </section>
+  <section class="home-controls" aria-label="Your settings">
+    <a id="vm-status-chip" class="home-control-card" href="/vms/" hidden><div><h2>Your computer</h2><p>Open your desktop or manage its resources.</p></div><span class="control-status"><span class="status-dot" id="vm-status-dot"></span><span id="vm-status-text">Computer</span></span></a>
+    <div id="abToggleBar" class="home-control-card"><div><h2>Private window</h2><p>Open games in an about:blank tab.</p></div><label class="toggle-switch"><input type="checkbox" id="abToggle" aria-label="Open games in an about:blank tab"><span class="toggle-slider"></span></label></div>
+    <a id="preferences-card" class="home-control-card" href="/preferences/"><div><h2>Preferences</h2><p>Appearance, privacy, and your account.</p></div><span class="control-status">Edit settings</span></a>
+  </section>
+
 </div>
 
 <!-- ══════════════════ Console overlay ══════════════════ -->
@@ -3223,9 +2967,12 @@ goBack = function() {
   var emblem = document.querySelector('.hello-emblem');
   if (!emblem) return;
   var inView = false;
+  var logoEnabled = true;
+  try { logoEnabled = JSON.parse(localStorage.getItem('_prefHomepage') || '{}').animateLogo !== false; } catch (_) {}
+  emblem.dataset.logoMotion = logoEnabled ? 'on' : 'off';
   var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   function updateMotion() {
-    emblem.dataset.motion = inView && !document.hidden && !reducedMotion.matches ? 'active' : 'paused';
+    emblem.dataset.motion = logoEnabled && inView && !document.hidden && !reducedMotion.matches ? 'active' : 'paused';
   }
   if ('IntersectionObserver' in window) {
     var observer = new IntersectionObserver(function (entries) {

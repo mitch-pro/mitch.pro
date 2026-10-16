@@ -336,18 +336,58 @@ pub fn update_virtual_machine_specs(
     memory_mb: Option<f64>,
     disk_gb: Option<f64>,
 ) -> Option<VmRecord> {
+    update_specs_policy(store, id, cpu_cores, memory_mb, disk_gb, false)
+}
+
+/// Caller must verify that the account is an owner or co-owner.
+pub fn update_owner_virtual_machine_specs(
+    store: &DataStore,
+    id: &str,
+    cpu_cores: Option<f64>,
+    memory_mb: Option<f64>,
+    disk_gb: Option<f64>,
+) -> Option<VmRecord> {
+    update_specs_policy(store, id, cpu_cores, memory_mb, disk_gb, true)
+}
+
+fn update_specs_policy(
+    store: &DataStore,
+    id: &str,
+    cpu_cores: Option<f64>,
+    memory_mb: Option<f64>,
+    disk_gb: Option<f64>,
+    owner: bool,
+) -> Option<VmRecord> {
     let current = get_virtual_machine_by_id(store, id)?;
     let cores = cpu_cores
-        .filter(|v| !v.is_nan())
-        .map(|v| v.round().clamp(2.0, 16.0))
+        .filter(|v| v.is_finite())
+        .map(|v| {
+            if owner {
+                v.round().max(1.0)
+            } else {
+                v.round().clamp(2.0, 16.0)
+            }
+        })
         .unwrap_or(current.cpu_cores);
     let memory = memory_mb
-        .filter(|v| !v.is_nan())
-        .map(|v| v.round().clamp(2048.0, 65536.0))
+        .filter(|v| v.is_finite())
+        .map(|v| {
+            if owner {
+                v.round().max(512.0)
+            } else {
+                v.round().clamp(2048.0, 65536.0)
+            }
+        })
         .unwrap_or(current.memory_mb);
     let disk = disk_gb
-        .filter(|v| !v.is_nan())
-        .map(|v| v.round().clamp(40.0, 256.0))
+        .filter(|v| v.is_finite())
+        .map(|v| {
+            if owner {
+                v.round().max(40.0)
+            } else {
+                v.round().clamp(40.0, 256.0)
+            }
+        })
         .unwrap_or(current.disk_gb);
     {
         let conn = store.conn();
@@ -1004,6 +1044,17 @@ mod tests {
         assert_eq!(rec.cpu_cores, 2.0, "cores clamp low to 2");
         assert_eq!(rec.memory_mb, 2048.0, "memory clamps low to 2048");
         assert_eq!(rec.disk_gb, 40.0, "disk clamps low to 40");
+        let rec = update_owner_virtual_machine_specs(
+            &store,
+            "vm-1",
+            Some(96.0),
+            Some(262144.0),
+            Some(4096.0),
+        )
+        .unwrap();
+        assert_eq!(rec.cpu_cores, 96.0);
+        assert_eq!(rec.memory_mb, 262144.0);
+        assert_eq!(rec.disk_gb, 4096.0);
     }
 
     #[test]

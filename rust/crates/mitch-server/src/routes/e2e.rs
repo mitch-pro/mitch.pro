@@ -648,9 +648,10 @@ fn messages(state: &Arc<AppState>, headers: &HeaderMap, search: &str) -> Respons
         .get(&k)
         .cloned()
         .unwrap_or_default();
+    let reset_cutoff = mitch_lib::chat_cleanup::history_reset_cutoff(&state.store);
     let out: Vec<Value> = msgs
         .iter()
-        .filter(|m| (m.timestamp as f64) > since)
+        .filter(|m| (m.timestamp as f64) > since && m.timestamp > reset_cutoff)
         .map(|m| {
             json!({
                 "from": m.from.clone(),

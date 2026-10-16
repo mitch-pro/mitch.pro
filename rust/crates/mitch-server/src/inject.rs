@@ -88,7 +88,7 @@ pub fn inject_access_guard(html: &str) -> String {
     }
     match html.rfind("</body>") {
         Some(index) => format!(
-            "{}<script src=\"/ban-guard.js\" defer></script>{}",
+            "{}<script src=\"/ban-guard.js?v=54\" defer></script>{}",
             &html[..index],
             &html[index..]
         ),

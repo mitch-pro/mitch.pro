@@ -666,6 +666,164 @@ pub(crate) fn notify_capacity_full_on_attempt(
     crate::routes::push::ntfy_notify(&msg, title, "high");
 }
 
+pub(crate) fn can_customize_owner_vm(state: &AppState, actor: &VmActor) -> bool {
+    actor.is_owner || mitch_lib::auth::is_co_owner_email(&state.store, &actor.email)
+}
+
+fn owner_resource_value(category: &str, value: &Value) -> Option<f64> {
+    let value = value.as_f64()?;
+    let minimum = match category {
+        "cpu" => 1.0,
+        "ram" => 512.0,
+        "disk" => 40.0,
+        _ => return None,
+    };
+    (value.is_finite() && value.fract() == 0.0 && value >= minimum && value <= i32::MAX as f64)
+        .then_some(value)
+}
+
+struct ResourceOperation<'a> {
+    state: &'a AppState,
+    key: String,
+}
+impl Drop for ResourceOperation<'_> {
+    fn drop(&mut self) {
+        self.state
+            .vm_power_gate
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .release(&self.key, 0.0);
+    }
+}
+fn resource_operation<'a>(state: &'a AppState, key: String) -> Option<ResourceOperation<'a>> {
+    let acquired = state
+        .vm_power_gate
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .acquire(&key, "resources", now_ms() as f64);
+    acquired.then(|| ResourceOperation { state, key })
+}
+
+async fn owner_resources(state: &Arc<AppState>, headers: &HeaderMap, bytes: &[u8]) -> Response {
+    let Some(actor) = authenticated_vm_actor(state, headers) else {
+        return json_response(401, json!({"error":"Sign in required."}));
+    };
+    if !can_customize_owner_vm(state, &actor) || !vm_same_origin_request(headers) {
+        return json_response(403, json!({"error":"Owner access required."}));
+    }
+    let body: Value = serde_json::from_slice(bytes).unwrap_or(Value::Null);
+    let category = body["category"].as_str().unwrap_or("");
+    let Some(value) = owner_resource_value(category, &body["value"]) else {
+        return json_response(
+            400,
+            json!({"error":"Enter a whole number: at least 1 CPU core, 512 MB memory, or 40 GB storage."}),
+        );
+    };
+    let Some(_account_operation) =
+        resource_operation(state, format!("owner-resources-{}", actor.email))
+    else {
+        return json_response(
+            409,
+            json!({"error":"A resource update is already in progress. Try again in a moment."}),
+        );
+    };
+    let records = vmlib::get_virtual_machines_for_owner(&state.store, &actor.email);
+    let record = records.iter().map(|r| r.to_json()).find(|r| {
+        r["ownerEmail"]
+            .as_str()
+            .is_some_and(|email| mitch_lib::auth::normalize_email(email) == actor.email)
+    });
+    if let Some(record) = &record {
+        let Some(_computer_operation) =
+            resource_operation(state, jsval::str_or(record.get("id"), ""))
+        else {
+            return json_response(
+                409,
+                json!({"error":"A computer operation is in progress. Try again in a moment."}),
+            );
+        };
+        if !crate::proxmox_desktop::desktop().configured() {
+            return json_response(
+                503,
+                json!({"error":"Computer service unavailable. No settings changed."}),
+            );
+        }
+        let runtime = match crate::proxmox_desktop::desktop().get_status(record).await {
+            Ok(value) => value,
+            Err(_) => {
+                return json_response(
+                    503,
+                    json!({"error":"Could not check computer status. No settings changed."}),
+                )
+            }
+        };
+        if runtime["status"] != "stopped" {
+            return json_response(
+                409,
+                json!({"error":"Shut down your computer before changing its resources."}),
+            );
+        }
+        if category == "disk" && value < js_num_or(record.get("diskGb"), 40.0) {
+            return json_response(400, json!({"error":"Storage can grow, but cannot shrink."}));
+        }
+        let (cpu, memory, disk) = (
+            if category == "cpu" { Some(value) } else { None },
+            if category == "ram" { Some(value) } else { None },
+            if category == "disk" {
+                Some(value)
+            } else {
+                None
+            },
+        );
+        if let Err(error) = crate::proxmox_desktop::desktop()
+            .update_owner_hardware(record, cpu, memory, disk)
+            .await
+        {
+            tracing::warn!("Owner hardware update failed: {error:?}");
+            return json_response(
+                502,
+                json!({"error":"The host could not apply those resources. Check available capacity and try again."}),
+            );
+        }
+        if vmlib::update_owner_virtual_machine_specs(
+            &state.store,
+            &jsval::str_or(record.get("id"), ""),
+            cpu,
+            memory,
+            disk,
+        )
+        .is_none()
+        {
+            return json_response(
+                500,
+                json!({"error":"The host applied the resources, but the account record could not be saved. Retry the same values to finish saving."}),
+            );
+        }
+    }
+    let upgrades = match try_save_user_vm_upgrade(state, &actor.email, category, value, 0.0) {
+        Ok(value) => value,
+        Err(error) => {
+            tracing::error!("Could not persist owner resources: {error}");
+            return json_response(
+                500,
+                json!({"error":"The resource preferences could not be saved. Retry the same values to finish saving."}),
+            );
+        }
+    };
+    vm_audit(
+        state,
+        &actor.email,
+        record.as_ref(),
+        "OWNER_RESOURCES_UPDATED",
+        true,
+        Some(&json!({"category":category,"value":value})),
+    );
+    json_response(
+        200,
+        json!({"success":true,"upgrades":upgrades,"coins":mitch_lib::coins::get_coins(&state.store,state.data_dir(),&actor.email)}),
+    )
+}
+
 // ── upgrades (server.js:27222-27280) ─────────────────────────────────────────
 
 /// `getUserVmUpgrades(email)` (server.js:27224-27248).
@@ -716,8 +874,18 @@ pub(crate) fn save_user_vm_upgrade(
     value: f64,
     duration_days: f64,
 ) -> Value {
+    try_save_user_vm_upgrade(state, email, category, value, duration_days).unwrap_or(Value::Null)
+}
+
+fn try_save_user_vm_upgrade(
+    state: &AppState,
+    email: &str,
+    category: &str,
+    value: f64,
+    duration_days: f64,
+) -> Result<Value, String> {
     if email.is_empty() {
-        return Value::Null;
+        return Ok(Value::Null);
     }
     let norm = mitch_lib::auth::normalize_email(email);
     let mut data = load_vm_json(state, "vm_upgrades.json", json!({}));
@@ -778,8 +946,11 @@ pub(crate) fn save_user_vm_upgrade(
     if let Some(obj) = data.as_object_mut() {
         obj.insert(norm, Value::Object(current.clone()));
     }
-    save_vm_json(state, "vm_upgrades.json", &data);
-    Value::Object(current)
+    state
+        .store
+        .write_document(&state.data_dir().join("vm_upgrades.json"), &data)
+        .map_err(|e| e.to_string())?;
+    Ok(Value::Object(current))
 }
 
 // ── daily usage (server.js:27285-27302) ──────────────────────────────────────
@@ -3624,6 +3795,7 @@ pub(crate) async fn handle(
         return Some(json_response(
             200,
             json!({
+                "ownerCustomization": can_customize_owner_vm(state, &actor),
                 "catalog": mitch_lib::vm_security::vm_upgrade_catalog(),
                 "current": current,
                 "coins": coins,
@@ -3635,6 +3807,10 @@ pub(crate) async fn handle(
                 },
             }),
         ));
+    }
+
+    if path == "/api/vm/owner-resources" && *method == Method::POST {
+        return Some(owner_resources(state, headers, body_bytes).await);
     }
 
     // POST /api/vm/upgrade (server.js:19219-19338)
@@ -4167,6 +4343,7 @@ pub(crate) async fn handle(
         };
 
         let clone_params = crate::proxmox_desktop::CloneDesktopParams {
+            owner_resources: can_customize_owner_vm(state, &actor),
             template_vmid: Some(template_vmid),
             vmid: Some(vmid),
             hostname: hostname.clone(),
@@ -4485,6 +4662,7 @@ pub(crate) async fn handle(
         };
 
         let clone_params = crate::proxmox_desktop::CloneDesktopParams {
+            owner_resources: can_customize_owner_vm(state, &actor),
             template_vmid: Some(template_vmid),
             vmid: Some(vmid),
             hostname: hostname.clone(),
@@ -5284,6 +5462,23 @@ pub(crate) fn schedule_desktop_setup(state: &Arc<AppState>, record: &Value, forc
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn owner_resource_values_allow_beyond_paid_tiers_and_reject_invalid_values() {
+        assert_eq!(owner_resource_value("cpu", &json!(96)), Some(96.0));
+        assert_eq!(owner_resource_value("ram", &json!(262144)), Some(262144.0));
+        assert_eq!(owner_resource_value("disk", &json!(4096)), Some(4096.0));
+        for (category, value) in [
+            ("cpu", json!(0)),
+            ("ram", json!(511)),
+            ("disk", json!(39)),
+            ("cpu", json!(1.5)),
+            ("cpu", json!("96")),
+            ("session", json!(96)),
+        ] {
+            assert_eq!(owner_resource_value(category, &value), None);
+        }
+    }
 
     #[test]
     fn vmid_range() {

@@ -1,1 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><title>MitchCoin</title><circle cx="64" cy="64" r="59" fill="#c4df9b"/><circle cx="64" cy="64" r="51" fill="none" stroke="#53683b" stroke-width="2"/><path d="M34 85V42h11l19 22 19-22h11v43H81V62L64 81 47 62v23Z" fill="#263322"/><path d="M53 95h22" stroke="#53683b" stroke-width="3" stroke-linecap="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <title>MitchCoin</title>
+  <defs>
+    <linearGradient id="rim" x1="24" y1="9" x2="101" y2="117" gradientUnits="userSpaceOnUse"><stop stop-color="#fff0b5"/><stop offset=".42" stop-color="#d6a443"/><stop offset=".75" stop-color="#ad7429"/><stop offset="1" stop-color="#efcc7c"/></linearGradient>
+    <linearGradient id="face" x1="33" y1="22" x2="93" y2="104" gradientUnits="userSpaceOnUse"><stop stop-color="#f4d98c"/><stop offset="1" stop-color="#c18a36"/></linearGradient>
+  </defs>
+  <path d="M43 5h42l30 30 9 29-9 29-30 30H43L13 93 4 64l9-29Z" fill="#68481f"/>
+  <path d="M42 3h44l29 29 10 30-10 30-29 29H42L13 92 3 62l10-30Z" fill="url(#rim)"/>
+  <path d="M45 15h38l23 23 8 24-8 24-23 23H45L22 86l-8-24 8-24Z" fill="url(#face)" stroke="#8f6329" stroke-width="2"/>
+  <path d="m29 47 9-10h12l14 17 14-17h12l9 10v38H83V59L64 81 45 59v26H29Z" fill="#714a23"/>
+  <path d="m30 45 9-10h11l14 17 14-17h11l9 10v36H84V55L64 77 44 55v26H30Z" fill="#352b24"/>
+  <path d="M53 96h22M41 22h46" stroke="#fff1ba" stroke-width="2" stroke-linecap="round"/>
+</svg>

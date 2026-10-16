@@ -340,6 +340,7 @@ impl Default for ProxmoxOptions {
 /// `cloneDesktop` inputs (destructured object in the JS). The numeric fields
 /// are already `Number()`-coerced by the caller.
 pub struct CloneDesktopParams {
+    pub owner_resources: bool,
     pub template_vmid: Option<f64>,
     pub vmid: Option<f64>,
     pub hostname: String,
@@ -355,6 +356,7 @@ pub struct CloneDesktopParams {
 /// cloud-init image to seed, the user sets up login themselves during
 /// their own OS install.
 pub struct CreateFromIsoParams {
+    pub owner_resources: bool,
     pub vmid: Option<f64>,
     pub hostname: String,
     pub cpu_cores: Option<f64>,
@@ -1418,12 +1420,20 @@ impl ProxmoxDesktopService {
             Some(raw) if !raw.is_nan() && raw != 0.0 => raw,
             _ => 2.0,
         };
-        let cpu_cores = clamp_js(cpu_input.round(), 2.0, 16.0);
+        let cpu_cores = if params.owner_resources {
+            cpu_input.round().max(1.0)
+        } else {
+            clamp_js(cpu_input.round(), 2.0, 16.0)
+        };
         let mem_input = match params.memory_mb {
             Some(raw) if !raw.is_nan() && raw != 0.0 => raw,
             _ => 4096.0,
         };
-        let memory_mb = clamp_js(mem_input.round(), 2048.0, 65536.0);
+        let memory_mb = if params.owner_resources {
+            mem_input.round().max(512.0)
+        } else {
+            clamp_js(mem_input.round(), 2048.0, 65536.0)
+        };
         let clean_host = clean_hostname(&params.hostname, vmid);
         let clone_upid = self
             .request(
@@ -1445,7 +1455,11 @@ impl ProxmoxDesktopService {
             .await?;
         self.wait_for_task(&self.node, Some(&clone_upid), 120_000)
             .await?;
-        let balloon = clamp_js((memory_mb / 4.0).floor(), 1024.0, 4096.0);
+        let balloon = if params.owner_resources {
+            0.0
+        } else {
+            clamp_js((memory_mb / 4.0).floor(), 1024.0, 4096.0)
+        };
         let mut config_body = Map::new();
         config_body.insert("name".to_string(), json!(clean_host));
         config_body.insert("cores".to_string(), jsval::num_value(cpu_cores));
@@ -1495,7 +1509,11 @@ impl ProxmoxDesktopService {
             Some(raw) if !raw.is_nan() && raw != 0.0 => raw,
             _ => 64.0,
         };
-        let requested_disk_gb = clamp_js(disk_input.round(), 40.0, 256.0);
+        let requested_disk_gb = if params.owner_resources {
+            disk_input.round().max(40.0)
+        } else {
+            clamp_js(disk_input.round(), 40.0, 256.0)
+        };
         if current_disk_gb != 0.0 && requested_disk_gb > current_disk_gb {
             // `['scsi0','virtio0','sata0'].find(key => config[key])` — when no
             // key matches, the JS sends the literal string "undefined".
@@ -2025,18 +2043,34 @@ impl ProxmoxDesktopService {
             Some(raw) if !raw.is_nan() && raw != 0.0 => raw,
             _ => 2.0,
         };
-        let cpu_cores = clamp_js(cpu_input.round(), 2.0, 16.0);
+        let cpu_cores = if params.owner_resources {
+            cpu_input.round().max(1.0)
+        } else {
+            clamp_js(cpu_input.round(), 2.0, 16.0)
+        };
         let mem_input = match params.memory_mb {
             Some(raw) if !raw.is_nan() && raw != 0.0 => raw,
             _ => 4096.0,
         };
-        let memory_mb = clamp_js(mem_input.round(), 2048.0, 65536.0);
+        let memory_mb = if params.owner_resources {
+            mem_input.round().max(512.0)
+        } else {
+            clamp_js(mem_input.round(), 2048.0, 65536.0)
+        };
         let disk_input = match params.disk_gb {
             Some(raw) if !raw.is_nan() && raw != 0.0 => raw,
             _ => 64.0,
         };
-        let disk_gb = clamp_js(disk_input.round(), 40.0, 256.0);
-        let balloon = clamp_js((memory_mb / 4.0).floor(), 1024.0, 4096.0);
+        let disk_gb = if params.owner_resources {
+            disk_input.round().max(40.0)
+        } else {
+            clamp_js(disk_input.round(), 40.0, 256.0)
+        };
+        let balloon = if params.owner_resources {
+            0.0
+        } else {
+            clamp_js((memory_mb / 4.0).floor(), 1024.0, 4096.0)
+        };
         let clean_host = clean_hostname(&params.hostname, vmid);
 
         // clone_desktop never sets net0 explicitly — a cloned VM just
@@ -2186,17 +2220,52 @@ impl ProxmoxDesktopService {
         memory_mb: Option<f64>,
         disk_gb: Option<f64>,
     ) -> Result<Value, ProxmoxServiceError> {
+        self.update_hardware_policy(record, cpu_cores, memory_mb, disk_gb, false)
+            .await
+    }
+
+    pub async fn update_owner_hardware(
+        &self,
+        record: &Value,
+        cpu_cores: Option<f64>,
+        memory_mb: Option<f64>,
+        disk_gb: Option<f64>,
+    ) -> Result<Value, ProxmoxServiceError> {
+        self.update_hardware_policy(record, cpu_cores, memory_mb, disk_gb, true)
+            .await
+    }
+
+    async fn update_hardware_policy(
+        &self,
+        record: &Value,
+        cpu_cores: Option<f64>,
+        memory_mb: Option<f64>,
+        disk_gb: Option<f64>,
+        owner_resources: bool,
+    ) -> Result<Value, ProxmoxServiceError> {
         let vmid = self.assert_vmid(jsval::number(&record["vmid"]))?;
         let node = encode_uri_component(&self.node_of(record));
         let mut updates = Map::new();
         if let Some(raw) = cpu_cores {
-            let cores = clamp_js(raw.round(), 2.0, 16.0);
+            let cores = if owner_resources {
+                raw.round().max(1.0)
+            } else {
+                clamp_js(raw.round(), 2.0, 16.0)
+            };
             updates.insert("cores".to_string(), js_num_value(cores));
         }
         if let Some(raw) = memory_mb {
-            let mem = clamp_js(raw.round(), 2048.0, 65536.0);
+            let mem = if owner_resources {
+                raw.round().max(512.0)
+            } else {
+                clamp_js(raw.round(), 2048.0, 65536.0)
+            };
             updates.insert("memory".to_string(), js_num_value(mem));
-            let balloon = clamp_js((mem / 4.0).floor(), 1024.0, 4096.0);
+            let balloon = if owner_resources {
+                0.0
+            } else {
+                clamp_js((mem / 4.0).floor(), 1024.0, 4096.0)
+            };
             updates.insert("balloon".to_string(), js_num_value(balloon));
         }
         if !updates.is_empty() {
@@ -2211,7 +2280,18 @@ impl ProxmoxDesktopService {
         if let Some(raw) = disk_gb {
             let config = self.get_config(record).await?;
             let current_disk_gb = parse_disk_gb(&config);
-            let requested_disk_gb = clamp_js(raw.round(), 40.0, 256.0);
+            let requested_disk_gb = if owner_resources {
+                raw.round().max(40.0)
+            } else {
+                clamp_js(raw.round(), 40.0, 256.0)
+            };
+            if owner_resources && (current_disk_gb == 0.0 || requested_disk_gb < current_disk_gb) {
+                return Err(ProxmoxServiceError::new(
+                    "INVALID_STORAGE_SIZE",
+                    "Storage can grow, but cannot shrink. Its current size must be known.",
+                    400,
+                ));
+            }
             if current_disk_gb != 0.0 && requested_disk_gb > current_disk_gb {
                 if let Some(disk) = ["scsi0", "virtio0", "sata0"]
                     .into_iter()

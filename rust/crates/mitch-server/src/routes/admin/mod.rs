@@ -22,6 +22,8 @@ use axum::response::Response;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
+pub mod accounts;
+pub mod chat;
 pub mod dashboard;
 pub mod data;
 pub mod economy;
@@ -87,13 +89,13 @@ pub fn forbidden() -> Response {
 /// the existing behavior of targeting an email that has no account yet
 /// (e.g. pre-provisioning a coin gift before someone signs up).
 pub fn resolve_admin_target(state: &AppState, raw: &str) -> String {
-    mitch_lib::profile::resolve_target_email(
-        &state.store,
-        &state.cfg.data_dir,
-        &state.id_secret,
-        raw,
-    )
-    .unwrap_or_else(|| mitch_lib::auth::normalize_email(raw))
+    accounts::resolve(state, raw).unwrap_or_else(|| {
+        if raw.starts_with('@') && raw.contains(':') {
+            raw.trim().to_string()
+        } else {
+            String::new()
+        }
+    })
 }
 
 /// `getCookies(req)` + `sid = studentId || id` + `getRealIp(req)`.
@@ -194,6 +196,13 @@ pub async fn handle(
     body: &Value,
 ) -> Resp {
     let ctx = admin_ctx(state, headers);
+    if let Some(response) = accounts::handle(state, method, path, search, &ctx) {
+        return Some(response);
+    }
+
+    if let Some(response) = chat::handle(state, method, path, body, &ctx) {
+        return Some(response);
+    }
 
     // ── Legacy pw-key tools (js/ssh-key/team-token/canvas/ratelimit) ──
     if let Some(resp) = legacy::handle(state, method, path, headers, search, body, &ctx).await {

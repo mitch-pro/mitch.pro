@@ -8,8 +8,8 @@ html body .mitch-wallet:hover { border-color: var(--t-ac); background: color-mix
 .mitch-wallet[data-state=loading] .mitch-wallet-value, .mitch-wallet[data-state=unavailable] .mitch-wallet-value { color: var(--t-fg2, #c8c1d4); }
 html body :is(.mitch-coin-amount, .mitch-coin-price) { display: inline-flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
 html body :is(.mitch-coin-amount, .mitch-coin-price)[hidden] { display: none !important; }
-:is(.mitch-coin-amount, .mitch-coin-price)::before { content: ''; display: inline-block; flex: 0 0 auto; width: 1.35em; height: 1.35em; border-radius: 50%; background: url('/mitchcoin.svg') center / contain no-repeat; }
-.my-rank-stats > span:first-child b::before { content: ''; display: inline-block; width: 1em; height: 1em; margin-right: .3em; vertical-align: -.1em; border-radius: 50%; background: url('/mitchcoin.svg') center / contain no-repeat; }
+:is(.mitch-coin-amount, .mitch-coin-price)::before { content: ''; display: inline-block; flex: 0 0 auto; width: 1.35em; height: 1.35em; border-radius: 50%; background: url('/mitchcoin.svg?v=3') center / contain no-repeat; }
+.my-rank-stats > span:first-child b::before { content: ''; display: inline-block; width: 1em; height: 1em; margin-right: .3em; vertical-align: -.1em; border-radius: 50%; background: url('/mitchcoin.svg?v=3') center / contain no-repeat; }
 .balance-panel .mitch-coin-amount { flex-wrap: wrap; }
 .balance-panel .mitch-coin-amount small { font-size: 14px; color: var(--t-fg2); }
 .mitch-coin-gamebar { position: sticky; top: 0; z-index: 100; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 16px; margin-bottom: 20px; border-bottom: 1px solid var(--t-bd); background: var(--t-bg, #0c0913); }

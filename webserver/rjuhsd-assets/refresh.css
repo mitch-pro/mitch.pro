@@ -1,44 +1,99 @@
-/* Schedule-first layout; school colors and official schedule content stay central. */
-.school-hub .announcement-bar{display:none}
-.school-hub .site-header{height:76px;padding-block:12px;gap:24px;background:var(--card-solid)!important;box-shadow:none}
-.school-hub .site-header .brand{gap:12px;min-width:0}
+/* Shared school layout; each campus keeps its own colors and schedule. */
+.school-hub{font-family:var(--sans);line-height:1.5}
+.school-hub .announcement-bar,.school-hub .hero-graphic,.school-hub .hero-overline,.school-hub .section-label,.school-hub .live-wolf{display:none}
+.school-hub .site-header{height:auto;min-height:84px;padding:16px 0;gap:22px;background:transparent!important;border:0;box-shadow:none}
+.school-hub .brand{gap:12px;min-width:0}
 .school-hub .brand-copy small{display:none}
-.school-hub .brand-copy strong{font-size:14px;line-height:1.3;max-width:24ch;white-space:normal}
-.school-hub .brand-logo{background:none;border:0;box-shadow:none}
-.school-hub .site-header nav{gap:4px;margin-left:auto}
-.school-hub .site-header nav a{font-weight:500;font-size:13px;border:0;border-radius:8px;padding:10px 12px}
+.school-hub .brand-copy strong{font:650 14px/1.35 var(--sans);max-width:25ch;white-space:normal}
+.school-hub .brand-logo{width:38px;height:38px;background:none;border:0;box-shadow:none}
+.school-hub .brand-logo img{width:38px;height:38px;object-fit:contain;border-radius:0}
+.school-hub .site-header nav{gap:3px;margin:0 0 0 auto}
+.school-hub .site-header nav a{height:38px;padding:0 13px;font-size:13px;font-weight:500;letter-spacing:0;text-transform:none;border:0;border-radius:9px}
 .school-hub .site-header nav a:hover{background:var(--card)}
-.school-hub .header-actions{gap:10px}
-.school-hub .school-choice{font-size:0;gap:0}
-.school-hub .school-choice select{font-size:13px;min-height:38px;max-width:160px;border-radius:8px;border:1px solid var(--line);background:var(--card);font-weight:500}
-.school-hub .icon-button{border-radius:8px;box-shadow:none}
-.school-hub .hero{margin-top:24px;padding:36px;gap:36px;border-radius:20px;box-shadow:none;background:var(--card-solid);border:1px solid var(--line)}
-.school-hub .hero-graphic .ring{display:none}
-.school-hub .hero-graphic{opacity:.06}
-.school-hub .hero h1{font-size:clamp(36px,4.5vw,62px);letter-spacing:-.045em;line-height:1.1;max-width:14ch}
-.school-hub .hero h1 em{font-size:.85em}
-.school-hub .hero-date-panel{padding:0;margin:0 0 20px;border:0;background:none;box-shadow:none}
-.school-hub .hero-date-main strong{font-size:32px}
-.school-hub .hero-overline,.school-hub .section-label{display:none}
-.school-hub .hero-actions{gap:10px}
-.school-hub .hero-chat-btn,.school-hub .hero-actions>a[href="/public-chat/"]{display:none}
-.school-hub .live-card{border:1px solid var(--line);box-shadow:none;background:var(--card);border-radius:16px}
-.school-hub .live-wolf{opacity:.035}
-.school-hub .live-card-top{background:transparent}
-.school-hub .snapshot{box-shadow:none;border-radius:14px;overflow:hidden}
-.school-hub .dashboard-section{box-shadow:none;margin-top:36px}
-.school-hub .section-title-row h2{letter-spacing:-.025em;font-size:28px}
-.school-hub .schedule-controls{gap:12px;flex-wrap:wrap}
-.school-hub .schedule-controls .lunch-status{display:flex;border-radius:8px;box-shadow:none;background:var(--card);margin:0}
+.school-hub .header-actions{gap:10px;height:auto}
+.school-hub .school-choice{font-size:0;gap:0;height:auto;border:0}
+.school-hub .school-choice select{font:500 13px var(--sans);height:38px;min-width:120px;max-width:160px;padding:0 30px 0 12px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink)}
+.school-hub .icon-button{height:38px;width:38px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink);box-shadow:none}
+.school-hub .hero{margin-top:8px;padding:34px;gap:36px;border-radius:20px;border:1px solid var(--line)!important;background:var(--card-solid)!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr)}
+.school-hub .hero-content{text-align:left;align-self:center}
+.school-hub .hero-date-panel{width:fit-content;gap:8px;padding:0!important;margin:0 0 24px;border:0!important;border-radius:0!important;background:transparent!important;color:var(--muted)!important}
+.school-hub .hero-weekday{font-size:12px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--muted)!important}
+.school-hub .hero-date-main strong,.school-hub .hero-date-main b{font-size:12px;font-weight:500;color:var(--muted)!important}
+.school-hub .hero h1{margin:0 0 16px;max-width:18ch;font-size:clamp(32px,4vw,48px);letter-spacing:-.045em;line-height:1.12}
+.school-hub .hero h1 em{font-size:.85em;font-style:normal}
+.school-hub .hero-summary{margin:0;max-width:38ch;color:var(--muted)!important;font-size:14px;line-height:1.6}
+.school-hub .hero-actions{justify-content:flex-start;gap:10px;margin-top:26px;flex-wrap:wrap}
+.school-hub .hero-actions a,.school-hub .hero-actions button{min-height:40px;padding-inline:16px;border-radius:9px;font-size:13px;font-weight:550;letter-spacing:0;text-transform:none}
+.school-hub .hero-actions span,.school-hub .outline-link span,.school-hub .school-card-actions span,.school-hub #brief-change-lunch span{display:none}
+.school-hub .live-card{padding:22px 24px;border:1px solid var(--line)!important;border-radius:14px;background:var(--card)!important;box-shadow:none;backdrop-filter:none}
+.school-hub .live-card-top{height:24px;justify-content:space-between;padding:0;background:none}
+.school-hub .live-card-top>span{display:flex;align-items:center;gap:7px}
+.school-hub .live-card-top>span b{font-size:11px;letter-spacing:0;text-transform:none}
+.school-hub .live-card-top time{font:500 12px var(--sans);letter-spacing:0}
+.school-hub .live-card-body{display:block;padding:16px 0;text-align:left}
+.school-hub .period-badge{float:right;margin:0;min-width:36px;height:36px;border-radius:10px;font-size:16px;box-shadow:none}
+.school-hub .live-card-body>p:first-of-type{margin:0;font-size:11px;letter-spacing:0;text-transform:none}
+.school-hub .live-card h2{margin:4px 0;font-size:24px;letter-spacing:-.025em}
+.school-hub .period-range{font-size:12px}
+.school-hub .countdown-dial{height:auto;min-height:0;margin:20px 0 24px;justify-items:start}
+.school-hub .countdown-dial>svg{display:none}
+.school-hub .countdown-center{justify-items:start}
+.school-hub .countdown-center .countdown{font:600 clamp(44px,5.5vw,72px)/1.1 var(--sans);letter-spacing:-.05em;font-variant-numeric:tabular-nums}
+.school-hub .countdown-center .countdown-copy{margin-top:4px;font-size:12px;letter-spacing:0;text-transform:none}
+.school-hub .countdown-details{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;border:0;padding:0;margin:0;text-align:left}
+.school-hub .countdown-details>span,.school-hub .countdown-details small,.school-hub .countdown-details strong{text-align:left}
+.school-hub .countdown-details small{font-size:10px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--muted)!important}
+.school-hub .countdown-details strong{font-size:12px;font-weight:600;overflow-wrap:anywhere}
+.school-hub .progress{height:4px;margin:18px 0 0;border-radius:4px}
+.school-hub .live-next{display:flex;align-items:center;gap:10px;padding:16px 0 0;border-top:1px solid var(--line);background:none}
+.school-hub .live-next span{font-size:11px;letter-spacing:0;text-transform:none}
+.school-hub .live-next strong{font-size:12px;white-space:normal}
+.school-hub .live-next time{font-size:12px;white-space:nowrap}
+.school-hub .snapshot{margin-top:16px;border:1px solid var(--line);border-radius:14px;background:var(--card);box-shadow:none;overflow:hidden}
+.school-hub .snapshot article{padding:20px;gap:12px}
+.school-hub .snapshot small{font-size:11px;letter-spacing:0;text-transform:none}
+.school-hub .snapshot strong{margin-top:5px;font-size:16px;font-weight:600}
+.school-hub .snapshot-icon{width:32px;height:32px;border-radius:9px;font-size:17px}
+.school-hub .dashboard-section{margin-top:36px;padding:28px;border:1px solid var(--line)!important;border-radius:18px;background:var(--card-solid)!important;box-shadow:none!important;backdrop-filter:none!important}
+.school-hub .section-title-row{gap:18px;margin-bottom:22px}
+.school-hub .section-title-row h2{font-size:25px;letter-spacing:-.035em}
+.school-hub .section-title-row p{font-size:13px;line-height:1.6}
+.school-hub .date-tile{display:none}
+.school-hub .schedule-controls{gap:12px;flex-wrap:wrap;padding-bottom:22px}
+.school-hub .schedule-controls label{font-size:12px;gap:8px}
+.school-hub .schedule-controls select{min-height:38px;padding:7px 10px;border-radius:8px;background:var(--card);border:1px solid var(--line);font-size:12px}
+.school-hub .schedule-controls .lunch-status{display:flex;align-items:center;height:38px;padding:0 12px;margin:0;border-radius:8px;box-shadow:none;background:var(--card);border:1px solid var(--line);color:var(--ink)}
 .school-hub .schedule-controls .lunch-status span{display:none}
-.school-hub .campus-links{display:flex;flex-wrap:wrap;gap:20px;padding:22px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-top:32px}
+.school-hub .schedule-controls .lunch-status strong{font-size:12px;letter-spacing:0;text-transform:none;color:var(--ink)}
+.school-hub #source-status{font-size:11px;color:var(--muted)}
+.school-hub .schedule-grid{gap:24px;grid-template-columns:minmax(0,1fr) 240px}
+.school-hub .day-brief{border-radius:12px;background:var(--card);border:1px solid var(--line);box-shadow:none}
+.school-hub .brief-heading span,.school-hub .brief-message>span,.school-hub .brief-stat small{font-size:11px;letter-spacing:0;text-transform:none}
+.school-hub .brief-stat strong{font-size:14px}
+.school-hub .timezone-chip{font-size:11px;letter-spacing:0;text-transform:none;background:none;border:0}
+.school-hub .district-school-card{border:1px solid var(--line);border-radius:14px;box-shadow:none;background:var(--card)}
+.school-hub .district-school-card:hover{transform:none;box-shadow:none}
+.school-hub .district-school-head h3{font-size:16px;letter-spacing:-.02em}
+.school-hub .school-card-actions .primary-button,.school-hub .outline-link{font-size:12px;text-transform:none;letter-spacing:0;border-radius:8px;line-height:1.4}
+.school-hub .campus-links{display:flex;flex-wrap:wrap;gap:22px;padding:20px 4px;border-bottom:1px solid var(--line);margin-top:24px}
 .school-hub .campus-links a{font-size:13px;color:var(--muted);text-decoration:none}
-.school-hub .campus-links a:hover{color:var(--text)}
-.school-hub .mobile-nav-dock{box-shadow:0 5px 25px #0002;background:var(--card-solid);border:1px solid var(--line);border-radius:14px;justify-content:space-around}
-.school-hub .mobile-nav-dock .dock-item{padding:14px 8px;font-size:12px;min-width:0}
+.school-hub .campus-links a:hover{color:var(--ink)}
+.school-hub .tool-grid a{border-radius:10px;background:var(--card);box-shadow:none;text-transform:none;letter-spacing:0;font-size:13px}
+.school-hub .mobile-nav-dock{box-shadow:0 4px 20px #0002;background:var(--card-solid);border:1px solid var(--line);border-radius:14px;justify-content:space-around}
+.school-hub .mobile-nav-dock .dock-item{padding:13px 8px;font-size:12px;min-width:0;text-transform:none;letter-spacing:0}
 .school-hub .footer-bottom{font-size:11px;gap:14px}
-@media(max-width:900px){.school-hub .site-header{gap:12px}.school-hub .site-header nav{display:none}.school-hub .header-actions{margin-left:auto}.school-hub .hero{padding:24px;gap:24px}.school-hub .hero-graphic{display:none}}
-@media(max-width:560px){.school-hub .site-header{height:auto;min-height:68px;padding:12px 14px;gap:8px}.school-hub .brand-copy strong{font-size:12px;max-width:15ch}.school-hub .brand-logo img{width:30px;height:30px}.school-hub .header-actions{gap:6px}.school-hub .school-choice select{width:116px;max-width:116px;padding:7px;font-size:12px}.school-hub .icon-button{width:32px;height:32px;min-width:32px}.school-hub .hero{padding:22px 18px;margin-top:16px;border-radius:16px}.school-hub .hero h1{font-size:37px}.school-hub .hero-date-panel{margin-bottom:15px}.school-hub .section-title-row h2{font-size:25px}.school-hub .campus-links{gap:16px}}
-@media(max-width:360px){.school-hub .brand-copy strong{max-width:12ch;font-size:11px}.school-hub .school-choice select{width:101px;max-width:101px}.school-hub .site-header{padding-inline:10px}.school-hub .header-actions{gap:4px}}
-
 .school-hub #weather-widget{position:relative!important;inset:auto!important;width:min(calc(100% - 32px),360px)!important;margin:24px auto!important;box-shadow:none!important}
+@media(max-width:1000px){.school-hub .site-header{gap:12px}.school-hub .site-header nav{display:none}.school-hub .header-actions{margin-left:auto}.school-hub .hero{padding:26px;gap:26px}.school-hub .schedule-grid{grid-template-columns:minmax(0,1fr) 210px}.school-hub .snapshot article{padding:16px}}
+@media(max-width:700px){.school-hub main#main,.school-hub .site-header{width:calc(100% - 28px)}.school-hub .site-header{min-height:76px;padding:14px 0}.school-hub .brand-copy strong{font-size:12px;max-width:16ch}.school-hub .hero{grid-template-columns:1fr;padding:24px;gap:28px}.school-hub .hero-date-panel{margin-bottom:18px}.school-hub .hero h1{font-size:36px}.school-hub .hero h1 br{display:none}.school-hub .hero h1 em:before{content:' '}.school-hub .hero-actions{margin-top:20px}.school-hub .live-card{padding:20px}.school-hub .countdown-center .countdown{font-size:56px}.school-hub .snapshot{grid-template-columns:repeat(2,minmax(0,1fr))}.school-hub .snapshot article{border-bottom:1px solid var(--line)}.school-hub .snapshot article:nth-child(2n){border-right:0}.school-hub .snapshot article:nth-last-child(-n+2){border-bottom:0}.school-hub .dashboard-section{padding:22px 18px;margin-top:24px}.school-hub .schedule-grid{grid-template-columns:1fr}.school-hub .day-brief{display:none}.school-hub .section-title-row h2{font-size:23px}.school-hub .school-choice select{width:116px;min-width:0;max-width:116px;font-size:12px}.school-hub .header-actions{gap:6px}.school-hub .icon-button{width:34px;height:36px}.school-hub .brand-logo,.school-hub .brand-logo img{width:30px;height:30px}}
+@media(max-width:360px){.school-hub .brand-copy strong{font-size:11px;max-width:12ch}.school-hub .brand{gap:8px}.school-hub .school-choice select{width:102px;max-width:102px;padding-left:8px}.school-hub .hero{padding:20px 16px}.school-hub .live-card{padding:18px 14px}.school-hub .live-next{flex-wrap:wrap}.school-hub .snapshot article{padding:12px;gap:8px}.school-hub .snapshot strong{font-size:14px}}
+@media(prefers-reduced-motion:reduce){.school-hub *{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+.school-hub .day-brief .brief-heading,.school-hub .day-brief .brief-message{background:transparent;color:var(--ink);border-color:var(--line)}
+.school-hub .day-brief .brief-heading b{font-size:11px;color:var(--muted)}
+.school-hub .day-brief .brief-message p{font-size:12px;color:var(--muted)}
+.school-hub .day-brief>button{background:var(--card);color:var(--ink);border-top:1px solid var(--line);border-radius:0;font-size:12px;letter-spacing:0;text-transform:none}
+@media(max-width:560px){.school-hub .district-schools-grid{grid-template-columns:1fr;gap:14px}.school-hub .district-school-card{padding:18px}.school-hub .district-school-head{gap:12px}.school-hub .district-school-head h3{font-size:16px}.school-hub .school-periods-list li{font-size:12px}.school-hub .school-card-actions{display:grid;grid-template-columns:1fr;gap:8px}}
+
+.school-hub #theme-btn{color:var(--ink)!important;background:var(--card)!important;border-color:var(--line)!important}
+.school-hub #current-eyebrow{display:none}
+.school-hub .live-card[data-countdown-state=complete] :is(.countdown-dial,.countdown-details,.progress),.school-hub .live-card[data-countdown-state=off] :is(.countdown-dial,.countdown-details,.progress){display:none!important}
+.school-hub .live-card:not([data-countdown-state=active]) .live-card-body{padding-block:24px}

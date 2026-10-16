@@ -17,7 +17,7 @@
     />
 
     <meta property="og:title" content="Matrix Chat — mitch.pro" />
-    <meta property="og:url" content="https://mitch.pro/matrix/" />
+    <meta property="og:url" content="https://mitchdog.com/matrix/" />
     <meta property="og:image" content="/icon-192.png" />
     <meta
       property="og:description"
@@ -68,7 +68,7 @@
 
     <!-- Cinny Stylesheet & Mitch.pro chat overrides -->
     <link rel="stylesheet" crossorigin href="/matrix/assets/index-DmaX6Xe5.css" />
-    <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=8" />
+    <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=9" />
     <script defer src="/matrix/media-auth.js?v=3"></script>
   </head>
   <body id="appBody">
@@ -105,7 +105,7 @@
     <!-- Mitch.pro SSO Connect Banner (only shown if guest/logged out) -->
     <div id="mitch-sso-banner">
       <span id="mitch-sso-msg">✨ Connect your account for instant single sign-on</span>
-      <a id="mitch-sso-btn" href="/api/sso/bridge?back=/matrix/">Login with mitch.pro</a>
+      <a id="mitch-sso-btn" href="/api/sso/bridge?back=/matrix/">Sign in</a>
       <a id="mitch-home-btn" href="/" style="margin-left: 12px; color: var(--t-fg2); text-decoration: none; font-size: 13px; opacity: 0.85; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.85'">← Return to mitch.pro</a>
     </div>
 
@@ -355,6 +355,7 @@
       // the identity host (mitchdog.com) and returns here after exchange.
       (function() {
         const banner = document.getElementById("mitch-sso-banner");
+        document.getElementById('mitch-sso-btn').href='/api/sso/bridge?back='+encodeURIComponent(location.pathname+location.search);
         const MATRIX_STORE_RECOVERY_KEY = 'mitch_matrix_store_recovery_v1';
         const MATRIX_DATABASES = [
           'matrix-js-sdk:web-sync-store',
@@ -490,9 +491,50 @@
           }
         }).observe(document.documentElement, { childList: true, subtree: true });
 
-        function bootCinny() {
+        async function openRequestedConversation() {
+          const recipient = new URLSearchParams(location.search).get('dm');
+          const token = localStorage.getItem('cinny_access_token');
+          if (!recipient || !token) return;
+          try {
+            const response = await fetch('/api/matrix/dm', {
+              method:'POST', credentials:'same-origin',
+              headers:{'Content-Type':'application/json','Authorization':'Bearer '+token,'X-Mitch-Requested-With':'1'},
+              body:JSON.stringify({recipient}), signal:AbortSignal.timeout(45000)
+            });
+            const data = await response.json();
+            if (!response.ok || !data.roomId) throw new Error(data.error || 'Could not open this conversation.');
+            history.replaceState(null,'','/matrix/direct/'+encodeURIComponent(data.roomId)+'/');
+          } catch(error) {
+            const notice=document.createElement('div');
+            notice.setAttribute('role','alert');notice.className='mitch-dm-notice';
+            const text=document.createElement('span');text.textContent=error.name==='TimeoutError'?'Opening the conversation took too long. Please try again.':error.message;
+            const retry=document.createElement('button');retry.type='button';retry.textContent='Retry';retry.onclick=()=>location.reload();
+            const close=document.createElement('button');close.type='button';close.textContent='Dismiss';close.onclick=()=>notice.remove();
+            notice.append(text,retry,close);document.body.append(notice);
+          }
+        }
+
+        async function bootCinny() {
           if (window.__cinnyLoaded) return;
           window.__cinnyLoaded = true;
+          try {
+            const response = await fetch('/api/access/status', {credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(8000)});
+            if (response.ok) {
+              const state = await response.json();
+              const cutoff = Number(state.chatResetAt || 0);
+              const previous = Number(localStorage.getItem('mitch-matrix-sync-reset-at') || 0);
+              if (cutoff > previous) {
+                const cleared = await deleteMatrixDatabase('matrix-js-sdk:web-sync-store');
+                if (!cleared) {
+                  window.__cinnyLoaded = false;
+                  const notice = document.createElement('p'); notice.setAttribute('role','alert'); notice.textContent='Chat history was cleared. Close other chat tabs, then reload this page.';
+                  document.body.appendChild(notice); return;
+                }
+                localStorage.setItem('mitch-matrix-sync-reset-at', String(cutoff));
+              }
+            }
+          } catch (_) {}
+          await openRequestedConversation();
           const script = document.createElement("script");
           script.type = "module";
           script.crossOrigin = "anonymous";
@@ -676,7 +718,7 @@
             name.textContent = 'Sign in';
             avatar.textContent = 'M';
             avatar.style.backgroundImage = '';
-            link.href = '/api/sso/bridge?back=/matrix/';
+            link.href = '/api/sso/bridge?back='+encodeURIComponent(location.pathname+location.search);
             link.removeAttribute('title');
             return;
           }
@@ -887,6 +929,19 @@
         setTimeout(pruneStaleMatrixDevices, 8000);
       })();
 
+      window.mitchReviewedGifFiles = new WeakSet();
+      function guardGifFiles(event) {
+        const files = Array.from(event.clipboardData?.files || event.dataTransfer?.files || event.target?.files || []);
+        if (!files.some(file => (file.type === 'image/gif' || /\.gif$/i.test(file.name)) && !window.mitchReviewedGifFiles.has(file))) return;
+        event.preventDefault(); event.stopImmediatePropagation();
+        if (event.target?.type === 'file') event.target.value = '';
+        let notice = document.getElementById('gif-upload-notice');
+        if (!notice) { notice=document.createElement('div'); notice.id='gif-upload-notice'; notice.setAttribute('role','alert'); notice.style.cssText='position:fixed;bottom:90px;left:50%;transform:translateX(-50%);max-width:calc(100vw - 40px);padding:14px 18px;border:1px solid var(--t-bd);border-radius:12px;background:var(--t-bg2);color:var(--t-fg);z-index:2147483645'; document.body.appendChild(notice); }
+        notice.textContent='Use the GIF picker to send reviewed reactions.';
+        clearTimeout(notice._timer); notice._timer=setTimeout(()=>notice.remove(),5000);
+      }
+      ['paste','drop','change'].forEach(type=>document.addEventListener(type,guardGifFiles,true));
+
       // ── Mitch GIF & Sticker Picker Integration ────────────────────
       (function() {
         let activeTab = 'gifs'; // 'gifs' | 'stickers'
@@ -915,7 +970,7 @@
                 <button type="button" class="mitch-gif-tab" data-tab="stickers">Stickers</button>
               </div>
               <div class="mitch-gif-search-box">
-                <input type="text" placeholder="Search Giphy..." aria-label="Search GIFs and Stickers" id="mitch-gif-search-input" autocomplete="off" />
+                <input type="text" placeholder="Search reviewed reactions…" aria-label="Search GIFs and Stickers" id="mitch-gif-search-input" autocomplete="off" />
               </div>
               <button type="button" class="mitch-gif-close-btn" aria-label="Close" id="mitch-gif-close">&times;</button>
             </div>
@@ -923,7 +978,7 @@
             <div id="mitch-gif-content" class="mitch-gif-grid"></div>
             <div class="mitch-gif-footer">
               <span id="mitch-gif-attribution">Powered by GIPHY</span>
-              <span id="mitch-gif-status">Ready</span>
+              <span id="mitch-gif-status">Reviewed reactions · Powered by GIPHY</span>
             </div>
           `;
           document.body.appendChild(popover);
@@ -1325,6 +1380,11 @@
                 },
                 body: JSON.stringify({ roomId: activeRoomId, url, title, format })
               });
+              if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                if (status) status.textContent = data.error || 'Could not send this GIF.';
+                return;
+              }
               if (res.ok) {
                 const data = await res.json();
                 if (data.ok) {
@@ -1338,22 +1398,15 @@
 
           // 2. Fallback: Client-side fetch & single paste for encrypted rooms
           try {
-            let blob;
-            try {
-              const res = await fetch(url);
-              if (!res.ok) throw new Error('direct fetch status ' + res.status);
-              blob = await res.blob();
-            } catch (_) {
-              const proxyUrl = `/api/matrix/gifs/proxy?url=${encodeURIComponent(url)}`;
-              const res = await fetch(proxyUrl);
-              if (!res.ok) throw new Error('proxy fetch status ' + res.status);
-              blob = await res.blob();
-            }
+            const response = await fetch(`/api/matrix/gifs/proxy?url=${encodeURIComponent(url)}`);
+            if (!response.ok) throw new Error('Choose a GIF from the reviewed collection.');
+            const blob = await response.blob();
 
             const ext = format || 'gif';
             const filename = (title || 'media').toLowerCase().replace(/[^a-z0-9_-]+/g, '_') + '.' + ext;
             const file = new File([blob], filename, { type: blob.type || (ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/gif') });
 
+            window.mitchReviewedGifFiles.add(file);
             const input = document.querySelector('[data-editable-name="RoomInput"]') || document.querySelector('.coabsl3') || document.querySelector('[contenteditable="true"]');
             if (input) {
               input.focus();
@@ -1369,14 +1422,10 @@
                 input.dispatchEvent(pasteEvent);
               } catch (_) {}
 
-              setTimeout(() => {
-                const sendBtn = document.querySelector('.coabsl0 button[aria-label*="Send" i], button[title*="Send" i], .modal button[type="submit"], [role="dialog"] button[type="submit"], [role="dialog"] button.btn-primary');
-                if (sendBtn) sendBtn.click();
-              }, 400);
             }
 
             closePopover();
-            if (status) status.textContent = 'Sent!';
+            if (status) status.textContent = 'Attached. Press Send to share.';
           } catch (err) {
             console.warn('[Mitch GIF] Send failed:', err);
             if (status) status.textContent = 'Send failed';
