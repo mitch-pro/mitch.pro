@@ -29,7 +29,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
 
-    <link rel="manifest" href="/manifest.json" />
+    <link rel="manifest" href="/matrix/manifest.json" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="application-name" content="Mitch.pro Matrix" />
     <meta name="apple-mobile-web-app-title" content="Mitch.pro Matrix" />
@@ -126,6 +126,27 @@
 
     <script>
       window.global ||= window;
+
+      // ── Keep a real-viewport-height custom property in sync ──
+      // CSS `dvh` alone has known iOS Safari edge cases around keyboard
+      // open/close and standalone-PWA cold launch where the reported
+      // viewport height is stale until the next resize fires, which reads
+      // as an intermittent blank gap at the bottom. visualViewport.height
+      // is the actual current visible height and fires its own resize
+      // event independent of those dvh recalculation quirks, so track it
+      // directly as a fallback-first custom property.
+      (function() {
+        function syncViewportHeight() {
+          const h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+          document.documentElement.style.setProperty('--mx-vvh', h + 'px');
+        }
+        syncViewportHeight();
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener('resize', syncViewportHeight);
+        }
+        window.addEventListener('orientationchange', syncViewportHeight);
+        window.addEventListener('pageshow', syncViewportHeight);
+      })();
 
       // ── Ensure Sun/Theme Button is Never Rendered in Matrix UI ──
       (function() {
