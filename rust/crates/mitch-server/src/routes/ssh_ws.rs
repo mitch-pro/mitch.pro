@@ -485,10 +485,7 @@ mod tests {
     fn test_state() -> (Arc<AppState>, std::path::PathBuf) {
         let dir = std::env::temp_dir().join(format!(
             "mitch-server-ssh-ws-test-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
+            mitch_lib::crypto::random_bytes_hex(8)
         ));
         std::fs::create_dir_all(dir.join("data")).unwrap_or_default();
         let cfg = crate::hosts::SiteConfig::load();
