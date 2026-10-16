@@ -5232,6 +5232,55 @@ pub(crate) async fn handle(
     None
 }
 
+fn managed_desktop(record: &Value) -> bool {
+    record["guestType"] == "qemu"
+        && matches!(record["templateVmid"].as_f64(), Some(9010.0 | 9011.0))
+}
+
+pub(crate) fn schedule_desktop_setup(state: &Arc<AppState>, record: &Value, force: bool) {
+    if !managed_desktop(record) {
+        return;
+    }
+    let id = jsval::str_or(record.get("id"), "");
+    {
+        let mut setups = state
+            .desktop_setup
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if let Some(current) = setups.get(&id) {
+            if current["status"] == "preparing"
+                || (!force && (current["status"] == "ready" || current["status"] == "failed"))
+            {
+                return;
+            }
+        }
+        setups.insert(id.clone(), json!({"status":"preparing"}));
+    }
+    let state = state.clone();
+    let record = record.clone();
+    tokio::spawn(async move {
+        let service = crate::proxmox_desktop::desktop();
+        let result = async {
+            let config = service.get_config(&record).await?;
+            let username = jsval::str_or(config.get("ciuser"), "");
+            let vmid = record["vmid"].as_f64().unwrap_or(0.0) as i64;
+            service
+                .enable_friendly_desktop_login(vmid, &username, "")
+                .await
+        }
+        .await;
+        let (status, error) = match result {
+            Ok(()) => ("ready", String::new()),
+            Err(e) => ("failed", e.message),
+        };
+        state
+            .desktop_setup
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(id, json!({"status":status,"error":error}));
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5371,53 +5420,4 @@ mod tests {
         );
         assert!(!vm_same_origin_request(&headers_bad));
     }
-}
-
-fn managed_desktop(record: &Value) -> bool {
-    record["guestType"] == "qemu"
-        && matches!(record["templateVmid"].as_f64(), Some(9010.0 | 9011.0))
-}
-
-pub(crate) fn schedule_desktop_setup(state: &Arc<AppState>, record: &Value, force: bool) {
-    if !managed_desktop(record) {
-        return;
-    }
-    let id = jsval::str_or(record.get("id"), "");
-    {
-        let mut setups = state
-            .desktop_setup
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        if let Some(current) = setups.get(&id) {
-            if current["status"] == "preparing"
-                || (!force && (current["status"] == "ready" || current["status"] == "failed"))
-            {
-                return;
-            }
-        }
-        setups.insert(id.clone(), json!({"status":"preparing"}));
-    }
-    let state = state.clone();
-    let record = record.clone();
-    tokio::spawn(async move {
-        let service = crate::proxmox_desktop::desktop();
-        let result = async {
-            let config = service.get_config(&record).await?;
-            let username = jsval::str_or(config.get("ciuser"), "");
-            let vmid = record["vmid"].as_f64().unwrap_or(0.0) as i64;
-            service
-                .enable_friendly_desktop_login(vmid, &username, "")
-                .await
-        }
-        .await;
-        let (status, error) = match result {
-            Ok(()) => ("ready", String::new()),
-            Err(e) => ("failed", e.message),
-        };
-        state
-            .desktop_setup
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert(id, json!({"status":status,"error":error}));
-    });
 }

@@ -195,6 +195,65 @@ pub fn media_blocked(store: &DataStore, uri: &str) -> bool {
     store.conn().query_row("SELECT EXISTS(SELECT 1 FROM moderated_media m LEFT JOIN account_chat_removals r ON m.email=r.email WHERE m.uri=?1 AND (m.blocked=1 OR m.created_at<=r.cutoff))",[uri],|r|r.get(0)).unwrap_or(true)
 }
 
+pub fn account_removals(store: &DataStore) -> HashMap<String, i64> {
+    removals(&store.conn()).unwrap_or_default()
+}
+pub fn pending_jobs(store: &DataStore) -> Vec<(String, i64)> {
+    let conn = store.conn();
+    let Ok(mut stmt) =
+        conn.prepare("SELECT email,cutoff FROM account_chat_removals WHERE matrix_done=0")
+    else {
+        return Vec::new();
+    };
+    let Ok(rows) = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?))) else {
+        return Vec::new();
+    };
+    rows.filter_map(Result::ok).collect()
+}
+pub fn finish_job(store: &DataStore, email: &str, cutoff: i64, done: bool, error: &str) {
+    let _=store.conn().execute("UPDATE account_chat_removals SET matrix_done=?1,last_error=?2 WHERE email=?3 AND cutoff=?4",rusqlite::params![done,error,email,cutoff]);
+}
+pub fn statuses(store: &DataStore) -> Value {
+    let conn = store.conn();
+    let Ok(mut stmt) =
+        conn.prepare("SELECT email,matrix_done,last_error FROM account_chat_removals")
+    else {
+        return json!({});
+    };
+    let Ok(rows) = stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, bool>(1)?,
+            r.get::<_, String>(2)?,
+        ))
+    }) else {
+        return json!({});
+    };
+    let mut statuses = serde_json::Map::new();
+    for (email, done, error) in rows.filter_map(Result::ok) {
+        statuses.insert(email, json!({"complete":done,"error":error}));
+    }
+    Value::Object(statuses)
+}
+
+pub fn identity_cutoffs(store: &DataStore) -> HashMap<String, (String, i64)> {
+    let conn = store.conn();
+    let Ok(mut stmt) = conn.prepare("SELECT user_id,email,cutoff FROM account_chat_removal_ids")
+    else {
+        return HashMap::new();
+    };
+    let Ok(rows) = stmt.query_map([], |r| Ok((r.get(0)?, (r.get(1)?, r.get(2)?)))) else {
+        return HashMap::new();
+    };
+    rows.filter_map(Result::ok).collect()
+}
+pub fn remember_identities(store: &DataStore, email: &str, cutoff: i64, ids: &[String]) {
+    let conn = store.conn();
+    for id in ids {
+        let _=conn.execute("INSERT INTO account_chat_removal_ids(email,user_id,cutoff) VALUES(?1,?2,?3) ON CONFLICT(email,user_id) DO UPDATE SET cutoff=MAX(cutoff,excluded.cutoff)",rusqlite::params![email,id,cutoff]);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -254,64 +313,5 @@ mod tests {
             2
         );
         std::fs::remove_dir_all(dir).unwrap();
-    }
-}
-
-pub fn account_removals(store: &DataStore) -> HashMap<String, i64> {
-    removals(&store.conn()).unwrap_or_default()
-}
-pub fn pending_jobs(store: &DataStore) -> Vec<(String, i64)> {
-    let conn = store.conn();
-    let Ok(mut stmt) =
-        conn.prepare("SELECT email,cutoff FROM account_chat_removals WHERE matrix_done=0")
-    else {
-        return Vec::new();
-    };
-    let Ok(rows) = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?))) else {
-        return Vec::new();
-    };
-    rows.filter_map(Result::ok).collect()
-}
-pub fn finish_job(store: &DataStore, email: &str, cutoff: i64, done: bool, error: &str) {
-    let _=store.conn().execute("UPDATE account_chat_removals SET matrix_done=?1,last_error=?2 WHERE email=?3 AND cutoff=?4",rusqlite::params![done,error,email,cutoff]);
-}
-pub fn statuses(store: &DataStore) -> Value {
-    let conn = store.conn();
-    let Ok(mut stmt) =
-        conn.prepare("SELECT email,matrix_done,last_error FROM account_chat_removals")
-    else {
-        return json!({});
-    };
-    let Ok(rows) = stmt.query_map([], |r| {
-        Ok((
-            r.get::<_, String>(0)?,
-            r.get::<_, bool>(1)?,
-            r.get::<_, String>(2)?,
-        ))
-    }) else {
-        return json!({});
-    };
-    let mut statuses = serde_json::Map::new();
-    for (email, done, error) in rows.filter_map(Result::ok) {
-        statuses.insert(email, json!({"complete":done,"error":error}));
-    }
-    Value::Object(statuses)
-}
-
-pub fn identity_cutoffs(store: &DataStore) -> HashMap<String, (String, i64)> {
-    let conn = store.conn();
-    let Ok(mut stmt) = conn.prepare("SELECT user_id,email,cutoff FROM account_chat_removal_ids")
-    else {
-        return HashMap::new();
-    };
-    let Ok(rows) = stmt.query_map([], |r| Ok((r.get(0)?, (r.get(1)?, r.get(2)?)))) else {
-        return HashMap::new();
-    };
-    rows.filter_map(Result::ok).collect()
-}
-pub fn remember_identities(store: &DataStore, email: &str, cutoff: i64, ids: &[String]) {
-    let conn = store.conn();
-    for id in ids {
-        let _=conn.execute("INSERT INTO account_chat_removal_ids(email,user_id,cutoff) VALUES(?1,?2,?3) ON CONFLICT(email,user_id) DO UPDATE SET cutoff=MAX(cutoff,excluded.cutoff)",rusqlite::params![email,id,cutoff]);
     }
 }
