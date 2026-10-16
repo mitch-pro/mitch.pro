@@ -14,7 +14,6 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"></noscript>
 <link rel="stylesheet" href="/app.css">
 <link rel="stylesheet" href="/home.css?v=11">
-<script src="/home-logo.js?v=1" defer></script>
 <script src="/app-shell.js" defer></script>
 <script src="/home-friends.js?v=4" defer></script>
 <script>
@@ -3218,5 +3217,26 @@ goBack = function() {
 <script src="/broadcast.js?v=10"></script>
 <script src="/sync.js?v=1779165304438"></script>
 <script src="/cookie-consent.js" defer></script>
+<script>
+(function () {
+  'use strict';
+  var emblem = document.querySelector('.hello-emblem');
+  if (!emblem) return;
+  var inView = false;
+  var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  function updateMotion() {
+    emblem.dataset.motion = inView && !document.hidden && !reducedMotion.matches ? 'active' : 'paused';
+  }
+  if ('IntersectionObserver' in window) {
+    var observer = new IntersectionObserver(function (entries) {
+      inView = entries[0].isIntersecting;
+      updateMotion();
+    });
+    observer.observe(emblem);
+  }
+  document.addEventListener('visibilitychange', updateMotion);
+  reducedMotion.addEventListener('change', updateMotion);
+})();
+</script>
 </body>
 </html>
