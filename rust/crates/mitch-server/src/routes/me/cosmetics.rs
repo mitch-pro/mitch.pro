@@ -23,6 +23,12 @@ pub(crate) async fn handle(
     if path == "/api/shop/buy" && *method == Method::POST {
         return Some(shop_buy(state, headers, body, body_bytes).await);
     }
+    if path == "/api/coins/buy-premium" && *method == Method::POST {
+        return Some(buy_premium(state, headers, body, body_bytes).await);
+    }
+    if path == "/api/coins/gift-premium" && *method == Method::POST {
+        return Some(gift_premium(state, headers, body, body_bytes).await);
+    }
     if path == "/api/me/inventory" && *method == Method::GET {
         return Some(me_inventory(state, headers));
     }
@@ -273,6 +279,196 @@ async fn shop_buy(
         200,
         json!({ "ok": true, "message": "Purchase successful!", "cost": cost }),
     )
+}
+
+/// `POST /api/coins/buy-premium` — the frontend's dedicated purchase path
+/// for the Premium shop item itself (the generic `/api/shop/buy` above
+/// explicitly rejects `type: "premium"` items and the frontend branches to
+/// this endpoint instead for exactly that item - see shop/index.html's
+/// `buyPremium()`). This endpoint didn't exist in Rust at all, so every
+/// purchase 404'd regardless of balance.
+async fn buy_premium(
+    state: &Arc<AppState>,
+    headers: &HeaderMap,
+    body: &Value,
+    body_bytes: &[u8],
+) -> Response {
+    if parse_body_strict(body_bytes).is_none() {
+        return json_response(400, json!({ "error": "bad json" }));
+    }
+    let cookies = cookies_of(state, headers);
+    let sid = cookies.auth_sid();
+    if !auth::valid_id(&sid, &state.id_secret) {
+        return json_response(401, json!({ "error": "unauthorized" }));
+    }
+    let Some(email) = auth::email_from_sid(&state.store, &state.id_secret, &sid) else {
+        return json_response(401, json!({ "error": "email not found" }));
+    };
+
+    let ip = crate::handler::get_real_ip(headers, None);
+    let token = body
+        .get("recaptcha_token")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    if !crate::routes::push::verify_recaptcha(state, token, &ip, &sid).await {
+        return json_response(
+            400,
+            json!({ "error": "reCAPTCHA failed. Please try again." }),
+        );
+    }
+
+    if auth::is_premium_email(&state.store, &email) {
+        return json_response(400, json!({ "error": "You already have Premium." }));
+    }
+
+    let catalog = mitch_lib::shop::load_shop_catalog(&state.store, state.data_dir());
+    let Some(item) = mitch_lib::shop::shop_item_by_id(&catalog, "premium").cloned() else {
+        return json_response(
+            400,
+            json!({ "error": "Premium is not currently available." }),
+        );
+    };
+    let cost = mitch_lib::shop::shop_cost_for(&state.store, &item, &email);
+    let balance = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &email);
+    if balance < cost as f64 {
+        return json_response(
+            400,
+            json!({ "error": format!("Insufficient coins. Need {cost}, have {balance:.2}.") }),
+        );
+    }
+
+    mitch_lib::coins::add_coins(
+        &state.store,
+        state.data_dir(),
+        &email,
+        -(cost as f64),
+        1.0,
+        "premium_purchase",
+    );
+    crate::routes::admin::economy::grant_premium_purchase(
+        state,
+        &email,
+        &format!("Purchased with {cost} coins"),
+    );
+
+    json_response(
+        200,
+        json!({ "ok": true, "message": "Welcome to Premium!", "cost": cost }),
+    )
+}
+
+/// `POST /api/coins/gift-premium` — same missing-endpoint bug as
+/// buy-premium, for shop/index.html's `giftPremium()`. One gift per account,
+/// ever (`premium_gifts_sent.json`, see `grant_premium_purchase`'s doc
+/// comment on why that file name already existed but was unused).
+async fn gift_premium(
+    state: &Arc<AppState>,
+    headers: &HeaderMap,
+    body: &Value,
+    body_bytes: &[u8],
+) -> Response {
+    if parse_body_strict(body_bytes).is_none() {
+        return json_response(400, json!({ "error": "bad json" }));
+    }
+    let cookies = cookies_of(state, headers);
+    let sid = cookies.auth_sid();
+    if !auth::valid_id(&sid, &state.id_secret) {
+        return json_response(401, json!({ "error": "unauthorized" }));
+    }
+    let Some(gifter_email) = auth::email_from_sid(&state.store, &state.id_secret, &sid) else {
+        return json_response(401, json!({ "error": "email not found" }));
+    };
+
+    let ip = crate::handler::get_real_ip(headers, None);
+    let token = body
+        .get("recaptcha_token")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    if !crate::routes::push::verify_recaptcha(state, token, &ip, &sid).await {
+        return json_response(
+            400,
+            json!({ "error": "reCAPTCHA failed. Please try again." }),
+        );
+    }
+
+    let target_raw = body
+        .get("targetEmail")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if target_raw.is_empty() {
+        return json_response(
+            400,
+            json!({ "error": "Please enter a friend's email address." }),
+        );
+    }
+    let target_norm = auth::normalize_email(&target_raw);
+    if target_norm == auth::normalize_email(&gifter_email) {
+        return json_response(
+            400,
+            json!({ "error": "You can't gift Premium to yourself." }),
+        );
+    }
+    if !valid_email_shape(&target_raw) {
+        return json_response(
+            400,
+            json!({ "error": "That doesn't look like a valid email." }),
+        );
+    }
+
+    if crate::routes::admin::economy::has_gifted_premium(state, &gifter_email) {
+        return json_response(
+            400,
+            json!({ "error": "You've already used your one lifetime Premium gift." }),
+        );
+    }
+    if auth::is_premium_email(&state.store, &target_norm) {
+        return json_response(400, json!({ "error": "That account already has Premium." }));
+    }
+
+    let catalog = mitch_lib::shop::load_shop_catalog(&state.store, state.data_dir());
+    let Some(item) = mitch_lib::shop::shop_item_by_id(&catalog, "premium").cloned() else {
+        return json_response(
+            400,
+            json!({ "error": "Premium is not currently available." }),
+        );
+    };
+    let cost = mitch_lib::shop::shop_cost_for(&state.store, &item, &gifter_email);
+    let balance = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &gifter_email);
+    if balance < cost as f64 {
+        return json_response(
+            400,
+            json!({ "error": format!("Insufficient coins. Need {cost}, have {balance:.2}.") }),
+        );
+    }
+
+    mitch_lib::coins::add_coins(
+        &state.store,
+        state.data_dir(),
+        &gifter_email,
+        -(cost as f64),
+        1.0,
+        "premium_gift",
+    );
+    crate::routes::admin::economy::mark_gifted_premium(state, &gifter_email);
+    crate::routes::admin::economy::grant_premium_purchase(
+        state,
+        &target_raw,
+        &format!("Gifted by {gifter_email}"),
+    );
+
+    json_response(
+        200,
+        json!({ "ok": true, "message": "Premium gifted successfully!", "cost": cost }),
+    )
+}
+
+fn valid_email_shape(email: &str) -> bool {
+    let mut parts = email.split('@');
+    let local = parts.next().unwrap_or("");
+    let rest = parts.next().unwrap_or("");
+    !local.is_empty() && !rest.is_empty() && rest.contains('.') && parts.next().is_none()
 }
 
 /// `stats[norm][key] = max(now, current) + minutes * 60_000` — the shared

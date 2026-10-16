@@ -889,6 +889,59 @@ pub fn grant_premium_application(
     super::legacy::send_premium_email_offer(state, target_raw);
 }
 
+/// Same underlying mechanism as `grant_premium_application` (an approved
+/// `type: "premium"` entry in applications.json, which is what
+/// `is_premium_email` actually checks) but for a self-service purchase
+/// rather than an admin grant - wording and `approved_by` reflect that
+/// instead of claiming to be "free... granted by" the buyer themselves.
+/// Used by both `/api/coins/buy-premium` and `/api/coins/gift-premium`.
+pub fn grant_premium_purchase(state: &Arc<AppState>, target_raw: &str, note: &str) {
+    let target_email = mitch_lib::auth::normalize_email(target_raw);
+    let file = state.cfg.data_dir.join("applications.json");
+    let apps = state
+        .store
+        .read_document(&file, json!([]))
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let mut next = vec![json!({
+        "name": target_email.split('@').next().unwrap_or(""),
+        "email": target_raw,
+        "type": "premium",
+        "status": "approved",
+        "grantPremium": true,
+        "why": note,
+        "submitted_at": now_millis(),
+        "approved_at": now_millis(),
+        "approved_by": "coins-purchase",
+    })];
+    next.extend(apps);
+    let _ = state.store.write_document(&file, &json!(next));
+    super::legacy::send_premium_email_offer(state, target_raw);
+}
+
+/// Whether `gifter_email` has already used their one lifetime Premium gift -
+/// `premium_gifts_sent.json` is a `{normalized_email: true}` map. The file
+/// name was already reserved for this (account-deletion wipes it, see
+/// `routes/me/account.rs`) but reading/writing it was never implemented.
+pub fn has_gifted_premium(state: &Arc<AppState>, gifter_email: &str) -> bool {
+    let file = state.cfg.data_dir.join("premium_gifts_sent.json");
+    let map = state.store.read_document(&file, json!({}));
+    map.get(mitch_lib::auth::normalize_email(gifter_email))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+}
+
+/// Records that `gifter_email` has used their one lifetime Premium gift.
+pub fn mark_gifted_premium(state: &Arc<AppState>, gifter_email: &str) {
+    let file = state.cfg.data_dir.join("premium_gifts_sent.json");
+    let mut map = state.store.read_document(&file, json!({}));
+    if let Some(obj) = map.as_object_mut() {
+        obj.insert(mitch_lib::auth::normalize_email(gifter_email), json!(true));
+    }
+    let _ = state.store.write_document(&file, &map);
+}
+
 /// Marks approved premium applications for one email as revoked; returns
 /// whether anything changed.
 pub fn revoke_premium_in_applications(
