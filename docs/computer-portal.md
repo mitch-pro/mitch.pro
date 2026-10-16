@@ -98,3 +98,15 @@ After deployment, use an assigned test desktop to verify the customer and admini
 - `VM_CREATED`, `VM_ASSIGNED`, `VM_UNASSIGNED`, power actions, and `DESKTOP_OPENED` are recorded with actor, VM, timestamp, and success/failure. Never add credentials or full upstream URLs to audit details.
 - Treat reassignment as handing an existing computer and its files to a different person. Create a fresh clone for a new customer when prior guest data should not be shared.
 - Keep template updates separate from active customer machines. Validate a fresh clone before changing the template allowlist.
+
+## Desktop repair and automatic sign-in
+
+The production desktop allowlist is `PROXMOX_DESKTOP_TEMPLATES=9011,9010`, with `PVE_TEMPLATE_LINUX=9011`. Template 9011 is the cleaned Ubuntu 24.04 desktop image with video decoders and a boot service that reads the recipient's cloud-init username before GDM starts. Template 9010 remains available for existing records. Both are in the `sandboxes` pool so the existing pool ACLs apply.
+
+New user computers get a random guest password. Website authentication opens the console, the guest signs in automatically, and sudo works without a second password. Custom OS installers retain their own account setup. Repair desktop applies the same configuration to existing managed Linux computers, preserves active desktop sessions, and checks that a graphical session actually starts. It also installs missing video decoders. A failed repair remains visible and can be retried; it does not block the console. Opening or reconnecting the console does not restart or reconfigure the guest display manager.
+
+Authenticated administrators can open and manage all registered computers, including those belonging to other administrators. Owner approval and owner notifications have been removed. Administrative operations remain recorded in the internal VM audit log. Ordinary accounts can only access their assigned computers. Desktop tickets remain single-use and bound to the account, session, VM, node, and ownership; account bans close connected consoles.
+
+To build another image, use a dedicated VM in the 9000–9999 range, apply `rust/crates/mitch-server/guest/desktop-setup.sh` with a temporary build username, verify the desktop and video playback, then run `tools/seal-managed-desktop-template.sh <vmid> <build-user>` on the Proxmox host. The sealer removes the temporary user, credentials and SSH host keys, cleans cloud-init/machine identity, and converts the stopped VM into a template. Validate a fresh clone with a different username before changing the allowlist. Do not edit a template disk used by linked clones.
+
+Validation for 9011: a fresh recipient clone reached graphical.target in about 20 seconds, logged in with its own username, retained no build-user home, and had no failed system services. The prior repaired clone reached graphical.target in about 17 seconds on a subsequent cold boot. These timings cover the system target; the first desktop session takes additional time to load.

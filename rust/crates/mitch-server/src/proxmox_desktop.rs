@@ -998,54 +998,6 @@ impl ProxmoxDesktopService {
         }
     }
 
-    /// `ensureGuestOptimized(vmid, node)` (lib/proxmox_desktop.js:251-279) —
-    /// infallible like the JS: the ping failure returns early and the guest
-    /// exec failure only warns.
-    pub async fn ensure_guest_optimized(&self, vmid: i64, node: &str) {
-        if self
-            .request(
-                "POST",
-                &format!(
-                    "/nodes/{}/qemu/{}/agent/ping",
-                    encode_uri_component(node),
-                    vmid
-                ),
-                Some(&json!({})),
-                2000,
-            )
-            .await
-            .is_err()
-        {
-            return;
-        }
-        let script = "set -eu
-systemctl disable --now systemd-networkd-wait-online.service NetworkManager-wait-online.service >/dev/null 2>&1 || true
-systemctl mask systemd-networkd-wait-online.service NetworkManager-wait-online.service >/dev/null 2>&1 || true
-modprobe virtio_rng >/dev/null 2>&1 || true
-if [ -f /etc/gdm3/custom.conf ]; then
-  if grep -q '^#*WaylandEnable=' /etc/gdm3/custom.conf; then
-    sed -i 's/^#*WaylandEnable=.*/WaylandEnable=false/' /etc/gdm3/custom.conf
-  elif grep -q '\\[daemon\\]' /etc/gdm3/custom.conf; then
-    sed -i '/\\[daemon\\]/a WaylandEnable=false' /etc/gdm3/custom.conf
-  fi
-  if ! pgrep -x Xorg >/dev/null 2>&1; then
-    systemctl restart gdm3 >/dev/null 2>&1 || true
-  fi
-fi
-exit 0
-";
-        if let Err(error) = self
-            .guest_exec(vmid, &json!(["/bin/sh", "-s"]), script, 15_000)
-            .await
-        {
-            tracing::warn!(
-                "[proxmox] Background guest optimization skipped for VM {}: {}",
-                vmid,
-                error.message
-            );
-        }
-    }
-
     /// `power(record, requestedAction)` (lib/proxmox_desktop.js:281-293).
     pub async fn power(
         &self,
@@ -1071,11 +1023,6 @@ exit 0
         {
             let node = self.node_of(record);
             let _ = self.ensure_optimized_vm_config(vmid, &node).await;
-            let service = self.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(Duration::from_millis(5000)).await;
-                service.ensure_guest_optimized(vmid, &node).await;
-            });
         }
         self.request(
             "POST",
@@ -1152,20 +1099,6 @@ exit 0
             ));
         }
         let node = self.node_of(record);
-        // `void this.ensureOptimizedVmConfig(...).catch(...);
-        //  void this.ensureGuestOptimized(...).catch(...)` — two detached tasks.
-        let service = self.clone();
-        let node_for_opt = node.clone();
-        tokio::spawn(async move {
-            let _ = service
-                .ensure_optimized_vm_config(vmid, &node_for_opt)
-                .await;
-        });
-        let service = self.clone();
-        let node_for_guest = node.clone();
-        tokio::spawn(async move {
-            service.ensure_guest_optimized(vmid, &node_for_guest).await;
-        });
         let console_data = self
             .request(
                 "POST",
@@ -1379,74 +1312,10 @@ exit 0
             use base64::Engine as _;
             base64::engine::general_purpose::STANDARD.encode(login.1.as_bytes())
         };
-        let script = format!(
-            r#"set -eu
-timeout 15 cloud-init status --wait >/dev/null 2>&1 || true
-systemctl disable --now systemd-networkd-wait-online.service NetworkManager-wait-online.service >/dev/null 2>&1 || true
-systemctl mask systemd-networkd-wait-online.service NetworkManager-wait-online.service >/dev/null 2>&1 || true
-modprobe virtio_rng >/dev/null 2>&1 || true
-user={username}
-pass_b64="{pass_b64}"
-if ! id "$user" >/dev/null 2>&1; then
-  if getent group "$user" >/dev/null 2>&1; then
-    useradd -m -s /bin/bash -g "$user" -G sudo,adm,cdrom,dip "$user"
-  else
-    useradd -m -s /bin/bash -U -G sudo,adm,cdrom,dip "$user"
-  fi
-fi
-if [ -n "$pass_b64" ]; then
-  pass=$(printf '%s' "$pass_b64" | base64 -d)
-  printf '%s:%s\n' "$user" "$pass" | chpasswd
-fi
-usermod -aG sudo,adm,cdrom,dip "$user" >/dev/null 2>&1 || true
-install -d -m 0755 "/home/$user/.config" /var/lib/AccountsService/users
-touch "/home/$user/.config/gnome-initial-setup-done"
-chown -R "$user:$user" "/home/$user/.config"
-sudo -u "$user" dbus-run-session gsettings set org.gnome.desktop.session idle-delay 0 >/dev/null 2>&1 || true
-sudo -u "$user" dbus-run-session gsettings set org.gnome.desktop.screensaver lock-enabled false >/dev/null 2>&1 || true
-if id ubuntu >/dev/null 2>&1 && [ "$user" != ubuntu ]; then
-  passwd -l ubuntu >/dev/null 2>&1 || true
-  printf '[User]\nSystemAccount=true\n' >/var/lib/AccountsService/users/ubuntu
-fi
-if [ -d /etc/gdm3 ] || [ -f /etc/gdm3/custom.conf ]; then
-  mkdir -p /etc/gdm3
-  cat >/etc/gdm3/custom.conf <<EOF
-[daemon]
-AutomaticLoginEnable=true
-AutomaticLogin=$user
-WaylandEnable=false
-
-[security]
-[xdmcp]
-[chooser]
-[debug]
-EOF
-  systemctl restart gdm3 >/dev/null 2>&1 || true
-fi
-if [ -d /etc/lightdm ]; then
-  mkdir -p /etc/lightdm/lightdm.conf.d
-  cat >/etc/lightdm/lightdm.conf.d/50-autologin.conf <<EOF
-[Seat:*]
-autologin-user=$user
-autologin-user-timeout=0
-EOF
-  systemctl restart lightdm >/dev/null 2>&1 || true
-fi
-uid=$(id -u "$user")
-for attempt in $(seq 1 45); do
-  if pgrep -u "$uid" -x gnome-shell >/dev/null 2>&1 || pgrep -u "$uid" -x xfce4-session >/dev/null 2>&1 || pgrep -u "$uid" -x cinnamon >/dev/null 2>&1 || pgrep -u "$uid" -x mate-session >/dev/null 2>&1; then
-    loginctl unlock-sessions >/dev/null 2>&1 || true
-    exit 0
-  fi
-  sleep 1
-done
-loginctl unlock-sessions >/dev/null 2>&1 || true
-exit 0
-"#,
-            username = login.0,
-            pass_b64 = pass_b64
-        );
-        self.guest_exec(vmid, &json!(["/bin/sh", "-s"]), &script, 150_000)
+        let script = include_str!("../guest/desktop-setup.sh")
+            .replace("__DESKTOP_USERNAME__", &login.0)
+            .replace("__DESKTOP_PASSWORD_BASE64__", &pass_b64);
+        self.guest_exec(vmid, &json!(["/bin/sh", "-s"]), &script, 450_000)
             .await
     }
 
@@ -1669,21 +1538,6 @@ exit 0
             self.wait_for_task(&self.node, Some(&start_upid), 120_000)
                 .await?;
         }
-        let service = self.clone();
-        let username = login.0.clone();
-        let password = login.1.clone();
-        tokio::spawn(async move {
-            match service.enable_friendly_desktop_login(vmid, &username, &password).await {
-                Ok(()) => {
-                    tracing::info!("[proxmox] Friendly desktop auto-login setup completed for VM {}", vmid)
-                }
-                Err(ref error) => tracing::warn!(
-                    "[proxmox] Friendly desktop auto-login setup deferred or timed out for VM {}: {}",
-                    vmid,
-                    error.message
-                ),
-            }
-        });
         Ok(json!({
             "vmid": jsval::num_value(vmid as f64),
             "node": self.node,

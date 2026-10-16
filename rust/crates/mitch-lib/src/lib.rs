@@ -67,3 +67,5 @@ mod tests {
         assert!(!super::version().is_empty());
     }
 }
+
+pub mod chat_cleanup;

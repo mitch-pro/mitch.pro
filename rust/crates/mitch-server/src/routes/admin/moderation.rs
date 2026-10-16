@@ -73,7 +73,7 @@ pub fn handle(
             .collect();
         return Some(json_response(
             200,
-            json!({ "bans": bans, "supportsTimedBans":true }),
+            json!({ "bans": bans, "supportsTimedBans":true,"supportsChatCleanup":true, "chatCleanup":mitch_lib::chat_cleanup::statuses(&state.store) }),
         ));
     }
     // POST /api/admin/moderators (admins only).
@@ -1290,6 +1290,8 @@ fn apply_account_ban(
     mitch_lib::bans::blacklist_insert_until(&state.store, &target, &reason, actor, expires_at)
         .map_err(|_| (500, "Could not save the account ban. Try again.".into()))?;
     crate::ws::disconnect_banned_user(state, &target, &reason);
+    crate::chat_cleanup::clear_relay(state, &target);
+    let _ = mitch_lib::chat_cleanup::remove_files(&state.store);
     mitch_lib::coins::add_admin_notification(
         &state.store,
         &state.cfg.data_dir,

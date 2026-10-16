@@ -530,7 +530,9 @@ pub(crate) fn vm_same_origin_request(headers: &HeaderMap) -> bool {
 /// canAccessVmRecord with the plain `isAdminEmail` option (no admin-grant
 /// requirement) and owner bypass.
 pub(crate) fn vm_record_allowed_for_actor(state: &AppState, record: &Value, actor: &Value) -> bool {
-    if actor.get("isOwner").map(jsval::truthy).unwrap_or(false) {
+    if actor.get("isOwner").map(jsval::truthy).unwrap_or(false)
+        || actor.get("isAdmin").map(jsval::truthy).unwrap_or(false)
+    {
         return true;
     }
     mitch_lib::vm_security::can_access_vm_record(
@@ -598,237 +600,7 @@ pub(crate) fn vm_audit(
     );
 }
 
-// ── admin grants (server.js:27099-27175) ─────────────────────────────────────
-
 /// `getVmAdminGrant(recordId)`.
-pub(crate) fn get_vm_admin_grant(state: &AppState, record_id: &str) -> Value {
-    if record_id.is_empty() {
-        return json!({ "allowed": false, "requested": false });
-    }
-    let grants = load_vm_json(state, "vm_admin_grants.json", json!({}));
-    match grants.get(record_id) {
-        Some(v) if !v.is_null() => v.clone(),
-        _ => json!({ "allowed": false, "requested": false }),
-    }
-}
-
-/// `isVmAdminAccessAllowed(recordId)`.
-pub(crate) fn is_vm_admin_access_allowed(state: &AppState, record_id: &str) -> bool {
-    if record_id.is_empty() {
-        return false;
-    }
-    get_vm_admin_grant(state, record_id)
-        .get("allowed")
-        .map(jsval::truthy)
-        .unwrap_or(false)
-}
-
-/// `isVmAdminAccessRequested(recordId)`.
-pub(crate) fn is_vm_admin_access_requested(state: &AppState, record_id: &str) -> bool {
-    if record_id.is_empty() {
-        return false;
-    }
-    get_vm_admin_grant(state, record_id)
-        .get("requested")
-        .map(jsval::truthy)
-        .unwrap_or(false)
-}
-
-/// `setVmAdminAccess(recordId, ownerEmail, allowed, actorEmail)`
-/// (server.js:27115-27133).
-pub(crate) fn set_vm_admin_access(
-    state: &AppState,
-    record_id: &str,
-    owner_email: &str,
-    allowed: bool,
-    actor_email: &str,
-) {
-    if record_id.is_empty() {
-        return;
-    }
-    let mut grants = load_vm_json(state, "vm_admin_grants.json", json!({}));
-    let id = record_id.to_string();
-    let current = grants.get(&id).cloned().unwrap_or_else(|| json!({}));
-    let now = now_ms();
-    let allowed_at = if allowed {
-        json!(now)
-    } else {
-        // `current.allowedAt || null`
-        current
-            .get("allowedAt")
-            .filter(|v| jsval::truthy(v))
-            .cloned()
-            .unwrap_or(Value::Null)
-    };
-    let allowed_by = if actor_email.is_empty() {
-        jsval::str_or(current.get("allowedBy"), "")
-    } else {
-        actor_email.to_string()
-    };
-    let curr_owner = jsval::str_or(current.get("ownerEmail"), "");
-    let owner_norm = mitch_lib::auth::normalize_email(if owner_email.is_empty() {
-        &curr_owner
-    } else {
-        owner_email
-    });
-    let mut entry = current.as_object().cloned().unwrap_or_default();
-    entry.insert("allowed".to_string(), json!(allowed));
-    entry.insert("allowedAt".to_string(), allowed_at);
-    entry.insert(
-        "revokedAt".to_string(),
-        if allowed { Value::Null } else { json!(now) },
-    );
-    entry.insert("allowedBy".to_string(), json!(allowed_by));
-    entry.insert("ownerEmail".to_string(), json!(owner_norm));
-    entry.insert(
-        "requested".to_string(),
-        json!(if allowed {
-            false
-        } else {
-            current.get("requested").map(jsval::truthy).unwrap_or(false)
-        }),
-    );
-    if let Some(obj) = grants.as_object_mut() {
-        obj.insert(id, Value::Object(entry));
-    }
-    save_vm_json(state, "vm_admin_grants.json", &grants);
-    if !allowed {
-        revoke_vm_desktop_connections(state, record_id);
-    }
-}
-
-/// `requestVmAdminAccess(record, adminEmail)` (server.js:27135-27175).
-pub(crate) fn request_vm_admin_access(state: &AppState, record: &Value, admin_email: &str) {
-    let record_id = jsval::str_or(record.get("id"), "");
-    let raw_owner = jsval::str_or(record.get("ownerEmail"), "");
-    if record_id.is_empty() || raw_owner.is_empty() {
-        return;
-    }
-    let owner = mitch_lib::auth::normalize_email(&raw_owner);
-    let admin = mitch_lib::auth::normalize_email(admin_email);
-    if owner.is_empty() || owner == admin {
-        return;
-    }
-
-    let mut grants = load_vm_json(state, "vm_admin_grants.json", json!({}));
-    let current = grants.get(&record_id).cloned().unwrap_or_else(|| json!({}));
-    let mut entry = current.as_object().cloned().unwrap_or_default();
-    entry.insert(
-        "allowed".to_string(),
-        json!(current.get("allowed").map(jsval::truthy).unwrap_or(false)),
-    );
-    entry.insert("requested".to_string(), json!(true));
-    entry.insert("requestedAt".to_string(), json!(now_ms()));
-    entry.insert("requestedBy".to_string(), json!(admin));
-    entry.insert("ownerEmail".to_string(), json!(owner));
-    if let Some(obj) = grants.as_object_mut() {
-        obj.insert(record_id.clone(), Value::Object(entry));
-    }
-    save_vm_json(state, "vm_admin_grants.json", &grants);
-
-    let key = format!("{}:{}:{}", owner, record_id, admin);
-    let now = now_ms();
-    {
-        let mut notices = state
-            .last_admin_request_notice
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        let last = *notices.get(&key).unwrap_or(&0);
-        if now - last < 15 * 60 * 1000 {
-            return;
-        }
-        notices.insert(key, now);
-    }
-
-    let vm_name = record
-        .get("friendlyName")
-        .and_then(Value::as_str)
-        .or_else(|| record.get("hostname").and_then(Value::as_str))
-        .unwrap_or("your computer");
-    let url = format!(
-        "/vms/?action=allow-admin&id={}",
-        mitch_lib::auth::encode_uri_component(&record_id)
-    );
-    mitch_lib::coins::add_vm_admin_notification(
-        &state.store,
-        state.data_dir(),
-        &owner,
-        "Admin Access Request",
-        &format!(
-            "Administrator {} requested access to your computer \"{}\". You can allow or revoke access in your Computer settings.",
-            admin, vm_name
-        ),
-        &admin,
-        &url,
-    );
-
-    vm_audit(
-        state,
-        &admin,
-        Some(record),
-        "ADMIN_ACCESS_REQUESTED",
-        true,
-        Some(&json!({ "requestedBy": admin, "ownerEmail": owner })),
-    );
-}
-
-// ── admin-usage + capacity notices (server.js:27177-27220) ───────────────────
-
-/// `notifyOwnerAdminUsedVm(record, adminEmail, operation)` (server.js:27177).
-pub(crate) fn notify_owner_admin_used_vm(
-    state: &AppState,
-    record: &Value,
-    admin_email: &str,
-    operation: &str,
-) {
-    let raw_owner = jsval::str_or(record.get("ownerEmail"), "");
-    if raw_owner.is_empty() {
-        return;
-    }
-    let owner = mitch_lib::auth::normalize_email(&raw_owner);
-    let admin = mitch_lib::auth::normalize_email(admin_email);
-    if owner.is_empty() || owner == admin {
-        return;
-    }
-
-    let record_id = jsval::str_or(record.get("id"), "");
-    let key = format!("{}:{}:{}", owner, record_id, operation);
-    let now = now_ms();
-    {
-        let mut notices = state
-            .last_admin_usage_notice
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        let last = *notices.get(&key).unwrap_or(&0);
-        if now - last < 5 * 60 * 1000 {
-            return;
-        }
-        notices.insert(key, now);
-    }
-
-    let vm_name = record
-        .get("friendlyName")
-        .and_then(Value::as_str)
-        .or_else(|| record.get("hostname").and_then(Value::as_str))
-        .unwrap_or("your computer");
-    let url = format!(
-        "/vms/?id={}",
-        mitch_lib::auth::encode_uri_component(&record_id)
-    );
-    mitch_lib::coins::add_vm_admin_notification(
-        &state.store,
-        state.data_dir(),
-        &owner,
-        "Admin Used Your Computer",
-        &format!(
-            "Administrator {} accessed your computer \"{}\" ({}).",
-            admin, vm_name, operation
-        ),
-        &admin,
-        &url,
-    );
-}
-
 /// `notifyCapacityFullOnAttempt(userEmail, actionDesc, details)`
 /// (server.js:27199-27220). The JS awaits ntfy; our ntfy helper spawns.
 pub(crate) fn notify_capacity_full_on_attempt(
@@ -1864,13 +1636,14 @@ pub(crate) fn public_vm_record(
             "",
         ),
         "uptime": runtime.and_then(|r| r.get("uptime")).and_then(jsval::number).filter(|v| *v != 0.0).unwrap_or(0.0),
+        "managedDesktop": managed_desktop(record),
+        "desktopSetup": state.desktop_setup.lock().unwrap_or_else(|e|e.into_inner()).get(&jsval::str_or(record.get("id"), "")).cloned(),
         "desktopAvailable": jsval::str_or(record.get("guestType"), "") == "qemu",
         "createdAt": record.get("createdAt").cloned().unwrap_or(Value::Null),
         "lease": lease,
         "upgrades": user_upgrades,
         "cooldownRemainingSeconds": cooldown_remaining_seconds,
-        "adminAccessAllowed": is_vm_admin_access_allowed(state, &jsval::str_or(record.get("id"), "")),
-        "adminAccessRequested": is_vm_admin_access_requested(state, &jsval::str_or(record.get("id"), "")),
+
     })
 }
 
@@ -1969,16 +1742,6 @@ pub(crate) fn vm_desktop_socket_authorized(state: &AppState, data: &Value) -> bo
     let is_admin =
         mitch_lib::auth::is_admin_id(&state.store, &state.id_secret, &sid, node_env_test);
     let is_owner = mitch_lib::auth::is_owner_id(&state.store, &state.id_secret, &sid);
-    let owner_norm = jsval::str_or(rj.get("ownerEmail"), "");
-    if is_admin
-        && !is_owner
-        && jsval::truthy(&rj["ownerEmail"])
-        && mitch_lib::auth::normalize_email(&owner_norm)
-            != mitch_lib::auth::normalize_email(&jsval::str_or(data.get("actorEmail"), ""))
-        && !is_vm_admin_access_allowed(state, &jsval::str_or(rj.get("id"), ""))
-    {
-        return false;
-    }
     vm_record_allowed_for_actor(
         state,
         &rj,
@@ -2763,7 +2526,7 @@ pub fn handle_desktop_ws_upgrade(
         Some(&actor_json),
         record_json.as_ref(),
         now_ms() as f64,
-        |e| mitch_lib::auth::is_admin_email(&state.store, e),
+        |_| false,
         false,
         None,
     );
@@ -2780,18 +2543,6 @@ pub fn handle_desktop_ws_upgrade(
         .as_ref()
         .map(|r| r.owner_email.clone())
         .unwrap_or_default();
-    let is_admin_using_other_vm = actor.is_admin
-        && !record_owner.is_empty()
-        && mitch_lib::auth::normalize_email(&record_owner)
-            != mitch_lib::auth::normalize_email(&actor.email);
-    if is_admin_using_other_vm && !actor.is_owner && !is_vm_admin_access_allowed(state, &record_id)
-    {
-        return Some(json_response(
-            403,
-            json!({ "error": "The owner has not allowed administrator access to this computer." }),
-        ));
-    }
-
     {
         let mut sessions = state
             .vm_desktop_sessions
@@ -2846,22 +2597,11 @@ async fn run_desktop_bridge(
     let actor_email = jsval::str_or(data.get("actorEmail"), "");
     let owner_email = jsval::str_or(data.get("ownerEmail"), "");
     let record_id = jsval::str_or(data.get("recordId"), "");
-    let is_owner_sid = mitch_lib::auth::is_owner_id(&state.store, &state.id_secret, &sid);
     let is_admin_using_other =
         mitch_lib::auth::is_any_admin_id(&state.store, &state.id_secret, &sid, false)
             && !owner_email.is_empty()
             && mitch_lib::auth::normalize_email(&owner_email)
                 != mitch_lib::auth::normalize_email(&actor_email);
-    if is_admin_using_other && !is_owner_sid && !is_vm_admin_access_allowed(&state, &record_id) {
-        let _ = client_ws
-            .send(axum::extract::ws::Message::Close(Some(CloseFrame {
-                code: 1008,
-                reason: "Administrator access not permitted by owner".into(),
-            })))
-            .await;
-        return;
-    }
-
     if is_admin_using_other {
         let r = vmlib::get_virtual_machine_by_id(&state.store, &record_id).map(|r| r.to_json());
         println!(
@@ -2880,9 +2620,6 @@ async fn run_desktop_bridge(
                 "vmid": data.get("vmid"),
             })),
         );
-        if let Some(rec) = &r {
-            notify_owner_admin_used_vm(&state, rec, &actor_email, "connected to desktop console");
-        }
     }
 
     let now = now_ms();
@@ -4341,7 +4078,12 @@ pub(crate) async fn handle(
         let requested_username = jsval::str_or(body.get("desktopUsername"), &base_user)
             .trim()
             .to_lowercase();
-        let raw_password = jsval::str_or(body.get("desktopPassword"), "");
+        let raw_password = body
+            .get("desktopPassword")
+            .and_then(Value::as_str)
+            .filter(|p| !p.is_empty())
+            .map(str::to_owned)
+            .unwrap_or_else(|| mitch_lib::crypto::random_bytes_hex(24));
         let desktop_login = match crate::proxmox_desktop::desktop()
             .validate_desktop_login(&requested_username, &raw_password)
         {
@@ -4451,6 +4193,7 @@ pub(crate) async fn handle(
                 let record = vmlib::upsert_virtual_machine(&state.store, &merged)
                     .map(|r| r.to_json())
                     .unwrap_or(merged);
+                schedule_desktop_setup(state, &record, true);
                 let rec_id = jsval::str_or(record.get("id"), "");
                 state
                     .vm_page_presence
@@ -4615,7 +4358,12 @@ pub(crate) async fn handle(
         let requested_username = jsval::str_or(body.get("desktopUsername"), &base_user)
             .trim()
             .to_lowercase();
-        let raw_password = jsval::str_or(body.get("desktopPassword"), "");
+        let raw_password = body
+            .get("desktopPassword")
+            .and_then(Value::as_str)
+            .filter(|p| !p.is_empty())
+            .map(str::to_owned)
+            .unwrap_or_else(|| mitch_lib::crypto::random_bytes_hex(24));
         let desktop_login = match crate::proxmox_desktop::desktop()
             .validate_desktop_login(&requested_username, &raw_password)
         {
@@ -4763,6 +4511,7 @@ pub(crate) async fn handle(
                 let record = vmlib::upsert_virtual_machine(&state.store, &merged)
                     .map(|r| r.to_json())
                     .unwrap_or(merged);
+                schedule_desktop_setup(state, &record, true);
                 let rec_id = jsval::str_or(record.get("id"), "");
                 state
                     .vm_page_presence
@@ -4818,7 +4567,7 @@ pub(crate) async fn handle(
     // vmComputerMatch: /api/vm/computers/:id(/:operation)? (server.js:19523-19808)
     static COMPUTER_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     let re = COMPUTER_RE.get_or_init(|| {
-        regex::Regex::new(r"^/api/vm/computers/([a-zA-Z0-9_-]{1,80})(?:/(power|desktop-session|extend|heartbeat|admin-access|request-admin-access))?$")
+        regex::Regex::new(r"^/api/vm/computers/([a-zA-Z0-9_-]{1,80})(?:/(power|desktop-session|repair-desktop|extend|heartbeat|admin-access|request-admin-access))?$")
             .unwrap_or_else(|_| {
                 regex::Regex::new("$^")
                     .unwrap_or_else(|_| regex::Regex::new("$^").unwrap_or_else(|_| unreachable!()))
@@ -4886,100 +4635,10 @@ pub(crate) async fn handle(
 
         let record_owner = jsval::str_or(record.get("ownerEmail"), "");
 
-        if operation == "admin-access" {
-            if *method == Method::GET {
-                let is_owner = mitch_lib::auth::normalize_email(&record_owner)
-                    == mitch_lib::auth::normalize_email(&actor.email);
-                if !is_owner && !actor.is_admin {
-                    return Some(json_response(403, json!({ "error": "Permission denied." })));
-                }
-                return Some(json_response(
-                    200,
-                    json!({
-                        "allowed": is_vm_admin_access_allowed(state, comp_id),
-                        "requested": is_vm_admin_access_requested(state, comp_id),
-                        "grant": get_vm_admin_grant(state, comp_id),
-                    }),
-                ));
-            }
-            if *method == Method::POST {
-                let is_owner = mitch_lib::auth::normalize_email(&record_owner)
-                    == mitch_lib::auth::normalize_email(&actor.email);
-                if !is_owner {
-                    return Some(json_response(
-                        403,
-                        json!({ "error": "Only the computer owner can grant or revoke admin access." }),
-                    ));
-                }
-                let body: Value = if body_bytes.is_empty() {
-                    json!({})
-                } else {
-                    match serde_json::from_slice(body_bytes) {
-                        Ok(v) => v,
-                        Err(_) => {
-                            return Some(json_response(
-                                400,
-                                json!({ "error": "Invalid request." }),
-                            ));
-                        }
-                    }
-                };
-                let allow = body
-                    .get("allow")
-                    .or_else(|| body.get("allowed"))
-                    .map(jsval::truthy)
-                    .unwrap_or(false);
-                set_vm_admin_access(state, comp_id, &record_owner, allow, &actor.email);
-                vm_audit(
-                    state,
-                    &actor.email,
-                    Some(&record),
-                    if allow {
-                        "ADMIN_ACCESS_ALLOWED"
-                    } else {
-                        "ADMIN_ACCESS_REVOKED"
-                    },
-                    true,
-                    Some(&json!({ "allowed": allow, "ownerEmail": record_owner })),
-                );
-                return Some(json_response(
-                    200,
-                    json!({
-                        "success": true,
-                        "allowed": allow,
-                        "message": if allow { "Administrator access granted." } else { "Administrator access revoked." },
-                    }),
-                ));
-            }
+        if operation == "admin-access" || operation == "request-admin-access" {
             return Some(json_response(
-                405,
-                json!({ "error": "Method not allowed." }),
-            ));
-        }
-
-        if operation == "request-admin-access" && *method == Method::POST {
-            if !actor.is_admin {
-                return Some(json_response(
-                    403,
-                    json!({ "error": "Only administrators can request computer access." }),
-                ));
-            }
-            if mitch_lib::auth::normalize_email(&record_owner)
-                == mitch_lib::auth::normalize_email(&actor.email)
-            {
-                return Some(json_response(
-                    200,
-                    json!({ "success": true, "message": "You are the owner of this computer." }),
-                ));
-            }
-            request_vm_admin_access(state, &record, &actor.email);
-            return Some(json_response(
-                200,
-                json!({
-                    "success": true,
-                    "requested": true,
-                    "message": "Access request sent to the computer owner.",
-                }),
+                410,
+                json!({"error":"Owner access requests have been retired."}),
             ));
         }
 
@@ -5163,43 +4822,6 @@ pub(crate) async fn handle(
                 && mitch_lib::auth::normalize_email(&record_owner)
                     != mitch_lib::auth::normalize_email(&actor.email);
 
-            let has_admin_passphrase = headers
-                .get("X-Admin-Passphrase")
-                .and_then(|v| v.to_str().ok())
-                .map(|p| p.trim())
-                .filter(|p| !p.is_empty())
-                .map(|p| {
-                    mitch_lib::admin::verify_admin_passphrase_raw(
-                        &state.store,
-                        &state.id_secret,
-                        &state.cfg.data_dir,
-                        &actor.sid,
-                        p,
-                    )
-                })
-                .unwrap_or(false);
-
-            let is_admin_power_override = actor.is_owner
-                || has_admin_passphrase
-                || action == "shutdown"
-                || action == "force-stop"
-                || action == "restart";
-
-            if is_admin_using_other_vm
-                && !is_admin_power_override
-                && !is_vm_admin_access_allowed(state, comp_id)
-            {
-                request_vm_admin_access(state, &record, &actor.email);
-                return Some(json_response(
-                    403,
-                    json!({
-                        "error": "The owner has not allowed administrator access to this computer. An access request has been sent to their notification center.",
-                        "code": "admin_access_not_allowed",
-                        "accessRequested": true,
-                    }),
-                ));
-            }
-
             if (action == "start" || action == "restart") && !actor.is_admin {
                 let user_upgrades = get_user_vm_upgrades(state, &record_owner);
                 let daily_max = user_upgrades
@@ -5320,12 +4942,6 @@ pub(crate) async fn handle(
                         "hostname": record.get("hostname"),
                     })),
                 );
-                notify_owner_admin_used_vm(
-                    state,
-                    &record,
-                    &actor.email,
-                    &format!("power action: {action}"),
-                );
             }
 
             match crate::proxmox_desktop::desktop()
@@ -5333,6 +4949,9 @@ pub(crate) async fn handle(
                 .await
             {
                 Ok(task) => {
+                    if action == "start" || action == "restart" {
+                        schedule_desktop_setup(state, &record, true);
+                    }
                     clear_vm_lease(state, comp_id);
                     if action == "start" {
                         state
@@ -5460,26 +5079,25 @@ pub(crate) async fn handle(
             }
         }
 
+        if operation == "repair-desktop" && *method == Method::POST {
+            if !managed_desktop(&record) {
+                return Some(json_response(
+                    400,
+                    json!({"error":"Desktop repair is available for managed Linux computers."}),
+                ));
+            }
+            schedule_desktop_setup(state, &record, true);
+            return Some(json_response(
+                202,
+                json!({"ok":true,"message":"Checking desktop login and video support."}),
+            ));
+        }
+
         if operation == "desktop-session" && *method == Method::POST {
             let is_admin_using_other_vm = actor.is_admin
                 && !record_owner.is_empty()
                 && mitch_lib::auth::normalize_email(&record_owner)
                     != mitch_lib::auth::normalize_email(&actor.email);
-
-            if is_admin_using_other_vm
-                && !actor.is_owner
-                && !is_vm_admin_access_allowed(state, comp_id)
-            {
-                request_vm_admin_access(state, &record, &actor.email);
-                return Some(json_response(
-                    403,
-                    json!({
-                        "error": "The owner has not allowed administrator access to this computer. An access request has been sent to their notification center.",
-                        "code": "admin_access_not_allowed",
-                        "accessRequested": true,
-                    }),
-                ));
-            }
 
             if is_admin_using_other_vm {
                 let vm_name = record
@@ -5504,7 +5122,23 @@ pub(crate) async fn handle(
                         "hostname": record.get("hostname"),
                     })),
                 );
-                notify_owner_admin_used_vm(state, &record, &actor.email, "opened desktop session");
+            }
+
+            if managed_desktop(&record) {
+                schedule_desktop_setup(state, &record, false);
+                let setup = state
+                    .desktop_setup
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .get(comp_id)
+                    .cloned()
+                    .unwrap_or_default();
+                if setup["status"] == "preparing" {
+                    return Some(json_response(
+                        409,
+                        json!({"error":"Preparing desktop login and video support…","code":"desktop_preparing"}),
+                    ));
+                }
             }
 
             cleanup_vm_desktop_sessions(state);
@@ -5642,6 +5276,23 @@ mod tests {
         assert_eq!(get_vm_type_by_vmid(&state, 399.0), "lxc");
         assert_eq!(get_vm_type_by_vmid(&state, 400.0), "qemu");
         assert_eq!(get_vm_type_by_vmid(&state, 900.0), "qemu");
+        let record =
+            json!({"id":"fixture","ownerEmail":"another-admin@example.com","status":"assigned"});
+        assert!(vm_record_allowed_for_actor(
+            &state,
+            &record,
+            &json!({"email":"staff@example.com","isAdmin":true})
+        ));
+        assert!(!vm_record_allowed_for_actor(
+            &state,
+            &record,
+            &json!({"email":"neighbor@example.com","isAdmin":false})
+        ));
+        assert!(vm_record_allowed_for_actor(
+            &state,
+            &record,
+            &json!({"email":"another-admin@example.com","isAdmin":false})
+        ));
         // activeFreeVms wins first.
         state
             .active_free_vms
@@ -5720,4 +5371,53 @@ mod tests {
         );
         assert!(!vm_same_origin_request(&headers_bad));
     }
+}
+
+fn managed_desktop(record: &Value) -> bool {
+    record["guestType"] == "qemu"
+        && matches!(record["templateVmid"].as_f64(), Some(9010.0 | 9011.0))
+}
+
+pub(crate) fn schedule_desktop_setup(state: &Arc<AppState>, record: &Value, force: bool) {
+    if !managed_desktop(record) {
+        return;
+    }
+    let id = jsval::str_or(record.get("id"), "");
+    {
+        let mut setups = state
+            .desktop_setup
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if let Some(current) = setups.get(&id) {
+            if current["status"] == "preparing"
+                || (!force && (current["status"] == "ready" || current["status"] == "failed"))
+            {
+                return;
+            }
+        }
+        setups.insert(id.clone(), json!({"status":"preparing"}));
+    }
+    let state = state.clone();
+    let record = record.clone();
+    tokio::spawn(async move {
+        let service = crate::proxmox_desktop::desktop();
+        let result = async {
+            let config = service.get_config(&record).await?;
+            let username = jsval::str_or(config.get("ciuser"), "");
+            let vmid = record["vmid"].as_f64().unwrap_or(0.0) as i64;
+            service
+                .enable_friendly_desktop_login(vmid, &username, "")
+                .await
+        }
+        .await;
+        let (status, error) = match result {
+            Ok(()) => ("ready", String::new()),
+            Err(e) => ("failed", e.message),
+        };
+        state
+            .desktop_setup
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(id, json!({"status":status,"error":error}));
+    });
 }

@@ -8,17 +8,17 @@
   <link rel="icon" href="/favicon.ico">
   <link rel="stylesheet" href="/app.css">
   <link rel="stylesheet" href="/vms/portal.css?v=3">
-  <link rel="stylesheet" href="/vms/portal-polish.css?v=3">
+  <link rel="stylesheet" href="/vms/portal-polish.css?v=4">
 </head>
 <body class="computer-portal">
   <main class="computer-shell">
     <header class="computer-hero">
       <div class="computer-heading">
         <h1>My Computer</h1>
-        <p>Manage, access, and monitor your personal desktop.</p>
+        <p>Your desktop, files, and computer settings.</p>
       </div>
       <div style="display:flex; gap:8px; align-items:center;">
-        <button class="quiet-button" id="byo-os-open-btn-header" type="button">Bring your own OS</button>
+        <button class="quiet-button" id="byo-os-open-btn-header" type="button" title="Install your own operating system">Custom OS</button>
         <button class="quiet-button" id="refresh-button" type="button" aria-label="Refresh computer status"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5M4 18v-5h5"/><path d="M18.5 9A7 7 0 0 0 6.2 6.2L4 8m16 8-2.2 2.2A7 7 0 0 1 5.5 15"/></svg><span>Refresh</span></button>
       </div>
     </header>
@@ -32,35 +32,11 @@
     <section id="empty-state" class="state-panel is-hidden">
       <div class="empty-icon" aria-hidden="true">🖥️</div>
       <div id="empty-create-box">
-        <span class="empty-badge">⚡ Instant Cloud Linux</span>
-        <strong>Get Your Free Computer</strong>
-        <p>A free personal Linux workstation, streamed to your browser. No payment required. Account access and available capacity determine whether you can create a computer or need one assigned.</p>
-        
-        <div class="vm-selling-points">
-          <div class="vm-sp-card">
-            <span>🖥️</span>
-            <b>Full Desktop in Browser</b>
-            <small>Runs on school Chromebooks, laptops, and phones with zero install</small>
-          </div>
-          <div class="vm-sp-card">
-            <span>⚡</span>
-            <b>Root &amp; Sudo Access</b>
-            <small>Install packages with apt, run Python, Node.js, C++, and dev servers</small>
-          </div>
-          <div class="vm-sp-card">
-            <span>💾</span>
-            <b>Persistent Storage</b>
-            <small>Keep your code and workspace between sessions. Back up important files before resetting or recreating your computer.</small>
-          </div>
-          <div class="vm-sp-card">
-            <span>🪙</span>
-            <b>MitchCoins Upgrades</b>
-            <small>Boost hardware up to 6 cores &amp; 16GB RAM using earned coins</small>
-          </div>
-        </div>
-
-        <button type="button" id="create-vm-btn" class="primary-button" style="margin-top: 18px; font-size: 0.96rem; padding: 12px 24px;">Set Password &amp; Create Computer →</button>
-        <button type="button" id="byo-os-open-btn" class="quiet-button" style="margin-top: 10px; font-size: 0.88rem;">Bring your own OS instead (1000 🪙) →</button>
+        <strong>Your Linux desktop</strong>
+        <p>Open a personal computer in your browser. Your files stay between sessions, and your website account signs you in automatically.</p>
+        <p class="empty-specs">2 CPU cores · 4 GB memory · 64 GB storage</p>
+        <button type="button" id="create-vm-btn" class="primary-button" style="margin-top: 18px; font-size: 0.96rem; padding: 12px 24px;">Create Computer</button>
+        <button type="button" id="byo-os-open-btn" class="quiet-button" style="margin-top: 10px; font-size: 0.88rem;">Bring your own OS · 1,000 coins</button>
       </div>
       <div id="empty-unauthorized-box" class="is-hidden">
         <strong>No computer assigned yet</strong>
@@ -90,35 +66,18 @@
 
   <dialog id="provision-dialog" class="confirm-dialog">
     <form id="provision-form" method="dialog">
-      <p class="eyebrow" id="provision-eyebrow">Personal Computer</p>
-      <h2 id="provision-title">Set Computer Password</h2>
+      <p class="provision-label" id="provision-eyebrow">Personal Computer</p>
+      <h2 id="provision-title">Create Computer</h2>
 
       <div id="recreate-warning" class="is-hidden" style="background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; border-radius: 8px; padding: 12px; margin: 12px 0; color: #fca5a5; text-align: left;">
-        <strong>⚠️ PERMANENT DATA LOSS WARNING</strong>
+        <strong>Delete this computer’s files</strong>
         <p style="margin: 6px 0 0 0; font-size: 0.88rem; line-height: 1.4;">
           This will <strong>permanently delete</strong> your current computer and create a brand new one.
-          All files, documents, and data will be <strong>lost forever</strong> and cannot be recovered!
+          Back up anything you want to keep. This cannot be undone.
         </p>
       </div>
 
-      <div style="background: rgba(234, 179, 8, 0.12); border: 1px solid #eab308; border-radius: 8px; padding: 12px; margin: 12px 0 16px 0; font-size: 0.85rem; line-height: 1.4; color: #fde047; text-align: left;">
-        <strong>Important: Save your password!</strong>
-        <div style="margin-top: 4px;">
-          Your password cannot be changed without knowing this password. If you lose it, you will have to delete and recreate your computer, and all your files will be lost.
-        </div>
-      </div>
-
-      <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; text-align: left;">
-        <label style="font-size: 0.85rem; color: #94a3b8; display: flex; flex-direction: column; gap: 4px;">
-          <span>Password (any non-empty length)</span>
-          <input type="password" id="provision-password" required autocomplete="new-password" style="padding: 9px 12px; border-radius: 8px; background: #0f172a; border: 1px solid #334155; color: #fff;">
-        </label>
-        <label style="font-size: 0.85rem; color: #94a3b8; display: flex; flex-direction: column; gap: 4px;">
-          <span>Confirm Password</span>
-          <input type="password" id="provision-confirm-password" required autocomplete="new-password" style="padding: 9px 12px; border-radius: 8px; background: #0f172a; border: 1px solid #334155; color: #fff;">
-        </label>
-      </div>
-
+      <p class="provision-note">Your website account opens the desktop automatically. You do not need to create or remember another password.</p>
       <p id="provision-status" class="form-status" style="color: #f87171; font-size: 0.88rem; margin: 0 0 12px 0; min-height: 1.2em;" role="status"></p>
 
       <div class="dialog-actions">

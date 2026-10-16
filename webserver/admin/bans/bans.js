@@ -59,6 +59,11 @@
       expiry.className = 'ban-expiry';
       expiry.textContent = ban.expiresAt ? 'Ends '+new Date(ban.expiresAt).toLocaleString() : 'Permanent ban';
       copy.append(email,reason,meta,expiry);
+      if (ban.cleanup) {
+        const cleanup=document.createElement('small');
+        cleanup.textContent=ban.cleanup.complete ? 'Chat messages removed; uploaded media blocked.' : ban.cleanup.error ? 'Chat history hidden. Server cleanup is retrying.' : 'Chat history hidden. Server cleanup is queued.';
+        copy.append(cleanup);
+      }
       const restore = document.createElement('button');restore.type='button';restore.textContent='Restore access';restore.disabled=busy;
       restore.addEventListener('click',()=>changeBan(false,ban.email,'','list-status'));
       row.append(copy,restore);list.append(row);
@@ -66,9 +71,9 @@
   }
   async function loadBans() {
     const data = await request('/api/admin/bans');
-    bans = data.bans || [];
+    bans = (data.bans || []).map(ban => ({...ban,cleanup:data.chatCleanup?.[ban.email]}));
     const wasReady = timedBansReady;
-    timedBansReady = data.supportsTimedBans === true;
+    timedBansReady = data.supportsTimedBans === true && data.supportsChatCleanup === true;
     $('ban-form').querySelector('button').disabled = busy || !timedBansReady;
     if (!timedBansReady) status('ban-status','Ban management is updating. Use Refresh in a moment to continue.');
     else if (!wasReady) status('ban-status','');

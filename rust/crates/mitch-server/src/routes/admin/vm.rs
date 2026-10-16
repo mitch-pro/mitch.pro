@@ -858,6 +858,7 @@ pub async fn handle(
                         json!({ "error": "Failed to save created computer record." }),
                     ));
                 };
+                crate::routes::vm::schedule_desktop_setup(state, &record.to_json(), true);
                 store_vm_desktop_credentials(
                     state,
                     &record.id,

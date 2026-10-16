@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="/app.css">
   <link rel="stylesheet" href="/admin/bans/bans.css">
   <script src="/app-shell.js" defer></script>
-  <script src="/admin/bans/bans.js" defer></script>
+  <script src="/admin/bans/bans.js?v=2" defer></script>
 </head>
 <body class="bans-page">
   <main class="bans-main">
@@ -77,7 +77,7 @@
   <dialog id="ban-confirm" aria-labelledby="confirm-title" aria-describedby="confirm-description">
     <form method="dialog">
       <h2 id="confirm-title">Confirm ban</h2>
-      <p id="confirm-description">This account will lose access to the website.</p>
+      <p id="confirm-description">This account will lose access to the website. Its chat messages and GIFs will be permanently removed.</p>
       <dl><dt>Account</dt><dd id="confirm-email"></dd><dt>Duration</dt><dd id="confirm-duration"></dd><dt>Reason</dt><dd id="confirm-reason"></dd></dl>
       <div class="confirm-actions"><button value="cancel" autofocus>Cancel</button><button value="ban" class="ban-submit">Ban account</button></div>
     </form>

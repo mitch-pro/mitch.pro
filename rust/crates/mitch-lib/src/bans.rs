@@ -68,6 +68,7 @@ pub fn blacklist_insert_until(
     banned_by: &str,
     expires_at: Option<i64>,
 ) -> rusqlite::Result<()> {
+    let snapshots = crate::chat_cleanup::snapshots(store);
     let conn = store.conn();
     let keys = matching_keys(&conn, email)?;
     let tx = conn.unchecked_transaction()?;
@@ -78,6 +79,7 @@ pub fn blacklist_insert_until(
         "INSERT INTO blacklist (email, reason, banned_at, banned_by, expires_at) VALUES (?1, ?2, ?3, ?4, ?5)",
         rusqlite::params![crate::auth::normalize_email(email), reason, now_millis(), banned_by, expires_at],
     )?;
+    crate::chat_cleanup::purge_transaction(&tx, email, now_millis(), snapshots)?;
     tx.commit()
 }
 

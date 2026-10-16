@@ -1735,9 +1735,14 @@ pub async fn handle(
                             .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")
                             .header(axum::http::header::CACHE_CONTROL, "private, no-store")
                             .header(axum::http::header::VARY, "Cookie")
-                            .body(axum::body::Body::from(crate::inject::inject_access_guard(
-                                &String::from_utf8_lossy(&raw),
-                            )))
+                            .body(axum::body::Body::from({
+                                let html = String::from_utf8_lossy(&raw);
+                                if path.starts_with("/vms/desktop") {
+                                    crate::inject::inject_credit(&html, false)
+                                } else {
+                                    crate::inject::inject_access_guard(&html)
+                                }
+                            }))
                             .expect("vm desktop response");
                     }
                     if let Ok(mut html) = String::from_utf8(raw) {

@@ -8,7 +8,6 @@
   const upDialog = $('upgrade-dialog');
   const headers = { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' };
   const pending = new Map();
-  const adminPending = new Set();
   let computers = [], loading = false, provisionMode = 'create';
   let upgradeData = null, activeUpgradeTab = 'cpu', upgradeBusy = false;
   const esc = value => String(value ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -35,7 +34,6 @@
     }[vm.status] || 'Offline');
     const statusTone = busy ? 'transitioning' : running ? 'running' : vm.status === 'stopped' ? 'offline' : 'unavailable';
     const distro = vm.operatingSystem || 'Linux desktop';
-    const mark = /mint/i.test(distro) ? 'LM' : /ubuntu/i.test(distro) ? 'U' : 'PC';
     const open = running && !busy && vm.desktopAvailable !== false;
     const cpuLoad = Math.max(0, Math.min(100, Math.round(Number(vm.cpuUsage || 0) * 100)));
     const memoryTotal = vm.memoryTotal || (vm.upgrades?.memoryMb ? vm.upgrades.memoryMb * 1048576 : 0);
@@ -58,37 +56,22 @@
     const canExtend = !isExempt && running && !busy && vm.lease?.canExtend && !vm.lease?.extended && !dailyUsed;
     const inCooldown = !running && Number(vm.cooldownRemainingSeconds) > 0;
     const cooldownMins = inCooldown ? Math.ceil(Number(vm.cooldownRemainingSeconds) / 60) : 0;
-    const adminAllowed = Boolean(vm.adminAccessAllowed);
-    const adminRequested = Boolean(vm.adminAccessRequested);
-    const changingAccess = adminPending.has(vm.id);
     const sessionValue = isExempt ? 'Unlimited' : running && remSeconds != null ? uptime(remSeconds) + ' left' : Math.round((vm.upgrades?.dailyMaxSeconds || 21600) / 3600) + 'h / day';
     const sessionDetail = vm.upgrades?.sessionUpgradeExpiresAt && vm.upgrades?.dailyMaxSeconds > 21600
       ? 'Pass: ' + Math.max(1, Math.ceil((vm.upgrades.sessionUpgradeExpiresAt - Date.now()) / 86400000)) + 'd left' : '';
     const startDisabled = busy || inCooldown || vm.status !== 'stopped' || dailyLimitReached;
     const startLabel = dailyLimitReached ? 'Daily limit reached' : inCooldown ? 'Cooldown (' + cooldownMins + 'm)' : operation || 'Start Computer';
-    const previewTitle = busy ? status : vm.status === 'stopped' ? 'Computer offline' : vm.status === 'unavailable' ? 'Connection unavailable' : status;
-    const previewCopy = busy ? 'This usually takes a moment.' : vm.status === 'stopped' ? 'Start your computer to connect.' : 'Refresh to check the connection.';
-    const previewTag = open ? 'a' : 'div';
-    const previewLink = open ? ` href="/vms/desktop/?id=${encodeURIComponent(vm.id)}" aria-label="Open ${esc(vm.name || 'My Computer')}"` : '';
     const primaryAction = running
       ? open ? `<a class="primary-button main-action" href="/vms/desktop/?id=${encodeURIComponent(vm.id)}">Open Desktop </a>`
         : `<button class="primary-button main-action" disabled>${esc(busy ? status : 'Desktop unavailable')}</button>`
       : `<button class="primary-button main-action" data-action="start" ${startDisabled ? 'disabled' : ''}>${esc(startLabel)}</button>`;
     return `<article class="computer-card" data-id="${esc(vm.id)}">
-      <${previewTag} class="desktop-preview ${running ? 'is-running' : 'is-offline'}"${previewLink}>
-        <span class="preview-status status-pill ${statusTone}">${esc(status)}</span>
-        <div class="desktop-window" aria-hidden="true">
-          <div class="window-bar"><span class="window-brand">${mark}</span><span class="window-clock">${esc(vm.name || 'My Computer')}</span><span class="window-system"><i></i><i></i><i></i></span></div>
-          <div class="window-content"><div class="desktop-emblem">${mark}</div><div class="desktop-dock"><i></i><i></i><i></i><i></i></div></div>
-        </div>
-        ${open ? '' : `<div class="preview-overlay"><strong>${esc(previewTitle)}</strong><span>${esc(previewCopy)}</span></div>`}
-      </${previewTag}>
       <div class="computer-details">
         <div class="computer-title-row">
           <div><h2>${esc(vm.name || 'My Computer')}</h2><p>${esc(distro)}</p></div>
           <span class="status-pill ${statusTone}">${esc(status)}</span>
         </div>
-        ${firstBootNotice ? `<div class="first-boot-banner"><span aria-hidden="true">⏳</span><p>First boot can take several minutes while your computer finishes setting up — this is normal, not a problem.</p></div>` : ''}
+        ${firstBootNotice ? `<div class="first-boot-banner"><span aria-hidden="true">⏳</span><p>Your desktop is being prepared. Its status will update here.</p></div>` : ''}
         <section class="detail-section connection-section" aria-label="Connection">
           <h3>Connection</h3>
           <dl class="machine-facts">
@@ -106,17 +89,13 @@
             ${resourceMeter('Storage', running && diskTotal ? bytes(vm.diskUsed) + ' / ' + bytes(diskTotal) : bytes(diskTotal), diskLoad, running && diskTotal > 0)}
           </div>
         </section>
-        <section class="detail-section access-section" aria-label="Access">
-          <h3>Access</h3>
-          <div class="access-row"><div><strong>Admin access <span class="access-value ${adminAllowed ? 'allowed' : ''}">${adminAllowed ? 'Allowed' : 'Disabled'}</span></strong><p>Allows administrator privileges inside the desktop.</p></div><button type="button" class="quiet-button" data-action="toggle-admin-access" ${changingAccess || busy ? 'disabled' : ''}>${changingAccess ? 'Updating…' : adminAllowed ? 'Revoke' : 'Allow admin'}</button></div>
-          ${adminRequested && !adminAllowed ? `<div class="admin-request-banner"><span>Administrator requested access for support.</span><button type="button" class="quiet-button" data-action="grant-admin-access" ${changingAccess || busy ? 'disabled' : ''}>Allow access</button></div>` : ''}
-        </section>
+        ${vm.desktopSetup?.status === 'preparing' ? '<p class="desktop-setup-status" role="status">Preparing automatic sign-in and video support…</p>' : vm.desktopSetup?.status === 'failed' ? '<p class="desktop-setup-status failed" role="status">Desktop setup needs another try. Choose Repair desktop below.</p>' : ''}
         <div class="computer-actions">
           ${primaryAction}
           ${isByoOs ? `<button type="button" class="control-button" data-action="detach-iso" ${busy ? 'disabled' : ''} title="Once your OS is installed, eject the install ISO so the next boot goes straight to disk">Detach ISO</button>` : ''}
           ${canExtend ? '<button type="button" class="control-button" data-action="extend">Extend 30m</button>' : running && dailyUsed ? '<button type="button" class="control-button" disabled title="Only one 30-minute extension is allowed per day">Extension used</button>' : ''}
           <details class="more-menu"><summary aria-label="More computer actions"><span aria-hidden="true">···</span> More</summary><div class="menu-panel" role="group" aria-label="Computer power and reset">
-            ${running ? `<button type="button" data-action="restart" ${busy ? 'disabled' : ''}>Restart</button><button type="button" data-action="shutdown" ${busy ? 'disabled' : ''}>Shut Down</button><span class="menu-divider"></span>` : ''}
+            ${running ? `${vm.managedDesktop ? '<button type="button" data-action="repair-desktop">Repair desktop</button>' : ''}<button type="button" data-action="restart" ${busy ? 'disabled' : ''}>Restart</button><button type="button" data-action="shutdown" ${busy ? 'disabled' : ''}>Shut Down</button><span class="menu-divider"></span>` : ''}
             <button type="button" class="danger-menu-action" data-action="recreate" ${busy ? 'disabled' : ''}>Delete &amp; Recreate Computer</button>
           </div></details>
         </div>
@@ -212,12 +191,10 @@
     provisionMode = mode;
     const isRecreate = mode === 'recreate';
     $('provision-eyebrow').textContent = isRecreate ? 'Recreate Computer' : 'New Computer';
-    $('provision-title').textContent = isRecreate ? 'Delete & Recreate Computer' : 'Set Computer Password';
+    $('provision-title').textContent = isRecreate ? 'Delete & Recreate Computer' : 'Create Computer';
     $('recreate-warning').classList.toggle('is-hidden', !isRecreate);
     $('provision-submit').textContent = isRecreate ? 'Delete & Recreate (Erase All Data)' : 'Create Computer';
     $('provision-submit').className = isRecreate ? 'danger-button' : 'primary-button';
-    $('provision-password').value = '';
-    $('provision-confirm-password').value = '';
     $('provision-status').textContent = '';
     provDialog.showModal();
   }
@@ -227,17 +204,7 @@
 
   $('provision-form')?.addEventListener('submit', async event => {
     event.preventDefault();
-    const pass = $('provision-password').value;
-    const confirm = $('provision-confirm-password').value;
     const statusEl = $('provision-status');
-    if (!pass.length) {
-      statusEl.textContent = 'Password cannot be empty.';
-      return;
-    }
-    if (pass !== confirm) {
-      statusEl.textContent = 'Passwords do not match.';
-      return;
-    }
     statusEl.textContent = provisionMode === 'recreate' ? 'Deleting old computer and provisioning new one…' : 'Provisioning your computer…';
     $('provision-submit').disabled = true;
     try {
@@ -246,12 +213,12 @@
         method: 'POST',
         credentials: 'same-origin',
         headers,
-        body: JSON.stringify({ desktopPassword: pass }),
+        body: '{}',
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Failed to provision computer.');
       provDialog.close();
-      $('refresh-status').textContent = 'Your computer is being prepared and will start shortly (approx 30s)...';
+      $('refresh-status').textContent = 'Your computer is being prepared. Status will update here.';
       setTimeout(load, 3000);
       setTimeout(load, 10000);
     } catch (err) {
@@ -261,42 +228,9 @@
     }
   });
 
-  async function toggleAdminAccess(id, forceAllow = false) {
-    const vm = computers.find(item => item.id === id);
-    if (!vm || adminPending.has(id) || pending.has(id)) return;
-    const targetState = forceAllow ? true : !vm.adminAccessAllowed;
-    adminPending.add(id);
-    render();
-    try {
-      $('refresh-status').textContent = targetState ? 'Granting administrator access...' : 'Revoking administrator access...';
-      const response = await fetch(`/api/vm/computers/${encodeURIComponent(id)}/admin-access`, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers,
-        body: JSON.stringify({ allow: targetState }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Failed to update admin access.');
-      $('refresh-status').textContent = data.message || (targetState ? 'Administrator access granted.' : 'Administrator access revoked.');
-      await load();
-    } catch (err) {
-      $('refresh-status').textContent = err.message || 'Could not update admin access.';
-    } finally {
-      adminPending.delete(id);
-      render();
-    }
-  }
-
   function checkUrlAction() {
     try {
       const params = new URLSearchParams(location.search);
-      if (params.get('action') === 'allow-admin') {
-        const id = params.get('id');
-        if (id) {
-          history.replaceState(null, '', location.pathname);
-          toggleAdminAccess(id, true);
-        }
-      }
       if (params.get('action') === 'upgrades' || location.hash === '#upgrades') {
         openUpgradeModal();
       }
@@ -476,12 +410,11 @@
       openUpgradeModal();
       return;
     }
-    if (action === 'grant-admin-access') {
-      toggleAdminAccess(id, true);
-      return;
-    }
-    if (action === 'toggle-admin-access') {
-      toggleAdminAccess(id);
+    if (action === 'repair-desktop') {
+      button.disabled = true;
+      fetch(`/api/vm/computers/${encodeURIComponent(id)}/repair-desktop`, {method:'POST',credentials:'same-origin',headers,body:'{}'})
+        .then(async response => {const data=await response.json();if(!response.ok) throw new Error(data.error || 'Repair could not start.');$('refresh-status').textContent=data.message;await load();})
+        .catch(error => {$('refresh-status').textContent=error.message;button.disabled=false;});
       return;
     }
     power(id, action);
@@ -492,6 +425,6 @@
   $('refresh-button').addEventListener('click', load);
   window.addEventListener('hashchange', () => { if (location.hash === '#upgrades') openUpgradeModal(); });
   load().then(checkUrlAction);
-  const timer = setInterval(() => { if (!document.hidden && !dialog.open && !provDialog?.open && !upDialog?.open && !pending.size) load(); }, 60000);
+  const timer = setInterval(() => { if (!document.hidden && !dialog.open && !provDialog?.open && !upDialog?.open && !pending.size) load(); }, 10000);
   window.addEventListener('pagehide', () => clearInterval(timer), { once: true });
 })();

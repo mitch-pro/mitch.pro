@@ -1,0 +1,11 @@
+# Account ban cleanup
+
+Every new account ban atomically records a permanent chat-removal cutoff alongside the blacklist entry. Existing bans are not retroactively purged. Removing or expiring a ban restores access but does not restore removed history. New messages after restoration are preserved.
+
+The transaction removes authored legacy DM messages, GIF favorites and encrypted-attachment index entries. A durable file-removal queue deletes the owned attachment blobs. Cutoff checks also apply to document writes so a request holding an old copy cannot restore removed messages.
+
+Matrix cleanup uses exact account-to-Matrix mappings, never fuzzy username search. The gateway redacts affected events in sync/history/search responses and blocks known removed media URLs, including thumbnails. New uploads are indexed by owner. A background worker redacts server history using the account's dedicated cleanup device, with the system moderation account as a fallback. Failures remain pending across restarts and retry automatically; the admin bans page shows pending or failed server cleanup. Matrix can reject redactions in old rooms where neither account has permission. In that case the website still hides the history, while upstream cleanup remains pending. Media blocking does not erase copies already downloaded or stored by other Matrix servers.
+
+The tests use synthetic accounts only: `cargo test --manifest-path rust/Cargo.toml --workspace`, `tests/test_site_bans_browser.mjs`, and `tests/test_ban_chat_cleanup.mjs`. The cleanup integration test uses an isolated SQLite copy and a local mock chat server to verify deletion, retry after restart, media blocking, and preservation of other users and newer messages.
+
+Create the local fixture with `python tests/setup_ban_fixture.py`, start the debug server with `MITCH_BASE=/tmp/mitch-bans-audit NODE_ENV=test GOD_MODE=0 PORT=4320`, then run `python tests/setup_ban_fixture.py --seed`. Unset `MITCH_DB_PATH` and `DATA_DIR` for that process so it uses the fixture database. Browser scripts accept `PLAYWRIGHT_MODULE` and `PLAYWRIGHT_EXECUTABLE_PATH`; the VM browser script also uses `BANS_TEST_FIXTURE=/tmp/mitch-bans-audit` and `VM_PORTAL_TEST_URL=http://127.0.0.1:4320/vms/`.

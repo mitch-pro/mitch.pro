@@ -239,7 +239,10 @@ fn get_matrix_password_for_uid_legacy(uid: &str, secret: &[u8]) -> String {
 /// on. Recovering a *specific* already-orphaned username (e.g. putting
 /// a user back on "admin" instead of "admin-2") needs a manual
 /// conduit-side fix — there's no stored data left to automate it from.
-async fn matrix_username_for_email(state: &AppState, norm_email: &str) -> Option<String> {
+pub(crate) async fn matrix_username_for_email(
+    state: &AppState,
+    norm_email: &str,
+) -> Option<String> {
     if norm_email.is_empty() {
         return None;
     }
@@ -900,6 +903,19 @@ pub fn resolve_matrix_user_id_from_store(
     norm_email: &str,
 ) -> String {
     let norm = mitch_lib::auth::normalize_email(norm_email);
+    let mapped = store.read_document(&data_dir.join("matrix_users.json"), json!({}));
+    if let Some(name) = mapped
+        .get(&norm)
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+    {
+        return if name.starts_with('@') {
+            name.to_string()
+        } else {
+            format!("@{name}:mitch.pro")
+        };
+    }
+
     if let Some(prof) = mitch_lib::profiles::profile_get_opt(store, &norm) {
         if let Some(uname) = prof.get("username").and_then(|v| v.as_str()) {
             if !uname.is_empty() {
@@ -924,6 +940,41 @@ pub fn resolve_matrix_user_id_from_store(
     }
     let local = norm.split('@').next().unwrap_or("user");
     format!("@{local}:mitch.pro")
+}
+
+/// Exact account ownership only; destructive cleanup must never use fuzzy staff search.
+pub fn matrix_user_ids_for_account(state: &AppState, email: &str) -> Vec<String> {
+    let norm = mitch_lib::auth::normalize_email(email);
+    let mut result = Vec::new();
+    let mapping = state
+        .store
+        .read_document(&state.data_dir().join("matrix_users.json"), json!({}));
+    if let Some(map) = mapping.as_object() {
+        for (key, value) in map {
+            let owner = if key.contains('@') && !key.starts_with('@') {
+                Some(mitch_lib::auth::normalize_email(key))
+            } else {
+                mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, key)
+                    .or_else(|| mitch_lib::auth::names_get_email(&state.store, key))
+                    .map(|e| mitch_lib::auth::normalize_email(&e))
+            };
+            if owner.as_deref() == Some(&norm) {
+                if let Some(name) = value.as_str() {
+                    push_matrix_user_id(&mut result, name);
+                }
+            }
+        }
+    }
+    for account in token_to_account_map()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .values()
+    {
+        if mitch_lib::auth::normalize_email(&account.norm_email) == norm {
+            push_matrix_user_id(&mut result, &account.user_id);
+        }
+    }
+    result
 }
 
 pub fn resolve_matrix_user_id_for_email(state: &AppState, norm_email: &str) -> String {
@@ -6953,6 +7004,13 @@ pub async fn handle_matrix_gateway(
         }
     }
 
+    if crate::chat_cleanup::blocked_media_path(state, path) {
+        return Some(cors_json_response(
+            404,
+            json!({"errcode":"M_NOT_FOUND","error":"Media removed"}),
+        ));
+    }
+
     // Forward upstream to Conduit
     let full_path = if search.is_empty() {
         path.to_string()
@@ -6985,6 +7043,22 @@ pub async fn handle_matrix_gateway(
 
     match conduit_res {
         Ok((status, upstream_headers, bytes)) => {
+            if method == Method::POST && path.ends_with("/upload") && status.is_success() {
+                if let (Some(account), Ok(result)) = (
+                    resolve_matrix_account(state, headers, None).await,
+                    serde_json::from_slice::<Value>(&bytes),
+                ) {
+                    if let Some(uri) = result.get("content_uri").and_then(Value::as_str) {
+                        mitch_lib::chat_cleanup::remember_media(
+                            &state.store,
+                            uri,
+                            &account.norm_email,
+                            now_millis(),
+                            false,
+                        );
+                    }
+                }
+            }
             // Track active user in Matrix for presence
             if let Some(acc) = resolve_matrix_account(state, headers, None).await {
                 if !acc.norm_email.is_empty() {
@@ -7254,6 +7328,7 @@ pub async fn handle_matrix_gateway(
                 }
             }
 
+            let bytes = crate::chat_cleanup::filter_matrix_response(state, bytes);
             Some(proxy_response_with_cors(status, &upstream_headers, bytes))
         }
         Err(err) => {
@@ -7347,6 +7422,26 @@ pub async fn admin_conduit_health(state: &Arc<AppState>) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn destructive_cleanup_resolves_email_keys_without_matching_neighbor_names() {
+        let (state, _dir) = test_state();
+        state
+            .store
+            .write_document(
+                &state.data_dir().join("matrix_users.json"),
+                &json!({"target@example.com":"arbitrary_handle","neighbor@example.com":"target"}),
+            )
+            .unwrap();
+        assert_eq!(
+            matrix_user_ids_for_account(&state, "target@example.com"),
+            vec!["@arbitrary_handle:mitch.pro"]
+        );
+        assert_eq!(
+            resolve_matrix_user_id_for_email(&state, "target@example.com"),
+            "@arbitrary_handle:mitch.pro"
+        );
+    }
 
     #[tokio::test]
     async fn banned_matrix_tokens_cannot_bypass_using_headers_or_query_parameters() {

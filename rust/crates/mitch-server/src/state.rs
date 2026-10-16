@@ -10,6 +10,7 @@ use crate::static_files::StaticCache;
 use std::sync::Arc;
 
 pub struct AppState {
+    pub desktop_setup: std::sync::Mutex<std::collections::HashMap<String, serde_json::Value>>,
     pub cfg: SiteConfig,
     pub static_cache: StaticCache,
     /// Store handle for the shared SQLite layer.
@@ -211,10 +212,6 @@ pub struct AppState {
     pub vm_shutdown_initiated: std::sync::Mutex<std::collections::HashMap<String, i64>>,
     /// `lastCapacityNtfy` (server.js:27095) — norm email → last ntfy ms.
     pub last_capacity_ntfy: std::sync::Mutex<std::collections::HashMap<String, i64>>,
-    /// `lastAdminUsageNotice` (server.js:27096) — `owner:recordId:op` → ms.
-    pub last_admin_usage_notice: std::sync::Mutex<std::collections::HashMap<String, i64>>,
-    /// `lastAdminRequestNotice` (server.js:27097) — `owner:recordId:admin` → ms.
-    pub last_admin_request_notice: std::sync::Mutex<std::collections::HashMap<String, i64>>,
     /// `latestAdminBroadcast` (server.js:1334) — polling fallback for broadcasts.
     pub latest_admin_broadcast: std::sync::Mutex<Option<AdminBroadcastEvent>>,
     /// `webauthnChallenges` (server.js:5643) — in-memory WebAuthn challenge store.
@@ -420,6 +417,7 @@ impl AppState {
             blooket_queue: std::sync::Mutex::new(Vec::new()),
             blooket_active: std::sync::Mutex::new(indexmap::IndexMap::new()),
             blooket_pin_locks: std::sync::Mutex::new(indexmap::IndexMap::new()),
+            desktop_setup: std::sync::Mutex::new(std::collections::HashMap::new()),
             vm_desktop_sessions: std::sync::Mutex::new(std::collections::HashMap::new()),
             vm_desktop_sockets: std::sync::Mutex::new(std::collections::HashMap::new()),
             vm_desktop_next_id: std::sync::atomic::AtomicU64::new(1),
@@ -431,8 +429,6 @@ impl AppState {
             vm_page_presence: std::sync::Mutex::new(std::collections::HashMap::new()),
             vm_shutdown_initiated: std::sync::Mutex::new(std::collections::HashMap::new()),
             last_capacity_ntfy: std::sync::Mutex::new(std::collections::HashMap::new()),
-            last_admin_usage_notice: std::sync::Mutex::new(std::collections::HashMap::new()),
-            last_admin_request_notice: std::sync::Mutex::new(std::collections::HashMap::new()),
             latest_admin_broadcast: std::sync::Mutex::new(None),
             webauthn_challenges: mitch_lib::webauthn::ChallengeStore::new(),
         }

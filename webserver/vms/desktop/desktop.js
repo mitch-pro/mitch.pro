@@ -170,7 +170,7 @@ function friendlyError(status, data) {
 async function request(url, options = {}) {
   const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store', ...options });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) { const error = new Error(friendlyError(response.status, data)); error.status = response.status; throw error; }
+  if (!response.ok) { const error = new Error(friendlyError(response.status, data)); error.status = response.status; error.code = data.code; throw error; }
   return data;
 }
 function interrupted(token, clean = false) {
@@ -207,8 +207,24 @@ async function connect() {
       };
       updateUptimeDisplay();
     }
+    if (computer?.desktopSetup?.status === 'failed') showNotice('Desktop repair needs another try. You can still open the console; choose Repair desktop in My Computer to retry.');
     if (computer?.status !== 'running') throw new Error('Your computer is offline. Start it from My Computer, then reconnect.');
-    const session = await request(`/api/vm/computers/${encodeURIComponent(id)}/desktop-session`, { method: 'POST', headers, body: '{}', signal });
+    let session;
+    const setupDeadline = Date.now() + 8 * 60 * 1000;
+    while (!session) {
+      try {
+        session = await request(`/api/vm/computers/${encodeURIComponent(id)}/desktop-session`, {method:'POST',headers,body:'{}',signal});
+      } catch (error) {
+        if (error.code !== 'desktop_preparing' || Date.now() > setupDeadline) throw error;
+        showCover('Preparing your desktop', 'Setting up automatic sign-in and video support. This can take a few minutes on the first start.', false, true);
+        await new Promise((resolve,reject) => {
+          const onAbort=()=>{clearTimeout(timer);reject(new DOMException('Cancelled','AbortError'));};
+          const timer=setTimeout(()=>{signal.removeEventListener('abort',onAbort);resolve();},3000);
+          signal.addEventListener('abort',onAbort,{once:true});
+        });
+        if (token !== generation || signal.aborted) return;
+      }
+    }
     if (token !== generation) return;
     if (typeof session.socketPath !== 'string' || !session.socketPath.startsWith('/api/vm/desktop/ws?session=')) throw new Error('The desktop connection could not be opened.');
     const url = new URL(session.socketPath, location.origin); url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -216,7 +232,7 @@ async function connect() {
     session.credentials = null;
     rfb = client;
     client.scaleViewport = true; client.resizeSession = true; client.clipViewport = false;
-    client.showDotCursor = true; client.background = '#050607'; client.qualityLevel = 6; client.compressionLevel = 3;
+    client.showDotCursor = true; client.background = '#050607'; client.qualityLevel = 7; client.compressionLevel = 2;
     client.addEventListener('connect', () => {
       if (token !== generation) return;
       clearTimeout(connectTimer); connected = true; connecting = false;
@@ -293,6 +309,7 @@ keyboard.addEventListener('input', event => { if (!connected || event.isComposin
 keyboard.addEventListener('compositionend', () => { if (connected) sendText(keyboard.value.replaceAll(sentinel, '')); resetKeyboard(); });
 $('mobile-enter').addEventListener('click', () => rfb?.sendKey(0xff0d));
 $('mobile-escape').addEventListener('click', () => rfb?.sendKey(0xff1b));
+$('reconnect-button')?.addEventListener('click', () => { reconnectAttempts=0; connect(); });
 $('retry-button').addEventListener('click', () => { reconnectAttempts = 0; connect(); });
 window.addEventListener('pagehide', () => { disposed = true; closeConnection(); });
 window.addEventListener('pageshow', event => { if (event.persisted) { disposed = false; reconnectAttempts = 0; connect(); } });

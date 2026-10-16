@@ -154,6 +154,25 @@ impl DataStore {
                         value TEXT NOT NULL,
                         updated_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS account_chat_removals (
+                        email TEXT PRIMARY KEY,
+                        cutoff INTEGER NOT NULL,
+                        matrix_done INTEGER NOT NULL DEFAULT 0,
+                        last_error TEXT NOT NULL DEFAULT ''
+                    );
+                    CREATE TABLE IF NOT EXISTS account_chat_removal_ids (
+                        email TEXT NOT NULL,
+                        user_id TEXT NOT NULL,
+                        cutoff INTEGER NOT NULL,
+                        PRIMARY KEY(email,user_id)
+                    );
+                    CREATE TABLE IF NOT EXISTS moderated_media (
+                        uri TEXT PRIMARY KEY,
+                        email TEXT NOT NULL,
+                        created_at INTEGER NOT NULL,
+                        blocked INTEGER NOT NULL DEFAULT 0
+                    );
+                    CREATE TABLE IF NOT EXISTS chat_files_to_remove (file TEXT PRIMARY KEY);
                     CREATE TABLE IF NOT EXISTS json_documents (
                         path TEXT PRIMARY KEY,
                         content TEXT NOT NULL,
@@ -1113,7 +1132,9 @@ impl DataStore {
             )
             .ok();
         if let Some(content) = row {
-            return parse(&content).unwrap_or(fallback);
+            let mut value = parse(&content).unwrap_or(fallback);
+            crate::chat_cleanup::filter_document(&conn, &key, &mut value);
+            return value;
         }
         std::fs::read_to_string(file)
             .ok()
@@ -1137,11 +1158,27 @@ impl DataStore {
             "json_documents"
         };
         let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
+        let tracked = [
+            "dms.json",
+            "pickle_dms.json",
+            "e2e_attachments.json",
+            "gif_favorites.json",
+        ]
+        .contains(&key.rsplit('/').next().unwrap_or(&key));
+        let mut value = if tracked {
+            serde_json::from_str::<Value>(content).ok()
+        } else {
+            None
+        };
+        if let Some(value) = value.as_mut() {
+            crate::chat_cleanup::filter_document(&conn, &key, value);
+        }
+        let filtered = value.map(|v| crate::data::js_stringify_pretty(&v));
         conn.execute(
             &format!(
                 "INSERT OR REPLACE INTO {table} (path, content, updated_at) VALUES (?1, ?2, ?3)"
             ),
-            rusqlite::params![key, content, now_millis()],
+            rusqlite::params![key, filtered.as_deref().unwrap_or(content), now_millis()],
         )?;
         Ok(())
     }
@@ -1157,6 +1194,10 @@ impl DataStore {
             other => js_stringify_pretty(other),
         };
         self.write_document_raw(file, &content)
+    }
+
+    pub fn data_dir(&self) -> &Path {
+        &self.data_dir
     }
 
     /// Clone the inner connection handle (parity tooling convenience).
