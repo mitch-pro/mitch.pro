@@ -34,16 +34,12 @@ if [ ! -f "$RAMDISK_DB" ] && [ ! -d "$REPLICA_DIR/ltx" ] && [ -f "$LEGACY_DB" ];
     # periodic snapshots use internally) and produces one clean, complete
     # file - no separate -wal/-shm copying needed or wanted alongside it.
     #
-    # `?immutable=1`: $LEGACY_DB is mounted read-only, and plain SQLite opens
-    # - even read-only ones - need to create a -shm file alongside the main
-    # db for WAL coordination, which fails hard on a read-only mount
-    # (verified directly: a plain open against the :ro mount errors with
-    # "unable to open database file"). immutable=1 tells SQLite not to
-    # expect or check for concurrent changes, skipping that requirement -
-    # exactly right for this one-time bootstrap read, which only ever needs
-    # to run once anyway (every load thereafter restores from Litestream's
-    # own replica, written with full consistency guarantees, not this path).
-    sqlite3 "file:$LEGACY_DB?immutable=1" ".backup '$RAMDISK_DB'"
+    # The legacy mount permits SQLite's WAL coordination files, while mode=ro
+    # keeps the database itself read-only. immutable=1 would ignore live WAL
+    # commits and can omit recently written account data from the seed.
+    sqlite3 "file:$LEGACY_DB?mode=ro" ".backup '$RAMDISK_DB'"
+    # Rust services run as the app user, including when RAM operation is enabled.
+    chown 1000:1000 /ramdisk "$RAMDISK_DB"
     echo "[sql-sync] Seed complete ($(wc -c < "$RAMDISK_DB") bytes)."
 fi
 

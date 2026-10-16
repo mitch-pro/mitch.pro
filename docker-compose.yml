@@ -12,6 +12,8 @@ services:
       - webserver-blue
       - webserver-green
 
+  # RAM-disk operation is opt-in via MITCH_DB_PATH=/ramdisk/mitchpro.db after
+  # a coordinated migration. The default keeps both slots on the current disk DB.
   # Litestream sidecar: replicates mitchpro.db between the shared tmpfs
   # ramdisk (webserver-blue/green read/write it there) and the HDD-backed
   # ./data mount. One shared ramdisk, one replication stream - see
@@ -24,7 +26,7 @@ services:
     volumes:
       - sql_ramdisk:/ramdisk
       - ./data/litestream-replica:/replica
-      - ./data:/legacy:ro
+      - ./data:/legacy
     healthcheck:
       test: ["CMD", "test", "-f", "/ramdisk/mitchpro.db"]
       interval: 2s
@@ -69,7 +71,7 @@ services:
     environment:
       - MITCH_BASE=/app
       - MITCH_SERVICE=mitch-server
-      - MITCH_DB_PATH=/ramdisk/mitchpro.db
+      - MITCH_DB_PATH=${MITCH_DB_PATH:-/app/data/mitchpro.db}
       - PORT=6800
       - TOR_SERVICE_URL=http://tor-browser:6840
       - PIA_USER
@@ -167,7 +169,7 @@ services:
     environment:
       - MITCH_BASE=/app
       - MITCH_SERVICE=mitch-server
-      - MITCH_DB_PATH=/ramdisk/mitchpro.db
+      - MITCH_DB_PATH=${MITCH_DB_PATH:-/app/data/mitchpro.db}
       - PORT=6800
       - TOR_SERVICE_URL=http://tor-browser:6840
       - PIA_USER
@@ -260,7 +262,7 @@ services:
     environment:
       - MITCH_SERVICE=mitch-mail
       - MITCH_BASE=/app
-      - MITCH_DB_PATH=/ramdisk/mitchpro.db
+      - MITCH_DB_PATH=${MITCH_DB_PATH:-/app/data/mitchpro.db}
       - MAIL_RS_PORT=6902
       - PIA_USER
       - PIA_PASS
