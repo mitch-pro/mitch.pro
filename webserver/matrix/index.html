@@ -478,15 +478,18 @@
         }
 
         // Cinny's own sidebar renders a "Home" icon twice: once in the top
-        // space-switcher rail, and again as the first item of a separate
-        // bottom icon group (right above its search icon). Both are baked
-        // into Cinny's compiled bundle, not something we add, so there's no
-        // source to edit - hide the redundant bottom one once it renders.
+        // space-switcher rail (._1ho1fyw0 > :nth-child(1)), and again as the
+        // first item of a separate bottom sticky icon group
+        // (._1ho1fyw0 > :nth-child(2), right above its search icon). When the
+        // user clicks off of Home, the top Home icon switches from its filled
+        // SVG path to the same outlined path (M4.5 10.6736...) used by the
+        // bottom icon — so scope strictly to the bottom sticky group so the
+        // real Home space button never disappears.
         function hideDuplicateHomeButton() {
-          const bottomHome = Array.from(document.querySelectorAll('button'))
+          const bottomHome = Array.from(document.querySelectorAll('._1ho1fyw0 > :nth-child(2) button'))
             .find(b => {
               const d = b.querySelector('path')?.getAttribute('d') || '';
-              return d.startsWith('M4.5 10.6736') && b.getBoundingClientRect().left < 60;
+              return d.startsWith('M4.5 10.6736');
             });
           if (!bottomHome || bottomHome.dataset.mitchHidden) return;
           bottomHome.dataset.mitchHidden = '1';

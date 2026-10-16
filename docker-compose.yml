@@ -97,6 +97,7 @@ services:
       - GEMINI_API_KEY
       - GROQ_API_KEY
       - GIPHY_API_KEY
+      - GIPHY_API_KEYS
       - RECAPTCHA_SECRET_KEY
       - SECRET_KEY
       - GOOGLE_ANALYTICS_ID
@@ -195,6 +196,7 @@ services:
       - GEMINI_API_KEY
       - GROQ_API_KEY
       - GIPHY_API_KEY
+      - GIPHY_API_KEYS
       - RECAPTCHA_SECRET_KEY
       - SECRET_KEY
       - GOOGLE_ANALYTICS_ID
