@@ -117,38 +117,8 @@ jobs:
               fi
             }
 
-            if [ "${{ needs.test.outputs.only_static }}" = "true" ]; then
-              echo "[deploy-ci] Push contains ONLY static changes. Running fast static deploy..."
-              git -C /home/mitch/server/bun checkout -- caddy/Caddyfile 2>/dev/null || true
-              git -C /home/mitch/server/bun pull origin master
-              restore_admins_guard
-
-              SECRET_KEY=""
-              if [ -f /home/mitch/server/bun/.env ]; then
-                SECRET_KEY=$(grep -E "^SECRET_KEY=" /home/mitch/server/bun/.env | cut -d= -f2- | tr -d '"' | tr -d "'")
-              fi
-
-              REFRESHED=false
-              for URL in "http://localhost:6800/api/cache/refresh" "http://localhost:6811/api/cache/refresh" "http://localhost:6812/api/cache/refresh"; do
-                STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-                  -H "Content-Type: application/json" \
-                  -H "Authorization: Bearer $SECRET_KEY" \
-                  -H "X-Internal-Refresh: 1" \
-                  -H "Host: mitchdog.com" \
-                  -d '{"files":[]}' "$URL" || echo "000")
-                if [ "$STATUS" = "200" ]; then
-                  REFRESHED=true
-                  echo "[deploy-ci] Static cache refreshed via $URL (HTTP 200)"
-                fi
-              done
-
-              if [ "$REFRESHED" = "true" ]; then
-                echo "[deploy-ci] Static deploy completed successfully in seconds!"
-                exit 0
-              fi
-              echo "[deploy-ci] Cache refresh failed; falling back to full deployment script..."
-            fi
-
-            echo "[deploy-ci] Running full blue-green deployment..."
+            # deploy.sh holds the deployment lock, detects the live slot before
+            # pulling, and refreshes static updates without rebuilding services.
+            echo "[deploy-ci] Running deployment script..."
             sudo /usr/local/bin/deploy.sh
             restore_admins_guard

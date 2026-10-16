@@ -554,6 +554,11 @@ impl AppState {
 
 /// `PUBLIC_API_PATHS` — verbatim.
 pub const PUBLIC_API_PATHS: &[&str] = &[
+    // Deployment routes authorize their own token; they do not require a
+    // student's password cookie before reaching that authorization check.
+    "/api/cache/refresh",
+    "/api/admin/cache/refresh",
+    "/api/refresh-cache",
     "/api/access/status",
     "/api/appeal",
     "/api/webauthn/login/options",

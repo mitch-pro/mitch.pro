@@ -135,9 +135,21 @@ main() {
         return 0
     }
 
-    # 1. Determine which slot is currently active BEFORE touching git or files.
-    # Check Caddyfile routing first (the true proxy source of truth).
-    if grep -q "webserver-blue:6800" "$CADDYFILE_PATH" 2>/dev/null; then
+    # Read the running proxy first: git checkout can reset the file on disk
+    # while Caddy continues serving its previously loaded configuration.
+    LIVE_UPSTREAM=$(docker exec mitch-caddy-proxy wget -qO- -T 5 http://127.0.0.1:2019/config/ 2>/dev/null | grep -oE 'webserver-(blue|green):6800' | sort -u || true)
+    if [ "$LIVE_UPSTREAM" = "webserver-blue:6800" ]; then
+        ACTIVE_SLOT="blue"
+        INACTIVE_SLOT="green"
+        INACTIVE_PORT=6812
+    elif [ "$LIVE_UPSTREAM" = "webserver-green:6800" ]; then
+        ACTIVE_SLOT="green"
+        INACTIVE_SLOT="blue"
+        INACTIVE_PORT=6811
+    elif [ -n "$LIVE_UPSTREAM" ]; then
+        echo "[deploy] Multiple active webserver upstreams; refusing to replace a serving slot."
+        exit 1
+    elif grep -q "webserver-blue:6800" "$CADDYFILE_PATH" 2>/dev/null; then
         ACTIVE_SLOT="blue"
         INACTIVE_SLOT="green"
         INACTIVE_PORT=6812
@@ -202,6 +214,10 @@ main() {
     fi
     NEW_COMMIT=$(run_git rev-parse HEAD 2>/dev/null || echo "")
 
+    # Keep the checked-out file aligned with the running proxy, including
+    # static-only deploys that return before the blue/green swap below.
+    sed -i -E "s/(webserver-)(blue|green)(:6800)/\1$ACTIVE_SLOT\3/g" "$CADDYFILE_PATH"
+
     # 2b. Fast path: check if this update only modifies static webroot files or docs
     CHANGED_FILES=""
     if [ -n "$OLD_COMMIT" ] && [ "$OLD_COMMIT" != "$NEW_COMMIT" ]; then
@@ -222,11 +238,11 @@ main() {
 
         REFRESHED=false
         for URL in "http://localhost:6800/api/cache/refresh" "http://localhost:6811/api/cache/refresh" "http://localhost:6812/api/cache/refresh"; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            STATUS=$(curl -s --connect-timeout 3 --max-time 15 -o /dev/null -w "%{http_code}" -X POST \
                 -H "Content-Type: application/json" \
                 -H "Authorization: Bearer $SECRET_KEY" \
                 -H "X-Internal-Refresh: 1" \
-                -H "Host: mitch.pro" \
+                -H "Host: mitchdog.com" \
                 -d '{"files":[]}' "$URL" || echo "000")
             if [ "$STATUS" = "200" ]; then
                 REFRESHED=true
