@@ -575,7 +575,7 @@ async function loadFriends() {
             </span>
           </div>
           <div class="friend-actions">
-            <a class="btn-action friend-message" href="/matrix/">Chat</a>
+            <a class="btn-action friend-message" href="/matrix/?dm=${encodeURIComponent(f.handle || email)}">Chat</a>
             <button onclick="removeFriend('${escText(email)}')" class="btn-remove" title="Remove friend" aria-label="Remove ${escText(name)}">&times;</button>
           </div>
         </article>

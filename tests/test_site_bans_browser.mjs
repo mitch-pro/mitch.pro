@@ -45,15 +45,15 @@ try {
  await page.unroute('**/api/admin/bans',oldServer);
  await page.locator('#refresh-bans').click();
  await page.waitForFunction(()=>!document.querySelector('#ban-form button').disabled);
- await page.goto(base+'/');await page.locator('#bans-action-btn').waitFor();assert(await page.locator('#bans-action-btn').isVisible());
- await page.locator('#bans-action-btn').click();await page.locator('#bans-workspace').waitFor();
- const otherPage=await neighbor.newPage();await otherPage.goto(base+'/');await otherPage.waitForFunction(()=>window.MitchShell?.ready);
- assert(!await otherPage.locator('#bans-action-btn').isVisible(),'Ordinary members must not see the admin button.');
+ await page.goto(base+'/members/');await page.locator('#people-staff-links a[href="/admin/bans/"]').waitFor();assert(await page.locator('#people-staff-links a[href="/admin/bans/"]').isVisible());
+ await page.locator('#people-staff-links a[href="/admin/bans/"]').click();await page.locator('#bans-workspace').waitFor();
+ const otherPage=await neighbor.newPage();await otherPage.goto(base+'/members/');await otherPage.waitForFunction(()=>window.MitchShell?.ready);
+ assert(await otherPage.locator('#people-staff-links a[href="/admin/bans/"]').count()===0,'Ordinary members must not see the admin button.');
  const targetPage=await student.newPage();
- await targetPage.route('**/ban-guard.js',route=>route.fulfill({contentType:'application/javascript',body:''}));
+ await targetPage.route('**/ban-guard.js*',route=>route.fulfill({contentType:'application/javascript',body:''}));
  await targetPage.goto(base+'/enroll/');
  const gamePage=await student.newPage();await gamePage.goto(base+'/games/kodys-keyboard/index.html');
- assert(await gamePage.locator('script[src="/ban-guard.js"]').count());
+ assert(await gamePage.locator('script[src^="/ban-guard.js"]').count());
  await targetPage.evaluate(()=>new Promise((resolve,reject)=>{
   const socket=new WebSocket(location.origin.replace(/^http/,'ws')+'/ssh/ws');
   socket.onopen=resolve;socket.onerror=()=>reject(new Error('Fixture terminal socket failed'));

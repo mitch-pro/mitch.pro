@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Members — mitch.pro</title>
+<title>People — mitch.pro</title>
 <link rel="stylesheet" href="/app.css">
 <script src="/api.js"></script>
 <script src="/app-shell.js" defer></script>
@@ -277,15 +277,29 @@
   .theme-no-motion .actions a {
     transition: none;
   }
+  .people-layout { display:grid; grid-template-columns:minmax(0,1fr); gap:28px; align-items:start; }
+  .people-layout.has-staff-tools { grid-template-columns:minmax(0,1fr) 224px; }
+  .people-directory { min-width:0; }
+  .people-staff-tools { position:sticky; top:84px; padding:18px; border:1px solid var(--t-bd); border-radius:14px; background:var(--t-bg2); }
+  .people-staff-tools[hidden] { display:none; }
+  .people-staff-tools h2 { font-size:.9rem; margin:0 0 14px; }
+  #people-staff-links { display:grid; gap:6px; }
+  .people-staff-link { display:flex; align-items:center; gap:12px; padding:12px 10px; border:1px solid transparent; border-radius:10px; color:var(--t-fg); text-decoration:none; }
+  .people-staff-link:hover { background:var(--t-bg3); border-color:var(--t-bd); }
+  .people-staff-link strong { display:block; font-size:.83rem; font-weight:600; }
+  .people-staff-link small { display:block; color:var(--t-fg2); font-size:.72rem; margin-top:3px; }
+  .people-staff-link svg { width:19px; height:19px; fill:none; stroke:var(--t-fg2); stroke-width:1.6; flex-shrink:0; }
+  @media(max-width:1000px) { .people-layout.has-staff-tools { grid-template-columns:minmax(0,1fr); } .people-staff-tools { position:static; } #people-staff-links { grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); } }
 </style>
 </head>
 <body class="members-page">
 <main class="app-main">
   <header class="page-head">
-    <h1>Members</h1>
+    <h1>People</h1>
     <p class="page-sub">Search people, start chats, and manage friend requests.</p>
   </header>
 
+  <div class="people-layout" id="people-layout"><div class="people-directory">
   <div class="toolbar panel">
     <input id="search" type="search" placeholder="Search members by name, handle, or role" autocomplete="off">
     <select id="roleFilter">
@@ -303,7 +317,8 @@
   </div>
 
   <div class="stats" id="stats"></div>
-  <div class="grid" id="membersGrid"><div class="empty">Loading members...</div></div>
+  <div class="grid" id="membersGrid"><div class="empty">Loading people…</div></div>
+  </div><aside class="people-staff-tools" id="people-staff-tools" aria-label="Staff tools" hidden><h2>Staff tools</h2><nav id="people-staff-links" aria-label="Your staff access"></nav></aside></div>
 </main>
 
 <div class="modal" id="reportModal" aria-hidden="true">
@@ -378,7 +393,7 @@
     }
 
     function dmHref(member) {
-      return '/matrix/';
+      return '/matrix/?dm=' + encodeURIComponent(member.handle || member.email || '');
     }
 
     function profileHref(member) {
@@ -592,5 +607,30 @@
     reload();
   </script>
 <script src="/cookie-consent.js" defer></script>
+<script>
+(async function () {
+  try {
+    const response = await fetch('/api/me', {credentials:'include'});
+    if (!response.ok) return;
+    const me = await response.json(), owner = me.isOwner || me.isCoOwner, admin = owner || me.isAdmin;
+    const tools = [
+      [owner, '/admin/#owner-tools', 'Owner tools', 'Site settings and operations', '<path d="m12 3 3 6 6 1-4.5 4.5 1 6.5-5.5-3-5.5 3 1-6.5L3 10l6-1z"/>'],
+      [admin, '/admin/#approval-tools', 'Admin tools', 'Accounts and requests', '<circle cx="12" cy="12" r="8"/><path d="M8 12h8m-4-4v8"/>'],
+      [admin, '/admin/bans/', 'Bans', 'Account access and appeals', '<circle cx="12" cy="12" r="8"/><path d="m6 6 12 12"/>'],
+      [admin || me.isModerator, '/moderator/', 'Moderator tools', 'Reports and chat moderation', '<path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6z"/><path d="m8 12 3 3 5-6"/>'],
+      [admin || me.isTester, '/tester/', 'Tester hub', 'Testing and feedback', '<path d="m9 3 6 0M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3M8 14h8"/>']
+    ].filter(tool=>tool[0]);
+    if (!tools.length) return;
+    const nav = document.getElementById('people-staff-links');
+    tools.forEach(([,href,title,description,path])=>{
+      const link = document.createElement('a'); link.className='people-staff-link'; link.href=href;
+      link.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+path+'</svg><span><strong>'+title+'</strong><small>'+description+'</small></span>';
+      nav.appendChild(link);
+    });
+    document.getElementById('people-staff-tools').hidden=false;
+    document.getElementById('people-layout').classList.add('has-staff-tools');
+  } catch (_) {}
+})();
+</script>
 </body>
 </html>

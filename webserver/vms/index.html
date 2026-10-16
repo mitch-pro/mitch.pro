@@ -8,7 +8,7 @@
   <link rel="icon" href="/favicon.ico">
   <link rel="stylesheet" href="/app.css">
   <link rel="stylesheet" href="/vms/portal.css?v=3">
-  <link rel="stylesheet" href="/vms/portal-polish.css?v=4">
+  <link rel="stylesheet" href="/vms/portal-polish.css?v=5">
 </head>
 <body class="computer-portal">
   <main class="computer-shell">
@@ -146,8 +146,8 @@
     <div class="upgrade-dialog-content">
       <div class="upgrade-header">
         <div>
-          <p class="eyebrow">Hardware &amp; Session Upgrades</p>
-          <h2>⚡ Upgrade Your Computer</h2>
+
+          <h2 id="upgrade-title">Computer resources</h2>
         </div>
         <div class="user-coin-badge">
           🪙 <strong id="upgrade-coin-balance">0</strong> Mitch Coins
@@ -155,10 +155,10 @@
       </div>
 
       <div class="upgrade-tabs">
-        <button type="button" class="upgrade-tab active" data-tab="cpu">Processor (CPU)</button>
-        <button type="button" class="upgrade-tab" data-tab="ram">Memory (RAM)</button>
-        <button type="button" class="upgrade-tab" data-tab="disk">Storage (Disk)</button>
-        <button type="button" class="upgrade-tab" data-tab="session">Daily Session</button>
+        <button type="button" class="upgrade-tab active" data-tab="cpu">CPU</button>
+        <button type="button" class="upgrade-tab" data-tab="ram">Memory</button>
+        <button type="button" class="upgrade-tab" data-tab="disk">Storage</button>
+        <button type="button" class="upgrade-tab" data-tab="session">Session</button>
       </div>
 
       <div id="upgrade-tab-content" class="upgrade-tab-content">
@@ -166,7 +166,7 @@
       </div>
 
       <div class="upgrade-notice">
-        <span>Your computer is free. Optional upgrades use earned MitchCoins, not real money. Hardware upgrades stay with your account; session extensions last for the selected period. Live changes depend on host capacity.</span>
+        <span id="upgrade-notice-copy">Your computer is free. Optional upgrades use earned MitchCoins, not real money. Hardware upgrades stay with your account; session extensions last for the selected period. Live changes depend on host capacity.</span>
       </div>
 
       <p id="upgrade-status" class="form-status" role="status"></p>
@@ -178,7 +178,7 @@
   </dialog>
 
   <script src="/app-shell.js?v=17" defer></script>
-  <script src="/vms/portal.js?v=8" defer></script>
+  <script src="/vms/portal.js?v=9" defer></script>
   <script src="/vms/byo-os.js?v=2" defer></script>
 </body>
 </html>

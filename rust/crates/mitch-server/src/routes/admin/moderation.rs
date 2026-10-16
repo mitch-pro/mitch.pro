@@ -1983,8 +1983,15 @@ pub async fn lookup_profile(state: &Arc<AppState>, search: &str) -> Response {
         );
     }
 
-    let norm_email = mitch_lib::auth::normalize_email(&raw);
-    let mut matrix_ids = crate::routes::matrix::resolve_all_matrix_user_ids_for_target(state, &raw);
+    let norm_email = super::resolve_admin_target(state, &raw);
+    let mut matrix_ids = crate::routes::matrix::resolve_all_matrix_user_ids_for_target(
+        state,
+        if norm_email.is_empty() {
+            &raw
+        } else {
+            &norm_email
+        },
+    );
     if matrix_ids.is_empty() {
         let resolved = crate::routes::matrix::resolve_matrix_user_id_for_email(state, &norm_email);
         if !resolved.is_empty() {

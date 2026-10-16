@@ -35,7 +35,7 @@
           <h2>Ban an account</h2>
           <p>Blocks this account across the website. Other people on the same network keep access.</p>
           <form id="ban-form">
-            <label for="ban-email">Account email</label>
+            <label for="ban-email">Account</label>
             <input id="ban-email" type="email" autocomplete="off" placeholder="name@student.rjuhsd.us" required>
             <label for="ban-duration">Ban duration</label>
             <select id="ban-duration" required>
@@ -57,7 +57,7 @@
           <h2>Restore access</h2>
           <p>Remove an account ban or restriction using the account’s email address.</p>
           <form id="restore-form">
-            <label for="restore-email">Account email</label>
+            <label for="restore-email">Account</label>
             <input id="restore-email" type="email" autocomplete="off" placeholder="name@student.rjuhsd.us" required>
             <button type="submit">Restore access</button>
             <p id="restore-status" class="bans-status" role="status"></p>
@@ -68,7 +68,7 @@
       <section class="bans-panel bans-roster" aria-labelledby="banned-title">
         <header class="bans-list-heading"><div><h2 id="banned-title">Banned accounts</h2><p id="bans-summary"></p></div><button id="refresh-bans" type="button">Refresh</button></header>
         <label for="ban-search">Search bans</label>
-        <input id="ban-search" type="search" placeholder="Email, reason, or staff member" autocomplete="off">
+        <input id="ban-search" type="search" placeholder="Name, username, email, reason, or staff member" autocomplete="off">
         <p id="list-status" class="bans-status" role="status"></p>
         <div id="ban-list" role="list"></div>
       </section>

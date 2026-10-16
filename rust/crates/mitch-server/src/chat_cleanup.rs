@@ -9,6 +9,10 @@ use serde_json::{json, Value};
 use std::{collections::HashMap, sync::Arc};
 
 pub fn clear_relay(state: &AppState, email: &str) {
+    let cutoff = data::account_removals(&state.store)
+        .get(email)
+        .copied()
+        .unwrap_or(0);
     let ids: Vec<String> = state
         .e2e_users
         .lock()
@@ -22,7 +26,7 @@ pub fn clear_relay(state: &AppState, email: &str) {
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .values_mut()
-        .for_each(|messages| messages.retain(|m| !ids.contains(&m.from)));
+        .for_each(|messages| messages.retain(|m| !ids.contains(&m.from) || m.timestamp > cutoff));
 }
 
 fn sender_cutoffs(state: &AppState) -> HashMap<String, (String, i64)> {

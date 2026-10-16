@@ -10,11 +10,11 @@
   const count = panel.querySelector('[data-count]');
   function render() {
     list.replaceChildren();
-    accounts.filter(account => account.email.includes(search.value.trim().toLowerCase())).forEach(account => {
+    accounts.filter(account => [account.email,account.username,account.displayName].join(' ').toLowerCase().includes(search.value.trim().toLowerCase())).forEach(account => {
       const label = document.createElement('label'); const input = document.createElement('input'); input.type = 'checkbox';
       input.checked = selected.has(account.email); input.disabled = account.protected || busy;
       input.addEventListener('change', () => { input.checked ? selected.add(account.email) : selected.delete(account.email); update(); });
-      label.append(input,document.createTextNode(account.email + (account.protected ? ' · Protected owner' : ''))); list.append(label);
+      label.append(input,document.createTextNode((account.displayName || account.username || account.email) + ' · ' + account.email + (account.protected ? ' · Protected owner' : ''))); list.append(label);
     }); update();
   }
   function update() { count.textContent = `${selected.size} selected. To remove them, type REMOVE ${selected.size} REGISTRATIONS below.`; }
@@ -28,7 +28,7 @@
     try { await task(); } catch(error) { status.textContent = error.message; }
     finally { busy = false; panel.querySelectorAll('button').forEach(button => button.disabled = false); render(); }
   }
-  panel.querySelector('[data-load]').onclick = () => run(async () => { const data = await call({action:'list'}); accounts = data.accounts; selected.clear(); status.textContent = `${accounts.length} registrations · ${data.coinAccounts} coin balances. Choose accounts below.`; });
+  panel.querySelector('[data-load]').onclick = () => run(async () => { const response = await fetch('/api/admin/accounts',{credentials:'same-origin',headers:{'X-Admin-Passphrase':sessionStorage.getItem('admin_passphrase') || ''}}); const data = await response.json(); if(!response.ok)throw new Error(data.error || 'Could not load accounts.'); accounts = data.accounts; selected.clear(); status.textContent = `${accounts.length} accounts. Choose accounts below.`; });
   panel.querySelector('[data-all]').onclick = () => { accounts.forEach(account => { if (!account.protected) selected.add(account.email); }); render(); };
   panel.querySelector('[data-none]').onclick = () => { selected.clear(); render(); };
   search.oninput = render;

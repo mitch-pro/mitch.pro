@@ -17,7 +17,7 @@
     />
 
     <meta property="og:title" content="Matrix Chat — mitch.pro" />
-    <meta property="og:url" content="https://mitch.pro/matrix/" />
+    <meta property="og:url" content="https://mitchdog.com/matrix/" />
     <meta property="og:image" content="/icon-192.png" />
     <meta
       property="og:description"
@@ -105,7 +105,7 @@
     <!-- Mitch.pro SSO Connect Banner (only shown if guest/logged out) -->
     <div id="mitch-sso-banner">
       <span id="mitch-sso-msg">✨ Connect your account for instant single sign-on</span>
-      <a id="mitch-sso-btn" href="/api/sso/bridge?back=/matrix/">Login with mitch.pro</a>
+      <a id="mitch-sso-btn" href="/api/sso/bridge?back=/matrix/">Sign in</a>
       <a id="mitch-home-btn" href="/" style="margin-left: 12px; color: var(--t-fg2); text-decoration: none; font-size: 13px; opacity: 0.85; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.85'">← Return to mitch.pro</a>
     </div>
 
@@ -376,6 +376,7 @@
       // the identity host (mitchdog.com) and returns here after exchange.
       (function() {
         const banner = document.getElementById("mitch-sso-banner");
+        document.getElementById('mitch-sso-btn').href='/api/sso/bridge?back='+encodeURIComponent(location.pathname+location.search);
         const MATRIX_STORE_RECOVERY_KEY = 'mitch_matrix_store_recovery_v1';
         const MATRIX_DATABASES = [
           'matrix-js-sdk:web-sync-store',
@@ -514,9 +515,33 @@
           }
         }).observe(document.documentElement, { childList: true, subtree: true });
 
-        function bootCinny() {
+        async function openRequestedConversation() {
+          const recipient = new URLSearchParams(location.search).get('dm');
+          const token = localStorage.getItem('cinny_access_token');
+          if (!recipient || !token) return;
+          try {
+            const response = await fetch('/api/matrix/dm', {
+              method:'POST', credentials:'same-origin',
+              headers:{'Content-Type':'application/json','Authorization':'Bearer '+token,'X-Mitch-Requested-With':'1'},
+              body:JSON.stringify({recipient}), signal:AbortSignal.timeout(45000)
+            });
+            const data = await response.json();
+            if (!response.ok || !data.roomId) throw new Error(data.error || 'Could not open this conversation.');
+            history.replaceState(null,'','/matrix/direct/'+encodeURIComponent(data.roomId)+'/');
+          } catch(error) {
+            const notice=document.createElement('div');
+            notice.setAttribute('role','alert');notice.className='mitch-dm-notice';
+            const text=document.createElement('span');text.textContent=error.name==='TimeoutError'?'Opening the conversation took too long. Please try again.':error.message;
+            const retry=document.createElement('button');retry.type='button';retry.textContent='Retry';retry.onclick=()=>location.reload();
+            const close=document.createElement('button');close.type='button';close.textContent='Dismiss';close.onclick=()=>notice.remove();
+            notice.append(text,retry,close);document.body.append(notice);
+          }
+        }
+
+        async function bootCinny() {
           if (window.__cinnyLoaded) return;
           window.__cinnyLoaded = true;
+          await openRequestedConversation();
           const script = document.createElement("script");
           script.type = "module";
           script.crossOrigin = "anonymous";
@@ -700,7 +725,7 @@
             name.textContent = 'Sign in';
             avatar.textContent = 'M';
             avatar.style.backgroundImage = '';
-            link.href = '/api/sso/bridge?back=/matrix/';
+            link.href = '/api/sso/bridge?back='+encodeURIComponent(location.pathname+location.search);
             link.removeAttribute('title');
             return;
           }

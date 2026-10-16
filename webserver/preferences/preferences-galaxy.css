@@ -1,4 +1,12 @@
 /* Settings use the shared palette and a single column of sections. */
+@media(min-width:900px) {
+  html:not(.school-preferences) .prefs-page .prefs-shell { display:grid; grid-template-columns:190px minmax(0,1fr); column-gap:32px; max-width:1120px; width:calc(100% - 64px); }
+  html:not(.school-preferences) .prefs-page .page-head,html:not(.school-preferences) .prefs-page .pref-summary { grid-column:1/-1; }
+  html:not(.school-preferences) .prefs-page .prefs-jump-nav { grid-column:1; grid-row:3; align-self:start; flex-direction:column; top:84px; margin:0; padding:4px; border:1px solid var(--t-bd); border-radius:14px; background:var(--t-bg2); }
+  html:not(.school-preferences) .prefs-page .prefs-jump-nav a { padding:11px 13px; border-color:transparent; border-radius:9px; font-size:13px; }
+  html:not(.school-preferences) .prefs-page .pref-stack { grid-column:2; grid-row:3; }
+  html:not(.school-preferences) .prefs-page .btn-row,html:not(.school-preferences) .prefs-page .save-status { grid-column:2; }
+}
 .prefs-page::before { content: none; }
 .prefs-page .prefs-shell { width: min(980px, calc(100% - 48px)); max-width: 980px; padding: 36px 0 80px; margin-inline: auto; }
 .prefs-page .page-head { max-width: none; margin-bottom: 22px; padding: 0 0 24px; border: 0; border-bottom: 1px solid var(--t-bd); background: none; box-shadow: none; }

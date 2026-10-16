@@ -7,7 +7,7 @@
 <script>if (/(^|\.)rjuhsd\.school$/.test(location.hostname) || /^\/rjuhsd(?:\/|$)/.test(location.pathname)) { document.documentElement.classList.add('school-preferences'); document.title = 'Preferences — rjuhsd.school'; }</script>
 <script src="/vendor/simplewebauthn.browser.min.js?v=1" defer></script>
 <link rel="stylesheet" href="/app.css">
-<link rel="stylesheet" href="/preferences/preferences-galaxy.css?v=11">
+<link rel="stylesheet" href="/preferences/preferences-galaxy.css?v=12">
 <script src="/api.js"></script>
 <script src="/app-shell.js" defer></script>
 <script src="/sync.js"></script>
@@ -753,12 +753,12 @@
   <header class="page-head">
     <a class="school-prefs-back" href="/">← Schedule</a>
     <h1>Preferences</h1>
-    <p class="page-sub"><span class="default-prefs-copy">Theme, account, privacy, and sync settings.</span><span class="school-prefs-copy">Make rjuhsd.school look and work the way you want.</span></p>
+    <p class="page-sub"><span class="default-prefs-copy">Theme, account, privacy, and sync settings.</span><span class="school-prefs-copy">Appearance and schedule settings.</span></p>
   </header>
 
   <div class="pref-summary" aria-label="Current preference snapshot">
     <div class="status-pill"><b>Theme</b><span id="summaryTheme">Loading</span></div>
-    <div class="status-pill"><b>Homepage</b><span id="summaryHome">Dashboard</span></div>
+    <div class="status-pill"><b>Homepage</b><span id="summaryHome">Standard</span></div>
     <div class="status-pill"><b>Sync</b><span id="summarySync">Enabled</span></div>
   </div>
 
@@ -928,7 +928,7 @@
   </section>
 
   <section class="pref-section" id="effects">
-    <h2>Visual Effects</h2>
+    <h2>Background effects</h2>
     <p class="section-sub">Add some flair to your background.</p>
     <div class="control-grid">
       <div class="field">
@@ -1161,89 +1161,14 @@
 
   <section class="pref-section" id="homepage">
   <h2>Homepage</h2>
-  <p class="section-sub">Customize what appears on your homepage.</p>
-
-  <div class="field">
-    <label>Greeting Name</label>
-    <input id="greetingName" type="text" placeholder="Leave blank to use your email">
-  </div>
-
+  <p class="section-sub">Choose what appears around your greeting and page directory.</p>
   <div class="control-grid">
-    <div class="field">
-      <label>Quick Actions</label>
-      <div class="toggle-row">
-        <label class="toggle-switch">
-          <input type="checkbox" id="homeQuickToggle" checked>
-          <span class="toggle-slider"></span>
-        </label>
-        <span class="toggle-desc">Show the Start Here shortcut panel on the homepage.</span>
-      </div>
-    </div>
-
-    <div class="field">
-      <label>Member Lists</label>
-      <div class="toggle-row">
-        <label class="toggle-switch">
-          <input type="checkbox" id="homeMembersToggle" checked>
-          <span class="toggle-slider"></span>
-        </label>
-        <span class="toggle-desc">Show owner, admin, premium, and online member lists around the homepage.</span>
-      </div>
-    </div>
-
-    <div class="field">
-      <label>Compact Homepage</label>
-      <div class="toggle-row">
-        <label class="toggle-switch">
-          <input type="checkbox" id="homeCompactToggle">
-          <span class="toggle-slider"></span>
-        </label>
-        <span class="toggle-desc">Tightens the middle dashboard for smaller screens and quick scanning.</span>
-      </div>
-    </div>
-
-    <div class="field">
-      <label>Focus Search</label>
-      <div class="toggle-row">
-        <label class="toggle-switch">
-          <input type="checkbox" id="homeSearchFocusToggle">
-          <span class="toggle-slider"></span>
-        </label>
-        <span class="toggle-desc">Automatically place the cursor in homepage search after links load.</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="field">
-    <label>Clock Format</label>
-    <div class="chip-row">
-      <button class="chip active" data-clock="12" onclick="selectChip(this,'[data-clock]','activeClock')">12-hour (AM/PM)</button>
-    </div>
-  </div>
-
-  <div class="field">
-    <label>Top Games to Show</label>
-    <div class="chip-row">
-      <button class="chip" data-count="1" onclick="selectCount(this)">1</button>
-      <button class="chip" data-count="3" onclick="selectCount(this)">3</button>
-      <button class="chip active" data-count="5" onclick="selectCount(this)">5</button>
-      <button class="chip" data-count="8" onclick="selectCount(this)">8</button>
-      <button class="chip" data-count="0" onclick="selectCount(this)">Hide</button>
-    </div>
-  </div>
-
-  <div class="field">
-    <label>Pinned Games</label>
-    <p class="field-sub">Always shown at top of Most Played regardless of play count.</p>
-    <input id="pinnedSearch" type="text" placeholder="Search games to pin…" autocomplete="off">
-    <div id="pinnedResults"></div>
-    <div id="pinnedWrap" class="chip-row"></div>
-  </div>
-
-  <div id="widgetOrderList" style="display:none">
-    <div class="sort-item" draggable="true" data-widget="stats">Stats Bar</div>
-    <div class="sort-item" draggable="true" data-widget="ab">About:Blank Toggle</div>
-    <div class="sort-item" draggable="true" data-widget="games">Most Played</div>
+    <div class="field"><label for="homeQuickToggle">Shortcuts</label><div class="toggle-row"><label class="toggle-switch"><input type="checkbox" id="homeQuickToggle"><span class="toggle-slider"></span></label><span class="toggle-desc">Show the three main shortcuts for games, chat, and your computer.</span></div></div>
+    <div class="field"><label for="homeMembersToggle">People panel</label><div class="toggle-row"><label class="toggle-switch"><input type="checkbox" id="homeMembersToggle"><span class="toggle-slider"></span></label><span class="toggle-desc">Open the People panel by hovering near the left edge.</span></div></div>
+    <div class="field"><label for="homeRecentToggle">Recent pages</label><div class="toggle-row"><label class="toggle-switch"><input type="checkbox" id="homeRecentToggle"><span class="toggle-slider"></span></label><span class="toggle-desc">Show pages you recently visited on this device.</span></div></div>
+    <div class="field"><label for="homeLogoToggle">Logo animation</label><div class="toggle-row"><label class="toggle-switch"><input type="checkbox" id="homeLogoToggle"><span class="toggle-slider"></span></label><span class="toggle-desc">Let the Mitch logo drift beside hello. Reduced motion always takes priority.</span></div></div>
+    <div class="field"><label for="homeCompactToggle">Compact layout</label><div class="toggle-row"><label class="toggle-switch"><input type="checkbox" id="homeCompactToggle"><span class="toggle-slider"></span></label><span class="toggle-desc">Use smaller cards and spacing on the homepage.</span></div></div>
+    <div class="field"><label for="homeSearchFocusToggle">Focus search</label><div class="toggle-row"><label class="toggle-switch"><input type="checkbox" id="homeSearchFocusToggle"><span class="toggle-slider"></span></label><span class="toggle-desc">Place the cursor in the page directory search when the homepage opens.</span></div></div>
   </div>
   </section>
 
@@ -1949,7 +1874,7 @@ function updateSummaries() {
   var home = load(HOME_CONFIG_KEY, { showQuickActions: true, showMemberRail: true });
   var sync = load(SYNC_CONFIG_KEY, { enabled: true });
   document.getElementById('summaryTheme').textContent = theme || 'system';
-  document.getElementById('summaryHome').textContent = (home.showQuickActions === false ? 'Focused' : 'Dashboard');
+  document.getElementById('summaryHome').textContent = (home.compactHome ? 'Compact' : 'Standard');
   document.getElementById('summarySync').textContent = sync.enabled === false ? 'Manual' : 'Enabled';
 }
 
@@ -2118,7 +2043,6 @@ function setupAccordions() {
     function toggle() {
       var open = section.classList.toggle('open');
       heading.setAttribute('aria-expanded', open ? 'true' : 'false');
-      if (open && section.id === 'homepage' && typeof ensurePinnedGamesLoaded === 'function') ensurePinnedGamesLoaded();
     }
     heading.addEventListener('click', toggle);
     heading.addEventListener('keydown', function(e) {
@@ -2161,140 +2085,13 @@ function setPasswordChangeVerificationUi(type) {
   }
 }
 
-var activeClock  = '12';
 var activeLaunch = 'default';
 
 function selectChip(btn, selector, varName) {
   document.querySelectorAll(selector).forEach(function(b) { b.classList.remove('active'); });
   btn.classList.add('active');
-  if (varName === 'activeClock')  activeClock  = btn.getAttribute('data-clock');
   if (varName === 'activeLaunch') activeLaunch = btn.getAttribute('data-launch');
   saveAll();
-}
-
-var activeCount = 5;
-
-function selectCount(btn) {
-  activeCount = parseInt(btn.getAttribute('data-count'), 10);
-  document.querySelectorAll('[data-count]').forEach(function(b) { b.classList.remove('active'); });
-  btn.classList.add('active');
-  saveAll();
-}
-
-var pinnedGames = new Set();
-var _allGames = [];
-var _pinnedLoaded = false;
-var _pinnedLoading = false;
-
-async function loadPinnedGames() {
-  if (_pinnedLoaded || _pinnedLoading) return;
-  _pinnedLoading = true;
-  var c = new URLSearchParams(document.cookie.replaceAll('; ', '&'));
-  var hash = c.get('studentId') || c.get('password');
-  try {
-    var r = await fetch('/api/games', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({hash})});
-    var d = await r.json();
-    var text = d.content || '';
-    _allGames = [];
-    text.split('\n').forEach(function(line) {
-      line = line.trim();
-      if (!line) return;
-      var parts = line.split(' ');
-      if (parts.length < 3) return;
-      var href = parts[1];
-      var label = parts.slice(2).join(' ').replace(/<[^>]*>/g, '').trim();
-      if (!label || href === '/report-game.html') return;
-      _allGames.push({href, label});
-    });
-    _pinnedLoaded = true;
-  } catch(e) {
-  } finally {
-    _pinnedLoading = false;
-  }
-  renderPinnedChips();
-}
-
-function ensurePinnedGamesLoaded() {
-  if (!_pinnedLoaded && !_pinnedLoading) loadPinnedGames();
-}
-
-function renderPinnedChips() {
-  var wrap = document.getElementById('pinnedWrap');
-  wrap.innerHTML = '';
-  pinnedGames.forEach(function(href) {
-    var g = _allGames.find(function(x) { return x.href === href; });
-    if (!g) return;
-    var chip = document.createElement('button');
-    chip.className = 'chip active';
-    chip.textContent = g.label + ' ✕';
-    chip.onclick = function() { pinnedGames.delete(href); renderPinnedChips(); saveAll(); };
-    wrap.appendChild(chip);
-  });
-}
-
-function renderPinnedResults(query) {
-  var box = document.getElementById('pinnedResults');
-  if (!query) { box.style.display = 'none'; box.innerHTML = ''; return; }
-  var q = query.toLowerCase();
-  var matches = _allGames.filter(function(g) { return g.label.toLowerCase().includes(q) && !pinnedGames.has(g.href); });
-  if (!matches.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
-  box.innerHTML = '';
-  box.style.display = 'flex';
-  matches.slice(0, 8).forEach(function(g) {
-    var row = document.createElement('button');
-    row.className = 'chip';
-    row.style.cssText = 'text-align:left;width:100%;';
-    row.textContent = g.label;
-    row.onclick = function() {
-      pinnedGames.add(g.href);
-      document.getElementById('pinnedSearch').value = '';
-      box.style.display = 'none'; box.innerHTML = '';
-      renderPinnedChips();
-      saveAll();
-    };
-    box.appendChild(row);
-  });
-}
-
-document.getElementById('pinnedSearch').addEventListener('focus', ensurePinnedGamesLoaded);
-document.getElementById('pinnedSearch').addEventListener('input', function() {
-  ensurePinnedGamesLoaded();
-  renderPinnedResults(this.value.trim());
-});
-document.getElementById('pinnedSearch').addEventListener('blur', function() {
-  setTimeout(function() { var box = document.getElementById('pinnedResults'); box.style.display = 'none'; }, 150);
-});
-
-var widgetOrder = ['stats', 'ab', 'games'];
-var _dragSrc = null;
-
-function initWidgetOrder() {
-  var list = document.getElementById('widgetOrderList');
-  list.addEventListener('dragstart', function(e) {
-    _dragSrc = e.target.closest('.sort-item');
-    e.dataTransfer.effectAllowed = 'move';
-  });
-  list.addEventListener('dragover', function(e) {
-    e.preventDefault();
-    var target = e.target.closest('.sort-item');
-    if (target && target !== _dragSrc) target.classList.add('drag-over');
-  });
-  list.addEventListener('dragleave', function(e) {
-    var target = e.target.closest('.sort-item');
-    if (target) target.classList.remove('drag-over');
-  });
-  list.addEventListener('drop', function(e) {
-    e.preventDefault();
-    var target = e.target.closest('.sort-item');
-    if (!target || target === _dragSrc) return;
-    target.classList.remove('drag-over');
-    var items = Array.from(list.querySelectorAll('.sort-item'));
-    var srcIdx = items.indexOf(_dragSrc), tgtIdx = items.indexOf(target);
-    if (srcIdx < tgtIdx) list.insertBefore(_dragSrc, target.nextSibling);
-    else list.insertBefore(_dragSrc, target);
-    widgetOrder = Array.from(list.querySelectorAll('.sort-item')).map(function(el) { return el.getAttribute('data-widget'); });
-    saveAll();
-  });
 }
 
 var _saveTimer = null;
@@ -2313,22 +2110,19 @@ function saveAll() {
       newsletter:   document.getElementById('privNewsletterToggle').checked,
       blockProfile: document.getElementById('privBlockProfileToggle').checked,
     }));
-    localStorage.setItem(HOME_CONFIG_KEY, JSON.stringify({
-      topCount:         activeCount,
-      clockFormat:      activeClock,
-      greetingName:     document.getElementById('greetingName').value.trim(),
-      pinnedGames:      Array.from(pinnedGames),
-      widgetOrder:      widgetOrder,
+    localStorage.setItem(HOME_CONFIG_KEY, JSON.stringify(Object.assign(load(HOME_CONFIG_KEY, {}), {
       showQuickActions: document.getElementById('homeQuickToggle').checked,
-      showMemberRail:   document.getElementById('homeMembersToggle').checked,
-      compactHome:      document.getElementById('homeCompactToggle').checked,
-      focusSearch:      document.getElementById('homeSearchFocusToggle').checked,
-    }));
-    localStorage.setItem(DISPLAY_CONFIG_KEY, JSON.stringify({
+      showMemberRail: document.getElementById('homeMembersToggle').checked,
+      showRecent: document.getElementById('homeRecentToggle').checked,
+      animateLogo: document.getElementById('homeLogoToggle').checked,
+      compactHome: document.getElementById('homeCompactToggle').checked,
+      focusSearch: document.getElementById('homeSearchFocusToggle').checked
+    })));
+    localStorage.setItem(DISPLAY_CONFIG_KEY, JSON.stringify(Object.assign(load(DISPLAY_CONFIG_KEY, {}), {
       reduceAnimations: document.getElementById('reduceAnimToggle').checked,
-      gameLaunch:       activeLaunch,
-      customCSS:        document.getElementById('customCSS').value.trim(),
-    }));
+      gameLaunch: activeLaunch,
+      customCSS: document.getElementById('customCSS').value.trim()
+    })));
     localStorage.setItem(SYNC_CONFIG_KEY, JSON.stringify({
       enabled: document.getElementById('syncToggle').checked,
     }));
@@ -2573,34 +2367,11 @@ async function deleteAccount() {
     }).catch(function(){});
   }
 
-  var hc = load(HOME_CONFIG_KEY, {
-    topCount: 5,
-    clockFormat: '12',
-    greetingName: '',
-    showQuickActions: true,
-    showMemberRail: true,
-    compactHome: false,
-    focusSearch: false
-  });
-  activeCount = hc.topCount != null ? hc.topCount : 5;
-  var ac = document.querySelector('[data-count="' + activeCount + '"]');
-  if (ac) { document.querySelectorAll('[data-count]').forEach(function(b){b.classList.remove('active');}); ac.classList.add('active'); }
-  activeClock = '12';
-  pinnedGames = new Set(hc.pinnedGames || []);
-  widgetOrder = hc.widgetOrder || ['stats', 'ab', 'games'];
-  var wlist = document.getElementById('widgetOrderList');
-  widgetOrder.forEach(function(w) {
-    var el = wlist.querySelector('[data-widget="' + w + '"]');
-    if (el) wlist.appendChild(el);
-  });
-  initWidgetOrder();
-  var homepageSection = document.getElementById('homepage');
-  if (homepageSection && homepageSection.classList.contains('open')) ensurePinnedGamesLoaded();
-  var acl = document.querySelector('[data-clock="' + activeClock + '"]');
-  if (acl) { document.querySelectorAll('[data-clock]').forEach(function(b){b.classList.remove('active');}); acl.classList.add('active'); }
-  document.getElementById('greetingName').value = hc.greetingName || '';
+  var hc = load(HOME_CONFIG_KEY, {});
   document.getElementById('homeQuickToggle').checked = hc.showQuickActions !== false;
   document.getElementById('homeMembersToggle').checked = hc.showMemberRail !== false;
+  document.getElementById('homeRecentToggle').checked = hc.showRecent !== false;
+  document.getElementById('homeLogoToggle').checked = hc.animateLogo !== false;
   document.getElementById('homeCompactToggle').checked = !!hc.compactHome;
   document.getElementById('homeSearchFocusToggle').checked = !!hc.focusSearch;
 
@@ -2634,7 +2405,7 @@ async function deleteAccount() {
 
   ['vfxSnowToggle','vfxStarsToggle','vfxRainToggle','vfxParticlesToggle',
    'privHideOnlineToggle','privStealthToggle','privNoHistoryToggle','privNewsletterToggle','privBlockProfileToggle',
-   'syncToggle','homeQuickToggle','homeMembersToggle','homeCompactToggle','homeSearchFocusToggle',
+   'syncToggle','homeQuickToggle','homeMembersToggle','homeRecentToggle','homeLogoToggle','homeCompactToggle','homeSearchFocusToggle',
    'prefCanvasLock','prefQuickAccess','prefDailyBonus'].forEach(function(id) {
     document.getElementById(id).addEventListener('change', saveAll);
   });
@@ -2645,7 +2416,7 @@ async function deleteAccount() {
     applyAppearanceLive(this.checked ? 'Animations reduced.' : 'Animations restored.');
     saveAll();
   });
-  ['greetingName','customCSS'].forEach(function(id) {
+  ['customCSS'].forEach(function(id) {
     document.getElementById(id).addEventListener('input', debouncedSave);
   });
   document.getElementById('exportPrefsBtn').onclick = exportPreferences;

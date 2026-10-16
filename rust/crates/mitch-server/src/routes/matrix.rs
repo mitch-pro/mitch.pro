@@ -19,6 +19,8 @@ use std::sync::{Arc, Mutex, OnceLock};
 use crate::hosts::request_host;
 use crate::state::AppState;
 
+mod direct;
+
 /// Browser-like UA for fetching GIFs/stickers from Tenor/Giphy — their CDNs
 /// hotlink-block or throttle reqwest's default "reqwest/x.y.z" UA.
 const GIF_FETCH_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36";
@@ -2761,6 +2763,9 @@ pub async fn handle_api(
         return Some(cors_response(StatusCode::NO_CONTENT, Bytes::new(), None));
     }
 
+    if path == "/api/matrix/dm" && method == Method::POST {
+        return Some(direct::open(state, headers, body_bytes).await);
+    }
     if path == "/api/matrix/sso-status" && method == Method::GET {
         return Some(api_sso_status(state, headers).await);
     }
@@ -5669,7 +5674,7 @@ pub fn add_matrix_notification(state: &AppState, target_norm: &str, notif: &Valu
             .unwrap_or("Matrix Chat");
         let detail = notif.get("detail").and_then(|v| v.as_str()).unwrap_or("");
         let enc_room = urlencoding_encode(room_id);
-        let default_url = format!("/matrix/#/room/{enc_room}");
+        let default_url = format!("/matrix/home/{enc_room}/");
         let url = notif
             .get("url")
             .and_then(|v| v.as_str())
@@ -6068,7 +6073,7 @@ async fn dispatch_matrix_message_notifications(
     };
 
     let enc_room = urlencoding_encode(room_id);
-    let notif_url = format!("/matrix/#/room/{enc_room}");
+    let notif_url = format!("/matrix/home/{enc_room}/");
 
     let vapid_public = std::env::var("VAPID_PUBLIC_KEY").unwrap_or_default();
 
@@ -6176,7 +6181,7 @@ async fn dispatch_matrix_invite_notifications(
     let notif_title = "Chat Room Invite".to_string();
     let notif_body = format!("{sender_display_name} invited you to join {room_title}");
     let enc_room = urlencoding_encode(room_id);
-    let notif_url = format!("/matrix/#/room/{enc_room}");
+    let notif_url = format!("/matrix/home/{enc_room}/");
 
     add_matrix_notification(
         state,
@@ -6268,7 +6273,7 @@ async fn dispatch_matrix_call_notifications(
     };
 
     let enc_room = urlencoding_encode(room_id);
-    let notif_url = format!("/matrix/#/room/{enc_room}");
+    let notif_url = format!("/matrix/home/{enc_room}/");
 
     let vapid_public = std::env::var("VAPID_PUBLIC_KEY").unwrap_or_default();
 

@@ -1009,6 +1009,7 @@ pub(crate) async fn handle(
         // time) — this just builds the VM against it.
         let result = crate::proxmox_desktop::desktop()
             .create_from_iso(&crate::proxmox_desktop::CreateFromIsoParams {
+                owner_resources: crate::routes::vm::can_customize_owner_vm(state, &actor),
                 vmid: Some(vmid),
                 hostname: hostname.clone(),
                 cpu_cores: Some(cpu_cores),

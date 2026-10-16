@@ -822,6 +822,7 @@ pub async fn handle(
         };
 
         let clone_params = crate::proxmox_desktop::CloneDesktopParams {
+            owner_resources: false,
             template_vmid: Some(template_vmid as f64),
             vmid: Some(vmid),
             hostname: hostname.clone(),
