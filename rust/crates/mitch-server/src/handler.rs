@@ -73,6 +73,8 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/onboarding-theme.js",
     "/media/site-tour-v1.mp4",
     "/media/site-tour-poster-v1.webp",
+    "/media/site-tour-v2.mp4",
+    "/media/site-tour-poster-v2.webp",
     "/guest-preview.js",
     "/home-friends.js",
     "/home.css",
@@ -1341,10 +1343,11 @@ pub async fn handle(
     // errResp(405). Everything before this point — CSRF, rate limits, ban
     // gates, the password gate — applies to every method, which is why a
     // CSRF-exempt upload POST surfaces the password gate in dev, not 405.
-    if method == Method::HEAD && path == crate::static_files::SITE_TOUR_PATH {
+    if method == Method::HEAD && crate::static_files::SITE_TOUR_PATHS.contains(&path.as_str()) {
         return crate::static_files::serve_tour_video(
             &state.static_cache,
             &state.cfg.webroot,
+            &path,
             headers,
             true,
         );
@@ -1837,10 +1840,11 @@ pub async fn handle(
 
     // The tour supports byte ranges so native video controls and chapters
     // can seek without downloading the entire recording first.
-    if path == crate::static_files::SITE_TOUR_PATH {
+    if crate::static_files::SITE_TOUR_PATHS.contains(&path.as_str()) {
         return crate::static_files::serve_tour_video(
             &state.static_cache,
             &webroot,
+            &path,
             headers,
             false,
         );

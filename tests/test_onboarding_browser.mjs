@@ -32,10 +32,10 @@ try {
     await delay(150);
   }
   assert(ready, 'Build the local Rust server before running this test');
-  for (const path of ['/faq/', '/faq.html', '/faq/index.html', '/privacy/', '/privacy.html', '/use-agreement/', '/use-agreement.html', '/onboarding.css?v=3', '/onboarding.js?v=3', '/media/site-tour-poster-v1.webp', '/rjuhsd-assets/pathways-logo.png', '/rjuhsd-assets/rosevilleadult-logo.png', '/rjuhsd-assets/district-logo.png']) {
+  for (const path of ['/faq/', '/faq.html', '/faq/index.html', '/privacy/', '/privacy.html', '/use-agreement/', '/use-agreement.html', '/onboarding.css?v=4', '/onboarding.js?v=4', '/enroll/enroll.css?v=1', '/media/site-tour-poster-v2.webp', '/rjuhsd-assets/pathways-logo.png', '/rjuhsd-assets/rosevilleadult-logo.png', '/rjuhsd-assets/district-logo.png']) {
     const response = await fetch(base + path);
     assert.equal(response.status, 200, `${path} should be public`);
-    assert(!response.url.includes('/enroll/'), `${path} must not redirect to login`);
+    assert(new URL(response.url).pathname !== '/enroll/', `${path} must not redirect to login`);
   }
   const helpAlias = await fetch(base + '/faq/', { redirect: 'manual' });
   assert.equal(helpAlias.status, 302);
@@ -44,17 +44,21 @@ try {
     const response = await fetch(base + path, { redirect: 'manual' });
     assert([302, 401, 403].includes(response.status), `${path} must remain protected`);
   }
-  const range = await fetch(base + '/media/site-tour-v1.mp4', { headers: { Range: 'bytes=0-99' } });
-  assert.equal(range.status, 206);
-  assert.match(range.headers.get('content-range'), /^bytes 0-99\/\d+$/);
-  assert.equal((await range.arrayBuffer()).byteLength, 100);
-  const head = await fetch(base + '/media/site-tour-v1.mp4', { method: 'HEAD' });
-  assert.equal(head.status, 200);
-  assert.equal(head.headers.get('accept-ranges'), 'bytes');
-  const suffix = await fetch(base + '/media/site-tour-v1.mp4', { headers: { Range: 'bytes=-50' } });
-  assert.equal(suffix.status, 206);
-  assert.equal((await suffix.arrayBuffer()).byteLength, 50);
-  assert.equal((await fetch(base + '/media/site-tour-v1.mp4', { headers: { Range: 'bytes=999999999-' } })).status, 416);
+  for (const version of [1, 2]) {
+    const path = '/media/site-tour-v' + version + '.mp4';
+    const range = await fetch(base + path, { headers: { Range: 'bytes=0-99' }, redirect: 'manual' });
+    assert.equal(range.status, 206, path + ' must support seeking without a login');
+    assert.match(range.headers.get('content-type'), /^video\/mp4/);
+    assert.match(range.headers.get('content-range'), /^bytes 0-99\/\d+$/);
+    assert.equal((await range.arrayBuffer()).byteLength, 100);
+    const head = await fetch(base + path, { method: 'HEAD' });
+    assert.equal(head.status, 200);
+    assert.equal(head.headers.get('accept-ranges'), 'bytes');
+    const suffix = await fetch(base + path, { headers: { Range: 'bytes=-50' } });
+    assert.equal(suffix.status, 206);
+    assert.equal((await suffix.arrayBuffer()).byteLength, 50);
+    assert.equal((await fetch(base + path, { headers: { Range: 'bytes=999999999-' } })).status, 416);
+  }
 
   browser = await chromium.launch({ channel: 'chromium', headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, serviceWorkers: 'block', reducedMotion: 'reduce' });
@@ -95,42 +99,52 @@ try {
   for (const [name, path] of [['landing', '/'], ['signup', '/enroll/?mode=signup'], ['help', '/faq/']]) {
     await page.goto(base + path);
     await page.evaluate(() => document.fonts.ready);
-    for (const width of [320, 390, 768, 1440]) {
+    for (const width of [320, 390, 768, 1024, 1440]) {
       await page.setViewportSize({ width, height: width < 768 ? 844 : 1000 });
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${name} must fit at ${width}px`);
       await page.screenshot({ path: `${out}/${name}-${width}.png`, fullPage: width === 1440 });
     }
   }
   await page.goto(base + '/');
-  assert.match(await page.locator('.ob-hero-copy').innerText(), /RJUHSD STUDENTS/);
-  assert.equal(await page.locator('.ob-school-card').count(), 8);
+  assert.match(await page.locator('.hero-copy').innerText(), /student community for RJUHSD/);
+  assert.equal(await page.locator('.school-card').count(), 8);
   assert.equal(await page.locator('[data-school-games-link]').getAttribute('href'), 'https://mitchdog.com/game-portal/');
-  assert.equal(await page.locator('.ob-school-site-brand').getAttribute('href'), 'https://rjuhsd.school/');
-  for (const mark of await page.locator('.ob-school-card img').all()) {
+  assert.equal(await page.locator('.school-site-link').getAttribute('href'), 'https://rjuhsd.school/');
+  for (const mark of await page.locator('.school-card img').all()) {
     await mark.scrollIntoViewIfNeeded();
     await mark.evaluate(img => img.complete && img.naturalWidth > 0 || new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; }));
     assert(await mark.evaluate(img => img.naturalWidth > 0), 'Every school logo must load');
   }
-  assert.equal(await page.locator('.ob-campus-sticker').first().evaluate(el => getComputedStyle(el).animationName), 'none');
-  await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await page.goto(base + '/');
-  assert.equal(await page.locator('.ob-campus-sticker').first().evaluate(el => getComputedStyle(el).animationName), 'ob-logo-float');
-  await page.locator('.ob-school-games').scrollIntoViewIfNeeded();
-  await page.waitForFunction(() => !document.querySelector('.ob-school-games').classList.contains('ob-reveal-pending'));
-  await page.emulateMedia({ reducedMotion: 'reduce' });
+  assert.equal(await page.locator('.ob-campus-orbit,.ob-video-bar,.ob-eyebrow').count(), 0);
   assert.equal(await page.locator('#site-tour').getAttribute('preload'), 'metadata');
-  await page.locator('[data-tour-time="20"]').click();
-  await page.waitForFunction(() => { const v = document.getElementById('site-tour'); return !v.paused && v.currentTime >= 20 && v.readyState >= 2; });
-  assert(await page.locator('#site-tour').evaluate(v => v.videoWidth > 0 && !v.muted));
-  await page.locator('[data-tour-time="120"]').click();
-  await page.waitForFunction(() => document.getElementById('site-tour').currentTime >= 120);
-  await page.locator('#site-tour').evaluate(v => v.pause());
+  assert.equal(await page.locator('#site-tour').getAttribute('autoplay'), null);
+  assert.equal(await page.locator('#site-tour source').getAttribute('src'), '/media/site-tour-v2.mp4');
+  assert.equal(await page.locator('#site-tour').getAttribute('poster'), '/media/site-tour-poster-v2.webp');
+  await page.waitForFunction(() => Number.isFinite(document.getElementById('site-tour').duration));
+  const duration = await page.locator('#site-tour').evaluate(video => video.duration);
+  assert(duration > 287 && duration < 289, 'The full new recording should be used');
+  assert.equal(await page.locator('#tour-duration').innerText(), '4:47');
+  assert(await page.locator('#site-tour').evaluate(video => video.paused));
+  const chapters = await page.locator('[data-tour-time]').evaluateAll(buttons => buttons.map(button => Number(button.dataset.tourTime)));
+  assert.deepEqual(chapters, [0,10,30,55,70,110,145,230,250,275]);
+  for (const time of chapters) {
+    await page.locator('[data-tour-time="' + time + '"]').click();
+    await page.waitForFunction(time => {
+      const video = document.getElementById('site-tour');
+      return !video.paused && video.currentTime >= time && video.currentTime < time + 4 && video.readyState >= 2;
+    }, time);
+    await page.waitForFunction(time => document.querySelector('[data-tour-time="' + time + '"]').getAttribute('aria-current') === 'true', time);
+    await page.locator('#site-tour').evaluate(video => video.pause());
+  }
+  assert(await page.locator('#site-tour').evaluate(video => video.videoWidth === 1920 && video.videoHeight === 968));
+  assert.equal(await page.locator('#tour-status').innerText(), '');
+  await page.screenshot({ path: out + '/tour-chapters.png' });
   await page.getByText('Do I have to pay for a VM?', { exact: true }).click();
-  assert(await page.locator('.ob-faq details').first().getAttribute('open') !== null);
+  assert(await page.locator('.help-list details').first().getAttribute('open') !== null);
 
   await page.goto(base + '/enroll/?mode=signup');
-  assert.equal(await page.locator('.ob-auth-campus-marks img').count(), 8);
-  assert.equal(await page.locator('.ob-auth-school-site').getAttribute('href'), 'https://rjuhsd.school/');
+  assert.equal(await page.locator('video,.ob-auth-story').count(), 0);
+  assert.equal(await page.locator('.enroll-main').count(), 1);
   await page.clock.install();
   assert(await page.locator('#pane-invite').isVisible());
   assert(await page.locator('#btn').isDisabled());
@@ -178,7 +192,7 @@ try {
   loginMode = '2fa';
   await page.locator('#login-btn').click();
   await page.locator('#login-2fa-panel').waitFor({ state: 'visible' });
-  assert.equal(await page.locator('#login-2fa-label').innerText(), 'Authenticator Code');
+  assert.equal(await page.locator('#login-2fa-label').innerText(), 'Authenticator code');
   await page.locator('#login-2fa-code').fill('654321');
   await page.locator('#login-2fa-btn').click();
   await page.waitForFunction(() => document.getElementById('login-msg').textContent.includes('Check your authenticator'));
@@ -208,7 +222,11 @@ try {
   for (const [name, path] of [['landing', '/'], ['signup', '/enroll/?mode=signup'], ['help', '/faq/']]) {
     await page.goto(base + path);
     assert(await page.locator('html').evaluate(h => h.classList.contains('theme-light')));
-    await page.screenshot({ path: `${out}/${name}-light.png`, fullPage: false });
+    for (const width of [320,390,768,1024,1440]) {
+      await page.setViewportSize({width,height:width < 768 ? 844 : 1000});
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), name + ' must fit light mode at ' + width + 'px');
+      if ([390,1440].includes(width)) await page.screenshot({path: out + '/' + name + '-light-' + width + '.png'});
+    }
   }
   assert.deepEqual(errors, [], 'Pages must not throw JavaScript errors');
   console.log('PASS: public help and policy routes; protected account routes; video ranges/playback/chapters; responsive dark/light layouts; signup/verification/resend; login/2FA; reset; invite prefill; keyboard tabs; CSRF headers.');

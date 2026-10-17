@@ -21,7 +21,7 @@ use axum::response::Response;
 use crate::errors::err_resp;
 
 pub const STATIC_CACHE_REVALIDATE_MS: u128 = 30 * 60 * 1000;
-pub const SITE_TOUR_PATH: &str = "/media/site-tour-v1.mp4";
+pub const SITE_TOUR_PATHS: &[&str] = &["/media/site-tour-v1.mp4", "/media/site-tour-v2.mp4"];
 
 /// Single byte ranges for the public tour; unsupported range units and
 /// multipart requests are ignored, while unsatisfiable byte ranges are 416.
@@ -60,10 +60,11 @@ fn video_byte_range(raw: &str, size: usize) -> Result<Option<(usize, usize)>, ()
 pub fn serve_tour_video(
     cache: &StaticCache,
     webroot: &Path,
+    path: &str,
     headers: &axum::http::HeaderMap,
     head: bool,
 ) -> Response {
-    let Some(file) = safe_webroot_path(webroot, SITE_TOUR_PATH) else {
+    let Some(file) = safe_webroot_path(webroot, path) else {
         return err_resp(403, None, None);
     };
     let Some(entry) = cache.get(&file) else {
