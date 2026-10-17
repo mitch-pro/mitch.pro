@@ -382,12 +382,12 @@ fn leaderboard_payload(rows: &[Value], metric: &str, query: &str, is_tester: boo
                     .as_str()
                     .unwrap_or("")
                     .to_lowercase()
-                    .contains(&query)
+                    .contains(query)
                 || r["handle"]
                     .as_str()
                     .unwrap_or("")
                     .to_lowercase()
-                    .contains(&query)
+                    .contains(query)
         })
         .collect();
     json!({
