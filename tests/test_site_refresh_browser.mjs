@@ -41,7 +41,15 @@ try {
   }
  }
  await page.setViewportSize({width:1440,height:1000});
- await page.goto(base+'/enroll/');assert(await page.locator('video').evaluate(el=>Boolean(el.controls&&el.compareDocumentPosition(document.querySelector('#account-access'))&Node.DOCUMENT_POSITION_FOLLOWING)));
+ await page.goto(base+'/enroll/');
+ assert.equal(await page.locator('video,.ob-auth-story').count(),0,'Account access should open directly on the form.');
+ for(const width of [320,390,1440]) {
+  await page.setViewportSize({width,height:844});
+  const login=await page.locator('#login-btn').boundingBox();
+  assert(login && login.y+login.height<844,'Login should be visible without scrolling at '+width+'px.');
+  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Account access overflows at '+width+'px.');
+ }
+ await page.setViewportSize({width:1440,height:1000});
  await page.goto(base+'/coins/?v=2');assert.equal(await page.title(),'MitchCoins — mitch.pro');assert.equal(await page.locator('.coin-destination').count(),4);
  const inventory=await get('/api/me/inventory');
  if(!inventory.cosmetics?.colors?.includes('neon_purple')) {

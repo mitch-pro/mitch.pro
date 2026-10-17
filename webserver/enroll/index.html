@@ -3,22 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Join or log in — mitch.pro</title>
-<meta name="description" content="Join the free student community for RJUHSD: games, friends, cloud Linux, Matrix chat, and school tools.">
-<meta name="keywords" content="mitch.pro signup, mitch.pro login, free cloud Linux, games, Matrix chat">
+<title>Log in — mitch.pro</title>
+<meta name="description" content="Log in to mitch.pro or create an account.">
 <link rel="canonical" href="https://mitchdog.com/enroll/" />
 
 
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://mitchdog.com/enroll/" />
-<meta property="og:title" content="Join or log in — mitch.pro" />
-<meta property="og:description" content="Join mitch.pro for free cloud Linux computers, games, Matrix chat, and community. No invitation needed." />
+<meta property="og:title" content="Log in — mitch.pro" />
+<meta property="og:description" content="Log in to mitch.pro or create an account." />
 <meta property="og:image" content="https://mitchdog.com/icon-512.png" />
 
-<link rel="stylesheet" href="/onboarding.css?v=3">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Space+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/enroll/enroll.css?v=1">
 <script src="/onboarding-theme.js?v=2"></script>
 <script src="/api.js"></script>
 <script src="/vendor/simplewebauthn.browser.min.js?v=1" defer></script>
@@ -29,7 +25,14 @@
 </head>
 <body class="enroll-page onboarding-page mitch-design" data-shell="off">
   <a class="ob-skip" href="#account-access">Skip to account access</a>
-  <header class="ob-nav ob-width"><a class="ob-brand" href="/" aria-label="mitch.pro home"><img src="/icon-192.png" width="32" height="32" alt=""><span>mitch<span class="ob-brand-dot">.pro</span></span></a><nav class="ob-nav-links" aria-label="Main navigation"><a href="/#schools">Your school</a><a href="https://rjuhsd.school/">RJUHSD.school </a><a href="/#help">Help</a></nav><div class="ob-nav-actions"><button class="ob-theme-toggle" type="button" data-theme-toggle aria-label="Switch to light mode" aria-pressed="false">◐</button><a class="ob-text-link" href="/">Back home </a></div></header>
+  <header class="enroll-header">
+    <a class="enroll-brand" href="/" aria-label="mitch.pro home"><img src="/icon-192.png" width="28" height="28" alt=""><span>mitch<span class="brand-dot">.pro</span></span></a>
+    <nav aria-label="Main navigation">
+      <a href="/">Home</a>
+      <a href="/#help">Help</a>
+      <button class="ob-theme-toggle" type="button" data-theme-toggle aria-label="Switch to light mode" aria-pressed="false">◐</button>
+    </nav>
+  </header>
 <div class="dev-test-access" id="dev-test-access" hidden>
     <button id="dev-test-btn" type="button" onclick="activateDevTestAccess()">
       <span class="dev-test-dot" aria-hidden="true"></span>
@@ -38,24 +41,10 @@
     </button>
     <div id="dev-test-msg" role="status" aria-live="polite"></div>
   </div>
-  <section class="signup-tour ob-width" aria-label="Website video tour"><video controls playsinline preload="metadata" poster="/media/site-tour-poster-v1.webp" aria-label="Tour of games, chat, and cloud Linux"><source src="/media/site-tour-v1.mp4?v=2" type="video/mp4"></video></section>
-  <main class="ob-auth-layout ob-width">
-    <aside class="ob-auth-story" aria-labelledby="join-title">
-
-      <h1 id="join-title">Your account</h1>
-      <p>Join students across RJUHSD for games, friends, school tools, and a free cloud computer.</p>
-      <div class="ob-auth-campus-marks" aria-label="RJUHSD schools"><img src="/rjuhsd-assets/woodcreek-logo.png" alt="Woodcreek" width="38" height="38"><img src="/rjuhsd-assets/roseville-logo.png" alt="Roseville" width="38" height="38"><img src="/rjuhsd-assets/granitebay-logo.png" alt="Granite Bay" width="38" height="38"><img src="/rjuhsd-assets/antelope-logo.png" alt="Antelope" width="38" height="38"><img src="/rjuhsd-assets/westpark-logo.png" alt="West Park" width="38" height="38"><img src="/rjuhsd-assets/oakmont-logo.png" alt="Oakmont" width="38" height="38"><img src="/rjuhsd-assets/pathways-logo.png" alt="Roseville Pathways" width="38" height="38"><img src="/rjuhsd-assets/rosevilleadult-logo.png" alt="Roseville Adult School" width="38" height="38"></div>
-      <a class="ob-auth-school-site" href="https://rjuhsd.school/"><img src="/rjuhsd-assets/icon-192.png" alt="" width="42" height="42"><span><b>RJUHSD.school</b><small>Bell schedules, live countdowns &amp; school tools.</small></span></a>
-      <ul class="ob-auth-benefits">
-        <li><div><b>Free cloud Linux</b><small>A desktop and terminal in your browser. No payment required.</small></div></li>
-        <li><div><b>Games, friends, and Matrix chat</b><small>Play games and talk with friends.</small></div></li>
-        <li><div><b>Settings and progress</b><small>Profile cosmetics, themes, rewards, and supported progress sync.</small></div></li>
-      </ul>
-    </aside>
-
+  <main class="enroll-main">
     <section class="auth-panel" id="account-access" aria-label="Account access">
       <div class="auth-tabs" role="tablist" aria-label="Choose account action">
-        <button class="auth-tab-btn active" id="tab-login" onclick="switchTab('login')" role="tab" aria-selected="true" aria-controls="pane-login" type="button">Sign in</button>
+        <button class="auth-tab-btn active" id="tab-login" onclick="switchTab('login')" role="tab" aria-selected="true" aria-controls="pane-login" type="button">Log in</button>
         <button class="auth-tab-btn" id="tab-invite" onclick="switchTab('invite')" role="tab" aria-selected="false" aria-controls="pane-invite" type="button">Create account</button>
         <button class="auth-tab-btn" id="tab-reset" onclick="switchTab('reset')" role="tab" aria-selected="false" aria-controls="pane-reset" type="button">Reset password</button>
       </div>
@@ -63,24 +52,23 @@
 
       <div class="tab-pane active" id="pane-login" role="tabpanel" aria-labelledby="tab-login">
         <div class="panel-head">
-          <h2>Welcome back</h2>
-          <p>Log in with your email or username and password.</p>
+          <h1>Log in</h1>
         </div>
-        <label class="field-label" for="login-email">Email or Username</label>
-        <input id="login-email" type="text" autocomplete="username" placeholder="your@email.com or username">
+        <label class="field-label" for="login-email">Email or username</label>
+        <input id="login-email" type="text" autocomplete="username" autocapitalize="none" spellcheck="false">
 
         <label class="field-label" for="login-password">Password</label>
-        <div class="ob-password-wrap"><input id="login-password" type="password" autocomplete="current-password" placeholder="••••••••"><button class="ob-password-toggle" type="button" aria-controls="login-password" aria-label="Show password" aria-pressed="false">Show</button></div>
+        <div class="ob-password-wrap"><input id="login-password" type="password" autocomplete="current-password"><button class="ob-password-toggle" type="button" aria-controls="login-password" aria-label="Show password" aria-pressed="false">Show</button></div>
 
-        <a class="forgot-link" href="javascript:void(0)" onclick="switchTab('reset')">Forgot password?</a>
+        <button class="forgot-link" type="button" onclick="switchTab('reset')">Forgot password?</button>
 
-        <button id="login-btn" class="btn-primary" type="button" onclick="login()">Log In</button>
-        <button id="passkey-btn" class="btn-primary" type="button" onclick="loginWithPasskey()" style="margin-top:10px;">Use a passkey instead</button>
+        <button id="login-btn" class="btn-primary" type="button" onclick="login()">Log in</button>
+        <button id="passkey-btn" class="btn-primary" type="button" onclick="loginWithPasskey()">Use a passkey</button>
         <div id="login-msg" role="status" aria-live="polite" aria-atomic="true"></div>
         <div id="login-2fa-panel" style="display:none;">
-          <label class="field-label" id="login-2fa-label" for="login-2fa-code">Verification Code</label>
+          <label class="field-label" id="login-2fa-label" for="login-2fa-code">Verification code</label>
           <input id="login-2fa-code" class="code-input" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" maxlength="6">
-          <button id="login-2fa-btn" class="btn-primary" type="button" onclick="verifyLogin2fa()">Verify Code</button>
+          <button id="login-2fa-btn" class="btn-primary" type="button" onclick="verifyLogin2fa()">Verify code</button>
         </div>
       </div>
 
@@ -88,14 +76,14 @@
       <div class="tab-pane" id="pane-invite" role="tabpanel" aria-labelledby="tab-invite">
         <div id="invite-step-1">
           <div class="panel-head">
-            <h2 id="invite-title">Make yourself at home.</h2>
-            <p id="invite-desc">Start with your email and a password. We’ll send a code to verify it. No invitation needed.</p>
+            <h1 id="invite-title">Create account</h1>
+            <p id="invite-desc">We’ll email you a verification code.</p>
           </div>
-          <label class="field-label" for="email">Email Address</label>
+          <label class="field-label" for="email">Email address</label>
           <input id="email" type="email" autocomplete="email" placeholder="your@email.com">
 
-          <label class="field-label" for="signup-password">Password · 8 characters or more</label>
-          <div class="ob-password-wrap"><input id="signup-password" type="password" autocomplete="new-password" placeholder="••••••••"><button class="ob-password-toggle" type="button" aria-controls="signup-password" aria-label="Show password" aria-pressed="false">Show</button></div>
+          <label class="field-label" for="signup-password">Password <span class="field-hint">(at least 8 characters)</span></label>
+          <div class="ob-password-wrap"><input id="signup-password" type="password" autocomplete="new-password"><button class="ob-password-toggle" type="button" aria-controls="signup-password" aria-label="Show password" aria-pressed="false">Show</button></div>
 
           <div id="signup-password-strength-container" class="pw-strength">
             <div class="pw-strength-bars">
@@ -108,7 +96,7 @@
           </div>
 
           <label class="field-label" for="signup-confirm-password">Confirm password</label>
-          <div class="ob-password-wrap"><input id="signup-confirm-password" type="password" autocomplete="new-password" placeholder="••••••••"><button class="ob-password-toggle" type="button" aria-controls="signup-confirm-password" aria-label="Show password" aria-pressed="false">Show</button></div>
+          <div class="ob-password-wrap"><input id="signup-confirm-password" type="password" autocomplete="new-password"><button class="ob-password-toggle" type="button" aria-controls="signup-confirm-password" aria-label="Show password" aria-pressed="false">Show</button></div>
 
           <details class="optional-details">
             <summary>Add profile details <small>(optional)</small></summary>
@@ -121,7 +109,7 @@
 
               <div class="field-grid">
                 <div>
-                  <label class="field-label" for="signup-grad-year">Graduation Year</label>
+                  <label class="field-label" for="signup-grad-year">Graduation year</label>
                   <select id="signup-grad-year"></select>
                 </div>
                 <div>
@@ -145,7 +133,7 @@
                 <option value="Other">Other</option>
               </select>
 
-              <label class="field-label" for="signup-referral-details">Referral Details</label>
+              <label class="field-label" for="signup-referral-details">Referral details</label>
               <input id="signup-referral-details" type="text" placeholder="Optional">
             </div>
           </details>
@@ -159,37 +147,36 @@
             </label>
           </div>
 
-          <button id="btn" class="btn-primary" type="button" onclick="submit()" disabled>Create free account</button>
-          <p class="ob-form-note">No payment details. Profile details are optional.</p>
+          <button id="btn" class="btn-primary" type="button" onclick="submit()" disabled>Create account</button>
 
           <div id="support-actions" style="display:none;">
-            <button id="resend-btn" class="btn" type="button" onclick="submit(true)">Didn't get email? (Wait 30s)</button>
+            <button id="resend-btn" class="btn" type="button" onclick="submit(true)">Resend code (wait 30s)</button>
             <br>
-            <a href="javascript:void(0)" id="no-email-link" onclick="showNoEmailForm()">Still not getting it? Apply for a manual account.</a>
+            <a href="javascript:void(0)" id="no-email-link" onclick="showNoEmailForm()">Can’t receive the email? Request a manual account.</a>
           </div>
 
           <div id="no-email-form" style="display:none;">
-            <h3>Manual Account Request</h3>
-            <p>If your school blocks our emails, you can apply for a manual bypass. Briefly state why you need access.</p>
+            <h3>Request a manual account</h3>
+            <p>If you can’t receive our emails, tell us why you need a manual account.</p>
             <textarea id="no-email-reason" placeholder="Brief reason..."></textarea>
-            <button class="btn-primary" type="button" onclick="applyNoEmail()">Submit Bypass Request</button>
+            <button class="btn-primary" type="button" onclick="applyNoEmail()">Send request</button>
           </div>
         </div>
 
         <div id="invite-step-2" style="display:none;">
           <div class="panel-head">
-            <h2>Verify email</h2>
+            <h1>Verify email</h1>
             <p>Enter the 6-digit code sent to your email to complete registration.</p>
           </div>
           <div class="warning-alert">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            <span><strong>Time sensitive:</strong> Your code expires in 30 minutes. Check your spam folder, or use Resend below for a new code.</span>
+            <span>Your code expires in 30 minutes. Check your spam folder if you don’t see the email.</span>
           </div>
 
-          <label class="field-label" for="token">6-Digit Verification Code</label>
+          <label class="field-label" for="token">Verification code</label>
           <input id="token" class="code-input" type="text" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]*" placeholder="123456" maxlength="6">
 
-          <button id="tbtn" class="btn-primary" type="button" onclick="verifySignup()">Complete Sign Up</button>
+          <button id="tbtn" class="btn-primary" type="button" onclick="verifySignup()">Verify email</button>
           <div id="tmsg" role="status" aria-live="polite" aria-atomic="true"></div>
         </div>
 
@@ -200,30 +187,30 @@
       <div class="tab-pane" id="pane-reset" role="tabpanel" aria-labelledby="tab-reset">
         <div id="reset-step-1">
           <div class="panel-head">
-            <h2>Reset password</h2>
-            <p>Enter your email to receive a 6-digit reset code.</p>
+            <h1>Reset password</h1>
+            <p>We’ll send a reset code to your email.</p>
           </div>
-          <label class="field-label" for="reset-email">Email Address</label>
+          <label class="field-label" for="reset-email">Email address</label>
           <input id="reset-email" type="email" autocomplete="email" placeholder="your@email.com">
 
-          <button id="reset-request-btn" class="btn-primary" type="button" onclick="requestReset()">Send Reset Code</button>
+          <button id="reset-request-btn" class="btn-primary" type="button" onclick="requestReset()">Send reset code</button>
         </div>
 
         <div id="reset-step-2" style="display:none;">
           <div class="panel-head">
-            <h2>Enter reset code</h2>
+            <h1>Enter reset code</h1>
             <p>Use your 6-digit reset code to set a new password.</p>
           </div>
           <div class="warning-alert">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            <span><strong>E2E secure chat warning:</strong> Resetting your password derives new encryption keys. <strong>You will lose access to all previously encrypted secure chats.</strong></span>
+            <span>Resetting your password will make your previous encrypted chats inaccessible.</span>
           </div>
 
-          <label class="field-label" for="reset-token">6-Digit Reset Code</label>
+          <label class="field-label" for="reset-token">Reset code</label>
           <input id="reset-token" class="code-input" type="text" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]*" placeholder="123456" maxlength="6">
 
-          <label class="field-label" for="reset-password">New Password (min 8 chars)</label>
-          <div class="ob-password-wrap"><input id="reset-password" type="password" autocomplete="new-password" placeholder="••••••••"><button class="ob-password-toggle" type="button" aria-controls="reset-password" aria-label="Show password" aria-pressed="false">Show</button></div>
+          <label class="field-label" for="reset-password">New password <span class="field-hint">(at least 8 characters)</span></label>
+          <div class="ob-password-wrap"><input id="reset-password" type="password" autocomplete="new-password"><button class="ob-password-toggle" type="button" aria-controls="reset-password" aria-label="Show password" aria-pressed="false">Show</button></div>
 
           <div id="reset-password-strength-container" class="pw-strength">
             <div class="pw-strength-bars">
@@ -235,17 +222,19 @@
             <div id="reset-strength-text" class="pw-strength-text"></div>
           </div>
 
-          <label class="field-label" for="reset-confirm-password">Confirm New Password</label>
-          <div class="ob-password-wrap"><input id="reset-confirm-password" type="password" autocomplete="new-password" placeholder="••••••••"><button class="ob-password-toggle" type="button" aria-controls="reset-confirm-password" aria-label="Show password" aria-pressed="false">Show</button></div>
+          <label class="field-label" for="reset-confirm-password">Confirm new password</label>
+          <div class="ob-password-wrap"><input id="reset-confirm-password" type="password" autocomplete="new-password"><button class="ob-password-toggle" type="button" aria-controls="reset-confirm-password" aria-label="Show password" aria-pressed="false">Show</button></div>
 
-          <button id="rbtn" class="btn-primary" type="button" onclick="claimToken('reset')">Reset Password</button>
+          <button id="rbtn" class="btn-primary" type="button" onclick="claimToken('reset')">Reset password</button>
         </div>
         <div id="rtmsg" role="status" aria-live="polite" aria-atomic="true"></div>
       </div>
     </section>
   </main>
 
-  <footer class="ob-footer ob-width"><a class="ob-brand" href="/">mitch<span class="ob-brand-dot">.pro</span></a><span>© 2026 mitch.pro</span><nav aria-label="Footer"><a href="/#help">Help</a><a href="/privacy/">Privacy</a><a href="/use-agreement/">Site rules</a><a href="/cookies/">Cookies</a><a href="/copyright/">Copyright</a></nav></footer>
+  <footer class="enroll-footer">
+    <nav aria-label="Footer"><a href="/privacy/">Privacy</a><a href="/use-agreement/">Site rules</a><a href="/cookies/">Cookies</a><a href="/copyright/">Copyright</a></nav>
+  </footer>
 
 <script>
 var _attempts = [], _LIMIT = 3, _WINDOW = 60000;
@@ -476,7 +465,7 @@ function resetCaptcha() {}
       // Show a small banner so they know they're using an invite
       var banner = document.createElement('div');
       banner.className = 'invite-banner';
-      banner.textContent = 'You were invited! Code: ' + refCode.toUpperCase();
+      banner.textContent = 'Invite code: ' + refCode.toUpperCase();
       var emailField = document.getElementById('email');
       if (emailField && emailField.parentNode) emailField.parentNode.insertBefore(banner, emailField);
     }
@@ -723,7 +712,7 @@ async function verifySignup() {
   // and fires a second /api/verify-signup for the same code.
   _verifyInFlight = true;
   btn.disabled = true;
-  tmsg.textContent = 'Verifying and finalizing account...';
+  tmsg.textContent = 'Verifying code...';
   tmsg.className = '';
 
   const captcha = await getCaptchaResponse('verify_signup');
@@ -744,10 +733,10 @@ async function verifySignup() {
         tmsg.innerHTML = 'Account created, but sign-in could not be confirmed. <a href="/enroll/">Sign in again</a>.';
         return;
       }
-      tmsg.textContent = 'Success! Setting up encrypted chat key...';
+      tmsg.textContent = 'Finishing account setup...';
       await restoreE2EKeysAfterAuth(window._signupPassword || '');
       tmsg.className = 'ok';
-      tmsg.innerHTML = 'Success! Welcome to mitch.pro. Redirecting...';
+      tmsg.innerHTML = 'Account created. Redirecting...';
       setTimeout(() => window.location.href = postLoginDestination(), 800);
     } else {
       tmsg.className = 'err';
@@ -819,7 +808,7 @@ function startResendTimer() {
     if (left <= 0) {
       clearInterval(resendInterval);
       resendBtn.disabled = false;
-      resendBtn.textContent = "Didn't get email? Resend";
+      resendBtn.textContent = "Resend code";
       link.style.display = 'inline-block';
     } else {
       resendBtn.textContent = `Resend available in ${left}s`;
@@ -915,13 +904,13 @@ async function login() {
     const d = await r.json();
     if (d.success) {
       await confirmAuthSession(d.email);
-      msg.textContent = 'Signed in — restoring secure chat key...';
+      msg.textContent = 'Signing in...';
       await restoreE2EKeysAfterAuth(password);
       window.location.href = postLoginDestination();
     } else if (d.twofa_required) {
       window._login2faToken = d.temp_token || '';
       window._login2faType = d.twofa_type || 'email';
-      document.getElementById('login-2fa-label').textContent = window._login2faType === 'totp' ? 'Authenticator Code' : 'Email Verification Code';
+      document.getElementById('login-2fa-label').textContent = window._login2faType === 'totp' ? 'Authenticator code' : 'Email verification code';
       document.getElementById('login-2fa-code').value = '';
       if (twofaPanel) twofaPanel.style.display = 'block';
       msg.className = 'ok';
@@ -964,7 +953,7 @@ async function verifyLogin2fa() {
     const d = await r.json();
     if (d.success) {
       await confirmAuthSession(d.email);
-      msg.textContent = 'Verified — restoring secure chat key...';
+      msg.textContent = 'Signing in...';
       await restoreE2EKeysAfterAuth(window._loginPassword || '');
       window.location.href = postLoginDestination();
     } else {
@@ -1030,7 +1019,7 @@ async function loginWithPasskey() {
     } else if (d.twofa_required) {
       window._login2faToken = d.temp_token || '';
       window._login2faType = d.twofa_type || 'email';
-      document.getElementById('login-2fa-label').textContent = window._login2faType === 'totp' ? 'Authenticator Code' : 'Email Verification Code';
+      document.getElementById('login-2fa-label').textContent = window._login2faType === 'totp' ? 'Authenticator code' : 'Email verification code';
       document.getElementById('login-2fa-code').value = '';
       document.getElementById('login-2fa-panel').style.display = 'block';
       msg.className = 'ok';
@@ -1065,7 +1054,7 @@ async function claimToken(mode) {
   const captcha = await getCaptchaResponse('claim_token');
 
 
-  tmsg.textContent = 'Verifying and configuring security...';
+  tmsg.textContent = 'Verifying code...';
   tmsg.className = '';
 
   try {
@@ -1078,12 +1067,12 @@ async function claimToken(mode) {
     const d = await r.json();
     if (d.success) {
       await confirmAuthSession(d.email);
-      tmsg.textContent = 'Success! Restoring encrypted chat key...';
+      tmsg.textContent = 'Updating password...';
       // New password just verified — restore if the backup was wrapped with
       // it, otherwise set up a fresh key for the new password.
       await restoreE2EKeysAfterAuth(password, true);
       tmsg.className = 'ok';
-      tmsg.innerHTML = 'Success! <a href="/" style="color:var(--t-ok, var(--t-ac))">Go to Homepage</a>';
+      tmsg.innerHTML = 'Password updated. <a href="/">Go to home</a>';
       setTimeout(() => window.location.href = "/", 2000);
     } else {
       tmsg.className = 'err';
