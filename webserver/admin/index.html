@@ -341,6 +341,23 @@
       font-weight: 750;
     }
     .table-wrap { overflow: auto; max-height: 360px; }
+    section.is-fullscreen {
+      position: fixed;
+      inset: 12px;
+      z-index: 2000;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+    }
+    section.is-fullscreen .table-wrap { flex: 1; max-height: none; }
+    .fullscreen-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1999;
+      background: rgba(0, 0, 0, 0.5);
+    }
+    .fullscreen-backdrop.active { display: block; }
     table { width: 100%; border-collapse: collapse; min-width: 520px; }
     th, td {
       text-align: left;
@@ -1279,11 +1296,13 @@
       <button type="button" onclick="loadData()">Refresh</button>
     </div>
 
+    <div class="fullscreen-backdrop" id="fullscreen-backdrop" onclick="exitSectionFullscreen()"></div>
     <div class="grid">
       <section id="adminActions-section">
         <div class="section-head">
           <h2>Admin Activity Log</h2>
           <span class="tag">privileged changes</span>
+          <button type="button" class="mini" style="margin-left:auto;" onclick="toggleSectionFullscreen('adminActions-section')">Fullscreen</button>
         </div>
         <div class="toolbar" style="margin-bottom:10px;">
           <select id="auditActorFilter"><option value="">All actors</option></select>
@@ -2310,11 +2329,38 @@
       setInterval(pollFeeds, 5000);
       setInterval(loadModeratorRequests, 15000);
     }
+
+    function exitSectionFullscreen() {
+      const open = document.querySelector('section.is-fullscreen');
+      if (open) {
+        open.classList.remove('is-fullscreen');
+        const btn = open.querySelector('.section-head button.mini');
+        if (btn) btn.textContent = 'Fullscreen';
+      }
+      document.getElementById('fullscreen-backdrop')?.classList.remove('active');
+    }
+
+    function toggleSectionFullscreen(sectionId) {
+      const section = document.getElementById(sectionId);
+      if (!section) return;
+      const isOpen = section.classList.contains('is-fullscreen');
+      exitSectionFullscreen();
+      if (!isOpen) {
+        section.classList.add('is-fullscreen');
+        document.getElementById('fullscreen-backdrop')?.classList.add('active');
+        const btn = section.querySelector('.section-head button.mini');
+        if (btn) btn.textContent = 'Exit fullscreen';
+      }
+    }
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') exitSectionFullscreen();
+    });
     setTimeout(drawResourceChart, 200);
 
     function populateAuditFilters() {
       if (!rawData) return;
-      const rows = rawData.adminActions || [];
+      const rows = (rawData.adminActions || []).filter(r => r.action !== 'moderator_view_admin_tools');
       const actorSel = document.getElementById('auditActorFilter');
       const actionSel = document.getElementById('auditActionFilter');
       if (!actorSel || !actionSel) return;
@@ -2340,6 +2386,7 @@
         filtered[key] = (rawData[key] || []).filter(row => {
           if (q && !textOf(row).toLowerCase().includes(q)) return false;
           if (key === 'adminActions') {
+            if (row.action === 'moderator_view_admin_tools') return false;
             if (actorFilter && row.actor !== actorFilter) return false;
             if (actionFilter && row.action !== actionFilter) return false;
             if (dateFilter === 'today' && now - row.ts > dayMs) return false;

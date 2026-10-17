@@ -82,17 +82,19 @@ pub fn handle(
         if !ctx.is_any_admin(state) {
             return Some(forbidden());
         }
-        mitch_lib::admin::log_admin_action(
-            &state.store,
-            &state.cfg.data_dir,
-            &ctx.email(state),
-            if ctx.is_admin(state) {
-                "view_admin_tools"
-            } else {
-                "moderator_view_admin_tools"
-            },
-            json!({}),
-        );
+        // Only log full-admin views as an activity-log entry. Moderators
+        // open this panel routinely to check the moderation queue, and a
+        // view isn't a privileged change (the section's own "privileged
+        // changes" tag), so logging it just buried real actions in noise.
+        if ctx.is_admin(state) {
+            mitch_lib::admin::log_admin_action(
+                &state.store,
+                &state.cfg.data_dir,
+                &ctx.email(state),
+                "view_admin_tools",
+                json!({}),
+            );
+        }
         return Some(json_response(
             200,
             mitch_lib::admin::build_advanced_admin_data(&state.store, &state.cfg.data_dir),
