@@ -20,11 +20,14 @@
     "spaces": ["#mitch.pro:mitch.pro"],
     "rooms": [
       "#general:mitch.pro",
+      "#suggestions:mitch.pro",
       "#tech:mitch.pro",
       "#biking:mitch.pro",
       "#gaming:mitch.pro",
       "#computers:mitch.pro",
-      "#random:mitch.pro"
+      "#random:mitch.pro",
+      "#marketplace:mitch.pro",
+      "#voice-general:mitch.pro"
     ],
     "servers": ["mitch.pro"]
   },

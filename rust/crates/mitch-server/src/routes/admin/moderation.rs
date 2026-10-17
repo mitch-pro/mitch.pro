@@ -1012,6 +1012,62 @@ fn revert_admin_action(
                 Ok(format!("Deducted {} coins from {}", amount, email))
             }
         }
+        "matrix_ban_user" | "matrix_chat_ban" => {
+            let target = details
+                .get("targetUserId")
+                .or_else(|| details.get("userId"))
+                .or_else(|| details.get("email"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            if target.is_empty() {
+                Err("Cannot revert Matrix ban: missing target user ID in action details".into())
+            } else {
+                let state_clone = state.clone();
+                let target_clone = target.clone();
+                tokio::spawn(async move {
+                    let _ = crate::routes::matrix::unban_matrix_user_all_rooms(
+                        &state_clone.id_secret,
+                        &state_clone.store,
+                        &state_clone.cfg.data_dir,
+                        &target_clone,
+                    )
+                    .await;
+                });
+                Ok(format!("Unbanning {} across Matrix rooms", target))
+            }
+        }
+        "matrix_add_channel" => {
+            let alias = details
+                .get("alias")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_lowercase();
+            if alias.is_empty() {
+                Err("Cannot revert channel creation: missing alias in action details".into())
+            } else {
+                let path = state.cfg.data_dir.join("matrix_official_rooms.json");
+                let existing = state.store.read_document(&path, json!([]));
+                let mut next = Vec::new();
+                if let Some(arr) = existing.as_array() {
+                    for item in arr {
+                        let a = item
+                            .get("alias")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .trim()
+                            .to_lowercase();
+                        if a != alias {
+                            next.push(item.clone());
+                        }
+                    }
+                }
+                let _ = state.store.write_document(&path, &Value::Array(next));
+                Ok(format!("Removed #{}:mitch.pro from official channels", alias))
+            }
+        }
         other => Err(format!(
             "Action '{}' cannot be automatically reverted",
             other
@@ -2021,12 +2077,15 @@ pub async fn lookup_profile(state: &Arc<AppState>, search: &str) -> Response {
     let settings_file = state.cfg.data_dir.join("matrix_room_settings.json");
     let settings_all = state.store.read_document(&settings_file, json!({}));
 
-    let mut room_ids: Vec<(String, Option<&'static str>)> = Vec::new();
-    for (alias, name, topic) in crate::routes::matrix::OFFICIAL_ROOMS {
+    let mut room_ids: Vec<(String, Option<String>)> = Vec::new();
+    for (alias, name, topic) in
+        crate::routes::matrix::all_official_rooms(&state.store, &state.cfg.data_dir)
+    {
         if let Ok(room_id) =
-            crate::routes::matrix::ensure_official_room(&state.id_secret, alias, name, topic).await
+            crate::routes::matrix::ensure_official_room(&state.id_secret, &alias, &name, &topic)
+                .await
         {
-            room_ids.push((room_id, Some(*alias)));
+            room_ids.push((room_id, Some(alias)));
         }
     }
     if let Some(map) = settings_all.as_object() {

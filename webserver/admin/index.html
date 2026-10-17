@@ -1075,6 +1075,56 @@
             <div id="matrix-redact-status" class="form-status"></div>
           </form>
         </div>
+
+        <!-- Public Matrix Channels (Admin Only — hidden from Moderators) -->
+        <div id="matrix-channels-admin-section" style="margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--t-bd); display: none;">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+            <div>
+              <h3 style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--t-fg2); margin: 0;">Public Matrix Channels</h3>
+              <p style="margin: 2px 0 0; font-size: 0.78rem; color: var(--t-fg2);">Admin-only: add or remove public rooms in the <code style="color:var(--t-ac);">#mitch.pro:mitch.pro</code> space.</p>
+            </div>
+            <span class="pill ok" style="font-size:0.72rem;">Admins Only</span>
+          </div>
+          <div id="matrix-channels-roster" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;">
+            <span class="muted">Loading channels...</span>
+          </div>
+          <form onsubmit="submitAddMatrixChannel(event)" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap:8px; background:rgba(0,0,0,0.15); padding:12px; border-radius:8px; border:1px solid var(--t-bd); align-items:center;">
+            <input id="matrix-new-channel-alias" type="text" placeholder="alias (e.g. announcements)" maxlength="32" required style="font-size:0.82rem; margin:0;">
+            <input id="matrix-new-channel-name" type="text" placeholder="Display Name (e.g. Announcements)" maxlength="60" style="font-size:0.82rem; margin:0;">
+            <input id="matrix-new-channel-topic" type="text" placeholder="Topic / description" maxlength="200" style="font-size:0.82rem; margin:0;">
+            <button type="submit" style="font-size:0.82rem; padding:8px 12px; margin:0; width:auto;">Add Public Channel</button>
+          </form>
+          <div id="matrix-channel-status" class="form-status"></div>
+        </div>
+
+        <!-- Chatroom Moderation Audit Log (includes in-chat Matrix bans/kicks/unbans/redactions) -->
+        <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--t-bd);">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+            <div>
+              <h3 style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--t-fg2); margin: 0;">Chatroom Moderation Audit Log</h3>
+              <p style="margin: 2px 0 0; font-size: 0.78rem; color: var(--t-fg2);">Tracks bans, unbans, kicks, message redactions, and role changes performed directly inside Matrix rooms as well as from this panel.</p>
+            </div>
+          </div>
+          <div class="table-wrap" style="max-height: 320px; overflow-y: auto;">
+            <table id="matrix-audit-log-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Source</th>
+                  <th>Room</th>
+                  <th>Actor</th>
+                  <th>Action</th>
+                  <th>Target</th>
+                  <th>Reason</th>
+                  <th>Quick Action</th>
+                </tr>
+              </thead>
+              <tbody id="matrix-audit-log-body">
+                <tr><td colspan="8" class="empty">Loading chatroom moderation audit log...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
       <div class="action-card" id="conduit-health-card" style="grid-column: 1 / -1;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
@@ -1799,6 +1849,11 @@
         case 'add_coins':
         case 'gift_coins':
           return `This will DEDUCT ${d.amount != null ? d.amount : '(unknown)'} coins from ${d.targetEmail || d.email || '(unknown)'}.\n\nCurrent state:  coins credited\nAfter revert:   coins deducted back`;
+        case 'matrix_ban_user':
+        case 'matrix_chat_ban':
+          return `This will UNBAN ${d.targetUserId || d.userId || d.email || '(unknown)'} across Matrix rooms.\n\nCurrent state:  banned in Matrix${d.reason ? ' — reason: ' + d.reason : ''}\nAfter revert:   unbanned`;
+        case 'matrix_add_channel':
+          return `This will REMOVE #${d.alias || '(unknown)'}:mitch.pro from official channels.\n\nCurrent state:  official channel\nAfter revert:   removed from official channels list`;
         default:
           return `No automatic preview is available for "${action}". The server will report whether this action type can be reverted.`;
       }
@@ -2556,7 +2611,7 @@
 
         const metaStr = ip ? `<span class="pill" style="font-family:monospace; font-size:0.68rem;" title="${esc(ua)}">${esc(ip)}</span>` : '<span class="muted">-</span>';
 
-        const canRevert = ['ban_account', 'unban_account', 'add_admin', 'remove_admin', 'add_co_owner', 'remove_co_owner', 'add_moderator', 'remove_moderator', 'shadow_ban', 'add_coins', 'gift_coins'].includes(r.action);
+        const canRevert = ['ban_account', 'unban_account', 'add_admin', 'remove_admin', 'add_co_owner', 'remove_co_owner', 'add_moderator', 'remove_moderator', 'shadow_ban', 'add_coins', 'gift_coins', 'matrix_ban_user', 'matrix_chat_ban', 'matrix_add_channel'].includes(r.action);
         const revertBtn = canRevert && r.action !== 'revert_action'
           ? `<button type="button" class="mini warn" onclick='revertAdminAction(${JSON.stringify(r.id)}, ${JSON.stringify(r.action)}, ${JSON.stringify(d).replace(/'/g, "&apos;")})' style="padding:3px 7px;font-size:0.7rem;cursor:pointer;">Revert</button>`
           : '<span class="muted">-</span>';
@@ -2841,8 +2896,12 @@
             bansContainer.innerHTML = data.bannedUsers.map(b => {
               const reasonStr = b.reason ? ` — "${esc(b.reason)}"` : '';
               const byStr = b.bannedBy ? ` (by ${esc(b.bannedBy)})` : '';
+              const roomBadge = b.room ? `<span class="pill" style="margin-left:6px; font-size:0.72rem;">${esc(b.room)}</span>` : '';
+              const sourceBadge = b.source === 'matrix_client'
+                ? `<span class="pill warn" style="margin-left:6px; font-size:0.7rem;">In-Chat</span>`
+                : '';
               return `<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 10px; background:rgba(255,255,255,0.03); border:1px solid var(--t-bd); border-radius:6px; margin-bottom:6px; flex-wrap:wrap; gap:6px;">` +
-                `<div><b>${esc(b.userId)}</b> <span class="pill danger" style="margin-left:6px; font-size:0.75rem;">Banned</span>${reasonStr}${byStr}</div>` +
+                `<div><b>${esc(b.userId)}</b> <span class="pill danger" style="margin-left:6px; font-size:0.75rem;">Banned</span>${roomBadge}${sourceBadge}${reasonStr}${byStr}</div>` +
                 `<div><button type="button" class="mini ok" onclick="matrixUnbanUser('${esc(b.userId)}')">Unban</button></div>` +
                 `</div>`;
             }).join('');
@@ -2863,9 +2922,153 @@
             }).join('');
           }
         }
+
+        // Public channels section (Admin only — hidden from Moderators)
+        const channelsSection = document.getElementById('matrix-channels-admin-section');
+        const channelsRoster = document.getElementById('matrix-channels-roster');
+        if (channelsSection) {
+          const isAdminUser = Boolean(currentUser && currentUser.isAdmin);
+          channelsSection.style.display = isAdminUser ? 'block' : 'none';
+          if (isAdminUser && channelsRoster) {
+            renderMatrixChannelsRoster(data.channels || []);
+          }
+        }
+
+        // Chatroom Moderation Audit Log
+        renderMatrixAuditLog(data.auditLog || []);
       } catch (e) {
         container.innerHTML = '<span class="muted">Error loading Matrix staff: ' + esc(e.message) + '</span>';
       }
+    }
+
+    function renderMatrixChannelsRoster(channels) {
+      const roster = document.getElementById('matrix-channels-roster');
+      if (!roster) return;
+      if (!channels || !channels.length) {
+        roster.innerHTML = '<span class="muted">No channels found.</span>';
+        return;
+      }
+      roster.innerHTML = channels.map(ch => {
+        const badge = ch.builtIn
+          ? `<span class="muted" style="font-size:0.7rem; margin-left:4px;">built-in</span>`
+          : `<button type="button" class="mini danger" style="padding:2px 6px; font-size:0.68rem; margin-left:6px;" onclick="removeMatrixChannel('${esc(ch.alias)}')" title="Remove custom channel">×</button>`;
+        return `<div style="display:inline-flex; align-items:center; gap:4px; padding:5px 10px; background:rgba(255,255,255,0.04); border:1px solid var(--t-bd); border-radius:6px; font-size:0.78rem;" title="${esc(ch.topic || '')}">` +
+          `<code style="color:var(--t-ac); font-weight:700;">${esc(ch.fullAlias || ('#' + ch.alias + ':mitch.pro'))}</code>` +
+          `<span style="color:var(--t-fg2);">(${esc(ch.name || ch.alias)})</span>` +
+          badge +
+          `</div>`;
+      }).join('');
+    }
+
+    async function submitAddMatrixChannel(e) {
+      e.preventDefault();
+      const aliasEl = document.getElementById('matrix-new-channel-alias');
+      const nameEl = document.getElementById('matrix-new-channel-name');
+      const topicEl = document.getElementById('matrix-new-channel-topic');
+      setStatus('matrix-channel-status', 'Creating channel in Matrix...', '');
+      try {
+        const res = await adminFetch('/api/matrix/moderation/channels', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            alias: (aliasEl?.value || '').trim(),
+            name: (nameEl?.value || '').trim(),
+            topic: (topicEl?.value || '').trim()
+          })
+        });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok || d.error) throw new Error(d.error || 'Failed to add channel');
+        if (aliasEl) aliasEl.value = '';
+        if (nameEl) nameEl.value = '';
+        if (topicEl) topicEl.value = '';
+        setStatus('matrix-channel-status', `Added public channel ${d.fullAlias || ('#' + d.alias + ':mitch.pro')}.`, 'ok');
+        if (Array.isArray(d.channels)) renderMatrixChannelsRoster(d.channels);
+        loadMatrixModeration();
+      } catch (err) {
+        setStatus('matrix-channel-status', err.message || 'Failed to add channel', 'err');
+      }
+    }
+
+    async function removeMatrixChannel(alias) {
+      if (!alias) return;
+      if (!confirm(`Remove #${alias}:mitch.pro from the official public channels list?`)) return;
+      setStatus('matrix-channel-status', `Removing #${alias}:mitch.pro...`, '');
+      try {
+        const res = await adminFetch('/api/matrix/moderation/channels', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ alias })
+        });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok || d.error) throw new Error(d.error || 'Failed to remove channel');
+        setStatus('matrix-channel-status', `Removed #${alias}:mitch.pro.`, 'ok');
+        if (Array.isArray(d.channels)) renderMatrixChannelsRoster(d.channels);
+        loadMatrixModeration();
+      } catch (err) {
+        setStatus('matrix-channel-status', err.message || 'Failed to remove channel', 'err');
+      }
+    }
+
+    function formatMatrixAuditActionLabel(action) {
+      const map = {
+        matrix_chat_ban: ['Ban (In-Chat)', 'danger'],
+        matrix_ban_user: ['Ban (Admin Panel)', 'danger'],
+        matrix_chat_unban: ['Unban (In-Chat)', 'ok'],
+        matrix_unban_user: ['Unban (Admin Panel)', 'ok'],
+        matrix_chat_kick: ['Kick (In-Chat)', 'warn'],
+        matrix_kick_user: ['Kick (Admin Panel)', 'warn'],
+        matrix_chat_redact: ['Redact Msg (In-Chat)', 'warn'],
+        matrix_redact_event: ['Redact Msg (Admin)', 'warn'],
+        matrix_chat_power_levels: ['Role/PL Change (In-Chat)', ''],
+        matrix_set_role: ['Role Change (Admin)', ''],
+        matrix_mute_user: ['Mute User', 'warn'],
+        matrix_unmute_user: ['Unmute User', 'ok'],
+        matrix_mute_room: ['Room Lockdown', 'warn'],
+        matrix_set_slowmode: ['Room Slowmode', ''],
+        matrix_set_user_slowmode: ['User Slowmode', ''],
+        matrix_add_channel: ['Add Channel', 'ok'],
+        matrix_remove_channel: ['Remove Channel', 'warn']
+      };
+      return map[action] || [action.replaceAll('_', ' '), ''];
+    }
+
+    function renderMatrixAuditLog(entries) {
+      const tbody = document.getElementById('matrix-audit-log-body');
+      if (!tbody) return;
+      if (!entries || !entries.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty">No chatroom moderation events recorded yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = entries.map(row => {
+        const d = row.details || {};
+        const isClient = d.source === 'matrix_client' || String(row.action || '').startsWith('matrix_chat_');
+        const sourceBadge = isClient
+          ? '<span class="pill warn" style="font-size:0.7rem;" title="Performed directly inside Matrix/Cinny client">In-Chat (Matrix)</span>'
+          : '<span class="pill" style="font-size:0.7rem;" title="Performed via Admin Panel">Admin Panel</span>';
+        const roomStr = d.room || (d.alias ? `#${d.alias}:mitch.pro` : (d.roomId || '#general:mitch.pro'));
+        const actorStr = d.actorMatrixId
+          ? `${esc(row.actor || d.actorMatrixId)} <span class="muted" style="font-size:0.72rem;">(${esc(d.actorMatrixId)})</span>`
+          : esc(row.actor || 'staff');
+        const [label, cls] = formatMatrixAuditActionLabel(String(row.action || ''));
+        const actionBadge = `<span class="pill ${cls}" style="font-size:0.72rem;">${esc(label)}</span>`;
+        const target = d.targetUserId || d.userId || d.eventId || (d.alias ? `#${d.alias}:mitch.pro` : '—');
+        const reason = d.reason || (d.powerLevel != null ? `PL ${d.powerLevel}` : (d.seconds != null ? `${d.seconds}s` : '—'));
+        const isBan = row.action === 'matrix_chat_ban' || row.action === 'matrix_ban_user';
+        const targetUser = d.targetUserId || d.userId || '';
+        const quickAction = (isBan && targetUser)
+          ? `<button type="button" class="mini ok" onclick="matrixUnbanUser('${esc(targetUser)}')">Unban</button>`
+          : '<span class="muted">—</span>';
+        return `<tr>` +
+          `<td>${esc(fmtTime(row.ts))}</td>` +
+          `<td>${sourceBadge}</td>` +
+          `<td><code style="font-size:0.75rem; color:var(--t-ac);">${esc(roomStr)}</code></td>` +
+          `<td>${actorStr}</td>` +
+          `<td>${actionBadge}</td>` +
+          `<td><b>${esc(target)}</b></td>` +
+          `<td class="muted">${esc(reason)}</td>` +
+          `<td>${quickAction}</td>` +
+          `</tr>`;
+      }).join('');
     }
 
     async function updateMatrixSlowmode(seconds) {
