@@ -55,7 +55,8 @@ pub mod vm;
 pub mod vm_security;
 pub mod webauthn;
 
-/// Library version, matching the workspace version.
+/// Library version, matching the workspace version. Read from Cargo.toml at
+/// compile time, not hand-maintained.
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
