@@ -502,7 +502,7 @@ body.home ::-webkit-scrollbar-track { background: transparent; }
 .hello-logo-prism { position:absolute; top:12px; left:calc(50% - var(--logo-size)/2); width:var(--logo-size); height:var(--logo-size); transform-style:preserve-3d; transform:translateX(calc(0px - var(--logo-travel))) rotateX(-12deg) rotateY(-24deg) rotateZ(-7deg); animation:hello-logo-drift 12s ease-in-out infinite; animation-play-state:paused; }
 .hello-emblem[data-motion="active"] .hello-logo-prism { animation-play-state:running; }
 .hello-logo-face { position:absolute; inset:0; clip-path:polygon(0 0,50% 50%,100% 0,100% 100%,0 100%); backface-visibility:hidden; }
-.hello-logo-front { transform:translateZ(10px); background:color-mix(in srgb,var(--t-ac) 85%,transparent); }
+.hello-logo-front { transform:translateZ(10px); background:radial-gradient(ellipse 85% 75% at 50% 90%,color-mix(in srgb,var(--t-ac) 95%,transparent) 0%,color-mix(in srgb,var(--t-ac) 50%,transparent) 100%); }
 .hello-logo-front::after { content:""; position:absolute; inset:0; background:linear-gradient(145deg,#fff6,transparent 38%); clip-path:polygon(0 0,50% 50%,100% 0,100% 1.5%,50% 51.5%,1.5% 3.5%,1.5% 100%,0 100%); }
 .hello-logo-back { transform:translateZ(-10px) rotateY(180deg); background:color-mix(in srgb,var(--t-ac) 55%,transparent); }
 .hello-logo-edge { position:absolute; top:0; left:0; height:20px; width:var(--logo-size); transform-origin:0 0; background:linear-gradient(color-mix(in srgb,var(--t-ac) 70%,transparent),color-mix(in srgb,var(--t-ac) 45%,transparent)); }
