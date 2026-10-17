@@ -21,7 +21,11 @@ use axum::response::Response;
 use crate::errors::err_resp;
 
 pub const STATIC_CACHE_REVALIDATE_MS: u128 = 30 * 60 * 1000;
-pub const SITE_TOUR_PATHS: &[&str] = &["/media/site-tour-v1.mp4", "/media/site-tour-v2.mp4"];
+pub const SITE_TOUR_PATHS: &[&str] = &[
+    "/media/site-tour-v1.mp4",
+    "/media/site-tour-v2.mp4",
+    "/media/site-tour-v3.mp4",
+];
 
 /// Single byte ranges for the public tour; unsupported range units and
 /// multipart requests are ignored, while unsatisfiable byte ranges are 416.

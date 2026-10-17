@@ -1,50 +1,59 @@
-# Public site and recorded tour
+# Public intro and recorded tour
 
-The public homepage is `webserver/index-sales.html`, styled by `webserver/onboarding.css`. It shows a short introduction, the recorded tour, a directory of site features, school links, and help. Account creation and login remain at `/enroll/`, with their own stylesheet at `webserver/public/enroll/enroll.css`.
+The public introduction is `webserver/index-sales.html`, styled by `webserver/onboarding.css`. Signed-out visitors see it at `/`; `/index-sales.html` also opens it directly, with or without a session. The player is the main content at the top, followed by a horizontal chapter strip, soundtrack credit, account actions, site links, schools, and help.
 
-Both pages use `onboarding-theme.js` for the theme cookie and `onboarding.js` for video chapters, password visibility, and keyboard tabs. Their `data-presentation="onboarding"` marker keeps the account shell's injected styles and navigation from interfering.
+Login and account creation remain at `/enroll/`, using `webserver/public/enroll/enroll.css`. Both pages share `onboarding-theme.js` and `onboarding.js`; `data-presentation="onboarding"` keeps account-shell styles out of the public pages.
 
-## Current recording
+## Current edit
 
-The October 17, 2026 recording is `webserver/media/site-tour-v2.mp4`, with `site-tour-poster-v2.webp` extracted at five seconds. It replaces the previous homepage tour. The source recording was `20261017-133852.mp4` (SHA-256 `013633a7b6742e74817add593511bb0876e371633a170e5a7b0a9b79d5da4c3a`).
+`webserver/media/site-tour-v3.mp4` is exactly **237.000 seconds (3:57)**. It contains 1920×968 H.264 video at 30 fps and a 48 kHz stereo AAC soundtrack. MP4 metadata is at the front for playback before the entire download finishes.
 
-The complete recording runs 287.73 seconds, displayed as 4:47. The web copy uses H.264 at 1920×968 and 30 fps, with MP4 metadata at the front for playback before the entire download finishes. It preserves the silent recording; no music, voiceover, or overlays were added.
+The picture comes from the complete `20261017-133852.mp4` screen recording. Every section is sped up using the reproducible map in `tools/site-tour-v3.json`. The soundtrack is the supplied `C418 - Aria Math, but it's an EPIC Soundtrack.mp3`, starting at its beginning and trimmed only to the requested 3:57 duration. Its dynamics are preserved with a 1 dB gain reduction, plus a short final fade. The picture fades in briefly and fades out with the track's quiet ending.
 
-| Time | Section |
-| --- | --- |
-| 0:00 | Dashboard |
-| 0:10 | People and profiles |
-| 0:30 | Games |
-| 0:55 | Bell schedule |
-| 1:10 | MitchCoins and shop |
-| 1:50 | Matrix chat |
-| 2:25 | Cloud Linux |
-| 3:50 | Profile cosmetics |
-| 4:10 | Casino |
-| 4:35 | Blooket tools |
+Chapter changes align the coins/shop section with the first build, Matrix with the quieter passage near 1:30, and profile cosmetics and casino with the later crescendo. The source sequence is preserved. The poster is a frame of the games library from 35 seconds into the original recording.
 
-The player has native controls and chapter shortcuts, highlights the current chapter, and preloads only metadata. It never starts automatically. Download and social preview links use the new versioned assets.
+| Output time | Section | Source time |
+| --- | --- | --- |
+| 0:00.0 | Dashboard | 0:00 |
+| 0:08.3 | People and profiles | 0:10 |
+| 0:24.7 | Games | 0:30 |
+| 0:45.5 | Bell schedule | 0:55 |
+| 0:59.9 | MitchCoins and shop | 1:10 |
+| 1:30.3 | Matrix chat | 1:50 |
+| 1:59.9 | Cloud Linux | 2:25 |
+| 3:09.5 | Profile cosmetics | 3:50 |
+| 3:26.3 | Casino | 4:10 |
+| 3:46.7 | Blooket tools | 4:35 |
 
-The Rust public-asset list explicitly allows the new MP4 and poster. Both v1 and v2 videos support GET byte ranges and HEAD requests so seeking works and older cached pages retain a working player. Other static files retain their access policies. Keep v1 assets for those cached references; media is cached for a year.
+Playback starts when the visitor presses Play or selects a chapter. It never autoplays. Native volume, seeking, and fullscreen controls remain available. The central play button works from the keyboard, starts with sound, and becomes Replay at the end. The chapter strip highlights the current section.
 
-## Preparing another recording
+## Reproducing and replacing the edit
 
-With Python, ffmpeg, and ffprobe installed, choose an unused version:
+With Python, ffmpeg, and ffprobe installed, use an unused version number:
 
 ```sh
-python3 tools/create-site-tour.py /path/to/recording.mp4 --version 3 --poster-time 5
+python3 tools/create-site-tour.py /path/to/recording.mp4 --version 4 --poster-time 35 \
+  --timing tools/site-tour-v3.json --soundtrack /path/to/soundtrack.mp3
 ```
 
-The tool leaves the input untouched, preserves source audio if present, and produces the optimized MP4 and poster. It refuses to overwrite existing assets. Update the homepage source, poster, download links, social previews, duration, chapters, server allowlist, range-supported paths, and browser check for the new version.
+The tool leaves source files untouched and refuses to overwrite published assets. A timing map specifies the output duration and source/output chapter points. The tool checks that the map only speeds up the recording and that the soundtrack covers the full edit.
+
+For a new published version, update the video, poster, download links, social previews, duration, chapter data, public-asset list, range-supported paths, and browser check. Versions 1 and 2 remain available for cached pages. All three MP4 versions support unauthenticated byte-range GET and HEAD requests.
 
 ## Verification
 
 ```sh
+cargo fmt --manifest-path rust/Cargo.toml --all --check
+cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets -- -D warnings
 cargo test --manifest-path rust/Cargo.toml --workspace
 cargo build --manifest-path rust/Cargo.toml -p mitch-server
 node tests/test_onboarding_browser.mjs
 ```
 
-The browser check starts an isolated local server. It verifies unauthenticated styles and media, protected account routes, video range responses, actual playback and every chapter, mobile and desktop layouts, both themes, and enrollment flows with mocked account responses. Screenshots go to the ignored `artifacts/ui-review/onboarding` directory.
+The browser check starts an isolated local server and mocks account requests. It verifies the direct public intro, styles and media without a session, range responses, exact video duration, decoded audible audio, keyboard Play, replay, every chapter, both themes at five viewport sizes, and signup/login/reset flows. It creates no production accounts.
 
-School links retain the six comprehensive high schools, Roseville Pathways, and Roseville Adult School. Bell schedules and period countdowns are on `rjuhsd.school`. VM access and available capacity remain governed by the server; optional hardware and session upgrades use earned MitchCoins.
+The media was also checked against its sources: decoded soundtrack samples correlate with the supplied MP3 after gain adjustment; frames from games, Matrix, profile cosmetics, and Blooket match the original recording at the mapped times. Screenshots are saved under the ignored `artifacts/ui-review/onboarding` directory.
+
+## CI
+
+The formatting failure in admin accounts, moderation, and Matrix routes was corrected in commit `4eb00d5`. The exact formatting, strict Clippy, and workspace-test commands used by `rust-ci` pass locally.

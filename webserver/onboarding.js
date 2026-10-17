@@ -2,6 +2,27 @@
   const video = document.getElementById('site-tour');
   const status = document.getElementById('tour-status');
   if (video) {
+    const playButton = document.getElementById('tour-play');
+    const playLabel = document.getElementById('tour-play-label');
+    const updatePlayer = () => {
+      if (!playButton) return;
+      playButton.hidden = !(video.paused && (video.currentTime < 0.3 || video.ended));
+      playLabel.textContent = video.ended ? 'Replay tour' : 'Play tour';
+      playButton.setAttribute('aria-label', video.ended ? 'Replay site tour with sound' : 'Play site tour with sound');
+    };
+    if (playButton) {
+      playButton.addEventListener('click', async () => {
+        try {
+          if (video.ended) video.currentTime = 0;
+          video.muted = false;
+          await video.play();
+          status.textContent = '';
+        } catch (_) { status.textContent = 'Use the video’s play button, or download the video.'; }
+        updatePlayer();
+      });
+      ['play', 'pause', 'ended', 'seeked'].forEach(event => video.addEventListener(event, updatePlayer));
+      updatePlayer();
+    }
     const chapters = [...document.querySelectorAll('[data-tour-time]')];
     const updateChapter = () => {
       const current = chapters.filter(button => Number(button.dataset.tourTime) <= video.currentTime).at(-1);

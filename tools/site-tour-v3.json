@@ -1,0 +1,15 @@
+{
+  "duration": 237,
+  "chapters": [
+    { "source": 0, "time": 0, "title": "Dashboard" },
+    { "source": 10, "time": 8.3, "title": "People & profiles" },
+    { "source": 30, "time": 24.7, "title": "Games" },
+    { "source": 55, "time": 45.5, "title": "Bell schedule" },
+    { "source": 70, "time": 59.9, "title": "MitchCoins & shop" },
+    { "source": 110, "time": 90.3, "title": "Matrix chat" },
+    { "source": 145, "time": 119.9, "title": "Cloud Linux" },
+    { "source": 230, "time": 189.5, "title": "Profile cosmetics" },
+    { "source": 250, "time": 206.3, "title": "Casino" },
+    { "source": 275, "time": 226.7, "title": "Blooket tools" }
+  ]
+}

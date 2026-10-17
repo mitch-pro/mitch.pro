@@ -75,6 +75,8 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/media/site-tour-poster-v1.webp",
     "/media/site-tour-v2.mp4",
     "/media/site-tour-poster-v2.webp",
+    "/media/site-tour-v3.mp4",
+    "/media/site-tour-poster-v3.webp",
     "/guest-preview.js",
     "/home-friends.js",
     "/home.css",
@@ -943,7 +945,13 @@ pub async fn handle(
         .unwrap_or(public_help_base);
     let is_exempt = matches!(
         public_help_base,
-        "/faq" | "/privacy" | "/use-agreement" | "/cookies" | "/copyright" | "/appeal"
+        "/faq"
+            | "/privacy"
+            | "/use-agreement"
+            | "/cookies"
+            | "/copyright"
+            | "/appeal"
+            | "/index-sales"
     ) || clean_path == "/enroll"
         || clean_path == "/api/me/coins"
         || clean_path == "/larp"

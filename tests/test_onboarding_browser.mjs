@@ -32,7 +32,7 @@ try {
     await delay(150);
   }
   assert(ready, 'Build the local Rust server before running this test');
-  for (const path of ['/faq/', '/faq.html', '/faq/index.html', '/privacy/', '/privacy.html', '/use-agreement/', '/use-agreement.html', '/onboarding.css?v=4', '/onboarding.js?v=4', '/enroll/enroll.css?v=1', '/media/site-tour-poster-v2.webp', '/rjuhsd-assets/pathways-logo.png', '/rjuhsd-assets/rosevilleadult-logo.png', '/rjuhsd-assets/district-logo.png']) {
+  for (const path of ['/faq/', '/faq.html', '/faq/index.html', '/privacy/', '/privacy.html', '/use-agreement/', '/use-agreement.html', '/index-sales.html', '/onboarding.css?v=5', '/onboarding.js?v=5', '/enroll/enroll.css?v=1', '/media/site-tour-poster-v3.webp', '/rjuhsd-assets/pathways-logo.png', '/rjuhsd-assets/rosevilleadult-logo.png', '/rjuhsd-assets/district-logo.png']) {
     const response = await fetch(base + path);
     assert.equal(response.status, 200, `${path} should be public`);
     assert(new URL(response.url).pathname !== '/enroll/', `${path} must not redirect to login`);
@@ -44,7 +44,7 @@ try {
     const response = await fetch(base + path, { redirect: 'manual' });
     assert([302, 401, 403].includes(response.status), `${path} must remain protected`);
   }
-  for (const version of [1, 2]) {
+  for (const version of [1, 2, 3]) {
     const path = '/media/site-tour-v' + version + '.mp4';
     const range = await fetch(base + path, { headers: { Range: 'bytes=0-99' }, redirect: 'manual' });
     assert.equal(range.status, 206, path + ' must support seeking without a login');
@@ -102,11 +102,16 @@ try {
     for (const width of [320, 390, 768, 1024, 1440]) {
       await page.setViewportSize({ width, height: width < 768 ? 844 : 1000 });
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${name} must fit at ${width}px`);
+      if (name === 'landing') {
+        const player = await page.locator('.tour-stage').boundingBox();
+        assert(player && player.y < 250, 'The video must lead the public intro at ' + width + 'px');
+      }
       await page.screenshot({ path: `${out}/${name}-${width}.png`, fullPage: width === 1440 });
     }
   }
   await page.goto(base + '/');
-  assert.match(await page.locator('.hero-copy').innerText(), /student community for RJUHSD/);
+  assert.equal(await page.locator('.tour-intro h1').innerText(), 'mitch.pro');
+  assert.match(await page.locator('.tour-intro').innerText(), /Games, chat, and cloud Linux/);
   assert.equal(await page.locator('.school-card').count(), 8);
   assert.equal(await page.locator('[data-school-games-link]').getAttribute('href'), 'https://mitchdog.com/game-portal/');
   assert.equal(await page.locator('.school-site-link').getAttribute('href'), 'https://rjuhsd.school/');
@@ -118,15 +123,26 @@ try {
   assert.equal(await page.locator('.ob-campus-orbit,.ob-video-bar,.ob-eyebrow').count(), 0);
   assert.equal(await page.locator('#site-tour').getAttribute('preload'), 'metadata');
   assert.equal(await page.locator('#site-tour').getAttribute('autoplay'), null);
-  assert.equal(await page.locator('#site-tour source').getAttribute('src'), '/media/site-tour-v2.mp4');
-  assert.equal(await page.locator('#site-tour').getAttribute('poster'), '/media/site-tour-poster-v2.webp');
+  assert.equal(await page.locator('#site-tour source').getAttribute('src'), '/media/site-tour-v3.mp4');
+  assert.equal(await page.locator('#site-tour').getAttribute('poster'), '/media/site-tour-poster-v3.webp');
   await page.waitForFunction(() => Number.isFinite(document.getElementById('site-tour').duration));
   const duration = await page.locator('#site-tour').evaluate(video => video.duration);
-  assert(duration > 287 && duration < 289, 'The full new recording should be used');
-  assert.equal(await page.locator('#tour-duration').innerText(), '4:47');
+  assert(Math.abs(duration - 237) < 0.01, 'The soundtrack edit must be exactly 3:57');
+  assert.equal(await page.locator('#tour-duration').innerText(), '3:57');
   assert(await page.locator('#site-tour').evaluate(video => video.paused));
+  await page.locator('#tour-play').scrollIntoViewIfNeeded();
+  assert(await page.locator('#tour-play').isVisible());
+  await page.locator('#tour-play').focus();
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => {
+    const video = document.getElementById('site-tour');
+    return !video.paused && video.currentTime > 0.2 && video.webkitAudioDecodedByteCount > 0;
+  });
+  assert(await page.locator('#site-tour').evaluate(video => !video.muted && video.volume > 0));
+  assert(await page.locator('#tour-play').isHidden());
+  await page.locator('#site-tour').evaluate(video => video.pause());
   const chapters = await page.locator('[data-tour-time]').evaluateAll(buttons => buttons.map(button => Number(button.dataset.tourTime)));
-  assert.deepEqual(chapters, [0,10,30,55,70,110,145,230,250,275]);
+  assert.deepEqual(chapters, [0,8.3,24.7,45.5,59.9,90.3,119.9,189.5,206.3,226.7]);
   for (const time of chapters) {
     await page.locator('[data-tour-time="' + time + '"]').click();
     await page.waitForFunction(time => {
@@ -139,6 +155,12 @@ try {
   assert(await page.locator('#site-tour').evaluate(video => video.videoWidth === 1920 && video.videoHeight === 968));
   assert.equal(await page.locator('#tour-status').innerText(), '');
   await page.screenshot({ path: out + '/tour-chapters.png' });
+  await page.locator('#site-tour').evaluate(video => { video.currentTime = video.duration - 0.08; return video.play(); });
+  await page.waitForFunction(() => document.getElementById('site-tour').ended);
+  assert(await page.getByRole('button', {name:'Replay site tour with sound'}).isVisible());
+  await page.getByRole('button', {name:'Replay site tour with sound'}).click();
+  await page.waitForFunction(() => { const v=document.getElementById('site-tour'); return !v.paused && v.currentTime < 3; });
+  await page.locator('#site-tour').evaluate(video => video.pause());
   await page.getByText('Do I have to pay for a VM?', { exact: true }).click();
   assert(await page.locator('.help-list details').first().getAttribute('open') !== null);
 
