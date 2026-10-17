@@ -1,9 +1,9 @@
 (() => {
   'use strict';
   const metrics = [
-    ['coins', 'MitchCoins', '◈'], ['wins', 'Chess wins', '♟'], ['puzzles', 'Puzzles', '◇'],
-    ['pixels', 'Pixels', '▦'], ['clicker_pts', 'Clicker', '↖'],
-    ['typing_races', 'Typing races', '⌨'], ['logic_puzzles', 'Logic puzzles', '⌘'],
+    ['coins', 'MitchCoins'], ['wins', 'Chess wins'], ['puzzles', 'Puzzles'],
+    ['pixels', 'Pixels'], ['clicker_pts', 'Clicker'],
+    ['typing_races', 'Typing races'], ['logic_puzzles', 'Logic puzzles'],
   ];
   // Match the profile page's shop cosmetics, including its existing colors.
   const colors = {
@@ -55,60 +55,50 @@
     return `<span class="player-name-line"><span class="player-name" data-color="${colors[user.activeColor] ? user.activeColor : ''}">${esc(user.name || 'Player')}</span>${badge ? `<span class="player-badge" title="${badge[1]}" aria-label="${badge[1]}">${badge[0]}</span>` : ''}${user.isPremium ? '<span class="player-premium" title="Premium member" aria-label="Premium member">✦</span>' : ''}${user.isMe ? '<span class="player-you">You</span>' : ''}</span>`;
   }
   function handle(user) {
-    return user.handle ? '@' + user.handle : 'Community player';
+    return user.handle ? '@' + user.handle : '';
   }
-  function loadout(user, mini = false) {
+  function loadout(user) {
     const equipped = [
       colors[user.activeColor] && ['◈', colors[user.activeColor]],
       badges[user.activeBadge || user.badge],
       effects[user.activeProfileEffect] && ['✧', effects[user.activeProfileEffect]],
     ].filter(Boolean);
-    return equipped.length ? `<span class="player-loadout${mini ? ' compact-loadout' : ''}" aria-label="Equipped cosmetics">${equipped.map(([icon, title]) => `<span class="loadout-item" title="${title}"><span aria-hidden="true">${icon}</span><span>${esc(title.replace(/ Name$/, '').replace(/^Profile /, '').replace(/ Profile Frame$/, ' frame').replace(/ Badge$/, ''))}</span></span>`).join('')}</span>` : '<span class="loadout-default">Original style</span>';
-  }
-  function renderPodium() {
-    $('spotlight-category').textContent = label(data.metric) + ' · Top 3';
-    $('podium').innerHTML = (data.top || []).slice(0, 3).map((user, index) => `
-      <article class="podium-player profile-surface ${index === 0 ? 'podium-winner' : ''}" ${surface(user)}>
-        ${cover(user)}<div class="podium-inner">
-          <div class="podium-topline"><span class="podium-place">${index === 0 ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h8v6a4 4 0 0 1-8 0V3ZM8 5H4v3a4 4 0 0 0 4 4m8-7h4v3a4 4 0 0 1-4 4M12 13v5m-4 3h8m-6-3h4v3"></path></svg> Leading the board' : ['','Second place','Third place'][index]}</span><span class="podium-place-number">0${index + 1}</span></div>
-          <a class="podium-identity" href="${profileLink(user)}">${avatar(user)}${name(user)}<span class="player-handle">${esc(handle(user))}</span></a>
-          ${loadout(user, true)}
-          <div class="podium-bottom"><div><strong class="podium-score" title="${exact(user[data.metric])}">${compact(user[data.metric])}</strong><span class="podium-score-label">${esc(label(data.metric))}</span></div><a class="profile-arrow" href="${profileLink(user)}" aria-label="View ${esc(user.name)}’s profile">↗</a></div>
-        </div>
-      </article>`).join('') || '<div class="board-empty podium-empty"><strong>The first spot is waiting.</strong><p>Play a game and start making your mark.</p><a href="/game-portal/">Explore games ↗</a></div>';
+    return equipped.length ? `<span class="player-loadout" aria-label="Equipped cosmetics">${equipped.map(([icon, title]) => `<span class="loadout-item" title="${title}"><span aria-hidden="true">${icon}</span><span>${esc(title.replace(/ Name$/, '').replace(/^Profile /, '').replace(/ Profile Frame$/, ' frame').replace(/ Badge$/, ''))}</span></span>`).join('')}</span>` : '<span class="loadout-default" aria-label="No equipped items">—</span>';
   }
   function renderMine() {
     const user = data.me;
+    $('my-rank').hidden = !user && !data.isTester;
     if (data.isTester) {
-      $('my-rank').innerHTML = '<span class="personal-symbol" aria-hidden="true">⌘</span><div class="personal-copy"><span class="personal-eyebrow">YOUR STANDING</span><strong>Playing in the sandbox</strong><p>Tester accounts sit out of public rankings.</p></div><a class="personal-link" href="/tester/">Open Tester Hub ↗</a>';
+      $('my-rank').innerHTML = '<span class="personal-label">Your rank</span><span class="personal-unranked">Test accounts are excluded from rankings.</span>';
     } else if (!user) {
-      $('my-rank').innerHTML = '<span class="personal-symbol" aria-hidden="true">↗</span><div class="personal-copy"><span class="personal-eyebrow">YOUR NEXT MOVE</span><strong>There’s a place for you here.</strong><p>Play, earn, and make the board your own.</p></div><a class="personal-link" href="/game-portal/">Jump into a game ↗</a>';
+      $('my-rank').innerHTML = '';
     } else {
-      $('my-rank').innerHTML = `<div class="personal-profile profile-surface" ${surface(user)}>${cover(user)}<a href="${profileLink(user)}" class="personal-identity">${avatar(user)}<span class="personal-copy"><span class="personal-eyebrow">YOUR STANDING · ${esc(label(data.metric))}</span>${name(user)}<span class="personal-caption">Your profile. Your place on the board.</span></span></a></div><div class="personal-numbers"><div><strong>#${exact(user.rank)}</strong><span>of ${exact(data.total)} players</span></div><div><strong title="${exact(user[data.metric])}">${compact(user[data.metric])}</strong><span>${esc(label(data.metric))}</span></div></div><a class="personal-link" href="/shop/">Make it yours ↗</a>`;
+      $('my-rank').innerHTML = `<span class="personal-label">Your rank</span><a href="${profileLink(user)}" class="personal-identity">${avatar(user)}<span class="personal-copy">${name(user)}</span></a><div class="personal-numbers"><div><strong>#${exact(user.rank)}</strong><span>of ${exact(data.total)}</span></div><div><strong title="${exact(user[data.metric])}">${compact(user[data.metric])}</strong><span>${esc(label(data.metric))}</span></div></div><a class="personal-link" href="${profileLink(user)}">Profile</a>`;
     }
   }
   function renderRows() {
     const secondary = metrics.filter(([key]) => key !== data.metric).slice(0, 2);
     const columns = [[data.metric, label(data.metric)], ...secondary];
-    $('standings-head').innerHTML = `<span>Rank</span><span>Player</span><span>Signature style</span>${columns.map(([, title], index) => `<span class="${index === 0 ? 'selected-column' : ''}">${esc(title)}</span>`).join('')}`;
+    $('rankings-title').textContent = label(data.metric) + ' rankings';
+    $('standings-head').innerHTML = `<span>Rank</span><span>Player</span><span>Equipped</span>${columns.map(([, title], index) => `<span class="${index === 0 ? 'selected-column' : ''}">${esc(title)}</span>`).join('')}`;
     $('rank-list').innerHTML = (data.players || []).map(user => `
       <li class="standing-row profile-surface ${user.isMe ? 'standing-me' : ''}" ${surface(user)} value="${number(user.rank)}">
-        ${cover(user)}<span class="standing-place ${user.rank <= 3 ? 'standing-top' : ''}" aria-label="Rank ${number(user.rank)}">${String(number(user.rank)).padStart(2, '0')}</span>
+        ${cover(user)}<span class="standing-place ${user.rank <= 3 ? 'standing-top' : ''}" aria-label="Rank ${number(user.rank)}">${number(user.rank)}</span>
         <a class="standing-identity" href="${profileLink(user)}">${avatar(user)}<span class="standing-person">${name(user)}<span class="player-handle">${esc(handle(user))}</span></span></a>
         <div class="standing-style">${loadout(user)}</div>
         ${columns.map(([key, title], index) => `<div class="standing-stat ${index === 0 ? 'selected-column' : 'secondary-stat'}"><span class="mobile-stat-label">${esc(title)}</span><strong title="${exact(user[key])}">${compact(user[key])}</strong></div>`).join('')}
-      </li>`).join('') || `<li class="board-empty"><strong>${search ? 'No players found.' : 'A fresh board. A new challenge.'}</strong><p>${search ? 'Try a different name or username.' : 'The first rankings will appear as the community plays.'}</p>${search ? '<button type="button" id="clear-search">Clear search</button>' : '<a href="/game-portal/">Find a game ↗</a>'}</li>`;
+      </li>`).join('') || `<li class="board-empty"><p>${search ? 'No players found.' : 'No rankings yet.'}</p>${search ? '<button type="button" id="clear-search">Clear search</button>' : ''}</li>`;
     const shown = (data.players || []).length;
     const total = number(search ? data.matchCount : data.total);
-    $('rank-count').textContent = search ? `${exact(total)} ${total === 1 ? 'match' : 'matches'} · original ranks preserved` : `${exact(data.total)} players · ${label(data.metric)} rankings`;
+    $('rank-count').textContent = search ? `${exact(total)} ${total === 1 ? 'match' : 'matches'}` : `${exact(data.total)} players`;
     const notice = $('board-notice');
     notice.hidden = total <= shown;
-    notice.textContent = search ? `Showing the first ${shown} of ${exact(total)} matches. Narrow your search to find more players.` : `Showing the top ${shown} players. Search to find anyone in the community.`;
+    notice.textContent = `Showing ${shown} of ${exact(total)} ${search ? 'matches' : 'players'}.`;
     $('clear-search')?.addEventListener('click', () => { $('rank-search').value = ''; search = ''; load(); $('rank-search').focus(); });
   }
   function render() {
-    renderPodium(); renderMine(); renderRows();
-    $('board-updated').textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ' · refreshes every minute';
+    renderMine(); renderRows();
+    $('board-updated').textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     $('board-status').textContent = `${label(data.metric)} rankings loaded. ${exact(data.matchCount ?? data.total)} players${search ? ' match your search' : ''}.`;
   }
   async function load() {
@@ -130,12 +120,11 @@
       render();
     } catch (error) {
       if (version !== sequence || error.name === 'AbortError') return;
-      const message = data ? 'Couldn’t refresh. Showing the last successful update.' : 'Rankings are taking a break. Try refreshing in a moment.';
+      const message = data ? 'Could not refresh. Showing previous results.' : 'Unable to load rankings.';
       $('board-status').textContent = message;
       $('board-updated').textContent = message;
       if (!data) {
-        $('podium').innerHTML = '<div class="board-empty podium-empty"><strong>The board will be back.</strong><p>Your scores and style will be here when rankings reconnect.</p></div>';
-        $('my-rank').innerHTML = '<span class="personal-symbol" aria-hidden="true">↗</span><div class="personal-copy"><strong>Keep the games going.</strong><p>Your standing is temporarily unavailable.</p></div><a class="personal-link" href="/game-portal/">Explore games ↗</a>';
+        $('my-rank').hidden = true;
         $('rank-count').textContent = 'Rankings unavailable';
         $('rank-list').innerHTML = `<li class="board-empty"><p>${message}</p><button type="button" id="retry-board">Try again</button></li>`;
         $('retry-board').addEventListener('click', load);
@@ -147,7 +136,7 @@
       }
     }
   }
-  $('metric-tabs').innerHTML = metrics.map(([key, title, icon]) => `<button type="button" class="board-category" data-metric="${key}" aria-pressed="${key === activeMetric}"><span aria-hidden="true">${icon}</span>${title}</button>`).join('');
+  $('metric-tabs').innerHTML = metrics.map(([key, title]) => `<button type="button" class="board-category" data-metric="${key}" aria-pressed="${key === activeMetric}">${title}</button>`).join('');
   $('metric-tabs').addEventListener('click', event => {
     const button = event.target.closest('[data-metric]');
     if (!button || button.dataset.metric === activeMetric) return;

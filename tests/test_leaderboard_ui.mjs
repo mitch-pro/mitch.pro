@@ -32,7 +32,7 @@ function boot(initialMode = 'success') {
     focus() { this.focused = true; }
     emit(type, target = this) { this.events.get(type)?.({ target }); }
   }
-  for (const id of ['metric-tabs', 'spotlight-category', 'podium', 'my-rank', 'standings-head', 'rank-list', 'rank-count', 'board-notice', 'board-updated', 'board-status', 'board-content', 'refresh-board', 'rank-search']) elements.set(id, new Element(id));
+  for (const id of ['metric-tabs', 'rankings-title', 'my-rank', 'standings-head', 'rank-list', 'rank-count', 'board-notice', 'board-updated', 'board-status', 'board-content', 'refresh-board', 'rank-search']) elements.set(id, new Element(id));
   const document = { getElementById: id => elements.get(id) || null, querySelectorAll: () => elements.get('metric-tabs').tabs, hidden: false };
   const fetch = async (url, options) => {
     requests.push({ url, options });
@@ -67,18 +67,18 @@ function boot(initialMode = 'success') {
 
 const app = boot();
 await tick();
-assert.match(app.get('podium').innerHTML, /data:image\/png;base64,aGk=/);
-assert.match(app.get('podium').innerHTML, /https:\/\/example.test\/cover.jpg/);
-assert.match(app.get('podium').innerHTML, /data-color="gold_glow"/);
-assert.match(app.get('podium').innerHTML, /data-effect="profile_neon_frame"/);
-assert.match(app.get('podium').innerHTML, /Artist Badge/);
-assert.match(app.get('podium').innerHTML, /Premium member/);
-assert.match(app.get('podium').innerHTML, /Nova &lt;script&gt;/);
-assert.ok(!app.get('podium').innerHTML.includes('<script>alert'));
+assert.match(app.get('rank-list').innerHTML, /data:image\/png;base64,aGk=/);
+assert.match(app.get('rank-list').innerHTML, /https:\/\/example.test\/cover.jpg/);
+assert.match(app.get('rank-list').innerHTML, /data-color="gold_glow"/);
+assert.match(app.get('rank-list').innerHTML, /data-effect="profile_neon_frame"/);
+assert.match(app.get('rank-list').innerHTML, /Artist Badge/);
+assert.match(app.get('rank-list').innerHTML, /Premium member/);
+assert.match(app.get('rank-list').innerHTML, /Nova &lt;script&gt;/);
+assert.ok(!app.get('rank-list').innerHTML.includes('<script>alert'));
 assert.match(app.get('rank-list').innerHTML, /Neon frame/);
 assert.match(app.get('my-rank').innerHTML, /#147/);
 assert.equal(app.get('board-content').getAttribute('aria-busy'), 'false');
-for (const id of ['podium', 'my-rank', 'rank-list']) {
+for (const id of ['my-rank', 'rank-list']) {
   const html = app.get(id).innerHTML;
   assert.equal((html.match(/<span(?:\s|>)/g) || []).length, (html.match(/<\/span>/g) || []).length, `${id} must have balanced profile markup`);
 }
@@ -88,7 +88,6 @@ assert.match(app.requests.at(-1).url, /q=hero/);
 assert.match(app.get('rank-list').innerHTML, /aria-label="Rank 147"/);
 assert.match(app.get('rank-list').innerHTML, /player-you/);
 assert.match(app.get('rank-count').textContent, /1 match/);
-assert.match(app.get('podium').innerHTML, /Nova &lt;script&gt;/);
 app.search('nobody'); app.debounce(); await tick();
 assert.match(app.get('rank-list').innerHTML, /No players found/);
 app.get('clear-search').emit('click'); await tick();
@@ -97,14 +96,14 @@ assert.equal(app.get('rank-search').value, '');
 app.metric('wins'); await tick();
 assert.match(app.requests.at(-1).url, /metric=wins/);
 assert.match(app.get('my-rank').innerHTML, /#1</);
-assert.equal(app.get('spotlight-category').textContent, 'Chess wins · Top 3');
+assert.equal(app.get('rankings-title').textContent, 'Chess wins rankings');
 assert.equal(app.get('metric-tabs').tabs.find(tab => tab.dataset.metric === 'wins').getAttribute('aria-pressed'), 'true');
 
 // Late responses must not overwrite newer searches or categories.
 app.delay(); app.metric('pixels');
 app.metric('wins'); await tick();
 app.release(); await tick();
-assert.equal(app.get('spotlight-category').textContent, 'Chess wins · Top 3');
+assert.equal(app.get('rankings-title').textContent, 'Chess wins rankings');
 app.search('hero'); app.debounce(); await tick();
 const beforeAutoRefresh = app.requests.length;
 app.intervals[0](); await tick();
@@ -113,14 +112,14 @@ app.document.hidden = true; app.intervals[0](); await tick();
 assert.equal(app.requests.length, beforeAutoRefresh + 1, 'Hidden pages must not refresh');
 
 app.mode('error'); app.refresh(); await tick();
-assert.match(app.get('board-updated').textContent, /last successful update/);
+assert.match(app.get('board-updated').textContent, /previous results/);
 assert.match(app.get('rank-list').innerHTML, /Hero/);
 assert.equal(app.get('board-content').getAttribute('aria-busy'), 'false');
 app.mode('tester'); app.refresh(); await tick();
-assert.match(app.get('my-rank').innerHTML, /Tester Hub/);
-app.mode('empty'); app.refresh(); await tick();
-assert.match(app.get('podium').innerHTML, /first spot is waiting/);
-assert.match(app.get('my-rank').innerHTML, /place for you/);
+assert.match(app.get('my-rank').innerHTML, /Test accounts are excluded/);
+app.mode('empty'); app.search(''); app.debounce(); await tick();
+assert.match(app.get('rank-list').innerHTML, /No rankings yet/);
+assert.equal(app.get('my-rank').hidden, true);
 app.mode('unsafe'); app.search(''); app.debounce(); await tick();
 assert.ok(!app.get('rank-list').innerHTML.includes('javascript:'));
 assert.ok(!app.get('rank-list').innerHTML.includes('data:text/html'));
