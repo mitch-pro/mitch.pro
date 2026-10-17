@@ -209,7 +209,10 @@ fn handle_owner_accounts(
             })
             .unwrap_or_default();
         if origin_host.is_empty() || !origin_host.eq_ignore_ascii_case(&req_host) {
-            return json_response(403, json!({ "error": "Open this tool from the owner panel." }));
+            return json_response(
+                403,
+                json!({ "error": "Open this tool from the owner panel." }),
+            );
         }
     }
     let action = body.get("action").and_then(|v| v.as_str()).unwrap_or("");

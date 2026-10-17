@@ -1065,7 +1065,10 @@ fn revert_admin_action(
                     }
                 }
                 let _ = state.store.write_document(&path, &Value::Array(next));
-                Ok(format!("Removed #{}:mitch.pro from official channels", alias))
+                Ok(format!(
+                    "Removed #{}:mitch.pro from official channels",
+                    alias
+                ))
             }
         }
         other => Err(format!(
