@@ -296,19 +296,32 @@
       margin-bottom: 7px;
     }
     .action-card textarea { min-height: 78px; resize: vertical; }
+    input[type="checkbox"],
+    input[type="radio"] {
+      width: 18px !important;
+      height: 18px !important;
+      min-width: 18px !important;
+      min-height: 18px !important;
+      flex: 0 0 18px !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      accent-color: var(--t-ac, #8b5cf6);
+      cursor: pointer;
+    }
     .check {
       display: flex;
       align-items: center;
       gap: 8px;
       color: var(--t-fg2);
-      font-size: 0.76rem;
-      margin-bottom: 8px;
+      font-size: 0.82rem;
+      margin-bottom: 10px;
+      cursor: pointer;
     }
-    .check input { width: 14px; min-width: 14px; margin: 0; accent-color: #ef4444; flex: 0 0 auto; }
-    .form-status { min-height: 1.2em; color: var(--t-fg2); font-size: 0.74rem; margin-top: 4px; }
+    .check input { width: 18px; min-width: 18px; margin: 0; accent-color: #ef4444; flex: 0 0 18px; }
+    .form-status { min-height: 1.2em; color: var(--t-fg2); font-size: 0.78rem; margin-top: 6px; }
     .form-status.ok { color: #d8b4fe; }
     .form-status.err { color: #f87171; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     section {
       background: color-mix(in srgb, var(--t-bg2) 92%, transparent);
       border: 1px solid var(--t-bd);
@@ -340,7 +353,7 @@
       font-size: 0.66rem;
       font-weight: 750;
     }
-    .table-wrap { overflow: auto; max-height: 360px; }
+    .table-wrap { overflow: auto; max-height: 420px; }
     section.is-fullscreen {
       position: fixed;
       inset: 12px;
@@ -393,20 +406,21 @@
     .canvas-sample { display:flex; flex-wrap:wrap; gap:2px; width:78px; }
     .canvas-dot { width:8px; height:8px; border-radius:2px; border:1px solid var(--t-bd); }
     .row-actions { display:flex; gap:6px; flex-wrap:wrap; }
-    .domain-row { display:flex; flex-wrap:wrap; gap:5px; margin:-2px 0 8px; }
+    .domain-row { display:flex; flex-wrap:wrap; gap:5px; margin:2px 0 8px; flex: 1 0 100%; width: 100%; }
     .domain-row button {
-      width:auto; margin:0; padding:5px 7px; font-size:0.66rem;
+      width:auto; margin:0; padding:5px 8px; font-size:0.68rem; min-height: 28px !important;
       border-color: var(--t-bd); color: var(--t-fg2);
     }
     .domain-row button.primary-domain {
       color:#fbbf24; border-color:rgba(251,191,36,.4); background:rgba(251,191,36,.08);
     }
 
-    .economy-panel, .moderation-panel, .casino-panel, .content-panel, .logs-panel {
+    .actions-panel, .economy-panel, .moderation-panel, .casino-panel, .content-panel, .logs-panel {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 10px;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 14px;
       margin: 0;
+      align-items: start;
     }
     .panel-title {
       grid-column: 1 / -1;
@@ -448,6 +462,54 @@
     .feed-msg { color: var(--t-fg); }
     .feed-tag { padding: 1px 4px; border-radius: 4px; background: var(--t-bg3); margin-right: 5px; font-size: 0.64rem; }
 
+    /* Owner account tools card styling */
+    .owner-account-tools {
+      border: 1px solid color-mix(in srgb, var(--t-ac) 24%, var(--t-bd));
+      border-radius: 10px;
+      background: var(--t-bg);
+      padding: 20px;
+      margin: 18px 0;
+      display: grid;
+      gap: 12px;
+    }
+    .owner-account-tools[hidden] { display: none !important; }
+    .owner-account-tools h3, .owner-account-tools h4 {
+      margin: 0;
+      font-family: 'Outfit', system-ui, sans-serif;
+      font-size: 1.05rem;
+      color: var(--t-fg);
+    }
+    .owner-account-tools p { margin: 0; color: var(--t-fg2); font-size: 0.85rem; line-height: 1.5; }
+    .owner-account-tools hr { border: 0; border-top: 1px solid var(--t-bd); margin: 8px 0; }
+    .owner-account-tools button { width: auto; justify-self: start; padding: 8px 14px; }
+    .owner-account-tools button[data-danger], button[data-danger] {
+      border-color: rgba(239, 68, 68, 0.45) !important;
+      background: rgba(239, 68, 68, 0.12) !important;
+      color: #fca5a5 !important;
+    }
+    .owner-account-list {
+      max-height: 260px;
+      overflow-y: auto;
+      border: 1px solid var(--t-bd);
+      border-radius: 8px;
+      background: var(--t-bg2);
+      padding: 8px;
+      display: grid;
+      gap: 4px;
+    }
+    .owner-account-list:empty { display: none; }
+    .owner-account-list label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 0.84rem;
+      color: var(--t-fg);
+      cursor: pointer;
+    }
+    .owner-account-list label:hover { background: var(--t-bg3); }
+
     /* Retired mitch.prox / arbitrary-proxy UI (APIs return 410); keep DOM nodes for JS safety */
     #prox-tools,
     #searchIntent-section,
@@ -457,7 +519,7 @@
 
     @media (max-width: 1000px) {
       .economy-panel, .moderation-panel, .casino-panel, .content-panel, .logs-panel {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       }
     }
     @media (max-width: 900px) {
@@ -480,8 +542,8 @@
     body.admin-locked .notice,
     body.admin-locked .role-note,
     body.admin-locked .cards,
-    body.admin-locked .topbar div,
-    body.admin-locked .topbar .status {
+    body.admin-locked .staff-panel-switcher,
+    body.admin-locked .staff-school-details {
       display: none !important;
     }
 
@@ -751,9 +813,9 @@
         <h2>Moderator Roles</h2>
         <p>Admins can apply changes directly. Moderators can request role or panel changes for approval.</p>
         <div id="moderator-list" style="font-size:0.75rem; margin-bottom:10px;"></div>
-        <form onsubmit="addModerator(event)" style="display:flex; gap:5px;">
-          <input id="mod-email" type="email" placeholder="user@email.com" required style="flex:1">
-          <button type="submit" style="width:auto">Add</button>
+        <form onsubmit="addModerator(event)" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <input id="mod-email" type="email" placeholder="user@email.com" required style="flex:1 1 200px; min-width:180px; margin:0;">
+          <button type="submit" style="width:auto; margin:0;">Add</button>
         </form>
         <textarea id="mod-panel-links" placeholder="Optional panel links, one per line: Label | /path"></textarea>
         <button type="button" onclick="saveModeratorPanel()">Save Moderator Panel</button>
@@ -764,9 +826,9 @@
         <h2>Blog Contributors</h2>
         <p>Contributors can create, edit, draft, and publish posts at /blog/ without broader staff permissions.</p>
         <div id="blog-contributor-list" style="font-size:0.75rem; margin-bottom:10px;"></div>
-        <form onsubmit="addBlogContributor(event)" style="display:flex; gap:5px;">
-          <input id="blog-contributor-email" type="email" placeholder="user@email.com" required style="flex:1">
-          <button type="submit" style="width:auto">Add</button>
+        <form onsubmit="addBlogContributor(event)" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <input id="blog-contributor-email" type="email" placeholder="user@email.com" required style="flex:1 1 200px; min-width:180px; margin:0;">
+          <button type="submit" style="width:auto; margin:0;">Add</button>
         </form>
         <div id="blog-contributor-status" class="form-status"></div>
       </div>
@@ -775,9 +837,9 @@
         <h2>Beta Testers</h2>
         <p>Beta testers get access to /tester/ tools, unlimited test coins, test notifications, and cooldown bypasses.</p>
         <div id="tester-list" style="font-size:0.75rem; margin-bottom:10px;"></div>
-        <form onsubmit="addTester(event)" style="display:flex; gap:5px;">
-          <input id="tester-email" type="email" placeholder="user@email.com" required style="flex:1">
-          <button type="submit" style="width:auto">Add</button>
+        <form onsubmit="addTester(event)" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <input id="tester-email" type="email" placeholder="user@email.com" required style="flex:1 1 200px; min-width:180px; margin:0;">
+          <button type="submit" style="width:auto; margin:0;">Add</button>
         </form>
         <div id="tester-status" class="form-status"></div>
       </div>
@@ -1062,9 +1124,9 @@
       <div class="action-card danger" id="casino-rig-card" style="display:none">
         <h2>Casino Rigging</h2>
         <p>Percentage chance to spoof a win as a loss (0-100%).</p>
-        <div style="display:flex; gap:5px; align-items:center;">
-          <input id="rig-chance" type="number" min="0" max="100" placeholder="%" style="flex:1">
-          <button onclick="updateRigChance()" style="width:auto">Set %</button>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <input id="rig-chance" type="number" min="0" max="100" placeholder="%" style="flex:1 1 120px; min-width:110px; margin:0;">
+          <button onclick="updateRigChance()" style="width:auto; margin:0;">Set %</button>
         </div>
         <div id="rig-status" class="form-status"></div>
       </div>
@@ -1086,10 +1148,10 @@
         <div class="action-card" style="grid-column: 1 / -1;">
           <h2>Application Logs</h2>
           <p>Read server logs written into the site database. Use debug request logging by starting the server with APP_DEBUG_LOGS=1.</p>
-          <div style="display:grid; grid-template-columns: minmax(130px, .45fr) minmax(150px, .65fr) minmax(120px, .35fr) minmax(180px, 1fr) auto; gap: 10px; align-items:end;">
+          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; align-items:end;">
             <label>
               <span class="muted" style="display:block; font-size:.7rem; margin-bottom:4px;">Level</span>
-              <select id="app-log-level" style="width:100%;">
+              <select id="app-log-level" style="width:100%; margin:0;">
                 <option value="all">All levels</option>
                 <option value="debug">Debug</option>
                 <option value="info">Info</option>
@@ -1099,13 +1161,13 @@
             </label>
             <label>
               <span class="muted" style="display:block; font-size:.7rem; margin-bottom:4px;">Category</span>
-              <select id="app-log-category" style="width:100%;">
+              <select id="app-log-category" style="width:100%; margin:0;">
                 <option value="all">All categories</option>
               </select>
             </label>
             <label>
               <span class="muted" style="display:block; font-size:.7rem; margin-bottom:4px;">Lines</span>
-              <select id="app-log-limit" style="width:100%;">
+              <select id="app-log-limit" style="width:100%; margin:0;">
                 <option value="100">100</option>
                 <option value="200" selected>200</option>
                 <option value="500">500</option>
@@ -1125,10 +1187,10 @@
         <div class="action-card" style="grid-column: 1 / -1;">
           <h2>Docker Logs</h2>
           <p>Read recent logs for the production compose services. This is read-only and limited to recent lines.</p>
-          <div style="display:grid; grid-template-columns: minmax(160px, 1fr) minmax(120px, .4fr) auto; gap: 10px; align-items:end;">
+          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; align-items:end;">
             <label>
               <span class="muted" style="display:block; font-size:.7rem; margin-bottom:4px;">Service</span>
-              <select id="docker-log-service" style="width:100%;">
+              <select id="docker-log-service" style="width:100%; margin:0;">
                 <option value="all">All services</option>
                 <option value="reverse-proxy">reverse-proxy</option>
                 <option value="webserver-blue">webserver-blue</option>
@@ -1139,7 +1201,7 @@
             </label>
             <label>
               <span class="muted" style="display:block; font-size:.7rem; margin-bottom:4px;">Lines</span>
-              <select id="docker-log-tail" style="width:100%;">
+              <select id="docker-log-tail" style="width:100%; margin:0;">
                 <option value="100">100</option>
                 <option value="200" selected>200</option>
                 <option value="500">500</option>
@@ -1396,6 +1458,36 @@
       return headers;
     }
 
+    function handlePassphraseRequired(errorCode) {
+      sessionStorage.removeItem('admin_passphrase');
+      stopPolling();
+      const accessEl = document.getElementById('access-status');
+      if (accessEl) accessEl.textContent = 'Passphrase required';
+      if (errorCode === 'passphrase_not_configured') {
+        checkPassphraseStatus();
+      } else {
+        showLockedState();
+      }
+    }
+
+    async function adminFetch(url, options = {}) {
+      const mergedHeaders = getAdminHeaders(options.headers || {});
+      const res = await fetch(url, {
+        credentials: 'include',
+        cache: 'no-store',
+        ...options,
+        headers: mergedHeaders,
+      });
+      if (res.status === 403 && currentUser && currentUser.isAdmin) {
+        const cloned = res.clone();
+        const errData = await cloned.json().catch(() => ({}));
+        if (errData && (errData.error === 'invalid_passphrase' || errData.error === 'passphrase_not_configured')) {
+          handlePassphraseRequired(errData.error);
+        }
+      }
+      return res;
+    }
+
     const ACTION_BY_URL = {
       '/api/admin/grant-premium': 'grant_premium',
       '/api/admin/revoke-premium': 'revoke_premium',
@@ -1453,6 +1545,8 @@
       document.querySelectorAll('input[type="email"]').forEach(input => {
         if (input.dataset.domainsReady) return;
         input.dataset.domainsReady = '1';
+        const parentStyle = (input.parentElement && input.parentElement.getAttribute('style')) || '';
+        if (input.closest('#passphrase-lock-box') || /display\s*:\s*flex/i.test(parentStyle)) return;
         const row = document.createElement('div');
         row.className = 'domain-row';
         domains.forEach((domain, idx) => {
@@ -1476,12 +1570,16 @@
 
 
     async function runWealthAudit() {
-      const res = await fetch('/api/admin/economy/audit', { credentials: 'include', headers: getAdminHeaders() });
-      const data = await res.json();
+      const res = await adminFetch('/api/admin/economy/audit');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) {
+        document.getElementById('audit-results').textContent = data.error || 'Audit failed.';
+        return;
+      }
       document.getElementById('audit-results').innerHTML = `
-        Total Coins: ${data.total.toFixed(2)}<br>
-        Top 1% owns: ${data.topPercent.toFixed(1)}%<br>
-        Richest: ${data.richestUser}
+        Total Coins: ${Number(data.total || 0).toFixed(2)}<br>
+        Top 1% owns: ${Number(data.topPercent || 0).toFixed(1)}%<br>
+        Richest: ${esc(data.richestUser || 'N/A')}
       `;
     }
 
@@ -1892,25 +1990,31 @@
 
 
     async function pollFeeds() {
+      if (document.body.classList.contains('admin-locked')) return;
       try {
-        const res = await fetch('/api/admin/live-feeds', { credentials: 'include', headers: getAdminHeaders() });
+        const res = await adminFetch('/api/admin/live-feeds');
+        if (!res.ok) return;
         const data = await res.json();
 
         const traffic = document.getElementById('traffic-feed');
-        traffic.innerHTML = data.traffic.map(t => `
-          <div class="feed-entry">
-            <span class="feed-ts">${new Date(t.ts).toLocaleTimeString('en-US', { hour12: true })}</span>
-            <span class="feed-msg">${esc(t.user)} -> ${esc(t.page)}</span>
-          </div>
-        `).join('');
+        if (traffic && Array.isArray(data.traffic)) {
+          traffic.innerHTML = data.traffic.map(t => `
+            <div class="feed-entry">
+              <span class="feed-ts">${new Date(t.ts).toLocaleTimeString('en-US', { hour12: true })}</span>
+              <span class="feed-msg">${esc(t.user)} -> ${esc(t.page)}</span>
+            </div>
+          `).join('');
+        }
 
         const betting = document.getElementById('betting-feed');
-        betting.innerHTML = data.bets.map(b => `
-          <div class="feed-entry">
-            <span class="feed-tag">${esc(b.game)}</span>
-            <span class="feed-msg">${esc(b.user)} wagered ${b.amount} -> ${esc(b.outcome)}</span>
-          </div>
-        `).join('');
+        if (betting && Array.isArray(data.bets)) {
+          betting.innerHTML = data.bets.map(b => `
+            <div class="feed-entry">
+              <span class="feed-tag">${esc(b.game)}</span>
+              <span class="feed-msg">${esc(b.user)} wagered ${b.amount} -> ${esc(b.outcome)}</span>
+            </div>
+          `).join('');
+        }
       } catch(e) {}
     }
 
@@ -1935,9 +2039,7 @@
       setStatus('mod-profile-status', 'Looking up…', '');
       document.getElementById('mod-profile-results').innerHTML = '';
       try {
-        const res = await fetch('/api/admin/moderation/lookup?q=' + encodeURIComponent(q), {
-          credentials: 'include', cache: 'no-store', headers: getAdminHeaders(),
-        });
+        const res = await adminFetch('/api/admin/moderation/lookup?q=' + encodeURIComponent(q));
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Lookup failed.');
         setStatus('mod-profile-status', '', '');
@@ -1993,7 +2095,7 @@
       const el = document.getElementById('conduit-health-body');
       if (!el) return;
       try {
-        const res = await fetch('/api/admin/matrix/health', { credentials: 'include', cache: 'no-store', headers: getAdminHeaders() });
+        const res = await adminFetch('/api/admin/matrix/health');
         const d = await res.json();
         if (!res.ok) throw new Error(d.error || 'Could not reach Conduit health check.');
         const gb = (d.dbSizeBytes / 1073741824).toFixed(2);
@@ -2024,7 +2126,8 @@
 
 
     async function refreshCasinoStats() {
-      const res = await fetch('/api/admin/casino/rtp', { credentials: 'include', headers: getAdminHeaders() });
+      const res = await adminFetch('/api/admin/casino/rtp');
+      if (!res.ok) return;
       const d = await res.json();
       const intake = d.intake || 0;
       const payout = d.payout || 0;
@@ -2088,7 +2191,8 @@
     async function refreshProxSessions() {
       const list = document.getElementById('prox-list');
       if (!list) return;
-      const res = await fetch('/api/admin/prox/sessions', { credentials: 'include', headers: getAdminHeaders() });
+      const res = await adminFetch('/api/admin/prox/sessions');
+      if (!res.ok) return;
       const d = await res.json();
       list.innerHTML = (d.sessions || []).map(s => '<div class="feed-entry"><span class="feed-ts">Active</span><span class="feed-msg">' + s.id + ' (Display ' + s.display + ')</span></div>').join('') || '<div class="empty">No active sessions</div>';
     }
@@ -2103,11 +2207,7 @@
       if (output) output.textContent = 'Loading...';
       try {
         const params = new URLSearchParams({ level, category, limit, search });
-        const res = await fetch('/api/admin/app-logs?' + params.toString(), {
-          credentials: 'include',
-          cache: 'no-store',
-          headers: getAdminHeaders(),
-        });
+        const res = await adminFetch('/api/admin/app-logs?' + params.toString());
         const d = await res.json().catch(() => ({}));
         if (!res.ok || d.error) throw new Error(d.message || d.error || 'Failed to load application logs.');
 
@@ -2142,11 +2242,7 @@
       if (output) output.textContent = 'Loading...';
       try {
         const params = new URLSearchParams({ service, tail });
-        const res = await fetch('/api/admin/docker-logs?' + params.toString(), {
-          credentials: 'include',
-          cache: 'no-store',
-          headers: getAdminHeaders(),
-        });
+        const res = await adminFetch('/api/admin/docker-logs?' + params.toString());
         const d = await res.json().catch(() => ({}));
         if (!res.ok || d.error) throw new Error(d.message || d.error || 'Failed to load Docker logs.');
         const text = d.output || d.stderr || 'No recent log output.';
@@ -2167,11 +2263,7 @@
       setStatus('blog-delete-status', 'Loading blog deletion log...', '');
       list.innerHTML = '<div class="empty">Loading deletions...</div>';
       try {
-        const res = await fetch('/api/admin/blog-deletions', {
-          credentials: 'include',
-          cache: 'no-store',
-          headers: getAdminHeaders(),
-        });
+        const res = await adminFetch('/api/admin/blog-deletions');
         const d = await res.json().catch(() => ({}));
         if (!res.ok || d.error) throw new Error(d.error || 'Failed to load blog deletion log.');
         const rows = d.logs || [];
@@ -2303,31 +2395,43 @@
     }
 
     async function pollResources() {
+      if (document.body.classList.contains('admin-locked')) return;
       try {
-        const res = await fetch('/api/admin/resources', { credentials: 'include', headers: getAdminHeaders() });
+        const res = await adminFetch('/api/admin/resources');
+        if (!res.ok) return;
         const d = await res.json();
-        const memGb = (d.memory.rss / 1024 / 1024 / 1024).toFixed(2);
-        const totalGb = (d.totalMem / 1024 / 1024 / 1024).toFixed(1);
-        document.getElementById('ram-usage').textContent = `${memGb}/${totalGb} GB`;
+        const rss = (d.memory && d.memory.rss) || 0;
+        const totalMem = d.totalMem || (8 * 1024 * 1024 * 1024);
+        const memGb = (rss / 1024 / 1024 / 1024).toFixed(2);
+        const totalGb = (totalMem / 1024 / 1024 / 1024).toFixed(1);
+        const ramEl = document.getElementById('ram-usage');
+        if (ramEl) ramEl.textContent = `${memGb}/${totalGb} GB`;
 
-        const cpuPercent = Math.round((d.load[0] / (d.cpus || 1)) * 100);
-        document.getElementById('cpu-usage').textContent = cpuPercent + '%';
+        const load0 = Array.isArray(d.load) ? (d.load[0] || 0) : 0;
+        const cpuPercent = Math.round((load0 / (d.cpus || 1)) * 100);
+        const cpuEl = document.getElementById('cpu-usage');
+        if (cpuEl) cpuEl.textContent = cpuPercent + '%';
 
         resourceHistory.cpu.push(cpuPercent);
-        resourceHistory.ram.push(d.memory.rss / 1024 / 1024);
+        resourceHistory.ram.push(rss / 1024 / 1024);
         if (resourceHistory.cpu.length > 30) resourceHistory.cpu.shift();
         if (resourceHistory.ram.length > 30) resourceHistory.ram.shift();
 
         drawResourceChart();
       } catch(e) {}
     }
-    let pollingActive = false;
+
+    let pollingTimers = [];
+    function stopPolling() {
+      while (pollingTimers.length) {
+        clearInterval(pollingTimers.pop());
+      }
+    }
     function startPolling() {
-      if (pollingActive) return;
-      pollingActive = true;
-      setInterval(pollResources, 10000);
-      setInterval(pollFeeds, 5000);
-      setInterval(loadModeratorRequests, 15000);
+      if (pollingTimers.length) return;
+      pollingTimers.push(setInterval(pollResources, 10000));
+      pollingTimers.push(setInterval(pollFeeds, 5000));
+      pollingTimers.push(setInterval(loadModeratorRequests, 15000));
     }
 
     function exitSectionFullscreen() {
@@ -2418,7 +2522,7 @@
         ['Cheat Logs', s.cheatLogs || 0],
       ];
       document.getElementById('cards').innerHTML = cards.map((c, i) =>
-        '<div class="card"><span class="metric-mark" aria-hidden="true">' + ['','✉','⚑','◇','●','⊘','≡'][i] + '</span><div class="label">' + esc(c[0]) + '</div><div class="value">' + esc(c[1]) + '</div></div>'
+        '<div class="card"><span class="metric-mark" aria-hidden="true">' + ['⚡','✉','⚑','◇','●','⊘','≡'][i] + '</span><div class="label">' + esc(c[0]) + '</div><div class="value">' + esc(c[1]) + '</div></div>'
       ).join('');
     }
 
@@ -2598,8 +2702,9 @@
     }
 
     async function loadModeratorRequests() {
+      if (document.body.classList.contains('admin-locked')) return;
       try {
-        const r = await fetch('/api/admin/moderator-requests', { credentials: 'include', cache: 'no-store', headers: getAdminHeaders() });
+        const r = await adminFetch('/api/admin/moderator-requests');
         if (!r.ok) return;
         const d = await r.json();
         moderatorRequests = d.requests || [];
@@ -2610,15 +2715,9 @@
     async function resolveModeratorRequest(id, decision) {
       const note = decision === 'reject' ? (await customPrompt('Rejection Note', 'Optional rejection note:')) || '' : '';
       try {
-        const headers = { 'Content-Type': 'application/json' };
-        const pass = sessionStorage.getItem('admin_passphrase');
-        if (pass) {
-          headers['X-Admin-Passphrase'] = pass;
-        }
-        const r = await fetch('/api/admin/moderator-requests/resolve', {
+        const r = await adminFetch('/api/admin/moderator-requests/resolve', {
           method: 'POST',
-          credentials: 'include',
-          headers: headers,
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id, decision, note }),
         });
         const d = await r.json().catch(() => ({}));
@@ -2634,13 +2733,9 @@
     async function resolveProfileReport(id, status) {
       const resolution = status === 'dismissed' ? ((await customPrompt('Dismissal Note', 'Optional dismissal note:')) || '') : '';
       try {
-        const headers = { 'Content-Type': 'application/json' };
-        const pass = sessionStorage.getItem('admin_passphrase');
-        if (pass) headers['X-Admin-Passphrase'] = pass;
-        const r = await fetch('/api/admin/profile-reports/resolve', {
+        const r = await adminFetch('/api/admin/profile-reports/resolve', {
           method: 'POST',
-          credentials: 'include',
-          headers,
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id, status, resolution }),
         });
         const d = await r.json().catch(() => ({}));
@@ -2655,10 +2750,9 @@
 
     async function resolveChatReport(ts, action = 'resolve') {
       try {
-        const res = await fetch('/api/admin/chat-reports/resolve', {
+        const res = await adminFetch('/api/admin/chat-reports/resolve', {
           method: 'POST',
-          credentials: 'include',
-          headers: getAdminHeaders({ 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' }),
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ts, action })
         });
         const d = await res.json().catch(() => ({}));
@@ -2675,10 +2769,7 @@
       const container = document.getElementById('matrix-staff-roster');
       if (!container) return;
       try {
-        const res = await fetch('/api/matrix/moderation/overview', {
-          credentials: 'include',
-          headers: getAdminHeaders()
-        });
+        const res = await adminFetch('/api/matrix/moderation/overview');
         if (!res.ok) {
           container.innerHTML = '<span class="muted">Could not load Matrix staff roster.</span>';
           return;
@@ -2779,10 +2870,9 @@
 
     async function updateMatrixSlowmode(seconds) {
       try {
-        const res = await fetch('/api/matrix/moderation/slowmode', {
+        const res = await adminFetch('/api/matrix/moderation/slowmode', {
           method: 'POST',
-          credentials: 'include',
-          headers: getAdminHeaders({ 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' }),
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ seconds: Number(seconds) })
         });
         const d = await res.json().catch(() => ({}));
@@ -2801,10 +2891,9 @@
         : 'Unlock Matrix General chat and allow regular members to chat again?';
       if (!confirm(promptText)) return;
       try {
-        const res = await fetch('/api/matrix/moderation/mute-room', {
+        const res = await adminFetch('/api/matrix/moderation/mute-room', {
           method: 'POST',
-          credentials: 'include',
-          headers: getAdminHeaders({ 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' }),
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ muted: willMute })
         });
         const d = await res.json().catch(() => ({}));
@@ -2817,10 +2906,9 @@
     }
 
     async function matrixMuteUser(userId, durationSeconds, reason) {
-      const res = await fetch('/api/matrix/moderation/mute-user', {
+      const res = await adminFetch('/api/matrix/moderation/mute-user', {
         method: 'POST',
-        credentials: 'include',
-        headers: getAdminHeaders({ 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' }),
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, durationSeconds: Number(durationSeconds), reason: reason || 'Muted by staff' })
       });
       const d = await res.json().catch(() => ({}));
@@ -2829,10 +2917,9 @@
     }
 
     async function matrixUnmuteUser(userId) {
-      const res = await fetch('/api/matrix/moderation/unmute-user', {
+      const res = await adminFetch('/api/matrix/moderation/unmute-user', {
         method: 'POST',
-        credentials: 'include',
-        headers: getAdminHeaders({ 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' }),
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId })
       });
       const d = await res.json().catch(() => ({}));
@@ -2845,10 +2932,9 @@
       const btn = document.getElementById('matrix-prune-devices-btn');
       if (btn) btn.disabled = true;
       try {
-        const res = await fetch('/api/matrix/devices/prune-stale', {
+        const res = await adminFetch('/api/matrix/devices/prune-stale', {
           method: 'POST',
-          credentials: 'include',
-          headers: getAdminHeaders({ 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' }),
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ maxAgeDays: 7 })
         });
         const d = await res.json().catch(() => ({}));
@@ -2956,10 +3042,9 @@
 
     async function matrixSetRole(userId, powerLevel) {
       if (!userId) return;
-      const res = await fetch('/api/matrix/moderation/set-role', {
+      const res = await adminFetch('/api/matrix/moderation/set-role', {
         method: 'POST',
-        credentials: 'include',
-        headers: getAdminHeaders({ 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' }),
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, powerLevel: Number(powerLevel) })
       });
       const d = await res.json();
@@ -2969,10 +3054,9 @@
 
     async function matrixKickUser(userId, reason, skipConfirm = false) {
       if (!skipConfirm && !confirm(`Kick ${userId} from official room?`)) return;
-      const res = await fetch('/api/matrix/moderation/kick', {
+      const res = await adminFetch('/api/matrix/moderation/kick', {
         method: 'POST',
-        credentials: 'include',
-        headers: getAdminHeaders({ 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' }),
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, reason: reason || 'Kicked by staff' })
       });
       const d = await res.json();
@@ -2983,10 +3067,9 @@
 
     async function matrixBanUser(userId, reason, skipConfirm = false) {
       if (!skipConfirm && !confirm(`Permanently BAN ${userId} from official room?`)) return;
-      const res = await fetch('/api/matrix/moderation/ban', {
+      const res = await adminFetch('/api/matrix/moderation/ban', {
         method: 'POST',
-        credentials: 'include',
-        headers: getAdminHeaders({ 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' }),
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, reason: reason || 'Banned by staff' })
       });
       const d = await res.json();
@@ -2997,10 +3080,9 @@
 
     async function matrixUnbanUser(userId, skipConfirm = false) {
       if (!skipConfirm && !confirm(`Unban ${userId} from Matrix chat?`)) return;
-      const res = await fetch('/api/matrix/moderation/unban', {
+      const res = await adminFetch('/api/matrix/moderation/unban', {
         method: 'POST',
-        credentials: 'include',
-        headers: getAdminHeaders({ 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' }),
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId })
       });
       const d = await res.json().catch(() => ({}));
@@ -3012,10 +3094,9 @@
     }
 
     async function matrixSetUserSlowmode(userId, seconds) {
-      const res = await fetch('/api/matrix/moderation/user-slowmode', {
+      const res = await adminFetch('/api/matrix/moderation/user-slowmode', {
         method: 'POST',
-        credentials: 'include',
-        headers: getAdminHeaders({ 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' }),
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, seconds: Number(seconds) })
       });
       const d = await res.json().catch(() => ({}));
@@ -3025,10 +3106,9 @@
 
     async function matrixRedact(roomId, eventId, reason, skipConfirm = false) {
       if (!skipConfirm && !confirm(`Redact/delete event ${eventId}?`)) return;
-      const res = await fetch('/api/matrix/moderation/redact', {
+      const res = await adminFetch('/api/matrix/moderation/redact', {
         method: 'POST',
-        credentials: 'include',
-        headers: getAdminHeaders({ 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' }),
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ roomId, eventId, reason: reason || 'Inappropriate content' })
       });
       const d = await res.json();
@@ -3063,31 +3143,30 @@
         const r = await fetch('/api/moderator/action-request', {
           method: 'POST',
           credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({ action, targetUrl: url, payload: body || {} }),
         });
         const d = await r.json().catch(() => ({}));
         if (!r.ok || d.error) throw new Error(d.error || 'Request failed');
         return { ok: true, pending: true, request: d.request };
       }
-      const headers = { 'Content-Type': 'application/json' };
-      const pass = sessionStorage.getItem('admin_passphrase');
-      if (pass) {
-        headers['X-Admin-Passphrase'] = pass;
-      }
-      const r = await fetch(url, {
+      const r = await adminFetch(url, {
         method: 'POST',
-        credentials: 'include',
-        headers: headers,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok || d.error) throw new Error(d.error || 'Request failed');
+      if (r.status === 403 && (d.error === 'invalid_passphrase' || d.error === 'passphrase_not_configured')) {
+        handlePassphraseRequired(d.error);
+        throw new Error('Admin passphrase verification required.');
+      }
+      if (!r.ok || d.error) throw new Error(d.message || d.error || 'Request failed');
       return d;
     }
 
     function setStatus(id, text, cls) {
       const el = document.getElementById(id);
+      if (!el) return;
       el.className = 'form-status' + (cls ? ' ' + cls : '');
       el.textContent = text;
     }
@@ -3139,18 +3218,12 @@
     const failedVmDeletions = new Set();
 
     async function loadVmRequests() {
+      if (document.body.classList.contains('admin-locked')) return;
       setStatus('vm-requests-global-status', 'Loading VM requests...', '');
       try {
-        const headers = {};
-        const pass = sessionStorage.getItem('admin_passphrase');
-        if (pass) {
-          headers['X-Admin-Passphrase'] = pass;
-        }
-        const res = await fetch('/api/admin/vm-requests', {
-          headers: headers
-        });
-        const d = await res.json();
-        if (d.error) throw new Error(d.error);
+        const res = await adminFetch('/api/admin/vm-requests');
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok || d.error) throw new Error(d.error || 'Failed to load VM requests');
         
         const tbody = document.getElementById('vm-requests-table-body');
         tbody.innerHTML = '';
@@ -3199,8 +3272,8 @@
             const randomVmid = Math.floor(Math.random() * 100) + 200;
             const inputId = 'vmid-' + normEmail.replace(/[^a-z0-9]/g, '');
             actionsHtml = `
-              <div style="display:flex; align-items:center; gap:5px; justify-content:flex-end;">
-                <input id="${inputId}" type="number" min="200" max="999" placeholder="VMID" value="${randomVmid}" style="width:70px; padding:3px 6px; font-size:0.75rem; text-align:center;">
+              <div style="display:flex; align-items:center; gap:6px; justify-content:flex-end; flex-wrap:wrap;">
+                <input id="${inputId}" type="number" min="200" max="999" placeholder="VMID" value="${randomVmid}" style="width:78px; min-width:78px; min-height:34px; margin:0; padding:4px 8px; font-size:0.78rem; text-align:center;">
                 <button onclick="approveVmRequest('${safeEmail}', '${inputId}')" class="mini" style="background:#8b5cf6; color:#fff; border-color:#8b5cf6;">Approve</button>
                 <button onclick="denyVmRequest('${safeEmail}')" class="mini" style="background:#ef4444; color:#fff; border-color:#ef4444;">Deny</button>
               </div>
@@ -3425,8 +3498,6 @@
         document.getElementById('owner-operations').appendChild(document.getElementById('soft-maintenance-card'));
         document.getElementById('coowner-role-card').hidden = false;
         document.getElementById('admin-role-card').hidden = false;
-        loadCoOwners();
-        loadAdministrators();
       }
       if (location.hash === '#owner-tools' && !currentUser.isOwner) activateToolGroup('approval-tools');
       const eyebrow = document.querySelector('.staff-eyebrow');
@@ -3441,26 +3512,25 @@
         : (currentUser.isModerator
           ? 'Moderator mode: you can view the admin tools and submit changes, but state-changing actions wait for admin or owner approval.'
           : 'This page is only for admin, owner, and moderator accounts.');
+
       // --- Passphrase Verification check FIRST ---
       if (currentUser.isAdmin) {
-        const savedPass = sessionStorage.getItem('admin_passphrase');
-        if (!savedPass) {
-          await checkPassphraseStatus();
+        const unlocked = await checkPassphraseStatus();
+        if (!unlocked) {
+          document.getElementById('access-status').textContent = 'Passphrase required';
+          stopPolling();
           return;
         }
-        const verifyRes = await fetch('/api/admin/passphrase-status', {
-          method: 'POST',
-          credentials: 'include',
-          headers: getAdminHeaders({ 'Content-Type': 'application/json', 'X-Admin-Passphrase': savedPass })
-        });
-        if (!verifyRes.ok) {
-          sessionStorage.removeItem('admin_passphrase');
-          await checkPassphraseStatus();
-          return;
-        }
+      } else {
+        await checkPassphraseStatus();
       }
 
-      const r = await fetch('/api/admin/advanced-data', { credentials: 'include', cache: 'no-store', headers: getAdminHeaders() });
+      if (currentUser.isOwner) {
+        loadCoOwners();
+        loadAdministrators();
+      }
+
+      const r = await adminFetch('/api/admin/advanced-data');
       if (!r.ok) {
         document.getElementById('access-status').textContent = r.status === 403 ? 'Staff only' : 'Unavailable';
         document.getElementById('cards').innerHTML = '<div class="card" style="grid-column:1/-1;"><div class="value">Access denied</div><div class="sub">This page is only available to signed-in admins and moderators.</div></div>';
@@ -3481,18 +3551,19 @@
         loadTesters();
       }
 
-      const rLogs = await fetch('/api/admin/search-logs', { credentials: 'include', headers: getAdminHeaders() });
-      const dLogs = await rLogs.json();
+      const rLogs = await adminFetch('/api/admin/search-logs');
+      const dLogs = await rLogs.json().catch(() => ({}));
       rawData.searchIntent = dLogs.logs || [];
 
       await loadModeratorRequests();
-      document.getElementById('access-status').textContent = currentUser.isCoOwner ? 'Co-owner verified' : (currentUser.isAdmin ? 'Admin verified' : 'Moderator review mode');
+      document.getElementById('access-status').textContent = currentUser.isOwner
+        ? 'Owner verified'
+        : (currentUser.isCoOwner ? 'Co-owner verified' : (currentUser.isAdmin ? 'Admin verified' : 'Moderator review mode'));
       renderCards();
       populateAuditFilters();
       applyFilter();
 
-      // Premium Dashboard initializers
-      await checkPassphraseStatus();
+      // Dashboard initializers
       await loadSoftMaintenanceStatus();
       await loadShopCatalog();
       await loadMatrixModeration();
@@ -3500,23 +3571,34 @@
       if (currentUser.isAdmin && location.hash === '#logs-tools') {
         loadAppLogs();
       }
+      if (location.hash === '#vm-tools') {
+        loadVmRequests();
+      }
+      if (location.hash === '#content-tools') {
+        loadBlogDeletionLog();
+      }
       startPolling();
     }
 
     // --- Passphrase Controllers ---
     async function checkPassphraseStatus() {
       const lockBox = document.getElementById('passphrase-lock-box');
-      if (!lockBox) return;
+      if (!lockBox) return true;
+      const resetOtherEl = document.getElementById('lock-box-reset-other-container');
+      if (resetOtherEl) resetOtherEl.style.display = 'none';
       if (!currentUser || !currentUser.isAdmin) {
         lockBox.style.display = 'none';
         document.body.classList.remove('admin-locked');
-        return;
+        return true;
       }
       lockBox.style.display = 'block';
       setStatus('lock-box-status', '', '');
       try {
-        const res = await fetch('/api/admin/passphrase-status', { credentials: 'include' });
-        if (!res.ok) return;
+        const res = await fetch('/api/admin/passphrase-status', { credentials: 'include', cache: 'no-store' });
+        if (!res.ok) {
+          showLockedState();
+          return false;
+        }
         const d = await res.json();
         const isSet = !!d.set;
         const savedPass = sessionStorage.getItem('admin_passphrase');
@@ -3530,11 +3612,13 @@
           document.getElementById('lock-box-unlocked-container').style.display = 'none';
           document.getElementById('lock-box-change-container').style.display = 'none';
           document.body.classList.add('admin-locked');
+          return false;
         } else if (savedPass) {
           const verifyRes = await fetch('/api/admin/passphrase-status', {
             method: 'POST',
             credentials: 'include',
-            headers: getAdminHeaders({ 'Content-Type': 'application/json', 'X-Admin-Passphrase': savedPass })
+            headers: getAdminHeaders({ 'Content-Type': 'application/json', 'X-Admin-Passphrase': savedPass }),
+            body: JSON.stringify({ passphrase: savedPass })
           });
           if (verifyRes.ok) {
             document.getElementById('lock-box-icon').textContent = '🔓';
@@ -3544,19 +3628,26 @@
             document.getElementById('lock-box-unlocked-container').style.display = 'flex';
             document.getElementById('lock-box-change-container').style.display = 'none';
             document.body.classList.remove('admin-locked');
+            return true;
           } else {
             sessionStorage.removeItem('admin_passphrase');
             showLockedState();
+            return false;
           }
         } else {
           showLockedState();
+          return false;
         }
       } catch (err) {
         setStatus('lock-box-status', 'Failed to read passphrase status: ' + err.message, 'err');
+        showLockedState();
+        return false;
       }
     }
 
     function showLockedState() {
+      const lockBox = document.getElementById('passphrase-lock-box');
+      if (lockBox && (!currentUser || currentUser.isAdmin)) lockBox.style.display = 'block';
       document.getElementById('lock-box-icon').textContent = '🔒';
       document.getElementById('lock-box-headline').textContent = 'Passphrase Verification Required';
       document.getElementById('lock-box-text').textContent = 'Enter your admin passphrase to unlock modifications on the admin panel.';
@@ -3566,6 +3657,8 @@
       document.getElementById('lock-box-form-container').style.display = 'flex';
       document.getElementById('lock-box-unlocked-container').style.display = 'none';
       document.getElementById('lock-box-change-container').style.display = 'none';
+      const resetOtherEl = document.getElementById('lock-box-reset-other-container');
+      if (resetOtherEl) resetOtherEl.style.display = 'none';
       document.body.classList.add('admin-locked');
     }
 
@@ -3578,7 +3671,8 @@
         const res = await fetch('/api/admin/passphrase-status', {
           method: 'POST',
           credentials: 'include',
-          headers: getAdminHeaders({ 'Content-Type': 'application/json', 'X-Admin-Passphrase': pass })
+          headers: getAdminHeaders({ 'Content-Type': 'application/json', 'X-Admin-Passphrase': pass }),
+          body: JSON.stringify({ passphrase: pass })
         });
         if (!res.ok) {
           const d = await res.json().catch(() => ({}));
@@ -3590,7 +3684,6 @@
         }
         sessionStorage.setItem('admin_passphrase', pass);
         input.value = '';
-        await checkPassphraseStatus();
         await loadData();
       } catch (err) {
         setStatus('lock-box-status', err.message, 'err');
@@ -3598,9 +3691,11 @@
     }
 
     function lockAdminPanel() {
+      stopPolling();
       sessionStorage.removeItem('admin_passphrase');
-      checkPassphraseStatus();
-      loadData();
+      showLockedState();
+      const accessEl = document.getElementById('access-status');
+      if (accessEl) accessEl.textContent = 'Passphrase required';
     }
 
     function showChangePassphraseForm() {
@@ -3692,7 +3787,7 @@
     let currentSoftMaintenanceActive = false;
     async function loadSoftMaintenanceStatus() {
       try {
-        const res = await fetch('/api/admin/maintenance-status', { credentials: 'include', headers: getAdminHeaders() });
+        const res = await adminFetch('/api/admin/maintenance-status');
         if (!res.ok) return;
         const d = await res.json();
         currentSoftMaintenanceActive = !!d.active;
@@ -3741,7 +3836,7 @@
     async function loadShopCatalog() {
       setStatus('shop-catalog-feedback', 'Loading catalog...', '');
       try {
-        const res = await fetch('/api/admin/shop/catalog', { credentials: 'include', headers: getAdminHeaders() });
+        const res = await adminFetch('/api/admin/shop/catalog');
         if (!res.ok) throw new Error('Failed to load shop catalog');
         const data = await res.json();
         currentShopCatalog = data.catalog || [];
@@ -3762,23 +3857,23 @@
       tbody.innerHTML = currentShopCatalog.map((item, index) => {
         return `
           <tr data-index="${index}" style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-            <td style="padding: 8px; font-family: monospace; font-size: 0.75rem;">${esc(item.id)}</td>
-            <td style="padding: 6px;">
-              <input type="text" value="${esc(item.name || '')}" onchange="updateShopLocalField(${index}, 'name', this.value)" style="width:100%; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.2); border-radius:4px; padding:4px 6px;">
+            <td style="padding: 8px; font-family: monospace; font-size: 0.75rem; white-space: nowrap;">${esc(item.id)}</td>
+            <td style="padding: 6px; min-width: 170px;">
+              <input type="text" value="${esc(item.name || '')}" onchange="updateShopLocalField(${index}, 'name', this.value)" style="width:100%; min-width:160px; min-height:36px; margin:0; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.2); border-radius:6px; padding:6px 8px;">
             </td>
-            <td style="padding: 8px; color: var(--t-fg2); font-size: 0.75rem;">${esc(item.section || '')}</td>
-            <td style="padding: 8px; color: var(--t-fg2); font-size: 0.75rem;">
+            <td style="padding: 8px; color: var(--t-fg2); font-size: 0.75rem; white-space: nowrap;">${esc(item.section || '')}</td>
+            <td style="padding: 8px; color: var(--t-fg2); font-size: 0.75rem; white-space: nowrap;">
               ${esc(item.type || '')}${item.costType ? ` (${esc(item.costType)})` : ''}
               ${item.premiumOnly ? ' <span class="pill warn" style="font-size:0.6rem; padding:1px 4px;">Premium</span>' : ''}
               ${item.adminOnly ? ' <span class="pill ok" style="font-size:0.6rem; padding:1px 4px;">Admin</span>' : ''}
             </td>
-            <td style="padding: 6px;">
-              <input type="number" value="${item.cost || 0}" onchange="updateShopLocalField(${index}, 'cost', parseInt(this.value) || 0)" style="width:90px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.2); border-radius:4px; padding:4px 6px;">
+            <td style="padding: 6px; min-width: 105px;">
+              <input type="number" value="${item.cost || 0}" onchange="updateShopLocalField(${index}, 'cost', parseInt(this.value) || 0)" style="width:96px; min-width:90px; min-height:36px; margin:0; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.2); border-radius:6px; padding:6px 8px;">
             </td>
-            <td style="padding: 6px;">
-              <input type="text" value="${esc(item.desc || '')}" onchange="updateShopLocalField(${index}, 'desc', this.value)" style="width:100%; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.2); border-radius:4px; padding:4px 6px;">
+            <td style="padding: 6px; min-width: 240px;">
+              <input type="text" value="${esc(item.desc || '')}" onchange="updateShopLocalField(${index}, 'desc', this.value)" style="width:100%; min-width:220px; min-height:36px; margin:0; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.2); border-radius:6px; padding:6px 8px;">
             </td>
-            <td style="padding: 6px; text-align: center;">
+            <td style="padding: 6px; text-align: center; white-space: nowrap;">
               <button type="button" class="mini" style="background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: #f87171;" onclick="deleteShopLocalItem(${index})">Delete</button>
             </td>
           </tr>
@@ -3888,9 +3983,11 @@
       if (updateHash && location.hash !== '#' + target) {
         history.replaceState(null, '', '#' + target);
       }
+      const unlocked = currentUser && !document.body.classList.contains('admin-locked');
+      if (!unlocked) return;
       if (target === 'logs-tools') {
         const output = document.getElementById('app-log-output');
-        if (currentUser && currentUser.isAdmin && output && !output.dataset.loaded) {
+        if (currentUser.isAdmin && output && !output.dataset.loaded) {
           loadAppLogs();
         }
       }
@@ -3899,7 +3996,7 @@
       }
       if (target === 'content-tools') {
         const list = document.getElementById('blog-delete-log');
-        if (currentUser && (currentUser.isAdmin || currentUser.isModerator) && list && !list.dataset.loaded) {
+        if ((currentUser.isAdmin || currentUser.isModerator) && list && !list.dataset.loaded) {
           loadBlogDeletionLog();
         }
       }

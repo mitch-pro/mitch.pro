@@ -124,9 +124,14 @@ pub fn handle(
     state: &Arc<AppState>,
     method: &Method,
     path: &str,
+    headers: &axum::http::HeaderMap,
     search: &str,
+    body: &Value,
     ctx: &AdminCtx,
 ) -> Resp {
+    if path == "/api/admin/owner-accounts" {
+        return Some(handle_owner_accounts(state, method, headers, body, ctx));
+    }
     if path != "/api/admin/account-search" && path != "/api/admin/accounts" {
         return None;
     }
@@ -174,6 +179,207 @@ pub fn handle(
         accounts.truncate(12);
     }
     Some(json_response(200, json!({"accounts":accounts})))
+}
+
+fn handle_owner_accounts(
+    state: &Arc<AppState>,
+    method: &Method,
+    headers: &axum::http::HeaderMap,
+    body: &Value,
+    ctx: &AdminCtx,
+) -> axum::response::Response {
+    let actor = auth::normalize_email(&ctx.email(state));
+    if !ctx.is_owner(state) {
+        return json_response(403, json!({ "error": "Owner access required." }));
+    }
+    if *method != Method::POST {
+        return json_response(405, json!({ "error": "Use POST." }));
+    }
+    if let Some(origin) = headers
+        .get(axum::http::header::ORIGIN)
+        .and_then(|v| v.to_str().ok())
+    {
+        let req_host = crate::hosts::request_host(headers);
+        let origin_host = url::Url::parse(origin)
+            .ok()
+            .and_then(|u| match (u.host_str(), u.port()) {
+                (Some(h), Some(p)) => Some(format!("{h}:{p}")),
+                (Some(h), None) => Some(h.to_string()),
+                _ => None,
+            })
+            .unwrap_or_default();
+        if origin_host.is_empty() || !origin_host.eq_ignore_ascii_case(&req_host) {
+            return json_response(403, json!({ "error": "Open this tool from the owner panel." }));
+        }
+    }
+    let action = body.get("action").and_then(|v| v.as_str()).unwrap_or("");
+    let confirmation = body
+        .get("confirmation")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    if action == "list" {
+        let accounts = directory(state);
+        let coins = mitch_lib::coins::load_coins(&state.store, state.data_dir());
+        let coin_accounts = coins.as_object().map(|m| m.len()).unwrap_or(0);
+        return json_response(
+            200,
+            json!({
+                "accounts": accounts,
+                "coinAccounts": coin_accounts,
+            }),
+        );
+    }
+
+    if action == "reset-coins" {
+        if confirmation != "RESET ALL COINS" {
+            return json_response(400, json!({ "error": "Type RESET ALL COINS to confirm." }));
+        }
+        let before_coins = mitch_lib::coins::load_coins(&state.store, state.data_dir());
+        save_owner_backup(state, "reset-coins", &json!({ "coins": before_coins }));
+        let count = mitch_lib::coins::reset_all_coins(
+            &state.store,
+            state.data_dir(),
+            "owner reset all coins",
+        );
+        mitch_lib::admin::log_admin_action(
+            &state.store,
+            state.data_dir(),
+            &actor,
+            "COINS_RESET_ALL",
+            json!({ "count": count, "success": true }),
+        );
+        return json_response(200, json!({ "ok": true, "count": count }));
+    }
+
+    if action != "remove-registrations" {
+        return json_response(
+            400,
+            json!({ "error": "Choose registered accounts to remove." }),
+        );
+    }
+
+    let Some(raw_emails) = body.get("emails").and_then(|v| v.as_array()) else {
+        return json_response(
+            400,
+            json!({ "error": "Choose registered accounts to remove." }),
+        );
+    };
+    if raw_emails.is_empty() || raw_emails.len() > 10_000 {
+        return json_response(
+            400,
+            json!({ "error": "Choose registered accounts to remove." }),
+        );
+    }
+    let mut targets: Vec<String> = Vec::new();
+    let mut seen = BTreeSet::new();
+    for item in raw_emails {
+        let Some(s) = item.as_str() else {
+            return json_response(
+                400,
+                json!({ "error": "Choose registered accounts to remove." }),
+            );
+        };
+        let norm = auth::normalize_email(s);
+        if norm.is_empty() {
+            continue;
+        }
+        if seen.insert(norm.clone()) {
+            targets.push(norm);
+        }
+    }
+    if targets.is_empty() {
+        return json_response(
+            400,
+            json!({ "error": "Choose registered accounts to remove." }),
+        );
+    }
+    if targets
+        .iter()
+        .any(|email| email == &actor || auth::is_owner_email(&state.store, email))
+    {
+        return json_response(
+            403,
+            json!({ "error": "Owner accounts cannot be removed here." }),
+        );
+    }
+    let expected = format!("REMOVE {} REGISTRATIONS", targets.len());
+    if confirmation != expected {
+        return json_response(
+            400,
+            json!({ "error": format!("Type {expected} to confirm.") }),
+        );
+    }
+
+    save_owner_backup(
+        state,
+        "remove-registrations",
+        &json!({ "targets": targets }),
+    );
+
+    let passkeys_file = state.data_dir().join("passkeys.json");
+    let mut passkeys = state.store.read_document(&passkeys_file, json!({}));
+    let codes_file = state.data_dir().join("signup_codes.json");
+    let mut codes = state.store.read_document(&codes_file, json!({}));
+
+    for email in &targets {
+        mitch_lib::passwords::password_remove(&state.store, email);
+        if let Some(map) = passkeys.as_object_mut() {
+            map.remove(email);
+        }
+        if let Some(map) = codes.as_object_mut() {
+            map.remove(email);
+        }
+        auth::rotate_session_generation(&state.store, email);
+    }
+    let _ = state.store.write_document(&passkeys_file, &passkeys);
+    let _ = state.store.write_document(&codes_file, &codes);
+
+    let tokens = mitch_lib::tokens::token_all(&state.store);
+    if let Some(map) = tokens.as_object() {
+        for (tok, rec) in map {
+            let rec_norm = rec
+                .get("norm_email")
+                .or_else(|| rec.get("email"))
+                .and_then(|v| v.as_str())
+                .map(auth::normalize_email)
+                .unwrap_or_default();
+            if seen.contains(&rec_norm) {
+                mitch_lib::tokens::token_remove(&state.store, tok);
+            }
+        }
+    }
+
+    mitch_lib::admin::log_admin_action(
+        &state.store,
+        state.data_dir(),
+        &actor,
+        "REGISTRATIONS_REMOVED",
+        json!({
+            "count": targets.len(),
+            "targets": targets,
+            "success": true,
+        }),
+    );
+
+    json_response(200, json!({ "ok": true, "count": targets.len() }))
+}
+
+fn save_owner_backup(state: &AppState, action: &str, before: &Value) {
+    let backup_dir = state.data_dir().join("owner-action-backups");
+    let _ = std::fs::create_dir_all(&backup_dir);
+    let now = mitch_lib::school::now_millis();
+    let key = mitch_lib::crypto::hmac_sha256(&state.id_secret, b"owner-backup-v1");
+    let payload = json!({
+        "action": action,
+        "at": now,
+        "before": before,
+    })
+    .to_string();
+    if let Some(sealed) = mitch_lib::crypto::seal_at_rest(&key, &payload, "enc1:") {
+        let filename = format!("{now}-{}.enc", mitch_lib::crypto::random_bytes_hex(8));
+        let _ = std::fs::write(backup_dir.join(filename), sealed.as_bytes());
+    }
 }
 
 #[cfg(test)]

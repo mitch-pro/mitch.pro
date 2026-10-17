@@ -28,7 +28,21 @@
     try { await task(); } catch(error) { status.textContent = error.message; }
     finally { busy = false; panel.querySelectorAll('button').forEach(button => button.disabled = false); render(); }
   }
-  panel.querySelector('[data-load]').onclick = () => run(async () => { const response = await fetch('/api/admin/accounts',{credentials:'same-origin',headers:{'X-Admin-Passphrase':sessionStorage.getItem('admin_passphrase') || ''}}); const data = await response.json(); if(!response.ok)throw new Error(data.error || 'Could not load accounts.'); accounts = data.accounts; selected.clear(); status.textContent = `${accounts.length} accounts. Choose accounts below.`; });
+  panel.querySelector('[data-load]').onclick = () => run(async () => {
+    const response = typeof adminFetch === 'function'
+      ? await adminFetch('/api/admin/accounts')
+      : await fetch('/api/admin/accounts', {
+          credentials: 'same-origin',
+          headers: typeof getAdminHeaders === 'function'
+            ? getAdminHeaders()
+            : { 'X-Mitch-Requested-With': '1', 'X-Admin-Passphrase': sessionStorage.getItem('admin_passphrase') || '' }
+        });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Could not load accounts.');
+    accounts = data.accounts || [];
+    selected.clear();
+    status.textContent = `${accounts.length} accounts. Choose accounts below.`;
+  });
   panel.querySelector('[data-all]').onclick = () => { accounts.forEach(account => { if (!account.protected) selected.add(account.email); }); render(); };
   panel.querySelector('[data-none]').onclick = () => { selected.clear(); render(); };
   search.oninput = render;

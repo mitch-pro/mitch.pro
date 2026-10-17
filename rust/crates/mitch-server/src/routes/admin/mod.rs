@@ -195,7 +195,7 @@ pub async fn handle(
     body: &Value,
 ) -> Resp {
     let ctx = admin_ctx(state, headers);
-    if let Some(response) = accounts::handle(state, method, path, search, &ctx) {
+    if let Some(response) = accounts::handle(state, method, path, headers, search, body, &ctx) {
         return Some(response);
     }
 

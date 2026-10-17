@@ -98,7 +98,7 @@ body:is(.admin-page,.moderator-page) .back { border-radius: 10px; }
 .staff-panel-switcher b { align-self: end; font: 800 16px/1.15 Outfit, sans-serif; }
 .staff-panel-switcher small { align-self: start; margin-top: 3px; color: var(--t-fg2); font-size: 12px; }
 
-#command-center .cards { grid-template-columns: repeat(7, minmax(0,1fr)); gap: 11px; }
+#command-center .cards { grid-template-columns: repeat(auto-fit, minmax(165px,1fr)); gap: 11px; }
 #command-center .cards .card {
   min-height: 128px;
   padding: 17px;
@@ -107,7 +107,7 @@ body:is(.admin-page,.moderator-page) .back { border-radius: 10px; }
   background: var(--t-bg2);
   box-shadow: none;
 }
-#command-center .cards .card::before { content: ''; width: 34px; height: 3px; border-radius: 10px; background: var(--t-bg2); box-shadow: none; }
+#command-center .cards .card::before { content: ''; width: 34px; height: 3px; border-radius: 10px; background: var(--t-ac); box-shadow: none; }
 #command-center .cards .value { font-size: 30px; }
 
 html body.admin-page .admin-layout { grid-template-columns: 230px minmax(0,1fr); gap: 22px; }
@@ -143,7 +143,9 @@ html body.admin-page .approval-grid > div {
 }
 html body.admin-page .action-card { padding: 21px; }
 html body.admin-page .action-card:hover { border-color: color-mix(in srgb, var(--t-ac) 44%, var(--staff2-line)); }
-html body.admin-page :is(input,select,textarea) { min-height: 45px; background: color-mix(in srgb, var(--t-bg) 82%, transparent); }
+html body.admin-page :is(input:not([type="checkbox"]):not([type="radio"]),select,textarea) { min-height: 42px; background: color-mix(in srgb, var(--t-bg) 82%, transparent); }
+html body.admin-page input[type="checkbox"],
+html body.admin-page input[type="radio"] { width: 18px !important; height: 18px !important; min-width: 18px !important; min-height: 18px !important; flex: 0 0 18px !important; padding: 0 !important; margin: 0 !important; }
 html body.admin-page button[type="submit"],
 html body.admin-page #admin-passphrase-btn { color: var(--t-fg); background: var(--t-bg); border-color: var(--t-bd); box-shadow: none; }
 

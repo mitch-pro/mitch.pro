@@ -240,6 +240,44 @@ pub fn cap_coins_above(
     affected
 }
 
+/// Resets every coin balance in the `coins` table to zero and returns the
+/// total number of coin rows affected.
+pub fn reset_all_coins(store: &DataStore, data_dir: &Path, reason: &str) -> usize {
+    let conn = store.conn();
+    if conn.execute_batch("BEGIN IMMEDIATE").is_err() {
+        return 0;
+    }
+    let rows: Vec<(String, f64)> = {
+        let mut stmt = match conn.prepare("SELECT email, balance FROM coins") {
+            Ok(s) => s,
+            Err(_) => {
+                let _ = conn.execute_batch("ROLLBACK");
+                return 0;
+            }
+        };
+        let mapped = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?))
+        });
+        match mapped {
+            Ok(iter) => iter.filter_map(|r| r.ok()).collect(),
+            Err(_) => Vec::new(),
+        }
+    };
+    let count = rows.len();
+    let _ = conn.execute(
+        "UPDATE coins SET balance = 0, updated_at = ?1",
+        rusqlite::params![now_millis()],
+    );
+    let _ = conn.execute_batch("COMMIT");
+    drop(conn);
+    for (email, before) in &rows {
+        if *before != 0.0 {
+            log_coin_change(data_dir, email, *before, 0.0, reason);
+        }
+    }
+    count
+}
+
 /// Shared `logs/coins.log` TSV append, factored out of `add_coins`/
 /// `set_coins`/`cap_coins_above` so every balance mutation leaves the same
 /// audit trail.

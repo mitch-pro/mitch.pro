@@ -660,7 +660,8 @@ html body.admin-page .section-head h2 { font-size:22px; }
 html body.admin-page .action-card,html body.admin-page .request-card { border-radius:14px; padding:20px; background:var(--t-bg2); }
 html body.admin-page .action-card h2 { font-size:18px; }
 html body.admin-page :is(p,.sub,.empty,.form-status,.role-note,.notice) { font-size:14px; line-height:1.6; }
-html body.admin-page :is(input,button,select,textarea) { font-size:14px; min-height:42px; border-radius:9px; }
+html body.admin-page :is(input:not([type="checkbox"]):not([type="radio"]),button,select,textarea) { font-size:14px; min-height:42px; border-radius:9px; }
+html body.admin-page input[type="checkbox"],html body.admin-page input[type="radio"] { width:18px!important; height:18px!important; min-width:18px!important; min-height:18px!important; flex:0 0 18px!important; padding:0!important; margin:0!important; }
 html body.admin-page .card .label { font-size:12px; }
 html body.admin-page .card .value { font-size:26px; }
 html body.admin-page .cards .card { min-height:90px; padding:16px; background:var(--staff-panel); box-shadow:none; }

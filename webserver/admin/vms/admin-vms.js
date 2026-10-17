@@ -20,6 +20,12 @@
     const box = $('passphrase-lock-box');
     if (!box) return;
     box.style.display = 'block';
+    const serviceState = $('service-state');
+    if (serviceState) {
+      serviceState.className = 'service-state offline';
+      const label = serviceState.querySelector('span');
+      if (label) label.textContent = isNewSetup ? 'Passphrase setup required' : 'Passphrase required';
+    }
     $('lock-box-headline').textContent = isNewSetup ? 'Set Admin Passphrase' : 'Passphrase Verification Required';
     $('lock-box-desc').textContent = isNewSetup
       ? 'Create a secure passphrase to protect all administrative actions.'
@@ -485,8 +491,11 @@
             hidePassphraseLockBox();
             const queue = passphraseResolvers;
             passphraseResolvers = [];
-            queue.forEach(p => p.resolve(pass));
-            load();
+            if (queue.length) {
+              queue.forEach(p => p.resolve(pass));
+            } else {
+              load();
+            }
           }, 300);
         } else {
           sessionStorage.removeItem('admin_passphrase');
@@ -645,6 +654,9 @@
   $('refresh-button').addEventListener('click', load);
   setupChartInteraction();
   load();
-  const timer = setInterval(() => { if (!document.hidden && !creating && !assigning && !pending.size) load(); }, 20000);
+  const timer = setInterval(() => {
+    const locked = $('passphrase-lock-box')?.style.display === 'block';
+    if (!document.hidden && !locked && !creating && !assigning && !pending.size) load();
+  }, 20000);
   window.addEventListener('pagehide', () => { clearInterval(timer); $('create-password').value = ''; }, { once: true });
 })();

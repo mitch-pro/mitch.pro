@@ -312,28 +312,52 @@ pub fn handle(
         let admin_email = ctx.email(state);
         let email = body.get("email").cloned().unwrap_or(Value::Null);
         let target = super::resolve_admin_target(state, email.as_str().unwrap_or(""));
+        if !valid_email(&target) {
+            return Some(json_response(
+                400,
+                json!({ "error": "valid target email required" }),
+            ));
+        }
         let amount = body
             .get("amount")
             .and_then(|v| v.as_str())
             .and_then(parse_f64)
             .or_else(|| body.get("amount").and_then(|v| v.as_f64()))
             .unwrap_or(f64::NAN);
+        if !amount.is_finite() || amount <= 0.0 {
+            return Some(json_response(
+                400,
+                json!({ "error": "amount must be a positive number" }),
+            ));
+        }
         mitch_lib::coins::add_coins(
             &state.store,
             &state.cfg.data_dir,
             &target,
             -amount,
             state.coin_multiplier(),
-            "",
+            "admin burn",
         );
+        let new_balance = mitch_lib::coins::get_coins(&state.store, &state.cfg.data_dir, &target);
         mitch_lib::admin::log_admin_action(
             &state.store,
             &state.cfg.data_dir,
             &admin_email,
             "burn_coins",
-            json!({ "target": target, "amount": mitch_lib::jsval::num_value(amount) }),
+            json!({
+                "target": target,
+                "amount": mitch_lib::jsval::num_value(amount),
+                "newBalance": mitch_lib::jsval::num_value(new_balance),
+            }),
         );
-        return Some(json_response(200, json!({ "ok": true })));
+        return Some(json_response(
+            200,
+            json!({
+                "ok": true,
+                "target": target,
+                "newBalance": mitch_lib::jsval::num_value(new_balance),
+            }),
+        ));
     }
 
     // POST /api/admin/economy/set-coins (admins only) — sets one account's

@@ -153,6 +153,8 @@ fn resources() -> Response {
                 "heapTotal": 0,
                 "external": 0,
             },
+            "totalMem": total_mem_bytes(),
+            "cpus": cpu_count(),
             "uptime": uptime_seconds(),
             "load": load_avg(),
         }),
@@ -169,6 +171,29 @@ fn rss_bytes() -> f64 {
         return rss_pages * page_size();
     }
     0.0
+}
+
+fn total_mem_bytes() -> f64 {
+    if let Ok(meminfo) = std::fs::read_to_string("/proc/meminfo") {
+        for line in meminfo.lines() {
+            if let Some(rest) = line.strip_prefix("MemTotal:") {
+                if let Some(kb) = rest
+                    .split_whitespace()
+                    .next()
+                    .and_then(|v| v.parse::<f64>().ok())
+                {
+                    return kb * 1024.0;
+                }
+            }
+        }
+    }
+    0.0
+}
+
+fn cpu_count() -> usize {
+    std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
 }
 
 fn page_size() -> f64 {

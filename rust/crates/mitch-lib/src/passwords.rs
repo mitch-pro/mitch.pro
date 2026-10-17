@@ -49,6 +49,16 @@ pub fn password_all_emails(store: &DataStore) -> Vec<String> {
     rows.filter_map(|r| r.ok()).collect()
 }
 
+pub fn password_remove(store: &DataStore, email: &str) -> bool {
+    let conn = store.conn();
+    conn.execute(
+        "DELETE FROM passwords WHERE email = ?1",
+        rusqlite::params![email],
+    )
+    .unwrap_or(0)
+        > 0
+}
+
 pub fn rename_password_email(store: &DataStore, old_email: &str, new_email: &str) {
     let conn = store.conn();
     let _ = conn.execute(
