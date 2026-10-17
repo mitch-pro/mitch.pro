@@ -43,6 +43,12 @@ try {
  await page.setViewportSize({width:1440,height:1000});
  await page.goto(base+'/enroll/');
  assert.equal(await page.locator('video,.ob-auth-story').count(),0,'Account access should open directly on the form.');
+ const guest=await browser.newContext({serviceWorkers:'block'});
+ try {
+  const stylesheet=await guest.request.get(base+'/enroll/enroll.css?v=1',{maxRedirects:0});
+  assert.equal(stylesheet.status(),200,'Login styles must load without a session or redirect.');
+  assert.match(stylesheet.headers()['content-type'],/^text\/css/);
+ } finally { await guest.close(); }
  for(const width of [320,390,1440]) {
   await page.setViewportSize({width,height:844});
   const login=await page.locator('#login-btn').boundingBox();
