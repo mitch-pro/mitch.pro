@@ -44,7 +44,7 @@ try {
     const response = await fetch(base + path, { redirect: 'manual' });
     assert([302, 401, 403].includes(response.status), `${path} must remain protected`);
   }
-  for (const version of [1, 2, 3]) {
+  for (const version of [1, 2, 3, 4]) {
     const path = '/media/site-tour-v' + version + '.mp4';
     const range = await fetch(base + path, { headers: { Range: 'bytes=0-99' }, redirect: 'manual' });
     assert.equal(range.status, 206, path + ' must support seeking without a login');
@@ -123,7 +123,7 @@ try {
   assert.equal(await page.locator('.ob-campus-orbit,.ob-video-bar,.ob-eyebrow').count(), 0);
   assert.equal(await page.locator('#site-tour').getAttribute('preload'), 'metadata');
   assert.equal(await page.locator('#site-tour').getAttribute('autoplay'), null);
-  assert.equal(await page.locator('#site-tour source').getAttribute('src'), '/media/site-tour-v3.mp4');
+  assert.equal(await page.locator('#site-tour source').getAttribute('src'), '/media/site-tour-v4.mp4');
   assert.equal(await page.locator('#site-tour').getAttribute('poster'), '/media/site-tour-poster-v3.webp');
   await page.waitForFunction(() => Number.isFinite(document.getElementById('site-tour').duration));
   const duration = await page.locator('#site-tour').evaluate(video => video.duration);

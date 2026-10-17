@@ -76,6 +76,7 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/media/site-tour-v2.mp4",
     "/media/site-tour-poster-v2.webp",
     "/media/site-tour-v3.mp4",
+    "/media/site-tour-v4.mp4",
     "/media/site-tour-poster-v3.webp",
     "/guest-preview.js",
     "/home-friends.js",

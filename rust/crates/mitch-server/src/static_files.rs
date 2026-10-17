@@ -25,6 +25,7 @@ pub const SITE_TOUR_PATHS: &[&str] = &[
     "/media/site-tour-v1.mp4",
     "/media/site-tour-v2.mp4",
     "/media/site-tour-v3.mp4",
+    "/media/site-tour-v4.mp4",
 ];
 
 /// Single byte ranges for the public tour; unsupported range units and

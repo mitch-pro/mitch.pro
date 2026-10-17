@@ -35,6 +35,28 @@ def timing_filter(chapters, source_duration, duration):
     return f"setpts=PTS-STARTPTS,setpts='({expression})/TB'"
 
 
+def soundtrack_filter(soundtrack, duration):
+    # Lift quiet passages smoothly, keeping stereo channels linked. Measure the
+    # processed track before normalizing so the final mix reaches -14 LUFS.
+    preparation = (
+        f"atrim=duration={duration},asetpts=PTS-STARTPTS,"
+        "dynaudnorm=f=500:g=31:p=0.8:m=10:r=0.18,"
+        f"afade=t=out:st={duration-1}:d=1"
+    )
+    target = "loudnorm=I=-14:TP=-2:LRA=11"
+    measurement = subprocess.run([
+        "ffmpeg", "-hide_banner", "-nostats", "-i", str(soundtrack), "-vn",
+        "-af", f"{preparation},{target}:print_format=json", "-f", "null", "-",
+    ], check=True, capture_output=True, text=True)
+    stats, _ = json.JSONDecoder().raw_decode(measurement.stderr[measurement.stderr.rfind("{"):])
+    normalization = (
+        f"{target}:measured_I={stats['input_i']}:measured_TP={stats['input_tp']}:"
+        f"measured_LRA={stats['input_lra']}:measured_thresh={stats['input_thresh']}:"
+        f"offset={stats['target_offset']}"
+    )
+    return f"{preparation},{normalization}"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path)
@@ -42,7 +64,11 @@ def main():
     parser.add_argument("--poster-time", type=float, default=5)
     parser.add_argument("--soundtrack", type=Path)
     parser.add_argument("--timing", type=Path)
+    parser.add_argument("--copy-video", action="store_true",
+                        help="Replace audio in an existing edit without re-encoding video or creating a poster.")
     args = parser.parse_args()
+    if args.copy_video and (not args.soundtrack or args.timing):
+        parser.error("--copy-video requires --soundtrack and cannot be used with --timing.")
     for path in [args.source, args.soundtrack, args.timing]:
         if path is not None and not path.is_file():
             parser.error(f"Input does not exist: {path}")
@@ -63,7 +89,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     video = out / f"site-tour-v{args.version}.mp4"
     poster = out / f"site-tour-poster-v{args.version}.webp"
-    if video.exists() or poster.exists():
+    if video.exists() or (not args.copy_video and poster.exists()):
         parser.error("These assets already exist. Use a new version number.")
 
     vf = timing_filter(timing["chapters"], source_duration, duration) if timing else "setpts=PTS-STARTPTS"
@@ -74,16 +100,22 @@ def main():
                "-threads", "4", "-i", str(args.source)]
     if args.soundtrack:
         command += ["-i", str(args.soundtrack), "-map", "0:v:0", "-map", "1:a:0",
-                    "-af", f"atrim=duration={duration},asetpts=PTS-STARTPTS,volume=-1dB,afade=t=out:st={duration-1}:d=1"]
+                    "-af", soundtrack_filter(args.soundtrack, duration)]
     else:
         command += ["-map", "0:v:0", "-map", "0:a?"]
-    command += ["-vf", vf, "-c:v", "libx264", "-preset", "medium",
-                "-crf", "22", "-threads", "4"]
+    if args.copy_video:
+        command += ["-c:v", "copy"]
+    else:
+        command += ["-vf", vf, "-c:v", "libx264", "-preset", "medium",
+                    "-crf", "22", "-threads", "4"]
     if args.soundtrack or any(s["codec_type"] == "audio" for s in source["streams"]):
-        command += ["-c:a", "aac", "-b:a", "192k"]
+        command += ["-c:a", "aac", "-b:a", "192k", "-ar", "48000"]
     command += ["-t", str(duration), "-movflags", "+faststart", "-map_metadata", "-1",
                 "-metadata", "title=mitch.pro site tour", str(video)]
     subprocess.run(command, check=True)
+    if args.copy_video:
+        print(f"Created {video.name} ({duration:.3f}s), preserving the original video stream.")
+        return
     subprocess.run([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-n",
         "-ss", str(args.poster_time), "-threads", "4", "-i", str(args.source),
