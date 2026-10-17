@@ -102,7 +102,7 @@ pub async fn handle(
         return Some(log_click(state, body));
     }
     if path == "/api/leaderboard" && *method == Method::GET {
-        return Some(leaderboard(state, headers));
+        return Some(leaderboard(state, headers, _search));
     }
     // GET /api/me/coins — server.js:23789-23802 (merged tree). Public wallet
     // for the signed-out top bar; the authed branch assembles coins,
@@ -315,10 +315,10 @@ fn log_click(state: &Arc<AppState>, body: &serde_json::Value) -> Response {
     }
 }
 
-/// `GET /api/leaderboard` — server.js:20489-20535. Ranked by coins desc,
-/// tie-break name asc. Coins and cosmetics come from real tables now;
-/// stats and profiles are still read from their JSON-blob documents.
-fn leaderboard(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
+/// `GET /api/leaderboard?metric=coins&q=...` — ranks the full community by
+/// the selected score (coins by default), then searches public names/handles.
+/// Reads coins, user_stats, profiles, and equipped cosmetics from the store.
+fn leaderboard(state: &Arc<AppState>, headers: &HeaderMap, search: &str) -> Response {
     let cookie_header = headers
         .get(axum::http::header::COOKIE)
         .and_then(|v| v.to_str().ok())
@@ -343,9 +343,76 @@ fn leaderboard(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let profiles = mitch_lib::profiles::profile_all(&state.store);
     let user_stats = mitch_lib::user_stats::user_stats_all(&state.store);
 
+    let params: std::collections::HashMap<_, _> =
+        url::form_urlencoded::parse(search.trim_start_matches('?').as_bytes()).collect();
+    let metric = params.get("metric").map(|v| v.as_ref()).unwrap_or("coins");
+    let metric = match metric {
+        "wins" | "puzzles" | "pixels" | "clicker_pts" | "typing_races" | "logic_puzzles" => metric,
+        _ => "coins",
+    };
+    let query = params
+        .get("q")
+        .map(|v| v.trim().trim_start_matches('@').to_lowercase())
+        .unwrap_or_default();
+    let rows = ranked_players(
+        &state.store,
+        [&coins, &profiles, &user_stats],
+        &viewer_norm,
+        &state.id_secret,
+        metric,
+    );
+    json_response(
+        200,
+        leaderboard_payload(
+            &rows,
+            metric,
+            &query,
+            mitch_lib::auth::is_tester_email(&state.store, &viewer_norm),
+        ),
+    )
+}
+
+fn leaderboard_payload(rows: &[Value], metric: &str, query: &str, is_tester: bool) -> Value {
+    let me = rows.iter().find(|r| r["isMe"] == true).cloned();
+    let matches: Vec<_> = rows
+        .iter()
+        .filter(|r| {
+            query.is_empty()
+                || r["name"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_lowercase()
+                    .contains(&query)
+                || r["handle"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_lowercase()
+                    .contains(&query)
+        })
+        .collect();
+    json!({
+        "top": rows.iter().take(10).collect::<Vec<_>>(),
+        "me": me,
+        "players": matches.iter().take(100).collect::<Vec<_>>(),
+        "total": rows.len(),
+        "matchCount": matches.len(),
+        "metric": metric,
+        "isTester": is_tester,
+    })
+}
+
+/// Rank the entire community before searching or limiting the response. Only
+/// public profile fields and equipped cosmetics belong in this payload.
+fn ranked_players(
+    store: &mitch_lib::data::DataStore,
+    [coins, profiles, user_stats]: [&Value; 3],
+    viewer_norm: &str,
+    id_secret: &[u8],
+    metric: &str,
+) -> Vec<Value> {
     let mut keys: Vec<String> = Vec::new();
     let mut seen = std::collections::HashSet::new();
-    for source in [&coins, &profiles] {
+    for source in [coins, profiles, user_stats] {
         if let Some(map) = source.as_object() {
             for k in map.keys() {
                 if seen.insert(k.clone()) {
@@ -354,15 +421,19 @@ fn leaderboard(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             }
         }
     }
-    if !viewer_norm.is_empty() && seen.insert(viewer_norm.clone()) {
-        keys.push(viewer_norm.clone());
+    if !viewer_norm.is_empty() && seen.insert(viewer_norm.to_string()) {
+        keys.push(viewer_norm.to_string());
     }
 
     let mut rows: Vec<serde_json::Value> = Vec::new();
     for norm in &keys {
+        // Sandbox balances must never compete with earned coins or scores.
+        if mitch_lib::auth::is_tester_email(store, norm) {
+            continue;
+        }
         let profile = profiles.get(norm).and_then(|v| v.as_object());
         let stats = user_stats.get(norm).and_then(|v| v.as_object());
-        let cosm_val = mitch_lib::shop::cosmetics_get(&state.store, norm);
+        let cosm_val = mitch_lib::shop::cosmetics_get(store, norm);
         let cosm = cosm_val.as_ref().and_then(|v| v.as_object());
         let nickname = profile
             .and_then(|p| p.get("nickname"))
@@ -376,10 +447,10 @@ fn leaderboard(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             .and_then(|p| p.get("username"))
             .and_then(|v| v.as_str())
             .unwrap_or("");
-        let name: &str = if !nickname.is_empty() {
-            nickname
-        } else if !display_name.is_empty() {
+        let name: &str = if !display_name.is_empty() {
             display_name
+        } else if !nickname.is_empty() {
+            nickname
         } else if !username.is_empty() {
             username
         } else {
@@ -388,12 +459,37 @@ fn leaderboard(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         let field = |obj: Option<&serde_json::Map<String, Value>>, key: &str| -> Value {
             obj.and_then(|o| o.get(key)).cloned().unwrap_or(json!(0))
         };
+        let profile_str = |key: &str| {
+            profile
+                .and_then(|p| p.get(key))
+                .and_then(Value::as_str)
+                .unwrap_or("")
+        };
+        let cosmetic = |key: &str| {
+            cosm.and_then(|c| c.get(key))
+                .cloned()
+                .unwrap_or(Value::Null)
+        };
+        let profile_id = if !username.is_empty() {
+            username.to_string()
+        } else {
+            mitch_lib::profile::get_uid_for_email(store, id_secret, norm).unwrap_or_default()
+        };
         let badge = cosm
             .and_then(|c| c.get("activeBadge"))
             .cloned()
             .unwrap_or(Value::Null);
         rows.push(json!({
             "name": name,
+            "handle": username,
+            "profileId": profile_id,
+            "pfp": mitch_lib::profile::sanitize_profile_image_url(profile_str("pfp"), true, 1000, 120_000),
+            "background": mitch_lib::profile::sanitize_profile_image_url(profile_str("background"), false, 1000, 0),
+            "bio": profile_str("bio").chars().take(160).collect::<String>(),
+            "activeColor": mitch_lib::shop::public_active_color(store, norm, &cosmetic("activeColor")),
+            "activeBadge": badge,
+            "activeProfileEffect": cosmetic("activeProfileEffect"),
+            "isPremium": mitch_lib::auth::is_premium_email(store, norm),
             "coins": coins.get(norm).cloned().unwrap_or(json!(0)),
             "wins": field(stats, "chess_wins"),
             "puzzles": field(stats, "puzzles_solved"),
@@ -404,39 +500,29 @@ fn leaderboard(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             "typing_coins": field(stats, "typing_coins"),
             "logic_puzzles": field(stats, "logic_puzzles"),
             "logic_coins": field(stats, "logic_coins"),
-            "email": if !username.is_empty() { json!(username) } else { json!(norm) },
+            // Retain the legacy key without exposing the account's email.
+            "email": profile_id,
             "badge": badge,
-            "isMe": norm == &viewer_norm,
+            "isMe": norm == viewer_norm,
         }));
     }
-    // Sort by coins desc, tie-break name asc. Rank is implicit (1-based).
+    // Rank every category on the server, including players outside the coin top 100.
     rows.sort_by(|a, b| {
-        let ca = a.get("coins").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let cb = b.get("coins").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let ca = a.get(metric).and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let cb = b.get(metric).and_then(|v| v.as_f64()).unwrap_or(0.0);
         cb.partial_cmp(&ca)
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| {
                 let na = a.get("name").and_then(|v| v.as_str()).unwrap_or("");
                 let nb = b.get("name").and_then(|v| v.as_str()).unwrap_or("");
                 na.cmp(nb)
+                    .then_with(|| a["profileId"].as_str().cmp(&b["profileId"].as_str()))
             })
     });
-    let total = rows.len();
-    let top = rows.iter().take(10).cloned().collect::<Vec<_>>();
-    let players = rows.iter().take(100).cloned().collect::<Vec<_>>();
-    let me_idx = rows
-        .iter()
-        .position(|r| r.get("isMe").and_then(|v| v.as_bool()).unwrap_or(false));
-    let me_val = me_idx.map(|p| rows[p].clone()).unwrap_or(Value::Null);
-    let me_out = match me_idx {
-        Some(p) if p < 10 => Value::Null, // viewer is in the top 10, no separate "me"
-        Some(_) => me_val,
-        None => me_val, // still include if resolvable
-    };
-    json_response(
-        200,
-        json!({ "top": top, "me": me_out, "players": players, "total": total }),
-    )
+    for (index, row) in rows.iter_mut().enumerate() {
+        row["rank"] = json!(index + 1);
+    }
+    rows
 }
 
 fn default_username_for_email(norm: &str) -> String {
@@ -1061,6 +1147,95 @@ fn health_check() -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn leaderboard_profiles_rankings_and_global_search() {
+        let base = std::env::temp_dir().join(format!(
+            "leaderboard-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(base.join("data")).unwrap();
+        let store = mitch_lib::data::DataStore::open(&base, &base.join("data")).unwrap();
+        store
+            .write_document(
+                &base.join("data/testers.json"),
+                &json!(["tester@example.test"]),
+            )
+            .unwrap();
+
+        let mut coins = json!({ "hero@example.test": 0, "tester@example.test": 1e12 });
+        let mut profiles = json!({
+            "hero@example.test": {
+                "username": "hero", "nickname": "Old name", "displayName": "Current name",
+                "pfp": "data:image/png;base64,aGk=", "background": "https://example.test/cover.png",
+                "bio": "Hello, community.", "totpSecret": "private", "email": "private@example.test"
+            },
+            "tester@example.test": { "username": "tester" },
+            "unsafe@example.test": { "pfp": "javascript:alert(1)", "background": "data:text/html;base64,aGk=" }
+        });
+        for index in 1..=105 {
+            let email = format!("player{index}@example.test");
+            coins[&email] = json!(index);
+            profiles[&email] = json!({ "username": format!("player{index}"), "displayName": format!("Player {index}") });
+        }
+        let cosmetics = json!({ "hero@example.test": {
+            "activeColor": "gold_glow", "activeBadge": "artist_badge", "activeProfileEffect": "profile_neon_frame",
+            "colors": ["gold_glow", "mint_flash"], "tools": ["private_inventory"]
+        }, "unsafe@example.test": { "activeColor": "rainbow_name" } });
+        let stats = json!({ "hero@example.test": { "chess_wins": 9999 }, "stats_only@example.test": { "chess_wins": 500 } });
+        for (email, cosmetic) in cosmetics.as_object().unwrap() {
+            mitch_lib::shop::cosmetics_set(&store, email, cosmetic);
+        }
+        let docs = [&coins, &profiles, &stats];
+        let rows = ranked_players(&store, docs, "hero@example.test", b"test-secret", "coins");
+        assert_eq!(rows.len(), 108);
+        assert!(!rows.iter().any(|row| row["handle"] == "tester"));
+        let hero = rows.iter().find(|row| row["isMe"] == true).unwrap();
+        assert_eq!(hero["name"], "Current name");
+        assert_eq!(hero["profileId"], "hero");
+        assert_eq!(hero["pfp"], "data:image/png;base64,aGk=");
+        assert_eq!(hero["background"], "https://example.test/cover.png");
+        assert_eq!(hero["activeColor"], "gold_glow");
+        assert_eq!(hero["activeBadge"], "artist_badge");
+        assert_eq!(hero["activeProfileEffect"], "profile_neon_frame");
+        assert!(hero["rank"].as_u64().unwrap() > 100);
+        assert!(!hero.to_string().contains("private"));
+        assert!(hero.get("colors").is_none());
+        let unsafe_row = rows.iter().find(|row| row["name"] == "unsafe").unwrap();
+        assert_eq!(unsafe_row["pfp"], "");
+        assert_eq!(unsafe_row["background"], "");
+        assert!(unsafe_row["activeColor"].is_null());
+        assert!(!unsafe_row["profileId"].as_str().unwrap().contains('@'));
+
+        let result = leaderboard_payload(&rows, "coins", "hero", false);
+        assert_eq!(result["players"].as_array().unwrap().len(), 1);
+        assert_eq!(result["players"][0]["rank"], hero["rank"]);
+        assert_eq!(result["matchCount"], 1);
+        assert_eq!(result["top"][0]["coins"], 105);
+        assert_eq!(result["me"], *hero);
+        assert_eq!(
+            leaderboard_payload(&rows, "coins", "", false)["players"]
+                .as_array()
+                .unwrap()
+                .len(),
+            100
+        );
+
+        let wins = ranked_players(&store, docs, "hero@example.test", b"test-secret", "wins");
+        assert_eq!(wins[0]["name"], "Current name");
+        assert_eq!(wins[0]["rank"], 1);
+        assert_eq!(wins[1]["wins"], 500);
+        let empty = leaderboard_payload(&[], "coins", "", true);
+        assert_eq!(empty["players"], json!([]));
+        assert!(empty["me"].is_null());
+        assert_eq!(empty["isTester"], true);
+        drop(store);
+        std::fs::remove_dir_all(base).unwrap();
+    }
 
     #[test]
     fn site_catalog_filters_comments_and_staff_links() {

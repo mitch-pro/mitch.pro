@@ -3,109 +3,56 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="description" content="Meet the players making their mark. Explore community rankings, game scores, and each player's signature style.">
   <title>Leaderboard — mitch.pro</title>
   <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/leaderboard/leaderboard.css?v=1">
   <script src="/api.js"></script>
   <script src="/app-shell.js" defer></script>
-  <style>
-    .rank-shell{width:min(1180px,calc(100% - 40px))}
-    .rank-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}
-    .rank-head-copy{max-width:690px}
-    .season-chip{display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border:2px solid var(--t-ac);background:transparent;color:var(--t-ac);font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;border-radius:0}
-    .season-chip i{width:7px;height:7px;background:currentColor}
-    .rank-overview{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(260px,.65fr);gap:14px;margin:24px 0 16px}
-    .podium{display:grid;grid-template-columns:repeat(3,1fr);align-items:end;gap:10px;min-height:252px;padding:0;border:0;border-radius:0;background:transparent;overflow:hidden}
-    .podium-card{position:relative;display:flex;min-width:0;flex-direction:column;align-items:flex-start;justify-content:flex-end;padding:16px;border:1px solid var(--t-bd);border-radius:10px;background:var(--t-bg2);text-align:left}
-    .podium-card.first{order:2;min-height:210px;border-color:var(--t-ac);background:var(--t-bg2);color:var(--t-fg)}
-    .podium-card.second{order:1;min-height:176px}.podium-card.third{order:3;min-height:158px}
-    .podium-card.first .podium-name,.podium-card.first .podium-score,.podium-card.first .podium-rank{color:var(--t-fg)}
-    .podium-rank{position:absolute;top:10px;right:11px;color:var(--t-fg2);font:800 11px/1 inherit}
-    .first .podium-rank{color:var(--t-ac)}
-    .podium-avatar{display:grid;width:48px;height:48px;place-items:center;margin-bottom:10px;border:2px solid currentColor;border-radius:0;background:transparent;color:inherit;font:800 1.1rem var(--t-display,Fraunces,serif)}
-    .first .podium-avatar{width:58px;height:58px}
-    .podium-name{max-width:100%;overflow:hidden;color:var(--t-fg);font-size:.92rem;font-weight:800;text-overflow:ellipsis;white-space:nowrap}
-    .podium-score{margin-top:5px;color:var(--t-fg2);font-size:.72rem}.podium-score b{color:var(--t-ac)}.first .podium-score b{color:var(--t-ac)}
-    .my-rank{display:flex;min-height:252px;flex-direction:column;justify-content:space-between;padding:20px;border:1px solid var(--t-bd);border-radius:10px;background:var(--t-bg2)}
-    .my-rank small{color:var(--t-ac);font-size:10px;font-weight:800;letter-spacing:0}
-    .my-rank strong{display:block;margin-top:8px;font:700 clamp(2.2rem,5vw,3.4rem)/.95 inherit;font-style:normal;letter-spacing:-.04em}
-    .my-rank h2{margin:10px 0 0;font-size:1.1rem}.my-rank p{margin:5px 0;color:var(--t-fg2);font-size:.78rem}
-    .my-rank-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-    .my-rank-stats span{padding:10px;border:2px solid var(--t-bd);border-radius:0;background:transparent}
-    .my-rank-stats b{display:block;font-size:.95rem}.my-rank-stats small{font-size:8px}
-    .rank-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:16px 0;padding:0;border:0;border-bottom:2px solid var(--t-ac);border-radius:0;background:transparent;padding-bottom:10px}
-    .metric-tabs{display:flex;gap:0;overflow-x:auto;scrollbar-width:none}
-    .metric-tabs::-webkit-scrollbar{display:none}
-    .metric-tab{width:auto!important;min-width:max-content;margin:0!important;padding:9px 12px!important;border:2px solid transparent!important;background:transparent!important;color:var(--t-fg2)!important;font-size:11px!important;text-transform:uppercase;letter-spacing:.06em;border-radius:0!important}
-    .metric-tab.active{border-color:var(--t-bd)!important;background:var(--t-bg2)!important;color:var(--t-fg)!important}
-    .rank-search{position:relative;flex:0 1 260px}
-    .rank-search input{min-height:38px!important;padding-left:34px!important;border-radius:0!important}
-    .rank-search span{position:absolute;left:12px;top:50%;color:var(--t-fg2);transform:translateY(-50%)}
-    .rank-list{padding:0!important;border-radius:0!important;border-width:2px!important}
-    .rank-row{display:grid;grid-template-columns:52px minmax(160px,1.4fr) repeat(4,minmax(76px,.55fr));align-items:center;gap:8px;min-height:60px;padding:8px 12px;border-bottom:1px solid var(--t-bd);transition:background .15s}
-    .rank-row:last-child{border-bottom:0}
-    .rank-row:hover{background:color-mix(in srgb,var(--t-ac) 8%,transparent);transform:none}
-    .rank-row.me{border:2px solid var(--t-ac);background:color-mix(in srgb,var(--t-ac) 10%,transparent)}
-    .rank-number{color:var(--t-fg2);font:800 .82rem inherit}.rank-number.top{color:var(--t-ac);font-size:1.05rem}
-    .rank-user{display:flex;min-width:0;align-items:center;gap:10px}
-    .rank-user-avatar{display:grid;width:34px;height:34px;flex:0 0 34px;place-items:center;border:2px solid var(--t-ac);border-radius:0;background:transparent;color:var(--t-ac);font:800 .75rem inherit}
-    .rank-user-copy{min-width:0}.rank-user-copy a{display:block;overflow:hidden;color:var(--t-fg);font-size:.82rem;font-weight:800;text-overflow:ellipsis;white-space:nowrap}
-    .rank-user-copy small{display:block;margin-top:2px;color:var(--t-fg2);font-size:.65rem}
-    .metric{font-variant-numeric:tabular-nums}.metric small{display:block;color:var(--t-fg2);font-size:7px;font-weight:800;letter-spacing:.08em}
-    .metric b{display:block;margin-top:3px;color:var(--t-fg);font-size:.76rem}
-    .metric.primary b{color:var(--t-ac);font-size:.86rem}
-    .rank-empty{padding:54px 20px;color:var(--t-fg2);text-align:center}
-    .l-badge{margin-left:5px;font-size:.68rem}
-    .you-pill{margin-left:6px;padding:2px 5px;border:1px solid var(--t-ac);color:var(--t-ac);font-size:7px;text-transform:uppercase}
-    .podium:has(.podium-card:only-child){grid-template-columns:1fr}
-    @media(max-width:700px){
-      .rank-head{align-items:flex-start;flex-direction:column}
-      .rank-overview{grid-template-columns:minmax(0,1fr)}
-      .rank-controls{flex-direction:column;align-items:stretch}
-      .metric-tabs{flex-wrap:wrap;min-width:0}
-      .metric-tab{text-transform:none;letter-spacing:0}
-      .rank-search{flex:auto;width:100%}
-      .rank-row{grid-template-columns:30px minmax(0,1fr) minmax(65px,auto);padding:10px 8px}
-      .rank-row .metric:not(.primary){display:none}
-      .rank-user-copy small{max-width:100%;overflow:hidden;text-overflow:ellipsis}
-    }
-  </style>
+  <script src="/leaderboard/leaderboard.js?v=1" defer></script>
 </head>
 <body class="leaderboard-page">
-  <main class="app-main rank-shell">
-    <header class="page-head rank-head">
-      <div class="rank-head-copy"><h1>Leaderboard</h1><p class="page-sub">Coins, wins, and scores — ranked live.</p></div>
-
+  <main class="app-main leaderboard-shell">
+    <header class="board-heading">
+      <div>
+        <p class="board-eyebrow"><span></span> The community, ranked</p>
+        <h1>Leaderboard<span>.</span></h1>
+        <p class="board-intro">Make your mark. Bring your own style.</p>
+      </div>
+      <a class="board-link" href="/game-portal/">Find your next game <span aria-hidden="true">↗</span></a>
     </header>
-    <section class="rank-overview" aria-label="Leaderboard highlights">
-      <div class="podium" id="podium"><div class="rank-empty">Building the podium…</div></div>
-      <aside class="my-rank" id="my-rank"><div><small>Your position</small><strong>--</strong><h2>Loading profile</h2><p>Your live standing appears here.</p></div><div class="my-rank-stats"><span><b>--</b><small>COINS</small></span><span><b>--</b><small>WINS</small></span></div></aside>
-    </section>
-    <section class="rank-controls" aria-label="Leaderboard controls">
-      <div class="metric-tabs" id="metric-tabs"></div>
-      <label class="rank-search"><span>⌕</span><input id="rank-search" type="search" placeholder="Find a player" autocomplete="off"></label>
-    </section>
-    <section class="panel rank-list" id="rank-list"><div class="rank-empty">Fetching live rankings…</div></section>
+
+    <nav class="board-categories" id="metric-tabs" aria-label="Rank by category"></nav>
+
+    <div id="board-content" aria-busy="true">
+      <section class="board-spotlight" aria-labelledby="spotlight-title">
+        <div class="section-heading"><h2 id="spotlight-title">Leading the way</h2><span id="spotlight-category">MitchCoins · Top 3</span></div>
+        <div class="board-podium" id="podium">
+          <div class="podium-placeholder skeleton" aria-hidden="true"></div>
+          <div class="podium-placeholder skeleton" aria-hidden="true"></div>
+          <div class="podium-placeholder skeleton" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      <aside class="personal-standing" id="my-rank" aria-label="Your standing"><div class="personal-placeholder skeleton" aria-hidden="true"></div></aside>
+
+      <section class="board-rankings" aria-labelledby="rankings-title">
+        <div class="rankings-toolbar">
+          <div><h2 id="rankings-title">The rankings</h2><p id="rank-count">Finding the community’s best…</p></div>
+          <div class="rankings-actions">
+            <label class="player-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m16 16 4 4"></path></svg><span class="board-sr-only">Find a player by name or username</span><input id="rank-search" type="search" placeholder="Find a player…" maxlength="100" autocomplete="off"></label>
+            <button class="board-refresh" id="refresh-board" type="button" aria-label="Refresh rankings" title="Refresh rankings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"></path><path d="M6.1 7a7 7 0 0 1 11.6-1L20 9M4 15l2.3 3A7 7 0 0 0 18 17"></path></svg></button>
+          </div>
+        </div>
+        <div class="standings-head" id="standings-head" aria-hidden="true"></div>
+        <ol class="standings-list" id="rank-list" aria-label="Player rankings"><li class="board-empty">Loading rankings…</li></ol>
+        <div class="board-notice" id="board-notice" hidden></div>
+        <footer class="board-footer"><p id="board-updated">Fetching the latest scores</p><a href="/shop/">Find your signature look <span aria-hidden="true">↗</span></a></footer>
+      </section>
+    </div>
+    <p class="board-sr-only" id="board-status" role="status" aria-live="polite"></p>
+    <noscript><p class="board-empty">Enable JavaScript to see the latest rankings.</p></noscript>
   </main>
-  <script>
-  (function(){
-    const metrics=[['coins','MitchCoins'],['wins','Wins'],['puzzles','Puzzles'],['pixels','Pixels'],['clicker_pts','Clicker'],['typing_races','Typing'],['logic_puzzles','Logic']];
-    const badgeLabels={verified_badge:'✓',og_badge:'OG',artist_badge:'◆',chess_badge:'♟',builder_badge:'⌁',lucky_badge:'♣',premium_star_badge:'★',owner_fan_badge:'♛'};
-    let users=[],myUser=null,activeMetric='coins',query='',isTester=false;
-    const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-    const fmt=n=>{n=Number(n)||0;if(Math.abs(n)<1000)return Number.isInteger(n)?String(n):n.toFixed(2);const s=['','K','M','B','T','Qa','Qi'];const i=Math.min(s.length-1,Math.floor(Math.log10(Math.abs(n))/3));return (n/10**(i*3)).toFixed(n>=100000?0:1)+s[i]};
-    const initials=n=>String(n||'?').split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase();
-    function score(u,key){return Number(u[key])||0}
-    function renderTabs(){document.getElementById('metric-tabs').innerHTML=metrics.map(([key,label])=>`<button type="button" class="metric-tab ${key===activeMetric?'active':''}" data-key="${key}">${label}</button>`).join('');document.querySelectorAll('.metric-tab').forEach(b=>b.onclick=()=>{activeMetric=b.dataset.key;renderTabs();renderAll()})}
-    function podiumCard(u,index){if(!u)return'';const cls=['first','second','third'][index];const rank=[1,2,3][index];return `<article class="podium-card ${cls}"><span class="podium-rank">#${rank}</span><span class="podium-avatar">${esc(initials(u.name))}</span><a class="podium-name" href="/profile/?u=${encodeURIComponent(u.email||u.name)}">${esc(u.name)}</a><span class="podium-score"><b>${fmt(score(u,activeMetric))}</b> ${esc(metrics.find(m=>m[0]===activeMetric)?.[1]||'points')}</span></article>`}
-    function renderPodium(sorted){const top=sorted.slice(0,3);document.getElementById('podium').innerHTML=(top[1]?podiumCard(top[1],1):'')+(top[0]?podiumCard(top[0],0):'')+(top[2]?podiumCard(top[2],2):'')||'<div class="rank-empty">No players ranked yet.</div>'}
-    function renderMine(){const box=document.getElementById('my-rank');if(isTester){box.innerHTML='<div><small style="color:#c084fc">Your position</small><strong style="font-size:clamp(1.8rem,4vw,2.4rem);color:#c084fc">TESTER</strong><h2>Beta Tester</h2><p>Testers enjoy unlimited sandbox coins and perks, and are excluded from public ranks.</p></div><div class="my-rank-stats"><a href="/tester/" style="grid-column:span 2;display:flex;align-items:center;justify-content:center;padding:10px;border:1px solid rgba(168,85,247,0.45);border-radius:8px;background:rgba(168,85,247,0.15);color:#d8b4fe;font-weight:700;font-size:0.85rem;text-decoration:none">🧪 Open Tester Hub &rarr;</a></div>';return}const u=myUser||users.find(x=>x.isMe);if(!u){box.innerHTML='<div><small>Your position</small><strong>--</strong><h2>Not ranked yet</h2><p>Play a game or earn coins to enter the board.</p></div>';return}box.innerHTML=`<div><small>Your position</small><strong>#${esc(u.rank||users.findIndex(x=>x.email===u.email)+1)}</strong><h2>${esc(u.name)}</h2><p>Your current standing.</p></div><div class="my-rank-stats"><span><b>${fmt(u.coins)}</b><small>COINS</small></span><span><b>${fmt(u.wins)}</b><small>WINS</small></span></div>`}
-    function metricHtml(u,key,label,primary){return `<span class="metric ${primary?'primary':''}"><small>${esc(label.toUpperCase())}</small><b class="${key==='coins'?'mitch-coin-amount':''}">${fmt(u[key])}</b></span>`}
-    function renderRows(sorted){const visible=sorted.filter(u=>!query||String(u.name||'').toLowerCase().includes(query)||String(u.email||'').toLowerCase().includes(query));const html=visible.map((u,i)=>{const boardRank=i+1;const badge=u.badge?`<span class="l-badge" title="${esc(u.badge.replace(/_/g,' '))}">${esc(badgeLabels[u.badge]||'◆')}</span>`:'';const you=u.isMe?'<span class="you-pill">You</span>':'';const other=metrics.filter(m=>m[0]!==activeMetric).slice(0,3);return `<article class="rank-row ${u.isMe?'me':''}"><span class="rank-number ${boardRank<=3?'top':''}">#${boardRank}</span><span class="rank-user"><span class="rank-user-avatar">${esc(initials(u.name))}</span><span class="rank-user-copy"><a href="/profile/?u=${encodeURIComponent(u.email||u.name)}">${esc(u.name)}${badge}${you}</a><small>${esc(u.email||'community player')}</small></span></span>${metricHtml(u,activeMetric,metrics.find(m=>m[0]===activeMetric)[1],true)}${other.map(m=>metricHtml(u,m[0],m[1],false)).join('')}</article>`}).join('');document.getElementById('rank-list').innerHTML=html||'<div class="rank-empty">No players match that search.</div>'}
-    function renderAll(){const sorted=[...users].sort((a,b)=>score(b,activeMetric)-score(a,activeMetric)||String(a.name).localeCompare(String(b.name)));renderPodium(sorted);renderRows(sorted);renderMine()}
-    async function load(){try{const r=await fetch('/api/leaderboard',{credentials:'include',cache:'no-store'});if(!r.ok)throw Error('rankings unavailable');const d=await r.json();users=[...(d.players||d.top||[])];myUser=d.me||users.find(u=>u.isMe)||null;if(myUser&&!users.some(u=>u.email===myUser.email))users.push(myUser);isTester=!!d.isTester;renderAll()}catch(e){document.getElementById('rank-list').innerHTML='<div class="rank-empty">Rankings are temporarily unavailable. Try refreshing in a moment.</div>'}}
-    document.getElementById('rank-search').addEventListener('input',e=>{query=e.target.value.trim().toLowerCase();renderAll()});renderTabs();load();
-  })();
-  </script>
   <script src="/cookie-consent.js" defer></script>
 </body>
 </html>
