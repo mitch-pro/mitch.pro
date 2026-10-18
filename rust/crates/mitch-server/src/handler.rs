@@ -86,6 +86,7 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/auth-non-enrolled.js",
     "/assistant.js",
     "/broadcast.js",
+    "/presence.js",
     "/cookie-consent.js",
     "/api.js",
     "/app-shell.js",
@@ -1672,9 +1673,17 @@ pub async fn handle(
                     .join("index.html");
                 if index_path.exists() {
                     if let Ok(content) = std::fs::read_to_string(&index_path) {
+                        let content =
+                            if crate::presence::authenticated_email(&state, headers).is_some() {
+                                crate::inject::inject_presence(&content, None)
+                            } else {
+                                content
+                            };
                         return Response::builder()
                             .status(StatusCode::OK)
                             .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")
+                            .header(axum::http::header::CACHE_CONTROL, "private, no-store")
+                            .header(axum::http::header::VARY, "Cookie")
                             .body(axum::body::Body::from(content))
                             .expect("static response");
                     }
@@ -1749,10 +1758,15 @@ pub async fn handle(
                             .header(axum::http::header::VARY, "Cookie")
                             .body(axum::body::Body::from({
                                 let html = String::from_utf8_lossy(&raw);
-                                if path.starts_with("/vms/desktop") {
+                                let html = if path.starts_with("/vms/desktop") {
                                     crate::inject::inject_credit(&html, false)
                                 } else {
                                     crate::inject::inject_access_guard(&html)
+                                };
+                                if crate::presence::authenticated_email(&state, headers).is_some() {
+                                    crate::inject::inject_presence(&html, None)
+                                } else {
+                                    html
                                 }
                             }))
                             .expect("vm desktop response");

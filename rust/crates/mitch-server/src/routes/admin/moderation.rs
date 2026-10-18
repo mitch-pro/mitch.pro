@@ -2262,12 +2262,14 @@ mod tests {
             crate::state::UserPresence {
                 last_seen: now_millis(),
                 playing: "Dashboard".into(),
+                ..Default::default()
             },
         );
         state.ws_broadcasts.lock().unwrap().insert(
             1,
             crate::ws::WsClient {
                 email_norm: email.into(),
+                ..Default::default()
             },
         );
         state

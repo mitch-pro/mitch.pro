@@ -9,13 +9,8 @@
   const list = section.querySelector('.home-friend-list');
   function activityLabel(friend) {
     if (!friend.online) return 'Offline';
-    const activity = String(friend.playing || '').trim().slice(0,100);
-    const labels = { '/':'On the homepage',shop:'Browsing the market',marketplace:'Browsing the market',members:'Finding friends',friends:'With friends',profile:'Viewing profiles',preferences:'Customizing their theme',matrix:'In chat',encrypt:'In chat',chat:'In chat',canvas:'Drawing on the canvas','game-portal':'Browsing games',games:'Browsing games',vms:'Using My Computer' };
-    if (!activity) return 'Online now';
-    if (activity.startsWith('/') || /^https?:\/\//i.test(activity)) {
-      try { const path = new URL(activity,location.origin).pathname; return labels[path.split('/').filter(Boolean)[0] || '/'] || 'Online now'; } catch { return 'Online now'; }
-    }
-    return labels[activity.toLowerCase()] || (/^(playing|browsing|in |using )/i.test(activity) ? activity : 'Playing ' + activity);
+    const activity = String(friend.activity || friend.playing || 'Online now').trim().slice(0,120);
+    return (friend.status === 'away' ? 'Away · ' : '') + activity;
   }
   function render(friends) {
     list.replaceChildren();
@@ -43,22 +38,30 @@
       const activity = document.createElement('small');
       const activityText = document.createElement('span'); activityText.textContent = activityLabel(friend);
       const activityIcon = document.createElement('i'); activityIcon.setAttribute('aria-hidden','true');
-      const rawActivity = String(friend.playing || '').toLowerCase();
+      const rawActivity = String(friend.activity || friend.playing || '').toLowerCase();
       activityIcon.textContent = !friend.online ? '' : (/game|chess|casino|playing/.test(rawActivity) ? '▶' : (/chat|matrix|encrypt/.test(rawActivity) ? '●' : '•'));
       activity.append(activityIcon,activityText);
       card.title = name + ' · ' + activity.textContent; card.append(avatar,title,activity); list.append(card);
     });
   }
-  let busy = false;
+  let busy = false, refreshAgain = false;
   async function refresh() {
-    if (document.hidden || busy) return;
+    if (document.hidden) return;
+    if (busy) { refreshAgain = true; return; }
     busy = true;
-    try { const response = await fetch('/api/friends/list', { credentials:'same-origin', cache:'no-store' }); if (response.ok) { const data = await response.json(); render(Array.isArray(data.friends) ? data.friends : []); } }
-    catch {} finally { busy = false; }
+    try { const response = await fetch('/api/friends/list', { credentials:'same-origin', cache:'no-store' }); if (!response.ok) throw new Error('Friends unavailable'); const data = await response.json(); render(Array.isArray(data.friends) ? data.friends : []); }
+    catch { list.querySelectorAll('.home-friend small span').forEach(el => { el.textContent = 'Status unavailable'; }); section.querySelector('.home-friend-count').textContent = ''; list.querySelectorAll('.home-friend.online').forEach(el => el.classList.remove('online')); }
+    finally { busy = false; if (refreshAgain) { refreshAgain = false; setTimeout(refresh, 500); } }
   }
   render([]); refresh();
   let timer = setInterval(refresh, 30000);
   document.addEventListener('visibilitychange', refresh);
+  let pending;
+  window.addEventListener('ws-broadcast-message', event => {
+    if (event.detail?.type !== 'presence_changed') return;
+    if (!pending) pending = setTimeout(() => { pending = null; refresh(); }, 1000);
+  });
+  window.addEventListener('ws-broadcast-status', refresh);
   window.addEventListener('pagehide', () => clearInterval(timer));
   window.addEventListener('pageshow', event => { if (event.persisted) { clearInterval(timer); timer = setInterval(refresh,30000); refresh(); } });
 })();

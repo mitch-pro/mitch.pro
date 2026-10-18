@@ -127,27 +127,22 @@ pub async fn handle(
     None
 }
 
-/// `String(body.playing || '').trim()` — the presence heartbeat's playing
-/// field. NOTE: unlike most heartbeat endpoints there is no isRevoked check.
+/// Authenticated document heartbeat, with compatibility for cached legacy clients.
 fn presence_heartbeat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Response {
-    let cookies = crate::routes::me::cookies_of(state, headers);
-    let sid = cookies
-        .get("studentId")
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| cookies.get("id").unwrap_or(""))
-        .to_string();
-    if !mitch_lib::auth::valid_id(&sid, &state.id_secret) {
+    let Some(email) = crate::presence::authenticated_email(state, headers) else {
         return json_response(401, json!({ "error": "unauthorized" }));
-    }
-    let Some(email) = mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, &sid) else {
-        return json_response(401, json!({ "error": "email not found" }));
     };
     let Some(body) = crate::routes::me::parse_body_strict(body_bytes) else {
         return json_response(400, json!({ "error": "bad json" }));
     };
-    let playing = jsval::string(&jsval::or(body.get("playing"), json!("")));
-    let playing = playing.trim();
-    crate::ws::touch_user_presence(state, &email, playing);
+    if body.get("clientId").is_some() {
+        if let Err(message) = crate::presence::update(state, &email, &body, None) {
+            return json_response(400, json!({ "error": message }));
+        }
+    } else {
+        let playing = jsval::string(&jsval::or(body.get("playing"), json!("")));
+        crate::ws::touch_user_presence(state, &email, playing.trim());
+    }
     json_response(200, json!({ "ok": true }))
 }
 

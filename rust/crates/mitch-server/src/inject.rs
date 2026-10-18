@@ -3,6 +3,32 @@
 //! `stripBroadcast`, and the main page-injection block (server.js
 //! ~20788-21313).
 
+/// Inject before upstream scripts so presence retains the site's fetch transport.
+#[allow(clippy::expect_used)]
+pub fn inject_presence(html: &str, page: Option<&str>) -> String {
+    if html.contains("/presence.js") {
+        return html.to_string();
+    }
+    let context = page
+        .map(|page| {
+            format!(
+                " data-presence-page=\"{}\"",
+                page.replace('&', "&amp;")
+                    .replace('"', "&quot;")
+                    .replace('<', "&lt;")
+            )
+        })
+        .unwrap_or_default();
+    let tag = format!("<script src=\"/presence.js?v=1\"{context}></script>");
+    static HEAD: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let head = HEAD.get_or_init(|| regex::Regex::new(r"(?i)<head\b[^>]*>").expect("static regex"));
+    if let Some(found) = head.find(html) {
+        format!("{}{}{}", &html[..found.end()], tag, &html[found.end()..])
+    } else {
+        format!("{tag}{html}")
+    }
+}
+
 /// `injectSharedHead(html)`.
 pub fn inject_shared_head(html: &str) -> String {
     let mut html = html.to_string();
@@ -57,7 +83,7 @@ pub fn inject_broadcast(html: &str) -> String {
     if html.contains("/broadcast.js") {
         return html.to_string();
     }
-    let tag = "<script src=\"/broadcast.js?v=4\" defer></script>";
+    let tag = "<script src=\"/broadcast.js?v=11\" defer></script>";
     match html.rfind("</body>") {
         Some(i) => format!("{}{}{}", &html[..i], tag, &html[i..]),
         None => format!("{html}{tag}"),
@@ -135,6 +161,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn presence_precedes_upstream_transports_and_preserves_legacy_page_context() {
+        let html = "<HTML><HEAD lang=\"en\"><script>window.fetch=proxyFetch</script></HEAD></HTML>";
+        let injected = inject_presence(html, Some("/games/chess/?name=\"a\"&mode=1"));
+        assert!(injected.find("/presence.js").unwrap() < injected.find("window.fetch").unwrap());
+        assert!(
+            injected.contains("data-presence-page=\"/games/chess/?name=&quot;a&quot;&amp;mode=1\"")
+        );
+        assert_eq!(inject_presence(&injected, None), injected);
+        assert!(inject_presence("<body>VM desktop</body>", None)
+            .starts_with("<script src=\"/presence.js"));
+    }
+
+    #[test]
     fn credits_are_idempotent_and_use_school_wording() {
         let html = "<html><body><main>Sign up</main></body></html>";
         let main = inject_credit(html, false);
@@ -172,7 +211,7 @@ mod tests {
 
     #[test]
     fn broadcast_strip_matches_js() {
-        let html = "a<script src=\"/broadcast.js?v=4\" defer></script>b<script SRC='/broadcast.js' ></script>c";
+        let html = "a<script src=\"/broadcast.js?v=11\" defer></script>b<script SRC='/broadcast.js' ></script>c";
         assert_eq!(strip_broadcast(html), "abc");
     }
 

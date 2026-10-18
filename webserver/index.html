@@ -15,7 +15,7 @@
 <link rel="stylesheet" href="/app.css">
 <link rel="stylesheet" href="/home.css?v=13">
 <script src="/app-shell.js" defer></script>
-<script src="/home-friends.js?v=4" defer></script>
+<script src="/home-friends.js?v=5" defer></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
@@ -520,6 +520,7 @@ function goBack() {
   if (frame) {
     frame.src = 'about:blank';
     frame.style.display = 'none';
+    window.MitchPresence?.setActivity(null);
   }
   var main = document.getElementById('mainpage');
   if (main) main.style.display = '';
@@ -842,7 +843,7 @@ function renderOnlineMembers(members) {
   });
   var online = allMembers.filter(function(m) { return m.online; });
   var signature = JSON.stringify(allMembers.map(function(m) {
-    return [m.email || '', m.displayName || '', m.pfp || '', m.badge || '', m.color || '', !!m.online, m.activity || m.playing || '', m.page || ''];
+    return [m.email || '', m.displayName || '', m.pfp || '', m.badge || '', m.color || '', !!m.online, m.activity || m.playing || '', m.page || '', m.status || ''];
   }));
   if (signature === window._onlineMembersSignature) return;
   window._onlineMembersSignature = signature;
@@ -894,7 +895,7 @@ function renderOnlineMembers(members) {
     var avatar = m.pfp
       ? '<img class="member-presence-avatar" src="' + escText(m.pfp) + '" alt="" data-initials="' + escText(initials) + '" referrerpolicy="no-referrer">'
       : '<span class="member-presence-avatar member-presence-initials" aria-hidden="true">' + escText(initials) + '</span>';
-    var statusText = escText(m.online ? (m.activity || m.playing || 'Online now') : 'Offline');
+    var statusText = escText(m.online ? ((m.status === 'away' ? 'Away · ' : '') + (m.activity || m.playing || 'Online now')) : 'Offline');
     var tooltip = email.includes('@') ? email : '';
     return '<a class="member-presence-card name ' + escText(colorClass) + (m.online ? ' is-online' : ' is-offline') + '" href="/profile/?u=' + encodeURIComponent(email) + '" title="' + escText(tooltip) + '">' +
       avatar + '<span class="member-presence-copy"><span class="member-presence-name name ' + escText(colorClass) + '">' + nameContent + badgeHtml + '</span><span class="member-presence-status"><span class="online-dot"></span>' + statusText + '</span></span></a>';
@@ -905,11 +906,14 @@ function renderOnlineMembers(members) {
 async function loadOnlineMembers() {
   var wrap = document.getElementById('online-members-wrap');
   var list = document.getElementById('online-members-list');
+  if (document.hidden) return;
+  var request = (window._peopleRequest || 0) + 1; window._peopleRequest = request;
   try {
     var r = await fetch('/api/members?t=' + Date.now(), {
       credentials: 'include',
       cache: 'no-store'
     });
+    if (request !== window._peopleRequest) return;
     if (!r.ok) {
       r.text().catch(()=>{});
       window._onlineMembersSignature = '';
@@ -922,8 +926,9 @@ async function loadOnlineMembers() {
       return;
     }
     var d = await r.json();
-    renderOnlineMembers(d.members || []);
+    if (request === window._peopleRequest) renderOnlineMembers(d.members || []);
   } catch(e) {
+    if (request !== window._peopleRequest) return;
     window._onlineMembersSignature = '';
     list.innerHTML = '<span class="side-empty">Online list unavailable</span>';
     wrap.style.display = '';
@@ -935,21 +940,15 @@ async function loadOnlineMembers() {
 }
 
 // ── Friends and Presence Client Side Logic ──────────────────────────────────
-async function sendPresenceHeartbeat() {
-  try {
-    fetch('/api/presence/heartbeat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ playing: window.currentPlayingActivity || 'Dashboard' })
-    }).then(r => r.text()).catch(()=>{});
-  } catch(e) {}
-}
+function sendPresenceHeartbeat() { window.MitchPresence?.send(); }
 
 async function loadFriends() {
   const friendsList = document.getElementById('friends-list');
-  if (!friendsList) return;
+  if (!friendsList || document.hidden) return;
+  const request = (window._friendsRequest || 0) + 1; window._friendsRequest = request;
   try {
     const r = await fetch('/api/friends/list?t=' + Date.now(), { credentials: 'include' });
+    if (request !== window._friendsRequest) return;
     if (!r.ok) {
       r.text().catch(()=>{});
       window._friendsSignature = '';
@@ -957,8 +956,9 @@ async function loadFriends() {
       return;
     }
     const d = await r.json();
+    if (request !== window._friendsRequest) return;
     const list = (d.friends || []).slice().sort((a, b) => Number(!!b.online) - Number(!!a.online) || String(a.maskedEmail || a.email || '').localeCompare(String(b.maskedEmail || b.email || '')));
-    const signature = JSON.stringify(list.map(f => [f.email || '', f.color || '', f.displayName || '', f.maskedEmail || '', !!f.online, f.activity || f.playing || '', f.page || '']));
+    const signature = JSON.stringify(list.map(f => [f.email || '', f.color || '', f.displayName || '', f.maskedEmail || '', !!f.online, f.activity || f.playing || '', f.page || '', f.status || '']));
     if (signature === window._friendsSignature) return;
     window._friendsSignature = signature;
     if (list.length === 0) {
@@ -969,7 +969,7 @@ async function loadFriends() {
       const email = f.email;
       const masked = f.displayName || f.handle || f.maskedEmail || 'Friend';
       const isOnline = f.online;
-      const statusText = isOnline ? (f.activity || f.playing || 'Online now') + (f.page ? ' · ' + f.page : '') : 'Offline';
+      const statusText = isOnline ? (f.status === 'away' ? 'Away · ' : '') + (f.activity || f.playing || 'Online now') : 'Offline';
       const initials = String(masked).replace(/[^a-z0-9 ]/gi, ' ').trim().split(/\s+/).slice(0, 2).map(part => part.charAt(0)).join('').toUpperCase() || 'F';
 
       return `
@@ -984,6 +984,7 @@ async function loadFriends() {
       `;
     }).join('');
   } catch(e) {
+    if (request !== window._friendsRequest) return;
     window._friendsSignature = '';
     friendsList.innerHTML = '<span class="side-empty">Error loading friends</span>';
   }
@@ -1241,11 +1242,12 @@ function initFriendsSystem() {
 
   var presenceRefreshTimer = 0;
   function refreshPresenceSoon() {
-    clearTimeout(presenceRefreshTimer);
+    if (presenceRefreshTimer) return;
     presenceRefreshTimer = setTimeout(function() {
+      presenceRefreshTimer = 0;
       loadOnlineMembers();
       loadFriends();
-    }, 120);
+    }, 1000);
   }
   window.addEventListener('ws-broadcast-message', function(event) {
     if (event.detail && event.detail.type === 'presence_changed') refreshPresenceSoon();
@@ -2962,7 +2964,7 @@ goBack = function() {
     };
   })();
 </script>
-<script src="/broadcast.js?v=10"></script>
+<script src="/broadcast.js?v=11"></script>
 <script src="/sync.js?v=1779165304438"></script>
 <script src="/cookie-consent.js" defer></script>
 <script>

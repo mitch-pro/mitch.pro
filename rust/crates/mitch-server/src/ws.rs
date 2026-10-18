@@ -1,29 +1,6 @@
-//! `/ws` — the global broadcast WebSocket (server.js:11711-11723 upgrade,
-//! 24894+ open/message/close). Everything else on `allSockets` (SSH relay,
-//! VNC bridge, blooket proxy, LiveKit) is Step 13.
-//!
-//! Surface parity contract (server.js):
-//! - upgrade gates: same-origin → 403 `websocket origin rejected`; the
-//!   studentId||id sid ladder + checkPasswordCookie → 401 `authentication
-//!   required`; emailFromSid → 401. NOTE the global password gate runs
-//!   BEFORE this arm (handler.rs), so anonymous upgrades see the gate's own
-//!   403 first — exactly like the JS flow.
-//! - open: cancel any pending offline timer (the timer body re-checks the
-//!   socket set, so cancellation is the re-check itself), stamp presence,
-//!   `notifyFriendsOnline` when the user was offline, broadcast
-//!   `presence_changed` online to the friend set.
-//! - message (broadcast sockets only): `presence_ping` re-validates the sid
-//!   (`validId`/`isRevoked`/emailFromSid === socket email, else close 1008
-//!   "Session expired") and stamps lastSeen keeping `playing`; every other
-//!   frame is swallowed by the JS try/catch.
-//! - close: drop from the set; the LAST socket for an email stamps lastSeen
-//!   (keeping `playing`) and schedules a 3s re-check that deletes presence
-//!   and broadcasts offline.
-//!
-//! The JS fans out by iterating `allSockets` at SEND time; here routes call
-//! [`broadcast`] with an explicit recipient set, computed at send time, and
-//! the per-socket loop filters by the socket's email — the same observable
-//! behavior. Broadcast recipients are keyed by NORMALIZED email.
+//! Authenticated broadcast sockets and transport liveness. Page activity is
+//! resolved per document by `presence`; notification sockets never own a
+//! user's current page. Server ping/pong expires broken connections.
 
 use crate::state::{AppState, UserPresence, PRESENCE_FALLBACK_TTL_MS};
 use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
@@ -51,8 +28,12 @@ pub struct WsEnvelope {
 }
 
 /// A connected broadcast socket (server.js `ws.data` for `isBroadcast`).
+#[derive(Default)]
 pub struct WsClient {
     pub email_norm: String,
+    pub last_seen: i64,
+    pub client_id: Option<String>,
+    pub sequence: u64,
 }
 
 /// `JSON.stringify(payload); for (const ws of allSockets) { ... ws.send }` —
@@ -107,74 +88,39 @@ pub fn has_authenticated_broadcast_socket(state: &Arc<AppState>, email: &str) ->
         .ws_broadcasts
         .lock()
         .unwrap_or_else(|e| e.into_inner());
-    sockets.values().any(|c| c.email_norm == norm)
+    sockets
+        .values()
+        .any(|c| c.email_norm == norm && now_millis() - c.last_seen < PRESENCE_FALLBACK_TTL_MS)
 }
 
 /// `isUserPresent(email, now)` (server.js:1077-1084) — socket leg OR the
 /// 45s presence-map fallback. Replaces the friends.rs map-only port.
 pub fn is_user_present(state: &Arc<AppState>, email: &str, now: i64) -> bool {
-    let norm = mitch_lib::auth::normalize_email(email);
-    if norm.is_empty() {
-        return false;
-    }
-    if has_authenticated_broadcast_socket(state, &norm) {
-        return true;
-    }
-    let presence = state
-        .user_presence
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    match presence.get(&norm) {
-        Some(p) => now - p.last_seen < PRESENCE_FALLBACK_TTL_MS,
-        None => false,
-    }
+    crate::presence::current(state, email, now).online
 }
 
 pub fn active_user_count(state: &Arc<AppState>, now: i64) -> usize {
-    let mut online: HashSet<String> = state
-        .user_presence
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .iter()
-        .filter(|(_, p)| now - p.last_seen < PRESENCE_FALLBACK_TTL_MS)
-        .map(|(email, _)| email.clone())
-        .collect();
-    let sockets = state
-        .ws_broadcasts
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    online.extend(sockets.values().map(|client| client.email_norm.clone()));
-    online.remove("");
-    online.len()
+    crate::presence::snapshot(state, now)
+        .values()
+        .filter(|view| view.online)
+        .count()
 }
 
-/// `broadcastPresenceChanged(email, online, playing)` (server.js:1086-1103) —
-/// friends of `email` plus the user themself receive the payload.
-pub fn broadcast_presence_changed(state: &Arc<AppState>, email: &str, online: bool, playing: &str) {
+/// Invalidate People and Friends for every authenticated viewer.
+pub fn broadcast_presence_changed(
+    state: &Arc<AppState>,
+    email: &str,
+    _online: bool,
+    _playing: &str,
+) {
     let norm = mitch_lib::auth::normalize_email(email);
     if norm.is_empty() {
         return;
     }
-    let friends = mitch_lib::friends::friends_get(&state.store, &norm);
-    let mut recipients: HashSet<String> = friends
-        .as_array()
-        .map(|arr| {
-            arr.iter()
-                .map(|f| mitch_lib::auth::normalize_email(&mitch_lib::jsval::string(f)))
-                .collect()
-        })
-        .unwrap_or_default();
-    recipients.insert(norm.clone());
-    let display =
-        mitch_lib::profile::display_email(&state.store, state.data_dir(), &state.id_secret, &norm);
-    let payload = json!({
-        "type": "presence_changed",
-        "email": display,
-        "online": online,
-        "playing": if online { String::from(playing).trim().to_string() } else { String::new() },
-        "ts": now_millis(),
-    });
-    broadcast(state, WsRecipients::Emails(recipients), payload.to_string());
+    // People is visible to all signed-in users. Send an invalidation without
+    // exposing an email or activity that the viewer's member API may mask.
+    let payload = json!({ "type": "presence_changed", "ts": now_millis() });
+    broadcast(state, WsRecipients::All, payload.to_string());
 }
 
 /// `touchUserPresence(email, playing)` (server.js:1105-1127).
@@ -187,6 +133,17 @@ pub fn touch_user_presence(state: &Arc<AppState>, email: &str, playing: &str) {
         return;
     }
     let now = now_millis();
+    // Background Matrix sync and reward pings cannot replace browser activity.
+    if state
+        .user_presence
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(&norm)
+        .is_some_and(|record| record.modern_seen > 0)
+    {
+        return;
+    }
+
     let was_offline = !is_user_present(state, &norm, now);
     let playing_trim = String::from(playing).trim().to_string();
     let previous_playing;
@@ -195,6 +152,12 @@ pub fn touch_user_presence(state: &Arc<AppState>, email: &str, playing: &str) {
             .user_presence
             .lock()
             .unwrap_or_else(|e| e.into_inner());
+        if presence
+            .get(&norm)
+            .is_some_and(|record| record.modern_seen > 0)
+        {
+            return;
+        }
         previous_playing = presence
             .get(&norm)
             .map(|p| p.playing.clone())
@@ -204,6 +167,7 @@ pub fn touch_user_presence(state: &Arc<AppState>, email: &str, playing: &str) {
             UserPresence {
                 last_seen: now,
                 playing: playing_trim.clone(),
+                ..Default::default()
             },
         );
     }
@@ -273,35 +237,9 @@ pub fn trigger_notification_refresh(state: &AppState) {
     }));
 }
 
-/// The 10s sweeper (server.js:1129-1136) — drop entries with no socket and a
-/// stale lastSeen, broadcasting offline for each.
+/// Expire activity and publish changes, including fallback to another tab.
 pub fn sweep_presence(state: &Arc<AppState>) {
-    let now = now_millis();
-    let stale: Vec<String> = {
-        let presence = state
-            .user_presence
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        presence
-            .keys()
-            .filter(|email| {
-                !has_authenticated_broadcast_socket(state, email)
-                    && now - presence.get(*email).map(|p| p.last_seen).unwrap_or(0)
-                        >= PRESENCE_FALLBACK_TTL_MS
-            })
-            .cloned()
-            .collect()
-    };
-    for email in stale {
-        {
-            let mut presence = state
-                .user_presence
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
-            presence.remove(&email);
-        }
-        broadcast_presence_changed(state, &email, false, "");
-    }
+    crate::presence::sweep(state);
 }
 
 /// `/ws` upgrade — runs AFTER the global password gate (handler.rs), so an
@@ -380,6 +318,8 @@ async fn run_broadcast_socket(
             id,
             WsClient {
                 email_norm: email_norm.clone(),
+                last_seen: now,
+                ..Default::default()
             },
         );
     }
@@ -387,40 +327,24 @@ async fn run_broadcast_socket(
     // every fan-out, including its own open-leg presence_changed (the JS
     // broadcast loop reaches it because allSockets already contains it).
     let mut rx = state.ws_tx.subscribe();
-    // open() presence leg: pendingOffline cancellation is the re-check inside
-    // the timer body, so nothing to clear here.
-    let playing = {
-        let presence = state
-            .user_presence
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        presence
-            .get(&email_norm)
-            .map(|p| p.playing.clone())
-            .unwrap_or_default()
-    };
-    {
-        let mut presence = state
-            .user_presence
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        presence.insert(
-            email_norm.clone(),
-            UserPresence {
-                last_seen: now_millis(),
-                playing: playing.clone(),
-            },
-        );
-    }
     if !was_present {
         let st = Arc::clone(&state);
         let email = email_norm.clone();
         tokio::spawn(async move { notify_friends_online(&st, &email).await });
     }
-    broadcast_presence_changed(&state, &email_norm, true, &playing);
+    broadcast_presence_changed(&state, &email_norm, true, "");
 
+    let mut heartbeat = tokio::time::interval(std::time::Duration::from_secs(15));
+    heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         tokio::select! {
+            _ = heartbeat.tick() => {
+                let fresh = state.ws_broadcasts.lock().unwrap_or_else(|e| e.into_inner())
+                    .get(&id).is_some_and(|client| now_millis() - client.last_seen < PRESENCE_FALLBACK_TTL_MS);
+                if !fresh || is_revoked_id(&state, &sid)
+                    || mitch_lib::auth::banned_info_for_email(&state.store, &email_norm).is_some()
+                    || socket.send(Message::Ping(Vec::new().into())).await.is_err() { break; }
+            }
             env = rx.recv() => {
                 match env {
                     Ok(env) => {
@@ -452,7 +376,7 @@ async fn run_broadcast_socket(
                     None => break,
                     Some(Err(_)) => break,
                     Some(Ok(Message::Text(text))) => {
-                        if !handle_presence_ping(&state, &email_norm, &sid, &text) {
+                        if !handle_presence_ping(&state, &email_norm, &sid, id, &text) {
                             // Session expired → close(1008, 'Session expired').
                             let _ = socket
                                 .send(Message::Close(Some(CloseFrame {
@@ -463,7 +387,13 @@ async fn run_broadcast_socket(
                             break;
                         }
                     }
-                    Some(Ok(_)) => {} // binary/pong frames: JS parse fails → ignored
+                    Some(Ok(Message::Pong(_))) | Some(Ok(Message::Ping(_))) => {
+                        if let Some(client) = state.ws_broadcasts.lock().unwrap_or_else(|e| e.into_inner()).get_mut(&id) {
+                            client.last_seen = now_millis();
+                        }
+                    }
+                    Some(Ok(Message::Close(_))) => break,
+                    Some(Ok(_)) => {}
                 }
             }
         }
@@ -475,8 +405,14 @@ async fn run_broadcast_socket(
 /// `presence_ping` handling (server.js:24992-25014). Returns false when the
 /// socket must be closed with 1008. Non-ping payloads and parse failures are
 /// swallowed exactly like the JS try/catch.
-fn handle_presence_ping(state: &Arc<AppState>, email_norm: &str, sid: &str, text: &str) -> bool {
-    let Ok(payload) = serde_json::from_str::<Value>(text) else {
+fn handle_presence_ping(
+    state: &Arc<AppState>,
+    email_norm: &str,
+    sid: &str,
+    socket_id: u64,
+    text: &str,
+) -> bool {
+    let Ok(mut payload) = serde_json::from_str::<Value>(text) else {
         return true;
     };
     if payload.get("type").and_then(|v| v.as_str()) != Some("presence_ping") {
@@ -494,28 +430,23 @@ fn handle_presence_ping(state: &Arc<AppState>, email_norm: &str, sid: &str, text
     {
         return false;
     }
-    let now = now_millis();
-    let playing = {
-        let presence = state
-            .user_presence
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        presence
-            .get(email_norm)
-            .map(|p| p.playing.clone())
-            .unwrap_or_default()
-    };
-    let mut presence = state
-        .user_presence
+    if let Some(client) = state
+        .ws_broadcasts
         .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    presence.insert(
-        email_norm.to_string(),
-        UserPresence {
-            last_seen: now,
-            playing,
-        },
-    );
+        .unwrap_or_else(|e| e.into_inner())
+        .get_mut(&socket_id)
+    {
+        client.last_seen = now_millis();
+        client.sequence = client.sequence.saturating_add(1);
+        if payload.get("clientId").is_none() && payload.get("page").is_some() {
+            payload["clientId"] = json!(format!("ws-{socket_id}"));
+            payload["seq"] = json!(client.sequence);
+            payload["focused"] = payload.get("visible").cloned().unwrap_or(json!(false));
+        }
+    }
+    if payload.get("clientId").is_some() {
+        let _ = crate::presence::update(state, email_norm, &payload, Some(socket_id));
+    }
     true
 }
 
@@ -540,40 +471,24 @@ async fn close_leg(state: &Arc<AppState>, email_norm: &str, socket_id: u64) {
             .remove(email_norm);
         return;
     }
-    if !has_authenticated_broadcast_socket(state, email_norm) {
-        let now = now_millis();
-        let playing = {
-            let mut presence = state
-                .user_presence
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
-            let prev = presence
-                .get(email_norm)
-                .map(|p| p.playing.clone())
-                .unwrap_or_default();
-            presence.insert(
-                email_norm.to_string(),
-                UserPresence {
-                    last_seen: now,
-                    playing: prev.clone(),
-                },
-            );
-            prev
-        };
-        let _ = playing;
-        let st = Arc::clone(state);
-        let email = email_norm.to_string();
-        tokio::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
-            if !has_authenticated_broadcast_socket(&st, &email) {
-                {
-                    let mut presence = st.user_presence.lock().unwrap_or_else(|e| e.into_inner());
-                    presence.remove(&email);
-                }
-                broadcast_presence_changed(&st, &email, false, "");
+    crate::presence::socket_closed(state, socket_id);
+    let closed_at = now_millis();
+    let st = Arc::clone(state);
+    let email = email_norm.to_string();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
+        if !has_authenticated_broadcast_socket(&st, &email) {
+            let mut records = st.user_presence.lock().unwrap_or_else(|e| e.into_inner());
+            if records
+                .get(&email)
+                .is_some_and(|record| record.modern_seen == 0 && record.last_seen <= closed_at)
+            {
+                records.remove(&email);
             }
-        });
-    }
+            drop(records);
+            broadcast_presence_changed(&st, &email, false, "");
+        }
+    });
 }
 
 /// `isRevoked(id)` — key presence in the revoked_ids table.
@@ -620,6 +535,7 @@ mod tests {
                 UserPresence {
                     last_seen,
                     playing: String::new(),
+                    ..Default::default()
                 },
             );
         }
@@ -632,11 +548,13 @@ mod tests {
                 id,
                 WsClient {
                     email_norm: email.into(),
+                    last_seen: now,
+                    ..Default::default()
                 },
             );
         }
         assert_eq!(active_user_count(&state, now), 3);
-        assert_eq!(active_user_count(&state, now + PRESENCE_FALLBACK_TTL_MS), 2);
+        assert_eq!(active_user_count(&state, now + PRESENCE_FALLBACK_TTL_MS), 0);
         state.ws_broadcasts.lock().unwrap().clear();
         assert_eq!(active_user_count(&state, now + PRESENCE_FALLBACK_TTL_MS), 0);
         drop(state);

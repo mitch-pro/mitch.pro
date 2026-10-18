@@ -11,7 +11,7 @@
 //! every method (GET included) lands in it; the later GET-specific branch at
 //! server.js:19048 is unreachable dead code.
 
-use super::friends::{encode_uri_component, is_user_present};
+use super::friends::encode_uri_component;
 use super::me::{
     cookies_of, data_file, dm_content_parts, json_response, me_uid, parse_body_strict,
 };
@@ -75,11 +75,7 @@ fn members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let friend_requests = state
         .store
         .read_document(&data_file(state, "friend_requests.json"), json!([]));
-    let presence_map = state
-        .user_presence
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .clone();
+    let presence_map = crate::presence::snapshot(state, now);
 
     let mut seen: Vec<String> = Vec::new();
     let mut out: Vec<Value> = Vec::new();
@@ -91,14 +87,14 @@ fn members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             .to_lowercase()
             .trim()
             .to_string();
-        if email.is_empty() || seen.contains(&email) || is_revoked_id(state, tok) {
+        let norm = auth::normalize_email(&email);
+        if norm.is_empty() || seen.contains(&norm) || is_revoked_id(state, tok) {
             continue;
         }
         if email == TEST_ACCOUNT_EMAIL && !is_admin {
             continue;
         }
-        seen.push(email.clone());
-        let norm = auth::normalize_email(&email);
+        seen.push(norm.clone());
         let empty = json!({});
         let prof = profiles
             .get(norm.as_str())
@@ -196,19 +192,13 @@ fn members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
                 120_000,
             )),
         );
-        let member_online = is_user_present(state, &email, now);
-        member.insert("online".into(), json!(member_online));
-        member.insert(
-            "playing".into(),
-            json!(if member_online {
-                presence_map
-                    .get(&norm)
-                    .map(|p| p.playing.clone())
-                    .unwrap_or_default()
-            } else {
-                String::new()
-            }),
-        );
+        let presence = presence_map.get(&norm).cloned().unwrap_or_default();
+        member.insert("online".into(), json!(presence.online));
+        member.insert("playing".into(), json!(presence.playing));
+        member.insert("activity".into(), json!(presence.activity));
+        member.insert("page".into(), json!(presence.page));
+        member.insert("status".into(), json!(presence.status));
+        member.insert("lastSeen".into(), json!(presence.last_seen));
         member.insert("role".into(), json!(role));
         member.insert(
             "displayName".into(),

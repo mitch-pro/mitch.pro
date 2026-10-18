@@ -535,15 +535,20 @@ document.addEventListener('click', function(e) {
   }
 });
 
+let friendsRequest = 0;
 async function loadFriends() {
   const grid = document.getElementById('friendsGrid');
+  if (document.hidden) return;
+  const request = ++friendsRequest;
   try {
     const r = await fetch('/api/friends/list?t=' + Date.now(), { credentials: 'include' });
+    if (request !== friendsRequest) return;
     if (!r.ok) {
       grid.innerHTML = '<div class="empty-state">Please sign in to view friends</div>';
       return;
     }
     const d = await r.json();
+    if (request !== friendsRequest) return;
     const list = d.friends || [];
     document.getElementById('friendCount').textContent = String(list.length);
     document.getElementById('onlineCount').textContent = String(list.filter(function(friend) { return friend.online; }).length);
@@ -558,10 +563,10 @@ async function loadFriends() {
       const pfp = safeFriendImage(f.pfp);
       const profileUrl = f.profileUrl || '/profile/?u=' + encodeURIComponent(f.handle || email);
       const isOnline = f.online;
-      const playing = f.playing ? ` (playing ${f.playing})` : '';
+      const activity = f.activity || f.playing || 'Online now';
       
       const statusClass = isOnline ? 'online' : 'offline';
-      const statusText = isOnline ? `Online${playing}` : 'Offline';
+      const statusText = isOnline ? (f.status === 'away' ? 'Away · ' : '') + activity : 'Offline';
       
       return `
         <article class="friend-item">
@@ -582,6 +587,8 @@ async function loadFriends() {
       `;
     }).join('');
   } catch(e) {
+    if (request !== friendsRequest) return;
+    document.getElementById('onlineCount').textContent = '—';
     grid.innerHTML = '<div class="empty-state">Error loading friends list</div>';
   }
 }
@@ -717,23 +724,20 @@ async function removeFriend(friendEmail) {
   } catch(e) {}
 }
 
-// Heartbeat reporting
-async function sendHeartbeat() {
-  try {
-    await fetch('/api/presence/heartbeat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ playing: 'Friends Manager' })
-    });
-  } catch(e) {}
-}
+function sendHeartbeat() { window.MitchPresence?.send(); }
 
 function init() {
   loadFriends();
   loadPending();
   fetchAllMembers();
   sendHeartbeat();
-  
+  let presenceRefresh;
+  window.addEventListener('ws-broadcast-message', event => {
+    if (event.detail?.type !== 'presence_changed') return;
+    if (!presenceRefresh) presenceRefresh = setTimeout(() => { presenceRefresh = null; loadFriends(); }, 1000);
+  });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) loadFriends(); });
+  window.addEventListener('ws-broadcast-status', loadFriends);
   setInterval(loadFriends, 15000);
   setInterval(loadPending, 15000);
   setInterval(sendHeartbeat, 30000);

@@ -29,6 +29,7 @@ mod hosts;
 mod inject;
 mod manifests;
 mod pipeline;
+mod presence;
 mod proxmox_desktop;
 mod routes;
 mod state;

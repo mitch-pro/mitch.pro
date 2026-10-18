@@ -110,8 +110,11 @@ pub fn inject_page(
         inject_str.push_str("<script src=\"/guest-preview.js?v=1\" defer></script>\n");
     }
 
+    if is_authenticated_html && !raw.contains("/presence.js") {
+        inject_str.push_str("<script src=\"/presence.js?v=1\" defer></script>\n");
+    }
     if is_authenticated_html && !is_embedded && !is_onboarding && !raw.contains("/broadcast.js") {
-        inject_str.push_str("<script src=\"/broadcast.js?v=9\" defer></script>\n");
+        inject_str.push_str("<script src=\"/broadcast.js?v=11\" defer></script>\n");
     } else if (!is_authenticated_html || is_onboarding) && raw.contains("/broadcast.js") {
         raw = strip_broadcast(&raw);
     }

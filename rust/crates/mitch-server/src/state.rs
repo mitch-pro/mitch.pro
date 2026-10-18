@@ -48,9 +48,7 @@ pub struct AppState {
     /// Process-local, single-instance assumption preserved from JS.
     #[allow(dead_code)]
     pub pickle_presence: std::sync::Mutex<Vec<(String, i64)>>,
-    /// `userPresence` (server.js:1064) — norm email -> {lastSeen, playing}.
-    /// The `/ws` heartbeat writer lands with the Step 11 presence work;
-    /// friends/list reads it for the online/playing fields.
+    /// Per-account document sessions and legacy activity fallback.
     #[allow(dead_code)]
     pub user_presence: std::sync::Mutex<std::collections::HashMap<String, UserPresence>>,
     /// `matrixPendingEmailAlerts` (server.js:8497) — key `norm:roomId`.
@@ -276,10 +274,13 @@ pub struct SsoBridgeToken {
 }
 
 /// A record in `userPresence` (server.js:1064, 1112-1116).
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct UserPresence {
     pub last_seen: i64,
     pub playing: String,
+    pub modern_seen: i64,
+    pub sessions: std::collections::HashMap<String, crate::presence::TabPresence>,
+    pub last_reported: Option<crate::presence::PresenceView>,
 }
 
 /// `PRESENCE_FALLBACK_TTL_MS` (server.js:1065).

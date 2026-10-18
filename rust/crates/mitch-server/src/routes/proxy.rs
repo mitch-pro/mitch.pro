@@ -125,7 +125,7 @@ fn bad_gateway() -> Response {
 pub async fn content(
     state: &Arc<AppState>,
     body: &serde_json::Value,
-    _headers: &HeaderMap,
+    headers: &HeaderMap,
 ) -> Option<Response> {
     let hash = body.get("hash").and_then(|v| v.as_str()).unwrap_or("");
     let content_path = body.get("path").and_then(|v| v.as_str()).unwrap_or("");
@@ -215,6 +215,12 @@ pub async fn content(
         ));
     };
 
+    let html = if crate::presence::authenticated_email(state, headers).is_some() {
+        crate::inject::inject_presence(&html, Some(&format!("/{}", rel.trim_start_matches('/'))))
+    } else {
+        html
+    };
+
     // Injection ladder: IS_PREMIUM (canvas/chess-bot only), sync.js, assistant.js, broadcast.js, agree_footer.
     let mut html = html;
     let is_canvas_or_chess = rel.starts_with("canvas/") || rel.starts_with("games/chess-bot/");
@@ -247,7 +253,7 @@ pub async fn content(
     if !html.contains("/broadcast.js") {
         if let Some(idx) = html.rfind("</body>") {
             html = format!(
-                "{}<script src=\"/broadcast.js?v=4\" defer></script>{}",
+                "{}<script src=\"/broadcast.js?v=11\" defer></script>{}",
                 &html[..idx],
                 &html[idx..]
             );
@@ -667,7 +673,7 @@ fn fixed_proxy_target(path: &str, headers: &HeaderMap) -> Option<(&'static str, 
 
 /// Fixed-origin game and movie proxies.
 pub async fn game_proxy(
-    _state: &Arc<AppState>,
+    state: &Arc<AppState>,
     method: &axum::http::Method,
     path: &str,
     search: &str,
@@ -792,7 +798,15 @@ pub async fn game_proxy(
             }
             builder = builder
                 .header("access-control-allow-origin", "*")
-                .header("cache-control", "public, max-age=3600");
+                .header(
+                    "cache-control",
+                    if content_type.contains("text/html") {
+                        "private, no-store"
+                    } else {
+                        "public, max-age=3600"
+                    },
+                )
+                .header("vary", "Cookie");
 
             let is_text = content_type.contains("text/html")
                 || content_type.contains("text/css")
@@ -882,6 +896,12 @@ pub async fn game_proxy(
                         format!("{base_tag}{content}")
                     };
                 }
+            }
+
+            if content_type.contains("text/html")
+                && crate::presence::authenticated_email(state, headers).is_some()
+            {
+                content = crate::inject::inject_presence(&content, None);
             }
 
             Some(
@@ -1144,6 +1164,9 @@ pub async fn pirate_voyage_proxy(
             builder = builder.header("access-control-allow-origin", "*");
 
             if content_type.contains("text/html") {
+                builder = builder
+                    .header("cache-control", "private, no-store")
+                    .header("vary", "Cookie");
                 let mut html = upstream_res.text().await.unwrap_or_default();
                 static INT1_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
                 let int1_re = INT1_RE.get_or_init(|| {
@@ -1178,6 +1201,9 @@ pub async fn pirate_voyage_proxy(
                         html.replacen("<head>", "<head><base href=\"/proxy/pirate-voyage/\">", 1);
                 }
 
+                if crate::presence::authenticated_email(state, headers).is_some() {
+                    html = crate::inject::inject_presence(&html, None);
+                }
                 Some(
                     builder
                         .body(axum::body::Body::from(html))

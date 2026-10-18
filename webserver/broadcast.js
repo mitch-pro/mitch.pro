@@ -7,6 +7,8 @@
     var LAST_BROADCAST_KEY = 'mitch:last-admin-broadcast';
     var lastBroadcastId = '';
     var pageOpenedAt = Date.now();
+    var pageActive = true;
+    var presenceBound = false;
     function stopPresencePing() {
       if (presenceTimer) clearInterval(presenceTimer);
       presenceTimer = null;
@@ -33,6 +35,18 @@
       };
     }
     function sendPresencePing() {
+      if (window.MitchPresence) {
+        stopPresencePing();
+        if (window.MitchPresence.delegated && ws) { var previous = ws; ws = null; previous.close(); }
+        if (!presenceBound) {
+          presenceBound = true;
+          window.MitchPresence.setTransport(function(packet) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+            ws.send(JSON.stringify(packet)); return true;
+          });
+        } else window.MitchPresence.send();
+        return;
+      }
       var details = presenceDetails();
       if (ws && ws.readyState === WebSocket.OPEN) {
         try { ws.send(JSON.stringify(details)); return; } catch(ex) {}
@@ -76,17 +90,19 @@
       window.dispatchEvent(new CustomEvent('ws-broadcast-message', { detail: data }));
     }
     function scheduleReconnect() {
-      if (reconnectTimer) return;
+      if (!pageActive || reconnectTimer) return;
       reconnectTimer = setTimeout(function() {
         reconnectTimer = null;
         connect();
       }, 1800);
     }
     function connect() {
+      if (!pageActive || window.MitchPresence?.delegated) return;
       if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
       var protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
       try {
-        ws = new WebSocket(protocol + '//' + location.host + '/ws');
+        var socket = new WebSocket(protocol + '//' + location.host + '/ws');
+        ws = socket;
       } catch(ex) {
         scheduleReconnect();
         return;
@@ -101,7 +117,10 @@
         sendPresencePing();
         window.dispatchEvent(new CustomEvent('ws-broadcast-status', { detail: { connected: true } }));
       };
-      ws.onclose = function() {
+      ws.onclose = function(event) {
+        if (ws !== socket) return;
+        if (event.code === 1008) { pageActive = false; stopPresencePing(); return; }
+        if (window.MitchPresence) window.MitchPresence.send();
         window.dispatchEvent(new CustomEvent('ws-broadcast-status', { detail: { connected: false } }));
         scheduleReconnect();
       };
@@ -122,8 +141,9 @@
       connect();
       stopPresencePing();
       sendPresencePing();
-      presenceTimer = setInterval(sendPresencePing, 20000);
+      if (!window.MitchPresence) presenceTimer = setInterval(sendPresencePing, 20000);
       pollLatestBroadcast();
+      clearInterval(fallbackTimer);
       fallbackTimer = setInterval(pollLatestBroadcast, 3000);
       document.addEventListener('visibilitychange', function() {
         sendPresencePing();
@@ -145,6 +165,12 @@
       document.body.appendChild(el);
       el.querySelector('#close-broadcast').onclick = function() { el.remove(); };
     }
+    window.addEventListener('mitch-presence-ready', sendPresencePing);
+    window.addEventListener('pagehide', function() {
+      pageActive = false; stopPresencePing(); clearInterval(fallbackTimer); clearTimeout(reconnectTimer); reconnectTimer = null;
+      var previous = ws; ws = null; if (previous) previous.close();
+    });
+    window.addEventListener('pageshow', function(event) { if (event.persisted) { pageActive = true; connect(); sendPresencePing(); pollLatestBroadcast(); fallbackTimer = setInterval(pollLatestBroadcast, 3000); } });
     if (document.body) start();
     else document.addEventListener('DOMContentLoaded', start, { once: true });
 })();

@@ -50,13 +50,11 @@ pub fn spawn(state: std::sync::Arc<crate::state::AppState>) {
         });
     }
 
-    // userPresence sweeper — every 10s (server.js:1129-1136): drop entries
-    // with no broadcast socket and a lastSeen ≥ 45s old, broadcasting
-    // `presence_changed` offline for each.
+    // Expire stale tabs and notify People even after an unclean disconnect.
     {
         let state = std::sync::Arc::clone(&state);
         tokio::spawn(async move {
-            let mut tick = tokio::time::interval(std::time::Duration::from_secs(10));
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
             tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 tick.tick().await;

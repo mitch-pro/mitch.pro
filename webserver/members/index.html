@@ -461,8 +461,8 @@
         const handle = member.handle ? '@' + member.handle : member.email;
         const pfpSrc = safeImageSrc(member.pfp);
         const pfp = pfpSrc ? '<img src="' + esc(pfpSrc) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">' : esc(initials(member));
-        const activity = member.online ? String(member.activity || member.playing || 'Online now') : 'Offline';
-        const presencePage = member.online ? String(member.page || '/') : '';
+        const activity = member.online ? (member.status === 'away' ? 'Away · ' : '') + String(member.activity || member.playing || 'Online now') : 'Offline';
+        const presencePage = member.online ? String(member.page || '') : '';
         const inChat = member.online && /chat|matrix|encrypt/i.test(activity + ' ' + presencePage);
         return '<article class="member">' +
           '<div class="cover"><div class="avatar">' + pfp + '</div><span class="online-dot ' + (member.online ? 'on' : '') + '"></span></div>' +
@@ -502,15 +502,22 @@
       return data;
     }
 
+    let memberRequest = 0;
     async function reload() {
+      if (document.hidden) return;
+      const request = ++memberRequest;
+      try {
       const res = await fetch('/api/members?t=' + Date.now(), { credentials: 'include', cache: 'no-store' });
+      if (request !== memberRequest) return;
       if (!res.ok) {
         document.getElementById('membersGrid').innerHTML = '<div class="empty">Please sign in to search members.</div>';
         return;
       }
       const data = await res.json();
+      if (request !== memberRequest) return;
       members = data.members || [];
       render();
+      } catch (_) { if (request === memberRequest) document.querySelectorAll('.presence-detail').forEach(el => { el.textContent = 'Status unavailable'; }); }
     }
 
     async function sendFriendRequest(key, button) {
@@ -604,6 +611,16 @@
       if (event.target.id === 'reportModal') closeReport();
     });
 
+    let presenceRefresh;
+    window.addEventListener('ws-broadcast-message', event => {
+      if (event.detail?.type === 'presence_changed' || event.detail?.type === 'profile_updated') {
+        if (!presenceRefresh) presenceRefresh = setTimeout(() => { presenceRefresh = null; reload(); }, 1000);
+      }
+    });
+    window.addEventListener('ws-broadcast-status', reload);
+    document.addEventListener('visibilitychange', reload);
+    window.addEventListener('pageshow', reload);
+    setInterval(reload, 10000);
     reload();
   </script>
 <script src="/cookie-consent.js" defer></script>

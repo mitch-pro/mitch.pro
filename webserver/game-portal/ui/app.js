@@ -195,12 +195,14 @@
     document.body.style.overflow = 'hidden';
     byId('player-back').focus();
     state.current = game;
+    window.MitchPresence?.setActivity("Playing " + game.title, game.url);
     startRewardLoop();
   }
 
   function closePlayer() {
     stopRewardLoop(true);
     state.current = null;
+    window.MitchPresence?.setActivity(null);
     player.hidden = true;
     frame.src = 'about:blank';
     document.body.style.overflow = '';

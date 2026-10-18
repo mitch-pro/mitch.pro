@@ -338,11 +338,7 @@ fn friends_list(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         .unwrap_or_default();
     let profiles = mitch_lib::profiles::profile_all(&state.store);
     let now = mitch_lib::school::now_millis();
-    let presence_map = state
-        .user_presence
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .clone();
+    let presence_map = crate::presence::snapshot(state, now);
     let res: Vec<Value> = my_list
         .iter()
         .map(|f| {
@@ -355,15 +351,7 @@ fn friends_list(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
                 prof.get("username").filter(|v| jsval::truthy(v)),
                 json!(profile::default_username_for_email(&f_norm)),
             )));
-            let is_online = is_user_present(state, &f_norm, now);
-            let playing = if is_online {
-                presence_map
-                    .get(&f_norm)
-                    .map(|p| p.playing.clone())
-                    .unwrap_or_default()
-            } else {
-                String::new()
-            };
+            let presence = presence_map.get(&f_norm).cloned().unwrap_or_default();
             let cosm = mitch_lib::shop::cosmetics_get(&state.store, &f_norm).unwrap_or(json!({}));
             json!({
                 "color": mitch_lib::shop::public_active_color(&state.store, &f_norm, cosm.get("activeColor").unwrap_or(&Value::Null)),
@@ -380,8 +368,12 @@ fn friends_list(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
                     120_000,
                 ),
                 "profileUrl": format!("/profile/?u={}", encode_uri_component(&username)),
-                "online": is_online,
-                "playing": playing,
+                "online": presence.online,
+                "playing": presence.playing,
+                "activity": presence.activity,
+                "page": presence.page,
+                "status": presence.status,
+                "lastSeen": presence.last_seen,
             })
         })
         .collect();
@@ -428,12 +420,6 @@ fn requests_pending(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
-
-/// `isUserPresent(email, now)` (server.js:1077-1084) — both legs live since
-/// the Step 11 WS batch; the map-only port moved to `crate::ws`.
-pub(crate) fn is_user_present(state: &std::sync::Arc<AppState>, email: &str, now: i64) -> bool {
-    crate::ws::is_user_present(state, email, now)
-}
 
 /// `notificationUrl` (server.js:2053-2055).
 fn notification_url(path: &str) -> String {
