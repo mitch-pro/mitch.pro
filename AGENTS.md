@@ -11,3 +11,10 @@
 - Deploys happen through the `Deploy to Production` GitHub Actions workflow (triggered by a push to `master`) or `tools/deploy.sh` run manually by a human. Do not invoke either yourself by SSHing in and running it.
 - If something on the server needs inspecting or fixing, stop and tell the person you're working with exactly what you want to check or run, and wait for them to say yes before doing it. Give them the specific command, not a vague description.
 - This holds even if you already have working SSH access or credentials. Having access is not the same as having permission for this specific action right now.
+
+## CI status checks
+
+- All autonomous agents are REQUIRED to check the status of CI after committing, or if they committed and then stopped (which is fine), before doing anything for the next commit.
+- Unless the user explicitly tells them to focus on the next commit and ignore CI, they must check CI status.
+- The git repository is public, so the `gh` CLI is not required (e.g., status can be checked via public GitHub Actions API requests or `gh run list`).
+
