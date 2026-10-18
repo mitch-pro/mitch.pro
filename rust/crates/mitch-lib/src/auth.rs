@@ -1226,14 +1226,17 @@ pub struct AdminConfig {
 }
 
 pub fn load_admin_config(store: &DataStore) -> AdminConfig {
+    let data_admins_file = store.data_dir().join("admins.json");
     let admins_file = store.base_dir.join("data/admins.json");
     let example_file = store.base_dir.join("data/admins.json.example");
-    let val = if admins_file.exists() {
+    let val = if data_admins_file.exists() {
+        store.read_document(&data_admins_file, json!({}))
+    } else if admins_file.exists() {
         store.read_document(&admins_file, json!({}))
     } else if example_file.exists() {
         store.read_document(&example_file, json!({}))
     } else {
-        store.read_document(&admins_file, json!({}))
+        store.read_document(&data_admins_file, json!({}))
     };
     let str_list = |key: &str, default: Vec<String>| -> Vec<String> {
         val.get(key)

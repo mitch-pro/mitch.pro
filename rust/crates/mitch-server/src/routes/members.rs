@@ -192,13 +192,52 @@ fn members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
                 120_000,
             )),
         );
+        let is_self = viewer_norm == norm;
+        let is_friend = my_friends.iter().any(|f| auth::normalize_email(f) == norm);
+        let can_view_activity = is_self || is_friend || is_admin;
         let presence = presence_map.get(&norm).cloned().unwrap_or_default();
+        let public_status = if presence.online { "online" } else { "offline" };
         member.insert("online".into(), json!(presence.online));
-        member.insert("playing".into(), json!(presence.playing));
-        member.insert("activity".into(), json!(presence.activity));
-        member.insert("page".into(), json!(presence.page));
-        member.insert("status".into(), json!(presence.status));
-        member.insert("lastSeen".into(), json!(presence.last_seen));
+        member.insert(
+            "playing".into(),
+            json!(if can_view_activity {
+                presence.playing
+            } else {
+                String::new()
+            }),
+        );
+        member.insert(
+            "activity".into(),
+            json!(if can_view_activity {
+                presence.activity
+            } else {
+                String::new()
+            }),
+        );
+        member.insert(
+            "page".into(),
+            json!(if can_view_activity {
+                presence.page
+            } else {
+                String::new()
+            }),
+        );
+        member.insert(
+            "status".into(),
+            json!(if can_view_activity {
+                presence.status
+            } else {
+                public_status.to_string()
+            }),
+        );
+        member.insert(
+            "lastSeen".into(),
+            json!(if can_view_activity {
+                presence.last_seen
+            } else {
+                0
+            }),
+        );
         member.insert("role".into(), json!(role));
         member.insert(
             "displayName".into(),
@@ -226,8 +265,6 @@ fn members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             jsval::or(cosm.get("activeBadge"), json!(Value::Null)),
         );
 
-        let is_self = viewer_norm == norm;
-        let is_friend = my_friends.iter().any(|f| auth::normalize_email(f) == norm);
         let req_arr = friend_requests.as_array();
         let incoming =
             req_arr.is_some_and(|a| a.iter().any(|r| member_req_between(r, &norm, &viewer_norm)));
@@ -903,5 +940,124 @@ mod tests {
             .collect();
         // c and d lead on ts; c outranks d on role; then online a; then b.
         assert_eq!(emails, vec!["c@x", "d@x", "a@x", "b@x"]);
+    }
+
+    #[tokio::test]
+    async fn members_presence_activity_visible_only_to_friends_self_and_admins() {
+        let base = std::env::temp_dir().join(format!(
+            "members-presence-privacy-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(base.join("data")).unwrap();
+        let cfg = crate::hosts::SiteConfig {
+            data_dir: base.join("data"),
+            ..crate::hosts::SiteConfig::load()
+        };
+        let store = Arc::new(mitch_lib::data::DataStore::open(&base, &cfg.data_dir).unwrap());
+        let state = Arc::new(AppState::new(cfg, store));
+
+        let mk_user = |email: &str| -> String {
+            let sess = auth::create_auth_session(
+                &state.store,
+                &state.id_secret,
+                email,
+                email,
+                "test",
+                "127.0.0.1",
+                false,
+            );
+            mitch_lib::tokens::token_set(
+                &state.store,
+                &sess.sid,
+                &json!({ "email": email, "used": true }),
+            );
+            sess.token
+        };
+        let alice_tok = mk_user("alice@example.test");
+        let bob_tok = mk_user("bob@example.test");
+        let carol_tok = mk_user("carol@example.test");
+        let admin_tok = mk_user("boss@example.test");
+        let _ = state.store.write_document(
+            &state.data_dir().join("admins.json"),
+            &json!({ "admins": ["boss@example.test"] }),
+        );
+        mitch_lib::friends::friends_add(&state.store, "alice@example.test", "carol@example.test");
+        mitch_lib::friends::friends_add(&state.store, "carol@example.test", "alice@example.test");
+
+        crate::presence::update(
+            &state,
+            "alice@example.test",
+            &json!({
+                "clientId": "tab-1",
+                "seq": 1,
+                "page": "/shop/",
+                "activity": "Browsing the shop",
+                "visible": true,
+                "focused": false,
+                "interaction": 1
+            }),
+            None,
+        )
+        .unwrap();
+
+        let fetch_alice_as = |tok: &str| {
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                axum::http::header::COOKIE,
+                format!("mitch_session={tok}").parse().unwrap(),
+            );
+            let resp = members(&state, &headers);
+            futures_util::FutureExt::now_or_never(axum::body::to_bytes(
+                resp.into_body(),
+                usize::MAX,
+            ))
+            .unwrap()
+            .unwrap()
+        };
+
+        let parse_alice = |bytes: axum::body::Bytes| -> Value {
+            let body: Value = serde_json::from_slice(&bytes).unwrap();
+            body["members"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|m| m["handle"].as_str().unwrap_or("").contains("alice"))
+                .unwrap()
+                .clone()
+        };
+
+        // Non-friend non-admin sees online boolean only; no page, activity, or away status.
+        let as_bob = parse_alice(fetch_alice_as(&bob_tok));
+        assert_eq!(as_bob["online"], json!(true));
+        assert_eq!(as_bob["page"], json!(""));
+        assert_eq!(as_bob["activity"], json!(""));
+        assert_eq!(as_bob["playing"], json!(""));
+        assert_eq!(as_bob["status"], json!("online"));
+        assert_eq!(as_bob["lastSeen"], json!(0));
+
+        // Friend sees page, activity, playing, and away status.
+        let as_carol = parse_alice(fetch_alice_as(&carol_tok));
+        assert_eq!(as_carol["online"], json!(true));
+        assert_eq!(as_carol["page"], json!("/shop/"));
+        assert_eq!(as_carol["activity"], json!("Browsing the shop"));
+        assert_eq!(as_carol["playing"], json!("Browsing the shop"));
+        assert_eq!(as_carol["status"], json!("away"));
+
+        // Self sees own page and activity.
+        let as_alice = parse_alice(fetch_alice_as(&alice_tok));
+        assert_eq!(as_alice["page"], json!("/shop/"));
+        assert_eq!(as_alice["activity"], json!("Browsing the shop"));
+
+        // Site admin sees page and activity even when not friends.
+        let as_admin = parse_alice(fetch_alice_as(&admin_tok));
+        assert_eq!(as_admin["page"], json!("/shop/"));
+        assert_eq!(as_admin["activity"], json!("Browsing the shop"));
+        assert_eq!(as_admin["status"], json!("away"));
+
+        drop(state);
+        std::fs::remove_dir_all(&base).ok();
     }
 }

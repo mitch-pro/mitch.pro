@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { chromium } from '@playwright/test';
 import { spawn } from 'node:child_process';
 import { createHash, createHmac } from 'node:crypto';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
 import { createServer } from 'node:net';
 import { resolve } from 'node:path';
@@ -30,7 +30,7 @@ try {
   await until(async () => { try { return (await fetch(base + '/enroll/')).ok; } catch { return false; } }, 'Server startup', 15000);
   const secret = await readFile(data + '/id_secret.key');
   const db = new DatabaseSync(data + '/mitchpro.db');
-  const accounts = ['alice', 'bob', 'carol'].map(name => {
+  const accounts = ['alice', 'bob', 'carol', 'admin'].map(name => {
     const email = 'presence-' + name + '@example.test';
     const raw = 'e' + createHash('sha256').update(email).digest('hex').slice(0, 24);
     const sid = raw + '.' + createHmac('sha256', secret).update(raw).digest('hex').slice(0, 16);
@@ -38,10 +38,11 @@ try {
     db.prepare('INSERT INTO tokens(token,data,updated_at) VALUES(?,?,?)').run(sid, JSON.stringify({ email, used: true }), Date.now());
     return { email, sid };
   });
-  const [alice, bob, carol] = accounts;
+  const [alice, bob, carol, admin] = accounts;
   db.prepare('INSERT INTO tokens(token,data,updated_at) VALUES(?,?,?)').run('alias-token',JSON.stringify({email:'pre.sence-alice@example.test'}),Date.now());
   for (const [a, b] of [[alice, carol], [carol, alice]]) db.prepare('INSERT INTO friend_lists(email,data,updated_at) VALUES(?,?,?)').run(a.email, JSON.stringify([b.email]), Date.now());
   db.close();
+  await writeFile(data + '/admins.json', JSON.stringify({ admins: [admin.email] }));
   [aliceBrowser, watcherBrowser] = await Promise.all([chromium.launch({ headless: true }), chromium.launch({ headless: true })]);
   async function contextFor(browser, user) {
     const context = await browser.newContext({ serviceWorkers: 'block', reducedMotion: 'reduce' });
@@ -56,10 +57,10 @@ try {
       const socket = new Native(...args); (window.__testSockets ||= []).push(socket); return socket;
     } });
   });
-  const carolApi = await watcherBrowser.newContext();
-  await carolApi.addCookies([{ name: 'id', value: carol.sid, url: base }]);
-  async function actorStatus() {
-    const response = await observer.request.get(base + '/api/members');
+  const carolApi = await contextFor(watcherBrowser, carol);
+  const adminApi = await contextFor(watcherBrowser, admin);
+  async function actorStatus(viewer = carolApi) {
+    const response = await viewer.request.get(base + '/api/members');
     assert.equal(response.status(), 200);
     const body = await response.json();
     assert.equal(body.members.filter(member=>String(member.handle||'').includes('alice')).length,1,'Email aliases must not duplicate People');
@@ -85,11 +86,20 @@ try {
   assert(Date.now() - started < 4000);
   await until(async () => invalidations.length > 0, 'Non-friends must receive presence invalidations');
   assert(invalidations.every(message => !('email' in message) && !('playing' in message)), 'Global invalidations must not disclose private identity or activity');
-  await until(async () => (await watcher.locator('#online-members-list').innerText()).includes('Viewing people'), 'Home People panel must update without a manual refresh');
+  const nonFriendView = await actorStatus(observer);
+  assert.equal(nonFriendView.online, true);
+  assert.equal(nonFriendView.page, '', 'Non-friends must not receive current page');
+  assert.equal(nonFriendView.activity, '', 'Non-friends must not receive activity');
+  assert.equal(nonFriendView.playing, '', 'Non-friends must not receive playing');
+  const adminView = await actorStatus(adminApi);
+  assert.equal(adminView.page, '/members/', 'Admins must receive current page');
+  assert.equal(adminView.activity, 'Viewing people', 'Admins must receive activity');
+  await until(async () => (await watcher.locator('#online-members-list').innerText()).includes('Online now'), 'Home People panel must show online status without leaking page to non-friends');
+  assert(!(await watcher.locator('#online-members-list').innerText()).includes('Viewing people'), 'Non-friends must not see page activity on Home People panel');
   await page.evaluate(() => history.pushState({}, '', '/leaderboard/?token=private#private'));
   await until(async () => (await actorStatus())?.page === '/leaderboard/', 'SPA navigation');
   assert(!(JSON.stringify(await actorStatus()).includes('token=private')));
-  console.log('PASS: navigation, SPA paths, non-friend live updates, and private query stripping');
+  console.log('PASS: navigation, SPA paths, friend/admin-only page visibility, and private query stripping');
   const second = await actor.newPage(); await second.goto(base + '/shop/'); await second.bringToFront();
   await until(async () => (await actorStatus())?.page === '/shop/', 'New foreground tab');
   await page.evaluate(() => window.MitchPresence.send());
@@ -128,7 +138,8 @@ try {
   await until(async () => (await actorStatus())?.page === '/matrix/presence-fixture', 'Matrix SPA fallback pages must report presence');
   assert.equal((await actorStatus()).activity, 'In Matrix chat');
   await watcher.goto(base + '/members/');
-  await until(async () => (await watcher.locator('#membersGrid').innerText()).includes('In Matrix chat'), 'Full People page must show the same activity');
+  await until(async () => (await watcher.locator('#membersGrid').innerText()).includes('Online now'), 'Full People page for non-friend must show online status only');
+  assert(!(await watcher.locator('#membersGrid').innerText()).includes('In Matrix chat'), 'Full People page must not leak activity to non-friends');
   const friendWatcher = await carolApi.newPage();
   await friendWatcher.goto(base + '/friends/');
   await until(async () => (await friendWatcher.locator('#friendsGrid').innerText()).includes('In Matrix chat'), 'Full Friends page must show the same activity');

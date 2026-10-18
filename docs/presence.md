@@ -20,11 +20,13 @@ VM desktops, Matrix SPA fallbacks, and legacy content responses. Proxy injection
 runs before upstream scripts replace fetch. HTML with conditional authenticated
 injection is private and uncached.
 
-People and Friends use the same resolved server snapshot. Activity changes
-broadcast a global invalidation without an email or activity in the message;
-clients obtain their viewer-specific directory or friends response. Visible
-lists refresh within about a second and periodically poll as a fallback.
-Older fetch responses cannot overwrite newer results.
+People and Friends use the same resolved in-memory server snapshot. What page or
+activity a user is on is only returned to that user's friends, the user
+themselves, and site admins; non-friends only see whether the member is online or
+offline. Activity changes broadcast a global invalidation without an email or
+activity in the message; clients obtain their viewer-specific directory or
+friends response. Visible lists refresh within about a second and periodically
+poll as a fallback. Older fetch responses cannot overwrite newer results.
 
 Page exit ends only that document. Closing a tab falls back to another live
 tab, while delayed requests cannot revive an ended document. A disconnected
@@ -35,14 +37,15 @@ server ping/pong also expires dead transport connections. A connection without
 a fresh document report does not claim an old page. Restoring a cached page
 resumes its document with a higher sequence number.
 
-Presence is process-local, as are the broadcast sockets. A deployment resets
-it until clients reconnect. Already-open tabs need one refresh to load the new
-tracker. Cached legacy clients retain compatibility, but cannot provide all
-the focus and ordering guarantees of the current tracker.
+Presence is strictly in-memory (process-local) and is never written to disk or
+SQLite. A deployment or restart resets it until clients reconnect. Already-open
+tabs need one refresh to load the new tracker. Cached legacy clients retain
+compatibility, but cannot provide all the focus and ordering guarantees of the
+current tracker.
 
-Validation: `cargo test --workspace` includes resolver and injection tests.
-After building `mitch-server`, run `node tests/test_presence_browser.mjs` for
-real-browser navigation, multiple tabs, iframe delegation, live non-friend
-updates, disconnects, HTTP fallback, VM/Matrix routes, page restoration,
-authentication, and stale-request checks. It uses isolated fixture accounts
-and a temporary local database.
+Validation: `cargo test --workspace` includes resolver, privacy, and injection
+tests. After building `mitch-server`, run `node tests/test_presence_browser.mjs`
+for real-browser navigation, multiple tabs, iframe delegation, friend/admin vs.
+non-friend visibility, disconnects, HTTP fallback, VM/Matrix routes, page
+restoration, authentication, and stale-request checks. It uses isolated fixture
+accounts and a temporary local database.
