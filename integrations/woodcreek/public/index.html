@@ -1142,7 +1142,7 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
                 <div class="gui-card-widget">
                   <div>
                     <div class="widget-title">On-Screen Answer Peek Mini-HUD</div>
-                    <div class="widget-desc">Injects a sleek floating Woodcreek Timberwolf widget in the top corner of Blooket showing the question text and verified correct answer in real time.</div>
+                    <div class="widget-desc">Show the current question and answer in a floating panel.</div>
                   </div>
                   <button type="button" class="widget-action-btn" id="btn-tool-peek-hud">
                     <svg width="13" height="13" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
@@ -1374,7 +1374,7 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
       const BLOOK_OPTIONS = ["wolf", "megabot", "dragon", "wizard"];
 
       const BLOOK_CATALOG = [
-        { id: "wolf", name: "Timberwolf", rarity: "rare", desc: "Woodcreek pride timberwolf" },
+        { id: "wolf", name: "Wolf", rarity: "rare", desc: "Wolf avatar" },
         { id: "dragon", name: "Emerald Dragon", rarity: "rare", desc: "Ancient firebreather" },
         { id: "shark", name: "Megalodon", rarity: "rare", desc: "Apex oceanic predator" },
         { id: "megabot", name: "MegaBot", rarity: "epic", desc: "Cybernetic automation" },
@@ -2069,8 +2069,8 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
       const SPEED_PRESETS = {
         instant: { min: 150, max: 300, label: "Instant blitz reaction (0.15s - 0.3s)" },
         fast: { min: 600, max: 1000, label: "Fast competitive speed (0.6s - 1.0s)" },
-        human: { min: 1200, max: 2800, label: "Natural classroom response with jitter (1.2s - 2.8s)" },
-        casual: { min: 3000, max: 5500, label: "Casual classroom slacker (3.0s - 5.5s)" },
+        human: { min: 1200, max: 2800, label: "Variable timing (1.2–2.8 seconds)" },
+        casual: { min: 3000, max: 5500, label: "Slower timing (3.0–5.5 seconds)" },
         custom: { label: "Custom configured timing range" }
       };
 
@@ -3252,7 +3252,7 @@ function getClientName(sn) {
               hud = document.createElement('div');
               hud.id = 'whs-solver-hud';
               hud.style = 'position:fixed; top:14px; right:14px; z-index:999999; background:linear-gradient(135deg, #85182a, #580e1a); color:#fff; padding:8px 16px; border-radius:8px; font-family:sans-serif; font-size:12px; font-weight:800; box-shadow:0 4px 20px rgba(0,0,0,0.6); display:flex; align-items:center; gap:10px; border:1px solid rgba(255,255,255,0.2); letter-spacing:0.5px;';
-              hud.innerHTML = '<span>🐺 WHS AUTO-SOLVER: ACTIVE</span> <button id="btn-whs-stop-hud" style="background:#fff; color:#85182a; border:none; padding:3px 8px; border-radius:4px; font-weight:800; cursor:pointer; font-size:11px;">STOP</button>';
+              hud.innerHTML = '<span>Auto-answer active</span> <button id="btn-whs-stop-hud" style="background:#fff; color:#85182a; border:none; padding:3px 8px; border-radius:4px; font-weight:800; cursor:pointer; font-size:11px;">STOP</button>';
               document.body.appendChild(hud);
               hud.querySelector('#btn-whs-stop-hud').onclick = () => {
                 clearInterval(window.__whsMasterSolverInterval);
@@ -3492,7 +3492,7 @@ function getClientName(sn) {
               peek = document.createElement('div');
               peek.id = 'whs-answer-peek';
               peek.style = 'position:fixed; bottom:16px; left:16px; z-index:999999; background:rgba(10, 12, 16, 0.95); border:1px solid #85182a; border-radius:10px; padding:12px 16px; color:#fff; font-family:sans-serif; max-width:380px; box-shadow:0 8px 30px rgba(0,0,0,0.7); backdrop-filter:blur(10px); font-size:12px;';
-              peek.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:6px; margin-bottom:8px;"><span style="font-weight:900; color:#10b981;">🐺 WHS ANSWER PEEK</span><span style="cursor:pointer; color:#9ca3af;" onclick="this.parentElement.parentElement.remove()">✕</span></div><div id="whs-peek-content" style="color:#d1d5db;">Scanning questions...</div>';
+              peek.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:6px; margin-bottom:8px;"><span style="font-weight:900; color:#10b981;">Answers</span><span style="cursor:pointer; color:#9ca3af;" onclick="this.parentElement.parentElement.remove()">✕</span></div><div id="whs-peek-content" style="color:#d1d5db;">Scanning questions...</div>';
               document.body.appendChild(peek);
 
               setInterval(() => {
@@ -4153,7 +4153,7 @@ function getClientName(sn) {
 
         if (instances.length === 0) {
           arenaGrid.innerHTML = `<div style="grid-column: 1/-1; padding: 20px; text-align: center; color: var(--text-sub); font-size: 0.8rem;">
-            No active bots. Join a game to view live student roster.
+            No active bots. Join a game to see their activity.
           </div>`;
           return;
         }
