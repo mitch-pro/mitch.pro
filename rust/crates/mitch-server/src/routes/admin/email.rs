@@ -4,8 +4,6 @@ use axum::http::Method;
 use serde_json::{json, Value};
 use std::{sync::Arc, time::Duration};
 
-const TEST_RECIPIENT: &str = "tyler.thompson3725@gmail.com";
-
 pub async fn handle(
     state: &Arc<AppState>,
     method: &Method,
@@ -47,7 +45,6 @@ pub async fn handle(
                 200,
                 json!({
                     "ok": true, "connected": senders.is_some(), "senders": senders,
-                    "testRecipient": TEST_RECIPIENT,
                 }),
             ))
         }
@@ -60,30 +57,36 @@ pub async fn handle(
                 return Some(json_resp(
                     200,
                     json!({
-                        "ok": true, "html": html, "subject": subject, "to": TEST_RECIPIENT,
+                        "ok": true, "html": html, "subject": subject,
                     }),
                 ));
             }
-            // Never accept a caller-supplied recipient, sender, subject or message.
             if body
                 .as_object()
-                .is_none_or(|obj| obj.keys().any(|k| k != "template"))
+                .is_none_or(|obj| obj.keys().any(|k| k != "template" && k != "to"))
             {
                 return Some(json_resp(
                     400,
-                    json!({"error": "Only the template may be selected."}),
+                    json!({"error": "Only the template and recipient may be selected."}),
                 ));
             }
-            let result = send_test(&client, &base, &subject, &html).await;
+            let to = body["to"].as_str().map(str::trim).unwrap_or("");
+            if to.is_empty() || !to.contains('@') || to.contains('\r') || to.contains('\n') {
+                return Some(json_resp(
+                    400,
+                    json!({"error": "Please provide a valid recipient email address."}),
+                ));
+            }
+            let result = send_test(&client, &base, to, &subject, &html).await;
             mitch_lib::admin::log_admin_action(
                 &state.store,
                 &state.cfg.data_dir,
                 &ctx.email(state),
                 "email_test",
-                json!({"to": TEST_RECIPIENT, "template": template, "accepted": result.is_ok()}),
+                json!({"to": to, "template": template, "accepted": result.is_ok()}),
             );
             Some(match result {
-                Ok(()) => json_resp(200, json!({"ok": true, "to": TEST_RECIPIENT})),
+                Ok(()) => json_resp(200, json!({"ok": true, "to": to})),
                 Err(error) => json_resp(502, json!({"error": error})),
             })
         }
@@ -123,6 +126,7 @@ fn test_message(state: &Arc<AppState>, template: &str) -> Option<(String, String
 async fn send_test(
     client: &reqwest::Client,
     base: &str,
+    to: &str,
     subject: &str,
     html: &str,
 ) -> Result<(), &'static str> {
@@ -130,7 +134,7 @@ async fn send_test(
         .post(format!("{base}/send"))
         .timeout(Duration::from_secs(30))
         .json(&json!({
-            "sender": "noreply", "to": TEST_RECIPIENT, "subject": subject,
+            "sender": "noreply", "to": to, "subject": subject,
             "body": html, "raw": true, "dry_run": false,
         }))
         .send()
@@ -201,7 +205,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn email_tools_require_admin_and_reject_recipient_overrides() {
+    async fn email_tools_require_admin_and_validate_parameters() {
         let fixture = Fixture::new();
         let member = fixture.ctx("member@example.test");
         for (method, path) in [
@@ -218,8 +222,8 @@ mod tests {
             );
         }
         let admin = fixture.ctx("admin@example.test");
-        for key in ["to", "cc", "bcc", "sender", "subject", "body", "dry_run"] {
-            let payload = json!({"template": "security", key: "other@example.test"});
+        for key in ["cc", "bcc", "sender", "subject", "body", "dry_run"] {
+            let payload = json!({"template": "security", "to": "test@example.test", key: "other@example.test"});
             assert_eq!(
                 handle(
                     &fixture.state,
@@ -235,6 +239,36 @@ mod tests {
                 "{key}"
             );
         }
+        for invalid_to in ["", "invalid-address", "bad@test\r\nbcc:evil@example.test"] {
+            let payload = json!({"template": "security", "to": invalid_to});
+            assert_eq!(
+                handle(
+                    &fixture.state,
+                    &Method::POST,
+                    "/api/admin/email/test",
+                    &payload,
+                    &admin
+                )
+                .await
+                .unwrap()
+                .status(),
+                400,
+                "{invalid_to}"
+            );
+        }
+        assert_eq!(
+            handle(
+                &fixture.state,
+                &Method::POST,
+                "/api/admin/email/test",
+                &json!({"template": "security"}),
+                &admin
+            )
+            .await
+            .unwrap()
+            .status(),
+            400
+        );
         assert_eq!(
             handle(
                 &fixture.state,
@@ -291,7 +325,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn delivery_requires_smtp_acceptance_and_has_one_fixed_recipient() {
+    async fn delivery_requires_smtp_acceptance_and_forwards_target_recipient() {
         for (status, reply, expected) in [
             (StatusCode::OK, json!({"ok":true}), true),
             (StatusCode::OK, json!({"ok":false}), false),
@@ -301,7 +335,7 @@ mod tests {
             let app = Router::new().route(
                 "/send",
                 post(move |Json(body): Json<Value>| async move {
-                    assert_eq!(body["to"], TEST_RECIPIENT);
+                    assert_eq!(body["to"], "recipient@example.test");
                     assert_eq!(body["sender"], "noreply");
                     assert_eq!(body["raw"], true);
                     assert_eq!(body["dry_run"], false);
@@ -321,6 +355,7 @@ mod tests {
                 send_test(
                     &reqwest::Client::new(),
                     &base,
+                    "recipient@example.test",
                     "[Test] subject",
                     "<p>Sample</p>"
                 )

@@ -8,7 +8,7 @@ The connection check calls the existing private `mitch-mail-rs` service. It show
 which sender credentials are configured; it does not prove SMTP delivery. The
 test button waits for the service's SMTP acceptance response. Acceptance does not
 guarantee inbox delivery. Timeouts are uncertain; check the inbox before retrying.
-Tests send only to `tyler.thompson3725@gmail.com`, with no CC or BCC, and are logged
+Tests send to the specified recipient email address, with no CC or BCC, and are logged
 in the admin audit history. They never create a valid security code or change an
 account. The shared API rate limit allows three test requests per minute.
 

@@ -75,25 +75,29 @@ try {
     await page.waitForFunction(() => !document.getElementById('email-test-send').disabled);
     assert.match(await page.locator('#email-subject').innerText(), /^\[Test\]/);
   }
+  assert.equal(await page.locator('#email-test-recipient').inputValue(), 'admin@mitch.pro');
   await send.click();
-  await page.getByText('SMTP accepted the test email for', { exact: false }).waitFor();
+  await page.getByText('SMTP accepted the test email for admin@mitch.pro', { exact: false }).waitFor();
   assert.equal(messages.length, 1);
-  assert.equal(messages[0].to, 'tyler.thompson3725@gmail.com');
+  assert.equal(messages[0].to, 'admin@mitch.pro');
   assert.equal(messages[0].sender, 'noreply');
   assert.equal(messages[0].raw, true);
   assert.equal(messages[0].cc, undefined);
   assert.equal(messages[0].bcc, undefined);
   assert(messages[0].body.includes('Test email only.'));
+  await page.locator('#email-test-recipient').fill('custom@example.com');
   rejectSend = true;
   await send.click();
   await page.getByText('mitch-mail-rs did not confirm SMTP acceptance.', { exact: false }).waitFor();
+  assert.equal(messages.length, 2);
+  assert.equal(messages[1].to, 'custom@example.com');
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `Overflow at ${width}px`);
   }
   if (process.env.EMAIL_SCREENSHOT) await page.screenshot({ path: process.env.EMAIL_SCREENSHOT, fullPage: true });
   assert.deepEqual(errors, []);
-  console.log('PASS: real admin authentication, connection status, four sandboxed previews, fixed-recipient test, SMTP rejection and responsive layout. All mail requests went to the local fake service.');
+  console.log('PASS: real admin authentication, connection status, four sandboxed previews, dynamic-recipient test, SMTP rejection and responsive layout. All mail requests went to the local fake service.');
 } finally {
   await browser?.close();
   server.kill('SIGTERM');

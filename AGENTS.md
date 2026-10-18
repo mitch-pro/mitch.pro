@@ -24,6 +24,11 @@
 - Live operational status (such as online or offline presence) must remain ephemeral in memory. Never log, cache, or persist browsing locations or presence data to disk, SQLite, or JSON storage.
 - Respect privacy toggles server-side: user privacy settings (such as hiding page location or presence) must be enforced at the server API layer for all consumers, including friends and administrators.
 
+## Credentials and secrets
+
+- Never hardcode credentials, passwords, secret tokens, API keys, private emails, or personal contact addresses into source code, test fixtures, documentation, or admin tools.
+- Secrets and service configuration must always be sourced from environment variables, secure stores, or dynamic user/admin inputs.
+
 ## Verification and test discipline
 
 - Never push without local validation: autonomous agents must run `cargo test --workspace`, `cargo fmt --all -- --check`, and any relevant test suites locally before committing or pushing to `master`.

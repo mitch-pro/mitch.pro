@@ -1287,7 +1287,8 @@
           <option value="login">Sign-in code</option>
           <option value="reset">Password reset</option>
         </select>
-        <p>Test recipient: <strong style="overflow-wrap:anywhere;">tyler.thompson3725@gmail.com</strong></p>
+        <label for="email-test-recipient">Recipient</label>
+        <input type="email" id="email-test-recipient" placeholder="user@example.com" autocomplete="email">
         <p class="muted">Previews use the website’s templates with a sample code. Tests do not change any account.</p>
         <iframe id="email-preview" title="Verification email preview" sandbox="" referrerpolicy="no-referrer" style="display:block;width:100%;height:650px;border:1px solid var(--t-bd);border-radius:8px;background:#06060c;"></iframe>
         <p id="email-subject" class="muted"></p>

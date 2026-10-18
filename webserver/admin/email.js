@@ -4,6 +4,10 @@ let emailTestSending = false;
 
 async function loadEmailTools() {
   if (!currentUser?.isAdmin || document.body.classList.contains('admin-locked')) return;
+  const recipient = document.getElementById('email-test-recipient');
+  if (recipient && !recipient.value && currentUser.email) {
+    recipient.value = currentUser.email;
+  }
   document.getElementById('email-connection').textContent = 'Checking mitch-mail-rs…';
   document.getElementById('email-senders').textContent = '';
   const preview = previewEmailTemplate();
@@ -50,13 +54,20 @@ async function previewEmailTemplate() {
 
 async function sendEmailTest() {
   if (emailTestSending || !emailPreviewTemplate || !currentUser?.isAdmin) return;
+  const recipient = document.getElementById('email-test-recipient');
+  const to = recipient ? recipient.value.trim() : '';
+  if (!to) {
+    setStatus('email-test-status', 'Enter a recipient email address.', 'err');
+    recipient?.focus();
+    return;
+  }
   emailTestSending = true;
   const template = emailPreviewTemplate;
   const button = document.getElementById('email-test-send');
   button.disabled = true;
   setStatus('email-test-status', 'Sending test email…');
   try {
-    const data = await postAdmin('/api/admin/email/test', { template });
+    const data = await postAdmin('/api/admin/email/test', { template, to });
     setStatus('email-test-status', 'SMTP accepted the test email for ' + data.to + '. Check the inbox or spam folder.', 'ok');
   } catch (error) {
     setStatus('email-test-status', error.message, 'err');
