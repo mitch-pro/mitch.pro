@@ -26,6 +26,7 @@ pub mod accounts;
 pub mod dashboard;
 pub mod data;
 pub mod economy;
+pub mod email;
 pub mod legacy;
 pub mod moderation;
 pub mod vm;
@@ -195,6 +196,9 @@ pub async fn handle(
     body: &Value,
 ) -> Resp {
     let ctx = admin_ctx(state, headers);
+    if let Some(response) = email::handle(state, method, path, body, &ctx).await {
+        return Some(response);
+    }
     if let Some(response) = accounts::handle(state, method, path, headers, search, body, &ctx) {
         return Some(response);
     }

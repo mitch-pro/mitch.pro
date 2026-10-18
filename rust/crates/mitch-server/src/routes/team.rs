@@ -549,7 +549,7 @@ async fn send_via_mitch_mail(
     in_reply_to: Option<String>,
     raw: bool,
 ) -> Result<(), String> {
-    let base = std::env::var("MAIL_RS_URL").unwrap_or_else(|_| "http://127.0.0.1:6902".to_string());
+    let base = crate::routes::push::mail_service_url();
     let resp = reqwest::Client::new()
         .post(format!("{base}/send"))
         .timeout(std::time::Duration::from_secs(30))

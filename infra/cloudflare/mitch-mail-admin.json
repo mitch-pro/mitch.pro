@@ -1,0 +1,28 @@
+{
+  "zone_id": "5972593aea3c40a7451dd65a165e1a34",
+  "ruleset_id": "0fa966c4f1084d4b94e241efb5332bc2",
+  "dns_record": {
+    "type": "A",
+    "name": "mitch.tylers-tools.com",
+    "content": "192.0.2.1",
+    "proxied": true,
+    "ttl": 1,
+    "comment": "Redirect-only hostname for the repository's admin email tools. No origin service."
+  },
+  "redirect_rule": {
+    "ref": "mitch_mail_admin",
+    "description": "Open Mitch admin email tools",
+    "expression": "http.host eq \"mitch.tylers-tools.com\"",
+    "action": "redirect",
+    "enabled": true,
+    "action_parameters": {
+      "from_value": {
+        "status_code": 302,
+        "preserve_query_string": false,
+        "target_url": {
+          "value": "https://mitchdog.com/admin/#email-tools"
+        }
+      }
+    }
+  }
+}

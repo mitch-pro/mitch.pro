@@ -200,7 +200,7 @@ pub fn ntfy_notify(msg: &str, title: &str, priority: &str) {
 
 /// `sendEmailBg(to, subject, body)` — the Step 2 mail-service transport.
 /// Masked-recipient + profanity guards from server.js:3471-3486.
-pub fn send_email_bg(state: &Arc<AppState>, to: &str, subject: &str, body: &str) {
+pub fn send_email_bg(_state: &Arc<AppState>, to: &str, subject: &str, body: &str) {
     // Defensive: refuse masked recipients (`ad***n@…` shape).
     static MASK_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     let re = MASK_RE.get_or_init(|| {
@@ -226,7 +226,7 @@ pub fn send_email_bg(state: &Arc<AppState>, to: &str, subject: &str, body: &str)
     } else {
         "noreply"
     };
-    let url = mail_service_url(state);
+    let url = mail_service_url();
     let body = body.to_string();
     let subject = subject.to_string();
     let to = to.to_string();
@@ -260,7 +260,12 @@ pub fn send_email_bg(state: &Arc<AppState>, to: &str, subject: &str, body: &str)
     });
 }
 
-fn mail_service_url(_state: &Arc<AppState>) -> String {
+pub(crate) fn mail_service_url() -> String {
+    if let Ok(url) = std::env::var("MAIL_RS_URL") {
+        if !url.trim().is_empty() {
+            return url.trim().trim_end_matches('/').to_string();
+        }
+    }
     let host = std::env::var("MAIL_RS_HOST")
         .or_else(|_| std::env::var("MAIL_SERVICE_HOST"))
         .unwrap_or_else(|_| {

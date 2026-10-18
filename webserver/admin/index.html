@@ -551,10 +551,12 @@
     body.moderator-mode a[href="#casino-tools"],
     body.moderator-mode a[href="#shop-tools"],
     body.moderator-mode a[href="#logs-tools"],
+    body.moderator-mode a[href="#email-tools"],
     body.moderator-mode #economy-tools,
     body.moderator-mode #casino-tools,
     body.moderator-mode #shop-tools,
     body.moderator-mode #logs-tools,
+    body.moderator-mode #email-tools,
     body.moderator-mode #moderator-card,
     body.moderator-mode #blog-contributor-card,
     body.moderator-mode #tester-card,
@@ -708,6 +710,7 @@
         <a href="#vm-tools">VM Cloud</a>
         <a href="#logs-tools">System Logs</a>
         <a href="#content-tools">Content</a>
+        <a href="#email-tools">Email</a>
         <a href="#shop-tools">Shop Catalog</a>
         <a href="#audit-tools">Audit Logs</a>
       </nav>
@@ -1267,6 +1270,33 @@
       </div>
     </section>
 
+    <section class="tool-group" id="email-tools">
+      <div class="section-head"><h2>Email</h2><a href="https://mitch.tylers-tools.com">mitch.tylers-tools.com</a></div>
+      <div class="action-card" style="margin-bottom:14px;">
+        <h2>Sending service</h2>
+        <p id="email-connection" role="status">Checking mitch-mail-rs…</p>
+        <p id="email-senders" class="muted"></p>
+        <button type="button" onclick="loadEmailTools()">Check connection</button>
+      </div>
+      <div class="action-card">
+        <h2>Verification emails</h2>
+        <label for="email-template">Template</label>
+        <select id="email-template" onchange="previewEmailTemplate()">
+          <option value="security">Account security</option>
+          <option value="signup">Email verification</option>
+          <option value="login">Sign-in code</option>
+          <option value="reset">Password reset</option>
+        </select>
+        <p>Test recipient: <strong style="overflow-wrap:anywhere;">tyler.thompson3725@gmail.com</strong></p>
+        <p class="muted">Previews use the website’s templates with a sample code. Tests do not change any account.</p>
+        <iframe id="email-preview" title="Verification email preview" sandbox="" referrerpolicy="no-referrer" style="display:block;width:100%;height:650px;border:1px solid var(--t-bd);border-radius:8px;background:#06060c;"></iframe>
+        <p id="email-subject" class="muted"></p>
+        <button type="button" id="email-test-send" onclick="sendEmailTest()" disabled>Send test email</button>
+        <div id="email-test-status" class="form-status" role="status" aria-live="polite"></div>
+        <p><a href="https://github.com/mitch-pro/mitch.pro/blob/master/rust/crates/mitch-server/src/routes/me/security.rs" target="_blank" rel="noopener noreferrer">Security template on GitHub</a> · <a href="https://github.com/mitch-pro/mitch.pro/blob/master/rust/crates/mitch-server/src/routes/auth.rs" target="_blank" rel="noopener noreferrer">Sign-in templates on GitHub</a></p>
+      </div>
+    </section>
+
     <section class="tool-group" id="content-tools">
       <div class="section-head">
         <h2>Content, Games & Roles</h2>
@@ -1494,6 +1524,7 @@
     </div>
   </main>
 
+  <script src="/admin/email.js"></script>
   <script>
     let rawData = null;
     let filtered = null;
@@ -3774,6 +3805,9 @@
       if (currentUser.isAdmin && location.hash === '#logs-tools') {
         loadAppLogs();
       }
+      if (currentUser.isAdmin && location.hash === '#email-tools') {
+        loadEmailTools();
+      }
       if (location.hash === '#vm-tools') {
         loadVmRequests();
       }
@@ -4196,6 +4230,9 @@
       }
       if (target === 'vm-tools') {
         loadVmRequests();
+      }
+      if (target === 'email-tools' && currentUser.isAdmin) {
+        loadEmailTools();
       }
       if (target === 'content-tools') {
         const list = document.getElementById('blog-delete-log');

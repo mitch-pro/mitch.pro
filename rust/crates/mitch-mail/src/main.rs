@@ -36,6 +36,19 @@ async fn healthz() -> Json<serde_json::Value> {
     Json(json!({ "ok": true }))
 }
 
+async fn status() -> Json<serde_json::Value> {
+    let configured =
+        |user, pass| !config::env_trim(user).is_empty() && !config::env_trim(pass).is_empty();
+    Json(json!({
+        "ok": true,
+        "senders": {
+            "noreply": configured("NOREPLY_USER", "NOREPLY_PASS"),
+            "gmail": configured("GMAIL_USER", "GMAIL_PASS"),
+            "support": configured("SUPPORT_USER", "SUPPORT_PASS"),
+        }
+    }))
+}
+
 async fn watch_status(State(state): State<AppState>) -> (StatusCode, Json<serde_json::Value>) {
     if state.watcher.healthy() {
         (StatusCode::OK, Json(json!({ "ok": true })))
@@ -145,6 +158,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/healthz", get(healthz))
+        .route("/status", get(status))
         .route("/watch/status", get(watch_status))
         .route("/send", post(send_handler))
         .with_state(AppState {
