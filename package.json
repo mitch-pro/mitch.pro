@@ -19,7 +19,8 @@
     "test:integration": "bun tests/test_runner.js",
     "test:integration:auth": "bun tests/test_auth_session_integration.js",
     "test:casino:browser": "node tests/test_casino_buttons_browser.mjs",
-    "test:integration:daily-login": "bun tests/test_daily_login.js"
+    "test:integration:daily-login": "bun tests/test_daily_login.js",
+    "test:blooket": "node tests/test_blooket_answers.mjs && node tests/test_blooket_connection.mjs && node tests/test_blooket_controller.mjs"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^14.0.0",

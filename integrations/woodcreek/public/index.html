@@ -241,7 +241,7 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
                   <span class="label-hint" id="speed-profile-hint">Variable response time (1.2s - 2.8s)</span>
                 </div>
                 <div class="speed-presets-bar">
-                  <button type="button" class="speed-preset-btn active" data-speed="instant">
+                  <button type="button" class="speed-preset-btn" data-speed="instant">
                     <svg viewbox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
                     <span>Instant (0s)</span>
                   </button>
@@ -249,7 +249,7 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
                     <svg viewbox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>
                     <span>Fast (0.8s)</span>
                   </button>
-                  <button type="button" class="speed-preset-btn" data-speed="human">
+                  <button type="button" class="speed-preset-btn active" data-speed="human">
                     <svg viewbox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                     <span>Natural (1.8s)</span>
                   </button>
@@ -270,14 +270,14 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
                     <label for="range-min-delay">Min Answer Delay</label>
                     <span class="label-hint" id="min-delay-hint">1200 ms</span>
                   </div>
-                  <input type="range" id="range-min-delay" class="count-slider" min="100" max="6000" step="50" value="1200">
+                  <input type="range" id="range-min-delay" class="count-slider" min="0" max="6000" step="50" value="1200">
                 </div>
                 <div class="option-row">
                   <div class="label-row">
                     <label for="range-max-delay">Max Answer Delay (Jitter Cap)</label>
                     <span class="label-hint" id="max-delay-hint">2800 ms</span>
                   </div>
-                  <input type="range" id="range-max-delay" class="count-slider" min="200" max="8000" step="50" value="2800">
+                  <input type="range" id="range-max-delay" class="count-slider" min="0" max="8000" step="50" value="2800">
                 </div>
               </div>
 
@@ -322,8 +322,8 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
                 <div class="option-row">
                   <label for="select-score-spread">Accuracy spread</label>
                   <select id="select-score-spread" class="select-control">
-                    <option value="bell_curve" selected>Varied accuracy (85–99%)</option>
-                    <option value="uniform">Uniform (All bots exact target %)</option>
+                    <option value="bell_curve">Vary accuracy around the target</option>
+                    <option value="uniform" selected>Same target for every bot</option>
                     <option value="tiered">Tiered (Top performers, middle average)</option>
                   </select>
                 </div>
@@ -331,8 +331,8 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
                 <div class="option-row">
                   <label for="select-wrong-strategy">Wrong Answer Behavior</label>
                   <select id="select-wrong-strategy" class="select-control">
-                    <option value="smart_miss" selected>Smart Miss (Select believable wrong option)</option>
-                    <option value="random_guess">Random Guess (Blind 1-in-4 pick)</option>
+                    <option value="smart_miss">Similar-length wrong answer</option>
+                    <option value="random_guess" selected>Random wrong answer</option>
                     <option value="first_wrong">First Alternate Distractor</option>
                   </select>
                 </div>
@@ -340,12 +340,12 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
 
               <div class="two-cols" style="margin-top: 12px;">
                 <div class="option-row">
-                  <label for="select-streak-breaker">Anti-Suspicion Streak Breaker</label>
+                  <label for="select-streak-breaker">Maximum correct streak</label>
                   <select id="select-streak-breaker" class="select-control">
-                    <option value="12" selected>Intentionally miss after 12 streak</option>
+                    <option value="12">Intentionally miss after 12 streak</option>
                     <option value="18">Intentionally miss after 18 streak</option>
                     <option value="25">Intentionally miss after 25 streak</option>
-                    <option value="0">No limit (Unbroken perfect streak)</option>
+                    <option value="0" selected>No limit</option>
                   </select>
                 </div>
 
@@ -365,7 +365,7 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
             <div class="gameplay-tab-content" id="tab-content-modes">
               <div class="gameplay-section">
                 <div class="label-row">
-                  <span class="form-label">Game Mode Specialist</span>
+                  <span class="form-label">Game mode</span>
                   <span class="label-hint">Tailors bot decision-making to specific Blooket mechanics</span>
                 </div>
                 <select id="select-active-gamemode" class="select-control">
@@ -384,8 +384,8 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
                   <div class="option-row">
                     <label for="select-chest-strategy">Chest Selection Policy</label>
                     <select id="select-chest-strategy" class="select-control">
-                      <option value="esp" selected>ESP Mode - Always Best Chest</option>
-                      <option value="random">Random Chest (Natural 1, 2, or 3)</option>
+
+                      <option value="random" selected>Random chest</option>
                       <option value="chest_1">Always Left Chest (#1)</option>
                       <option value="chest_2">Always Middle Chest (#2)</option>
                       <option value="chest_3">Always Right Chest (#3)</option>
@@ -394,8 +394,8 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
                   <div class="option-row">
                     <label for="select-swap-target">Gold Swap / Steal Target</label>
                     <select id="select-swap-target" class="select-control">
-                      <option value="leader" selected>Always Steal from 1st Place (Leader)</option>
-                      <option value="random">Random Player (Spread Chaos)</option>
+                      <option value="leader" selected>First listed player</option>
+                      <option value="random">Random player</option>
                       <option value="never">Defensive (Avoid Swapping)</option>
                     </select>
                   </div>
@@ -408,38 +408,19 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
                   <div class="option-row">
                     <label for="select-crypto-target">Hack Target Priority</label>
                     <select id="select-crypto-target" class="select-control">
-                      <option value="leader" selected>Target Highest Crypto Player</option>
+                      <option value="leader" selected>First listed player</option>
                       <option value="random">Random Player</option>
                     </select>
                   </div>
-                  <div class="option-row">
-                    <label for="select-crypto-defense">Security Priority</label>
-                    <select id="select-crypto-defense" class="select-control">
-                      <option value="shields" selected>Prioritize Shields &amp; Firewalls</option>
-                      <option value="multipliers">Prioritize Crypto Multipliers</option>
-                    </select>
-                  </div>
+
                 </div>
               </div>
 
               <div id="gamemode-config-fishing" class="gamemode-config-subpanel" style="margin-top: 12px;" hidden>
-                <span class="subpanel-title">Fishing Frenzy Tactics</span>
+                <span class="subpanel-title">Fishing Frenzy</span><p class="label-hint">Uses the visible cast and reel controls.</p>
                 <div class="two-cols" style="margin-top: 8px;">
-                  <div class="option-row">
-                    <label for="select-fishing-style">Cast &amp; Depth Technique</label>
-                    <select id="select-fishing-style" class="select-control">
-                      <option value="deep" selected>Deep Cast (Bigger Fish &amp; Points)</option>
-                      <option value="quick">Quick Reel (Speed &amp; Count)</option>
-                      <option value="balanced">Mixed Depths</option>
-                    </select>
-                  </div>
-                  <div class="option-row">
-                    <label for="select-lure-priority">Lure &amp; Weight Strategy</label>
-                    <select id="select-lure-priority" class="select-control">
-                      <option value="heavy" selected>Heavy Sinker Priority</option>
-                      <option value="frenzy">Frenzy Lure Priority</option>
-                    </select>
-                  </div>
+
+
                 </div>
               </div>
 
@@ -454,13 +435,7 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
                       <option value="speed">Speed &amp; Agility</option>
                     </select>
                   </div>
-                  <div class="option-row">
-                    <label for="select-cafe-priority">Cafe Food Restock Doctrine</label>
-                    <select id="select-cafe-priority" class="select-control">
-                      <option value="fast" selected>Instant Service &amp; Quick Restock</option>
-                      <option value="upgrades">High-tier Upgrades Focus</option>
-                    </select>
-                  </div>
+
                 </div>
               </div>
 
@@ -480,8 +455,8 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
               <div class="toggles-grid">
                 <div class="toggle-row">
                   <div class="toggle-info">
-                    <span class="toggle-label">FlareSolverr Anti-Bot Clearance</span>
-                    <span class="toggle-hint">Injects Cloudflare bypass cookies &amp; synced User-Agent from local bypass service (:8191)</span>
+                    <span class="toggle-label">Connection verification</span>
+                    <span class="toggle-hint">Use the server’s verification service when connecting.</span>
                   </div>
                   <label class="switch">
                     <input type="checkbox" id="toggle-flaresolverr" checked>
@@ -491,22 +466,22 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
 
                 <div class="toggle-row">
                   <div class="toggle-info">
-                    <span class="toggle-label">Human Keystroke Simulation</span>
+                    <span class="toggle-label">Type answers gradually</span>
                     <span class="toggle-hint">Types character-by-character with 40-90ms variable keystrokes instead of instantaneous pasting</span>
                   </div>
                   <label class="switch">
-                    <input type="checkbox" id="toggle-human-keystrokes" checked>
+                    <input type="checkbox" id="toggle-human-keystrokes">
                     <span class="switch-slider"></span>
                   </label>
                 </div>
 
                 <div class="toggle-row">
                   <div class="toggle-info">
-                    <span class="toggle-label">Organic Mouse Click Offsets</span>
-                    <span class="toggle-hint">Clicks randomized coordinates inside answer cards to prevent dead-center coordinate fingerprinting</span>
+                    <span class="toggle-label">Vary click position</span>
+                    <span class="toggle-hint">Vary where answer cards are clicked.</span>
                   </div>
                   <label class="switch">
-                    <input type="checkbox" id="toggle-click-offsets" checked>
+                    <input type="checkbox" id="toggle-click-offsets">
                     <span class="switch-slider"></span>
                   </label>
                 </div>
@@ -856,7 +831,7 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
 
                 <div class="gui-card-widget">
                   <div>
-                    <div class="widget-title">Instant Auto-Answer (0ms)</div>
+                    <div class="widget-title">Answer current question</div>
                     <div class="widget-desc">Immediately clicks the correct answer the exact millisecond questions render on screen. Works on Multiple Choice and Typing questions.</div>
                   </div>
                   <button type="button" class="widget-action-btn" id="btn-tool-instant-answer">
@@ -897,12 +872,12 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
 
                 <div class="gui-card-widget" style="border-color: rgba(133, 24, 42, 0.4) !important;">
                   <div>
-                    <div class="widget-title" style="color: #f87171;">Master Hands-Free Solver (Continuous Loop)</div>
-                    <div class="widget-desc">High-speed autonomous background solver. Continuously answers all questions correctly and auto-skips all feedback screens indefinitely until stopped.</div>
+                    <div class="widget-title" style="color: #f87171;">Answering</div>
+                    <div class="widget-desc">Uses the same Start answering and Stop answering control as the dashboard.</div>
                   </div>
                   <button type="button" class="widget-action-btn" id="btn-tool-master-solver" style="background: linear-gradient(135deg, #85182a 0%, #580e1a 100%) !important; border-color: #f87171 !important;">
                     <svg width="13" height="13" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                    Toggle Master Solver
+                    Start / stop answering
                   </button>
                 </div>
 
@@ -975,7 +950,7 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
                   </div>
                   <button type="button" class="widget-action-btn" id="btn-tool-fish-auto">
                     <svg width="13" height="13" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="5" r="3"></circle><line x1="12" y1="22" x2="12" y2="8"></line><path d="M5 12H2a10 10 0 0 0 20 0h-3"></path></svg>
-                    Auto-Cast &amp; Reel
+                    Start fishing controls
                   </button>
                 </div>
 
@@ -1441,11 +1416,7 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
       const selectChestStrategy = byId("select-chest-strategy");
       const selectSwapTarget = byId("select-swap-target");
       const selectCryptoTarget = byId("select-crypto-target");
-      const selectCryptoDefense = byId("select-crypto-defense");
-      const selectFishingStyle = byId("select-fishing-style");
-      const selectLurePriority = byId("select-lure-priority");
       const selectBrawlStat = byId("select-brawl-stat");
-      const selectCafePriority = byId("select-cafe-priority");
       const toggleAutoMinigames = byId("toggle-auto-minigames");
 
       const toggleFlare = byId("toggle-flaresolverr");
@@ -1931,7 +1902,7 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
 
       // Speed Profiles & Jitter Engine
       const SPEED_PRESETS = {
-        instant: { min: 150, max: 300, label: "Instant blitz reaction (0.15s - 0.3s)" },
+        instant: { min: 0, max: 0, label: "No added answer delay" },
         fast: { min: 600, max: 1000, label: "Fast competitive speed (0.6s - 1.0s)" },
         human: { min: 1200, max: 2800, label: "Variable timing (1.2–2.8 seconds)" },
         casual: { min: 3000, max: 5500, label: "Slower timing (3.0–5.5 seconds)" },
@@ -1954,7 +1925,7 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
             speedProfileHint.textContent = conf.label;
           }
           updateGameplayChips();
-          sendLiveSettings();
+          sendLiveSettings(["answerSpeedMode","answerDelayMinMs","answerDelayMaxMs"]);
         });
       });
 
@@ -1967,7 +1938,7 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
         minDelayHint.textContent = `${minVal} ms`;
         setCustomSpeedPreset();
         updateGameplayChips();
-        sendLiveSettings();
+        sendLiveSettings(["answerSpeedMode","answerDelayMinMs","answerDelayMaxMs"]);
       });
 
       rangeMaxDelay.addEventListener("input", () => {
@@ -1979,7 +1950,7 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
         maxDelayHint.textContent = `${maxVal} ms`;
         setCustomSpeedPreset();
         updateGameplayChips();
-        sendLiveSettings();
+        sendLiveSettings(["answerSpeedMode","answerDelayMinMs","answerDelayMaxMs"]);
       });
 
       function setCustomSpeedPreset() {
@@ -2000,7 +1971,7 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
         else if (acc >= 75) accuracyTargetHint.textContent = `${acc}% (Moderate accuracy · 1 miss every ~${Math.round(100 / (100 - acc))} questions)`;
         else accuracyTargetHint.textContent = `${acc}% (Lower accuracy)`;
         updateGameplayChips();
-        sendLiveSettings();
+        sendLiveSettings(["accuracy"]);
       });
 
       // Game Mode Subpanel Switching
@@ -2011,7 +1982,7 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
         modeFishingPanel.hidden = mode !== "fishing_frenzy";
         modeMonsterPanel.hidden = (mode !== "monster_brawl" && mode !== "cafe_factory");
         updateGameplayChips();
-        sendLiveSettings();
+        sendLiveSettings(["gameMode"]);
       });
 
       // Live Header Chips Update
@@ -2032,7 +2003,7 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
           } else if (mode === "crypto_hack") {
             chipMode.textContent = `Crypto Hack (${selectCryptoTarget.value === "leader" ? "Hack #1" : "Random"})`;
           } else if (mode === "fishing_frenzy") {
-            chipMode.textContent = `Fishing (${selectFishingStyle.value})`;
+            chipMode.textContent = "Fishing Frenzy";
           } else if (mode === "monster_brawl") {
             chipMode.textContent = `Monster Brawl (${selectBrawlStat.value})`;
           } else if (mode === "cafe_factory") {
@@ -2045,9 +2016,9 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
 
       // Live Settings Broadcast via WebSocket
       let hydratingSettings = false;
-      function sendLiveSettings() {
+      function sendLiveSettings(keys) {
         if (hydratingSettings) return;
-        sendCommand({
+        const payload = {
           op: "settings",
           autoAnswer: toggleAutoAnswer.checked,
           autoMinigames: toggleAutoMinigames.checked,
@@ -2064,23 +2035,22 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
           chestStrategy: selectChestStrategy.value,
           swapTarget: selectSwapTarget.value,
           cryptoTarget: selectCryptoTarget.value,
-          cryptoDefense: selectCryptoDefense.value,
-          fishingStyle: selectFishingStyle.value,
           brawlStat: selectBrawlStat.value,
           humanKeystrokes: toggleHumanKeystrokes.checked,
           clickOffsets: toggleClickOffsets.checked,
           blookTheme: selectBlooks ? selectBlooks.value : "random",
           useFlareSolverr: toggleFlare ? toggleFlare.checked : true
-        });
+        };
+        sendCommand(keys ? Object.fromEntries(Object.entries(payload).filter(([key]) => key === "op" || keys.includes(key))) : payload);
       }
 
       // Attach change listeners to all gameplay tactics controls
       [
         toggleStaggerFleet, toggleAdaptiveReading, selectScoreSpread,
         selectWrongStrategy, selectStreakBreaker, selectChestStrategy,
-        selectSwapTarget, selectCryptoTarget, selectCryptoDefense,
-        selectFishingStyle, selectLurePriority, selectBrawlStat,
-        selectCafePriority, toggleAutoAnswer, toggleAutoMinigames,
+        selectSwapTarget, selectCryptoTarget,
+        selectBrawlStat,
+        toggleAutoAnswer, toggleAutoMinigames,
         toggleHumanKeystrokes, toggleClickOffsets, selectBlooks,
         toggleLobbyShuffle
       ].forEach((el) => {
@@ -2091,7 +2061,15 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
               if (fleetAnswerLabel) fleetAnswerLabel.classList.toggle("active", toggleAutoAnswer.checked);
             }
             updateGameplayChips();
-            sendLiveSettings();
+            const settingKeys = new Map([
+              [toggleStaggerFleet,"staggerFleet"], [toggleAdaptiveReading,"adaptiveReadingTime"], [selectScoreSpread,"scoreSpread"],
+              [selectWrongStrategy,"wrongAnswerStrategy"], [selectStreakBreaker,"streakBreaker"], [selectChestStrategy,"chestStrategy"],
+              [selectSwapTarget,"swapTarget"], [selectCryptoTarget,"cryptoTarget"], [selectBrawlStat,"brawlStat"],
+              [toggleAutoAnswer,"autoAnswer"], [toggleAutoMinigames,"autoMinigames"], [toggleHumanKeystrokes,"humanKeystrokes"],
+              [toggleClickOffsets,"clickOffsets"], [selectBlooks,"blookTheme"]
+            ]);
+            const key = settingKeys.get(el);
+            if (key) sendLiveSettings([key]);
           });
         }
       });
@@ -2215,16 +2193,22 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
               if (typeof updateCheatsAvailability === "function") {
                 updateCheatsAvailability(msg.state);
               }
+            } else if (msg.type === "command-result") {
+              if (["launch","start"].includes(msg.op)) resetJoinButton();
+              if (msg.result?.success === false) showConnectionError(msg.result.message || msg.result.error || "Command failed.");
             } else if (msg.type === "log") {
               appendLog(msg.log);
             } else if (msg.type === "error") {
               byId("btn-answering").disabled=false;
+              resetJoinButton();
               showConnectionError(msg.message || "Command failed. Please try again.");
             }
           } catch {}
         };
 
         socket.onclose = () => {
+          byId("btn-answering").disabled = false;
+          resetJoinButton();
           setStatus(false, "Disconnected");
           if (!reconnectTimer) {
             reconnectTimer = setInterval(connect, 3000);
@@ -2528,206 +2512,20 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
       // 1-BOT AVAILABILITY SYSTEM & BLOOKET UNIVERSAL CONTROLS
       // =========================================================
 
-            const BLOOKET_UNIVERSAL_HELPER = `
-function getBlooketGameContext() {
-  let room = null;
-  const all = document.querySelectorAll('*');
-  for (const el of all) {
-    for (const k of Object.keys(el)) {
-      if (k.startsWith('__reactFiber$')) {
-        let f = el[k];
-        while (f) {
-          if (f.memoizedState) {
-            let s = f.memoizedState;
-            while (s) {
-              if (s.memoizedState && typeof s.memoizedState === 'object' && s.memoizedState.sessionId && s.memoizedState.roomId) {
-                room = s.memoizedState;
-                break;
-              }
-              s = s.next;
-            }
-          }
-          if (room) break;
-          f = f.return;
-        }
-      }
-      if (room) break;
-    }
-    if (room) break;
-  }
-
-  let stateNode = null;
-  for (const el of all) {
-    for (const k of Object.keys(el)) {
-      if (k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$')) {
-        let f = el[k];
-        let d = 0;
-        while (f && d < 60) {
-          const sn = f.stateNode;
-          if (sn && !(sn instanceof HTMLElement) && typeof sn === 'object' && !sn.containerInfo) {
-            if (sn.props?.liveGameController || sn.state?.gold !== undefined || sn.state?.crypto !== undefined || sn.state?.choices) {
-              stateNode = sn;
-              break;
-            }
-          }
-          f = f.return;
-          d++;
-        }
-      }
-      if (stateNode) break;
-    }
-    if (stateNode) break;
-  }
-
-  const myName = window.__botName || (document.querySelector("[class*='nameText'], [class*='headerPlayerNameText']")?.innerText?.trim()) || "Jonah";
-
-  return {
-    room,
-    stateNode,
-    name: myName,
-    isColyseus: Boolean(room),
-    isFirebase: Boolean(stateNode?.props?.liveGameController)
-  };
-}
-
+      const BLOOKET_UNIVERSAL_HELPER = `
 function getStateNode() {
-  const ctx = getBlooketGameContext();
-  if (ctx.stateNode) return ctx.stateNode;
-
-  const colyseusPlayers = (ctx.room && ctx.room.state && ctx.room.state.players) ? ctx.room.state.players : null;
-  const playerObj = colyseusPlayers
-    ? (colyseusPlayers.get ? colyseusPlayers.get(ctx.name) : colyseusPlayers[ctx.name])
-    : null;
-
-  const activeScore = playerObj ? playerObj.score : 0;
-
-  return {
-    _synthetic: true,
-    context: ctx,
-    invulnerable: true,
-    ghostMode: false,
-    player: playerObj || {
-      x: 0,
-      y: 0,
-      health: 999999,
-      maxHealth: 999999,
-      invulnerable: true,
-      score: activeScore
-    },
-    enemies: [
-      { health: 1, maxHealth: 1, die() { this.health = 0; } }
-    ],
-    gems: [
-      { x: 0, y: 0 }
-    ],
-    abilities: {
-      dmg: { level: 10, maxLevel: 10 },
-      speed: { level: 10, maxLevel: 10 },
-      magnet: { level: 10, maxLevel: 10 }
-    },
-    towers: [
-      { level: 3 }
-    ],
-    state: {
-      name: ctx.name,
-      gold: activeScore,
-      gold2: activeScore,
-      crypto: activeScore,
-      crypto2: activeScore,
-      cafeCash: activeScore,
-      cash: activeScore,
-      tokens: activeScore,
-      coins: activeScore,
-      fossils: activeScore,
-      doubloons: activeScore,
-      toys: activeScore,
-      weight: activeScore,
-      weight2: activeScore,
-      progress: 100,
-      people: 100,
-      materials: 100,
-      military: 100,
-      strength: 100,
-      charisma: 100,
-      wisdom: 100,
-      health: 999999,
-      lives: 999999,
-      password: "admin",
-      hack: "",
-      frenzy: true,
-      frenzyTime: 999999,
-      lure: 5,
-      distraction: false,
-      customers: [],
-      foods: [
-        { name: "Toast", stock: 99, level: 5 },
-        { name: "Milk", stock: 99, level: 5 }
-      ],
-      items: { speed: 5, customers: 5 },
-      blooks: [
-        { name: "Mega Bot", upgradePrice: 0, level: 4 }
-      ],
-      cards: [
-        { name: "Hero", strength: 100, charisma: 100, wisdom: 100 }
-      ],
-      enemy: { health: 1 },
-      guest: { name: "King", choices: [{ text: "Yes" }, { text: "No" }] },
-      choices: [
-        { type: "gold", val: 5000000, text: "5,000,000 Gold" },
-        { type: "multiply", val: 3, text: "Triple Gold!" },
-        { type: "swap", text: "Swap Gold!" }
-      ],
-      unlocks: []
-    },
-    setState(updates, cb) {
-      if (!updates) return;
-      Object.assign(this.state, updates);
-      const newScore = updates.gold ?? updates.gold2 ?? updates.crypto ?? updates.crypto2 ?? updates.cash ?? updates.cafeCash ?? updates.tokens ?? updates.coins ?? updates.fossils ?? updates.doubloons ?? updates.toys ?? updates.weight;
-      if (newScore !== undefined) {
-        if (playerObj) playerObj.score = newScore;
-        document.querySelectorAll('[class*="headerScoreText"], [class*="goldText"], [class*="scoreText"]').forEach(el => {
-          el.innerText = Number(newScore).toLocaleString();
-        });
-      }
-      if (typeof cb === 'function') cb();
-    },
-    props: {
-      client: { name: ctx.name },
-      liveGameController: {
-        setVal({ path, val }) {
-          if (path && (path.includes('/g') || path.includes('/ca') || path.includes('/cr') || path.includes('/w') || path.includes('/f') || path.includes('/d') || path.includes('/t') || path.includes('/pr'))) {
-            if (playerObj) playerObj.score = val;
-            document.querySelectorAll('[class*="headerScoreText"], [class*="goldText"], [class*="scoreText"]').forEach(el => {
-              el.innerText = Number(val).toLocaleString();
-            });
-          }
-          return true;
-        },
-        getDatabaseVal(path, cb) {
-          if (typeof cb === 'function') {
-            const mockDb = {};
-            mockDb[ctx.name] = { g: activeScore, cr: activeScore, ca: activeScore, w: activeScore };
-            cb(mockDb);
-          }
-        }
-      }
-    },
-    choosePrize(i) {
-      const chests = document.querySelectorAll("div[class*='choice'], img[alt^='Chest ']");
-      if (chests && chests[i]) chests[i].click();
-    },
-    takeDamage() {},
-    nextLevel() {},
-    nextWave() {},
-    nextGuest() {}
-  };
+  for (const element of document.querySelectorAll('*')) {
+    const key = Object.keys(element).find(key => key.startsWith('__reactFiber$') || key.startsWith('__reactInternalInstance$'));
+    let fiber = key && element[key];
+    for (let depth = 0; fiber && depth < 80; depth++, fiber = fiber.return) {
+      const node = fiber.stateNode;
+      if (node && !(node instanceof Element) && typeof node.setState === 'function' && (node.props?.liveGameController || node.state?.stage || node.state?.question || node.state?.gold !== undefined)) return node;
+    }
+  }
+  throw new Error('This script is unavailable for the current game screen.');
 }
-
 const getStatenode = getStateNode;
-
-function getClientName(sn) {
-  return window.__botName || sn?.props?.client?.name || sn?.state?.name || "Jonah";
-}
+function getClientName(node) { return node?.props?.client?.name || node?.state?.name || window.__botName || ''; }
 `;
 
       // Helper to trim fleet to 1 bot
@@ -2765,7 +2563,7 @@ function getClientName(sn) {
         }
 
         const instances = (state && state.instances) ? state.instances : (lastState && lastState.instances ? lastState.instances : []);
-        const activeBots = (instances || []).filter(i => i.status !== 'error' && i.status !== 'stopped');
+        const activeBots = (instances || []).filter(i => ['lobby','game'].includes(i.status));
         const count = activeBots.length;
 
         const actionBtns = document.querySelectorAll(".widget-action-btn, .btn-cheat-inject");
@@ -2810,9 +2608,26 @@ function getClientName(sn) {
           return;
         }
 
+        if (name === "Toggle Master Solver") {
+          sendCommand({op:"settings",autoAnswer:!lastState?.autoAnswer});
+          return;
+        }
+        if (["Instant Auto-Answer","Auto-Fill Typing Answer"].includes(name) || name.startsWith("Delayed Auto-Answer")) {
+          if (name.startsWith("Delayed Auto-Answer")) {
+            const delay = Number(byId("select-answer-delay").value);
+            sendCommand({op:"settings",answerSpeedMode:"custom",answerDelayMinMs:delay,answerDelayMaxMs:delay});
+          }
+          sendCommand({op:"force-answer"});
+          return;
+        }
+        if (name === "Auto-Cast & Reel") {
+          sendCommand({op:"settings",autoMinigames:true,autoAnswer:true});
+          return;
+        }
+
         // Fleet execution: check active bot count
         const instances = lastState ? lastState.instances : [];
-        const activeBots = (instances || []).filter(i => i.status !== 'error' && i.status !== 'stopped');
+        const activeBots = (instances || []).filter(i => ['lobby','game'].includes(i.status));
 
         if (activeBots.length === 0) {
           showVaultToast("⚠️ Unavailable: No active bot running. Launch 1 bot first.");
@@ -3097,9 +2912,6 @@ function getClientName(sn) {
               if (!targetEl) targetEl = data.domAnswerEls[0];
 
               targetEl.click();
-              ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(evt => {
-                targetEl.dispatchEvent(new MouseEvent(evt, { bubbles: true, cancelable: true, view: window }));
-              });
 
               return { success: true, answered: targetEl.innerText.trim() };
             } catch(e) { return { error: e.message }; }
@@ -3134,9 +2946,6 @@ function getClientName(sn) {
 
               setTimeout(() => {
                 targetEl.click();
-                ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(evt => {
-                  targetEl.dispatchEvent(new MouseEvent(evt, { bubbles: true, cancelable: true, view: window }));
-                });
               }, ${delayMs});
 
               return { success: true, scheduledDelayMs: ${delayMs}, target: targetEl.innerText.trim() };
@@ -3145,99 +2954,43 @@ function getClientName(sn) {
           handleGuiAction(`Delayed Auto-Answer (${delayMs}ms)`, code, this);
         });
 
-        // 5. AUTO-SKIP FEEDBACK DELAY SCREEN
         byId("btn-tool-skip-feedback")?.addEventListener("click", function() {
           const code = `(() => {
-            try {
-              const fb = document.querySelector('[class*="feedbackContainer"], [class*="feedback"], [class*="nextButton"], [class*="next"], [id*="feedback"]');
-              if (fb) {
-                const btn = fb.querySelector('button, [role="button"]') || fb;
-                btn.click();
-              }
-              document.body?.click();
-              window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', keyCode: 32, which: 32, bubbles: true }));
-              window.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', code: 'Space', keyCode: 32, which: 32, bubbles: true }));
-              window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-              return { success: true, message: "Dispatched skip signals." };
-            } catch(e) { return { error: e.message }; }
+            const visible = element => element?.getClientRects().length;
+            const answers = [...document.querySelectorAll('[class*="answerContainer"], [class*="answersHolder"] > button')].filter(visible);
+            if (answers.length >= 2) return {success:false,message:'A question is still on screen.'};
+            const control = [...document.querySelectorAll('[class*="nextButton"], [class*="feedbackContainer"], [class*="feedbackWrapper"]')].find(visible);
+            if (!control) return {success:false,message:'No feedback control is visible.'};
+            control.click();
+            return {success:true};
           })()`;
           handleGuiAction("Skip Feedback Screen", code, this);
         });
 
-        // 6. MASTER HANDS-FREE AUTONOMOUS SOLVER DAEMON
+        // Personal bookmarklet; fleet actions use the server controller above.
         byId("btn-tool-master-solver")?.addEventListener("click", function() {
           const code = `(() => {
             ${BLOOKET_QUIZ_RESOLVER}
-            if (window.__whsMasterSolverActive) {
-              clearInterval(window.__whsMasterSolverInterval);
-              window.__whsMasterSolverActive = false;
-              document.getElementById('whs-solver-hud')?.remove();
-              return { success: true, active: false, message: "Master hands-free solver stopped." };
+            if (window.__whsMasterSolverInterval) {
+              clearInterval(window.__whsMasterSolverInterval);window.__whsMasterSolverInterval=null;
+              return {success:true,active:false};
             }
-
-            window.__whsMasterSolverActive = true;
-
-            // In-game status banner
-            let hud = document.getElementById('whs-solver-hud');
-            if (!hud) {
-              hud = document.createElement('div');
-              hud.id = 'whs-solver-hud';
-              hud.style = 'position:fixed; top:14px; right:14px; z-index:999999; background:linear-gradient(135deg, #85182a, #580e1a); color:#fff; padding:8px 16px; border-radius:8px; font-family:sans-serif; font-size:12px; font-weight:800; box-shadow:0 4px 20px rgba(0,0,0,0.6); display:flex; align-items:center; gap:10px; border:1px solid rgba(255,255,255,0.2); letter-spacing:0.5px;';
-              hud.innerHTML = '<span>Auto-answer active</span> <button id="btn-whs-stop-hud" style="background:#fff; color:#85182a; border:none; padding:3px 8px; border-radius:4px; font-weight:800; cursor:pointer; font-size:11px;">STOP</button>';
-              document.body.appendChild(hud);
-              hud.querySelector('#btn-whs-stop-hud').onclick = () => {
-                clearInterval(window.__whsMasterSolverInterval);
-                window.__whsMasterSolverActive = false;
-                hud.remove();
-              };
-            }
-
+            let lastQuestion = '';
             window.__whsMasterSolverInterval = setInterval(() => {
-              try {
-                // 1. Advance Feedback Screen
-                const bodyText = document.body ? document.body.innerText : "";
-                if (/(press anywhere to continue|click anywhere|nice job|correct!|incorrect|wrong answer|you got it|go next)/i.test(bodyText)) {
-                  const fb = document.querySelector('[class*="feedbackContainer"], [class*="feedback"], [class*="nextButton"], [class*="next"]');
-                  if (fb) (fb.querySelector('button, [role="button"]') || fb).click();
-                  else document.body?.click();
-                  window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', keyCode: 32, bubbles: true }));
-                  return;
-                }
-
-                // 2. Answer Question
-                const data = getBlooketQuizData();
-                if (data.domAnswerEls.length >= 2) {
-                  let target = null;
-                  if (data.correctAnswers.length > 0) {
-                    target = data.domAnswerEls.find(el => {
-                      const text = el.innerText.toLowerCase().trim();
-                      return data.correctAnswers.some(ca => {
-                        const cat = String(ca).toLowerCase().trim();
-                        return text === cat || text.includes(cat) || cat.includes(text);
-                      });
-                    });
-                  }
-                  if (!target) target = data.domAnswerEls[0];
-                  target.click();
-                  ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(evt => {
-                    target.dispatchEvent(new MouseEvent(evt, { bubbles: true, cancelable: true, view: window }));
-                  });
-                  return;
-                }
-
-                // 3. Minigame Clickers (Gold Quest Chests, Crypto Hack)
-                const chests = document.querySelectorAll("div[class*='choice'], img[alt^='Chest ']");
-                if (chests.length > 0) { chests[0].click(); return; }
-
-                const pw = document.querySelectorAll('[class*="passwordChoice"], [class*="passwordOption"], [class*="guessTile"]');
-                if (pw.length > 0) { pw[0].click(); return; }
-
-                const victim = document.querySelectorAll('[class*="cryptoPlayerCard"], [class*="hackVictim"]');
-                if (victim.length > 0) { victim[0].click(); return; }
-              } catch(e) {}
-            }, 80);
-
-            return { success: true, active: true, message: "Master hands-free solver started." };
+              const visible = element => element?.getClientRects().length;
+              const data = getBlooketQuizData();
+              const cards = data.domAnswerEls.filter(visible);
+              if (cards.length >= 2) {
+                const key = data.domQText + '::' + cards.map(card=>card.innerText).join('|');
+                if (key === lastQuestion) return;
+                const target = cards.find(card => data.correctAnswers.some(answer=>String(answer).trim().toLowerCase()===card.innerText.trim().toLowerCase()));
+                if (!target) return;
+                lastQuestion = key;target.click();return;
+              }
+              const control = [...document.querySelectorAll('[class*="nextButton"], [class*="feedbackContainer"], [class*="feedbackWrapper"]')].find(visible);
+              if (control) {lastQuestion='';control.click();}
+            },500);
+            return {success:true,active:true};
           })()`;
           handleGuiAction("Toggle Master Solver", code, this);
         });
@@ -3279,7 +3032,6 @@ function getClientName(sn) {
               else idx = Math.min(parseInt("${choiceVal}") || 0, chests.length - 1);
 
               chests[idx]?.click();
-              chests[idx]?.parentElement?.click();
               return { success: true, clickedChest: idx + 1 };
             } catch(e) { return { error: e.message }; }
           })()`;
@@ -3333,9 +3085,8 @@ function getClientName(sn) {
               try {
                 const cast = document.querySelector('[class*="castButton"], [class*="reelButton"], [class*="fishingButton"]');
                 if (cast) cast.click();
-                window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', keyCode: 32, bubbles: true }));
               } catch(e) {}
-            }, 120);
+            }, 500);
 
             return { success: true, active: true, message: "Auto-fisher active. Automatically casting & reeling." };
           })()`;
@@ -3522,8 +3273,7 @@ function getClientName(sn) {
 
               bar.querySelector('#whs-tb-skip').onclick = () => {
                 document.body?.click();
-                window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', keyCode: 32, bubbles: true }));
-              };
+                };
 
               return { success: true, message: "Injected floating toolbar." };
             } catch(e) { return { error: e.message }; }
@@ -3548,7 +3298,7 @@ function getClientName(sn) {
               } catch(e) {}
             }, 5000);
 
-            return { success: true, active: true, message: "Anti-AFK active. Disconnecting prevented." };
+            return { success: true, active: true, message: "Activity signals enabled. The host can still remove this connection." };
           })()`;
           handleGuiAction("Toggle Anti-AFK Keep-Alive", code, this);
         });
@@ -3885,7 +3635,6 @@ function getClientName(sn) {
           chestStrategy: "random",
           swapTarget: "leader",
           cryptoTarget: "leader",
-          cryptoDefense: "shields",
           autoMinigames: true
         },
         wolfpack: {
@@ -3900,7 +3649,6 @@ function getClientName(sn) {
           chestStrategy: "random",
           swapTarget: "leader",
           cryptoTarget: "leader",
-          cryptoDefense: "shields",
           autoMinigames: true
         },
         ghost: {
@@ -3937,7 +3685,6 @@ function getClientName(sn) {
           scoreSpread: "bell_curve",
           wrongStrategy: "smart_miss",
           streakBreaker: 14,
-          cryptoDefense: "shields",
           autoMinigames: true
         }
       };
@@ -3977,10 +3724,9 @@ function getClientName(sn) {
             selectActiveGamemode.value = profile.gameMode;
             selectActiveGamemode.dispatchEvent(new Event("change"));
           }
-          if (profile.chestStrategy && selectChestStrategy) selectChestStrategy.value = profile.chestStrategy;
+          if (profile.chestStrategy && selectChestStrategy) selectChestStrategy.value = ["esp","best"].includes(profile.chestStrategy) ? "random" : profile.chestStrategy;
           if (profile.swapTarget && selectSwapTarget) selectSwapTarget.value = profile.swapTarget;
           if (profile.cryptoTarget && selectCryptoTarget) selectCryptoTarget.value = profile.cryptoTarget;
-          if (profile.cryptoDefense && selectCryptoDefense) selectCryptoDefense.value = profile.cryptoDefense;
           if (profile.humanKeystrokes !== undefined && toggleHumanKeystrokes) toggleHumanKeystrokes.checked = profile.humanKeystrokes;
           if (profile.clickOffsets !== undefined && toggleClickOffsets) toggleClickOffsets.checked = profile.clickOffsets;
           if (profile.adaptiveReading !== undefined && toggleAdaptiveReading) toggleAdaptiveReading.checked = profile.adaptiveReading;
@@ -4200,8 +3946,6 @@ function getClientName(sn) {
           if (state.chestStrategy && selectChestStrategy) selectChestStrategy.value = state.chestStrategy;
           if (state.swapTarget && selectSwapTarget) selectSwapTarget.value = state.swapTarget;
           if (state.cryptoTarget && selectCryptoTarget) selectCryptoTarget.value = state.cryptoTarget;
-          if (state.cryptoDefense && selectCryptoDefense) selectCryptoDefense.value = state.cryptoDefense;
-          if (state.fishingStyle && selectFishingStyle) selectFishingStyle.value = state.fishingStyle;
           if (state.brawlStat && selectBrawlStat) selectBrawlStat.value = state.brawlStat;
           if (state.scoreSpread && selectScoreSpread) selectScoreSpread.value = state.scoreSpread;
           if (state.wrongAnswerStrategy && selectWrongStrategy) selectWrongStrategy.value = state.wrongAnswerStrategy;
@@ -4225,7 +3969,7 @@ function getClientName(sn) {
         const errorBots = instances.filter((i) => i.status === "error");
         const lobbyBots = instances.filter((i) => i.status === "lobby");
         const gameBots = instances.filter((i) => i.status === "game");
-        const activeBots = instances.filter((i) => i.status !== "error");
+        const activeBots = instances.filter((i) => !["error","ended"].includes(i.status));
 
         tabCountAll.textContent = total;
         tabCountLobby.textContent = lobbyBots.length;
@@ -4259,8 +4003,8 @@ function getClientName(sn) {
           fleetSection.hidden = false;
 
           hudFleetStatus.innerHTML = `${activeBots.length} <span class="hud-val-sub">/ ${total} Online</span>`;
-          hudQuestions.innerHTML = `${state.totalQuestions || 0} <span class="hud-val-sub">Solved</span>`;
-          hudAccuracy.textContent = `${state.accuracyPct || 100}%`;
+          hudQuestions.innerHTML = `${state.totalQuestions || 0} <span class="hud-val-sub">Answered</span>`;
+          hudAccuracy.textContent = Number.isFinite(state.accuracyPct) ? `${state.accuracyPct}%` : "—";
 
           let maxStreak = 0;
           instances.forEach((i) => {
@@ -4536,6 +4280,7 @@ function getClientName(sn) {
         li.appendChild(time);
         li.appendChild(text);
         logList.appendChild(li);
+        while (logList.children.length > 250) logList.firstElementChild.remove();
 
         if (currentLogFilter === "error" && item.type !== "error") {
           li.style.display = "none";
@@ -4546,16 +4291,19 @@ function getClientName(sn) {
         logList.scrollTop = logList.scrollHeight;
       }
 
+      const joinButtonHtml = btnLaunch.innerHTML;
+      function resetJoinButton() { btnLaunch.innerHTML = joinButtonHtml; btnLaunch.disabled = false; }
+
       // Launch Form Submit
       fleetForm.addEventListener("submit", (e) => {
         e.preventDefault();
-        const rawPin = inputPin.value.replace(/\D/g, "").trim();
-        if (!rawPin || rawPin.length < 6) {
+        const rawPin = inputPin.value.replace(/[\s-]/g, "");
+        if (!/^\d{6,9}$/.test(rawPin)) {
           inputPin.classList.add("input-error-shake");
           inputPin.focus();
           const countHint = byId("count-hint");
           if (countHint) {
-            countHint.textContent = "Please enter a valid 6-digit Game PIN";
+            countHint.textContent = "Enter a Game PIN with 6–9 digits.";
             countHint.style.color = "#ef4444";
             setTimeout(() => {
               countHint.textContent = `${currentCount} bots selected`;
@@ -4568,27 +4316,24 @@ function getClientName(sn) {
         // Prevent double submit & show launch animation
         if (btnLaunch.disabled) return;
         btnLaunch.disabled = true;
-        const originalLaunchHtml = btnLaunch.innerHTML;
+
         btnLaunch.innerHTML = `
           <svg class="spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
           Joining with ${currentCount} bots…
         `;
-        setTimeout(() => {
-          btnLaunch.disabled = false;
-          btnLaunch.innerHTML = originalLaunchHtml;
-        }, 3500);
+
 
         playSfx("launch");
         const pin = rawPin;
 
         // Collect custom names & blooks configured in the roster slots
-        const names = botSlots.map((s) => s.name.trim().slice(0, 16)).filter(Boolean);
+        const names = botSlots.map((s) => s.name.trim().slice(0, 16));
         const botBlooks = botSlots.map((s) => s.blook);
 
-        sendCommand({
+        const sent = sendCommand({
           op: "launch",
           pin,
-          count: names.length,
+          count: botSlots.length,
           names,
           botBlooks,
           blookTheme: selectBlooks ? selectBlooks.value : "random",
@@ -4610,12 +4355,12 @@ function getClientName(sn) {
           chestStrategy: selectChestStrategy.value,
           swapTarget: selectSwapTarget.value,
           cryptoTarget: selectCryptoTarget.value,
-          cryptoDefense: selectCryptoDefense.value,
-          fishingStyle: selectFishingStyle.value,
           brawlStat: selectBrawlStat.value,
           humanKeystrokes: toggleHumanKeystrokes.checked,
           clickOffsets: toggleClickOffsets.checked
         });
+
+        if (!sent) resetJoinButton();
 
         setTimeout(() => {
           fleetSection.scrollIntoView({ behavior: "smooth", block: "nearest" });

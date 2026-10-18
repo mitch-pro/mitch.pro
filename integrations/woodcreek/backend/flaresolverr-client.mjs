@@ -106,8 +106,6 @@ export class FlareSolverrClient {
           signal: controller.signal
         });
 
-        clearTimeout(timeoutId);
-
         if (!res.ok) {
           throw new Error(`FlareSolverr returned HTTP ${res.status}`);
         }
@@ -140,12 +138,12 @@ export class FlareSolverrClient {
         this.lastError = null;
         return this.cachedSession;
       } catch (err) {
-        clearTimeout(timeoutId);
         this.status = "fallback";
         this.lastError = err.message;
         // Don't blow up the entire caller - return null so callers gracefully fallback to direct browser launch
         return null;
       } finally {
+        clearTimeout(timeoutId);
         this.solvingPromise = null;
       }
     })();

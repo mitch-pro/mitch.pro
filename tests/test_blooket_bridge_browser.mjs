@@ -58,7 +58,7 @@ upstream.on('upgrade',(req,socket)=>{
       if(masked)for(let i=0;i<payload.length;i++)payload[i]^=buffer[offset+i%4];
       buffer=buffer.subarray(header+length);
       if(op===8){socket.end();return}
-      if(op===1){const value=JSON.parse(payload);commands.push(value);if(value.op==='settings'){if('accuracy'in value)shared.accuracyRate=value.accuracy;if('autoAnswer'in value)shared.autoAnswer=value.autoAnswer;broadcastState()}}
+      if(op===1){const value=JSON.parse(payload);commands.push(value);if(value.op==='launch')sendFrame(socket,{type:'command-result',op:'launch',result:{success:true}});if(value.op==='settings'){if('accuracy'in value)shared.accuracyRate=value.accuracy;if('autoAnswer'in value)shared.autoAnswer=value.autoAnswer;broadcastState()}}
     }
   });
   socket.on('close',()=>sockets.delete(socket));socket.on('error',()=>sockets.delete(socket));
@@ -141,6 +141,14 @@ try {
   assert.equal(shared.autoAnswer,true);
   direct.send(JSON.stringify({op:'settings',autoAnswer:false}));
   await page.getByRole('button',{name:'Start answering',exact:true}).waitFor();
+  shared.instances=[{id:'fixture-bot',name:'Fixture',blook:'cat',status:'game',statusText:'Game connected.',questionsAnswered:0,streak:0,timeline:[],technicalTrace:[]}];broadcastState();
+  await page.waitForFunction(()=>!document.getElementById('btn-tool-master-solver').disabled);
+  await page.locator('#btn-tool-master-solver').evaluate(button=>button.click());
+  await page.getByRole('button',{name:'Stop answering',exact:true}).waitFor();
+  assert(!requests.some(request=>request.path==='/api/fleet/inject'),'Tools answering must use the shared controller rather than inject another loop');
+  direct.send(JSON.stringify({op:'settings',autoAnswer:false}));
+  await page.getByRole('button',{name:'Start answering',exact:true}).waitFor();
+  shared.instances=[];broadcastState();
   const fonts=await page.evaluate(async()=>{await document.fonts.ready;return [...document.fonts].filter(font=>font.status==='loaded').map(font=>font.family)});
   assert(fonts.includes('Manrope')&&fonts.includes('JetBrainsMono'),'Tylerium fonts must load through the Mitch mount');
   assert(!(await page.locator('body').innerText()).includes('↗'));
@@ -159,6 +167,7 @@ try {
   await page.locator('#range-accuracy').focus();
   await page.locator('#range-accuracy').evaluate(input=>{input.value='92';input.dispatchEvent(new Event('input',{bubbles:true}));});
   await until(async()=>shared.accuracyRate===92,'WebSocket command and state round trip');
+  assert.deepEqual(Object.keys(commands.findLast(command=>command.op==='settings'&&command.accuracy===92)).sort(),['accuracy','op'],'Editing accuracy cannot overwrite other settings');
   await page.locator('#input-pin').focus();
   await until(async()=>directState?.accuracyRate===92,'Direct Woodcreek viewer must receive changes sent through Mitch');
   const response=await actor.request.post(base+'/blooket-bot/api/fleet/settings',{
@@ -172,6 +181,7 @@ try {
   await page.locator('#input-pin').fill('123456');
   await page.locator('#btn-launch').click();
   await until(async()=>commands.some(command=>command.op==='launch'&&command.pin==='123456'),'Real dashboard launch control must reach the local fixture');
+  await until(async()=>!await page.locator('#btn-launch').isDisabled(),'Join acknowledgement releases the button');
   const before=commands.length;
   assert.equal((await actor.request.post(base+'/blooket-bot/api/fleet/settings',{headers:{Origin:base},data:{accuracy:80}})).status(),403);
   assert.equal((await actor.request.post(base+'/blooket-bot/api/fleet/settings',{headers:{Origin:'https://external.example','X-Mitch-Requested-With':'1'},data:{accuracy:80}})).status(),403);

@@ -51,3 +51,38 @@ service, and names stay unique within a game across batches. Stopping cancels
 queued work. Games already running can be joined directly. Disconnections and
 explicit host removals have separate diagnostics and do not trigger silent
 name changes or automatic rejoining after removal.
+
+The Blooket controller is split by responsibility:
+
+- `blooket-settings.mjs` owns defaults and validates complete settings patches
+  before applying them. Launching preserves unspecified settings; accuracy edits
+  recalculate targets for existing bots.
+- `blooket-commands.mjs` dispatches both HTTP and WebSocket commands. Script files
+  are confined to the real `public/cheats` directory, including symlink checks.
+- `blooket-screen.mjs` reads visible controls and the matching question's data.
+  Question wording cannot trigger a minigame, and hidden stale controls are ignored.
+- `blooket-answers.mjs` chooses and submits one answer per observed question.
+  Unknown multiple-choice keys may be guessed but are excluded from accuracy;
+  typing questions with no key wait. Typing and click-position options affect the
+  actual input controls. A feedback screen resets the question submission lock.
+- `blooket-minigames.mjs` performs one visible action per poll. Chest selection is
+  random or positional; player targeting uses the first listed player or a random
+  player. The UI no longer promises unavailable chest previews, crypto defenses,
+  or fishing depth settings.
+- `blooket-names.mjs` keeps roster names and avatar constants outside the controller.
+- `blooket-manager.mjs` owns browser lifetimes, reservations, retries, and polling.
+  Finished games release contexts, closed pages become errors, and concurrent
+  stops share one cleanup operation. Stopping also pauses answering and clears
+  question counters. Removed server telemetry is no longer collected per event.
+
+Tools that start answering or fishing on bots use the same server controller as
+the dashboard; they do not inject a second background solver.
+
+Scripts use real game state when available and report unavailable or failed
+execution without fabricating a state node, database writes, or scores.
+
+Run `npm run test:blooket` from the repository root for browser fixtures covering
+these behaviors without connecting to Blooket. The mounted bridge and account
+handoff additionally require the local Rust server binary:
+`node tests/test_blooket_bridge_browser.mjs` and
+`node tests/test_woodcreek_accounts.mjs`.
