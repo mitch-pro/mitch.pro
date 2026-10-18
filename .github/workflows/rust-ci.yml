@@ -27,6 +27,21 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Tests
         run: cargo test --workspace
+      - name: Build local server for email browser checks
+        run: cargo build -p mitch-server
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: npm
+      - name: Install browser test dependencies
+        working-directory: .
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install Chromium
+        working-directory: .
+        run: npx playwright install --with-deps chromium
+      - name: Newsletter editor and delivery regressions
+        working-directory: .
+        run: node tests/test_admin_email_browser.mjs
   blooket:
     name: Blooket controller regressions
     runs-on: ubuntu-latest

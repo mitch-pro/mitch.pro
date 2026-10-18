@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Newsletter — mitch.pro</title>
+  <link rel="stylesheet" href="/admin/email/editor.css">
+  <script src="/admin/email/editor.js" defer></script>
+</head>
+<body class="newsletter-editor">
+  <main class="newsletter-app" id="newsletter-app">
+    <header class="editor-header">
+      <div><a class="back-link" href="/admin/#email-tools">Admin / Email</a><h1>Newsletter</h1></div>
+      <div class="header-actions"><span id="draft-status" role="status"></span><button id="save-draft" type="button" disabled>Save draft</button><button id="review-email" class="primary" type="button" disabled>Review email</button></div>
+    </header>
+
+    <section id="access-panel" class="access-panel" aria-live="polite">
+      <h2 id="access-title">Checking access…</h2><p id="access-message">Sign in with an administrator account to write a newsletter.</p>
+      <form id="unlock-form" hidden><label for="admin-passphrase">Admin passphrase</label><div class="unlock-row"><input id="admin-passphrase" type="password" autocomplete="current-password" required minlength="4"><button class="primary" type="submit">Unlock</button></div></form>
+      <a id="sign-in-link" href="/enroll/?next=%2Fadmin%2Femail%2F" hidden>Sign in</a>
+    </section>
+
+    <div id="editor-workspace" class="editor-workspace" hidden>
+      <form id="newsletter-form" class="editor-fields">
+        <section class="field-card">
+          <div class="card-heading"><h2>Recipients</h2><span id="recipient-count">Loading…</span></div>
+          <fieldset class="audience-options"><legend class="sr-only">Choose recipients</legend>
+            <label><input type="radio" name="audience" value="selected" checked><span>Choose recipients</span></label>
+            <label><input type="radio" name="audience" value="everyone"><span>Everyone signed up <small id="everyone-count"></small></span></label>
+          </fieldset>
+          <div id="selected-recipients">
+            <label for="recipient-search">Find a member</label><input id="recipient-search" type="search" placeholder="Name, username, or email" autocomplete="off">
+            <div id="recipient-list" class="recipient-list" role="group" aria-label="Registered members"></div>
+            <label for="extra-recipients">Other email addresses</label><textarea id="extra-recipients" rows="2" placeholder="name@example.com, another@example.com"></textarea>
+            <p class="field-note">Separate addresses with commas or new lines.</p>
+          </div>
+          <p class="field-note">Unsubscribed addresses are excluded from every audience.</p>
+        </section>
+
+        <section class="field-card">
+          <div class="card-heading"><h2>Message</h2><button type="button" class="text-button" id="load-example">Load example</button></div>
+          <p class="example-note" id="example-note">An example is loaded below. Change anything before sending.</p>
+          <label for="subject">Subject</label><input id="subject" name="subject" maxlength="180" required>
+          <label for="preheader">Inbox preview text</label><input id="preheader" name="preheader" maxlength="250">
+          <label for="title">Headline</label><input id="title" name="title" maxlength="180" required>
+          <label for="intro">Introduction</label><textarea id="intro" name="intro" rows="6" maxlength="12000" required></textarea>
+          <div id="newsletter-sections"></div>
+          <button id="add-section" type="button" class="add-section">Add section</button>
+          <div class="field-pair"><div><label for="buttonLabel">Button text</label><input id="buttonLabel" name="buttonLabel" maxlength="80"></div><div><label for="buttonUrl">Button link</label><input id="buttonUrl" name="buttonUrl" type="url" maxlength="2048"></div></div>
+          <label for="signature">Sign-off</label><input id="signature" name="signature" maxlength="120">
+        </section>
+
+        <section class="field-card">
+          <h2>Design</h2>
+          <div class="field-pair"><div><label for="theme">Style</label><select id="theme" name="theme"><option value="midnight">Midnight</option><option value="paper">Paper</option></select></div><div><label for="accent">Accent color</label><input id="accent" name="accent" type="color" value="#b8ec83"></div></div>
+          <label for="heroUrl">Cover image URL</label><input id="heroUrl" name="heroUrl" type="url" placeholder="https://…" maxlength="2048">
+          <p class="field-note">Optional. Use an image people can view without signing in.</p>
+        </section>
+        <p id="editor-status" class="editor-status" role="status"></p>
+      </form>
+
+      <section class="preview-pane" aria-label="Newsletter preview">
+        <div class="preview-toolbar"><h2>Preview</h2><div class="preview-actions"><div class="view-switch" role="group" aria-label="Preview width"><button type="button" data-preview-width="desktop" aria-pressed="true">Desktop</button><button type="button" data-preview-width="phone" aria-pressed="false">Phone</button></div><button type="button" id="download-html" class="text-button">Download HTML</button></div></div>
+        <div class="inbox-preview"><span class="sender">mitch.pro</span><strong id="preview-subject"></strong><p id="preview-preheader"></p></div>
+        <div class="preview-canvas" id="preview-canvas"><iframe id="newsletter-preview" title="Newsletter example and live preview" sandbox="" referrerpolicy="no-referrer"></iframe></div>
+        <p class="preview-note" id="preview-status" role="status">Loading preview…</p>
+      </section>
+    </div>
+
+    <section class="delivery-panel" id="delivery-panel" hidden aria-live="polite"><h2>Delivery</h2><p id="delivery-status"></p><button type="button" id="refresh-delivery">Refresh status</button></section>
+  </main>
+
+  <dialog id="review-dialog" class="review-dialog">
+    <div class="review-heading"><h2>Review newsletter</h2><button type="button" id="close-review" aria-label="Close review">Close</button></div>
+    <p id="review-subject"></p><p id="review-count" class="review-count"></p>
+    <details><summary>View recipients</summary><ul id="review-recipients"></ul></details>
+    <iframe id="review-preview" title="Final newsletter preview" sandbox="" referrerpolicy="no-referrer"></iframe>
+    <p id="review-status" role="status"></p><div class="review-actions"><button type="button" id="back-to-editor">Keep editing</button><button type="button" id="send-newsletter" class="primary">Send newsletter</button></div>
+  </dialog>
+</body>
+</html>

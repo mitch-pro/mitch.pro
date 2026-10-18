@@ -29,6 +29,7 @@ pub mod economy;
 pub mod email;
 pub mod legacy;
 pub mod moderation;
+pub mod newsletters;
 pub mod vm;
 
 pub type Resp = Option<Response>;
@@ -197,6 +198,9 @@ pub async fn handle(
 ) -> Resp {
     let ctx = admin_ctx(state, headers);
     if let Some(response) = email::handle(state, method, path, body, &ctx).await {
+        return Some(response);
+    }
+    if let Some(response) = newsletters::handle(state, method, path, search, body, &ctx).await {
         return Some(response);
     }
     if let Some(response) = accounts::handle(state, method, path, headers, search, body, &ctx) {

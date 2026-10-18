@@ -1183,6 +1183,24 @@ impl DataStore {
         Ok(())
     }
 
+    /// Atomically replace an existing SQLite JSON document if it is unchanged.
+    /// Used to claim a reviewed newsletter once, including across app processes.
+    pub fn compare_exchange_document(
+        &self,
+        file: &Path,
+        expected: &Value,
+        replacement: &Value,
+    ) -> Result<bool, DataError> {
+        if !self.should_store_in_db(file) || file.extension().is_none_or(|ext| ext != "json") {
+            return Err("Atomic document updates require a SQLite JSON document".into());
+        }
+        let changed = self.conn().execute(
+            "UPDATE json_documents SET content = ?1, updated_at = ?2 WHERE path = ?3 AND content = ?4",
+            rusqlite::params![js_stringify_pretty(replacement), now_millis(), self.relative_key(file), js_stringify_pretty(expected)],
+        )?;
+        Ok(changed == 1)
+    }
+
     /// `writeDocument(file, data)`: INSERT OR REPLACE into the blob table
     /// (pretty 2-space JSON via [`js_stringify_pretty`], like
     /// `JSON.stringify(data, null, 2)`), or a plain file write for non-DB

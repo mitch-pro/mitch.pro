@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { mkdtemp, mkdir, symlink, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -34,6 +35,12 @@ const base = `http://127.0.0.1:${port}`;
 await mkdir(join(fixture, 'data'));
 await symlink(join(repo, 'webserver'), join(fixture, 'webserver'));
 await writeFile(join(fixture, 'data/site.json'), JSON.stringify({ primary: base, alternate: base }));
+await writeFile(join(fixture, 'data/profiles.json'), JSON.stringify({
+  'alice@example.test': { username: 'alice', displayName: 'Alice' },
+  'bob@example.test': { username: 'bob', displayName: 'Bob' },
+  'unsub@example.test': { username: 'unsub', displayName: 'Unsubscribed member' },
+}));
+await writeFile(join(fixture, 'data/newsletter_unsub.json'), JSON.stringify(['unsub@example.test']));
 const server = spawn(join(repo, 'rust/target/debug/mitch-server'), [], {
   cwd: fixture,
   env: { ...process.env, NODE_ENV: 'test', DEV_TEST_ACCESS: '1', MITCH_BASE: fixture,
@@ -55,7 +62,7 @@ try {
   await context.route('**/*', route => new URL(route.request().url()).origin === base ? route.continue() : route.abort());
   const headers = { Origin: base, 'X-Mitch-Requested-With': '1' };
   assert((await context.request.post(base + '/api/dev/test-access', { headers })).ok());
-  const passphrase = 'fixture-only-passphrase';
+  const passphrase = randomUUID();
   assert((await context.request.post(base + '/api/admin/passphrase-status', { headers, data: { passphrase } })).ok());
   await context.addInitScript(pass => {
     if (window.top === window) sessionStorage.setItem('admin_passphrase', pass);
@@ -65,39 +72,95 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(base + '/admin/#email-tools');
   await page.getByText('Connected to mitch-mail-rs.', { exact: true }).waitFor();
-  const send = page.getByRole('button', { name: 'Send test email', exact: true });
-  await page.waitForFunction(() => !document.getElementById('email-test-send').disabled);
   assert.equal(messages.length, 0, 'Opening the tools must not send email.');
   assert.equal(await page.locator('#email-preview').getAttribute('sandbox'), '');
   await page.frameLocator('#email-preview').getByText('Test email only.', { exact: false }).waitFor();
-  for (const template of ['signup', 'login', 'reset', 'security']) {
-    await page.selectOption('#email-template', template);
-    await page.waitForFunction(() => !document.getElementById('email-test-send').disabled);
-    assert.match(await page.locator('#email-subject').innerText(), /^\[Test\]/);
+  await page.getByRole('link', { name: 'Send email', exact: true }).click();
+  await page.waitForURL(base + '/admin/email/');
+  await page.getByText('Preview only. Nothing has been sent.', { exact: true }).waitFor();
+  assert.equal(await page.locator('#newsletter-preview').getAttribute('sandbox'), '');
+  assert.equal(messages.length, 0);
+  const original = await page.locator('#newsletter-preview').getAttribute('srcdoc');
+  if (process.env.NEWSLETTER_ARTIFACT_DIR) {
+    const out = process.env.NEWSLETTER_ARTIFACT_DIR;
+    await mkdir(out, { recursive: true });
+    await writeFile(join(out, 'example.html'), original);
+    const sample = await context.newPage();
+    await sample.setViewportSize({ width: 760, height: 1000 });
+    await sample.setContent(original);
+    await sample.screenshot({ path: join(out, 'example.png'), fullPage: true });
+    await sample.close();
+    await page.bringToFront();
+    await page.screenshot({ path: join(out, 'editor.png') });
   }
-  assert.equal(await page.locator('#email-test-recipient').inputValue(), 'admin@mitch.pro');
-  await send.click();
-  await page.getByText('SMTP accepted the test email for admin@mitch.pro', { exact: false }).waitFor();
-  assert.equal(messages.length, 1);
-  assert.equal(messages[0].to, 'admin@mitch.pro');
-  assert.equal(messages[0].sender, 'noreply');
-  assert.equal(messages[0].raw, true);
-  assert.equal(messages[0].cc, undefined);
-  assert.equal(messages[0].bcc, undefined);
-  assert(messages[0].body.includes('Test email only.'));
-  await page.locator('#email-test-recipient').fill('custom@example.com');
-  rejectSend = true;
-  await send.click();
-  await page.getByText('mitch-mail-rs did not confirm SMTP acceptance.', { exact: false }).waitFor();
+  await page.locator('#review-email').click();
+  await page.getByText('Choose at least one recipient who has not unsubscribed.', { exact: true }).waitFor();
+  await page.locator('#subject').fill('October updates — local test');
+  await page.locator('#title').fill('A newsletter you can customize.');
+  await page.locator('#intro').fill('Hello everyone,\n\nThis is an isolated preview test.');
+  const alice = page.locator('.recipient-option').filter({ hasText: 'alice@example.test' }).locator('input');
+  await alice.check();
+  assert(await page.locator('.recipient-option').filter({ hasText: 'unsub@example.test' }).locator('input').isDisabled());
+  await page.locator('#extra-recipients').fill('person@example.test, PERSON@example.test');
+  await page.locator('#save-draft').click();
+  await page.waitForFunction(() => document.getElementById('draft-status').textContent.startsWith('Saved '));
+  await page.reload();
+  await page.getByText('Preview only. Nothing has been sent.', { exact: true }).waitFor();
+  assert.equal(await page.locator('#subject').inputValue(), 'October updates — local test');
+  assert(await page.locator('.recipient-option').filter({ hasText: 'alice@example.test' }).locator('input').isChecked());
+  assert.equal(await page.locator('#recipient-count').innerText(), '2 recipients');
+  const heading = page.locator('[data-section-title]').first();
+  const firstHeading = await heading.inputValue();
+  const secondHeading = await page.locator('[data-section-title]').nth(1).inputValue();
+  await page.locator('.content-section').nth(1).getByRole('button', { name: 'Move up', exact: true }).click();
+  assert.equal(await heading.inputValue(), secondHeading);
+  await page.locator('.content-section').first().getByRole('button', { name: 'Move down', exact: true }).click();
+  assert.equal(await heading.inputValue(), firstHeading);
+  await page.getByRole('button', { name: 'Phone', exact: true }).click();
+  assert(await page.locator('#preview-canvas').evaluate(el => el.classList.contains('phone')));
+  await page.selectOption('#theme', 'paper');
+  await page.waitForFunction(() => document.getElementById('newsletter-preview').srcdoc.includes('#fffdf8'));
+  await page.locator('#review-email').click();
+  await page.locator('#review-dialog[open]').waitFor();
+  assert.equal(await page.locator('#review-count').innerText(), '2 recipients');
+  assert.deepEqual(await page.locator('#review-recipients li').allTextContents(), ['alice@example.test', 'person@example.test']);
+  assert.equal(messages.length, 0, 'Saving, previewing and reviewing must never send email.');
+  await page.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await page.locator('[name="audience"][value="everyone"]').check();
+  await page.locator('#review-email').click();
+  await page.locator('#review-dialog[open]').waitFor();
+  const everyone = await page.locator('#review-recipients li').allTextContents();
+  assert(everyone.includes('alice@example.test') && everyone.includes('bob@example.test'));
+  assert(!everyone.includes('unsub@example.test'));
+  assert(!everyone.includes('person@example.test'), 'Everyone must use registered accounts, not custom addresses from another mode.');
+  assert.equal(messages.length, 0);
+  await page.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await page.locator('[name="audience"][value="selected"]').check();
+  await page.locator('#review-email').click();
+  await page.locator('#review-dialog[open]').waitFor();
+  await page.locator('#send-newsletter').click();
+  await page.waitForFunction(() => document.getElementById('delivery-status').textContent.startsWith('Finished.'));
   assert.equal(messages.length, 2);
-  assert.equal(messages[1].to, 'custom@example.com');
+  assert.deepEqual(messages.map(m => m.to).sort(), ['alice@example.test', 'person@example.test']);
+  assert(messages.every(m => !m.cc && !m.bcc && m.raw && m.body.includes('/unsubscribe/')));
+  const jobId = await page.evaluate(() => sessionStorage.getItem('newsletter_last_job'));
+  const replay = await context.request.post(base + '/api/admin/newsletters/send', { headers: { ...headers, 'X-Admin-Passphrase': passphrase }, data: { id: jobId, confirm: true } });
+  assert(replay.ok());
+  assert.equal(messages.length, 2, 'Submitting the same reviewed newsletter again must not resend.');
+  rejectSend = true;
+  await page.locator('#review-email').click();
+  await page.locator('#review-dialog[open]').waitFor();
+  await page.locator('#send-newsletter').click();
+  await page.waitForFunction(() => document.getElementById('delivery-status').textContent.includes('2 failed'));
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `Overflow at ${width}px`);
   }
   if (process.env.EMAIL_SCREENSHOT) await page.screenshot({ path: process.env.EMAIL_SCREENSHOT, fullPage: true });
+  const previewTop = await page.frameLocator('#newsletter-preview').locator('h1').evaluate(el => el.getBoundingClientRect().top);
+  assert(previewTop < 220, `Newsletter heading should be visible near the top of the preview, got ${previewTop}px`);
   assert.deepEqual(errors, []);
-  console.log('PASS: real admin authentication, connection status, four sandboxed previews, dynamic-recipient test, SMTP rejection and responsive layout. All mail requests went to the local fake service.');
+  console.log('PASS: admin authentication, composer navigation, example/live previews, draft save/reload, selected/everyone audiences, unsubscribe exclusions, review without sending, section ordering, local fake delivery, duplicate prevention, SMTP failures and responsive layout. No real emails were sent.');
 } finally {
   await browser?.close();
   server.kill('SIGTERM');

@@ -1287,12 +1287,11 @@
           <option value="login">Sign-in code</option>
           <option value="reset">Password reset</option>
         </select>
-        <label for="email-test-recipient">Recipient</label>
-        <input type="email" id="email-test-recipient" placeholder="user@example.com" autocomplete="email">
-        <p class="muted">Previews use the website’s templates with a sample code. Tests do not change any account.</p>
+        <p class="muted">These previews use sample codes and don’t change any account.</p>
         <iframe id="email-preview" title="Verification email preview" sandbox="" referrerpolicy="no-referrer" style="display:block;width:100%;height:650px;border:1px solid var(--t-bd);border-radius:8px;background:#06060c;"></iframe>
         <p id="email-subject" class="muted"></p>
-        <button type="button" id="email-test-send" onclick="sendEmailTest()" disabled>Send test email</button>
+        <a id="email-compose-link" href="/admin/email/" style="display:inline-block;padding:10px 16px;border-radius:7px;background:var(--t-ac);color:var(--t-ac-ink,#fff);text-decoration:none;font-weight:600;">Send email</a>
+        <p class="muted">Write a newsletter, choose recipients, and preview it before sending.</p>
         <div id="email-test-status" class="form-status" role="status" aria-live="polite"></div>
         <p><a href="https://github.com/mitch-pro/mitch.pro/blob/master/rust/crates/mitch-server/src/routes/me/security.rs" target="_blank" rel="noopener noreferrer">Security template on GitHub</a> · <a href="https://github.com/mitch-pro/mitch.pro/blob/master/rust/crates/mitch-server/src/routes/auth.rs" target="_blank" rel="noopener noreferrer">Sign-in templates on GitHub</a></p>
       </div>
