@@ -646,9 +646,26 @@ pub const GAME_PROXY_ORIGINS: &[(&str, &str)] = &[
     ("/proxy/luma/", "https://lumassets.pages.dev"),
     ("/proxy/calculated2/", "https://calculated2.github.io"),
     ("/proxy/gamemonetize/", "https://html5.gamemonetize.co"),
+    ("/proxy/rivestream/", "https://www.rivestream.app"),
 ];
 
-/// Fixed-origin game proxy — server.js:10881-10947.
+fn fixed_proxy_target(path: &str, headers: &HeaderMap) -> Option<(&'static str, String)> {
+    for (prefix, _) in GAME_PROXY_ORIGINS {
+        if let Some(stripped) = path.strip_prefix(prefix) {
+            return Some((prefix, format!("/{stripped}")));
+        }
+    }
+    let referer = headers.get(axum::http::header::REFERER)?.to_str().ok()?;
+    let url = url::Url::parse(referer).ok()?;
+    GAME_PROXY_ORIGINS.iter().find_map(|(prefix, _)| {
+        // Rivestream rewrites its own paths; it must not intercept
+        // navigation back to Home or requests to Mitch APIs.
+        (*prefix != "/proxy/rivestream/" && url.path().starts_with(prefix))
+            .then(|| (*prefix, path.to_string()))
+    })
+}
+
+/// Fixed-origin game and movie proxies.
 pub async fn game_proxy(
     _state: &Arc<AppState>,
     method: &axum::http::Method,
@@ -656,35 +673,13 @@ pub async fn game_proxy(
     search: &str,
     headers: &HeaderMap,
 ) -> Option<Response> {
-    let mut game_proxy_prefix: Option<&'static str> = None;
-    let mut game_proxy_path = String::new();
-
-    for (prefix, _) in GAME_PROXY_ORIGINS {
-        if let Some(stripped) = path.strip_prefix(prefix) {
-            game_proxy_prefix = Some(prefix);
-            game_proxy_path = format!("/{stripped}");
-            break;
-        }
+    if path == "/proxy/rivestream" {
+        return Some(crate::static_files::redirect(
+            &format!("/proxy/rivestream/{search}"),
+            302,
+        ));
     }
-    if game_proxy_prefix.is_none() {
-        if let Some(ref_val) = headers
-            .get(axum::http::header::REFERER)
-            .and_then(|v| v.to_str().ok())
-        {
-            if let Ok(u) = url::Url::parse(ref_val) {
-                let ref_path = u.path();
-                for (prefix, _) in GAME_PROXY_ORIGINS {
-                    if ref_path.starts_with(prefix) {
-                        game_proxy_prefix = Some(prefix);
-                        game_proxy_path = path.to_string();
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    let game_proxy_prefix = game_proxy_prefix?;
+    let (game_proxy_prefix, game_proxy_path) = fixed_proxy_target(path, headers)?;
 
     if *method != axum::http::Method::GET && *method != axum::http::Method::HEAD {
         return Some(crate::errors::err_resp(
@@ -709,13 +704,28 @@ pub async fn game_proxy(
     };
     let target_url = format!("{target_origin}{game_proxy_path}{query_str}");
 
+    let is_rivestream = game_proxy_prefix == "/proxy/rivestream/";
+    let redirect_policy = if is_rivestream {
+        reqwest::redirect::Policy::custom(|attempt| {
+            if attempt.previous().len() < 10
+                && attempt.url().scheme() == "https"
+                && attempt.url().host_str() == Some("www.rivestream.app")
+            {
+                attempt.follow()
+            } else {
+                attempt.stop()
+            }
+        })
+    } else {
+        reqwest::redirect::Policy::limited(10)
+    };
     let req_builder = match reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::limited(10))
+        .redirect(redirect_policy)
         .timeout(std::time::Duration::from_secs(15))
         .build()
     {
         Ok(b) => b,
-        Err(_) => return Some(game_proxy_error()),
+        Err(_) => return Some(game_proxy_error(is_rivestream)),
     };
 
     let req_m = if *method == axum::http::Method::HEAD {
@@ -739,6 +749,9 @@ pub async fn game_proxy(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         );
     }
+    if is_rivestream {
+        req = req.header("referer", "https://www.rivestream.app/");
+    }
 
     match req.send().await {
         Ok(upstream_res) => {
@@ -750,6 +763,10 @@ pub async fn game_proxy(
             let mut content_type = String::new();
             for (name, value) in upstream_res.headers().iter() {
                 let n = name.as_str().to_ascii_lowercase();
+                if is_rivestream && ["speculation-rules", "report-to", "nel"].contains(&n.as_str())
+                {
+                    continue;
+                }
                 if n == "set-cookie"
                     || n == "content-security-policy"
                     || n == "content-security-policy-report-only"
@@ -780,6 +797,13 @@ pub async fn game_proxy(
             let is_text = content_type.contains("text/html")
                 || content_type.contains("text/css")
                 || content_type.contains("javascript");
+
+            if is_rivestream && content_type.contains("text/html") {
+                builder = builder.header(
+                    "content-security-policy",
+                    "default-src 'self' https: blob: data:; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https:; object-src 'none'; worker-src 'none'; frame-ancestors 'self'",
+                );
+            }
 
             if !is_text || *method == axum::http::Method::HEAD {
                 let body = if *method == axum::http::Method::HEAD {
@@ -814,6 +838,10 @@ pub async fn game_proxy(
             content = url_re
                 .replace_all(&content, format!("url($1{game_proxy_prefix}$2"))
                 .to_string();
+
+            if is_rivestream {
+                content = rewrite_rivestream(&content, content_type.contains("text/html"));
+            }
 
             if content_type.contains("text/html") {
                 static BASE_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
@@ -862,15 +890,80 @@ pub async fn game_proxy(
                     .unwrap_or_else(|_| crate::errors::err_resp(500, None, None)),
             )
         }
-        Err(_) => Some(game_proxy_error()),
+        Err(_) => Some(game_proxy_error(is_rivestream)),
     }
 }
 
-fn game_proxy_error() -> Response {
+fn rewrite_rivestream(content: &str, is_html: bool) -> String {
+    const PREFIX: &str = "/proxy/rivestream";
+    if is_html {
+        static DATA_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+        let data_re = DATA_RE.get_or_init(|| {
+            regex::Regex::new(
+                r#"(?s)(<script\b[^>]*\bid=["']__NEXT_DATA__["'][^>]*>)(.*?)(</script\s*>)"#,
+            )
+            .expect("static regex")
+        });
+        let html = data_re.replace(content, |caps: &regex::Captures<'_>| {
+            let Ok(mut data) = serde_json::from_str::<Value>(&caps[2]) else {
+                return caps[0].to_string();
+            };
+            let Some(object) = data.as_object_mut() else {
+                return caps[0].to_string();
+            };
+            object.insert("assetPrefix".to_string(), json!(PREFIX));
+            format!(
+                "{}{}{}",
+                &caps[1],
+                data.to_string().replace('<', "\\u003c"),
+                &caps[3]
+            )
+        });
+        let runtime = include_str!("rivestream.js");
+        return html.replacen(
+            "<head>",
+            &format!(r#"<head><base href="{PREFIX}/"><script>{runtime}</script>"#),
+            1,
+        );
+    }
+
+    // Next's exported build assumes it owns /. Give its router the proxy base
+    // path while keeping internal page names (such as /watch) unchanged.
+    let mut js = content.replace("this.basePath=\"\"", &format!("this.basePath=\"{PREFIX}\""));
+    static ADD_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let add_re = ADD_RE.get_or_init(|| {
+        regex::Regex::new(r#"(\b(?:addPathPrefix|pathHasPrefix)\)\([\w$]+,\s*)"""#)
+            .expect("static regex")
+    });
+    js = add_re
+        .replace_all(&js, |caps: &regex::Captures<'_>| {
+            format!(r#"{}"{PREFIX}""#, &caps[1])
+        })
+        .into_owned();
+    static REMOVE_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let remove_re = REMOVE_RE.get_or_init(|| {
+        regex::Regex::new(r#"function ([\w$]+)\(([\w$]+)\)\{return [\w$]+\}(Object\.defineProperty\([^;]+?"removeBasePath")"#)
+            .expect("static regex")
+    });
+    remove_re
+        .replace_all(&js, |caps: &regex::Captures<'_>| {
+            let name = &caps[1];
+            let arg = &caps[2];
+            let tail = &caps[3];
+            format!(r#"function {name}({arg}){{return {arg}==="{PREFIX}"?"/":{arg}.startsWith("{PREFIX}/")?{arg}.slice({}):{arg}}}{tail}"#, PREFIX.len())
+        })
+        .into_owned()
+}
+
+fn game_proxy_error(is_rivestream: bool) -> Response {
     Response::builder()
         .status(StatusCode::BAD_GATEWAY)
         .header("content-type", "text/plain; charset=utf-8")
-        .body(axum::body::Body::from("This game could not be reached."))
+        .body(axum::body::Body::from(if is_rivestream {
+            "This movie page could not be reached."
+        } else {
+            "This game could not be reached."
+        }))
         .unwrap_or_else(|_| crate::errors::err_resp(502, None, None))
 }
 
@@ -1121,6 +1214,53 @@ pub async fn pirate_voyage_proxy(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rivestream_routing_stays_scoped() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "referer",
+            "https://mitchdog.com/proxy/rivestream/watch?type=movie&id=969681"
+                .parse()
+                .unwrap(),
+        );
+        assert_eq!(
+            fixed_proxy_target("/proxy/rivestream/watch", &headers),
+            Some(("/proxy/rivestream/", "/watch".to_string()))
+        );
+        for path in ["/", "/api/me", "/enroll/", "/proxy/rivestream.evil/watch"] {
+            assert_eq!(fixed_proxy_target(path, &headers), None);
+        }
+        headers.insert(
+            "referer",
+            "https://mitchdog.com/proxy/luma/Slope/index.html"
+                .parse()
+                .unwrap(),
+        );
+        assert_eq!(
+            fixed_proxy_target("/assets/game.js", &headers),
+            Some(("/proxy/luma/", "/assets/game.js".to_string()))
+        );
+    }
+
+    #[test]
+    fn rivestream_keeps_next_page_names_and_sets_asset_base() {
+        let html = r#"<html><head></head><body><script id="__NEXT_DATA__" type="application/json">{"page":"/watch","query":{"type":"movie","id":"969681"}}</script></body></html>"#;
+        let rewritten = rewrite_rivestream(html, true);
+        assert!(rewritten.contains(r#"<base href="/proxy/rivestream/">"#));
+        let data = rewritten
+            .split(r#"type="application/json">"#)
+            .nth(1)
+            .unwrap()
+            .split("</script>")
+            .next()
+            .unwrap();
+        let data: Value = serde_json::from_str(data).unwrap();
+        assert_eq!(data["assetPrefix"], "/proxy/rivestream");
+        assert_eq!(data["page"], "/watch");
+        assert_eq!(data["query"]["id"], "969681");
+        assert!(rewritten.contains("window.fetch ="));
+    }
 
     #[test]
     fn test_prox_redirect_or_gone() {
