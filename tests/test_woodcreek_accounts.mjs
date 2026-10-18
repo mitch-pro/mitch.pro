@@ -32,6 +32,7 @@ try {
   const auth=createAccountAuth({provider});
   wood=createServer(async(req,res)=>{const url=new URL(req.url,'https://woodcreek.site');if(await auth.handle(req,res,url))return;res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true}));});
   await new Promise(r=>wood.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+wood.address().port;
+  const entry=await fetch(base+'/?pin=123456',{redirect:'manual'});assert.equal(entry.status,303);assert.equal(entry.headers.get('location'),'https://mitchdog.com/blooket-bot/?pin=123456');
   assert.equal((await fetch(base+'/api/state')).status,401);
   const begin=await fetch(base+'/auth/login?next=%2F%3Ftab%3Dnames',{redirect:'manual'});
   assert.equal(begin.status,303);

@@ -47,6 +47,13 @@ export function createAccountAuth({ provider = process.env.MITCH_AUTH_ORIGIN || 
     } catch { return null; }
   }
   async function handle(req, res, url) {
+    const entry = new Map([["/",""],["/index.html",""],["/bookmarklets","bookmarklets"],["/bookmarklets.html","bookmarklets"]]);
+    if ((req.method === 'GET' || req.method === 'HEAD') && entry.has(url.pathname)) {
+      if (!hasBearer(req)) {
+        redirect(res, 'https://mitchdog.com/blooket-bot/' + entry.get(url.pathname) + url.search); return true;
+      }
+      if (!await authenticate(req)) { reply(res,401,{error:'Sign in again.'}); return true; }
+    }
     if (url.pathname === '/auth/login' && req.method === 'GET') {
       const state = randomBytes(32).toString('base64url'), verifier = randomBytes(32).toString('base64url');
       const flow = Buffer.from(JSON.stringify({ state, verifier, next: safeNext(url.searchParams.get('next')), created: clock() })).toString('base64url');

@@ -174,7 +174,7 @@ pub async fn handle(
             request = request.header(name, value);
         }
     }
-    if relative.starts_with("api/") {
+    {
         let Some(grant) = crate::routes::service_auth::issue(state, headers) else {
             return error(401, "Sign in again.");
         };

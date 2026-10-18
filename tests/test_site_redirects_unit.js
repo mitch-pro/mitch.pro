@@ -56,7 +56,7 @@ assert.equal(location.href, '/blooket-bot/?pin=123456', 'Blooket Bot must use th
 // Installed Mitch PWAs require a same-origin shortcut; the server redirects it.
 const shortcut = JSON.parse(readFileSync('webserver/manifest.json', 'utf8')).shortcuts.find(item => item.name === 'Bell Schedule');
 assert.equal(bellScheduleRedirect(new URL(shortcut.url, 'https://mitch.pro')), RJUHSD_ORIGIN + '/?utm_source=pwa-shortcut');
-assert(readFileSync('data/sites', 'utf8').includes('https://woodcreek.site/'), 'data/sites must still point Blooket Bot to woodcreek.site');
+assert(readFileSync('data/sites', 'utf8').includes('url /blooket-bot/ Blooket Bot'), 'Blooket Bot must open through the Mitch proxy');
 
 // Top-left brand logo on rjuhsd.school must use mitch.pro logo (/icon-192.png)
 const rjuhsdHtml = readFileSync('webserver/rjuhsd/index.html', 'utf8');

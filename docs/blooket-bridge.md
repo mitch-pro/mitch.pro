@@ -21,8 +21,9 @@ is limited per account, and responses have a size limit.
 
 The dashboard reads `data-app-base` to route API requests and WebSockets at
 either origin. Mounted HTML rewrites local asset links and loads Mitch's
-presence tracker. Woodcreek's own public URL and subdomains keep their existing
-routing. The main application is branded **Tylerium Services**, using the logo
+presence tracker. Woodcreek's public entry redirects to the Mitch mount;
+Mitch attaches its scoped grant to upstream HTML requests to avoid a redirect
+loop. Subdomains keep their existing routing. The main application is branded **Tylerium Services**, using the logo
 and fonts from tylerium.pro, with no decorative external-link arrows.
 
 ## Shared accounts
@@ -86,3 +87,20 @@ The dashboard reports command failures, avoids overlapping reconnects, and the
 Node WebSocket server checks heartbeats. Unmeasured latency is no longer shown
 as random data. `node tests/test_blooket_connection.mjs` uses real Chromium with
 fully intercepted Blooket pages to exercise these cases without joining games.
+
+The browser tab is titled Clever Portal and uses Clever's favicon. The visible
+interface remains Tylerium Services. Server status controls are removed.
+
+Joining now uses a service-wide scheduler (two simultaneous joins, 400ms
+spacing) shared by launch and retry operations. Cgroup process/memory admission
+checks stop fresh browser contexts from exhausting the container. The app's
+process limit was raised live from 512 to 1024 after its process limit counter
+reported 39 failures, without restarting the current session. The Compose app
+limit persists that change. CPU and memory limits were not increased.
+
+Answering starts off and is controlled by the visible Start answering / Stop
+answering button. Each bot submits its own current question once, respects a
+pause during its configured delay, and never performs blind mouse/keyboard
+bursts on the next screen. The duplicate 40ms page daemon was removed. Feedback
+advances once through its visible control. `node tests/test_blooket_answers.mjs`
+checks answering and queue limits with local pages only.

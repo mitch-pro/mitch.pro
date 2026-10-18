@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Blooket · Tylerium Services</title>
-  <link rel="icon" type="image/svg+xml" href="/assets/tylerium-logo.svg">
+  <title>Clever Portal</title>
+  <link rel="icon" type="image/x-icon" href="/assets/clever-portal.ico">
   <meta name="description" content="Blooket game setup, bot names, gameplay settings, and live activity."><meta name="theme-color" content="#0c121d"><link rel="stylesheet" href="/components.css?v=20261018"><link rel="stylesheet" href="/woodcreek.css?v=20261018"><script src="/woodcreek.js?v=20261018" defer></script></head>
 <body>
   <a class="skip-link" href="#workspace">Skip to content</a><div class="container app-shell">
@@ -28,15 +28,12 @@
         </nav><div class="sidebar-bottom"><div class="account-panel">
 <a id="account-signin" href="/auth/login">Sign in</a>
 <details id="account-menu" hidden><summary><span class="account-avatar"><img id="account-photo" alt="" hidden><span id="account-initial"></span></span><span id="account-name"></span><span class="account-badge" id="account-badge" hidden></span></summary><div class="account-actions"><a href="https://mitchdog.com/profile/">Account settings</a><button id="account-signout" type="button">Sign out</button></div></details>
-</div><a href="#telemetry-drawer"><svg viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="7" rx="2"></rect><rect x="3" y="14" width="18" height="7" rx="2"></rect><path d="M7 6.5h.01M7 17.5h.01"></path></svg>Server status</a><a href="https://play.blooket.com/" target="_blank" rel="noopener noreferrer">Open Blooket </a></div></aside><header class="header">
+</div><a href="https://play.blooket.com/" target="_blank" rel="noopener noreferrer">Open Blooket </a></div></aside><header class="header">
       <div class="workspace-heading"><h1>Blooket</h1><p>Shared bot session.</p></div><div class="header-right">
                 <button type="button" class="telemetry-pill btn-audio-toggle" id="btn-toggle-audio" title="Toggle interface sounds" aria-label="Toggle interface sounds">
           <span id="audio-icon">🔊</span>
           <span id="audio-status-text">SFX: ON</span>
         </button>
-        <div class="telemetry-pill" id="telemetry-pill-server" hidden="">Server: --</div>
-        <div class="telemetry-pill" id="telemetry-pill-app" hidden="">App: --</div>
-        <div class="telemetry-pill" id="telemetry-pill-flare" title="FlareSolverr Cloudflare Clearance Status" hidden="">Bypass: --</div>
         <div class="server-status" id="server-status">
           <span class="status-dot"></span>
           <span class="status-text" id="status-text">Connecting</span>
@@ -95,6 +92,7 @@
               <svg width="20" height="20" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
               <span id="btn-launch-text">Join with 5 bots</span>
             </button>
+            <button type="button" class="btn-answering" id="btn-answering" aria-pressed="false">Start answering</button>
           </div>
         </section><div class="roster-builder-card" id="bot-names">
             <div class="roster-builder-header">
@@ -357,7 +355,7 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
                     <span class="toggle-hint">Automatically solves and clicks answers</span>
                   </div>
                   <label class="switch">
-                    <input type="checkbox" id="toggle-auto-answer" checked>
+                    <input type="checkbox" id="toggle-auto-answer">
                     <span class="switch-slider"></span>
                   </label>
                 </div>
@@ -645,13 +643,13 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
               </svg>
               <span class="toggle-tool-label">Blooket tools</span>
             </button>
-            <label class="toggle-tool-pill active" id="fleet-answer-toggle-label" title="Toggle automatic answering for all bots (ON = all bots answer simultaneously, OFF = pause answering)">
+            <label class="toggle-tool-pill active" id="fleet-answer-toggle-label" title="Toggle automatic answering for all bots (ON = answer questions, OFF = stop answering)">
               <svg viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="toggle-tool-icon">
                 <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
               </svg>
               <span class="toggle-tool-label">Auto-Answer</span>
               <span class="switch switch-sm">
-                <input type="checkbox" id="toggle-fleet-answer" checked>
+                <input type="checkbox" id="toggle-fleet-answer">
                 <span class="switch-slider"></span>
               </span>
             </label>
@@ -717,116 +715,7 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
           </ul>
         </div>
       </details>
-    <details class="telemetry-drawer" id="telemetry-drawer">
-      <summary class="telemetry-summary">
-        <div class="telemetry-summary-left">
-          <span class="telemetry-live-dot"></span>
-          <span class="telemetry-summary-title">Server status</span>
-          <div class="telemetry-summary-badges">
-            <span class="telemetry-badge" id="ribbon-cpu"><svg width="11" height="11" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg> CPU: <b id="ribbon-cpu-val">0.3%</b></span>
-            <span class="telemetry-badge" id="ribbon-ram"><svg width="11" height="11" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg> RAM: <b id="ribbon-ram-val">2.1G</b></span>
-            <span class="telemetry-badge" id="ribbon-app"><svg width="11" height="11" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg> App: <b id="ribbon-app-val">96M</b></span>
-            <span class="telemetry-badge badge-green" id="ribbon-flare"><svg width="11" height="11" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg> <b id="ribbon-flare-val">Clearance Ready</b></span>
-          </div>
-        </div>
-        <div class="telemetry-summary-right">
-          <span id="telemetry-summary-label">Intel Skylake 4-Core</span>
-          <svg class="telemetry-chevron" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
-        </div>
-      </summary>
-      <div class="telemetry-body">
-        <div class="oscilloscope-wrap">
-          <div class="oscilloscope-header">
-            <span class="oscilloscope-title">Resource usage</span>
-            <div class="oscilloscope-legend">
-              <span class="legend-item"><span class="legend-dot dot-cyan"></span>Host CPU</span>
-              <span class="legend-item"><span class="legend-dot dot-magenta"></span>Service RAM</span>
-              <span class="legend-item"><span class="legend-dot dot-green"></span>Fleet Health</span>
-            </div>
-          </div>
-          <canvas id="canvas-oscilloscope" class="oscilloscope-canvas" width="820" height="80"></canvas>
-        </div>
 
-        <div class="metrics-row">
-          <div class="metric-group">
-            <span class="metric-group-title">tyler-home-server (Host)</span>
-            <div class="metric-line">
-              <span class="metric-k">Server Uptime:</span>
-              <span class="metric-v" id="stat-server-uptime">--</span>
-            </div>
-            <div class="metric-line">
-              <span class="metric-k">CPU Model:</span>
-              <span class="metric-v" id="stat-cpu-model">Intel i5-6400</span>
-            </div>
-            <div class="metric-line">
-              <span class="metric-k">Load Average:</span>
-              <span class="metric-v" id="stat-load-avg">0.00</span>
-            </div>
-            <div class="metric-line">
-              <span class="metric-k">Host RAM:</span>
-              <span class="metric-v" id="stat-host-ram">-- / --</span>
-            </div>
-            <div class="progress-bar-wrap">
-              <div class="progress-bar-fill" id="ram-progress" style="width: 20%;"></div>
-            </div>
-          </div>
-
-          <div class="metric-group">
-            <span class="metric-group-title">Tylerium Services (App footprint)</span>
-            <div class="metric-line">
-              <span class="metric-k">Program Uptime:</span>
-              <span class="metric-v" id="stat-app-uptime">--</span>
-            </div>
-            <div class="metric-line">
-              <span class="metric-k">Total Service RAM:</span>
-              <span class="metric-v" id="stat-app-ram">-- MB</span>
-            </div>
-            <div class="metric-line">
-              <span class="metric-k">Peak RAM:</span>
-              <span class="metric-v" id="stat-app-peak">-- MB</span>
-            </div>
-            <div class="metric-line">
-              <span class="metric-k">Chromium Workers:</span>
-              <span class="metric-v" id="stat-app-workers">0 Workers (0 PIDs)</span>
-            </div>
-            <div class="metric-line">
-              <span class="metric-k">Node Engine RSS:</span>
-              <span class="metric-v" id="stat-node-rss">-- MB</span>
-            </div>
-          </div>
-
-          <div class="metric-group">
-            <span class="metric-group-title">flaresolverr.service (:8191)</span>
-            <div class="metric-line">
-              <span class="metric-k">Bypass Engine:</span>
-              <span class="metric-v" id="stat-flare-engine">FlareSolverr v3.5.0</span>
-            </div>
-            <div class="metric-line">
-              <span class="metric-k">Clearance Cache:</span>
-              <span class="metric-v" id="stat-flare-status">Checking...</span>
-            </div>
-            <div class="metric-line">
-              <span class="metric-k">Tokens Cached:</span>
-              <span class="metric-v" id="stat-flare-cookies">--</span>
-            </div>
-            <div class="metric-line">
-              <span class="metric-k">User-Agent Sync:</span>
-              <span class="metric-v" id="stat-flare-ua">--</span>
-            </div>
-            <div class="metric-line">
-              <span class="metric-k">Solve Latency:</span>
-              <span class="metric-v" id="stat-flare-latency">--</span>
-            </div>
-            <div style="margin-top: 6px;">
-              <button type="button" class="btn-roster-action" id="btn-refresh-flaresolverr" style="width: 100%; justify-content: center; font-size: 0.72rem; height: 26px;" title="Re-solve Cloudflare challenge for fresh clearance cookies">
-                <svg width="12" height="12" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"></path></svg>
-                Re-solve Clearance
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </details>
 
     </main>
 
@@ -1565,39 +1454,8 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
       const selectBlooks = byId("select-blooks");
       const toggleLobbyShuffle = byId("toggle-lobby-shuffle");
 
-      // Header Telemetry
-      const telemetryPillServer = byId("telemetry-pill-server");
-      const telemetryPillApp = byId("telemetry-pill-app");
-      const telemetryPillFlare = byId("telemetry-pill-flare");
-      const telemetryDrawer = byId("telemetry-drawer");
       const serverStatus = byId("server-status");
       const statusText = byId("status-text");
-
-      [telemetryPillServer, telemetryPillApp, telemetryPillFlare].forEach((pill) => {
-        if (pill && telemetryDrawer) {
-          pill.addEventListener("click", () => {
-            telemetryDrawer.open = !telemetryDrawer.open;
-          });
-        }
-      });
-
-      // Detailed Telemetry Drawer Elements
-      const statServerUptime = byId("stat-server-uptime");
-      const statCpuModel = byId("stat-cpu-model");
-      const statLoadAvg = byId("stat-load-avg");
-      const statHostRam = byId("stat-host-ram");
-      const ramProgress = byId("ram-progress");
-      const statAppUptime = byId("stat-app-uptime");
-      const statAppRam = byId("stat-app-ram");
-      const statAppPeak = byId("stat-app-peak");
-      const statAppWorkers = byId("stat-app-workers");
-      const statNodeRss = byId("stat-node-rss");
-      const statFlareEngine = byId("stat-flare-engine");
-      const statFlareStatus = byId("stat-flare-status");
-      const statFlareCookies = byId("stat-flare-cookies");
-      const statFlareUa = byId("stat-flare-ua");
-      const statFlareLatency = byId("stat-flare-latency");
-      const btnRefreshFlare = byId("btn-refresh-flaresolverr");
 
       // Error Banner
       const errorBanner = byId("error-banner");
@@ -2360,6 +2218,7 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
             } else if (msg.type === "log") {
               appendLog(msg.log);
             } else if (msg.type === "error") {
+              byId("btn-answering").disabled=false;
               showConnectionError(msg.message || "Command failed. Please try again.");
             }
           } catch {}
@@ -4147,72 +4006,6 @@ function getClientName(sn) {
         }
       });
 
-      // --- Live Telemetry Oscilloscope (60fps Canvas) ---
-      const canvasOsc = byId("canvas-oscilloscope");
-      let oscHistoryCpu = new Array(70).fill(12);
-      let oscHistoryRam = new Array(70).fill(22);
-      let scanX = 0;
-
-      if (canvasOsc) {
-        const ctx = canvasOsc.getContext("2d");
-        function drawOscilloscope() {
-          ctx.clearRect(0, 0, canvasOsc.width, canvasOsc.height);
-
-          // Grid
-          ctx.strokeStyle = "rgba(255, 255, 255, 0.04)";
-          ctx.lineWidth = 1;
-          for (let x = 0; x < canvasOsc.width; x += 36) {
-            ctx.beginPath();
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, canvasOsc.height);
-            ctx.stroke();
-          }
-          for (let y = 0; y < canvasOsc.height; y += 20) {
-            ctx.beginPath();
-            ctx.moveTo(0, y);
-            ctx.lineTo(canvasOsc.width, y);
-            ctx.stroke();
-          }
-
-          // CPU Cyan Line
-          ctx.beginPath();
-          ctx.strokeStyle = "#38bdf8";
-          ctx.lineWidth = 2;
-          ctx.shadowBlur = 8;
-          ctx.shadowColor = "#38bdf8";
-          for (let i = 0; i < oscHistoryCpu.length; i++) {
-            const x = (i / (oscHistoryCpu.length - 1)) * canvasOsc.width;
-            const y = canvasOsc.height - (oscHistoryCpu[i] / 100) * (canvasOsc.height - 14) - 7;
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-          }
-          ctx.stroke();
-
-          // RAM Magenta Line
-          ctx.beginPath();
-          ctx.strokeStyle = "#d946ef";
-          ctx.lineWidth = 1.5;
-          ctx.shadowBlur = 6;
-          ctx.shadowColor = "#d946ef";
-          for (let i = 0; i < oscHistoryRam.length; i++) {
-            const x = (i / (oscHistoryRam.length - 1)) * canvasOsc.width;
-            const y = canvasOsc.height - (oscHistoryRam[i] / 100) * (canvasOsc.height - 14) - 7;
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-          }
-          ctx.stroke();
-          ctx.shadowBlur = 0;
-
-          // Scanner radar line
-          scanX = (scanX + 3) % canvasOsc.width;
-          ctx.fillStyle = "rgba(56, 189, 248, 0.35)";
-          ctx.fillRect(scanX, 0, 2, canvasOsc.height);
-
-          requestAnimationFrame(drawOscilloscope);
-        }
-        requestAnimationFrame(drawOscilloscope);
-      }
-
       // --- Interactive Fleet Arena Radar Grid ---
       const arenaGrid = byId("arena-grid");
       const arenaCountTag = byId("arena-count-tag");
@@ -4355,82 +4148,21 @@ function getClientName(sn) {
         if (!currentAccount) { window.location.href = appBase ? "/enroll/?next=%2Fblooket-bot%2F" : "/auth/login"; return; }
         if (socket?.readyState === WebSocket.OPEN) {
           byId("connection-error").hidden = true;
-          socket.send(JSON.stringify(payload));
+          socket.send(JSON.stringify(payload));return true;
         } else { showConnectionError("Connection lost. Please wait for it to reconnect."); }
+        return false;
       }
 
       // State Rendering
       function renderState(state) {
         if (!state) return;
         lastState = state;
-
-        // Metrics & Telemetry
-        if (state.metrics) {
-          const m = state.metrics;
-          telemetryPillServer.textContent = `Server Up: ${m.serverUptimeFormatted || "--"} · RAM ${m.usedMemoryMB || 0}/${m.totalMemoryMB || 0}MB`;
-          telemetryPillApp.textContent = `App: ${m.serviceMemoryMB || m.nodeRssMB || 0}MB (${m.servicePids || 1} PIDs)`;
-
-          statServerUptime.textContent = m.serverUptimeFormatted || "--";
-          statCpuModel.textContent = m.cpuModel || "Intel Skylake 4-Core";
-          statLoadAvg.textContent = `${m.loadAverage || "0.00"} (15m: ${m.loadAverage15 || "0.00"})`;
-          statHostRam.textContent = `${(m.usedMemoryMB / 1024).toFixed(2)} GB / ${(m.totalMemoryMB / 1024).toFixed(2)} GB (${m.memoryPercent || 0}%)`;
-          ramProgress.style.width = `${m.memoryPercent || 0}%`;
-
-          const rCpu = byId("ribbon-cpu-val");
-          if (rCpu && m.loadAverage !== undefined) rCpu.textContent = `${m.loadAverage}`;
-          const rRam = byId("ribbon-ram-val");
-          if (rRam && m.usedMemoryMB) rRam.textContent = `${(m.usedMemoryMB / 1024).toFixed(1)}G`;
-          const rApp = byId("ribbon-app-val");
-          if (rApp && (m.serviceMemoryMB || m.cgroupMemoryMB)) rApp.textContent = `${m.serviceMemoryMB || m.cgroupMemoryMB}M`;
-
-          statAppUptime.textContent = m.programUptimeFormatted || "--";
-          statAppRam.textContent = `${m.serviceMemoryMB || 0} MB (Cgroup v2 footprint)`;
-          statAppPeak.textContent = `${m.servicePeakMemoryMB || 0} MB peak`;
-          statAppWorkers.textContent = `${m.activeBotWorkers || 0} Workers (${m.servicePids || 0} tasks)`;
-          statNodeRss.textContent = `${m.nodeRssMB || 0} MB RSS / ${m.nodeHeapMB || 0} MB Heap`;
-
-          // Feed Oscilloscope
-          if (oscHistoryCpu && m.loadAverage !== undefined) {
-            oscHistoryCpu.push(Math.min(100, Math.max(5, Math.round(Number(m.loadAverage) * 20))));
-            if (oscHistoryCpu.length > 70) oscHistoryCpu.shift();
-          }
-          if (oscHistoryRam && m.memoryPercent !== undefined) {
-            oscHistoryRam.push(Number(m.memoryPercent));
-            if (oscHistoryRam.length > 70) oscHistoryRam.shift();
-          }
-        }
-
-        // FlareSolverr Telemetry
-        if (state.flaresolverr) {
-          const fs = state.flaresolverr;
-          if (telemetryPillFlare) {
-            if (fs.cached) {
-              telemetryPillFlare.textContent = `Bypass: ${fs.cookiesCount} Tokens`;
-              telemetryPillFlare.classList.add("flare-active");
-            } else if (fs.status === "solving") {
-              telemetryPillFlare.textContent = `Bypass: Solving...`;
-              telemetryPillFlare.classList.remove("flare-active");
-            } else {
-              telemetryPillFlare.textContent = `Bypass: Standby`;
-              telemetryPillFlare.classList.remove("flare-active");
-            }
-          }
-
-          if (statFlareEngine) {
-            statFlareEngine.textContent = `FlareSolverr v${fs.version || "3.5.0"}`;
-          }
-          if (statFlareStatus) {
-            statFlareStatus.textContent = fs.cached ? `Active (Cached ${fs.ageSeconds || 0}s ago)` : (fs.status === "solving" ? "Solving..." : "Standby");
-          }
-          if (statFlareCookies) {
-            statFlareCookies.textContent = fs.cached ? `${fs.cookiesCount} tokens (${fs.cookieNames.slice(0, 3).join(", ") || "none"})` : "None cached";
-          }
-          if (statFlareUa) {
-            statFlareUa.textContent = fs.userAgent === "Synced" ? "Synchronized" : "Default";
-          }
-          if (statFlareLatency) {
-            statFlareLatency.textContent = fs.latencyMs ? `${fs.latencyMs} ms` : "--";
-          }
+        if (state.autoAnswer !== undefined) {
+          const enabled=Boolean(state.autoAnswer),button=byId("btn-answering");
+          button.textContent=enabled?"Stop answering":"Start answering";
+          button.setAttribute("aria-pressed",String(enabled));button.disabled=false;
+          if(toggleAutoAnswer)toggleAutoAnswer.checked=enabled;
+          if(toggleFleetAnswer)toggleFleetAnswer.checked=enabled;
         }
 
         if (state.useFlareSolverr !== undefined && toggleFlare) {
@@ -4896,24 +4628,11 @@ function getClientName(sn) {
         });
       }
 
-      if (btnRefreshFlare) {
-        btnRefreshFlare.addEventListener("click", async () => {
-          btnRefreshFlare.disabled = true;
-          btnRefreshFlare.textContent = "Solving...";
-          try {
-            sendCommand({ op: "flaresolverr-refresh" });
-            await appFetch("/api/flaresolverr/refresh", { method: "POST" }).catch(() => {});
-          } finally {
-            setTimeout(() => {
-              btnRefreshFlare.disabled = false;
-              btnRefreshFlare.innerHTML = `
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
-                Re-solve Clearance
-              `;
-            }, 1200);
-          }
-        });
-      }
+      const answeringButton = byId("btn-answering");
+      answeringButton.addEventListener("click", () => {
+        const enabled = answeringButton.getAttribute("aria-pressed") === "true";
+        if (sendCommand({op:"settings",autoAnswer:!enabled})) answeringButton.disabled=true;
+      });
 
       // Fleet Actions
       btnStopAll.addEventListener("click", () => {
@@ -4926,9 +4645,7 @@ function getClientName(sn) {
           if (fleetAnswerLabel) fleetAnswerLabel.classList.toggle("active", isEnabled);
           if (toggleAutoAnswer) toggleAutoAnswer.checked = isEnabled;
           sendCommand({ op: "settings", autoAnswer: isEnabled });
-          if (isEnabled) {
-            sendCommand({ op: "force-answer" });
-          }
+
         });
       }
 

@@ -1,3 +1,5 @@
+import { JoinScheduler } from "./join-scheduler.mjs";
+import { submitAnswer, advanceFeedback } from "./blooket-answers.mjs";
 import { EventEmitter } from "events";
 import fs from "fs";
 import os from "os";
@@ -109,6 +111,7 @@ export class BlooketInstanceManager extends EventEmitter {
     this.fleetGeneration = 0;
     this.starting = false;
     this.stopping = false;
+    this.joinScheduler = new JoinScheduler();
     this.instances = new Map(); // id -> instance
     this.currentPin = "";
     this.baseName = "Tyler";
@@ -145,7 +148,8 @@ export class BlooketInstanceManager extends EventEmitter {
     this.humanKeystrokes = true;
     this.clickOffsets = true;
 
-    this.autoAnswerGlobal = true;
+    this.autoAnswerGlobal = false;
+    this.answerGeneration = 0;
     this.autoMinigames = true;
     this.logHistory = [];
     this.nextInstanceId = 1;
@@ -286,7 +290,17 @@ export class BlooketInstanceManager extends EventEmitter {
     if (!options || typeof options !== "object" || Array.isArray(options)) throw new Error("Invalid game settings.");
     const pin = normalizePin(options.pin);
     if (this.starting || this.stopping) throw new Error("Wait for the current join or stop operation to finish.");
+    const requested = this.fleetCount(options);
+    const active = [...this.instances.values()].filter(instance=>!instance.cancelled&&instance.status!=="error").length;
+    if (active+requested>50) throw new Error(`Up to 50 bots can be connected or queued. ${50-active} slots are available.`);
     return pin;
+  }
+
+  fleetCount(options={}) {
+    const names=Array.isArray(options.names)&&options.names.length?options.names:options.customNames;
+    const named=Array.isArray(names)?names.filter(name=>String(name).trim()).length:0;
+    const requested=Number.isFinite(Number(options.count))&&Number(options.count)>0?Math.floor(Number(options.count)):named||5;
+    return Math.max(1,Math.min(50,Math.max(requested,named)));
   }
 
   async startFleet(options = {}) {
@@ -298,7 +312,7 @@ export class BlooketInstanceManager extends EventEmitter {
   }
 
   async launchFleet({
-    count = 5,
+    count,
     pin = "",
     names = [],
     customNames = [],
@@ -327,7 +341,7 @@ export class BlooketInstanceManager extends EventEmitter {
     brawlStat = "damage",
     humanKeystrokes = true,
     clickOffsets = true,
-    autoAnswer = true,
+    autoAnswer,
     autoMinigames = true,
     useFlareSolverr = true
   }, generation) {
@@ -371,17 +385,14 @@ export class BlooketInstanceManager extends EventEmitter {
 
     this.humanKeystrokes = Boolean(humanKeystrokes);
     this.clickOffsets = Boolean(clickOffsets);
-    this.autoAnswerGlobal = Boolean(autoAnswer);
+    if (autoAnswer !== undefined) this.autoAnswerGlobal = Boolean(autoAnswer);
     this.autoMinigames = Boolean(autoMinigames);
 
     if (!this.currentPin) {
       throw new Error("A valid Blooket Game PIN is required.");
     }
 
-    let safeCount = Math.max(1, Math.min(50, Number(count) || cleanNames.length || 1));
-    if (cleanNames.length > 0 && (!count || count < cleanNames.length)) {
-      safeCount = Math.min(50, cleanNames.length);
-    }
+    const safeCount = this.fleetCount({count,names:cleanNames});
 
     this.log(`Deploying customized fleet of ${safeCount} bots for Game PIN ${this.currentPin}...`, "system");
 
@@ -404,7 +415,7 @@ export class BlooketInstanceManager extends EventEmitter {
     if (generation !== this.fleetGeneration) return;
 
     // Strict deduplication pass: eliminate any duplicate/repeating names and ensure short, real names
-    const usedFleetNames = new Set();
+    const usedFleetNames = new Set([...this.instances.values()].filter(instance=>!instance.cancelled&&instance.status!=="error"&&instance.pin===pin).map(instance=>instance.name.toLowerCase()));
     const finalFleetNames = [];
     for (let i = 0; i < safeCount; i++) {
       let rawCandidate = cleanNames[i] ? cleanNames[i].trim().slice(0, 16) : "";
@@ -415,18 +426,8 @@ export class BlooketInstanceManager extends EventEmitter {
       finalFleetNames.push(rawCandidate);
     }
 
-    // Calculate adaptive stagger delay - balanced smooth stream to prevent CPU spikes & socket drops
-    const staggerDelayMs = this.staggerFleet ? (safeCount > 25 ? 220 : 140) : (safeCount > 15 ? 160 : 120);
-
-    // Track active joining concurrency: max 6 simultaneous browser initializations optimal for 4-core host
-    let activeJoining = 0;
-    const maxConcurrentJoins = 6;
-
+    // Reserve every name before another request can enqueue joins.
     for (let i = 1; i <= safeCount; i++) {
-      while (activeJoining >= maxConcurrentJoins && generation === this.fleetGeneration) {
-        await new Promise((r) => setTimeout(r, 60));
-      }
-
       if (generation !== this.fleetGeneration) return;
       const name = finalFleetNames[i - 1];
       let blook = Array.isArray(botBlooks) && botBlooks[i - 1] ? botBlooks[i - 1] : this.assignBlook(i);
@@ -435,17 +436,9 @@ export class BlooketInstanceManager extends EventEmitter {
       }
 
       const instanceId = `bot-${this.nextInstanceId++}`;
-      activeJoining++;
 
       const inst = this.createBotInstance(instanceId, name, blook, this.currentPin, i);
-      this.runBotLifecycle(inst)
-        .finally(() => {
-          activeJoining = Math.max(0, activeJoining - 1);
-        });
-
-      if (i < safeCount && staggerDelayMs > 0) {
-        await new Promise((r) => setTimeout(r, staggerDelayMs));
-      }
+      this.runBotLifecycle(inst).catch(err=>this.log(`Join failed: ${err.message}`,"error",inst.name));
     }
 
     this.emit("state-change", this.getState());
@@ -535,7 +528,10 @@ export class BlooketInstanceManager extends EventEmitter {
     const version = ++instance.runVersion;
     const active = () => !instance.cancelled && instance.runVersion === version && this.instances.get(instance.id) === instance;
     const startTime = Date.now();
+    instance.status = "queued";
+    instance.statusText = "Waiting to join...";
     try {
+      await this.joinScheduler.run(async () => {
       for (let attempt = 0; attempt < 2 && active(); attempt++) {
         try { await this.executeBotJoin(instance, active); return; }
         catch (err) {
@@ -554,6 +550,9 @@ export class BlooketInstanceManager extends EventEmitter {
           }
         }
       }
+      }, active);
+    } catch (err) {
+      if (active()) this.handleBotError(instance,err,startTime);
     } finally { instance.lifecycleActive = false; }
   }
 
@@ -638,6 +637,7 @@ export class BlooketInstanceManager extends EventEmitter {
       if (this.useFlareSolverr) {
         const fresh = await this.flaresolverr.getClearance({ forceRefresh: true });
         if (fresh?.cookies?.length) {
+          if (fresh.userAgent && fresh.userAgent !== userAgent) throw new Error("Verification refreshed. Reopening the join page.");
           await context.addCookies(fresh.cookies);
           instance.addEvent("Injected refreshed FlareSolverr clearance; reloading page...", "info", "PHASE_NAVIGATE");
           navResponse = await instance.page.reload({ waitUntil: "domcontentloaded", timeout: 30000 });
@@ -718,6 +718,7 @@ export class BlooketInstanceManager extends EventEmitter {
     instance.status = "entering_name";
 
     let inLobbyConfirmed = false;
+    let joinedGame = false;
     let nicknameAttempts = 0;
 
     while (!inLobbyConfirmed && nicknameAttempts < 4) {
@@ -774,8 +775,9 @@ export class BlooketInstanceManager extends EventEmitter {
         // CONFIRMATION: Name input GONE, PIN input GONE, and either lobby text or blook box visible or URL is lobby
         const currentUrl = instance.page ? instance.page.url() : "";
         const isLobbyUrl = currentUrl.includes("/lobby");
-        if (!check.hasName && !check.hasPin && (check.hasLobbyTxt || check.hasBlooks || isLobbyUrl)) {
+        if (!check.hasName && !check.hasPin && (check.hasLobbyTxt || check.hasBlooks || check.hasGame || isLobbyUrl)) {
           inLobbyConfirmed = true;
+          joinedGame = check.hasGame;
           break;
         }
         await instance.page.waitForTimeout(100);
@@ -789,8 +791,8 @@ export class BlooketInstanceManager extends EventEmitter {
     ensureActive();
     // Phase 8: In Genuine Lobby
     instance.phase = "PHASE_LOBBY";
-    instance.status = "lobby";
-    instance.statusText = "Lobby joined! Standing by for host to start match.";
+    instance.status = joinedGame ? "game" : "lobby";
+    instance.statusText = joinedGame ? "Game connected." : "Waiting for the host.";
     instance.durationMs = Date.now() - startTime;
     instance.addEvent(`Joined lobby as "${instance.name}"`, "success", "PHASE_LOBBY");
     this.log(`Joined game lobby as [${instance.name}]!`, "success", instance.name);
@@ -950,170 +952,9 @@ export class BlooketInstanceManager extends EventEmitter {
   }
 
 
-  async ensureBotAutoAnswerDaemon(instance) {
-    if (!instance.page || instance.page.isClosed()) return;
-    try {
-      await instance.page.evaluate((opts) => {
-        window.__autoAnswerActive = Boolean(opts.autoAnswer);
-        window.__autoMinigamesActive = Boolean(opts.autoMinigames);
-        window.__accuracyRate = Number(opts.accuracyRate ?? 100);
-
-        if (window.__fleetAutoAnswerInstalled) return;
-        window.__fleetAutoAnswerInstalled = true;
-
-        function solveStep() {
-          if (!window.__autoAnswerActive) return;
-          try {
-            // 1. Advance Feedback screen if visible
-            const feedback = document.querySelector("[class*='feedbackContainer'], [class*='feedback'], [id*='feedback'], [class*='nextButton']");
-            if (feedback) {
-              const btn = feedback.querySelector("button, [class*='next'], [role='button']");
-              if (btn && btn.click) btn.click();
-              if (feedback.click) feedback.click();
-              if (feedback.firstChild && feedback.firstChild.click) feedback.firstChild.click();
-            }
-
-            // 2. Advance Transition screen / Click anywhere to continue
-            const bodyText = document.body ? document.body.innerText : "";
-            if (/(press anywhere to continue|click anywhere to (continue|go next)|click to continue|click anywhere|nice job|correct!|incorrect|wrong answer|you got it)/i.test(bodyText)) {
-              document.body.click();
-            }
-
-            // 3. Minigame solvers
-            if (window.__autoMinigamesActive) {
-              // Gold Quest: Choices / Chests
-              const chests = document.querySelectorAll("div[class*='choice'], img[alt^='Chest ']");
-              if (chests.length > 0 && !document.querySelector("[class*='feedback']")) {
-                chests[Math.floor(Math.random() * chests.length)].click();
-              }
-
-              // Crypto Hack: Passwords
-              const pwContainer = document.querySelector("div[class*='buttonContainer']");
-              if (pwContainer && document.querySelector("[class*='hack']")) {
-                const pwBtns = pwContainer.querySelectorAll("button, div[role='button']");
-                if (pwBtns.length > 0) pwBtns[0].click();
-              }
-            }
-
-            // 4. Question Answering
-            // Find React stateNode
-            let stateNode = null;
-            try {
-              const reactRoot = (function findReact(r = document.querySelector("body>div")) {
-                if (!r) return null;
-                const vals = Object.values(r);
-                if (vals[1]?.children?.[0]?._owner?.stateNode) return r;
-                const child = r.querySelector(":scope>div");
-                return child ? findReact(child) : null;
-              })();
-              if (reactRoot) stateNode = Object.values(reactRoot)[1]?.children?.[0]?._owner?.stateNode;
-            } catch(e) {}
-
-            // Fallback to Fiber on #app
-            if (!stateNode) {
-              try {
-                const app = document.querySelector("#app > div > div") || document.querySelector("#app");
-                if (app) {
-                  for (const k in app) {
-                    if (k.startsWith("__reactFiber$") || k.startsWith("__reactInternalInstance$")) {
-                      let curr = app[k];
-                      while (curr) {
-                        if (curr.stateNode?.state?.question || curr.stateNode?.props?.client?.question) {
-                          stateNode = curr.stateNode;
-                          break;
-                        }
-                        curr = curr.return;
-                      }
-                    }
-                  }
-                }
-              } catch(e) {}
-            }
-
-            const Question = stateNode?.state?.question || stateNode?.props?.client?.question;
-
-            if (Question && stateNode?.state?.stage !== "feedback" && !stateNode?.state?.feedback) {
-              // Check typing question
-              if (Question.qType === "typing" || stateNode?.state?.question?.qType === "typing") {
-                const ansText = (Question.answers && Question.answers[0]) || "";
-                if (ansText) {
-                  try {
-                    const typingWrap = document.querySelector("[class*='typingAnswerWrapper']");
-                    if (typingWrap) {
-                      const node = Object.values(typingWrap)[1]?.children?._owner?.stateNode;
-                      if (node?.sendAnswer) { node.sendAnswer(ansText); return; }
-                    }
-                  } catch(e) {}
-
-                  const input = document.querySelector("input[class*='typingInput'], input[placeholder*='Type'], input[placeholder*='Answer'], input[type='text']");
-                  if (input) {
-                    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-                    if (setter) setter.call(input, ansText);
-                    else input.value = ansText;
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                    input.dispatchEvent(new Event('change', { bubbles: true }));
-                    const submit = document.querySelector("button[class*='typingSubmit'], form button[type='submit']");
-                    if (submit) submit.click();
-                  }
-                }
-                return;
-              }
-
-              // Multiple choice question
-              if (Array.isArray(Question.answers) && Array.isArray(Question.correctAnswers)) {
-                let correctIdx = -1;
-                for (let i = 0; i < Question.answers.length; i++) {
-                  for (let j = 0; j < Question.correctAnswers.length; j++) {
-                    if (String(Question.answers[i]).toLowerCase().trim() === String(Question.correctAnswers[j]).toLowerCase().trim()) {
-                      correctIdx = i;
-                      break;
-                    }
-                  }
-                  if (correctIdx !== -1) break;
-                }
-
-                // Evaluate target accuracy
-                let shouldBeCorrect = (Math.random() * 100) < (window.__accuracyRate || 100);
-                let clickIdx = correctIdx;
-                if (!shouldBeCorrect && Question.answers.length > 1) {
-                  const wrongIndices = [];
-                  for (let i = 0; i < Question.answers.length; i++) {
-                    if (i !== correctIdx) wrongIndices.push(i);
-                  }
-                  if (wrongIndices.length > 0) clickIdx = wrongIndices[Math.floor(Math.random() * wrongIndices.length)];
-                }
-
-                if (clickIdx !== -1) {
-                  const containers = document.querySelectorAll("[class*='answerContainer'], [class*='answerWrapper'], [class*='answersHolder'] > div, [class*='styles__answer']");
-                  if (containers && containers[clickIdx]) {
-                    containers[clickIdx].click();
-                    return;
-                  }
-                }
-              }
-
-              // Fallback: click any available answer card
-              const domAnswers = document.querySelectorAll("[class*='answerContainer'], [class*='answerWrapper'], [class*='answersHolder'] > div, [class*='styles__answer']");
-              if (domAnswers.length >= 2) {
-                domAnswers[0].click();
-              }
-            }
-          } catch(e) {}
-        }
-
-        window.__fleetAutoAnswerInterval = setInterval(solveStep, 40);
-      }, {
-        autoAnswer: this.autoAnswerGlobal,
-        autoMinigames: this.autoMinigames,
-        accuracyRate: this.accuracyRate
-      });
-    } catch(err) {}
-  }
-
   startBotLoop(instance) {
     const version = instance.runVersion;
     const active = () => !instance.cancelled && instance.runVersion === version && this.instances.get(instance.id) === instance;
-    this.ensureBotAutoAnswerDaemon(instance).catch(() => {});
     if (instance.autoAnswerLoop) {
       clearInterval(instance.autoAnswerLoop);
       clearTimeout(instance.autoAnswerLoop);
@@ -1124,7 +965,7 @@ export class BlooketInstanceManager extends EventEmitter {
         return;
       }
 
-      let nextDelay = instance.status === "lobby" ? 400 : 140;
+      let nextDelay = this.pollDelay(instance);
 
       if (instance.isLooping || instance.isAnswering) {
         if (instance.isAnswering && Date.now() - (instance.lastAnswerAttemptTime || 0) > 4000) {
@@ -1251,9 +1092,9 @@ export class BlooketInstanceManager extends EventEmitter {
           }
 
           const bodyText = document.body ? document.body.innerText : "";
-          const pinInputEl = document.querySelector('input[placeholder*="Game ID"], input[name="join-code"]');
+          const pinInputEl = [...document.querySelectorAll('input[placeholder*="game id" i], input[placeholder*="pin" i], input[name="join-code"]')].find(el=>el.getClientRects().length);
           const hasPinInput = Boolean(pinInputEl && pinInputEl.offsetParent !== null);
-          const nameInputEl = document.querySelector('input[placeholder*="Name"], input[aria-label*="Name"], input[placeholder*="Nickname"]');
+          const nameInputEl = [...document.querySelectorAll('input[placeholder*="name" i], input[aria-label*="name" i], input[placeholder*="nickname" i]')].find(el=>el.getClientRects().length);
           const hasNameInput = Boolean(nameInputEl && nameInputEl.offsetParent !== null);
           const hasKicked = /you were kicked|you have been removed|kicked from (the )?game|host removed you/i.test(bodyText);
           const hasBlooks = Boolean(document.querySelector('[class*="blookBox"], [class*="blookContainer"], [class*="playerBlook"], [class*="blookWrapper"]'));
@@ -1261,7 +1102,7 @@ export class BlooketInstanceManager extends EventEmitter {
           // Specific feedback & transition screen detection (avoids broad word matching that breaks questions)
           const feedbackEl = document.querySelector('[class*="feedbackContainer"], [class*="feedbackWrapper"], [class*="feedback"], [class*="styles__feedback"]');
           const hasFeedbackEl = Boolean(feedbackEl && feedbackEl.offsetParent !== null);
-          const isTransitionScreen = /(press anywhere to continue|click anywhere to (continue|go next)|click anywhere to cast|cast again|click to continue|click anywhere|nice job|correct!|incorrect|wrong answer|you got it|\+\s*\d+\s*(gold|crypto|points|tokens|lbs)|take\s*\d+%|c tier|b tier|a tier|s tier)/i.test(bodyText);
+          const isTransitionScreen = domAnswers.length < 2 && !hasPinInput && !hasNameInput && /(press anywhere to continue|click anywhere to (continue|go next)|click anywhere to cast|cast again|click to continue|click anywhere|nice job|correct!|incorrect|wrong answer|you got it|\+\s*\d+\s*(gold|crypto|points|tokens|lbs)|take\s*\d+%|c tier|b tier|a tier|s tier)/i.test(bodyText);
           const hasFeedback = stage === "feedback" || hasFeedbackEl || isTransitionScreen;
 
           const nextButton = document.querySelector('button[class*="nextButton"], [class*="nextButton"]');
@@ -1321,41 +1162,23 @@ export class BlooketInstanceManager extends EventEmitter {
           };
         });
 
-        // 1. Check if kicked (strict multi-cycle verification on root URL only)
-        const currentUrl = instance.page ? instance.page.url() : "";
-        const isStrictlyOnPlayJoin = currentUrl.replace(/\/+$/, "") === "https://play.blooket.com/play" && state.hasPinInput;
-        if (state.hasKicked || (isStrictlyOnPlayJoin && instance.status === "game")) {
-          instance.kickedCounter = (instance.kickedCounter || 0) + 1;
-          if (instance.kickedCounter >= 4) {
-            instance.status = "error";
-            instance.phase = "PHASE_KICKED";
-            instance.statusText = "Bot was removed or disconnected from match";
-            instance.diagnostic = {
-              category: "LOBBY_REMOVED",
-              code: "HOST_KICKED_BOT",
-              phase: "PHASE_LOBBY",
-              explanation: "The bot was either removed by the game host or disconnected from the session.",
-              remediation: [
-                "Click 'Retry with New Name' to rejoin under an untracked nickname.",
-                "Verify the host did not end or restart the lobby."
-              ]
-            };
-            instance.addEvent("Disconnected or removed from match", "error", "PHASE_KICKED");
-            this.log(`Bot [${instance.name}] disconnected or was removed from the match.`, "error", instance.name);
-            this.emit("state-change", this.getState());
-            if (instance.autoAnswerLoop) clearTimeout(instance.autoAnswerLoop);
-            return;
+        // Distinguish an explicit host removal from a lost connection.
+        const hostRemoved=state.hasKicked&&!state.hasQuestion;
+        if (hostRemoved || state.hasPinInput || state.hasNameInput) {
+          instance.connectionLostAt ??= Date.now();
+          if (hostRemoved || Date.now()-instance.connectionLostAt>=2500) {
+            instance.status="error";
+            instance.phase=hostRemoved?"PHASE_REMOVED":"PHASE_DISCONNECTED";
+            instance.statusText=hostRemoved?"Removed by the host.":"Connection closed.";
+            instance.diagnostic={category:"CONNECTION",code:hostRemoved?"HOST_REMOVED":"CONNECTION_LOST",explanation:instance.statusText,remediation:hostRemoved?["Check with the host before joining again."]:["Check whether the game is still running, then retry."]};
+            instance.addEvent(instance.statusText,"error",instance.phase);
+            this.emit("state-change",this.getState());
+            await instance.context?.close().catch(()=>{});
+            instance.context=null;instance.page=null;
           }
-        } else {
-          instance.kickedCounter = 0;
-        }
-
-        // 2. Name prompt re-submission if lobby bounced
-        if (state.hasNameInput && instance.status === "lobby") {
-          await instance.page.locator('input[placeholder*="Name"], input[aria-label*="Name"], input[placeholder*="Nickname"]').first().fill(instance.name).catch(() => {});
-          await instance.page.keyboard.press("Enter").catch(() => {});
           return;
         }
+        instance.connectionLostAt=null;
 
         // 3. In genuine lobby
         if (state.inLobby && instance.status !== "lobby") {
@@ -1367,55 +1190,15 @@ export class BlooketInstanceManager extends EventEmitter {
         }
 
         // 4. Feedback / Transition / Next Screen Auto-Dismiss (Continuous Unblocking)
-        if (state.hasFeedback || state.hasNext || state.hasChestReward || state.isTransitionScreen) {
-          await instance.page.evaluate(() => {
-            // A. React stateNode progression
-            try {
-              const app = document.querySelector("#app > div > div") || document.querySelector("#app");
-              for (const k in app) {
-                if (k.startsWith('__reactFiber$')) {
-                  let c = app[k];
-                  while (c) {
-                    if (c.stateNode?.nextStage) { c.stateNode.nextStage(); break; }
-                    if (c.stateNode?.onFeedback) { c.stateNode.onFeedback(); break; }
-                    c = c.return;
-                  }
-                }
-              }
-            } catch {}
-
-            // B. Click feedback elements, next button, or any continue prompt
-            const candidates = [
-              ...document.querySelectorAll('[class*="feedbackContainer"], [class*="feedback"], [class*="nextButton"], [class*="next"], button, div[role="button"]')
-            ].filter((el) => {
-              if (el.offsetParent === null) return false;
-              const t = el.innerText?.trim() || "";
-              return /press anywhere|click anywhere|click to cast|cast again|go next|continue|next|claim|collect|done/i.test(t);
-            });
-            if (candidates.length > 0) {
-              candidates[candidates.length - 1].click();
-            }
-
-            // C. Dispatch synthetic clicks across window and document
-            try {
-              const ev = new MouseEvent('click', { bubbles: true, cancelable: true, view: window, clientX: 400, clientY: 300 });
-              window.dispatchEvent(ev);
-              document.dispatchEvent(ev);
-              if (document.body) document.body.dispatchEvent(ev);
-            } catch {}
-          }).catch(() => {});
-
-          // OS-Level trusted clicks
-          await instance.page.mouse.click(400, 300).catch(() => {});
-          await instance.page.keyboard.press("Space").catch(() => {});
-          await instance.page.keyboard.press("Enter").catch(() => {});
-
-          instance.lastAnswerAttemptKey = null;
-          instance.answerAttemptCount = 0;
+        if ((this.autoAnswerGlobal || instance.forceAnswerOnce) && (state.hasFeedback || state.hasNext || state.hasChestReward || state.isTransitionScreen)) {
+          if(await advanceFeedback(instance.page).catch(()=>false)) {
+            instance.lastAnswerAttemptKey=null;instance.answerAttemptCount=0;
+          }
+          return;
         }
 
         // 5. Minigames Progression
-        if (this.autoMinigames) {
+        if (this.autoMinigames && (this.autoAnswerGlobal || instance.forceAnswerOnce)) {
           // Gold Quest Chests
           if (state.hasChests && !state.hasChestReward) {
             await instance.page.evaluate((strategy) => {
@@ -1542,35 +1325,11 @@ export class BlooketInstanceManager extends EventEmitter {
 
           const currentQKey = (qData.questionText || "") + "::" + (qData.answers.join("|") || qData.questionType);
 
-          if (this.autoAnswerGlobal) {
-            if (this.currentFleetQuestionKey !== currentQKey) {
-              // Brand new question arrived for the fleet!
-              this.currentFleetQuestionKey = currentQKey;
-              this.currentFleetQuestionTime = Date.now();
-              this.currentFleetQuestionData = qData;
-              this.latestQuestion = {
-                questionText: qData.questionText,
-                correctAnswers: qData.correctAnswers,
-                answers: qData.answers,
-                botName: instance.name,
-                timestamp: Date.now()
-              };
-
-              // BROADCAST SIMULTANEOUS ANSWER TO ALL ACTIVE BOTS!
-              this.dispatchSimultaneousFleetAnswer(qData, currentQKey).catch(() => {});
-            } else {
-              // Same question: if this bot has not answered yet, answer immediately
-              if (instance.lastAnswerAttemptKey !== currentQKey) {
-                await this.performBotAnswer(instance, qData, 1);
-              } else {
-                // Retry if question is still visible on screen after 2200ms
-                const elapsed = Date.now() - (instance.lastAnswerAttemptTime || 0);
-                if (elapsed > 2200) {
-                  instance.answerAttemptCount = (instance.answerAttemptCount || 1) + 1;
-                  instance.lastAnswerAttemptTime = Date.now();
-                  await this.performBotAnswer(instance, qData, instance.answerAttemptCount);
-                }
-              }
+          this.latestQuestion={...qData,botName:instance.name,timestamp:Date.now()};
+          if (this.autoAnswerGlobal || instance.forceAnswerOnce) {
+            const force=Boolean(instance.forceAnswerOnce);instance.forceAnswerOnce=false;
+            if (instance.lastAnswerAttemptKey!==currentQKey || Date.now()-instance.lastAnswerAttemptTime>2200) {
+              await this.performBotAnswer(instance,qData,1,force);
             }
           }
         }
@@ -1579,330 +1338,55 @@ export class BlooketInstanceManager extends EventEmitter {
       } finally {
         instance.isLooping = false;
         if (active() && instance.page && !instance.page.isClosed()) {
-          const nextDelay = instance.status === "lobby" ? 400 : 140;
+          const nextDelay = this.pollDelay(instance);
           instance.autoAnswerLoop = setTimeout(step, nextDelay);
         }
       }
     };
 
-    instance.autoAnswerLoop = setTimeout(step, 80);
+    instance.pollNow = step;
+    instance.autoAnswerLoop = setTimeout(step, 80+(instance.fleetIndex%10)*25);
   }
 
-  async dispatchSimultaneousFleetAnswer(qData, qKey) {
-    if (this.isDispatchingFleetAnswer) return;
-    this.isDispatchingFleetAnswer = true;
-
-    try {
-      const activeBots = [...this.instances.values()].filter(
-        (inst) => (inst.status === "game" || inst.status === "lobby") && inst.page && !inst.page.isClosed()
-      );
-
-      if (activeBots.length === 0) return;
-
-      this.log(`Fleet strike: Simultaneous answer for ${activeBots.length} bots: "${(qData.questionText || "Question").slice(0, 45)}"`, "action");
-
-      // Uniform fleet delay
-      let fleetDelay = 0;
-      if (this.answerSpeedMode === "instant") {
-        fleetDelay = 0;
-      } else if (this.answerDelayMinMs > 0) {
-        fleetDelay = this.answerDelayMinMs;
-      } else if (this.answerDelayMs > 0) {
-        fleetDelay = this.answerDelayMs;
-      }
-
-      if (fleetDelay > 0) {
-        await new Promise((r) => setTimeout(r, fleetDelay));
-      }
-
-      // Execute across ALL active bots concurrently via Promise.all!
-      await Promise.all(
-        activeBots.map((bot) => this.performBotAnswer(bot, qData, 1).catch(() => {}))
-      );
-    } finally {
-      this.isDispatchingFleetAnswer = false;
-    }
+  pollDelay(instance) {
+    return instance.status==="lobby"?1000:this.instances.size>10?500:300;
   }
 
-  async performBotAnswer(instance, state, attemptCount = 1) {
-    if (!instance.page || instance.page.isClosed()) return;
-
-    const currentQKey = (state.questionText || "") + "::" + (state.answers ? state.answers.join("|") : (state.questionType || ""));
-    if (attemptCount === 1 && instance.lastAnswerAttemptKey === currentQKey && (Date.now() - (instance.lastAnswerAttemptTime || 0)) < 1400) {
-      return; // Already answered this question recently
-    }
-
-    instance.isAnswering = true;
-    instance.lastAnswerAttemptKey = currentQKey;
-    instance.lastAnswerAttemptTime = Date.now();
-
+  async performBotAnswer(instance,state,attemptCount=1,force=false) {
+    if ((!this.autoAnswerGlobal&&!force)||instance.isAnswering||instance.cancelled||!instance.page||instance.page.isClosed())return;
+    const page=instance.page,version=instance.runVersion,generation=this.answerGeneration;
+    const active=()=>this.answerGeneration===generation&&!instance.cancelled&&instance.runVersion===version&&instance.page===page&&!page.isClosed()&&(this.autoAnswerGlobal||force);
+    const questionKey=(state.questionText||"")+"::"+(state.answers||[]).join("|");
+    if(instance.lastAnswerAttemptKey===questionKey&&Date.now()-instance.lastAnswerAttemptTime<2200)return;
+    instance.isAnswering=true;
     try {
-      if (state.hasFeedback) {
-        await instance.page.evaluate(() => {
-          const fb = document.querySelector('[class*="feedbackContainer"], [class*="feedback"], [class*="nextButton"], [class*="next"]');
-          if (fb) fb.click();
-          else if (document.body) document.body.click();
-        }).catch(() => {});
-        await instance.page.keyboard.press("Space").catch(() => {});
-        instance.lastAnswerAttemptKey = null;
-        instance.answerAttemptCount = 0;
-        return;
+      let delay=0;
+      if(this.answerSpeedMode!=="instant") {
+        const min=Math.max(0,this.answerDelayMinMs||0),max=Math.max(min,this.answerDelayMaxMs||min);
+        delay=min+Math.floor(Math.random()*(max-min+1));
+        if(this.adaptiveReadingTime)delay=Math.max(delay,Math.min(2000,(state.questionText||"").length*12));
+        if(this.staggerFleet)delay+=(instance.fleetIndex%4)*40;
       }
-
-      // 1. Accuracy target evaluation
-      const targetAcc = instance.targetAccuracy ?? this.accuracyRate;
-      let isCorrect = Math.random() * 100 < targetAcc;
-
-      if (this.streakBreaker > 0 && instance.streak >= this.streakBreaker) {
-        isCorrect = false; // Intentional smart miss
-      }
-
-      // 2. Delay evaluation (Simultaneous fleet answering has uniform delay)
-      let delay = 0;
-      if (this.staggerFleet && this.answerSpeedMode !== "instant") {
-        delay = (instance.fleetIndex % 4) * 40 + Math.floor(Math.random() * 40);
-        if (delay > 0) {
-          await new Promise((r) => setTimeout(r, delay));
-        }
-      }
-
-      // 3. Typing Question Execution
-      if (state.questionType === "typing") {
-        let text = "quiz";
-        if (state.correctAnswers && state.correctAnswers.length > 0) {
-          const correctVal = state.correctAnswers[0];
-          if (isCorrect) {
-            text = correctVal;
-          } else if (correctVal.length > 3) {
-            text = correctVal.slice(0, -1) + "e";
-          } else {
-            text = "pass";
-          }
-        } else {
-          text = isCorrect ? "true" : "none";
-        }
-
-        await instance.page.evaluate((answerText) => {
-          // A. Try React stateNode sendAnswer or onAnswer
-          const app = document.querySelector("#app > div > div") || document.querySelector("#app");
-          for (const k in app) {
-            if (k.startsWith('__reactFiber$')) {
-              let c = app[k];
-              while (c) {
-                if (c.stateNode?.sendAnswer) { c.stateNode.sendAnswer(answerText); return true; }
-                if (c.stateNode?.onAnswer) { c.stateNode.onAnswer(true, answerText); return true; }
-                c = c.return;
-              }
-            }
-          }
-
-          // B. Fill DOM input
-          const input = document.querySelector(
-            'input[class*="typingInput"], input[placeholder*="Type"], input[placeholder*="Answer"], input[type="text"]:not([placeholder*="Game"]):not([placeholder*="Name"]):not([placeholder*="PIN"])'
-          );
-          if (!input) return false;
-          input.focus();
-          const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-          if (nativeSetter) nativeSetter.call(input, answerText);
-          else input.value = answerText;
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-          input.dispatchEvent(new Event('change', { bubbles: true }));
-          const submitBtn = document.querySelector('button[class*="typingSubmit"], form button[type="submit"], form button') ||
-            [...document.querySelectorAll('button')].find(b => /submit/i.test(b.innerText || ""));
-          if (submitBtn) submitBtn.click();
-          return true;
-        }, text).catch(() => false);
-
-        await instance.page.keyboard.press("Enter").catch(() => {});
-
-        instance.questionsAnswered++;
-        if (isCorrect) {
-          instance.streak++;
-          this.totalCorrectAnswers++;
-        } else {
-          instance.streak = 0;
-        }
-        this.totalQuestionsAnswered++;
-        instance.lastAnswer = text;
-        instance.addEvent(`Answered Typing: "${text}" (${isCorrect ? "Correct" : "Missed"}) [${delay}ms]`, "action", "PHASE_GAME");
-        this.emit("state-change", this.getState());
-
-        // Proactive feedback advance
-        await new Promise((r) => setTimeout(r, 120));
-        await Promise.all([
-          instance.page.keyboard.press("Space").catch(() => {}),
-          instance.page.keyboard.press("Enter").catch(() => {}),
-          instance.page.mouse.click(400, 300).catch(() => {})
-        ]);
-        return;
-      }
-
-      // 4. Multiple Choice Execution: Multi-Layer React & DOM & Native Click
-      let chosenIdx = 0;
-      let chosenText = "";
-
-      const correctText = state.correctAnswers?.[0];
-      const correctIdx = correctText && Array.isArray(state.answers) ?
-        state.answers.findIndex(a => a.toLowerCase().trim() === correctText.toLowerCase().trim()) : -1;
-
-      if (isCorrect && (correctIdx >= 0 || correctText)) {
-        chosenIdx = correctIdx >= 0 ? correctIdx : 0;
-        chosenText = (state.answers && state.answers[chosenIdx]) || correctText || "Option 1";
-      } else {
-        const totalOpts = Math.max(2, state.answers ? state.answers.length : 4);
-        const wrongIndices = [];
-        for (let i = 0; i < totalOpts; i++) {
-          if (i !== correctIdx) wrongIndices.push(i);
-        }
-
-        if (this.wrongAnswerStrategy === "first_wrong" && wrongIndices.length > 0) {
-          chosenIdx = wrongIndices[0];
-        } else if (wrongIndices.length > 0) {
-          chosenIdx = wrongIndices[Math.floor(Math.random() * wrongIndices.length)];
-        } else {
-          chosenIdx = Math.floor(Math.random() * totalOpts);
-        }
-        chosenText = (state.answers && state.answers[chosenIdx]) || `Choice #${chosenIdx + 1}`;
-      }
-
-      // Execute Answer via page.evaluate (React onAnswer + Fiber onClick + DOM PointerEvents)
-      const clickRes = await instance.page.evaluate(({ isCorrect, targetIdx, targetText }) => {
-        let onAnswerDone = false;
-        try {
-          const app = document.querySelector("#app > div > div") || document.querySelector("#app");
-          for (const k in app) {
-            if (k.startsWith('__reactFiber$')) {
-              let c = app[k];
-              while (c) {
-                if (typeof c.stateNode?.onAnswer === 'function') {
-                  c.stateNode.onAnswer(isCorrect, targetText);
-                  onAnswerDone = true;
-                  break;
-                }
-                c = c.return;
-              }
-            }
-          }
-        } catch {}
-
-        const selectors = [
-          '[class*="answerContainer"]',
-          '[class*="answerWrapper"]',
-          '[class*="answersHolder"] > div',
-          '[class*="answersWrapper"] > div',
-          '[class*="answers"] > div',
-          'div[role="button"][class*="answer"]',
-          '[class*="styles__answer"]',
-          '[class*="answerCard"]',
-          '[class*="buttonContainer"]',
-          '[class*="answerText"]'
-        ];
-
-        let found = [];
-        for (const sel of selectors) {
-          const list = [...document.querySelectorAll(sel)].filter(el => {
-            if (el.offsetParent === null) return false;
-            const r = el.getBoundingClientRect();
-            return r.width > 20 && r.height > 15;
-          });
-          if (list.length >= 2) {
-            const topCards = list.filter(el => !list.some(other => other !== el && other.contains(el)));
-            found = topCards.length >= 2 ? topCards : list;
-            break;
-          }
-        }
-
-        let targetEl = null;
-        if (targetText && found.length > 0) {
-          const clean = targetText.toLowerCase().trim();
-          targetEl = found.find(el => {
-            const t = el.innerText?.toLowerCase().trim() || "";
-            return t === clean || t.includes(clean);
-          });
-        }
-        if (!targetEl && found.length > 0) {
-          const safeIdx = Math.max(0, Math.min(targetIdx, found.length - 1));
-          targetEl = found[safeIdx];
-        }
-
-        let rectInfo = null;
-        let clicked = false;
-
-        if (targetEl) {
-          const r = targetEl.getBoundingClientRect();
-          rectInfo = { x: r.left, y: r.top, width: r.width, height: r.height };
-
-          // Fiber synthetic onClick
-          for (const k in targetEl) {
-            if (k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$')) {
-              let curr = targetEl[k];
-              let d = 0;
-              while (curr && d < 25) {
-                if (typeof curr.memoizedProps?.onClick === 'function') {
-                  try {
-                    curr.memoizedProps.onClick({ preventDefault() {}, stopPropagation() {}, target: targetEl });
-                    clicked = true;
-                  } catch {}
-                  break;
-                }
-                curr = curr.return;
-                d++;
-              }
-            }
-          }
-
-          // Native DOM events
-          const clientX = r.left + r.width / 2;
-          const clientY = r.top + r.height / 2;
-          const ev = { bubbles: true, cancelable: true, view: window, clientX, clientY };
-          targetEl.dispatchEvent(new PointerEvent('pointerdown', ev));
-          targetEl.dispatchEvent(new MouseEvent('mousedown', ev));
-          targetEl.dispatchEvent(new PointerEvent('pointerup', ev));
-          targetEl.dispatchEvent(new MouseEvent('mouseup', ev));
-          targetEl.click();
-          clicked = true;
-        }
-
-        return {
-          ok: onAnswerDone || clicked,
-          onAnswerDone,
-          clicked,
-          rect: rectInfo,
-          chosenText: targetEl?.innerText?.trim() || targetText
-        };
-      }, { isCorrect, targetIdx: chosenIdx, targetText: chosenText }).catch(() => ({ ok: false }));
-
-      // OS-Level mouse click
-      if (clickRes?.rect) {
-        const { x, y, width, height } = clickRes.rect;
-        await instance.page.mouse.click(x + width / 2, y + height / 2).catch(() => {});
-      }
-
-      // Keyboard digit fallback
-      await instance.page.keyboard.press(String(chosenIdx + 1)).catch(() => {});
-
-      instance.questionsAnswered++;
-      if (isCorrect) {
-        instance.streak++;
-        this.totalCorrectAnswers++;
-      } else {
-        instance.streak = 0;
-      }
-      this.totalQuestionsAnswered++;
-      instance.lastAnswer = clickRes?.chosenText || chosenText;
-      instance.addEvent(`Answered MC: "${instance.lastAnswer}" (${isCorrect ? "Correct" : "Missed"}) [${delay}ms]`, "action", "PHASE_GAME");
-      this.emit("state-change", this.getState());
-
-      // Proactive feedback advance
-      await new Promise((r) => setTimeout(r, 120));
-      await Promise.all([
-        instance.page.keyboard.press("Space").catch(() => {}),
-        instance.page.keyboard.press("Enter").catch(() => {}),
-        instance.page.mouse.click(400, 300).catch(() => {})
-      ]);
-    } finally {
-      instance.isAnswering = false;
-    }
+      if(delay)await new Promise(resolve=>setTimeout(resolve,delay));
+      if(!active())return;
+      const answers=state.answers||[],correct=state.correctAnswers||[];
+      const correctText=correct[0];
+      const targetAccuracy=instance.targetAccuracy??this.accuracyRate;
+      const wantCorrect=Math.random()*100<targetAccuracy&&!(this.streakBreaker>0&&instance.streak>=this.streakBreaker);
+      const incorrect=answers.filter(answer=>!correct.some(item=>String(item).trim().toLowerCase()===String(answer).trim().toLowerCase()));
+      const text=state.questionType==="typing"?(wantCorrect&&correctText?String(correctText):"pass"):
+        wantCorrect&&correctText?String(correctText):String(incorrect[0]??answers[0]??"");
+      if(!text)return;
+      const submitted=await submitAnswer(page,state,{text});
+      if(!submitted||!active())return;
+      instance.lastAnswerAttemptKey=questionKey;instance.lastAnswerAttemptTime=Date.now();
+      instance.questionsAnswered++;this.totalQuestionsAnswered++;
+      const isCorrect=correct.some(answer=>String(answer).trim().toLowerCase()===submitted.text.trim().toLowerCase());
+      if(isCorrect){instance.streak++;this.totalCorrectAnswers++;}else instance.streak=0;
+      instance.lastAnswer=submitted.text;
+      instance.addEvent(`Answered: "${submitted.text}"`,"action","PHASE_GAME");
+      this.emit("state-change",this.getState());
+    } finally {instance.isAnswering=false;}
   }
 
   async shuffleLobbyBlooks() {
@@ -1915,46 +1399,12 @@ export class BlooketInstanceManager extends EventEmitter {
   }
 
   async forceAnswerAll() {
-    this.log("Triggering simultaneous fleet-wide answer strike!", "system");
-    const activeInstances = [...this.instances.values()].filter((inst) => inst.page && !inst.page.isClosed());
-    if (activeInstances.length === 0) return;
-
-    this.currentFleetQuestionKey = null;
-    await Promise.all(activeInstances.map(async (inst) => {
-      inst.isAnswering = false;
-      inst.lastAnswerAttemptKey = null;
-      inst.answerAttemptCount = 0;
-
-      await inst.page.evaluate(() => {
-        // A. Dismiss feedback if visible
-        const fb = document.querySelector('[class*="feedbackContainer"], [class*="feedback"], [class*="nextButton"], [class*="next"]');
-        if (fb && fb.offsetParent !== null) { fb.click(); return; }
-
-        // B. Minigame chest if in Gold Quest
-        const chests = [...document.querySelectorAll('img[alt^="Chest "], [class*="chest"], [class*="choiceBox"]')];
-        if (chests.length > 0) {
-          chests[Math.floor(Math.random() * chests.length)].click();
-          return;
-        }
-
-        // C. Multiple choice answers
-        const answers = [...document.querySelectorAll('[class*="answerContainer"], [class*="answerWrapper"], [class*="answersHolder"] > div')].filter(el => el.offsetParent !== null);
-        if (answers.length > 0) {
-          answers[0].click();
-        } else if (document.body) {
-          document.body.click();
-        }
-      }).catch(() => {});
-
-      await Promise.all([
-        inst.page.keyboard.press("Space").catch(() => {}),
-        inst.page.keyboard.press("1").catch(() => {}),
-        inst.page.keyboard.press("Enter").catch(() => {}),
-        inst.page.mouse.click(400, 300).catch(() => {})
-      ]);
-    }));
+    for(const instance of this.instances.values()) {
+      if(!instance.page||instance.page.isClosed()||instance.status==="error")continue;
+      instance.forceAnswerOnce=true;
+      if(!instance.isLooping&&!instance.isAnswering&&instance.pollNow){clearTimeout(instance.autoAnswerLoop);instance.pollNow().catch(()=>{});}
+    }
   }
-
 
   async trimToOneBot() {
     const activeInstances = [...this.instances.values()].filter((inst) => inst.page && !inst.page.isClosed());
@@ -2219,6 +1669,7 @@ export class BlooketInstanceManager extends EventEmitter {
     const inst = this.instances.get(id);
     if (!inst) return;
     inst.cancelled = true;
+    this.joinScheduler.cancelInactive();
     this.instances.delete(id);
     if (inst.autoAnswerLoop) clearTimeout(inst.autoAnswerLoop);
     try {
@@ -2235,6 +1686,7 @@ export class BlooketInstanceManager extends EventEmitter {
     this.stopping = true;
     this.fleetGeneration++;
     for (const instance of this.instances.values()) { instance.cancelled = true; clearTimeout(instance.autoAnswerLoop); }
+    this.joinScheduler.cancelInactive();
     if (this.browserPromise) await this.browserPromise.catch(() => {});
     this.log("Terminating active bot fleet...", "warn");
     for (const inst of this.instances.values()) {
@@ -2283,10 +1735,12 @@ export class BlooketInstanceManager extends EventEmitter {
     useFlareSolverr
   }) {
     if (autoAnswer !== undefined) {
-      const wasDisabled = !this.autoAnswerGlobal;
-      this.autoAnswerGlobal = Boolean(autoAnswer);
-      if (this.autoAnswerGlobal && wasDisabled) {
-        this.forceAnswerAll().catch(() => {});
+      const enabled=Boolean(autoAnswer),changed=enabled!==this.autoAnswerGlobal;
+      this.autoAnswerGlobal=enabled;
+      if(changed||!enabled)this.answerGeneration++;
+      for(const instance of this.instances.values()) {
+        if(!enabled)instance.forceAnswerOnce=false;
+        if(enabled&&changed&&instance.pollNow&&!instance.isLooping&&!instance.isAnswering){clearTimeout(instance.autoAnswerLoop);instance.pollNow().catch(()=>{});}
       }
     }
     if (autoMinigames !== undefined) this.autoMinigames = Boolean(autoMinigames);
@@ -2314,9 +1768,6 @@ export class BlooketInstanceManager extends EventEmitter {
     if (nameStartNumber !== undefined) this.nameStartNumber = Number(nameStartNumber);
     if (blookTheme !== undefined) this.blookTheme = blookTheme;
     if (useFlareSolverr !== undefined) this.useFlareSolverr = Boolean(useFlareSolverr);
-        for (const inst of this.instances.values()) {
-      this.ensureBotAutoAnswerDaemon(inst).catch(() => {});
-    }
     this.emit("state-change", this.getState());
   }
 
@@ -2388,7 +1839,7 @@ export class BlooketInstanceManager extends EventEmitter {
     const errorCount = list.filter((i) => i.status === "error").length;
     const lobbyCount = list.filter((i) => i.status === "lobby").length;
     const inGameCount = list.filter((i) => i.status === "game").length;
-    const activeBots = list.filter((i) => ["starting", "navigating", "entering_pin", "entering_name", "lobby", "game"].includes(i.status));
+    const activeBots = list.filter((i) => ["queued", "starting", "navigating", "entering_pin", "entering_name", "lobby", "game"].includes(i.status));
     const accuracy = this.totalQuestionsAnswered > 0
       ? Math.round((this.totalCorrectAnswers / this.totalQuestionsAnswered) * 100)
       : 100;

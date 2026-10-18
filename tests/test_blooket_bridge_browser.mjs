@@ -16,7 +16,7 @@ await new Promise(resolve => socket.listen(0, '127.0.0.1', resolve));
 const port = socket.address().port; await new Promise(resolve => socket.close(resolve));
 const base = 'http://127.0.0.1:' + port;
 // Independent local service fixture; commands never reach real Blooket bots.
-const shared = { instances: [], logs: [], accuracyRate: 95, answerSpeedMode:'human', answerDelayMinMs:1200, answerDelayMaxMs:2800, gameMode:'gold_quest', autoAnswer:true, autoMinigames:true, accuracyPct:100 }, requests = [], commands = [], sockets = new Set();
+const shared = { instances: [], logs: [], accuracyRate: 95, answerSpeedMode:'human', answerDelayMinMs:1200, answerDelayMaxMs:2800, gameMode:'gold_quest', autoAnswer:false, autoMinigames:true, accuracyPct:100 }, requests = [], commands = [], sockets = new Set();
 function sendFrame(socket, value) {
   const data = Buffer.from(JSON.stringify(value));
   const header = data.length < 126 ? Buffer.from([129, data.length]) : Buffer.from([129,126,data.length >> 8,data.length & 255]);
@@ -28,11 +28,12 @@ const upstream = httpServer(async (req,res) => {
   requests.push({path:req.url, cookie:req.headers.cookie,authorization:req.headers.authorization});
   if(req.method==='POST') {
     const chunks=[];for await(const chunk of req)chunks.push(chunk);
-    const body=JSON.parse(Buffer.concat(chunks));commands.push(body);shared.accuracyRate=body.accuracy;broadcastState();
+    const body=JSON.parse(Buffer.concat(chunks));commands.push(body);if('accuracy'in body)shared.accuracyRate=body.accuracy;if('autoAnswer'in body)shared.autoAnswer=body.autoAnswer;broadcastState();
     res.writeHead(200,{'content-type':'application/json'});return res.end(JSON.stringify({success:true}));
   }
   const pathname=new URL(req.url,'http://fixture').pathname;
-  if (pathname==='/' || ['woodcreek.js','woodcreek.css','components.css','assets/tylerium-logo.svg','assets/manrope.woff2','assets/jetbrains-mono.woff2'].includes(pathname.slice(1))) {
+  if (pathname==='/' || ['woodcreek.js','woodcreek.css','components.css','assets/tylerium-logo.svg','assets/clever-portal.ico','assets/manrope.woff2','assets/jetbrains-mono.woff2'].includes(pathname.slice(1))) {
+    if(pathname==='/'&&!req.headers.authorization?.startsWith('Bearer wc1.')){res.writeHead(303,{location:'https://mitchdog.com/blooket-bot/'});return res.end();}
     const relative=pathname==='/'?'index.html':pathname.slice(1);
     const body=await readFile(resolve(uiRoot,relative));
     const mime=relative.endsWith('.html')?'text/html':relative.endsWith('.js')?'text/javascript':relative.endsWith('.css')?'text/css':relative.endsWith('.woff2')?'font/woff2':'image/svg+xml';
@@ -57,7 +58,7 @@ upstream.on('upgrade',(req,socket)=>{
       if(masked)for(let i=0;i<payload.length;i++)payload[i]^=buffer[offset+i%4];
       buffer=buffer.subarray(header+length);
       if(op===8){socket.end();return}
-      if(op===1){const value=JSON.parse(payload);commands.push(value);if(value.op==='settings'){shared.accuracyRate=value.accuracy;broadcastState()}}
+      if(op===1){const value=JSON.parse(payload);commands.push(value);if(value.op==='settings'){if('accuracy'in value)shared.accuracyRate=value.accuracy;if('autoAnswer'in value)shared.autoAnswer=value.autoAnswer;broadcastState()}}
     }
   });
   socket.on('close',()=>sockets.delete(socket));socket.on('error',()=>sockets.delete(socket));
@@ -131,7 +132,15 @@ try {
   assert.equal(await page.locator('#account-name').getAttribute('data-color'),'electric_blue');
   assert.equal(await page.locator('#account-badge').innerText(),'✔');
   assert.equal(await page.locator('#account-menu summary').getAttribute('data-effect'),'profile_gold_frame');
-  assert((await page.title()).includes('Tylerium Services'));
+  assert.equal(await page.title(),'Clever Portal');
+  assert.equal(await page.locator('link[rel=icon]').getAttribute('href'),'/blooket-bot/assets/clever-portal.ico');
+  assert.equal(await page.getByText('Server status',{exact:true}).count(),0);
+  assert.equal(await page.locator('#btn-answering').innerText(),'Start answering');
+  await page.locator('#btn-answering').click();
+  await page.getByRole('button',{name:'Stop answering',exact:true}).waitFor();
+  assert.equal(shared.autoAnswer,true);
+  direct.send(JSON.stringify({op:'settings',autoAnswer:false}));
+  await page.getByRole('button',{name:'Start answering',exact:true}).waitFor();
   const fonts=await page.evaluate(async()=>{await document.fonts.ready;return [...document.fonts].filter(font=>font.status==='loaded').map(font=>font.family)});
   assert(fonts.includes('Manrope')&&fonts.includes('JetBrainsMono'),'Tylerium fonts must load through the Mitch mount');
   assert(!(await page.locator('body').innerText()).includes('↗'));

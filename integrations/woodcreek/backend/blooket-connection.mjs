@@ -27,6 +27,7 @@ export async function readJoinScreen(page) {
     const hasBlooks = [...document.querySelectorAll('[class*="blookBox"], [class*="blookContainer"], [class*="playerBlook"], [class*="blookWrapper"]')].some(visible);
     return {
       hasPin, hasName, hasRandom, hasBlooks,
+      hasGame: [...document.querySelectorAll('[class*="questionText"], [class*="answersHolder"], [class*="questionHolder"], [class*="feedbackContainer"], [class*="choiceBox"]')].some(visible),
       hasLobbyTxt: /waiting for (the )?host|you[’']?re in|choose a blook|waiting for players/i.test(text),
       invalidPin: /invalid game (id|pin|code)|could not find (that|the) game|game (id|code) (not found|does not exist)/i.test(text),
       isTaken: /name.*(taken|already in use|choose another|not allowed|inappropriate|invalid)/i.test(text),

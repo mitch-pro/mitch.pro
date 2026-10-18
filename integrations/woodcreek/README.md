@@ -17,7 +17,8 @@ the Compose directory, build with `docker compose -p recovered-woodcreek build a
 then publish with `docker compose -p recovered-woodcreek up -d --no-deps --no-build app`.
 The project name must match the existing deployment so the correct image and
 container are updated. This restarts only the main application; check active
-sessions first. Do not change Compose configuration or operate on other services.
+sessions first. Keep other services and Compose settings unchanged. The app uses a process limit of
+1024; its previous limit of 512 caused Chromium thread creation failures.
 
 `components.css` preserves the existing advanced controls and dialogs;
 `woodcreek.css` supplies the neutral responsive layout. School branding and
@@ -32,3 +33,21 @@ back to the server. See [the bridge documentation](../../docs/blooket-bridge.md)
 The account provider is mitchdog.com. Deploy Mitch first, then copy `backend/*`
 to the Node app root and rebuild the main app. The root stays read-only; no
 additional secret, account database, mount, or Compose edit is required.
+
+Public visits to woodcreek.site redirect to mitchdog.com/blooket-bot/. Mitch
+supplies its scoped grant for HTML as well as API requests, so the backend serves
+the proxied document without a redirect loop. Deploy the Mitch bridge first.
+The tab uses Clever Portal and Clever's favicon; the interface keeps Tylerium
+Services branding. The Server status navigation and panel have been removed.
+
+The visible Start answering / Stop answering button controls the server's
+answering state and updates from other clients. Answering starts off. One
+controller submits each bot's own question once; it no longer runs a second
+40ms loop or broadcasts one bot's answer to every other bot.
+
+All joins and retries share two slots with 400ms spacing and checks for process
+and memory headroom. At most 50 connections may be active or queued across the
+service, and names stay unique within a game across batches. Stopping cancels
+queued work. Games already running can be joined directly. Disconnections and
+explicit host removals have separate diagnostics and do not trigger silent
+name changes or automatic rejoining after removal.
