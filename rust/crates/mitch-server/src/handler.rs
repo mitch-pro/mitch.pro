@@ -1003,6 +1003,12 @@ pub async fn handle(
         return redirect("/enroll/", 302);
     }
 
+    if crate::routes::service_auth::is_path(&path) {
+        return crate::routes::service_auth::handle(
+            &state, &method, &path, &search, headers, body_bytes,
+        );
+    }
+
     if crate::routes::woodcreek::is_path(&path) {
         return crate::routes::woodcreek::handle(
             &state, &method, &path, &search, headers, body_bytes, ws_upgrade,

@@ -53,6 +53,7 @@ fn allowed_path(relative: &str, method: &Method) -> bool {
         | "woodcreek.js"
         | "bookmarklets"
         | "bookmarklets.html"
+        | "api/account"
         | "api/state"
         | "api/preview-names"
         | "api/bot/screenshot"
@@ -165,12 +166,19 @@ pub async fn handle(
     }) else {
         return error(503, "Blooket tools are temporarily unavailable.");
     };
-    // Mitch cookies, authorization, and forwarding headers stay on Mitch.
+    // Mitch cookies and incoming authorization stay on Mitch. Only a
+    // dedicated Woodcreek grant authenticates the backend connection.
     let mut request = client.request(method.clone(), url);
     for name in ["accept", "content-type"] {
         if let Some(value) = headers.get(name) {
             request = request.header(name, value);
         }
+    }
+    if relative.starts_with("api/") {
+        let Some(grant) = crate::routes::service_auth::issue(state, headers) else {
+            return error(401, "Sign in again.");
+        };
+        request = request.bearer_auth(grant);
     }
     if *method == Method::POST {
         request = request.body(body.to_vec());
@@ -222,10 +230,23 @@ async fn relay(
     email: String,
     headers: HeaderMap,
 ) {
-    use tokio_tungstenite::tungstenite::Message as UpstreamMessage;
+    use tokio_tungstenite::tungstenite::{client::IntoClientRequest, Message as UpstreamMessage};
+    let Some(grant) = crate::routes::service_auth::issue(&state, &headers) else {
+        let _ = client.close().await;
+        return;
+    };
+    let Ok(mut request) = url.into_client_request() else {
+        let _ = client.close().await;
+        return;
+    };
+    let Ok(authorization) = format!("Bearer {grant}").parse() else {
+        let _ = client.close().await;
+        return;
+    };
+    request.headers_mut().insert("authorization", authorization);
     let connected = tokio::time::timeout(
         Duration::from_secs(20),
-        tokio_tungstenite::connect_async(url),
+        tokio_tungstenite::connect_async(request),
     )
     .await;
     let Ok(Ok((mut upstream, _))) = connected else {

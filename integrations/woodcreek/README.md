@@ -1,8 +1,9 @@
-# Woodcreek dashboard frontend
+# Tylerium Services on woodcreek.site
 
 These are the redesigned files for the main `woodcreek.site` application.
-The existing Node backend and its other public assets stay on
-`tyler-home-server`; subdomains are separate applications.
+The `backend/` directory versions the account middleware, Blooket manager, and
+Node HTTP/WebSocket entrypoint; deploy these files at the application root. Other
+public assets remain on `tyler-home-server`; subdomains are separate applications.
 
 The live app is Docker Compose service `app` in
 `/opt/recovered-sites/woodcreek`, container `recovered-woodcreek-app-1`.
@@ -27,3 +28,7 @@ The app reads `data-app-base` for mounted API and WebSocket URLs. It runs at
 Woodcreek's root and through Mitch's `/blooket-bot/` bridge. Incoming settings
 update controls when they are not being edited; hydration never sends settings
 back to the server. See [the bridge documentation](../../docs/blooket-bridge.md).
+
+The account provider is mitchdog.com. Deploy Mitch first, then copy `backend/*`
+to the Node app root and rebuild the main app. The root stays read-only; no
+additional secret, account database, mount, or Compose edit is required.

@@ -13,16 +13,48 @@ Commands and live updates travel in both directions. The existing legacy
 Mitch checks signed, non-revoked sessions and bans for every request, and
 rechecks WebSocket authentication every 15 seconds. Mutating HTTP requests
 require the site's CSRF header and trusted origin; WebSocket upgrades also
-require a trusted origin. Mitch does not forward its cookies or Authorization
-headers, and does not accept upstream cookies or redirects. URLs are restricted
+require a trusted origin. Mitch sends its own scoped Woodcreek grant to the
+backend, never browser cookies or incoming Authorization headers. It does not
+accept upstream cookies or redirects. URLs are restricted
 to the configured service, paths and methods are allowlisted, command traffic
 is limited per account, and responses have a size limit.
 
 The dashboard reads `data-app-base` to route API requests and WebSockets at
 either origin. Mounted HTML rewrites local asset links and loads Mitch's
 presence tracker. Woodcreek's own public URL and subdomains keep their existing
-routing. This integration does not share accounts or login cookies between
-the domains.
+routing. The main application is branded **Tylerium Services**, using the logo
+and fonts from tylerium.pro, with no decorative external-link arrows.
+
+## Shared accounts
+
+Woodcreek's `/auth/login` redirects to Mitch's `/api/woodcreek/auth/authorize`.
+Existing Mitch sessions continue immediately; otherwise `/enroll/?next=...`
+returns to authorization after sign-in. A fixed Woodcreek callback receives a
+90-second, one-use code. The Woodcreek backend exchanges it with an S256 PKCE
+verifier held in an HttpOnly flow cookie. SQLite atomically consumes the code,
+including across blue/green deployments. Callback state must match the flow
+cookie, and return paths are restricted to local paths.
+
+The seven-day service grant uses AES-256-GCM with a purpose-separated key.
+Only Mitch can open it or use the enclosed session proof. Woodcreek validates
+it through the dedicated Mitch session endpoint, which checks the original
+session, account revocation, and bans, then returns the account's saved name
+and photo. No duplicate user database or cross-domain login cookie is created.
+Woodcreek's `__Host-tylerium_session` cookie is Secure, HttpOnly, SameSite=Lax,
+and host-only; subdomains receive no account cookie.
+
+Woodcreek requires an account for APIs and WebSockets. Cookie-authenticated
+writes require its own origin and CSRF header; the Mitch bridge supplies a
+scoped grant for HTTP and WebSocket connections. Session validation caches for
+at most ten seconds, WebSockets recheck every fifteen seconds, and failures
+close access. Woodcreek sign-out revokes its grant; Mitch logout invalidates the
+original session and therefore all linked grants. The account menu reads the
+existing Mitch profile.
+
+`MITCH_AUTH_ORIGIN` overrides Woodcreek's account provider for local fixtures;
+production defaults to `https://mitchdog.com`. Deploy the Mitch provider before
+the Woodcreek authentication middleware. No new shared secret or writable
+container directory is needed.
 
 `WOODCREEK_BACKEND_URL` optionally overrides the service origin for deployment
 or isolated integration tests. It must be an HTTP(S) origin without credentials,
@@ -33,3 +65,8 @@ starts an isolated local backend and temporary Mitch database. It verifies the
 mounted page, HTTP and WebSocket commands, updates from both sites, CSRF and
 origin checks, cookie isolation, path restrictions, and revoked sessions.
 It never launches bots or sends commands to the production service.
+
+`node tests/test_woodcreek_accounts.mjs` exercises both backends with a real local
+Mitch server in production authentication mode. It checks the profile, PKCE,
+state, code persistence and concurrent consumption, cookies, CSRF, token
+integrity, grant revocation, and linked Mitch logout without production data.

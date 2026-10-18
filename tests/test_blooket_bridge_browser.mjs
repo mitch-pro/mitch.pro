@@ -32,12 +32,13 @@ const upstream = httpServer(async (req,res) => {
     res.writeHead(200,{'content-type':'application/json'});return res.end(JSON.stringify({success:true}));
   }
   const pathname=new URL(req.url,'http://fixture').pathname;
-  if (pathname==='/' || ['woodcreek.js','woodcreek.css','components.css','assets/woodcreek-mark.svg'].includes(pathname.slice(1))) {
+  if (pathname==='/' || ['woodcreek.js','woodcreek.css','components.css','assets/tylerium-logo.svg','assets/manrope.woff2','assets/jetbrains-mono.woff2'].includes(pathname.slice(1))) {
     const relative=pathname==='/'?'index.html':pathname.slice(1);
     const body=await readFile(resolve(uiRoot,relative));
     const mime=relative.endsWith('.html')?'text/html':relative.endsWith('.js')?'text/javascript':relative.endsWith('.css')?'text/css':'image/svg+xml';
     res.writeHead(200,{'content-type':mime});return res.end(body);
   }
+  if(pathname==='/api/account'){res.writeHead(200,{'content-type':'application/json'});return res.end(JSON.stringify({account:{username:'alice',displayName:'Alice',pfp:''}}));}
   res.writeHead(200,{'content-type':'application/json','set-cookie':'fixture_cookie=must-not-reach-browser'});res.end(JSON.stringify(shared));
 });
 upstream.on('upgrade',(req,socket)=>{
@@ -121,13 +122,13 @@ try {
   let directState;
   direct.onmessage=event=>{const message=JSON.parse(event.data);directState=message.state};
   await page.goto(base+'/blooket-bot/');
-  await page.waitForFunction(()=>document.getElementById('status-text')?.textContent==='Connected' && document.getElementById('bulk-editor-textarea')?.value.length>0);
+  await page.waitForFunction(()=>document.getElementById('status-text')?.textContent==='Connected' && document.getElementById('bulk-editor-textarea')?.value.length>0, null, {timeout:8000}).catch(async error => { throw new Error(JSON.stringify({errors, requests:requests.map(r=>r.path), status:await page.locator('#status-text').textContent(),notice:await page.locator('#account-notice-text').textContent()})+' '+error.message); });
   assert(!commands.length,'Opening the shared dashboard must not send settings or commands');
   assert.equal(page.url(),base+'/blooket-bot/');
   assert.equal(await page.locator('html').getAttribute('data-app-base'),'/blooket-bot');
   assert.equal(await page.locator('.workspace-heading h1').innerText(),'Blooket');
   assert.equal(await page.locator('#accuracy-badge-box').textContent(),'95%');
-  for(const width of [1440,768,390,320]) {await page.setViewportSize({width,height:1000});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Mounted dashboard must fit '+width);}
+  for(const width of [1440,768,390,320]) {await page.setViewportSize({width,height:1000});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Mounted dashboard must fit '+width+' '+JSON.stringify(await page.evaluate(()=>[...document.querySelectorAll('body *')].filter(el=>el.getBoundingClientRect().right>innerWidth+1&&el.getBoundingClientRect().width>0).slice(0,15).map(el=>({tag:el.tagName,id:el.id,class:el.className,right:el.getBoundingClientRect().right})))));}
   await page.setViewportSize({width:1440,height:1050});
   assert(await page.locator('script[src="/presence.js?v=1"]').count());
   assert((await actor.request.head(base+'/blooket-bot/')).ok());
@@ -158,7 +159,7 @@ try {
   const anonymous=await watcherBrowser.newContext();
   assert.equal((await anonymous.request.get(base+'/blooket-bot/api/state')).status(),401);
   assert.equal((await anonymous.request.get(base+'/blooket-bot/',{maxRedirects:0})).status(),302);
-  assert(requests.every(request=>!request.cookie&&!request.authorization),'Mitch cookies and authorization must never reach Woodcreek');
+  assert(requests.every(request=>!request.cookie && (!request.authorization || request.authorization.startsWith('Bearer wc1.'))),'Only scoped grants may reach Woodcreek; Mitch cookies and incoming authorization stay on Mitch');
   assert(!(await actor.cookies()).some(cookie=>cookie.name==='fixture_cookie'),'Upstream cookies must never reach Mitch users');
   const revokeDb=new DatabaseSync(data+'/mitchpro.db');
   revokeDb.prepare('INSERT INTO revoked_ids(sid,data,updated_at) VALUES(?,?,?)').run(alice.sid,JSON.stringify({email:alice.email}),Date.now());revokeDb.close();

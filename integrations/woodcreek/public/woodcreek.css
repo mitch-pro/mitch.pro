@@ -1,16 +1,18 @@
+@font-face{font-family:Manrope;src:url('/assets/manrope.woff2') format('woff2');font-weight:200 800;font-display:swap}
+@font-face{font-family:JetBrainsMono;src:url('/assets/jetbrains-mono.woff2') format('woff2');font-weight:400;font-display:swap}
 :root {
   color-scheme: dark;
-  --bg-page:#141416; --bg-card:#1c1c1f; --bg-card-sub:#19191c; --bg-input:#161618;
-  --bg-subtle:#252529; --bg-hover:#2c2c31; --border:#323237; --border-focus:#bd677b;
-  --primary:#a23d55; --primary-hover:#b84b65; --primary-glow:transparent;
-  --accent-maroon:#a23d55; --accent-crimson:#c8798d; --accent-magenta:#c8798d;
+  --bg-page:#0c121d; --bg-card:#151e2c; --bg-card-sub:#111a27; --bg-input:#101724;
+  --bg-subtle:#252529; --bg-hover:#2c2c31; --border:#323237; --border-focus:#9acbfa;
+  --primary:#87b8e5; --primary-hover:#a6d1f7; --primary-glow:transparent;
+  --accent-maroon:#87b8e5; --accent-crimson:#9acbfa; --accent-magenta:#9acbfa;
   --accent-cyan:#b8b8c1; --accent-silver:#b8b8c1;
   --text-main:#eeeef0; --text-muted:#aaaab4; --text-sub:#92929d;
   --success:#8cbea1; --success-subtle:#1d2b23; --danger:#e49496; --danger-subtle:#362326;
   --warning:#d4b17b; --warning-subtle:#302b22; --info:#b4bacb; --info-subtle:#262932;
   --radius-sm:7px; --radius-md:10px; --radius:12px; --radius-lg:14px;
-  --font:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  --font-mono:ui-monospace,SFMono-Regular,Consolas,monospace;
+  --font:Manrope,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-mono:JetBrainsMono,SFMono-Regular,Consolas,monospace;
 }
 html {scroll-behavior:smooth;scroll-padding-top:24px}
 body {display:block;padding:0;background:var(--bg-page);background-image:none;color:var(--text-main);font:14px/1.5 var(--font);min-width:320px}
@@ -38,8 +40,8 @@ svg {flex-shrink:0}
 .site-nav a,.site-nav button,.sidebar-bottom a {display:flex;align-items:center;gap:11px;padding:11px 12px;border:1px solid transparent;border-radius:7px;font-size:13px;font-weight:500;color:#a9a9b2;background:transparent;width:100%;text-align:left;min-height:42px}
 .site-nav svg,.sidebar-bottom svg {width:17px;height:17px;opacity:.85}
 .site-nav a:hover,.site-nav button:hover,.sidebar-bottom a:hover {background:#242427;color:#eeeef0;transform:none}
-.site-nav a.is-current {color:#f0dee3;background:#34222b;border-color:#4d2a37}
-.site-nav a.is-current svg {color:#d18c9d}
+.site-nav a.is-current {color:#e1effd;background:#22364d;border-color:#476585}
+.site-nav a.is-current svg {color:#9acbfa}
 .site-nav .badge-vault-count {display:none}
 .sidebar-bottom {margin-top:auto;border-top:1px solid #2a2a2f;padding-top:16px;display:grid;gap:4px}
 .sidebar-bottom a:last-child {color:#91919d;font-size:12px;justify-content:space-between}
@@ -59,7 +61,7 @@ svg {flex-shrink:0}
 .join-panel,#bot-names {border:1px solid var(--border);border-radius:12px;background:var(--bg-card);padding:24px;min-width:0;margin:0}
 .join-panel {display:flex;flex-direction:column;gap:26px}
 .panel-heading {display:flex;gap:13px;align-items:center;margin-bottom:2px}
-.section-icon {width:40px;height:40px;display:grid;place-items:center;border-radius:9px;color:#d298a7;background:#36252c;border:1px solid #50303b}
+.section-icon {width:40px;height:40px;display:grid;place-items:center;border-radius:9px;color:#9acbfa;background:#203147;border:1px solid #39536e}
 .section-icon svg {width:21px;height:21px}
 .panel-heading h2,.roster-title {font-size:18px;font-weight:600;letter-spacing:-.4px;color:var(--text-main)}
 .panel-heading p {color:var(--text-sub);font-size:12px;margin-top:4px}
@@ -84,7 +86,7 @@ svg {flex-shrink:0}
 .count-slider::-webkit-slider-thumb {width:13px;height:13px;background:#d596a7;border:2px solid #282127;border-radius:50%;transform:none}
 #input-count {height:33px;width:52px;flex:0 0 52px;border:1px solid #3b3b43;border-radius:6px;background:var(--bg-input);color:var(--text-main);font:13px var(--font-mono);padding:4px 6px;text-align:center}
 .join-panel .action-group {margin-top:auto;padding:0}
-#btn-launch {height:45px;border:1px solid #b9526d;background:#a23d55;border-radius:8px;color:#fff;display:flex;align-items:center;justify-content:center;gap:10px;font:500 13px var(--font);letter-spacing:0;transform:none;text-transform:none}
+#btn-launch {height:45px;border:1px solid #b9526d;background:#87b8e5;border-radius:8px;color:#fff;display:flex;align-items:center;justify-content:center;gap:10px;font:500 13px var(--font);letter-spacing:0;transform:none;text-transform:none}
 #btn-launch:hover {background:var(--primary-hover);transform:none}
 #btn-launch svg {width:14px;height:14px;fill:currentColor;stroke:none}
 #bot-names {display:flex;flex-direction:column;gap:0}
@@ -217,7 +219,7 @@ summary::-webkit-details-marker {display:none}
 .vault-view-tab {border-color:transparent;background:none}
 .vault-view-tab.active,.target-btn.active {color:#f0dce4;background:#38262e;border-color:#835065}
 .cheats-avail-banner {background:#25252b;border:0;color:#bbbcc7;border-radius:0;font:12px var(--font)}
-.gui-deck-nav {background:#19191c;border-color:var(--border);padding:14px}
+.gui-deck-nav {background:#111a27;border-color:var(--border);padding:14px}
 .gui-nav-item {color:#aaaab7;background:none;padding:11px;border-color:transparent}
 .gui-nav-item.active {background:#38262e;color:#edd6de;border-color:#624050}
 .gui-nav-item svg {color:inherit;stroke:currentColor}
@@ -283,3 +285,36 @@ summary::-webkit-details-marker {display:none}
 .app-shell>.footer {display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .mitch-link {color:#a4a2ad;font-size:11px}
 .mitch-link:hover {color:#e4c2cd}
+
+/* Tylerium's navigation colors, typography, and rounded frame. */
+.site-sidebar{inset:18px auto 18px 18px;width:220px;border:1px solid #52678355;border-radius:18px;background:linear-gradient(145deg,#1b2b40f5,#111a28fa);padding:25px 13px;backdrop-filter:blur(18px)}
+.app-shell.container{padding-left:244px}
+.site-sidebar .brand{gap:10px;padding:0 8px 28px}
+.brand-logo{width:36px;height:36px;flex:0 0 36px;border-radius:9px}
+.brand-title{font:600 19px var(--font-mono);letter-spacing:-1px;white-space:nowrap}
+.brand-period{color:#9acbfa}
+.brand-edition-badge{font:11px var(--font);color:#b2bfce;margin-top:3px;letter-spacing:.1px}
+.site-nav a,.site-nav button,.sidebar-bottom a{color:#b2bfce;font-size:12px;border-radius:8px}
+.site-nav a:hover,.site-nav button:hover,.sidebar-bottom a:hover{background:#24364b;color:#e4effb}
+.site-nav a.is-current{color:#d5eaff;background:#9acbfa15;border-color:#9acbfa38}
+.sidebar-bottom{border-color:#52678355;padding-top:13px;gap:2px}
+.account-panel{border-bottom:1px solid #52678355;margin-bottom:6px;padding-bottom:10px;min-width:0}
+.account-panel summary{display:flex;align-items:center;gap:10px;list-style:none;padding:8px;cursor:pointer;border-radius:8px}
+.account-panel summary:hover{background:#24364b}
+.account-avatar{display:grid;place-items:center;flex:0 0 30px;width:30px;height:30px;border-radius:50%;background:#2b405a;color:#d5eaff;overflow:hidden;font-size:12px}
+.account-avatar img{width:100%;height:100%;object-fit:cover}
+#account-name{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.account-actions{display:grid;margin:5px 0 2px 40px;gap:4px}
+.account-actions a,.account-actions button{font:11px var(--font);min-height:34px;padding:8px;background:none;border:0;color:#b2bfce;text-align:left;border-radius:6px}
+.account-actions a:hover,.account-actions button:hover{background:#24364b;color:#e4effb}
+.account-notice{border:1px solid #52678355;background:#18263a;border-radius:10px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:15px;color:#c0cede;font-size:12px}
+.account-notice p{margin:0}
+.account-notice a{flex-shrink:0;color:#d5eaff;border:1px solid #7595b466;padding:7px 12px;border-radius:6px;background:#29435f}
+#btn-launch{color:#081827}
+@media(min-width:1600px){.site-sidebar{width:228px}.app-shell.container{padding-left:250px}}
+@media(max-width:900px){.site-sidebar{position:relative;inset:auto;width:calc(100% - 36px);margin:18px 18px 0;border-radius:16px;padding:16px;flex-direction:row;align-items:center}.app-shell.container{padding-left:0}.site-sidebar .brand{padding:0}.brand-logo{width:32px;height:32px;flex-basis:32px}.brand-title{font-size:17px}.sidebar-bottom{display:flex;border:0;margin:0 0 0 auto;padding:0}.sidebar-bottom>a{display:none}.account-panel{border:0;margin:0;padding:0}.account-actions{position:absolute;right:16px;top:70px;background:#162439;border:1px solid #52678388;padding:8px;margin:0;z-index:60;border-radius:8px;min-width:150px}.site-nav{flex:1}}
+@media(max-width:720px){.site-sidebar{align-items:stretch;flex-wrap:wrap;gap:14px;margin:12px 12px 0;width:calc(100% - 24px);padding:14px}.site-sidebar .brand{align-self:center}.brand-info{flex-direction:column;gap:0;align-items:start}.brand-edition-badge{display:block;font-size:10px}.site-nav{order:3;flex-basis:100%;display:flex;flex-direction:row}.sidebar-bottom{position:absolute;right:14px;top:15px;height:36px}.account-panel summary{padding:3px;max-width:130px}.account-actions{top:45px;right:0}.brand-title{font-size:17px}.account-notice{align-items:start;padding:13px}.account-notice a{padding:7px 10px}#account-signin{min-height:36px;padding:6px 10px}.app-shell>.header{padding-top:26px}.account-notice{font-size:11px}}
+@media(max-width:380px){#account-name{max-width:68px}.brand-title{font-size:16px}.site-sidebar .brand{gap:7px}.brand-logo{width:29px;height:29px;flex-basis:29px}}
+@media(max-width:900px){.site-sidebar{flex-wrap:wrap;flex-direction:row}.site-nav{order:3;flex:1 1 100%;min-width:0;justify-content:flex-start}.sidebar-bottom{margin-left:auto}}
+@media(max-width:720px){.site-nav{justify-content:space-between;gap:2px}.site-nav a,.site-nav button{font-size:11px;padding:8px 5px;gap:0;min-width:0;justify-content:center}.site-nav .sidebar-tools svg{display:none}}
+@media(max-width:380px){.site-nav a,.site-nav button{font-size:10px;padding:8px 3px}}

@@ -585,6 +585,10 @@ pub const PUBLIC_API_PATHS: &[&str] = &[
     "/api/sso/bridge",
     "/api/sso/bridge/handoff",
     "/api/sso/exchange",
+    "/api/woodcreek/auth/authorize",
+    "/api/woodcreek/auth/token",
+    "/api/woodcreek/auth/session",
+    "/api/woodcreek/auth/revoke",
     "/api/weather",
     "/api/school-calendar",
     "/api/school-info",
@@ -613,6 +617,9 @@ pub const PUBLIC_API_PATHS: &[&str] = &[
 /// exempt (they require X-Mitch-Requested-With like every other /api/ POST).
 pub const CSRF_EXEMPT_PATHS: &[&str] = &[
     "/api/sso/exchange",
+    "/api/woodcreek/auth/token",
+    "/api/woodcreek/auth/session",
+    "/api/woodcreek/auth/revoke",
     "/api/sso/bridge/handoff",
     "/api/dm/attachment/upload",
     "/api/games",

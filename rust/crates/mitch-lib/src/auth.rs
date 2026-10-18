@@ -978,6 +978,10 @@ pub fn rate_limit_for(endpoint: &str) -> (u32, u32) {
         "/api/admin/profile-reports/resolve" => (20, 60),
         "/api/presence/heartbeat" => (240, 60),
         "/api/blooket-fleet/control" => (600, 60),
+        "/api/woodcreek/auth/session" => (6000, 60),
+        "/api/woodcreek/auth/authorize"
+        | "/api/woodcreek/auth/token"
+        | "/api/woodcreek/auth/revoke" => (120, 60),
         "/api/premium-chat/history" => (60, 60),
         "/api/premium-chat/send" => (3, 10),
         "/api/public-chat/history" => (60, 60),
@@ -1185,7 +1189,15 @@ pub fn check_rate_limit(
         return None;
     }
     // Public presence polling must not share one anonymous bucket across all visitors.
-    let public_presence = matches!(endpoint, "/api/presence/count" | "/api/access/status");
+    let public_presence = matches!(
+        endpoint,
+        "/api/presence/count"
+            | "/api/access/status"
+            | "/api/woodcreek/auth/authorize"
+            | "/api/woodcreek/auth/session"
+            | "/api/woodcreek/auth/token"
+            | "/api/woodcreek/auth/revoke"
+    );
     if limiter.rate_limited(&format!("ip:{ip}"), endpoint)
         || (!public_presence && limiter.rate_limited(id_key, endpoint))
     {
