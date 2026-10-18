@@ -2,7 +2,8 @@ import { PIN_SELECTOR, NAME_SELECTOR, visibleField, submitJoinField } from './bl
 const clean=value=>String(value??'').replace(/\s+/g,' ').trim().toLowerCase();
 
 // Submit through the visible game control once; never click the next screen blindly.
-export async function submitAnswer(page,state,choice) {
+export async function submitAnswer(page,state,choice,active=()=>true) {
+  if(!active())return null;
   if(await visibleField(page,PIN_SELECTOR).count()||await visibleField(page,NAME_SELECTOR).count())return null;
   const heading=page.locator('[class*="questionText"], [class*="QuestionText"], [class*="questionHolder"], [class*="questionContainer"]').filter({visible:true}).first();
   if(await heading.count()) {
@@ -12,7 +13,8 @@ export async function submitAnswer(page,state,choice) {
   if(state.questionType==='typing') {
     const input=page.locator('input[class*="typingInput"], input[placeholder*="type" i], input[placeholder*="answer" i]').filter({visible:true}).first();
     if(!await input.count())return null;
-    await input.fill(choice.text);await submitJoinField(input);
+    if(!active())return null;
+    await input.fill(choice.text);if(!active())return null;await submitJoinField(input);
     return {text:choice.text};
   }
   for(const selector of ['[class*="answerContainer"]','[class*="answerWrapper"]','[class*="answersHolder"] > div','[class*="answersHolder"] > button','[class*="answersWrapper"] > div','[class*="answerCard"]','[role="button"][class*="answer"]']) {
@@ -21,6 +23,7 @@ export async function submitAnswer(page,state,choice) {
     const texts=await cards.allInnerTexts();
     const index=texts.findIndex(text=>clean(text)===clean(choice.text));
     if(index<0)return null;
+    if(!active())return null;
     await cards.nth(index).click({timeout:2000});
     return {text:texts[index].trim()};
   }

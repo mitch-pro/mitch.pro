@@ -39,5 +39,13 @@ try{
   let active=true;const cancelled=guarded.run(async()=>{entered=true},()=>active);active=false;guarded.cancelInactive();await cancelled;assert.equal(entered,false);
   assert.equal(manager.fleetCount({count:2.8}),2);
   assert.throws(()=>manager.validateStart({pin:'123456',count:50}),/slots are available/);
+  const retryManager=new BlooketInstanceManager();retryManager.joinScheduler=new JoinScheduler({spacingMs:0,capacity:async()=>true});
+  const connected=retryManager.createBotInstance('connected','Alex','cat','123456');connected.status='lobby';
+  const retry=retryManager.createBotInstance('retry','Alex','cat','123456');retry.status='error';
+  retryManager.executeBotJoin=async instance=>{instance.status='lobby'};
+  await retryManager.retryBot('retry');assert.notEqual(retry.name,connected.name,'A retry must not take over another connection with the same nickname');
+  for(let i=0;i<48;i++)retryManager.instances.set('active-'+i,{id:'active-'+i,name:'Name'+i,pin:'123456',status:'lobby'});
+  retry.status='error';retryManager.instances.set('extra',{id:'extra',name:'Extra',pin:'123456',status:'lobby'});
+  await assert.rejects(retryManager.retryBot('retry'),/50 bots/);
   console.log('PASS: explicit answer activation, one answer per question, stale/join-screen protection, immediate pause, shared join limits, capacity rejection, cancellation, and total bot cap. No external requests.');
 }finally{await browser.close()}

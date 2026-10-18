@@ -890,6 +890,7 @@ export class BlooketInstanceManager extends EventEmitter {
   async retryBot(id, customNameOrBool = "") {
     const inst = this.instances.get(id);
     if (!inst || inst.cancelled || inst.lifecycleActive || inst.retrying || this.stopping) return;
+    if (inst.status==="error"&&[...this.instances.values()].filter(other=>!other.cancelled&&other.status!=="error").length>=50) throw new Error("Up to 50 bots can be connected or queued. Stop one before retrying.");
     inst.retrying = true;
     try { return await this.retryInstance(inst, customNameOrBool); }
     finally { inst.retrying = false; }
@@ -906,6 +907,8 @@ export class BlooketInstanceManager extends EventEmitter {
       this.log(`Assigned fresh unique real name [${inst.name}] to bot ${inst.id}`, "system", inst.name);
     }
 
+    const usedNames=new Set([...this.instances.values()].filter(other=>other!==inst&&other.pin===inst.pin&&!other.cancelled&&other.status!=="error").map(other=>other.name.toLowerCase()));
+    if(usedNames.has(inst.name.toLowerCase())) inst.name=this.generateUniqueRealName(usedNames);
     this.log(`Retrying bot [${inst.name}]...`, "system", inst.name);
 
     if (inst.autoAnswerLoop) clearTimeout(inst.autoAnswerLoop);
@@ -1377,7 +1380,7 @@ export class BlooketInstanceManager extends EventEmitter {
       const text=state.questionType==="typing"?(wantCorrect&&correctText?String(correctText):"pass"):
         wantCorrect&&correctText?String(correctText):String(incorrect[0]??answers[0]??"");
       if(!text)return;
-      const submitted=await submitAnswer(page,state,{text});
+      const submitted=await submitAnswer(page,state,{text},active);
       if(!submitted||!active())return;
       instance.lastAnswerAttemptKey=questionKey;instance.lastAnswerAttemptTime=Date.now();
       instance.questionsAnswered++;this.totalQuestionsAnswered++;
