@@ -27,6 +27,7 @@ try {
   db.prepare('INSERT INTO names(sid,email,norm_email,created_at) VALUES(?,?,?,?)').run(sid,email,email,Date.now());
   db.prepare('INSERT INTO passwords(email,hash,updated_at) VALUES(?,?,?)').run(email,'fixture-password-hash',Date.now());
   db.prepare('INSERT INTO profiles(email,data,updated_at) VALUES(?,?,?)').run(email,JSON.stringify({username:'alice',displayName:'Alice Example',pfp:'https://example.test/alice.png',totpSecret:'must-not-leak'}),Date.now());
+  db.prepare('INSERT INTO cosmetics(email,data,updated_at) VALUES(?,?,?)').run(email,JSON.stringify({activeColor:'electric_blue',activeBadge:'verified_badge',activeProfileEffect:'profile_gold_frame'}),Date.now());
   db.prepare('INSERT INTO json_documents(path,content,updated_at) VALUES(?,?,?)').run('data/auth_sessions.json',JSON.stringify({[hash(session)]:{email,normEmail:email,sid,gen:0,createdAt:Date.now(),lastSeen:Date.now(),expiresAt:Date.now()+86400000}}),Date.now());db.close();
   const auth=createAccountAuth({provider});
   wood=createServer(async(req,res)=>{const url=new URL(req.url,'https://woodcreek.site');if(await auth.handle(req,res,url))return;res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true}));});
@@ -52,7 +53,7 @@ try {
   const ownCookie=cookieValue(returned,'__Host-tylerium_session');assert(ownCookie);
   const token=ownCookie.slice(ownCookie.indexOf('=')+1);assert(token.startsWith('wc1.'));assert(!token.includes(session)&&!token.includes(sid));
   assert.equal((await post('token',{code,code_verifier:flowData.verifier})).status,400,'Codes must be one-use');
-  let account=await fetch(base+'/api/account',{headers:{Cookie:ownCookie}});assert.equal(account.status,200);account=await account.json();assert.equal(account.account.displayName,'Alice Example');assert.equal(account.account.pfp,'https://example.test/alice.png');assert(!JSON.stringify(account).includes('totpSecret'));
+  let account=await fetch(base+'/api/account',{headers:{Cookie:ownCookie}});assert.equal(account.status,200);account=await account.json();assert.equal(account.account.displayName,'Alice Example');assert.equal(account.account.activeColor,'electric_blue');assert.equal(account.account.activeBadge,'verified_badge');assert.equal(account.account.activeProfileEffect,'profile_gold_frame');assert.equal(account.account.pfp,'https://example.test/alice.png');assert(!JSON.stringify(account).includes('totpSecret'));
   assert.equal((await fetch(base+'/api/state',{headers:{Cookie:ownCookie}})).status,200);
   assert.equal((await fetch(base+'/api/start',{method:'POST',headers:{Cookie:ownCookie,Origin:'https://evil.example','X-Mitch-Requested-With':'1'}})).status,403);
   assert.equal((await post('session',{},token.slice(0,-3)+'bad')).status,401,'Tampered grants must fail');

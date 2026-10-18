@@ -38,7 +38,7 @@ const upstream = httpServer(async (req,res) => {
     const mime=relative.endsWith('.html')?'text/html':relative.endsWith('.js')?'text/javascript':relative.endsWith('.css')?'text/css':relative.endsWith('.woff2')?'font/woff2':'image/svg+xml';
     res.writeHead(200,{'content-type':mime});return res.end(body);
   }
-  if(pathname==='/api/account'){res.writeHead(200,{'content-type':'application/json'});return res.end(JSON.stringify({account:{username:'alice',displayName:'Alice',pfp:''}}));}
+  if(pathname==='/api/account'){res.writeHead(200,{'content-type':'application/json'});return res.end(JSON.stringify({account:{username:'alice',displayName:'Alice',pfp:'',activeColor:'electric_blue',activeBadge:'verified_badge',activeProfileEffect:'profile_gold_frame'}}));}
   res.writeHead(200,{'content-type':'application/json','set-cookie':'fixture_cookie=must-not-reach-browser'});res.end(JSON.stringify(shared));
 });
 upstream.on('upgrade',(req,socket)=>{
@@ -128,6 +128,9 @@ try {
   assert.equal(await page.locator('html').getAttribute('data-app-base'),'/blooket-bot');
   assert.equal(await page.locator('.workspace-heading h1').innerText(),'Blooket');
   assert.equal(await page.locator('#account-name').innerText(),'Alice');
+  assert.equal(await page.locator('#account-name').getAttribute('data-color'),'electric_blue');
+  assert.equal(await page.locator('#account-badge').innerText(),'✔');
+  assert.equal(await page.locator('#account-menu summary').getAttribute('data-effect'),'profile_gold_frame');
   assert((await page.title()).includes('Tylerium Services'));
   const fonts=await page.evaluate(async()=>{await document.fonts.ready;return [...document.fonts].filter(font=>font.status==='loaded').map(font=>font.family)});
   assert(fonts.includes('Manrope')&&fonts.includes('JetBrainsMono'),'Tylerium fonts must load through the Mitch mount');

@@ -49,7 +49,7 @@ scoped grant for HTTP and WebSocket connections. Session validation caches for
 at most ten seconds, WebSockets recheck every fifteen seconds, and failures
 close access. Woodcreek sign-out revokes its grant; Mitch logout invalidates the
 original session and therefore all linked grants. The account menu reads the
-existing Mitch profile.
+existing Mitch profile, including the chosen photo, name color, badge, and profile effect.
 
 `MITCH_AUTH_ORIGIN` overrides Woodcreek's account provider for local fixtures;
 production defaults to `https://mitchdog.com`. Deploy the Mitch provider before

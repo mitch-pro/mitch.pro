@@ -154,7 +154,14 @@ fn account(state: &AppState, email: &str) -> Value {
         1000,
         120_000,
     );
-    json!({"username":username,"displayName":processed.get("displayName"),"pfp":pfp,"profileUrl":"https://mitchdog.com/profile/"})
+    let cosmetics = mitch_lib::shop::cosmetics_get(&state.store, email).unwrap_or(json!({}));
+    let color = mitch_lib::shop::public_active_color(
+        &state.store,
+        email,
+        cosmetics.get("activeColor").unwrap_or(&Value::Null),
+    );
+    json!({"username":username,"displayName":processed.get("displayName"),"pfp":pfp,"profileUrl":"https://mitchdog.com/profile/",
+        "activeColor":color,"activeBadge":cosmetics.get("activeBadge"),"activeProfileEffect":cosmetics.get("activeProfileEffect")})
 }
 
 pub fn handle(
