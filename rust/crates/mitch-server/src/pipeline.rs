@@ -139,7 +139,7 @@ pub fn inject_page(
         inject_str.push_str("<script src=\"/site-theme.js\"></script>\n");
     }
     if !is_embedded && !raw.contains("/app-shell.js") {
-        inject_str.push_str("<script src=\"/app-shell.js\" defer></script>\n");
+        inject_str.push_str("<script src=\"/app-shell.js?v=2\" defer></script>\n");
     }
     if !is_embedded
         && (path == "/encrypt" || path == "/encrypt/" || path == "/encrypt/index.html")

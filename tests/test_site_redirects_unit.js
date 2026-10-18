@@ -17,12 +17,12 @@ for (const path of ['/', '/bell/schedule.js?v=5', '/api/bell/override', '/rjuhsd
 }
 assert.equal(bellScheduleRedirect(new URL('https://mitch.pro/bell/'), 'POST'), null);
 
-for (const path of ['/blooket-bot', '/blooket-bot/', '/blooket-bot.html', '/blooket-bot/index', '/blooket-bot/index/', '/blooket-bot/index.html']) {
+for (const path of ['/blooket-bot', '/blooket-bot.html', '/blooket-bot/index', '/blooket-bot/index/', '/blooket-bot/index.html']) {
   for (const method of ['GET', 'HEAD']) {
-    assert.equal(blooketBotRedirect(new URL('https://mitch.pro' + path + '?pin=123456'), method), BLOOKET_BOT_ORIGIN + '/?pin=123456');
+    assert.equal(blooketBotRedirect(new URL('https://mitch.pro' + path + '?pin=123456'), method), '/blooket-bot/?pin=123456');
   }
 }
-for (const path of ['/', '/api/blooket-bot/status', '/previousblooket/', '/blooket-bot.css']) {
+for (const path of ['/', '/blooket-bot/', '/api/blooket-bot/status', '/previousblooket/', '/blooket-bot.css']) {
   assert.equal(blooketBotRedirect(new URL('https://mitch.pro' + path)), null, `${path} must not redirect`);
 }
 assert.equal(blooketBotRedirect(new URL('https://mitch.pro/blooket-bot/'), 'POST'), null);
@@ -42,7 +42,7 @@ for (const destination of ['/game-portal/', '/matrix/', '/vms/', '/members/', '/
 for (const id of ['home-search', 'links', 'hub-daily-chip', 'member-side-rail', 'home-search-results']) {
   assert(home.includes(`id="${id}"`), `Homepage must preserve the ${id} integration`);
 }
-assert(home.includes('/home.css?v=10') && home.includes('/home-friends.js?v=4'), 'Homepage assets need cache-busted URLs');
+assert(/\/home\.css\?v=\d+/.test(home) && /\/home-friends\.js\?v=\d+/.test(home), 'Homepage assets need cache-busted URLs');
 assert(homeFriends.includes("hero.after(section)"), 'Friends activity should live inside the dashboard');
 assert(homeCss.includes('prefers-reduced-motion') && homeCss.includes('--mh-bg: var(--t-bg)') && readFileSync('webserver/app.css', 'utf8').includes('prefers-color-scheme'), 'Homepage styles must inherit the shared theme and respect motion preferences');
 const location = { href: 'https://mitch.pro/' };
@@ -51,7 +51,7 @@ vm.runInContext(home.slice(home.indexOf('function launchSite('), home.indexOf('f
 context.launchSite('iframe', 'https://rjuhsd.school/?school=oakmont');
 assert.equal(location.href, 'https://rjuhsd.school/?school=oakmont');
 context.launchSite('iframe', 'https://woodcreek.site/?pin=123456');
-assert.equal(location.href, 'https://woodcreek.site/?pin=123456', 'Blooket Bot must bypass iframe/game launch preferences');
+assert.equal(location.href, '/blooket-bot/?pin=123456', 'Blooket Bot must use the connected Mitch dashboard');
 
 // Installed Mitch PWAs require a same-origin shortcut; the server redirects it.
 const shortcut = JSON.parse(readFileSync('webserver/manifest.json', 'utf8')).shortcuts.find(item => item.name === 'Bell Schedule');

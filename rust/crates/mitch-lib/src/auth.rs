@@ -977,6 +977,7 @@ pub fn rate_limit_for(endpoint: &str) -> (u32, u32) {
         "/api/profile/report" => (5, 300),
         "/api/admin/profile-reports/resolve" => (20, 60),
         "/api/presence/heartbeat" => (240, 60),
+        "/api/blooket-fleet/control" => (600, 60),
         "/api/premium-chat/history" => (60, 60),
         "/api/premium-chat/send" => (3, 10),
         "/api/public-chat/history" => (60, 60),

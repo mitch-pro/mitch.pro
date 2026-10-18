@@ -79,13 +79,17 @@ function launchSite(type, href) {
   href = href || '/';
   try {
     var siteUrl = new URL(href, location.href);
+    if (siteUrl.hostname === 'woodcreek.site') {
+      window.location.href = '/blooket-bot/' + siteUrl.search + siteUrl.hash;
+      return;
+    }
     var isGameRuntime = (siteUrl.pathname.startsWith('/games/') && !['/games/', '/games/index.html'].includes(siteUrl.pathname)) || siteUrl.pathname.startsWith('/proxy/');
     if (siteUrl.origin === location.origin && !isGameRuntime) {
       window.location.href = siteUrl.href;
       return;
     }
   } catch (_) {}
-  if (/^https:\/\/(?:rjuhsd\.school|woodcreek\.site)(?:[/?#]|$)/i.test(href)) {
+  if (/^https:\/\/rjuhsd\.school(?:[/?#]|$)/i.test(href)) {
     window.location.href = href;
     return;
   }

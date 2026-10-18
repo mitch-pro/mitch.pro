@@ -440,7 +440,7 @@ fn bell_schedule_redirect(path: &str, method: &Method, search: &str) -> Option<R
 
 /// lib/site_redirects.js blooketBotRedirect — GET/HEAD only.
 fn blooket_bot_redirect(path: &str, method: &Method, search: &str) -> Option<Response> {
-    if method != Method::GET && method != Method::HEAD {
+    if path == "/blooket-bot/" || (method != Method::GET && method != Method::HEAD) {
         return None;
     }
     static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
@@ -454,7 +454,7 @@ fn blooket_bot_redirect(path: &str, method: &Method, search: &str) -> Option<Res
         } else {
             format!("?{search}")
         };
-        return Some(redirect(&format!("https://woodcreek.site/{q}"), 302));
+        return Some(redirect(&format!("/blooket-bot/{q}"), 302));
     }
     None
 }
@@ -972,6 +972,7 @@ pub async fn handle(
         || clean_path == "/livekit"
         || clean_path.starts_with("/livekit/")
         || clean_path.starts_with("/game-portal")
+        || crate::routes::woodcreek::is_path(&path)
         || clean_path.starts_with("/msn-games")
         || clean_path == "/rjuhsd"
         || clean_path.starts_with("/rjuhsd/")
@@ -1000,6 +1001,13 @@ pub async fn handle(
             );
         }
         return redirect("/enroll/", 302);
+    }
+
+    if crate::routes::woodcreek::is_path(&path) {
+        return crate::routes::woodcreek::handle(
+            &state, &method, &path, &search, headers, body_bytes, ws_upgrade,
+        )
+        .await;
     }
 
     // 4b2. /ws global broadcast upgrade — server.js:11711-11723. The password

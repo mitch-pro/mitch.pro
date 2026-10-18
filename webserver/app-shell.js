@@ -116,7 +116,7 @@
     menu.setAttribute('aria-labelledby', 'mobile-menu-title');
     menu.innerHTML = '<header><h2 id="mobile-menu-title">mitch.pro</h2><button type="button" aria-label="Close menu">×</button></header><nav aria-label="All sections"></nav>';
     var links = menu.querySelector('nav');
-    [['https://woodcreek.site/', 'Blooket Bot'], ['/profile/', 'My profile'], ['/preferences/', 'Customizer'], ['/friends/', 'Friends'], ['/coins/?v=2', 'MitchCoins'], ['/shop/', 'Shop'], ['/marketplace/', 'Marketplace'], ['/inventory/', 'Inventory'], ['/leaderboard/', 'Leaderboard'], ['https://rjuhsd.school/', 'Bell schedule'], ['/public-chat/', 'Public chat'], ['/canvas/', 'Canvas'], ['/vms/', 'VM Lab'], ['/notifications/', 'Notifications'], ['/blog/', 'Blog'], ['/invite/', 'Invite friends'], ['/feedback/', 'Feedback'], ['/faq/', 'Help']].forEach(function (item) {
+    [['/blooket-bot/', 'Blooket Bot'], ['/profile/', 'My profile'], ['/preferences/', 'Customizer'], ['/friends/', 'Friends'], ['/coins/?v=2', 'MitchCoins'], ['/shop/', 'Shop'], ['/marketplace/', 'Marketplace'], ['/inventory/', 'Inventory'], ['/leaderboard/', 'Leaderboard'], ['https://rjuhsd.school/', 'Bell schedule'], ['/public-chat/', 'Public chat'], ['/canvas/', 'Canvas'], ['/vms/', 'VM Lab'], ['/notifications/', 'Notifications'], ['/blog/', 'Blog'], ['/invite/', 'Invite friends'], ['/feedback/', 'Feedback'], ['/faq/', 'Help']].forEach(function (item) {
       var link = document.createElement('a'); link.href = item[0]; link.textContent = item[1]; links.appendChild(link);
     });
     more.addEventListener('click', function () { menu.showModal(); more.setAttribute('aria-expanded', 'true'); });
@@ -228,12 +228,6 @@
       var a = document.createElement('a');
       a.href = item.href;
       a.textContent = item.label;
-      if (item.href === 'https://woodcreek.site/') {
-        a.classList.add('nav-blooket-status');
-        a.style.setProperty('font-size', '10px', 'important');
-        a.style.setProperty('line-height', '1.2', 'important');
-        a.style.setProperty('white-space', 'normal', 'important');
-      }
       if (item.badge) {
         var badge = document.createElement('span');
         badge.className = 'nav-pill-free';
