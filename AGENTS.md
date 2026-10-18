@@ -18,3 +18,16 @@
 - Unless the user explicitly tells them to focus on the next commit and ignore CI, they must check CI status.
 - The git repository is public, so the `gh` CLI is not required (e.g., status can be checked via public GitHub Actions API requests or `gh run list`).
 
+## Privacy and telemetry
+
+- Default to strict privacy: never track, aggregate, or expose user actions, current URLs, open tabs, or viewing habits to other users or staff without explicit user opt-in.
+- Live operational status (such as online or offline presence) must remain ephemeral in memory. Never log, cache, or persist browsing locations or presence data to disk, SQLite, or JSON storage.
+- Respect privacy toggles server-side: user privacy settings (such as hiding page location or presence) must be enforced at the server API layer for all consumers, including friends and administrators.
+
+## Verification and test discipline
+
+- Never push without local validation: autonomous agents must run `cargo test --workspace`, `cargo fmt --all -- --check`, and any relevant test suites locally before committing or pushing to `master`.
+- Major subsystem integrations (such as cross-origin bridges, auth grant systems, or proxies) require explicit confirmation rather than direct autonomous pushes to `master`.
+- Do not commit temporary test artifacts, media assets, or fixture data to tracked webroots or the repository.
+
+
