@@ -151,7 +151,24 @@ try {
   const legacyHtml = (await content.json()).content;
   assert(legacyHtml.includes('data-presence-page="/games/adrian-clicker/index.html"'), 'Legacy content must report its real source page');
   assert(legacyHtml.indexOf('/presence.js') < legacyHtml.indexOf('</head>'));
-  console.log('PASS: socket-to-HTTP fallback, VM desktops, Matrix SPA fallback, page cache restoration, and legacy embeds');
+  await second.goto(base + '/preferences/');
+  await second.waitForSelector('#privHideLocationToggle', { state: 'attached' });
+  assert.equal(await second.evaluate(() => document.getElementById('privHideLocationToggle').checked), false);
+  await second.evaluate(() => {
+    const input = document.getElementById('privHideLocationToggle');
+    input.checked = true;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await until(async () => (await actorStatus(carolApi))?.page === '', 'Friend must not see page when hideLocation is enabled in preferences');
+  assert.equal((await actorStatus(adminApi)).page, '', 'Admin must not see page when hideLocation is enabled in preferences');
+  assert.equal((await actorStatus(carolApi)).online, true, 'Online status remains visible when hideLocation is enabled');
+  console.log('PASS: preferences hideLocation toggle hides page from both friends and admins');
+  await second.evaluate(() => {
+    const input = document.getElementById('privHideLocationToggle');
+    input.checked = false;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await until(async () => (await actorStatus(carolApi))?.page === '/preferences/', 'Unchecking hideLocation restores page visibility');
   await second.goto(base + '/');
   await until(async () => (await actorStatus())?.page === '/', 'Return from HTTP-only Matrix to a broadcast-connected page');
   await second.waitForFunction(() => window.__testSockets?.some(socket => socket.readyState === WebSocket.OPEN));

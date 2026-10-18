@@ -279,6 +279,7 @@ pub struct UserPresence {
     pub last_seen: i64,
     pub playing: String,
     pub modern_seen: i64,
+    pub hide_location: bool,
     pub sessions: std::collections::HashMap<String, crate::presence::TabPresence>,
     pub last_reported: Option<crate::presence::PresenceView>,
 }

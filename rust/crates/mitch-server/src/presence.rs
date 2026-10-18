@@ -123,8 +123,22 @@ fn apply(
         .get("seq")
         .and_then(Value::as_u64)
         .ok_or("invalid sequence")?;
-    let page = page_path(payload.get("page").and_then(Value::as_str).unwrap_or(""))
-        .ok_or("invalid page")?;
+    let hide_location = payload
+        .get("hideLocation")
+        .or_else(|| payload.get("hidePageLocation"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if hide_location {
+        record.hide_location = true;
+    } else if payload.get("hideLocation").is_some() || payload.get("hidePageLocation").is_some() {
+        record.hide_location = false;
+    }
+    let raw_page = payload.get("page").and_then(Value::as_str).unwrap_or("");
+    let page = if hide_location || record.hide_location || raw_page.is_empty() {
+        String::new()
+    } else {
+        page_path(raw_page).ok_or("invalid page")?
+    };
     if record
         .sessions
         .get(id)
@@ -156,18 +170,22 @@ fn apply(
         }
         _ => now,
     };
-    let activity = text(
-        payload
-            .get("activity")
-            .or_else(|| payload.get("playing"))
-            .and_then(Value::as_str)
-            .unwrap_or(""),
-        120,
-    );
-    let activity = if activity.is_empty() {
-        fallback_activity(&page)
+    let activity = if hide_location || record.hide_location || page.is_empty() {
+        String::new()
     } else {
-        activity
+        let act = text(
+            payload
+                .get("activity")
+                .or_else(|| payload.get("playing"))
+                .and_then(Value::as_str)
+                .unwrap_or(""),
+            120,
+        );
+        if act.is_empty() {
+            fallback_activity(&page)
+        } else {
+            act
+        }
     };
     record
         .sessions
@@ -224,7 +242,23 @@ fn view(record: Option<&UserPresence>, socket_seen: i64, now: i64) -> PresenceVi
     let legacy_online =
         record.modern_seen == 0 && now - record.last_seen < PRESENCE_FALLBACK_TTL_MS;
     let online = selected.is_some() || legacy_online || socket_online;
-    let (activity, page, status) = if let Some(tab) = selected {
+    let (activity, page, status) = if record.hide_location {
+        (
+            String::new(),
+            String::new(),
+            if let Some(tab) = selected {
+                if tab.focused {
+                    "active"
+                } else {
+                    "away"
+                }
+            } else if online {
+                "online"
+            } else {
+                "offline"
+            },
+        )
+    } else if let Some(tab) = selected {
         (
             tab.activity.clone(),
             tab.page.clone(),
@@ -553,5 +587,18 @@ mod tests {
         assert_eq!(record.sessions.len(), MAX_TABS);
         assert!(!record.sessions.contains_key("tab1"));
         assert!(record.sessions.contains_key("tab100"));
+    }
+    #[test]
+    fn hide_location_suppresses_page_and_activity_for_all_viewers() {
+        let mut record = UserPresence::default();
+        let mut pkt = packet("tab1", 1, "/shop/", true);
+        pkt["hideLocation"] = json!(true);
+        apply(&mut record, &pkt, None, 100).unwrap();
+        let v = view(Some(&record), 0, 101);
+        assert!(v.online);
+        assert_eq!(v.page, "");
+        assert_eq!(v.activity, "");
+        assert_eq!(v.playing, "");
+        assert_eq!(v.status, "active");
     }
 }

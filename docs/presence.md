@@ -23,10 +23,13 @@ injection is private and uncached.
 People and Friends use the same resolved in-memory server snapshot. What page or
 activity a user is on is only returned to that user's friends, the user
 themselves, and site admins; non-friends only see whether the member is online or
-offline. Activity changes broadcast a global invalidation without an email or
-activity in the message; clients obtain their viewer-specific directory or
-friends response. Visible lists refresh within about a second and periodically
-poll as a fallback. Older fetch responses cannot overwrite newer results.
+offline. Users can also disable page location entirely in Preferences > Privacy
+("Page Location" toggle), which prevents anyone—including friends and site
+admins—from seeing their current page or activity. Activity changes broadcast a
+global invalidation without an email or activity in the message; clients obtain
+their viewer-specific directory or friends response. Visible lists refresh
+within about a second and periodically poll as a fallback. Older fetch responses
+cannot overwrite newer results.
 
 Page exit ends only that document. Closing a tab falls back to another live
 tab, while delayed requests cannot revive an ended document. A disconnected

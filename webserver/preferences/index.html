@@ -989,6 +989,16 @@
         </div>
       </div>
       <div class="field">
+        <label>Page Location</label>
+        <div class="toggle-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="privHideLocationToggle">
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-desc">Hide your current page from everyone, including friends and admins.</span>
+        </div>
+      </div>
+      <div class="field">
         <label>Stealth Dashboard</label>
         <div class="toggle-row">
           <label class="toggle-switch">
@@ -2105,11 +2115,13 @@ function saveAll() {
     }));
     localStorage.setItem(PRIVACY_CONFIG_KEY, JSON.stringify({
       hideOnline:   document.getElementById('privHideOnlineToggle').checked,
+      hideLocation: document.getElementById('privHideLocationToggle').checked,
       stealthDash:  document.getElementById('privStealthToggle').checked,
       noHistory:    document.getElementById('privNoHistoryToggle').checked,
       newsletter:   document.getElementById('privNewsletterToggle').checked,
       blockProfile: document.getElementById('privBlockProfileToggle').checked,
     }));
+    try { window.MitchPresence?.send(); } catch (_) {}
     localStorage.setItem(HOME_CONFIG_KEY, JSON.stringify(Object.assign(load(HOME_CONFIG_KEY, {}), {
       showQuickActions: document.getElementById('homeQuickToggle').checked,
       showMemberRail: document.getElementById('homeMembersToggle').checked,
@@ -2352,12 +2364,13 @@ async function deleteAccount() {
   document.getElementById('vfxRainToggle').checked      = !!vk.rain;
   document.getElementById('vfxParticlesToggle').checked = !!vk.particles;
 
-  var pk = load(PRIVACY_CONFIG_KEY, { hideOnline: false, stealthDash: false, noHistory: false, newsletter: true, blockProfile: false });
-  document.getElementById('privHideOnlineToggle').checked  = !!pk.hideOnline;
-  document.getElementById('privStealthToggle').checked     = !!pk.stealthDash;
-  document.getElementById('privNoHistoryToggle').checked    = !!pk.noHistory;
-  document.getElementById('privNewsletterToggle').checked   = pk.newsletter !== false;
-  document.getElementById('privBlockProfileToggle').checked = !!pk.blockProfile;
+  var pk = load(PRIVACY_CONFIG_KEY, { hideOnline: false, hideLocation: false, stealthDash: false, noHistory: false, newsletter: true, blockProfile: false });
+  document.getElementById('privHideOnlineToggle').checked   = !!pk.hideOnline;
+  document.getElementById('privHideLocationToggle').checked = !!pk.hideLocation;
+  document.getElementById('privStealthToggle').checked      = !!pk.stealthDash;
+  document.getElementById('privNoHistoryToggle').checked     = !!pk.noHistory;
+  document.getElementById('privNewsletterToggle').checked    = pk.newsletter !== false;
+  document.getElementById('privBlockProfileToggle').checked  = !!pk.blockProfile;
   if (!schoolPrefs) {
     loadBlogAlerts();
     loadNtfyTopic();
@@ -2404,7 +2417,7 @@ async function deleteAccount() {
   }
 
   ['vfxSnowToggle','vfxStarsToggle','vfxRainToggle','vfxParticlesToggle',
-   'privHideOnlineToggle','privStealthToggle','privNoHistoryToggle','privNewsletterToggle','privBlockProfileToggle',
+   'privHideOnlineToggle','privHideLocationToggle','privStealthToggle','privNoHistoryToggle','privNewsletterToggle','privBlockProfileToggle',
    'syncToggle','homeQuickToggle','homeMembersToggle','homeRecentToggle','homeLogoToggle','homeCompactToggle','homeSearchFocusToggle',
    'prefCanvasLock','prefQuickAccess','prefDailyBonus'].forEach(function(id) {
     document.getElementById(id).addEventListener('change', saveAll);

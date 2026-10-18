@@ -45,18 +45,25 @@
     return [...document.querySelectorAll('iframe')].find(frame => usable(frame) &&
       (document.activeElement === frame || frame.matches('#fullframe, #hud-terminal-iframe, .mitch-iab-frame, #player-frame')));
   }
+  function isLocationHidden() {
+    try {
+      const priv = JSON.parse(localStorage.getItem('_prefPrivacy') || '{}');
+      return !!(priv.hideLocation || priv.hidePageLocation);
+    } catch (_) { return false; }
+  }
   function details() {
-    let page = explicit?.page || location.pathname || '/';
-    let activity = explicit?.activity || describe(page, document.title);
-    const frame = selectedFrame();
+    const hideLocation = isLocationHidden();
+    let page = hideLocation ? '' : (explicit?.page || location.pathname || '/');
+    let activity = hideLocation ? '' : (explicit?.activity || describe(page, document.title));
+    const frame = hideLocation ? null : selectedFrame();
     if (frame && frame.src && frame.src !== 'about:blank') {
       const reported = frames.get(frame.contentWindow);
       page = reported?.page || pathOf(frame.src);
       activity = explicit?.activity || reported?.activity || describe(page, frame.title);
     }
     return { type: 'presence_ping', clientId, seq: ++sequence, interaction,
-      page: pathOf(page), activity: clean(activity), visible: !document.hidden,
-      focused: !document.hidden && document.hasFocus(), ended: !alive };
+      page: hideLocation ? '' : pathOf(page), activity: hideLocation ? '' : clean(activity), visible: !document.hidden,
+      focused: !document.hidden && document.hasFocus(), ended: !alive, hideLocation };
   }
   function send(ended = false) {
     if (!alive && !ended) return;
@@ -123,6 +130,7 @@
   window.addEventListener('hashchange', soon);
   window.addEventListener('popstate', () => { interaction++; soon(); });
   window.addEventListener('online', soon);
+  window.addEventListener('storage', event => { if (event.key === '_prefPrivacy') { interaction++; soon(); } });
   window.addEventListener('pagehide', () => { alive = false; clearInterval(timer); clearTimeout(pending); pending = null; send(true); });
   window.addEventListener('pageshow', event => { if (event.persisted) { alive = true; interaction++; timer = setInterval(send, 15000); send(); } });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true }); else start();

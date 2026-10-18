@@ -711,6 +711,7 @@ fn userdata(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Re
     // Update newsletter unsub list based on preference (server.js:17277-17298,
     // wrapped in try/catch — every failure path just skips the sync).
     sync_newsletter_unsub(state, &uid, &body, &existing);
+    sync_privacy_prefs(state, &uid, &body, &existing);
 
     let new_json = serde_json::to_string(&existing).unwrap_or_default();
     let used = new_json.len();
@@ -726,6 +727,44 @@ fn userdata(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Re
     }
     let _ = std::fs::write(&fpath, new_json.as_bytes());
     json_response(200, json!({ "ok": true }))
+}
+
+fn sync_privacy_prefs(state: &Arc<AppState>, uid: &str, body: &Value, existing: &Value) {
+    let Some(email) = auth::email_from_sid(&state.store, &state.id_secret, uid) else {
+        return;
+    };
+    let norm = auth::normalize_email(&email);
+    let body_snap = body.get("_snapshot");
+    let snap = if body_snap.is_some_and(jsval::truthy) {
+        body_snap.cloned().unwrap_or(Value::Null)
+    } else {
+        existing.get("_snapshot").cloned().unwrap_or(Value::Null)
+    };
+    if !jsval::truthy(&snap) {
+        return;
+    }
+    let Some(raw_pref) = snap.get("_prefPrivacy").filter(|v| jsval::truthy(v)) else {
+        return;
+    };
+    let pref: Value = match raw_pref {
+        Value::String(s) => match serde_json::from_str(s) {
+            Ok(v) => v,
+            Err(_) => return,
+        },
+        other => other.clone(),
+    };
+    if let Some(hide) = pref
+        .get("hideLocation")
+        .or_else(|| pref.get("hidePageLocation"))
+        .and_then(Value::as_bool)
+    {
+        let mut presence = state
+            .user_presence
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let rec = presence.entry(norm).or_default();
+        rec.hide_location = hide;
+    }
 }
 
 /// The newsletter-unsub sync block (server.js:17278-17297).
@@ -1056,6 +1095,37 @@ mod tests {
         assert_eq!(as_admin["page"], json!("/shop/"));
         assert_eq!(as_admin["activity"], json!("Browsing the shop"));
         assert_eq!(as_admin["status"], json!("away"));
+
+        // When Alice turns off page location in preferences (hideLocation: true),
+        // nobody - not friends, not Alice, not site admins - can see her page or activity.
+        crate::presence::update(
+            &state,
+            "alice@example.test",
+            &json!({
+                "clientId": "tab-1",
+                "seq": 2,
+                "page": "/shop/",
+                "activity": "Browsing the shop",
+                "visible": true,
+                "focused": true,
+                "interaction": 2,
+                "hideLocation": true
+            }),
+            None,
+        )
+        .unwrap();
+
+        let hidden_for_friend = parse_alice(fetch_alice_as(&carol_tok));
+        assert_eq!(hidden_for_friend["online"], json!(true));
+        assert_eq!(hidden_for_friend["page"], json!(""));
+        assert_eq!(hidden_for_friend["activity"], json!(""));
+        assert_eq!(hidden_for_friend["playing"], json!(""));
+
+        let hidden_for_admin = parse_alice(fetch_alice_as(&admin_tok));
+        assert_eq!(hidden_for_admin["online"], json!(true));
+        assert_eq!(hidden_for_admin["page"], json!(""));
+        assert_eq!(hidden_for_admin["activity"], json!(""));
+        assert_eq!(hidden_for_admin["playing"], json!(""));
 
         drop(state);
         std::fs::remove_dir_all(&base).ok();
