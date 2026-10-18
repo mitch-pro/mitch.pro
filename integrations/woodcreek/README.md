@@ -6,15 +6,17 @@ The existing Node backend and its other public assets stay on
 
 The live app is Docker Compose service `app` in
 `/opt/recovered-sites/woodcreek`, container `recovered-woodcreek-app-1`.
-Its image is `recovered-woodcreek-app`. It has no bind-mounted public directory,
-so an update must change both the build context and the running container.
-The older source mirror is `/home/tbot5k/Websites/woodcreek.site`.
+Its image is `recovered-woodcreek-app`. The container has a read-only root
+filesystem and no bind-mounted public directory. The older source mirror is
+`/home/tbot5k/Websites/woodcreek.site`.
 
-Back up the current public files outside the webroot, copy these files into
-the build context and source mirror, and run `docker compose build app` from
-the Compose directory. Copy the same files into `/app/public/` in the running
-container. Static responses are read from disk, so the app needs no restart.
-Do not change the Compose configuration or operate on other services.
+Back up the current public files outside the webroot and tag the existing image
+for rollback. Copy these files into the build context and source mirror. From
+the Compose directory, build with `docker compose -p recovered-woodcreek build app`,
+then publish with `docker compose -p recovered-woodcreek up -d --no-deps --no-build app`.
+The project name must match the existing deployment so the correct image and
+container are updated. This restarts only the main application; check active
+sessions first. Do not change Compose configuration or operate on other services.
 
 `components.css` preserves the existing advanced controls and dialogs;
 `woodcreek.css` supplies the neutral responsive layout. School branding and
