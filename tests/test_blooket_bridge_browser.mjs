@@ -35,7 +35,7 @@ const upstream = httpServer(async (req,res) => {
   if (pathname==='/' || ['woodcreek.js','woodcreek.css','components.css','assets/tylerium-logo.svg','assets/manrope.woff2','assets/jetbrains-mono.woff2'].includes(pathname.slice(1))) {
     const relative=pathname==='/'?'index.html':pathname.slice(1);
     const body=await readFile(resolve(uiRoot,relative));
-    const mime=relative.endsWith('.html')?'text/html':relative.endsWith('.js')?'text/javascript':relative.endsWith('.css')?'text/css':'image/svg+xml';
+    const mime=relative.endsWith('.html')?'text/html':relative.endsWith('.js')?'text/javascript':relative.endsWith('.css')?'text/css':relative.endsWith('.woff2')?'font/woff2':'image/svg+xml';
     res.writeHead(200,{'content-type':mime});return res.end(body);
   }
   if(pathname==='/api/account'){res.writeHead(200,{'content-type':'application/json'});return res.end(JSON.stringify({account:{username:'alice',displayName:'Alice',pfp:''}}));}
@@ -129,6 +129,8 @@ try {
   assert.equal(await page.locator('.workspace-heading h1').innerText(),'Blooket');
   assert.equal(await page.locator('#account-name').innerText(),'Alice');
   assert((await page.title()).includes('Tylerium Services'));
+  const fonts=await page.evaluate(async()=>{await document.fonts.ready;return [...document.fonts].filter(font=>font.status==='loaded').map(font=>font.family)});
+  assert(fonts.includes('Manrope')&&fonts.includes('JetBrainsMono'),'Tylerium fonts must load through the Mitch mount');
   assert(!(await page.locator('body').innerText()).includes('↗'));
   for(const socket of sockets)sendFrame(socket,{type:'error',message:'Game lobby is full.'});
   await page.locator('#connection-error').waitFor({state:'visible'});
