@@ -2,9 +2,10 @@ import { EventEmitter } from "events";
 import fs from "fs";
 import os from "os";
 import { chromium } from "playwright";
+import { PLAYER_URL, PIN_SELECTOR, NAME_SELECTOR, normalizePin, visibleField, submitJoinField, readJoinScreen } from "./blooket-connection.mjs";
 import { FlareSolverrClient } from "./flaresolverr-client.mjs";
 
-const CHROME_PATH = process.env.CHROME_PATH || "/home/tbot5k/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome";
+const CHROME_PATH = process.env.CHROME_PATH || chromium.executablePath();
 const CGROUP_PATH = "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/woodcreek.service";
 
 const BLOOK_TYPES = [
@@ -104,6 +105,10 @@ export class BlooketInstanceManager extends EventEmitter {
   constructor() {
     super();
     this.browser = null;
+    this.browserPromise = null;
+    this.fleetGeneration = 0;
+    this.starting = false;
+    this.stopping = false;
     this.instances = new Map(); // id -> instance
     this.currentPin = "";
     this.baseName = "Tyler";
@@ -170,10 +175,17 @@ export class BlooketInstanceManager extends EventEmitter {
   }
 
   async ensureBrowser() {
-    if (this.browser && this.browser.isConnected()) return this.browser;
-    this.log("Initializing headless Chromium fleet engine...", "system");
+    if (this.stopping) throw new Error("The previous session is still stopping. Please try again.");
+    if (this.browser?.isConnected()) return this.browser;
+    if (this.browserPromise) return this.browserPromise;
+    this.browserPromise = this.launchBrowser();
+    try { return await this.browserPromise; }
+    finally { this.browserPromise = null; }
+  }
 
-    this.browser = await chromium.launch({
+  async launchBrowser() {
+    this.log("Starting browser...", "system");
+    const browser = await chromium.launch({
       executablePath: CHROME_PATH,
       headless: true,
       args: [
@@ -191,15 +203,21 @@ export class BlooketInstanceManager extends EventEmitter {
         "--no-first-run"
       ]
     });
-
-    this.browser.on("disconnected", () => {
-      this.log("Chromium fleet engine disconnected.", "warn");
+    this.browser = browser;
+    browser.on("disconnected", () => {
+      if (this.browser !== browser) return;
       this.browser = null;
-      this.instances.clear();
+      if (this.stopping) return;
+      this.log("Browser disconnected. Retry the affected connections.", "warn");
+      for (const instance of this.instances.values()) {
+        if (instance.cancelled) continue;
+        clearTimeout(instance.autoAnswerLoop);
+        instance.status = "error";
+        instance.statusText = "Browser disconnected. Retry to reconnect.";
+      }
       this.emit("state-change", this.getState());
     });
-
-    return this.browser;
+    return browser;
   }
 
   generateUniqueRealName(usedSet = new Set()) {
@@ -264,7 +282,22 @@ export class BlooketInstanceManager extends EventEmitter {
     return BLOOK_TYPES[(index - 1) % BLOOK_TYPES.length];
   }
 
-  async startFleet({
+  validateStart(options = {}) {
+    if (!options || typeof options !== "object" || Array.isArray(options)) throw new Error("Invalid game settings.");
+    const pin = normalizePin(options.pin);
+    if (this.starting || this.stopping) throw new Error("Wait for the current join or stop operation to finish.");
+    return pin;
+  }
+
+  async startFleet(options = {}) {
+    const pin = this.validateStart(options);
+    this.starting = true;
+    const generation = this.fleetGeneration;
+    try { return await this.launchFleet({...options, pin}, generation); }
+    finally { this.starting = false; }
+  }
+
+  async launchFleet({
     count = 5,
     pin = "",
     names = [],
@@ -297,8 +330,8 @@ export class BlooketInstanceManager extends EventEmitter {
     autoAnswer = true,
     autoMinigames = true,
     useFlareSolverr = true
-  }) {
-    this.currentPin = String(pin).replace(/\D/g, "").slice(0, 10);
+  }, generation) {
+    this.currentPin = pin;
     this.baseName = String(baseName || "Tyler").trim().slice(0, 16);
     this.namingStyle = namingStyle;
     this.namePattern = String(namePattern || "WHS_{n}").trim();
@@ -366,7 +399,9 @@ export class BlooketInstanceManager extends EventEmitter {
       }
     }
 
+    if (generation !== this.fleetGeneration) return;
     await this.ensureBrowser();
+    if (generation !== this.fleetGeneration) return;
 
     // Strict deduplication pass: eliminate any duplicate/repeating names and ensure short, real names
     const usedFleetNames = new Set();
@@ -388,10 +423,11 @@ export class BlooketInstanceManager extends EventEmitter {
     const maxConcurrentJoins = 6;
 
     for (let i = 1; i <= safeCount; i++) {
-      while (activeJoining >= maxConcurrentJoins) {
+      while (activeJoining >= maxConcurrentJoins && generation === this.fleetGeneration) {
         await new Promise((r) => setTimeout(r, 60));
       }
 
+      if (generation !== this.fleetGeneration) return;
       const name = finalFleetNames[i - 1];
       let blook = Array.isArray(botBlooks) && botBlooks[i - 1] ? botBlooks[i - 1] : this.assignBlook(i);
       if (!BLOOK_TYPES.includes(blook) && blook !== "random") {
@@ -446,7 +482,10 @@ export class BlooketInstanceManager extends EventEmitter {
       lastActionAt: Date.now(),
       startTime,
       durationMs: 0,
-      pingMs: Math.floor(Math.random() * 25 + 15),
+      pingMs: null,
+      cancelled: false,
+      lifecycleActive: false,
+      runVersion: 0,
       diagnostic: null,
       timeline: [],
       technicalTrace: [],
@@ -491,37 +530,36 @@ export class BlooketInstanceManager extends EventEmitter {
   }
 
   async runBotLifecycle(instance) {
+    if (instance.cancelled || instance.lifecycleActive) return;
+    instance.lifecycleActive = true;
+    const version = ++instance.runVersion;
+    const active = () => !instance.cancelled && instance.runVersion === version && this.instances.get(instance.id) === instance;
     const startTime = Date.now();
-    const maxRetries = 1;
-
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        await this.executeBotJoin(instance);
-        return; // Joined lobby successfully!
-      } catch (err) {
-        if (/closed|aborted|destroyed|target page/i.test(err.message)) {
-          return;
-        }
-
-        const isFatal = /invalid game pin|game is full|game session has already concluded/i.test(err.message);
-        if (attempt < maxRetries && !isFatal) {
-          instance.addEvent(`Join transient issue (${err.message}). Auto-retrying (${attempt + 1}/${maxRetries})...`, "warn", instance.phase);
-          this.log(`Bot [${instance.name}] auto-retrying join (${attempt + 1}/${maxRetries}): ${err.message}`, "warn", instance.name);
-          try {
-            if (instance.page && !instance.page.isClosed()) await instance.page.close().catch(() => {});
+    try {
+      for (let attempt = 0; attempt < 2 && active(); attempt++) {
+        try { await this.executeBotJoin(instance, active); return; }
+        catch (err) {
+          if (!active()) return;
+          const fatal = /invalid game pin|game (lobby )?is full|maximum player capacity|game session has already concluded/i.test(err.message);
+          if (attempt === 0 && !fatal) {
+            instance.addEvent(`Connection interrupted. Retrying: ${err.message}`, "warn", instance.phase);
             if (instance.context) await instance.context.close().catch(() => {});
-          } catch {}
-          await new Promise((r) => setTimeout(r, 1200));
-          continue;
+            instance.context = null; instance.page = null;
+            await new Promise(resolve => setTimeout(resolve, 1200));
+          } else {
+            this.handleBotError(instance, err, startTime);
+            if (instance.context) await instance.context.close().catch(() => {});
+            instance.context = null; instance.page = null;
+            return;
+          }
         }
-
-        this.handleBotError(instance, err, startTime);
-        return;
       }
-    }
+    } finally { instance.lifecycleActive = false; }
   }
 
-  async executeBotJoin(instance) {
+  async executeBotJoin(instance, active = () => !instance.cancelled && this.instances.get(instance.id) === instance) {
+    const ensureActive = () => { if (!active()) throw new Error("Connection cancelled."); };
+    ensureActive();
     const { pin } = instance;
     const startTime = Date.now();
 
@@ -531,15 +569,17 @@ export class BlooketInstanceManager extends EventEmitter {
 
     instance.phase = "PHASE_SANDBOX";
     const clearance = this.useFlareSolverr ? this.flaresolverr.getCachedClearance() : null;
-    const userAgent = clearance?.userAgent || `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.${Math.floor(Math.random() * 80 + 20)} Safari/537.36`;
+    const userAgent = clearance?.userAgent;
 
     const context = await this.browser.newContext({
       viewport: { width: 800, height: 600 },
-      userAgent,
+      ...(userAgent ? {userAgent} : {}),
       serviceWorkers: "block",
       deviceScaleFactor: 1
     });
 
+    if (!active()) { await context.close().catch(() => {}); ensureActive(); }
+    instance.context = context;
     if (clearance?.cookies?.length) {
       await context.addCookies(clearance.cookies);
       instance.addEvent(`Injected FlareSolverr clearance (${clearance.cookies.length} cookies, UA synchronized)`, "info", "PHASE_SANDBOX");
@@ -552,16 +592,17 @@ export class BlooketInstanceManager extends EventEmitter {
         ["media", "font"].includes(type) ||
         url.includes("google-analytics") ||
         url.includes("googletagmanager") ||
-        url.includes("s.blooket.com/rc") ||
         url.includes("doubleclick")
       ) {
         return route.abort();
       }
-      return route.continue();
+      return route.fallback();
     });
 
     instance.context = context;
+    ensureActive();
     instance.page = await context.newPage();
+    ensureActive();
     await instance.page.addInitScript(() => {
       try {
         Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
@@ -571,7 +612,8 @@ export class BlooketInstanceManager extends EventEmitter {
       } catch {}
       const style = document.createElement('style');
       style.textContent = '*, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }';
-      document.documentElement.appendChild(style);
+      if (document.documentElement) document.documentElement.appendChild(style);
+      else document.addEventListener("DOMContentLoaded", () => document.documentElement.appendChild(style), {once:true});
     });
     instance.page.setDefaultTimeout(25000);
     instance.page.setDefaultNavigationTimeout(35000);
@@ -583,11 +625,12 @@ export class BlooketInstanceManager extends EventEmitter {
     instance.addEvent("Navigating to https://play.blooket.com/play", "info", "PHASE_NAVIGATE");
     this.emit("state-change", this.getState());
 
-    const navResponse = await instance.page.goto("https://play.blooket.com/play", {
+    let navResponse = await instance.page.goto(PLAYER_URL, {
       waitUntil: "domcontentloaded",
       timeout: 30000
     });
 
+    ensureActive();
     // Check for Cloudflare challenge interstitials
     const pageTitle = await instance.page.title().catch(() => "");
     if (/just a moment|attention required|cloudflare|turnstile/i.test(pageTitle)) {
@@ -597,7 +640,7 @@ export class BlooketInstanceManager extends EventEmitter {
         if (fresh?.cookies?.length) {
           await context.addCookies(fresh.cookies);
           instance.addEvent("Injected refreshed FlareSolverr clearance; reloading page...", "info", "PHASE_NAVIGATE");
-          await instance.page.reload({ waitUntil: "domcontentloaded", timeout: 30000 });
+          navResponse = await instance.page.reload({ waitUntil: "domcontentloaded", timeout: 30000 });
         }
       }
     }
@@ -623,15 +666,11 @@ export class BlooketInstanceManager extends EventEmitter {
     instance.addEvent(`Entering Game PIN: ${pin}`, "info", "PHASE_PIN_INPUT");
     this.emit("state-change", this.getState());
 
-    const pinInput = instance.page.locator('input[placeholder*="Game ID"], input[placeholder*="PIN"], input[aria-label*="Game ID"], input[name="join-code"]').first();
+    ensureActive();
+    const pinInput = visibleField(instance.page, PIN_SELECTOR);
     await pinInput.waitFor({ state: "visible", timeout: 20000 });
     await pinInput.fill(pin);
-    await pinInput.press("Enter");
-
-    const pinSubmitBtn = instance.page.locator('form button, button[type="submit"], [class*="joinButton"], [class*="enterButton"], [class*="triangleButton"]').first();
-    if (await pinSubmitBtn.isVisible().catch(() => false)) {
-      await pinSubmitBtn.click().catch(() => {});
-    }
+    await submitJoinField(pinInput);
 
     // Phase 5: PIN Verification & Wait for Nickname field
     instance.phase = "PHASE_PIN_VERIFY";
@@ -640,26 +679,17 @@ export class BlooketInstanceManager extends EventEmitter {
     const pinWaitStart = Date.now();
 
     while (Date.now() - pinWaitStart < 22000) {
-      const checkRes = await instance.page.evaluate(() => {
-        const text = document.body ? document.body.innerText : "";
-        const nameEl = document.querySelector('input[placeholder*="Name"], input[aria-label*="Name"], input[placeholder*="Nickname"]');
-        const randomEl = document.querySelector('button[class*="randomButton"]') ||
-                         [...document.querySelectorAll("button")].find(b => /generate|spin/i.test(b.innerText || ""));
-        return {
-          text,
-          hasName: Boolean(nameEl && nameEl.offsetParent !== null),
-          hasRandom: Boolean(randomEl && randomEl.offsetParent !== null)
-        };
-      }).catch(() => null);
+      ensureActive();
+      const checkRes = await readJoinScreen(instance.page).catch(() => null);
 
       if (checkRes) {
-        if (/invalid game id|could not find (that|the) game|game (id|code) (not found|does not exist)/i.test(checkRes.text)) {
+        if (checkRes.invalidPin) {
           throw new Error("Invalid Game PIN: Blooket reported that this game could not be found.");
         }
-        if (/game (has ended|is over|is no longer active)/i.test(checkRes.text)) {
+        if (checkRes.isEnded) {
           throw new Error("Game session has already concluded.");
         }
-        if (/game is full|maximum (number of )?players/i.test(checkRes.text)) {
+        if (checkRes.isFull) {
           throw new Error("Game lobby is full (maximum player capacity reached).");
         }
         if (checkRes.hasName) {
@@ -672,7 +702,7 @@ export class BlooketInstanceManager extends EventEmitter {
         }
       }
 
-      await instance.page.waitForTimeout(40);
+      await instance.page.waitForTimeout(100);
     }
 
     if (!nameInputFound && !randomNameFound) {
@@ -691,6 +721,7 @@ export class BlooketInstanceManager extends EventEmitter {
     let nicknameAttempts = 0;
 
     while (!inLobbyConfirmed && nicknameAttempts < 4) {
+      ensureActive();
       nicknameAttempts++;
       instance.statusText = `Submitting nickname: ${instance.name}`;
       instance.addEvent(`Entering nickname "${instance.name}" (attempt ${nicknameAttempts})`, "info", "PHASE_NAME_INPUT");
@@ -706,16 +737,10 @@ export class BlooketInstanceManager extends EventEmitter {
         }
       } else {
         // Native Playwright input fill ensures React's synthetic input tracker registers the nickname
-        const nameInput = instance.page.locator('input[placeholder*="Name"], input[aria-label*="Name"], input[placeholder*="Nickname"], input[type="text"]').first();
+        const nameInput = visibleField(instance.page, NAME_SELECTOR);
         await nameInput.waitFor({ state: "visible", timeout: 8000 });
         await nameInput.fill(instance.name);
-        await nameInput.press("Enter");
-
-        const submitBtn = instance.page.locator('form button, button[type="submit"], [class*="joinButton"], [class*="arrowButton"], [class*="triangleButton"]').first();
-        if (await submitBtn.isVisible().catch(() => false)) {
-          await submitBtn.click().catch(() => {});
-        }
-        await instance.page.keyboard.press("Enter").catch(() => {});
+        await submitJoinField(nameInput);
       }
 
       // Phase 7: Strict Multi-Stage Lobby Confirmation
@@ -724,29 +749,11 @@ export class BlooketInstanceManager extends EventEmitter {
 
       while (Date.now() - verifyStart < 14000) {
 
-        const check = await instance.page.evaluate(() => {
-          const body = document.body.innerText || "";
-          const hasName = Boolean(document.querySelector('input[placeholder*="Name"], input[aria-label*="Name"], input[placeholder*="Nickname"]'));
-          const hasPin = Boolean(document.querySelector('input[placeholder*="Game ID"], input[name="join-code"]'));
-          const hasBlooks = Boolean(document.querySelector('[class*="blookBox"], [class*="blookContainer"], [class*="playerBlook"], [class*="blookWrapper"]'));
-          const hasLobbyTxt = /waiting for (the )?host|you'?re in|choose a blook|waiting for players/i.test(body);
-          const isTaken = /name.*(taken|already in use|choose another|not allowed|inappropriate|invalid)/i.test(body);
-          const isFull = /game.*full|maximum.*players/i.test(body);
-          const isEnded = /game.*(ended|over)/i.test(body);
-
-          return {
-            hasName,
-            hasPin,
-            hasBlooks,
-            hasLobbyTxt,
-            isTaken,
-            isFull,
-            isEnded
-          };
-        }).catch(() => null);
+        ensureActive();
+        const check = await readJoinScreen(instance.page).catch(() => null);
 
         if (!check) {
-          await instance.page.waitForTimeout(40);
+          await instance.page.waitForTimeout(100);
           continue;
         }
 
@@ -767,10 +774,11 @@ export class BlooketInstanceManager extends EventEmitter {
         // CONFIRMATION: Name input GONE, PIN input GONE, and either lobby text or blook box visible or URL is lobby
         const currentUrl = instance.page ? instance.page.url() : "";
         const isLobbyUrl = currentUrl.includes("/lobby");
-        if ((!check.hasName && !check.hasPin && (check.hasLobbyTxt || check.hasBlooks)) || isLobbyUrl) {
+        if (!check.hasName && !check.hasPin && (check.hasLobbyTxt || check.hasBlooks || isLobbyUrl)) {
           inLobbyConfirmed = true;
           break;
         }
+        await instance.page.waitForTimeout(100);
       }
     }
 
@@ -778,6 +786,7 @@ export class BlooketInstanceManager extends EventEmitter {
       throw new Error(`Failed to confirm lobby entry for "${instance.name}". Nickname prompt did not advance or lobby failed to load.`);
     }
 
+    ensureActive();
     // Phase 8: In Genuine Lobby
     instance.phase = "PHASE_LOBBY";
     instance.status = "lobby";
@@ -878,8 +887,13 @@ export class BlooketInstanceManager extends EventEmitter {
 
   async retryBot(id, customNameOrBool = "") {
     const inst = this.instances.get(id);
-    if (!inst) return;
+    if (!inst || inst.cancelled || inst.lifecycleActive || inst.retrying || this.stopping) return;
+    inst.retrying = true;
+    try { return await this.retryInstance(inst, customNameOrBool); }
+    finally { inst.retrying = false; }
+  }
 
+  async retryInstance(inst, customNameOrBool) {
     if (typeof customNameOrBool === "string" && customNameOrBool.trim()) {
       inst.name = customNameOrBool.trim().slice(0, 16);
       this.log(`Updated bot ${inst.id} name to [${inst.name}]`, "system", inst.name);
@@ -892,12 +906,15 @@ export class BlooketInstanceManager extends EventEmitter {
 
     this.log(`Retrying bot [${inst.name}]...`, "system", inst.name);
 
-    if (inst.autoAnswerLoop) clearInterval(inst.autoAnswerLoop);
+    if (inst.autoAnswerLoop) clearTimeout(inst.autoAnswerLoop);
     try {
       if (inst.page && !inst.page.isClosed()) await inst.page.close().catch(() => {});
       if (inst.context) await inst.context.close().catch(() => {});
     } catch {}
 
+    if (inst.cancelled || this.instances.get(inst.id) !== inst) return;
+    inst.isLooping = false; inst.isAnswering = false;
+    inst.lastAnsweredQuestion = null; inst.lastAnswerAttemptKey = null; inst.answerAttemptCount = 0;
     inst.status = "starting";
     inst.statusText = "Retrying connection...";
     inst.phase = "PHASE_SANDBOX";
@@ -914,7 +931,7 @@ export class BlooketInstanceManager extends EventEmitter {
     if (errorBots.length === 0) return;
     this.log(`Retrying all ${errorBots.length} failed bots...`, "system");
     for (const inst of errorBots) {
-      this.retryBot(inst.id, useNewNames);
+      this.retryBot(inst.id, useNewNames).catch(err => this.log(`Retry failed: ${err.message}`, "error", inst.name));
       await new Promise((r) => setTimeout(r, 220));
     }
   }
@@ -1094,6 +1111,8 @@ export class BlooketInstanceManager extends EventEmitter {
   }
 
   startBotLoop(instance) {
+    const version = instance.runVersion;
+    const active = () => !instance.cancelled && instance.runVersion === version && this.instances.get(instance.id) === instance;
     this.ensureBotAutoAnswerDaemon(instance).catch(() => {});
     if (instance.autoAnswerLoop) {
       clearInterval(instance.autoAnswerLoop);
@@ -1101,7 +1120,7 @@ export class BlooketInstanceManager extends EventEmitter {
     }
 
     const step = async () => {
-      if (!instance.page || instance.page.isClosed()) {
+      if (!active() || !instance.page || instance.page.isClosed()) {
         return;
       }
 
@@ -1559,7 +1578,7 @@ export class BlooketInstanceManager extends EventEmitter {
         // Log minor evaluate errors at debug level to avoid UI error floods
       } finally {
         instance.isLooping = false;
-        if (instance.page && !instance.page.isClosed()) {
+        if (active() && instance.page && !instance.page.isClosed()) {
           const nextDelay = instance.status === "lobby" ? 400 : 140;
           instance.autoAnswerLoop = setTimeout(step, nextDelay);
         }
@@ -2199,7 +2218,9 @@ export class BlooketInstanceManager extends EventEmitter {
   async stopBot(id) {
     const inst = this.instances.get(id);
     if (!inst) return;
-    if (inst.autoAnswerLoop) clearInterval(inst.autoAnswerLoop);
+    inst.cancelled = true;
+    this.instances.delete(id);
+    if (inst.autoAnswerLoop) clearTimeout(inst.autoAnswerLoop);
     try {
       if (inst.page && !inst.page.isClosed()) await inst.page.close().catch(() => {});
       if (inst.context) await inst.context.close().catch(() => {});
@@ -2210,9 +2231,14 @@ export class BlooketInstanceManager extends EventEmitter {
   }
 
   async stopFleet() {
+    if (this.stopping) return;
+    this.stopping = true;
+    this.fleetGeneration++;
+    for (const instance of this.instances.values()) { instance.cancelled = true; clearTimeout(instance.autoAnswerLoop); }
+    if (this.browserPromise) await this.browserPromise.catch(() => {});
     this.log("Terminating active bot fleet...", "warn");
     for (const inst of this.instances.values()) {
-      if (inst.autoAnswerLoop) clearInterval(inst.autoAnswerLoop);
+      if (inst.autoAnswerLoop) clearTimeout(inst.autoAnswerLoop);
       try {
         if (inst.page && !inst.page.isClosed()) await inst.page.close().catch(() => {});
         if (inst.context) await inst.context.close().catch(() => {});
@@ -2223,7 +2249,8 @@ export class BlooketInstanceManager extends EventEmitter {
       await this.browser.close().catch(() => {});
       this.browser = null;
     }
-    this.log("All fleet workers cleanly stopped. Memory reclaimed.", "system");
+    this.stopping = false;
+    this.log("Session stopped.", "system");
     this.emit("state-change", this.getState());
   }
 

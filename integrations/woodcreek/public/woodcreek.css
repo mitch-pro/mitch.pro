@@ -79,14 +79,14 @@ svg {flex-shrink:0}
 .count-presets {display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;margin:0 0 13px}
 #fleet-form .pill-btn {display:grid;place-items:center;min-height:39px;padding:7px;border:1px solid #38383f;border-radius:7px;background:transparent;color:#aaaab4;transform:none}
 #fleet-form .pill-btn:hover {background:#29292e;border-color:#55555e}
-#fleet-form .pill-btn.active {border-color:#aa6075;background:#3b2730;color:#f1d8e0}
+#fleet-form .pill-btn.active {border-color:#7595b4;background:#22364d;color:#d5eaff}
 .pill-btn-num {font:500 14px var(--font);line-height:1.4}
 .slider-row {display:flex;gap:16px;align-items:center}
 .count-slider {accent-color:#bd6a80;flex:1;width:100%;height:4px;min-width:0;background:#3b3b43;border:0}
-.count-slider::-webkit-slider-thumb {width:13px;height:13px;background:#d596a7;border:2px solid #282127;border-radius:50%;transform:none}
+.count-slider::-webkit-slider-thumb {width:13px;height:13px;background:#9acbfa;border:2px solid #17283a;border-radius:50%;transform:none}
 #input-count {height:33px;width:52px;flex:0 0 52px;border:1px solid #3b3b43;border-radius:6px;background:var(--bg-input);color:var(--text-main);font:13px var(--font-mono);padding:4px 6px;text-align:center}
 .join-panel .action-group {margin-top:auto;padding:0}
-#btn-launch {height:45px;border:1px solid #b9526d;background:#87b8e5;border-radius:8px;color:#fff;display:flex;align-items:center;justify-content:center;gap:10px;font:500 13px var(--font);letter-spacing:0;transform:none;text-transform:none}
+#btn-launch {height:45px;border:1px solid #9acbfa;background:#87b8e5;border-radius:8px;color:#fff;display:flex;align-items:center;justify-content:center;gap:10px;font:500 13px var(--font);letter-spacing:0;transform:none;text-transform:none}
 #btn-launch:hover {background:var(--primary-hover);transform:none}
 #btn-launch svg {width:14px;height:14px;fill:currentColor;stroke:none}
 #bot-names {display:flex;flex-direction:column;gap:0}
@@ -134,18 +134,18 @@ summary::-webkit-details-marker {display:none}
 .doctrines-hint {font-size:10px;color:var(--text-sub)}
 .doctrines-grid {display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px}
 #gameplay-deck .doctrine-btn {border:1px solid #36363e;border-radius:7px;background:#202024;padding:10px;gap:8px;transform:none}
-#gameplay-deck .doctrine-btn.active {background:#38252e!important;border-color:#9f576c!important}
+#gameplay-deck .doctrine-btn.active {background:#22364d!important;border-color:#7595b4!important}
 .doctrine-badge {display:none}
 .doctrine-name {font:500 12px var(--font);color:#e3e3e8}
 .doctrine-tag {font:10px var(--font);color:var(--text-sub)}
 .gameplay-deck-tabs {display:flex;flex-wrap:wrap;gap:5px;padding:0;border:0;border-bottom:1px solid var(--border);background:none;border-radius:0;overflow:visible}
 #gameplay-deck .gameplay-tab-btn {border:1px solid transparent;border-radius:6px 6px 0 0;padding:9px 11px;background:none;color:#a8a8b3;font:12px var(--font);transform:none}
-#gameplay-deck .gameplay-tab-btn.active {background:#2b2b31;border-color:#3e3e47;border-bottom-color:#2b2b31;color:#f0e0e5}
+#gameplay-deck .gameplay-tab-btn.active {background:#2b2b31;border-color:#3e3e47;border-bottom-color:#2b2b31;color:#d5eaff}
 .gameplay-tab-btn svg {display:none}
 .gameplay-tab-content {padding:18px 0 0;min-width:0}
 #gameplay-deck .speed-presets-bar {gap:7px}
 #gameplay-deck .speed-preset-btn {border:1px solid var(--border);border-radius:6px;background:#202024;padding:9px;color:#aaaab6;transform:none}
-#gameplay-deck .speed-preset-btn.active {background:#38252e;border-color:#9f576c;color:#f0dce3}
+#gameplay-deck .speed-preset-btn.active {background:#22364d;border-color:#7595b4;color:#d5eaff}
 .speed-preset-btn svg {display:none}
 .two-cols,.toggles-grid {gap:16px;grid-template-columns:repeat(2,minmax(0,1fr))}
 .toggle-row {background:none;border:0;border-bottom:1px solid #303037;padding:11px 0;gap:15px}
@@ -217,11 +217,11 @@ summary::-webkit-details-marker {display:none}
 .btn-vault-action,.vault-view-tab,.target-btn,.gui-nav-item,.widget-action-btn {font:12px var(--font);border-radius:6px;transform:none;color:#c3c3ce}
 .vault-view-tabs,.target-bar-wrap {background:#1d1d21;border-color:var(--border);gap:8px}
 .vault-view-tab {border-color:transparent;background:none}
-.vault-view-tab.active,.target-btn.active {color:#f0dce4;background:#38262e;border-color:#835065}
+.vault-view-tab.active,.target-btn.active {color:#d5eaff;background:#22364d;border-color:#526783}
 .cheats-avail-banner {background:#25252b;border:0;color:#bbbcc7;border-radius:0;font:12px var(--font)}
 .gui-deck-nav {background:#111a27;border-color:var(--border);padding:14px}
 .gui-nav-item {color:#aaaab7;background:none;padding:11px;border-color:transparent}
-.gui-nav-item.active {background:#38262e;color:#edd6de;border-color:#624050}
+.gui-nav-item.active {background:#22364d;color:#d5eaff;border-color:#526783}
 .gui-nav-item svg {color:inherit;stroke:currentColor}
 .gui-deck-panels {padding:22px;background:#1d1d21;min-width:0}
 .gui-panel-title {font:500 16px var(--font);color:#dedee5}
@@ -318,3 +318,5 @@ summary::-webkit-details-marker {display:none}
 @media(max-width:900px){.site-sidebar{flex-wrap:wrap;flex-direction:row}.site-nav{order:3;flex:1 1 100%;min-width:0;justify-content:flex-start}.sidebar-bottom{margin-left:auto}}
 @media(max-width:720px){.site-nav{justify-content:space-between;gap:2px}.site-nav a,.site-nav button{font-size:11px;padding:8px 5px;gap:0;min-width:0;justify-content:center}.site-nav .sidebar-tools svg{display:none}}
 @media(max-width:380px){.site-nav a,.site-nav button{font-size:10px;padding:8px 3px}}
+
+#connection-error{background:#30252c;border-color:#76515d}#connection-error button{padding:7px 10px;border:1px solid #9b7380;background:transparent;border-radius:6px;color:inherit;font-size:11px}

@@ -1,10 +1,12 @@
+import { PLAYER_URL } from "./blooket-connection.mjs";
+
 /**
  * FlareSolverr Client & Clearance Manager
  * Connects to the local loopback FlareSolverr service (default: http://127.0.0.1:8191/v1)
  * to solve Cloudflare Turnstile/Managed Challenges and retrieve clearance cookies & User-Agents.
  */
 
-export const BLOOKET_PLAYER_URL = "https://play.blooket.com/play";
+export const BLOOKET_PLAYER_URL = PLAYER_URL;
 
 function sameSiteValue(val) {
   const s = String(val || "").toLowerCase();
@@ -22,7 +24,8 @@ export function toPlaywrightCookies(rawCookies, targetHost = "play.blooket.com")
 
     let domain = String(c?.domain || targetHost).trim().toLowerCase();
     // Keep cookies scoped to blooket.com or play.blooket.com
-    if (!domain.includes("blooket.com")) return [];
+    const host = domain.replace(/^\./, "");
+    if (host !== "blooket.com" && !host.endsWith(".blooket.com")) return [];
 
     const expires = Number(c?.expires || c?.expiry);
     const cookie = {

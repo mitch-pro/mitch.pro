@@ -46,6 +46,7 @@
 
     <main id="workspace" tabindex="-1">
       <div class="account-notice" id="account-notice" role="status" hidden><p id="account-notice-text">Sign in with your Mitch account to use Blooket.</p><a href="/auth/login">Sign in</a></div>
+      <div class="account-notice" id="connection-error" role="alert" hidden><p id="connection-error-text"></p><button type="button" id="dismiss-connection-error">Dismiss</button></div>
       <section class="setup-section" id="game-setup">
         <form id="fleet-form" novalidate>
           <div class="setup-grid"><section class="join-panel"><div class="panel-heading"><div class="section-icon"><svg viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 4H5v16h5M9 12h12m-5-5 5 5-5 5"></path></svg></div><div><h2>Join a game</h2><p>Use the PIN on the host’s screen.</p></div></div><div class="form-group">
@@ -2271,6 +2272,9 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
       }
 
       let currentAccount = null;
+      let connecting = false;
+      const showConnectionError = message => { byId("connection-error-text").textContent = message; byId("connection-error").hidden = false; };
+      byId("dismiss-connection-error").addEventListener("click", () => { byId("connection-error").hidden = true; });
       async function loadAccount() {
         try {
           const response = await appFetch("/api/account");
@@ -2315,7 +2319,10 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
 
       // Recheck the account before opening or reconnecting a live session.
       async function connect() {
-        if (!await loadAccount()) { setStatus(false, "Sign in required"); return; }
+        if (connecting || socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) return;
+        connecting = true;
+        try {
+        if (!await loadAccount()) { clearInterval(reconnectTimer); reconnectTimer = null; setStatus(false, "Sign in required"); return; }
         const protocol = location.protocol === "https:" ? "wss:" : "ws:";
         const wsUrl = `${protocol}//${location.host}${appBase}/socket`;
 
@@ -2339,6 +2346,8 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
               }
             } else if (msg.type === "log") {
               appendLog(msg.log);
+            } else if (msg.type === "error") {
+              showConnectionError(msg.message || "Command failed. Please try again.");
             }
           } catch {}
         };
@@ -2353,6 +2362,7 @@ Ava" spellcheck="false" rows="6" aria-label="Bot names, one per line"></textarea
         socket.onerror = () => {
           socket.close();
         };
+        } finally { connecting = false; }
       }
 
 
@@ -4331,8 +4341,9 @@ function getClientName(sn) {
       function sendCommand(payload) {
         if (!currentAccount) { window.location.href = appBase ? "/enroll/?next=%2Fblooket-bot%2F" : "/auth/login"; return; }
         if (socket?.readyState === WebSocket.OPEN) {
+          byId("connection-error").hidden = true;
           socket.send(JSON.stringify(payload));
-        }
+        } else { showConnectionError("Connection lost. Please wait for it to reconnect."); }
       }
 
       // State Rendering
@@ -4690,7 +4701,7 @@ function getClientName(sn) {
             <div class="diag-box" style="border-color: rgba(16, 185, 129, 0.3); background: var(--success-subtle);">
               <span style="color: #34d399; font-weight: 600;">Status: ${escapeHtml(bot.statusText || bot.status)}</span>
               <p style="font-size: 0.78rem; color: var(--text-muted);">
-                Worker active on tyler-home-server. Latency: ${bot.pingMs}ms. Questions solved: ${bot.questionsAnswered} (Streak: ${bot.streak}).
+                Questions answered: ${bot.questionsAnswered}. Current streak: ${bot.streak}.
               </p>
             </div>
           `}

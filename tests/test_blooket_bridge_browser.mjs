@@ -127,6 +127,14 @@ try {
   assert.equal(page.url(),base+'/blooket-bot/');
   assert.equal(await page.locator('html').getAttribute('data-app-base'),'/blooket-bot');
   assert.equal(await page.locator('.workspace-heading h1').innerText(),'Blooket');
+  assert.equal(await page.locator('#account-name').innerText(),'Alice');
+  assert((await page.title()).includes('Tylerium Services'));
+  assert(!(await page.locator('body').innerText()).includes('↗'));
+  for(const socket of sockets)sendFrame(socket,{type:'error',message:'Game lobby is full.'});
+  await page.locator('#connection-error').waitFor({state:'visible'});
+  assert.equal(await page.locator('#connection-error-text').innerText(),'Game lobby is full.');
+  await page.locator('#dismiss-connection-error').click();
+  assert(await page.locator('#connection-error').isHidden());
   assert.equal(await page.locator('#accuracy-badge-box').textContent(),'95%');
   for(const width of [1440,768,390,320]) {await page.setViewportSize({width,height:1000});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Mounted dashboard must fit '+width+' '+JSON.stringify(await page.evaluate(()=>[...document.querySelectorAll('body *')].filter(el=>el.getBoundingClientRect().right>innerWidth+1&&el.getBoundingClientRect().width>0).slice(0,15).map(el=>({tag:el.tagName,id:el.id,class:el.className,right:el.getBoundingClientRect().right})))));}
   await page.setViewportSize({width:1440,height:1050});

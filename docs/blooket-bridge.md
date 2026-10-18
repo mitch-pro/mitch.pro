@@ -70,3 +70,19 @@ It never launches bots or sends commands to the production service.
 Mitch server in production authentication mode. It checks the profile, PKCE,
 state, code persistence and concurrent consumption, cookies, CSRF, token
 integrity, grant revocation, and linked Mitch logout without production data.
+
+## Blooket connection updates
+
+`integrations/woodcreek/backend/blooket-connection.mjs` centralizes the browser
+join selectors and validates 6–9 digit Game PINs. It finds visible fields, submits
+each form once, and distinguishes a full/ended game from a temporary connection
+failure. Browser creation is shared across concurrent joins. Stops cancel queued
+joins and late contexts; failed joins release their contexts; retries cannot
+start a second lifecycle for the same connection. Browser disconnects preserve
+failed entries so they can be retried. Blooket's own client resources are allowed
+to load, and a refreshed navigation uses the new HTTP response status.
+
+The dashboard reports command failures, avoids overlapping reconnects, and the
+Node WebSocket server checks heartbeats. Unmeasured latency is no longer shown
+as random data. `node tests/test_blooket_connection.mjs` uses real Chromium with
+fully intercepted Blooket pages to exercise these cases without joining games.

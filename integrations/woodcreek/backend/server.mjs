@@ -52,18 +52,25 @@ setInterval(() => {
 }, 1500);
 
 async function readBody(req) {
-  return new Promise((resolve) => {
-    const chunks = [];
-    req.on("data", (chunk) => chunks.push(chunk));
-    req.on("end", () => {
-      try {
-        const body = Buffer.concat(chunks).toString("utf8");
-        resolve(body ? JSON.parse(body) : {});
-      } catch {
-        resolve({});
-      }
+  return new Promise((resolve, reject) => {
+    const chunks = []; let size = 0, failed = false;
+    const fail = (status, message) => { if (!failed) { failed = true; chunks.length = 0; reject(Object.assign(new Error(message), {status})); } };
+    req.on("data", chunk => {
+      size += chunk.length;
+      if (size > 262144) { fail(413, "Request is too large."); return; }
+      if (!failed) chunks.push(chunk);
     });
-    req.on("error", () => resolve({}));
+    req.on("end", () => {
+      if (failed) return;
+      try {
+        const text = Buffer.concat(chunks).toString("utf8");
+        const body = text ? JSON.parse(text) : {};
+        if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("Invalid request.");
+        resolve(body);
+      } catch { fail(400, "Send a JSON object."); }
+    });
+    req.on("error", () => fail(400, "Request could not be read."));
+    req.on("aborted", () => fail(400, "Request was interrupted."));
   });
 }
 
@@ -114,14 +121,11 @@ const server = http.createServer(async (req, res) => {
 
     if ((pathname === "/api/fleet/launch" || pathname === "/api/start" || pathname === "/api/launch") && req.method === "POST") {
       const body = await readBody(req);
-      const cleanPin = String(body.pin || "").replace(/\D/g, "").trim();
-      if (!cleanPin || cleanPin.length < 6) {
-        return sendJson(res, 400, { error: "Invalid Game PIN. Please enter a valid 6-digit PIN." });
-      }
-      body.pin = cleanPin;
       try {
+        body.pin = manager.validateStart(body);
         manager.startFleet(body).catch((err) => {
-          console.error("Fleet launch error:", err);
+          manager.log(`Could not join game: ${err.message}`, "error");
+          broadcastJson({type:"error", message:err.message});
         });
         return sendJson(res, 200, { success: true });
       } catch (err) {
@@ -245,16 +249,26 @@ const server = http.createServer(async (req, res) => {
       res.end("Not Found");
     }
   } catch (err) {
-    sendJson(res, 500, { error: "Internal server error" });
+    if (!res.headersSent) sendJson(res, err.status || 500, { error: err.status ? err.message : "Internal server error" });
   }
 });
 
-const wss = new WebSocketServer({ noServer: true });
+const wss = new WebSocketServer({ noServer: true, maxPayload: 262144 });
+const heartbeat = setInterval(() => {
+  for (const socket of wss.clients) {
+    if (!socket.isAlive || socket.bufferedAmount > 1048576) { socket.terminate(); continue; }
+    socket.isAlive = false;
+    if (socket.readyState === WebSocket.OPEN) socket.ping();
+  }
+}, 30000);
+heartbeat.unref();
 
 wss.on("connection", (socket, request) => {
   const authCheck = setInterval(async () => {
     if (!await accountAuth.authenticate(request)) socket.close(1008, "Sign in again");
   }, 15000);
+  socket.isAlive = true;
+  socket.on("pong", () => { socket.isAlive = true; });
   clients.add(socket);
   try {
     socket.send(JSON.stringify({ type: "state", state: manager.getState() }));
@@ -265,6 +279,7 @@ wss.on("connection", (socket, request) => {
     try {
       if (!await accountAuth.authenticate(request)) { socket.close(1008, "Sign in again"); return; }
       const payload = JSON.parse(data.toString("utf8"));
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("Invalid command.");
       const op = payload.op;
 
       if (op === "ping") {
@@ -272,14 +287,10 @@ wss.on("connection", (socket, request) => {
         return;
       }
       if (op === "launch" || op === "start") {
-        const cleanPin = String(payload.pin || "").replace(/\D/g, "").trim();
-        if (!cleanPin || cleanPin.length < 6) {
-          socket.send(JSON.stringify({ type: "error", message: "Please enter a valid 6-digit Game PIN." }));
-          return;
-        }
-        payload.pin = cleanPin;
+        payload.pin = manager.validateStart(payload);
         manager.startFleet(payload).catch((err) => {
-          console.error("Fleet launch error:", err);
+          manager.log(`Could not join game: ${err.message}`, "error");
+          broadcastJson({type:"error", message:err.message});
         });
         return;
       }
@@ -333,8 +344,9 @@ wss.on("connection", (socket, request) => {
         manager.emit("state-change", manager.getState());
         return;
       }
+      throw new Error("Unknown command.");
     } catch (err) {
-      console.error("[WS Guard] Invalid message:", err?.message);
+      if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({type:"error",message:err?.message || "Command failed. Please try again."}));
     }
   });
 
