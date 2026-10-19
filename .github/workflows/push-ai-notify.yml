@@ -8,7 +8,6 @@ name: Direct Push AI Notify
 on:
   push:
     branches: [master]
-  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -18,11 +17,10 @@ jobs:
     name: AI Summary + ntfy for direct pushes
     runs-on: ubuntu-latest
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.actor != 'Mitch-Fogler' &&
+      github.actor != 'Mitch-Fogler' &&
       github.event.forced == false &&
       github.event.deleted == false &&
-      github.event.before != '0000000000000000000000000000000000000000')
+      github.event.before != '0000000000000000000000000000000000000000'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,17 +28,9 @@ jobs:
           fetch-depth: 0
 
       - name: Collect diff
-        env:
-          EVENT_BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
-          # workflow_dispatch has no "before" SHA (manual test run) - diff
-          # against the previous commit instead.
-          BEFORE="${EVENT_BEFORE:-}"
-          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
-            BEFORE=$(git rev-parse HEAD~1)
-          fi
-          git diff -U3 "$BEFORE" "${{ github.sha }}" > full-diff.txt
+          git diff -U3 "${{ github.event.before }}" "${{ github.sha }}" > full-diff.txt
           head -c 60000 full-diff.txt > diff.txt
           echo "Diff captured: $(wc -c < diff.txt) bytes"
 
