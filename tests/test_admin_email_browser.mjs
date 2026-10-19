@@ -60,6 +60,10 @@ try {
   browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   await context.route('**/*', route => new URL(route.request().url()).origin === base ? route.continue() : route.abort());
+  // This suite tests email; the admin shell also requests the unrelated Matrix service.
+  await context.route(base + '/api/matrix/**', route => route.fulfill({
+    contentType: 'application/json', body: JSON.stringify({ ok: true, staff: [], rooms: [] }),
+  }));
   const headers = { Origin: base, 'X-Mitch-Requested-With': '1' };
   assert((await context.request.post(base + '/api/dev/test-access', { headers })).ok());
   const passphrase = randomUUID();
@@ -80,6 +84,20 @@ try {
   await page.getByText('Preview only. Nothing has been sent.', { exact: true }).waitFor();
   assert.equal(await page.locator('#newsletter-preview').getAttribute('sandbox'), '');
   assert.equal(messages.length, 0);
+  assert.equal(await page.locator('#edition').inputValue(), 'October 16–18, 2026');
+  assert.equal(await page.locator('#signature').inputValue(), 'Mitch & Tyler');
+  assert.equal(await page.locator('.content-section').count(), 8);
+  assert.equal(await page.getByRole('tab', { name: 'Message', exact: true }).getAttribute('aria-selected'), 'true');
+  const messageTab = page.getByRole('tab', { name: 'Message', exact: true });
+  const appearanceTab = page.getByRole('tab', { name: 'Appearance', exact: true });
+  const recipientsTab = page.getByRole('tab', { name: 'Recipients', exact: true });
+  await messageTab.focus();
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await appearanceTab.getAttribute('aria-selected'), 'true');
+  await page.keyboard.press('End');
+  assert.equal(await recipientsTab.getAttribute('aria-selected'), 'true');
+  await page.keyboard.press('Home');
+  assert.equal(await messageTab.getAttribute('aria-selected'), 'true');
   const original = await page.locator('#newsletter-preview').getAttribute('srcdoc');
   if (process.env.NEWSLETTER_ARTIFACT_DIR) {
     const out = process.env.NEWSLETTER_ARTIFACT_DIR;
@@ -91,13 +109,17 @@ try {
     await sample.screenshot({ path: join(out, 'example.png'), fullPage: true });
     await sample.close();
     await page.bringToFront();
+    await page.locator('h1').click();
     await page.screenshot({ path: join(out, 'editor.png') });
   }
   await page.locator('#review-email').click();
   await page.getByText('Choose at least one recipient who has not unsubscribed.', { exact: true }).waitFor();
+  assert.equal(await recipientsTab.getAttribute('aria-selected'), 'true');
+  await messageTab.click();
   await page.locator('#subject').fill('October updates — local test');
   await page.locator('#title').fill('A newsletter you can customize.');
   await page.locator('#intro').fill('Hello everyone,\n\nThis is an isolated preview test.');
+  await recipientsTab.click();
   const alice = page.locator('.recipient-option').filter({ hasText: 'alice@example.test' }).locator('input');
   await alice.check();
   assert(await page.locator('.recipient-option').filter({ hasText: 'unsub@example.test' }).locator('input').isDisabled());
@@ -118,14 +140,23 @@ try {
   assert.equal(await heading.inputValue(), firstHeading);
   await page.getByRole('button', { name: 'Phone', exact: true }).click();
   assert(await page.locator('#preview-canvas').evaluate(el => el.classList.contains('phone')));
+  await appearanceTab.click();
+  await page.selectOption('#theme', 'midnight');
+  await page.waitForFunction(() => document.getElementById('newsletter-preview').srcdoc.includes('#111b2e'));
   await page.selectOption('#theme', 'paper');
-  await page.waitForFunction(() => document.getElementById('newsletter-preview').srcdoc.includes('#fffdf8'));
+  await page.waitForFunction(() => document.getElementById('newsletter-preview').srcdoc.includes('bgcolor="#ffffff"'));
+  await page.locator('#heroUrl').fill('not-a-url');
+  await messageTab.click();
+  await page.locator('#review-email').click();
+  assert.equal(await appearanceTab.getAttribute('aria-selected'), 'true', 'Invalid hidden fields must open their own tab.');
+  await page.locator('#heroUrl').fill('');
   await page.locator('#review-email').click();
   await page.locator('#review-dialog[open]').waitFor();
   assert.equal(await page.locator('#review-count').innerText(), '2 recipients');
   assert.deepEqual(await page.locator('#review-recipients li').allTextContents(), ['alice@example.test', 'person@example.test']);
   assert.equal(messages.length, 0, 'Saving, previewing and reviewing must never send email.');
   await page.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await recipientsTab.click();
   await page.locator('[name="audience"][value="everyone"]').check();
   await page.locator('#review-email').click();
   await page.locator('#review-dialog[open]').waitFor();
@@ -152,14 +183,24 @@ try {
   await page.locator('#review-dialog[open]').waitFor();
   await page.locator('#send-newsletter').click();
   await page.waitForFunction(() => document.getElementById('delivery-status').textContent.includes('2 failed'));
+  const messagesBeforeReset = messages.length;
+  await messageTab.click();
+  await page.locator('#load-example').click();
+  assert.equal(await page.locator('#title').inputValue(), 'This weekend on mitch.pro');
+  assert.equal(await page.locator('#signature').inputValue(), 'Mitch & Tyler');
+  assert.equal(await page.locator('#recipient-count').textContent(), '2 recipients', 'Loading the new default preserves recipients.');
+  await page.getByRole('button', { name: 'Desktop', exact: true }).click();
+  await page.waitForFunction(() => document.getElementById('newsletter-preview').srcdoc.includes('This weekend on mitch.pro'));
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `Overflow at ${width}px`);
+    assert(await page.frameLocator('#newsletter-preview').locator('html').evaluate(el => el.scrollWidth <= innerWidth + 1), `Email overflow at ${width}px`);
   }
   if (process.env.EMAIL_SCREENSHOT) await page.screenshot({ path: process.env.EMAIL_SCREENSHOT, fullPage: true });
   const previewTop = await page.frameLocator('#newsletter-preview').locator('h1').evaluate(el => el.getBoundingClientRect().top);
   assert(previewTop < 220, `Newsletter heading should be visible near the top of the preview, got ${previewTop}px`);
   assert.deepEqual(errors, []);
+  assert.equal(messages.length, messagesBeforeReset, 'Loading a default and changing preview size must not send.');
   console.log('PASS: admin authentication, composer navigation, example/live previews, draft save/reload, selected/everyone audiences, unsubscribe exclusions, review without sending, section ordering, local fake delivery, duplicate prevention, SMTP failures and responsive layout. No real emails were sent.');
 } finally {
   await browser?.close();

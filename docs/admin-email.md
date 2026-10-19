@@ -36,6 +36,18 @@ reorderable sections, cover image, button, sign-off, accent color, and light or
 dark design. Desktop and phone previews use the same Rust renderer as delivery.
 Download HTML exports the preview without a personal unsubscribe token.
 
+Message, Appearance, and Recipients tabs sit beside the live preview. Arrow keys,
+Home, and End navigate the tabs; reviewing an invalid field opens its tab. The
+email uses a sans-serif layout with a dark masthead, unnumbered update cards,
+and Mitch & Tyler branding and sign-off. The edition/date line is editable.
+
+The default is the October 16–18, 2026 weekend update, based on this repository's
+Friday-through-Sunday changes: site design and shortcuts, profiles and leaderboard,
+sign-in and site tour, Matrix, presence and privacy, VM/admin controls,
+Tylerium/Blooket, and email/build tooling. Existing saved drafts stay intact;
+Load weekend update replaces the message with the new default while preserving
+recipient choices. New drafts start with no recipients selected.
+
 Choose everyone signed up, selected members, or additional individual addresses.
 The registered audience comes from accounts, profiles, and password records;
 unused invitation tokens and manually added newsletter addresses are not included

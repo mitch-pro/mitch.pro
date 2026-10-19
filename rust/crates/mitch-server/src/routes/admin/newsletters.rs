@@ -12,6 +12,7 @@ mod template;
 pub struct Draft {
     subject: String,
     preheader: String,
+    edition: String,
     title: String,
     intro: String,
     hero_url: String,
@@ -35,22 +36,28 @@ pub struct Section {
 impl Default for Draft {
     fn default() -> Self {
         Self {
-            subject: "A few updates from mitch.pro".into(),
-            preheader: "Site updates, recent changes, and a note from Mitch and Tyler.".into(),
-            title: "What’s changed on mitch.pro".into(),
-            intro: "Hey everyone,\n\nHere’s a look at what’s changed on mitch.pro recently.".into(),
+            subject: "mitch.pro updates — October 16–18".into(),
+            preheader: "A weekend of updates to profiles, chat, movies, Blooket, privacy, and more. From Mitch & Tyler.".into(),
+            edition: "October 16–18, 2026".into(),
+            title: "This weekend on mitch.pro".into(),
+            intro: "Hey everyone,\n\nWe’ve been updating the site throughout Friday, Saturday, and Sunday. Here’s what changed, from the pages you use every day to the tools running behind them.".into(),
             hero_url: String::new(),
             button_label: "Open mitch.pro".into(),
             button_url: "https://mitchdog.com".into(),
             signature: "Mitch & Tyler".into(),
-            accent: "#b8ec83".into(),
-            theme: "midnight".into(),
+            accent: "#2563eb".into(),
+            theme: "paper".into(),
             audience: "selected".into(),
             recipients: vec![],
             sections: vec![
-                Section { title: "Profiles and the leaderboard".into(), body: "The leaderboard now shows the profile photos and items people have chosen for their accounts. Take a look and see where you stand.".into() },
-                Section { title: "Email updates".into(), body: "We’ve added a newsletter editor for site updates. Future emails can include release notes, new features, and occasional notes from us.".into() },
-                Section { title: "Feedback".into(), body: "If you’ve found a bug or have an idea for the site, send a note to support@mitch.pro.".into() },
+                Section { title: "Homepage and navigation".into(), body: "We refreshed the homepage, preferences, games, shop, coins, friends, members, casino, and school pages with simpler layouts and more direct labels. The site logo and MitchCoin artwork were updated too.\n\nMovies now opens the Rivestream homepage through the site’s proxy. Blooket Bot has its own full-width shortcut below the other four homepage cards and a link in the top navigation.".into() },
+                Section { title: "Profiles and the leaderboard".into(), body: "The leaderboard was rebuilt around people’s actual profile photos and equipped cosmetics, including their profile colors, badges, and effects. Search and the layout were cleaned up, and Tylerium’s account display now keeps those same profile details.".into() },
+                Section { title: "Sign-in and the new site tour".into(), body: "The login and public signup pages have simpler layouts and clearer account controls. Login styles also load correctly before you sign in.\n\nThe public introduction now centers on the new recording, edited to 3 minutes and 57 seconds with a louder soundtrack. The extra promotional copy and soundtrack caption were removed.".into() },
+                Section { title: "Matrix chat and suggestions".into(), body: "Direct messages now find or reuse the right conversation. We fixed the disappearing Home space button and the empty bottom gap in the installed Matrix app.\n\nThere’s a public #suggestions channel, an administrator-only channel manager, and a moderation audit log. Unbanning someone no longer repeatedly invites or rejects them.".into() },
+                Section { title: "People, friends, and privacy".into(), body: "Presence now follows individual tabs more accurately across People and Friends. Page and activity details are restricted to friends, yourself, and administrators.\n\nA Page Location toggle in Preferences lets you hide those details from everyone, including administrators. Privacy choices are enforced by the backend, and live presence stays in memory.".into() },
+                Section { title: "Cloud Linux and administration".into(), body: "We repaired VM controls and desktop connections. Owners can adjust CPU, memory, and disk from VM Lab’s resource dialog, and staff account search now suggests names, usernames, and email addresses.\n\nThe admin panel’s collapsing layouts, passphrase wiring, and backend routes were fixed. Account, ban, economy, and VM tools received related fixes, and routine moderator visits are no longer added to the activity log. The Activity Log also has a fullscreen view.".into() },
+                Section { title: "Tylerium Services and Blooket".into(), body: "Woodcreek’s main app is now Tylerium Services, with Tylerium branding and navigation. Its dashboard is available at /blooket-bot/ through Mitch, and both backends share Mitch accounts and sign-in.\n\nBlooket joins and retries use a shared queue with capacity checks, cancellation, and clearer connection errors. Existing game identities are preserved. Settings and game controls now use one controller, and a visible Start answering / Stop answering button controls answering. Server status controls and the remaining school-themed labels were removed; the browser tab uses Clever Portal branding.".into() },
+                Section { title: "Email and site maintenance".into(), body: "Admin email tools now connect to the existing mitch-mail-rs service. Newsletters have their own editor with member selection, individual addresses, an everyone audience, saved drafts, and a preview before sending. Unsubscribed addresses are excluded.\n\nBuild-cache handling was repaired and capped at 12 GB. Rust formatting and CI checks were fixed, larger pull-request reviews handle their diffs correctly, and the push-notification workflow’s AI provider was updated. This email and its editor have also been redesigned, with this weekend’s changes loaded as the default update.\n\nThanks for using the site. If something needs fixing, let us know at support@mitch.pro.".into() },
             ],
         }
     }
@@ -91,6 +98,7 @@ fn parse_draft(body: &Value, ready: bool) -> Result<Draft, &'static str> {
     if draft.subject.len() > 180
         || draft.subject.chars().any(char::is_control)
         || draft.preheader.len() > 250
+        || draft.edition.len() > 80
         || draft.title.len() > 180
         || draft.intro.len() > 12_000
         || draft.signature.len() > 120
@@ -510,6 +518,13 @@ mod tests {
         assert!(html.contains("&lt;script&gt;"));
         assert!(!html.contains("<script>"));
         assert!(html.contains("https://mitchdog.com/unsubscribe/token"));
+        draft.edition = "<img src=x onerror=alert(1)>".into();
+        let html = template::render(&draft, "#");
+        assert!(html.contains("&lt;img src=x onerror=alert(1)&gt;"));
+        assert!(html.contains("Mitch &amp; Tyler"));
+        draft.edition = "x".repeat(81);
+        assert!(parse_draft(&json!(draft), false).is_err());
+        draft.edition.clear();
         draft.hero_url = "javascript:alert(1)".into();
         assert!(parse_draft(&json!(draft), false).is_err());
         draft.hero_url.clear();

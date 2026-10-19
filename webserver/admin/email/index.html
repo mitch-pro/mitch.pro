@@ -10,7 +10,7 @@
 <body class="newsletter-editor">
   <main class="newsletter-app" id="newsletter-app">
     <header class="editor-header">
-      <div><a class="back-link" href="/admin/#email-tools">Admin / Email</a><h1>Newsletter</h1></div>
+      <div class="editor-heading"><a class="back-link" href="/admin/#email-tools">Admin / Email</a><div class="editor-title"><h1>Newsletter</h1><span class="author-credit">Mitch &amp; Tyler</span></div></div>
       <div class="header-actions"><span id="draft-status" role="status"></span><button id="save-draft" type="button" disabled>Save draft</button><button id="review-email" class="primary" type="button" disabled>Review email</button></div>
     </header>
 
@@ -21,48 +21,62 @@
     </section>
 
     <div id="editor-workspace" class="editor-workspace" hidden>
-      <form id="newsletter-form" class="editor-fields">
-        <section class="field-card">
-          <div class="card-heading"><h2>Recipients</h2><span id="recipient-count">Loading…</span></div>
-          <fieldset class="audience-options"><legend class="sr-only">Choose recipients</legend>
-            <label><input type="radio" name="audience" value="selected" checked><span>Choose recipients</span></label>
-            <label><input type="radio" name="audience" value="everyone"><span>Everyone signed up <small id="everyone-count"></small></span></label>
-          </fieldset>
-          <div id="selected-recipients">
-            <label for="recipient-search">Find a member</label><input id="recipient-search" type="search" placeholder="Name, username, or email" autocomplete="off">
-            <div id="recipient-list" class="recipient-list" role="group" aria-label="Registered members"></div>
-            <label for="extra-recipients">Other email addresses</label><textarea id="extra-recipients" rows="2" placeholder="name@example.com, another@example.com"></textarea>
-            <p class="field-note">Separate addresses with commas or new lines.</p>
-          </div>
-          <p class="field-note">Unsubscribed addresses are excluded from every audience.</p>
-        </section>
+      <div class="composer-pane">
+        <div class="editor-tabs" role="tablist" aria-label="Newsletter settings">
+          <button id="tab-message" type="button" role="tab" aria-controls="panel-message" aria-selected="true" data-editor-tab="message">Message</button>
+          <button id="tab-design" type="button" role="tab" aria-controls="panel-design" aria-selected="false" tabindex="-1" data-editor-tab="design">Appearance</button>
+          <button id="tab-recipients" type="button" role="tab" aria-controls="panel-recipients" aria-selected="false" tabindex="-1" data-editor-tab="recipients">Recipients</button>
+        </div>
+        <form id="newsletter-form" class="editor-fields">
+          <section id="panel-message" class="field-card" role="tabpanel" aria-labelledby="tab-message" data-editor-panel="message">
+            <div class="card-heading"><h2>Message</h2><button type="button" class="text-button" id="load-example">Load weekend update</button></div>
+            <p class="example-note" id="example-note">Default update: October 16–18, 2026.</p>
+            <label for="subject">Subject</label><input id="subject" name="subject" maxlength="180" required>
+            <label for="preheader">Inbox preview text</label><input id="preheader" name="preheader" maxlength="250">
+            <div class="message-divider"></div>
+            <label for="edition">Edition / date</label><input id="edition" name="edition" maxlength="80">
+            <label for="title">Headline</label><input id="title" name="title" maxlength="180" required>
+            <label for="intro">Introduction</label><textarea id="intro" name="intro" rows="5" maxlength="12000" required></textarea>
+            <div id="newsletter-sections"></div>
+            <button id="add-section" type="button" class="add-section">Add section</button>
+            <div class="message-divider"></div>
+            <label for="buttonLabel">Button text</label><input id="buttonLabel" name="buttonLabel" maxlength="80">
+            <label for="buttonUrl">Button link</label><input id="buttonUrl" name="buttonUrl" type="url" maxlength="2048">
+            <label for="signature">Sign-off</label><input id="signature" name="signature" maxlength="120">
+          </section>
 
-        <section class="field-card">
-          <div class="card-heading"><h2>Message</h2><button type="button" class="text-button" id="load-example">Load example</button></div>
-          <p class="example-note" id="example-note">An example is loaded below. Change anything before sending.</p>
-          <label for="subject">Subject</label><input id="subject" name="subject" maxlength="180" required>
-          <label for="preheader">Inbox preview text</label><input id="preheader" name="preheader" maxlength="250">
-          <label for="title">Headline</label><input id="title" name="title" maxlength="180" required>
-          <label for="intro">Introduction</label><textarea id="intro" name="intro" rows="6" maxlength="12000" required></textarea>
-          <div id="newsletter-sections"></div>
-          <button id="add-section" type="button" class="add-section">Add section</button>
-          <div class="field-pair"><div><label for="buttonLabel">Button text</label><input id="buttonLabel" name="buttonLabel" maxlength="80"></div><div><label for="buttonUrl">Button link</label><input id="buttonUrl" name="buttonUrl" type="url" maxlength="2048"></div></div>
-          <label for="signature">Sign-off</label><input id="signature" name="signature" maxlength="120">
-        </section>
+          <section id="panel-design" class="field-card" role="tabpanel" aria-labelledby="tab-design" data-editor-panel="design" hidden>
+            <h2>Appearance</h2>
+            <label for="theme">Background</label><select id="theme" name="theme"><option value="paper">Light</option><option value="midnight">Dark</option></select>
+            <label for="accent">Accent color</label><input id="accent" name="accent" type="color" value="#2563eb">
+            <label for="heroUrl">Cover image URL</label><input id="heroUrl" name="heroUrl" type="url" placeholder="https://…" maxlength="2048">
+            <p class="field-note">Optional. Use an image people can view without signing in.</p>
+          </section>
 
-        <section class="field-card">
-          <h2>Design</h2>
-          <div class="field-pair"><div><label for="theme">Style</label><select id="theme" name="theme"><option value="midnight">Midnight</option><option value="paper">Paper</option></select></div><div><label for="accent">Accent color</label><input id="accent" name="accent" type="color" value="#b8ec83"></div></div>
-          <label for="heroUrl">Cover image URL</label><input id="heroUrl" name="heroUrl" type="url" placeholder="https://…" maxlength="2048">
-          <p class="field-note">Optional. Use an image people can view without signing in.</p>
-        </section>
+          <section id="panel-recipients" class="field-card" role="tabpanel" aria-labelledby="tab-recipients" data-editor-panel="recipients" hidden>
+            <div class="card-heading"><h2>Recipients</h2><span id="recipient-count">Loading…</span></div>
+            <fieldset class="audience-options"><legend class="sr-only">Choose recipients</legend>
+              <label><input type="radio" name="audience" value="selected" checked><span>Choose recipients</span></label>
+              <label><input type="radio" name="audience" value="everyone"><span>Everyone signed up <small id="everyone-count"></small></span></label>
+            </fieldset>
+            <div id="selected-recipients">
+              <label for="recipient-search">Find a member</label><input id="recipient-search" type="search" placeholder="Name, username, or email" autocomplete="off">
+              <div id="recipient-list" class="recipient-list" role="group" aria-label="Registered members"></div>
+              <label for="extra-recipients">Other email addresses</label><textarea id="extra-recipients" rows="3" placeholder="name@example.com, another@example.com"></textarea>
+              <p class="field-note">Separate addresses with commas or new lines.</p>
+            </div>
+            <p class="field-note">Unsubscribed addresses are excluded from every audience.</p>
+          </section>
+        </form>
         <p id="editor-status" class="editor-status" role="status"></p>
-      </form>
+      </div>
 
       <section class="preview-pane" aria-label="Newsletter preview">
         <div class="preview-toolbar"><h2>Preview</h2><div class="preview-actions"><div class="view-switch" role="group" aria-label="Preview width"><button type="button" data-preview-width="desktop" aria-pressed="true">Desktop</button><button type="button" data-preview-width="phone" aria-pressed="false">Phone</button></div><button type="button" id="download-html" class="text-button">Download HTML</button></div></div>
-        <div class="inbox-preview"><span class="sender">mitch.pro</span><strong id="preview-subject"></strong><p id="preview-preheader"></p></div>
-        <div class="preview-canvas" id="preview-canvas"><iframe id="newsletter-preview" title="Newsletter example and live preview" sandbox="" referrerpolicy="no-referrer"></iframe></div>
+        <div class="preview-surface">
+          <div class="inbox-preview"><div class="sender-avatar" aria-hidden="true">m.</div><div class="inbox-copy"><span class="sender">Mitch &amp; Tyler <small>mitch.pro</small></span><strong id="preview-subject"></strong><p id="preview-preheader"></p></div></div>
+          <div class="preview-canvas" id="preview-canvas"><iframe id="newsletter-preview" title="Newsletter example and live preview" sandbox="" referrerpolicy="no-referrer"></iframe></div>
+        </div>
         <p class="preview-note" id="preview-status" role="status">Loading preview…</p>
       </section>
     </div>

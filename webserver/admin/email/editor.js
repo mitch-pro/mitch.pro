@@ -1,11 +1,36 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  const fields = ['subject', 'preheader', 'title', 'intro', 'heroUrl', 'buttonLabel', 'buttonUrl', 'signature', 'accent', 'theme'];
+  const fields = ['subject', 'preheader', 'edition', 'title', 'intro', 'heroUrl', 'buttonLabel', 'buttonUrl', 'signature', 'accent', 'theme'];
   const selected = new Set();
   let accounts = [], example, draft, previewHtml = '', previewTimer, previewVersion = 0;
   let dirty = false, ready = false, reviewing = false, sending = false, review, reviewSnapshot = '', jobTimer;
   const dialog = $('review-dialog');
+  const tabs = [...document.querySelectorAll('[data-editor-tab]')];
+
+  function selectTab(name, focus = false) {
+    tabs.forEach(tab => {
+      const active = tab.dataset.editorTab === name;
+      tab.setAttribute('aria-selected', String(active));
+      tab.tabIndex = active ? 0 : -1;
+      if (active && focus) tab.focus();
+    });
+    document.querySelectorAll('[data-editor-panel]').forEach(panel => {
+      panel.hidden = panel.dataset.editorPanel !== name;
+    });
+    $('newsletter-form').scrollTop = 0;
+  }
+  tabs.forEach((tab, index) => {
+    tab.onclick = () => selectTab(tab.dataset.editorTab);
+    tab.onkeydown = event => {
+      let next;
+      if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+      if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length;
+      if (event.key === 'Home') next = 0;
+      if (event.key === 'End') next = tabs.length - 1;
+      if (next !== undefined) { event.preventDefault(); selectTab(tabs[next].dataset.editorTab, true); }
+    };
+  });
 
   function status(id, message, error = false) {
     $(id).textContent = message;
@@ -72,7 +97,7 @@
   }
   function populate(value) {
     draft = structuredClone(value);
-    for (const field of fields) $(field).value = value[field];
+    for (const field of fields) $(field).value = value[field] ?? '';
     selected.clear();
     const known = new Set(accounts.map(a => a.email));
     value.recipients.forEach(email => { if (known.has(email)) selected.add(email); });
@@ -179,7 +204,13 @@
     finally { $('save-draft').disabled = !ready; }
   };
   $('review-email').onclick = async () => {
-    if (!ready || reviewing || sending || !$('newsletter-form').reportValidity()) return;
+    if (!ready || reviewing || sending) return;
+    const invalid = $('newsletter-form').querySelector(':invalid');
+    if (invalid) {
+      selectTab(invalid.closest('[data-editor-panel]').dataset.editorPanel);
+      invalid.reportValidity();
+      return;
+    }
     reviewing = true; $('review-email').disabled = true;
     reviewSnapshot = JSON.stringify(readDraft());
     status('editor-status', 'Preparing recipient list…');
@@ -193,7 +224,10 @@
       $('review-preview').srcdoc = result.html;
       $('send-newsletter').disabled = false; status('review-status', 'Nothing will be sent until you choose Send.');
       status('editor-status', ''); dialog.showModal();
-    } catch (error) { status('editor-status', error.message, true); }
+    } catch (error) {
+      if (error.message.includes('recipient')) selectTab('recipients');
+      status('editor-status', error.message, true);
+    }
     finally { reviewing = false; $('review-email').disabled = !ready || sending; }
   };
   for (const id of ['close-review', 'back-to-editor']) $(id).onclick = () => { if (!sending) dialog.close(); };
