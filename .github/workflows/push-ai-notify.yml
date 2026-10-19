@@ -11,7 +11,6 @@ on:
 
 permissions:
   contents: read
-  models: read
 
 jobs:
   ai-notify:
@@ -35,11 +34,16 @@ jobs:
           head -c 60000 full-diff.txt > diff.txt
           echo "Diff captured: $(wc -c < diff.txt) bytes"
 
-      - name: Run AI summary via GitHub Models
+      - name: Run AI summary via Gemini
         env:
-          GH_TOKEN: ${{ github.token }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           set -euo pipefail
+          if [ -z "${GEMINI_API_KEY:-}" ]; then
+            echo "GEMINI_API_KEY secret not set." >&2
+            echo "AI summary unavailable (GEMINI_API_KEY not set) - add it as a repo secret." > ai_summary.txt
+            exit 0
+          fi
           SYSTEM_PROMPT=$(cat <<'PROMPT'
           You are a senior security-focused code reviewer for a live, multi-tenant Rust/Axum
           web platform (mitch.pro, rjuhsd.school, sexypickleclub.com) serving real students.
@@ -57,7 +61,7 @@ jobs:
 
           jq -n --arg sys "$SYSTEM_PROMPT" --rawfile diff diff.txt '
             {
-              model: "openai/gpt-4o-mini",
+              model: "gemini-3.8-flash",
               messages: [
                 {role: "system", content: $sys},
                 {role: "user", content: ("Review this diff pushed directly to master:\n\n" + $diff)}
@@ -66,9 +70,12 @@ jobs:
             }
           ' > payload.json
 
+          # Gemini's OpenAI-compatibility endpoint - same request/response
+          # shape as the OpenAI chat completions API, so the rest of this
+          # step's logic (and the jq parse below) is unchanged.
           HTTP_CODE=$(curl -sS -o response.json -w '%{http_code}' \
-            -X POST "https://models.github.ai/inference/chat/completions" \
-            -H "Authorization: Bearer $GH_TOKEN" \
+            -X POST "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions" \
+            -H "Authorization: Bearer $GEMINI_API_KEY" \
             -H "Content-Type: application/json" \
             -d @payload.json)
 
