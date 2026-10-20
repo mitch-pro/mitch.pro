@@ -299,6 +299,7 @@ pub fn build_advanced_admin_data(store: &DataStore, data_dir: &Path) -> Value {
         .as_array()
         .map(|a| a.len())
         .unwrap_or(0);
+    let coin_logs = crate::coins::read_coin_log(data_dir, 250);
 
     json!({
         "generatedAt": now,
@@ -315,6 +316,7 @@ pub fn build_advanced_admin_data(store: &DataStore, data_dir: &Path) -> Value {
             "bannedAccounts": banned_accounts.len(),
             "activeUsers": active_users.len(),
             "cheatLogs": cheat_logs_count,
+            "coinLogs": coin_logs.len(),
         },
         "activeUsers": active_users,
         "bannedAccounts": banned_accounts,
@@ -326,6 +328,7 @@ pub fn build_advanced_admin_data(store: &DataStore, data_dir: &Path) -> Value {
         "sentNotifications": sent_notifications.iter().take(250).cloned().collect::<Vec<_>>(),
         "heatmap": store.read_document(&data_dir.join("heatmap.json"), json!({})),
         "cheatLogs": cheat_logs,
+        "coinLogs": coin_logs,
     })
 }
 
@@ -862,6 +865,7 @@ mod tests {
             "b1",
             "",
         );
+        crate::coins::add_coins(&store, &data, "user@mitch.pro", 10.0, 1.0, "daily login");
         let advanced = build_advanced_admin_data(&store, &data);
         assert_eq!(
             advanced
@@ -876,6 +880,22 @@ mod tests {
                 .and_then(|v| v.as_array())
                 .map(|a| a.len()),
             Some(1)
+        );
+        assert_eq!(
+            advanced
+                .get("stats")
+                .and_then(|s| s.get("coinLogs"))
+                .and_then(|v| v.as_i64()),
+            Some(1)
+        );
+        assert_eq!(
+            advanced
+                .get("coinLogs")
+                .and_then(|v| v.as_array())
+                .and_then(|a| a.first())
+                .and_then(|r| r.get("reason"))
+                .and_then(|v| v.as_str()),
+            Some("daily login")
         );
         std::fs::remove_dir_all(base).ok();
     }

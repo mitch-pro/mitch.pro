@@ -305,6 +305,43 @@ fn log_coin_change(data_dir: &Path, norm_email: &str, before: f64, after: f64, r
         .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
 }
 
+/// Reads back the `logs/coins.log` TSV trail `log_coin_change` appends to,
+/// for the admin "Coin Log" view — every balance mutation (earn, spend,
+/// admin burn/set/cap/reset) in one place. Returns up to `limit` entries,
+/// newest first; a malformed or missing file just yields no rows rather
+/// than an error, since this is a best-effort audit view, not a source of
+/// truth (the `coins` table balance is that).
+pub fn read_coin_log(data_dir: &Path, limit: usize) -> Vec<Value> {
+    let logs_dir = data_dir.parent().unwrap_or(data_dir).join("logs");
+    let Ok(content) = std::fs::read_to_string(logs_dir.join("coins.log")) else {
+        return Vec::new();
+    };
+    let mut entries: Vec<Value> = content
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.splitn(5, '\t');
+            let ts = parts.next()?;
+            let email = parts.next()?;
+            let delta: f64 = parts.next()?.parse().ok()?;
+            let (before, after) = parts.next()?.split_once(" -> ")?;
+            let before: f64 = before.trim().parse().ok()?;
+            let after: f64 = after.trim().parse().ok()?;
+            let reason = parts.next().unwrap_or("unspecified");
+            Some(json!({
+                "ts": ts,
+                "email": email,
+                "delta": delta,
+                "before": before,
+                "after": after,
+                "reason": reason,
+            }))
+        })
+        .collect();
+    entries.reverse();
+    entries.truncate(limit);
+    entries
+}
+
 /// Moves a balance row to a new email key — used when a user changes their
 /// account email (server.js's `renameEmailReferences`, which used to treat
 /// coins.json as just another entry in its generic key-rename list; a real
@@ -889,6 +926,52 @@ mod tests {
         // Exactly-at-threshold and below are untouched.
         assert_eq!(get_coins(&store, &data, "exact@gmail.com"), 100000.0);
         assert_eq!(get_coins(&store, &data, "normal@gmail.com"), 500.0);
+        std::fs::remove_dir_all(base).ok();
+    }
+
+    #[test]
+    fn read_coin_log_parses_entries_newest_first_and_caps_at_limit() {
+        let (base, data, store) = temp_store("read-log");
+        add_coins(&store, &data, "earner@gmail.com", 10.0, 1.0, "daily login");
+        add_coins(
+            &store,
+            &data,
+            "earner@gmail.com",
+            -4.0,
+            1.0,
+            "shop purchase",
+        );
+        set_coins(&store, &data, "whale@gmail.com", 500.0, "admin set");
+
+        let log = read_coin_log(&data, 10);
+        assert_eq!(log.len(), 3);
+        // Newest entry (the set_coins admin correction) comes first.
+        assert_eq!(log[0]["email"], json!("whale@gmail.com"));
+        assert_eq!(log[0]["reason"], json!("admin set"));
+        assert_eq!(log[0]["before"], json!(0.0));
+        assert_eq!(log[0]["after"], json!(500.0));
+        assert_eq!(log[0]["delta"], json!(500.0));
+        // Oldest entry is last.
+        assert_eq!(log[2]["email"], json!("earner@gmail.com"));
+        assert_eq!(log[2]["reason"], json!("daily login"));
+        assert_eq!(log[2]["delta"], json!(10.0));
+        // The negative-amount entry's delta parses correctly (no leading
+        // '+' for negative deltas, unlike positive ones).
+        assert_eq!(log[1]["delta"], json!(-4.0));
+
+        // limit caps to the most recent entries, not just truncates the
+        // file in whatever order it was read.
+        let capped = read_coin_log(&data, 1);
+        assert_eq!(capped.len(), 1);
+        assert_eq!(capped[0]["email"], json!("whale@gmail.com"));
+
+        std::fs::remove_dir_all(base).ok();
+    }
+
+    #[test]
+    fn read_coin_log_is_empty_when_no_log_file_exists() {
+        let (base, data, _store) = temp_store("read-log-missing");
+        assert_eq!(read_coin_log(&data, 10), Vec::<Value>::new());
         std::fs::remove_dir_all(base).ok();
     }
 }

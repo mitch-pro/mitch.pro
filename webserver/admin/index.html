@@ -1432,6 +1432,7 @@
         <option value="profileReports">Profile Reports</option>
         <option value="chatReports">Chat Safety Reports</option>
         <option value="cheatLogs">Anti-Cheat Monitor</option>
+        <option value="coinLogs">Coin Log</option>
       </select>
       <button type="button" onclick="downloadJson()">Export JSON</button>
       <button type="button" onclick="downloadCsv()">Export CSV</button>
@@ -1505,6 +1506,13 @@
           <span class="tag">cheating telemetry and flagged users</span>
         </div>
         <div class="table-wrap"><table id="cheatLogs-table"></table></div>
+      </section>
+      <section id="coinLogs-section">
+        <div class="section-head">
+          <h2>Coin Log</h2>
+          <span class="tag">every balance change — earn, spend, admin correction</span>
+        </div>
+        <div class="table-wrap"><table id="coinLogs-table"></table></div>
       </section>
 
       <section class="full">
@@ -2572,7 +2580,7 @@
       const dateFilter = document.getElementById('auditDateFilter')?.value || 'all';
       const now = Date.now(), dayMs = 24 * 60 * 60 * 1000;
       filtered = {};
-      ['adminActions','sentNotifications','bannedAccounts','activeUsers','searchIntent','profileReports','chatReports','cheatLogs'].forEach(key => {
+      ['adminActions','sentNotifications','bannedAccounts','activeUsers','searchIntent','profileReports','chatReports','cheatLogs','coinLogs'].forEach(key => {
         filtered[key] = (rawData[key] || []).filter(row => {
           if (q && !textOf(row).toLowerCase().includes(q)) return false;
           if (key === 'adminActions') {
@@ -2606,9 +2614,10 @@
         ['Active Users', s.activeUsers || 0],
         ['Banned Accounts', s.bannedAccounts || 0],
         ['Cheat Logs', s.cheatLogs || 0],
+        ['Coin Log', s.coinLogs || 0],
       ];
       document.getElementById('cards').innerHTML = cards.map((c, i) =>
-        '<div class="card"><span class="metric-mark" aria-hidden="true">' + ['⚡','✉','⚑','◇','●','⊘','≡'][i] + '</span><div class="label">' + esc(c[0]) + '</div><div class="value">' + esc(c[1]) + '</div></div>'
+        '<div class="card"><span class="metric-mark" aria-hidden="true">' + ['⚡','✉','⚑','◇','●','⊘','≡','◈'][i] + '</span><div class="label">' + esc(c[0]) + '</div><div class="value">' + esc(c[1]) + '</div></div>'
       ).join('');
     }
 
@@ -2718,6 +2727,12 @@
       table('cheatLogs-table', ['Time', 'Email', 'Game', 'Details', 'IP'], filtered.cheatLogs || [], r =>
         '<tr><td>' + esc(fmtTime(r.ts)) + '</td><td>' + esc(r.email) + '</td><td><span class="pill warn">' + esc(r.game) + '</span></td><td><div class="chat-text">' + esc(r.details) + '</div></td><td>' + esc(r.ip) + '</td></tr>'
       );
+
+      table('coinLogs-table', ['Time', 'Email', 'Change', 'Before → After', 'Reason'], filtered.coinLogs || [], r => {
+        const cls = r.delta > 0 ? 'ok' : (r.delta < 0 ? 'warn' : '');
+        const sign = r.delta > 0 ? '+' : '';
+        return '<tr><td>' + esc(fmtTime(r.ts)) + '</td><td>' + esc(r.email) + '</td><td><span class="pill ' + cls + '">' + esc(sign + r.delta.toFixed(4)) + '</span></td><td>' + esc(r.before.toFixed(4)) + ' → ' + esc(r.after.toFixed(4)) + '</td><td>' + esc(r.reason) + '</td></tr>';
+      });
     }
 
     function download(name, type, content) {
@@ -2747,6 +2762,7 @@
       (filtered.profileReports || []).forEach(r => lines.push(['profileReports', fmtTime(r.ts), r.target, r.reporter, r.reason, r.status].map(csvEscape).join(',')));
       (filtered.chatReports || []).forEach(r => lines.push(['chatReports', fmtTime(r.ts), r.reportedBy, r.reason, JSON.stringify(r.context), ''].map(csvEscape).join(',')));
       (filtered.cheatLogs || []).forEach(r => lines.push(['cheatLogs', fmtTime(r.ts), r.email, r.game, r.details, r.ip].map(csvEscape).join(',')));
+      (filtered.coinLogs || []).forEach(r => lines.push(['coinLogs', fmtTime(r.ts), r.email, (r.delta > 0 ? '+' : '') + r.delta.toFixed(4), r.before.toFixed(4) + ' -> ' + r.after.toFixed(4), r.reason].map(csvEscape).join(',')));
       download('admin-logs.csv', 'text/csv', lines.join('\n'));
     }
 
