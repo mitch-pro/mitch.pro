@@ -2103,6 +2103,8 @@
       const statusPills = [
         data.accountBanned ? `<span class="pill" style="color:#f87171; border-color:rgba(239,68,68,0.25); background:rgba(239,68,68,0.08);">Account banned${data.banReason ? ': ' + esc(data.banReason) : ''}</span>` : `<span class="pill" style="color:#4ade80; border-color:rgba(74,222,128,0.25); background:rgba(74,222,128,0.08);">Not banned</span>`,
         data.shadowBanned ? `<span class="pill" style="color:#f87171; border-color:rgba(239,68,68,0.25); background:rgba(239,68,68,0.08);">Shadow-banned</span>` : '',
+        data.vmBanned ? `<span class="pill" style="color:#f87171; border-color:rgba(239,68,68,0.25); background:rgba(239,68,68,0.08);">Banned from VMs</span>` : '',
+        data.byoOsBanned ? `<span class="pill" style="color:#f87171; border-color:rgba(239,68,68,0.25); background:rgba(239,68,68,0.08);">Banned from BYO-OS</span>` : '',
       ].filter(Boolean).join(' ');
       const matrixIdsStr = (data.matrixUserIds || []).join(', ') || '(no Matrix account found)';
       const rooms = data.rooms || [];
@@ -2125,7 +2127,11 @@
           <thead><tr><th>Room</th><th>Membership</th><th>Power level</th><th>Local status</th></tr></thead>
           <tbody>${roomRows}</tbody>
         </table></div>
-        ${canRestore ? `<button type="button" class="mini warn" style="margin-top:10px;" onclick='restoreFromModProfile(${JSON.stringify(data.email)})'>Restore account (unban + unmute everywhere)</button>` : ''}
+        <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;">
+          ${canRestore ? `<button type="button" class="mini warn" onclick='restoreFromModProfile(${JSON.stringify(data.email)})'>Restore account (unban + unmute everywhere)</button>` : ''}
+          <button type="button" class="mini ${data.vmBanned ? 'ok' : 'warn'}" onclick='toggleVmBanFromModProfile(${JSON.stringify(data.email)}, "vm")'>${data.vmBanned ? 'Unban from VMs' : 'Ban from VMs'}</button>
+          <button type="button" class="mini ${data.byoOsBanned ? 'ok' : 'warn'}" onclick='toggleVmBanFromModProfile(${JSON.stringify(data.email)}, "byoOs")'>${data.byoOsBanned ? 'Unban from BYO-OS' : 'Ban from BYO-OS'}</button>
+        </div>
       `;
     }
 
@@ -2137,6 +2143,23 @@
         lookupModerationProfile({ preventDefault() {} });
       } catch (err) {
         await customAlert('Restore Failed', err.message || 'Could not restore account.');
+      }
+    }
+
+    // Toggle endpoints (/api/admin/vm-ban, /api/admin/byo-os-ban) ban if not
+    // already banned, unban if already banned — this is the only place that
+    // calls them independent of a specific VM row, so it's the one surface
+    // that can undo a ban for someone with no VM left to show a row for.
+    async function toggleVmBanFromModProfile(email, kind) {
+      const url = kind === 'byoOs' ? '/api/admin/byo-os-ban' : '/api/admin/vm-ban';
+      const label = kind === 'byoOs' ? 'BYO-OS' : 'VMs';
+      if (!(await customConfirm(`Toggle ${label} ban`, `Toggle "banned from ${label}" for ${email}?`))) return;
+      try {
+        const d = await postAdmin(url, { email });
+        await customAlert('Updated', `${email} is now ${d.active ? 'banned from' : 'unbanned from'} ${label}.`);
+        lookupModerationProfile({ preventDefault() {} });
+      } catch (err) {
+        await customAlert('Update Failed', err.message || `Could not update the ${label} ban.`);
       }
     }
 
