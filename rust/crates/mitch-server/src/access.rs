@@ -210,7 +210,6 @@ mod tests {
                 "/games/foo/index.html",
                 "/game-portal/",
                 "/coins/",
-                "/casino/",
                 "/preferences/",
                 "/admin/",
                 "/api/presence/count",

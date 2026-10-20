@@ -204,10 +204,6 @@ function timeLeft(ts) {
 }
 function renderStatus(status) {
   const rows = [
-    ['VIP Casino', timeLeft(status.vipUntil)],
-    ['Double Down', timeLeft(status.doubleDownUntil)],
-    ['Bad Beat Insurance', timeLeft(status.badBeatInsuranceUntil)],
-    ['Slot Free Spins', String(status.slotsFreeSpins || 0)],
     ['Streak Freezes', String(status.streakFreezes || 0)]
   ];
   document.getElementById('status').innerHTML = rows.map(([label, value]) => (

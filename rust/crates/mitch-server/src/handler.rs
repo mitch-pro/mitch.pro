@@ -145,7 +145,6 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/robots.txt",
     "/sitemap.xml",
     "/verify-open.json",
-    "/casino/casino-refresh.css",
 ];
 
 /// Query-string map (URLSearchParams-like, first value wins).
@@ -1309,13 +1308,6 @@ pub async fn handle(
         if let Some(resp) =
             crate::routes::jeopardy::handle(&state, &method, &path, headers, &search, body_bytes)
                 .await
-        {
-            return resp;
-        }
-        // casino group (Step 12): the shared prelude + instant games first;
-        // blackjack/poker/slots/… land in later commits.
-        if let Some(resp) =
-            crate::routes::casino::handle(&state, &method, &path, headers, &body, body_bytes).await
         {
             return resp;
         }

@@ -22,14 +22,6 @@ pub struct AppState {
     /// `globalCoinMultiplier` (server.js:1159) — admin-settable process state.
     /// f64 stored bit-exact via AtomicU64.
     pub coin_multiplier: std::sync::atomic::AtomicU64,
-    /// `casinoEnabled` (server.js:1162) — admin-settable process state.
-    pub casino_enabled: std::sync::atomic::AtomicBool,
-    /// `casinoRigChance` (server.js:1177) — admin-settable process state.
-    pub casino_rig_chance: std::sync::atomic::AtomicU64,
-    /// `casinoIntake`/`casinoPayout` — read from data/casino_stats.json at
-    /// boot (server.js:1165-1169); casino games update them in Step 12.
-    pub casino_intake: std::sync::atomic::AtomicU64,
-    pub casino_payout: std::sync::atomic::AtomicU64,
     /// `shadowBans` (server.js:1174) — loaded from data/shadow_bans.json.
     pub shadow_bans: std::sync::RwLock<std::collections::HashSet<String>>,
     /// Users banned from the BYO-OS custom-ISO feature specifically (can
@@ -127,16 +119,6 @@ pub struct AppState {
     /// empty set, like the JS try/catch).
     pub logic_dictionary: std::sync::Mutex<std::collections::HashSet<String>>,
 
-    /// `bjGames` (server.js:837) — norm email → the active blackjack hand.
-    /// In-memory only, like JS: hands die with the process.
-    pub bj_games:
-        std::sync::Mutex<std::collections::HashMap<String, crate::routes::casino::BjGame>>,
-    /// `casinoHistory` (server.js:839) — norm email → the last 25 settled
-    /// rounds (newest first). In-memory only.
-    pub casino_history: std::sync::Mutex<std::collections::HashMap<String, Vec<serde_json::Value>>>,
-    /// `bettingFeed` (server.js:1201) — every settled round, newest first,
-    /// 50-cap; read by /api/casino/global-feed and the admin traffic page.
-    pub betting_feed: std::sync::Mutex<Vec<serde_json::Value>>,
     /// `jeopardyLobbies` (server.js:888) — gameId → lobby, kept as an
     /// insertion-ordered Vec: /join scans in JS Object.values order. In-memory
     /// only, like JS.
@@ -307,10 +289,6 @@ impl AppState {
             tracing::warn!("id_secret load failed: {e}");
             vec![0u8; 32]
         });
-        let casino = store.read_document(
-            &cfg.base_dir.join("data/casino_stats.json"),
-            serde_json::json!({}),
-        );
         let shadow_bans: std::collections::HashSet<String> = store
             .read_document(
                 &cfg.base_dir.join("data/shadow_bans.json"),
@@ -361,22 +339,6 @@ impl AppState {
             coin_multiplier: std::sync::atomic::AtomicU64::new(
                 mitch_lib::coins::DEFAULT_COIN_MULTIPLIER.to_bits(),
             ),
-            casino_enabled: std::sync::atomic::AtomicBool::new(true),
-            casino_rig_chance: std::sync::atomic::AtomicU64::new(0f64.to_bits()),
-            casino_intake: std::sync::atomic::AtomicU64::new(
-                casino
-                    .get("intake")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(0.0)
-                    .to_bits(),
-            ),
-            casino_payout: std::sync::atomic::AtomicU64::new(
-                casino
-                    .get("payout")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(0.0)
-                    .to_bits(),
-            ),
             shadow_bans: std::sync::RwLock::new(shadow_bans),
             byo_os_bans: std::sync::RwLock::new(byo_os_bans),
             vm_bans: std::sync::RwLock::new(vm_bans),
@@ -403,9 +365,6 @@ impl AppState {
             cv_online: std::sync::Mutex::new(std::collections::HashMap::new()),
             game_portal_sessions: std::sync::Mutex::new(std::collections::HashMap::new()),
             logic_dictionary: std::sync::Mutex::new(logic_dictionary),
-            bj_games: std::sync::Mutex::new(std::collections::HashMap::new()),
-            casino_history: std::sync::Mutex::new(std::collections::HashMap::new()),
-            betting_feed: std::sync::Mutex::new(Vec::new()),
             jeopardy_lobbies: std::sync::Mutex::new(jeopardy_lobbies),
             jeopardy_clues: std::sync::Mutex::new(crate::routes::jeopardy::ClueCache::default()),
             bs_challenges: std::sync::Mutex::new(indexmap::IndexMap::new()),

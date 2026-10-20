@@ -415,7 +415,7 @@
       color:#fbbf24; border-color:rgba(251,191,36,.4); background:rgba(251,191,36,.08);
     }
 
-    .actions-panel, .economy-panel, .moderation-panel, .casino-panel, .content-panel, .logs-panel {
+    .actions-panel, .economy-panel, .moderation-panel, .content-panel, .logs-panel {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
       gap: 14px;
@@ -518,7 +518,7 @@
     }
 
     @media (max-width: 1000px) {
-      .economy-panel, .moderation-panel, .casino-panel, .content-panel, .logs-panel {
+      .economy-panel, .moderation-panel, .content-panel, .logs-panel {
         grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       }
     }
@@ -532,7 +532,7 @@
       .status { margin-left: 0; }
     }
     @media (max-width: 680px) {
-      .economy-panel, .moderation-panel, .casino-panel, .content-panel, .logs-panel {
+      .economy-panel, .moderation-panel, .content-panel, .logs-panel {
         grid-template-columns: 1fr;
       }
       .shell { width: calc(100% - 16px); padding-top: 14px; }
@@ -548,12 +548,10 @@
     }
 
     body.moderator-mode a[href="#economy-tools"],
-    body.moderator-mode a[href="#casino-tools"],
     body.moderator-mode a[href="#shop-tools"],
     body.moderator-mode a[href="#logs-tools"],
     body.moderator-mode a[href="#email-tools"],
     body.moderator-mode #economy-tools,
-    body.moderator-mode #casino-tools,
     body.moderator-mode #shop-tools,
     body.moderator-mode #logs-tools,
     body.moderator-mode #email-tools,
@@ -706,7 +704,6 @@
         <a href="#people-tools">People</a>
         <a href="#economy-tools">Economy</a>
         <a href="#moderation-tools">Safety</a>
-        <a href="#casino-tools">Casino</a>
         <a href="#vm-tools">VM Cloud</a>
         <a href="#logs-tools">System Logs</a>
         <a href="#content-tools">Content</a>
@@ -1151,45 +1148,6 @@
     </div>
     </section>
 
-    <section class="tool-group" id="casino-tools">
-      <div class="section-head">
-        <h2>Casino Controls</h2>
-        <span class="tag">rtp, switch, rig</span>
-      </div>
-    <div class="casino-panel">
-      <div class="action-card">
-        <h2>RTP Monitor</h2>
-        <p>Lifetime Payout vs Intake.</p>
-        <div id="casino-stats" style="font-size:0.8rem; line-height:1.6;">
-          Intake: <span id="casino-intake">0</span><br>
-          Payout: <span id="casino-payout">0</span><br>
-          Profit: <span id="casino-profit">0</span><br>
-          RTP: <span id="casino-rtp">0%</span>
-        </div>
-        <button onclick="refreshCasinoStats()" style="margin-top:10px;">Refresh</button>
-      </div>
-      <div class="action-card danger">
-        <h2>Kill-Switch</h2>
-        <p>Instantly disable all casino games.</p>
-        <button id="casino-switch" onclick="toggleCasino()" class="warn">DISABLE CASINO</button>
-        <div id="casino-toggle-status" class="form-status"></div>
-      </div>
-      <div class="action-card danger" id="casino-rig-card" style="display:none">
-        <h2>Casino Rigging</h2>
-        <p>Percentage chance to spoof a win as a loss (0-100%).</p>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-          <input id="rig-chance" type="number" min="0" max="100" placeholder="%" style="flex:1 1 120px; min-width:110px; margin:0;">
-          <button onclick="updateRigChance()" style="width:auto; margin:0;">Set %</button>
-        </div>
-        <div id="rig-status" class="form-status"></div>
-      </div>
-      <div class="action-card">
-        <h2>Live Betting Feed</h2>
-        <div id="betting-feed" class="live-feed"></div>
-      </div>
-    </div>
-    </section>
-
     <section class="tool-group" id="prox-tools" hidden aria-hidden="true"></section>
 
     <section class="tool-group" id="logs-tools">
@@ -1591,8 +1549,6 @@
       '/api/admin/restricted-mode': 'shadow_ban',
       '/api/admin/ban-account': 'ban_account',
       '/api/admin/unban-account': 'unban_account',
-      '/api/admin/casino/rig': 'casino_rig',
-      '/api/admin/casino/toggle': 'casino_toggle',
       '/api/admin/prox/block': 'prox_block',
       '/api/admin/content/mirror': 'content_mirror',
       '/api/admin/content/featured': 'content_featured',
@@ -2108,15 +2064,6 @@
           `).join('');
         }
 
-        const betting = document.getElementById('betting-feed');
-        if (betting && Array.isArray(data.bets)) {
-          betting.innerHTML = data.bets.map(b => `
-            <div class="feed-entry">
-              <span class="feed-tag">${esc(b.game)}</span>
-              <span class="feed-msg">${esc(b.user)} wagered ${b.amount} -> ${esc(b.outcome)}</span>
-            </div>
-          `).join('');
-        }
       } catch(e) {}
     }
 
@@ -2226,39 +2173,6 @@
       }
     }
 
-
-    async function refreshCasinoStats() {
-      const res = await adminFetch('/api/admin/casino/rtp');
-      if (!res.ok) return;
-      const d = await res.json();
-      const intake = d.intake || 0;
-      const payout = d.payout || 0;
-      const profit = intake - payout;
-      const rtp = intake > 0 ? ((payout / intake) * 100).toFixed(1) : 0;
-
-      document.getElementById('casino-intake').textContent = intake.toFixed(2);
-      document.getElementById('casino-payout').textContent = payout.toFixed(2);
-      document.getElementById('casino-profit').textContent = profit.toFixed(2);
-      document.getElementById('casino-rtp').textContent = rtp + '%';
-    }
-
-    async function toggleCasino() {
-      setStatus('casino-toggle-status', 'Submitting...', '');
-      try {
-        const d = await postAdmin('/api/admin/casino/toggle', {});
-        if (d.pending) {
-          setStatus('casino-toggle-status', pendingText(d), 'ok');
-          loadModeratorRequests();
-          return;
-        }
-        const btn = document.getElementById('casino-switch');
-        btn.textContent = d.enabled ? 'DISABLE CASINO' : 'ENABLE CASINO';
-        btn.className = d.enabled ? 'warn' : 'ok';
-        setStatus('casino-toggle-status', 'Casino is now ' + (d.enabled ? 'enabled.' : 'disabled.'), 'ok');
-      } catch (err) {
-        setStatus('casino-toggle-status', err.message, 'err');
-      }
-    }
 
     async function addProxBlock(e) {
       e.preventDefault();
@@ -3728,18 +3642,6 @@
       }
     }
 
-    async function updateRigChance() {
-      const chance = document.getElementById('rig-chance').value;
-      setStatus('rig-status', 'Updating...', '');
-      try {
-        const d = await postAdmin('/api/admin/casino/rig', { chance });
-        setStatus('rig-status', d.pending ? pendingText(d) : 'Updated to ' + chance + '%.', 'ok');
-        if (d.pending) loadModeratorRequests();
-      } catch (err) {
-        setStatus('rig-status', err.message, 'err');
-      }
-    }
-
     async function loadData() {
       document.getElementById('access-status').textContent = 'Loading';
       const rMe = await fetch('/api/me', { credentials: 'include', cache: 'no-store' });
@@ -3799,7 +3701,6 @@
 
       if (currentUser.isAdmin || currentUser.isModerator) {
         document.getElementById('moderator-card').style.display = 'block';
-        document.getElementById('casino-rig-card').style.display = 'block';
         loadModerators();
         loadModeratorPanel();
       }

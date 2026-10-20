@@ -209,17 +209,6 @@ async fn shop_buy(
             obj.insert("streakFreezes".to_string(), json!(freezes + 1));
         }
         mitch_lib::daily_logins::daily_login_set(&state.store, &norm, &entry);
-    } else if cost_type == "slots_free_spin" {
-        let mut entry = mitch_lib::user_stats::user_stats_get(&state.store, &norm);
-        let current = entry
-            .get("slots_free_spins")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0);
-        let add = item.get("spinCount").and_then(|v| v.as_i64()).unwrap_or(5);
-        if let Some(obj) = entry.as_object_mut() {
-            obj.insert("slots_free_spins".to_string(), json!(current + add));
-        }
-        mitch_lib::user_stats::user_stats_set(&state.store, &norm, &entry);
     }
 
     if cost > 0 {

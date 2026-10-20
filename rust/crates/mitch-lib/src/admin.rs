@@ -409,8 +409,6 @@ pub const MODERATOR_ACTION_LABELS: &[(&str, &str)] = &[
     ("shadow_ban", "Toggle shadow-ban"),
     ("ban_account", "Ban account"),
     ("unban_account", "Unban account"),
-    ("casino_rig", "Set casino rig chance"),
-    ("casino_toggle", "Toggle casino"),
     ("prox_block", "Block mitch.prox domain"),
     ("content_mirror", "Update mirror link"),
     ("content_featured", "Set featured game"),
@@ -441,8 +439,6 @@ pub fn moderator_action_by_url(url: &str) -> &'static str {
         "/api/admin/restricted-mode" => "shadow_ban",
         "/api/admin/ban-account" => "ban_account",
         "/api/admin/unban-account" => "unban_account",
-        "/api/admin/casino/rig" => "casino_rig",
-        "/api/admin/casino/toggle" => "casino_toggle",
         "/api/admin/prox/block" => "prox_block",
         "/api/admin/content/mirror" => "content_mirror",
         "/api/admin/content/featured" => "content_featured",
@@ -587,10 +583,6 @@ pub fn clean_moderator_action_payload(
             }))
         }
         "unban_account" => Ok(json!({ "email": canonical_email(p.get("email"), "email")? })),
-        "casino_rig" => Ok(json!({
-            "chance": p.get("chance").and_then(|v| v.as_f64()).unwrap_or(f64::NAN),
-        })),
-        "casino_toggle" => Ok(json!({})),
         "prox_block" => {
             let domain_raw = s("domain").to_lowercase().trim().to_string();
             let no_scheme = domain_raw

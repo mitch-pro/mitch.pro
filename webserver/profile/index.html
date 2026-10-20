@@ -311,8 +311,6 @@ async function load(forceNetwork) {
         <div class="stat-card"><div class="stat-val">${Fmt(stats.clicker_points || 0)}</div><div class="stat-lbl">Clicker Pts</div></div>
         <div class="stat-card"><div class="stat-val">${stats.typing_races || 0}</div><div class="stat-lbl">Keyboard Races</div></div>
         <div class="stat-card"><div class="stat-val">${stats.logic_puzzles || 0}</div><div class="stat-lbl">Logic Puzzles</div></div>
-        <div class="stat-card"><div class="stat-val">${stats.casino_bets || 0}</div><div class="stat-lbl">Casino Bets</div></div>
-        <div class="stat-card"><div class="stat-val">${stats.casino_wins || 0}</div><div class="stat-lbl">Casino Wins</div></div>
         <div class="stat-card"><div class="stat-val mitch-coin-amount">${(Number(stats.clicker_coins || 0) + Number(stats.typing_coins || 0) + Number(stats.logic_coins || 0)).toFixed(1)}</div><div class="stat-lbl">Game coins earned</div></div>
         <div class="stat-card"><div class="stat-val">${calculatePlaytime(stats)}</div><div class="stat-lbl">Time Spent</div></div>
       </div>

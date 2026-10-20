@@ -407,8 +407,6 @@ pub async fn ping(
         let page_lower = page.to_lowercase();
         let playing_game = if page_lower.contains("/games/chess/") {
             "Chess".to_string()
-        } else if page_lower.contains("/games/casino/") || page_lower.contains("/casino/") {
-            "Casino".to_string()
         } else if page_lower.contains("/canvas/") {
             "Canvas".to_string()
         } else if page_lower.contains("/encrypt.html")

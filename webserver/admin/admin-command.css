@@ -47,7 +47,7 @@
 #command-center .tool-group>.section-head { background:var(--t-bg2);padding:23px 26px;margin:-24px -24px 24px; }
 #command-center .section-head h2 { font-size:23px;letter-spacing:-.035em;text-transform:none; }
 #command-center .section-head .tag { font-size:12px;font-weight:500;background:transparent;border:0;color:var(--t-fg2); }
-#command-center .actions-panel,#command-center .economy-panel,#command-center .moderation-panel,#command-center .casino-panel,#command-center .content-panel { grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;align-items:start; }
+#command-center .actions-panel,#command-center .economy-panel,#command-center .moderation-panel,#command-center .content-panel { grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;align-items:start; }
 #command-center .action-card { padding:22px;border:1px solid var(--cmd-edge);border-radius:10px;background:color-mix(in srgb,var(--t-bg) 30%,var(--t-bg2));box-shadow:none; }
 #command-center .action-card h2 { margin-bottom:10px;font-size:18px;text-transform:none;letter-spacing:-.025em; }
 #command-center .action-card p { min-height:0;margin-bottom:14px;color:var(--t-fg2); }

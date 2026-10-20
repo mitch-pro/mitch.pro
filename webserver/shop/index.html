@@ -391,7 +391,7 @@
 
       <h1>Shop</h1>
       <p class="subline" id="shop-note">Loading the shop…</p>
-      <div class="shop-hero-links"><a href="/inventory/">Your inventory </a><a href="/casino/">Try the casino </a></div>
+      <div class="shop-hero-links"><a href="/inventory/">Your inventory </a></div>
     </div>
     <div class="panel balance-panel">
       <div class="balance-label">Balance</div>
@@ -838,13 +838,10 @@
       discount.textContent = isPremium ? (itemData.premiumDiscountNote || 'premium discounts vary by item') : '';
       document.getElementById('shop-note').textContent = isAdmin
         ? 'Your account has shop access. Browse perks below or send coins to someone from the admin panel.'
-        : 'Looks for chat, profiles, game sessions, and the casino. Start small or save up for something permanent.';
+        : 'Looks for chat, profiles, and game sessions. Start small or save up for something permanent.';
 
       const status = inventory.status || {};
       const activeBuffs = [];
-      if ((status.slotsFreeSpins || 0) > 0) {
-        activeBuffs.push(`<span class="pill good">🎰 ${status.slotsFreeSpins} Free Spins Available</span>`);
-      }
 
       const bar = document.getElementById('active-buffs-bar');
       const list = document.getElementById('active-buffs-list');

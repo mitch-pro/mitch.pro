@@ -4,8 +4,7 @@
 //!   advanced-data, maintenance/shop status)
 //! - `moderation.rs`: moderators, panels, requests, bans, reports, blog,
 //!   content tools
-//! - `economy.rs`: coins, premium grants, notifications, broadcast, casino
-//!   state
+//! - `economy.rs`: coins, premium grants, notifications, broadcast
 //! - `legacy.rs`: passphrase-key auth endpoints (js/data/ssh-key/team-token/
 //!   canvas/reset-ratelimit) + passphrase management
 //! - `vm.rs`: Proxmox VM approval flows
@@ -238,7 +237,7 @@ pub async fn handle(
         return Some(resp);
     }
 
-    // ── Economy/coins/premium/casino ──
+    // ── Economy/coins/premium ──
     if let Some(resp) = economy::handle(state, method, path, headers, body, &ctx) {
         return Some(resp);
     }

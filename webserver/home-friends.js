@@ -39,7 +39,7 @@
       const activityText = document.createElement('span'); activityText.textContent = activityLabel(friend);
       const activityIcon = document.createElement('i'); activityIcon.setAttribute('aria-hidden','true');
       const rawActivity = String(friend.activity || friend.playing || '').toLowerCase();
-      activityIcon.textContent = !friend.online ? '' : (/game|chess|casino|playing/.test(rawActivity) ? '▶' : (/chat|matrix|encrypt/.test(rawActivity) ? '●' : '•'));
+      activityIcon.textContent = !friend.online ? '' : (/game|chess|playing/.test(rawActivity) ? '▶' : (/chat|matrix|encrypt/.test(rawActivity) ? '●' : '•'));
       activity.append(activityIcon,activityText);
       card.title = name + ' · ' + activity.textContent; card.append(avatar,title,activity); list.append(card);
     });

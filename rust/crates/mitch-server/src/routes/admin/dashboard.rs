@@ -1,6 +1,6 @@
 //! Admin dashboards & status — read-only endpoints:
 //! resources (10490), app-logs (10503), docker-logs (10517), search-logs
-//! (10567), live-feeds (10575), casino/rtp (10482), advanced-data (15736),
+//! (10567), live-feeds (10575), advanced-data (15736),
 //! maintenance-status (15507), shop/catalog (15516), moderators GET +
 //! moderator-panel GET are in moderation.rs.
 
@@ -54,27 +54,12 @@ pub fn handle(
         return Some(json_response(200, json!({ "logs": logs })));
     }
 
-    // GET /api/admin/live-feeds — traffic is always empty; bets from the
-    // casino bettingFeed (in-process, empty until Step 12).
+    // GET /api/admin/live-feeds — traffic is always empty.
     if path == "/api/admin/live-feeds" {
         if !ctx.is_any_admin(state) {
             return Some(forbidden());
         }
-        return Some(json_response(200, json!({ "traffic": [], "bets": [] })));
-    }
-
-    // GET /api/admin/casino/rtp.
-    if path == "/api/admin/casino/rtp" {
-        if !ctx.is_any_admin(state) {
-            return Some(forbidden());
-        }
-        return Some(json_response(
-            200,
-            json!({
-                "intake": f64::from_bits(state.casino_intake.load(std::sync::atomic::Ordering::Relaxed)),
-                "payout": f64::from_bits(state.casino_payout.load(std::sync::atomic::Ordering::Relaxed)),
-            }),
-        ));
+        return Some(json_response(200, json!({ "traffic": [] })));
     }
 
     // GET /api/admin/advanced-data.

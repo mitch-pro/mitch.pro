@@ -22,7 +22,7 @@
       else if (/^\/public-chat(?:\/|$)/.test(path)) activity = 'In public chat';
       else if (/^\/vms\/desktop(?:\/|$)/.test(path)) activity = 'Using VM desktop';
       else if (/^\/vms(?:\/|$)/.test(path)) activity = 'Managing a VM';
-      else if (/^\/(?:game-portal|games|casino|chess)(?:\/|$)/.test(path) && !activity) activity = 'Playing games';
+      else if (/^\/(?:game-portal|games|chess)(?:\/|$)/.test(path) && !activity) activity = 'Playing games';
       else if (path === '/' || path === '/index.html') activity = 'On the homepage';
       else if (!activity) activity = 'Viewing ' + (document.title || path).replace(/\s*[—|-]\s*mitch(?:\.pro)?\s*$/i, '').trim();
       return {

@@ -59,8 +59,7 @@ pub fn default_shop_catalog() -> Value {
       { "id": "canvas_lock_pass", "name": "Canvas Lock Pass", "section": "Passes", "type": "cosmetic", "costType": "canvas_tool", "cost": 1200, "desc": "Unlocks a saved canvas-tool preference toggle." },
       { "id": "quick_access_pass", "name": "Quick Access Pass", "section": "Passes", "type": "cosmetic", "costType": "canvas_tool", "cost": 800, "desc": "Unlocks a quick-access preference toggle." },
       { "id": "daily_bonus_plus", "name": "Daily Bonus Plus", "section": "Passes", "type": "cosmetic", "costType": "canvas_tool", "cost": 1500, "premiumOnly": true, "desc": "Unlocks a premium daily-bonus preference toggle." },
-      { "id": "streak_freeze", "name": "Streak Freeze", "section": "Utility", "type": "utility", "costType": "streak_freeze", "cost": 150, "desc": "Automatically saves your Daily Login streak if you miss a day!" },
-      { "id": "slots_free_spin", "name": "Slots Free Spins (5x)", "section": "Utility", "type": "utility", "costType": "slots_free_spin", "cost": 200, "desc": "Adds 5 free spins to your account. Free spins let you play slots with zero coins at risk while keeping all winnings!" }
+      { "id": "streak_freeze", "name": "Streak Freeze", "section": "Utility", "type": "utility", "costType": "streak_freeze", "cost": 150, "desc": "Automatically saves your Daily Login streak if you miss a day!" }
     ])
 }
 
@@ -540,7 +539,6 @@ pub fn build_inventory(
 ) -> Value {
     let norm = auth::normalize_email(email);
     let unlocked_ai = store.read_document(&data_dir.join("unlocked_ai.json"), json!({}));
-    let stats = crate::user_stats::user_stats_get(store, &norm);
     let daily = crate::daily_logins::daily_login_get(store, &norm).unwrap_or(json!({}));
     let entry = cosmetics_get(store, &norm).unwrap_or(json!({}));
     let user_cosm = sanitize_cosmetics_for_email(store, email, &entry);
@@ -636,7 +634,6 @@ pub fn build_inventory(
         "ai": ai,
         "items": items,
         "status": {
-            "slotsFreeSpins": stats.get("slots_free_spins").cloned().unwrap_or(json!(0)),
             "streakFreezes": daily.get("streakFreezes").cloned().unwrap_or(json!(0)),
         }
     })

@@ -1774,39 +1774,6 @@ pub fn execute_moderator_approved_action(
             );
             Ok(result)
         }
-        "casino_rig" => {
-            let chance = s("chance").as_f64().unwrap_or(f64::NAN);
-            if !chance.is_finite() || !(0.0..=100.0).contains(&chance) {
-                return Err((400, "invalid chance".into()));
-            }
-            state
-                .casino_rig_chance
-                .store(chance.to_bits(), std::sync::atomic::Ordering::Relaxed);
-            mitch_lib::admin::log_admin_action(
-                &state.store,
-                &state.cfg.data_dir,
-                actor,
-                "set_casino_rig",
-                json!({ "chance": chance }).merge(requested_by()),
-            );
-            Ok(json!({ "ok": true, "chance": chance }))
-        }
-        "casino_toggle" => {
-            let enabled = !state
-                .casino_enabled
-                .load(std::sync::atomic::Ordering::Relaxed);
-            state
-                .casino_enabled
-                .store(enabled, std::sync::atomic::Ordering::Relaxed);
-            mitch_lib::admin::log_admin_action(
-                &state.store,
-                &state.cfg.data_dir,
-                actor,
-                "toggle_casino",
-                json!({ "enabled": enabled }).merge(requested_by()),
-            );
-            Ok(json!({ "ok": true, "enabled": enabled }))
-        }
         "prox_block" => {
             let domain = s("domain").as_str().unwrap_or("").to_string();
             if domain.is_empty() {

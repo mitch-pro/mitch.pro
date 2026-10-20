@@ -114,7 +114,7 @@
         if (response.ok) response.clone().json().then(accept).catch(() => {});
         else if (response.status === 401 || response.status === 403) { balance = null; status = 'guest'; render(); }
       }).catch(() => {});
-    } else if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && /^\/api\/(?:shop|coins|marketplace|market|daily-login|casino|games|profile|puzzle|claim|admin\/gift-coins)(?:\/|$)/.test(url.pathname)) {
+    } else if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && /^\/api\/(?:shop|coins|marketplace|market|daily-login|games|profile|puzzle|claim|admin\/gift-coins)(?:\/|$)/.test(url.pathname)) {
       result.then(response => { if (response.ok) queueRefresh(); }).catch(() => {});
     }
     return result;

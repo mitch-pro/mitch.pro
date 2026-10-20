@@ -81,36 +81,6 @@ pub const ACHIEVEMENT_DEFINITIONS: &[(&str, AchievementDef)] = &[
         },
     ),
     (
-        "casino_novice",
-        AchievementDef {
-            name: "High Roller I",
-            desc: "Play 10 casino games",
-            bonus: 100.0,
-            goal: 10.0,
-            stat: "casino_bets",
-        },
-    ),
-    (
-        "casino_regular",
-        AchievementDef {
-            name: "High Roller II",
-            desc: "Play 100 casino games",
-            bonus: 500.0,
-            goal: 100.0,
-            stat: "casino_bets",
-        },
-    ),
-    (
-        "casino_winner",
-        AchievementDef {
-            name: "Lucky Streak",
-            desc: "Win 50 casino games",
-            bonus: 250.0,
-            goal: 50.0,
-            stat: "casino_wins",
-        },
-    ),
-    (
         "clicker_1",
         AchievementDef {
             name: "Clicker Novice",

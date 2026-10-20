@@ -13,7 +13,7 @@
     matrix: 'In Matrix chat', encrypt: 'Using secure chat', 'public-chat': 'In public chat',
     members: 'Viewing people', friends: 'Viewing friends', profile: 'Viewing a profile',
     shop: 'Browsing the shop', marketplace: 'Browsing the market', inventory: 'Viewing inventory',
-    coins: 'Viewing MitchCoins', leaderboard: 'Viewing the leaderboard', casino: 'In the casino',
+    coins: 'Viewing MitchCoins', leaderboard: 'Viewing the leaderboard',
     preferences: 'Changing preferences', notifications: 'Viewing notifications',
     vms: 'Managing Cloud Linux', bell: 'Viewing the bell schedule', rjuhsd: 'Viewing school schedules',
     admin: 'Using admin tools', moderator: 'Using moderator tools', tester: 'Using tester tools',

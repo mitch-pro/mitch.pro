@@ -4,7 +4,7 @@
 //!
 //! Groups land in plan Steps 7-13, in this order:
 //! misc (7) → admin (8) → me + pickle (9) → canvas (10) → dm (11) →
-//! games/casino/jeopardy/battleship/chess_vs (12) → team/vm (13).
+//! games/jeopardy/battleship/chess_vs (12) → team/vm (13).
 
 pub mod admin;
 pub mod auth;
@@ -14,7 +14,6 @@ pub mod blog;
 pub mod blooket;
 pub mod byo_os;
 pub mod canvas;
-pub mod casino;
 pub mod chess_vs;
 pub mod daily_login;
 pub mod dayboard;

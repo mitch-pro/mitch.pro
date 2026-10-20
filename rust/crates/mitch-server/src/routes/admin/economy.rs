@@ -1,7 +1,7 @@
-//! Economy & privileged fan-out — coin multiplier (10582), casino toggle/rig
-//! (10593/10191), grant-premium (10062), gift-coins (10104), economy audit/
-//! burn (10142-10172), broadcast (10174), send/unsend notification
-//! (10812-10910), revoke-premium (10912), trigger-daily-summary (9876).
+//! Economy & privileged fan-out — coin multiplier (10582), grant-premium
+//! (10062), gift-coins (10104), economy audit/burn (10142-10172),
+//! broadcast (10174), send/unsend notification (10812-10910),
+//! revoke-premium (10912), trigger-daily-summary (9876).
 //! Shared helpers are reused by the moderator request engine in moderation.rs.
 
 use super::{forbidden, unauthorized, AdminCtx, Resp};
@@ -42,56 +42,6 @@ pub fn handle(
             200,
             json!({ "ok": true, "multiplier": multiplier }),
         ));
-    }
-
-    // POST /api/admin/casino/toggle (admins only).
-    if path == "/api/admin/casino/toggle" {
-        if !ctx.is_admin(state) {
-            return Some(forbidden());
-        }
-        let enabled = !state
-            .casino_enabled
-            .load(std::sync::atomic::Ordering::Relaxed);
-        state
-            .casino_enabled
-            .store(enabled, std::sync::atomic::Ordering::Relaxed);
-        mitch_lib::admin::log_admin_action(
-            &state.store,
-            &state.cfg.data_dir,
-            &ctx.email(state),
-            "toggle_casino",
-            json!({ "enabled": enabled }),
-        );
-        return Some(json_response(
-            200,
-            json!({ "ok": true, "enabled": enabled }),
-        ));
-    }
-
-    // POST /api/admin/casino/rig (admins only).
-    if path == "/api/admin/casino/rig" && *method == Method::POST {
-        if !ctx.is_admin(state) {
-            return Some(forbidden());
-        }
-        let chance = body
-            .get("chance")
-            .and_then(|v| v.as_str())
-            .and_then(parse_f64)
-            .or_else(|| body.get("chance").and_then(|v| v.as_f64()));
-        let Some(chance) = chance.filter(|c| c.is_finite() && (0.0..=100.0).contains(c)) else {
-            return Some(json_response(400, json!({ "error": "invalid chance" })));
-        };
-        state
-            .casino_rig_chance
-            .store(chance.to_bits(), std::sync::atomic::Ordering::Relaxed);
-        mitch_lib::admin::log_admin_action(
-            &state.store,
-            &state.cfg.data_dir,
-            &ctx.email(state),
-            "set_casino_rig",
-            json!({ "chance": chance }),
-        );
-        return Some(json_response(200, json!({ "ok": true, "chance": chance })));
     }
 
     // POST /api/admin/trigger-daily-summary (admins; 401 on failure per JS).
