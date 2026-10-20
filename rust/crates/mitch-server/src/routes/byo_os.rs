@@ -73,6 +73,53 @@ fn fmt_gb(size_bytes: u64) -> String {
     format!("{:.1}GB", size_bytes as f64 / (1024.0 * 1024.0 * 1024.0))
 }
 
+/// One curated, admin-provided install ISO. `filename` must already exist
+/// in `iso_storage` on Proxmox — placed there by hand, not by this server
+/// (see the `/create-preset` handler's doc comment).
+struct PresetIso {
+    id: &'static str,
+    name: &'static str,
+    filename: &'static str,
+}
+
+/// Cheaper than custom BYO-OS (`PRESET_ISO_COST_COINS` vs
+/// `BYO_OS_COST_COINS`) since there's no upload — the file is already
+/// sitting on `iso_storage`. This is the one place the catalog is listed;
+/// don't let a second copy of it drift out of sync (AGENTS.md "Economy
+/// integrity").
+const PRESET_ISO_COST_COINS: f64 = 750.0;
+const PRESET_ISOS: &[PresetIso] = &[
+    PresetIso {
+        id: "windows",
+        name: "Windows",
+        filename: "preset-windows.iso",
+    },
+    PresetIso {
+        id: "mint",
+        name: "Linux Mint",
+        filename: "preset-mint.iso",
+    },
+    PresetIso {
+        id: "arch",
+        name: "Arch Linux",
+        filename: "preset-arch.iso",
+    },
+    PresetIso {
+        id: "tails",
+        name: "Tails",
+        filename: "preset-tails.iso",
+    },
+    PresetIso {
+        id: "kali",
+        name: "Kali Linux",
+        filename: "preset-kali.iso",
+    },
+];
+
+fn preset_by_id(id: &str) -> Option<&'static PresetIso> {
+    PRESET_ISOS.iter().find(|preset| preset.id == id)
+}
+
 // Only byo_os_uploads/ exists on this box now — a scratch area used for the
 // brief reassemble-then-hand-off-to-Proxmox window in /iso/complete. There
 // is deliberately no persistent byo_os_isos/ directory: once upload
@@ -1078,6 +1125,277 @@ pub(crate) async fn handle(
         }
     }
 
+    // GET /api/vm/byo-os/presets — the curated ISO catalog. Just metadata:
+    // the actual files are placed on iso_storage by hand (AGENTS.md
+    // "Economy integrity" — this is why presets are listed in exactly one
+    // place, this array, rather than duplicated into a second config).
+    if path == "/api/vm/byo-os/presets" && *method == Method::GET {
+        let items: Vec<Value> = PRESET_ISOS
+            .iter()
+            .map(|preset| {
+                json!({ "id": preset.id, "name": preset.name, "cost": PRESET_ISO_COST_COINS })
+            })
+            .collect();
+        return Some(json_response(200, json!({ "presets": items })));
+    }
+
+    // POST /api/vm/byo-os/create-preset — same shape as /create, but the
+    // ISO is a curated file that already lives on iso_storage (no upload,
+    // so no manifest entry to read) and payment happens here instead of at
+    // upload-complete time: charged only after create_from_iso actually
+    // succeeds, so a failed provision never costs coins.
+    if path == "/api/vm/byo-os/create-preset" && *method == Method::POST {
+        if is_vm_banned(state, &actor.email) {
+            return Some(json_response(
+                403,
+                json!({ "error": "VM access is restricted on this account." }),
+            ));
+        }
+        if is_byo_os_banned(state, &actor.email) {
+            return Some(json_response(
+                403,
+                json!({ "error": "BYO-OS is restricted on this account." }),
+            ));
+        }
+        let body: Value = serde_json::from_slice(body_bytes).unwrap_or(json!({}));
+        let preset_id = jsval::str_or(body.get("presetId"), "");
+        let Some(preset) = preset_by_id(&preset_id) else {
+            return Some(json_response(
+                400,
+                json!({ "error": "Unknown preset ISO." }),
+            ));
+        };
+
+        // Checked up front, before anything (including the user's existing
+        // computer) is touched — failing late here would mean deleting a
+        // working computer only to then refuse the replacement.
+        let balance = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &actor.email);
+        if balance < PRESET_ISO_COST_COINS {
+            return Some(json_response(
+                400,
+                json!({ "error": format!("Need {} coins, have {:.2}.", PRESET_ISO_COST_COINS, balance) }),
+            ));
+        }
+
+        let lock_key = format!("byo-os-create-{}", actor.email);
+        {
+            let mut requests = state
+                .vm_power_requests
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            if requests.contains_key(&lock_key)
+                || requests.contains_key(&format!("create-{}", actor.email))
+                || requests.contains_key(&format!("recreate-{}", actor.email))
+            {
+                return Some(json_response(
+                    409,
+                    json!({ "error": "A computer operation is already in progress for your account." }),
+                ));
+            }
+            requests.insert(
+                lock_key.clone(),
+                json!({ "startedAt": mitch_lib::school::now_millis() as f64 }),
+            );
+        }
+
+        let old_records = vmlib::get_virtual_machines_for_owner(&state.store, &actor.email);
+        for old_rec in old_records {
+            let old = old_rec.to_json();
+            let old_id = jsval::str_or(old.get("id"), "");
+            if let Err(err) = crate::proxmox_desktop::desktop()
+                .delete_guest(&old, true)
+                .await
+            {
+                tracing::warn!(
+                    "[byo-os create-preset] Note: Proxmox delete for {old_id} returned: {err:?}"
+                );
+            }
+            vmlib::delete_virtual_machine(&state.store, &old_id);
+            crate::routes::vm::revoke_vm_desktop_connections(state, &old_id);
+            crate::routes::vm::clear_vm_lease(state, &old_id);
+            state
+                .vm_page_presence
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&old_id);
+            vm_audit(
+                state,
+                &actor.email,
+                Some(&old),
+                "VM_DELETED_FOR_RECREATE",
+                true,
+                None,
+            );
+        }
+
+        let user_upgrades = get_user_vm_upgrades(state, &actor.email);
+        let cpu_cores = body
+            .get("cpuCores")
+            .and_then(jsval::number)
+            .or_else(|| user_upgrades.get("cpuCores").and_then(jsval::number))
+            .unwrap_or(2.0);
+        let memory_mb = body
+            .get("memoryMb")
+            .and_then(jsval::number)
+            .or_else(|| user_upgrades.get("memoryMb").and_then(jsval::number))
+            .unwrap_or(4096.0);
+        let disk_gb = body
+            .get("diskGb")
+            .and_then(jsval::number)
+            .or_else(|| user_upgrades.get("diskGb").and_then(jsval::number))
+            .unwrap_or(64.0);
+
+        const MAX_RESERVE_ATTEMPTS: u32 = 5;
+        let mut pending_record: Option<Value> = None;
+        let mut vmid: f64 = 0.0;
+        let mut hostname = String::new();
+        let mut excluded_vmids: Vec<f64> = Vec::new();
+        for attempt in 1..=MAX_RESERVE_ATTEMPTS {
+            let all_records = vmlib::list_virtual_machines(&state.store, true);
+            let mut existing_vmids: Vec<f64> = all_records.iter().map(|r| r.vmid).collect();
+            existing_vmids.extend_from_slice(&excluded_vmids);
+            let candidate_vmid = match crate::proxmox_desktop::desktop()
+                .next_available_vmid(PVE_VMID_MIN, PVE_VMID_MAX, &existing_vmids)
+                .await
+            {
+                Ok(v) => v as f64,
+                Err(e) => {
+                    state
+                        .vm_power_requests
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .remove(&lock_key);
+                    let friendly = crate::routes::vm::friendly_vm_error(&e.into());
+                    return Some(json_response(
+                        friendly.0,
+                        json!({ "error": friendly.1, "code": friendly.2 }),
+                    ));
+                }
+            };
+            let candidate_hostname = format!("preset-os-{}", candidate_vmid as i64);
+            let reserved = vmlib::reserve_virtual_machine(
+                &state.store,
+                &json!({
+                    "id": format!("vm-{}", candidate_vmid as i64),
+                    "ownerEmail": actor.email,
+                    "ownerUserId": mitch_lib::profile::get_uid_for_email(&state.store, &state.id_secret, &actor.email).unwrap_or_default(),
+                    "vmid": candidate_vmid,
+                    "node": crate::proxmox_desktop::desktop().node(),
+                    "guestType": "qemu",
+                    "friendlyName": "My Computer (Preset OS)",
+                    "hostname": candidate_hostname,
+                    "operatingSystem": format!("Preset ({})", preset.name),
+                    "templateVmid": Value::Null,
+                    "cpuCores": cpu_cores,
+                    "memoryMb": memory_mb,
+                    "diskGb": disk_gb,
+                    "status": "provisioning",
+                    "createdAt": mitch_lib::school::now_millis() as f64,
+                }),
+            )
+            .map(|r| r.to_json());
+            if let Some(rec) = reserved {
+                pending_record = Some(rec);
+                vmid = candidate_vmid;
+                hostname = candidate_hostname;
+                break;
+            }
+            tracing::warn!(
+                "[byo-os create-preset] reserve_virtual_machine attempt {attempt}/{MAX_RESERVE_ATTEMPTS} collided on vmid {candidate_vmid}"
+            );
+            excluded_vmids.push(candidate_vmid);
+        }
+        let Some(pending_record) = pending_record else {
+            state
+                .vm_power_requests
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&lock_key);
+            return Some(json_response(
+                500,
+                json!({ "error": "Could not reserve a computer slot. Please try again." }),
+            ));
+        };
+
+        let result = crate::proxmox_desktop::desktop()
+            .create_from_iso(&crate::proxmox_desktop::CreateFromIsoParams {
+                owner_resources: crate::routes::vm::can_customize_owner_vm(state, &actor),
+                vmid: Some(vmid),
+                hostname: hostname.clone(),
+                cpu_cores: Some(cpu_cores),
+                memory_mb: Some(memory_mb),
+                disk_gb: Some(disk_gb),
+                iso_filename: preset.filename.to_string(),
+            })
+            .await;
+        state
+            .vm_power_requests
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&lock_key);
+
+        match result {
+            Ok(created) => {
+                mitch_lib::coins::add_coins(
+                    &state.store,
+                    state.data_dir(),
+                    &actor.email,
+                    -PRESET_ISO_COST_COINS,
+                    state.coin_multiplier(),
+                    &format!("byo-os preset: {}", preset.name),
+                );
+                let mut merged = pending_record.clone();
+                if let Some(obj) = merged.as_object_mut() {
+                    if let Some(created_obj) = created.as_object() {
+                        for (k, v) in created_obj {
+                            obj.insert(k.clone(), v.clone());
+                        }
+                    }
+                }
+                merged["status"] = json!("assigned");
+                let record = vmlib::upsert_virtual_machine(&state.store, &merged)
+                    .map(|r| r.to_json())
+                    .unwrap_or(merged);
+                vm_audit(
+                    state,
+                    &actor.email,
+                    Some(&record),
+                    "BYO_OS_PRESET_VM_CREATED",
+                    true,
+                    None,
+                );
+                return Some(json_response(
+                    201,
+                    json!({ "success": true, "computer": record }),
+                ));
+            }
+            Err(err) => {
+                let rec_id = jsval::str_or(pending_record.get("id"), "");
+                if !rec_id.is_empty() {
+                    vmlib::update_virtual_machine_runtime(
+                        &state.store,
+                        &rec_id,
+                        None,
+                        Some("provisioning-failed"),
+                    );
+                }
+                vm_audit(
+                    state,
+                    &actor.email,
+                    Some(&pending_record),
+                    "BYO_OS_PRESET_VM_CREATED",
+                    false,
+                    Some(&json!({ "code": err.code })),
+                );
+                let friendly = crate::routes::vm::friendly_vm_error(&err.into());
+                return Some(json_response(
+                    friendly.0,
+                    json!({ "error": friendly.1, "code": friendly.2 }),
+                ));
+            }
+        }
+    }
+
     // POST /api/vm/byo-os/detach-iso — once the OS is installed, eject the
     // install ISO and drop it from the boot order so the next boot goes
     // straight to disk instead of back into the installer. Only meaningful
@@ -1171,5 +1489,26 @@ mod tests {
         // Past 12GB the surcharge stops scaling — same price as exactly 12GB.
         assert_eq!(link_iso_cost_coins(50 * GB), BYO_OS_COST_COINS + 600.0);
         assert_eq!(link_iso_cost_coins(500 * GB), link_iso_cost_coins(12 * GB));
+    }
+
+    #[test]
+    fn preset_catalog_has_five_unique_ids_and_filenames() {
+        assert_eq!(PRESET_ISOS.len(), 5);
+        let ids: std::collections::HashSet<_> = PRESET_ISOS.iter().map(|p| p.id).collect();
+        assert_eq!(ids.len(), 5, "preset ids must be unique");
+        let filenames: std::collections::HashSet<_> =
+            PRESET_ISOS.iter().map(|p| p.filename).collect();
+        assert_eq!(filenames.len(), 5, "preset filenames must be unique");
+        for preset in PRESET_ISOS {
+            assert!(preset.filename.ends_with(".iso"));
+        }
+        for want in ["windows", "mint", "arch", "tails", "kali"] {
+            assert!(
+                preset_by_id(want).is_some(),
+                "expected a preset with id {want:?}"
+            );
+        }
+        assert!(preset_by_id("ubuntu").is_none());
+        assert!(preset_by_id("").is_none());
     }
 }

@@ -95,6 +95,18 @@
         Give a link to an install ISO, or upload one yourself (one stored at a time), and boot a blank computer from it instead of the standard template. You install and configure the OS yourself through the same desktop console — nothing is pre-set up. Costs 1000 MitchCoins per ISO; recreating a computer from the same stored ISO afterward is free. Uploaded files are capped at 6GB — a link has no size limit, but anything over 6GB adds a surcharge (100 🪙/GB, capped at 12GB).
       </p>
 
+      <div style="background:#0f172a; border:1px solid #334155; border-radius:8px; padding:12px; margin-bottom:16px; text-align:left;">
+        <p style="font-size:0.85rem; color:#e2e8f0; margin:0 0 8px 0; font-weight:600;">Or start from a ready-made ISO</p>
+        <p style="font-size:0.78rem; color:#64748b; margin:0 0 10px 0;">No upload needed — boots straight from a preset image. This replaces your current computer, same as above.</p>
+        <label style="display:flex; flex-direction:column; gap:6px; font-size:0.85rem; color:#94a3b8;">
+          <span>Operating system</span>
+          <select id="byo-os-preset-select" style="padding:9px 12px; border-radius:8px; background:#0f172a; border:1px solid #334155; color:#fff;">
+            <option value="">Loading…</option>
+          </select>
+        </label>
+        <button type="button" id="byo-os-preset-btn" class="primary-button" style="margin-top:10px;" disabled>Create computer from preset →</button>
+      </div>
+
       <div id="byo-os-no-iso">
         <label style="display:flex; flex-direction:column; gap:6px; text-align:left; font-size:0.85rem; color:#94a3b8;">
           <span>Link to an ISO (http/https, any size)</span>

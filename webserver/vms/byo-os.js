@@ -87,6 +87,32 @@
     }
   }
 
+  // Preset ISOs (no upload — the file already lives on Proxmox's storage)
+  // are independent of the custom-ISO state above, so they're loaded once
+  // per dialog open rather than as part of refreshIsoState.
+  let presetsLoaded = false;
+  async function loadPresets() {
+    if (presetsLoaded) return;
+    const select = $('byo-os-preset-select');
+    const btn = $('byo-os-preset-btn');
+    if (!select || !btn) return;
+    try {
+      const data = await api('/api/vm/byo-os/presets', { method: 'GET' });
+      const presets = (data && data.presets) || [];
+      if (!presets.length) {
+        select.innerHTML = '<option value="">No presets available</option>';
+        return;
+      }
+      select.innerHTML = presets
+        .map((p) => `<option value="${p.id}">${p.name} (${p.cost} coins)</option>`)
+        .join('');
+      btn.disabled = false;
+      presetsLoaded = true;
+    } catch (e) {
+      select.innerHTML = '<option value="">Failed to load presets</option>';
+    }
+  }
+
   let uploading = false;
   let cancelRequested = false;
 
@@ -220,11 +246,13 @@
     const createBtn = $('byo-os-create-btn');
     const refundBtn = $('byo-os-refund-btn');
     const reportBtn = $('byo-os-report-btn');
+    const presetBtn = $('byo-os-preset-btn');
 
     openBtns.forEach((btn) => {
       btn.addEventListener('click', () => {
         setStatus('');
         refreshIsoState();
+        loadPresets();
         dialog().showModal();
       });
     });
@@ -318,6 +346,36 @@
         createBtn.disabled = false;
       }
     });
+    if (presetBtn) {
+      presetBtn.addEventListener('click', async () => {
+        const select = $('byo-os-preset-select');
+        const presetId = select && select.value;
+        if (!presetId) return;
+        const presetLabel = select.options[select.selectedIndex].textContent;
+        const warning = hasExistingComputer
+          ? `This will permanently delete your current computer and all its files, then create a new one from ${presetLabel}. This cannot be undone. Continue?`
+          : `Create a computer from ${presetLabel}? This cannot be undone.`;
+        if (!confirm(warning)) return;
+        presetBtn.disabled = true;
+        setStatus(
+          hasExistingComputer
+            ? 'Deleting your current computer and creating a new one… this can take a minute.'
+            : 'Creating your computer… this can take a minute.',
+        );
+        try {
+          await api('/api/vm/byo-os/create-preset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
+            body: JSON.stringify({ presetId }),
+          });
+          setStatus('Computer created — reloading…');
+          setTimeout(() => location.reload(), 1200);
+        } catch (e) {
+          setStatus(e.message, true);
+          presetBtn.disabled = false;
+        }
+      });
+    }
   }
 
   if (document.readyState === 'loading') {
