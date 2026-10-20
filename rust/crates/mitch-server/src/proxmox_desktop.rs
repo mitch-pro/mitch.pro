@@ -971,9 +971,12 @@ impl ProxmoxDesktopService {
             // framebuffer — std VGA was previously "optimized" here, but
             // qxl is the actually-fast choice. Leave a VM alone if it's
             // already on some qxl config (e.g. a custom memory size).
+            // 128MB (not 64) — this is ordinary VM RAM, not scarce host GPU
+            // VRAM, and a heavier desktop compositor (GNOME) running out of
+            // QXL buffer headroom mid-frame is a real source of tearing.
             let vga = config["vga"].as_str().unwrap_or("");
             if !vga.starts_with("qxl") {
-                updates.insert("vga".to_string(), json!("qxl,memory=64"));
+                updates.insert("vga".to_string(), json!("qxl,memory=128"));
             }
             if !updates.is_empty() {
                 self.request(
@@ -1475,7 +1478,7 @@ impl ProxmoxDesktopService {
         config_body.insert("rng0".to_string(), json!("source=/dev/urandom"));
         config_body.insert(
             "vga".to_string(),
-            jsval::or(template_config.get("vga"), json!("qxl,memory=64")),
+            jsval::or(template_config.get("vga"), json!("qxl,memory=128")),
         );
         config_body.insert("balloon".to_string(), jsval::num_value(balloon));
         config_body.insert("agent".to_string(), json!(1));
@@ -2133,7 +2136,7 @@ impl ProxmoxDesktopService {
         body.insert("balloon".to_string(), jsval::num_value(balloon));
         body.insert("cpu".to_string(), json!("host"));
         body.insert("rng0".to_string(), json!("source=/dev/urandom"));
-        body.insert("vga".to_string(), json!("qxl,memory=64"));
+        body.insert("vga".to_string(), json!("qxl,memory=128"));
         body.insert("agent".to_string(), json!(1));
         body.insert("scsihw".to_string(), json!("virtio-scsi-pci"));
         body.insert("net0".to_string(), json!(net0));
