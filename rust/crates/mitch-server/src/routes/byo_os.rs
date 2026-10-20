@@ -1408,6 +1408,7 @@ pub(crate) async fn handle(
                 json!({ "error": "VM access is restricted on this account." }),
             ));
         }
+        let body: Value = serde_json::from_slice(body_bytes).unwrap_or(json!({}));
         let records = vmlib::get_virtual_machines_for_owner(&state.store, &actor.email);
         let req_id = body
             .get("id")
