@@ -952,21 +952,16 @@ impl ProxmoxDesktopService {
     /// — the whole body is try/catch in the JS, so every failure path returns
     /// `None` (null) and only a successful pass marks the VMID optimized.
     ///
-    /// `is_byo_os` picks the display adapter: qxl is a paravirtualized
-    /// adapter that tracks dirty regions at the driver level instead of
-    /// making every remote viewer (VNC included, not just SPICE) poll and
-    /// diff a dumb framebuffer, and it's what BYO-OS VMs get — but the
-    /// curated Ubuntu template doesn't have the guest-side QXL driver (or
-    /// is running Wayland, which doesn't have mature QXL acceleration
-    /// either way) and that mismatch produces screen tearing, not a speed
-    /// win. Until the template itself is updated, template-cloned ("normal")
-    /// VMs stay on std VGA; only BYO-OS (custom or preset ISO) gets qxl.
-    pub async fn ensure_optimized_vm_config(
-        &self,
-        vmid: i64,
-        node: &str,
-        is_byo_os: bool,
-    ) -> Option<Value> {
+    /// Display adapter: virtio-gpu (Proxmox UI calls the same `vga=virtio`
+    /// value "VirtIO-GPU") — qxl needs a guest-side driver the curated
+    /// Ubuntu template doesn't have, which produced tearing; std has no
+    /// acceleration at all. virtio-gpu's DRM/KMS driver ships in the
+    /// mainline Linux kernel, so it works out of the box on both the
+    /// template and BYO-OS without installing anything in the guest.
+    /// A bare `vga=virtio` was tried and reverted once before (see the
+    /// Sept 18 "noVNC black screen" commits) — confirmed working now,
+    /// tested through mitch.pro's own VM console, not just Proxmox's.
+    pub async fn ensure_optimized_vm_config(&self, vmid: i64, node: &str) -> Option<Value> {
         if self.lock_caches().optimized_vmids.contains(&vmid) {
             return None;
         }
@@ -980,14 +975,9 @@ impl ProxmoxDesktopService {
             if !jsval::truthy(&config["rng0"]) {
                 updates.insert("rng0".to_string(), json!("source=/dev/urandom"));
             }
-            // 128MB qxl memory is ordinary VM RAM, not scarce host GPU VRAM
-            // — generous on purpose so a desktop compositor doesn't run out
-            // of buffer headroom mid-frame.
-            let target_vga = if is_byo_os {
-                "qxl,memory=128"
-            } else {
-                "std,memory=64"
-            };
+            // memory is a real suboption for virtio too, same as std/qxl —
+            // 128MB of ordinary VM RAM, not scarce host GPU VRAM.
+            let target_vga = "virtio,memory=128";
             let vga = config["vga"].as_str().unwrap_or("");
             if vga != target_vga {
                 updates.insert("vga".to_string(), json!(target_vga));
@@ -1047,13 +1037,7 @@ impl ProxmoxDesktopService {
             && (requested_action == "start" || requested_action == "restart")
         {
             let node = self.node_of(record);
-            // No templateVmid means this VM was built from an ISO
-            // (BYO-OS, custom or preset), not cloned from the curated
-            // template.
-            let is_byo_os = record["templateVmid"].as_f64().is_none();
-            let _ = self
-                .ensure_optimized_vm_config(vmid, &node, is_byo_os)
-                .await;
+            let _ = self.ensure_optimized_vm_config(vmid, &node).await;
         }
         self.request(
             "POST",
@@ -1496,13 +1480,12 @@ impl ProxmoxDesktopService {
         config_body.insert("memory".to_string(), jsval::num_value(memory_mb));
         config_body.insert("cpu".to_string(), json!("host"));
         config_body.insert("rng0".to_string(), json!("source=/dev/urandom"));
-        // Template-cloned ("normal") VMs stay on std VGA — see
-        // ensure_optimized_vm_config's doc comment for why qxl is BYO-OS-only
-        // for now. This just inherits the template's own current vga either
-        // way, so it only matters the first time a template is ever cloned.
+        // See ensure_optimized_vm_config's doc comment re: virtio-gpu. This
+        // just inherits the template's own current vga either way, so it
+        // only matters the first time a template is ever cloned.
         config_body.insert(
             "vga".to_string(),
-            jsval::or(template_config.get("vga"), json!("std,memory=64")),
+            jsval::or(template_config.get("vga"), json!("virtio,memory=128")),
         );
         config_body.insert("balloon".to_string(), jsval::num_value(balloon));
         config_body.insert("agent".to_string(), json!(1));
@@ -2160,7 +2143,7 @@ impl ProxmoxDesktopService {
         body.insert("balloon".to_string(), jsval::num_value(balloon));
         body.insert("cpu".to_string(), json!("host"));
         body.insert("rng0".to_string(), json!("source=/dev/urandom"));
-        body.insert("vga".to_string(), json!("qxl,memory=128"));
+        body.insert("vga".to_string(), json!("virtio,memory=128"));
         body.insert("agent".to_string(), json!(1));
         body.insert("scsihw".to_string(), json!("virtio-scsi-pci"));
         body.insert("net0".to_string(), json!(net0));
