@@ -139,19 +139,46 @@ fn parse_draft(body: &Value, ready: bool) -> Result<Draft, &'static str> {
 }
 
 fn unsubscribed(state: &AppState) -> BTreeSet<String> {
-    mitch_lib::newsletter_unsub::newsletter_unsub_all_emails(&state.store)
-        .into_iter()
-        .map(|e| e.trim().to_lowercase())
-        .collect()
+    // Keep both the stored form and its normalized form so a lookup matches
+    // regardless of whether the unsub record or the recipient address is the
+    // dotted or the normalized variant.
+    let mut set = BTreeSet::new();
+    for e in mitch_lib::newsletter_unsub::newsletter_unsub_all_emails(&state.store) {
+        let low = e.trim().to_lowercase();
+        if low.is_empty() {
+            continue;
+        }
+        let norm = mitch_lib::auth::normalize_email(&low);
+        set.insert(low);
+        if !norm.is_empty() {
+            set.insert(norm);
+        }
+    }
+    set
 }
 
 fn directory(state: &AppState) -> Vec<Value> {
     let unsub = unsubscribed(state);
     let mut seen = BTreeSet::new();
     super::accounts::directory(state).into_iter().filter_map(|account| {
-        let email = account["email"].as_str()?.trim().to_lowercase();
+        // accounts::directory() keys accounts by their normalized identity
+        // (dots stripped, mitch.pro aliased to student.rjuhsd.us) so one
+        // account shows up once. That normalized string isn't always a real
+        // mailbox — a student's actual @student.rjuhsd.us address needs its
+        // dot to deliver — so resolve the real address to send to before
+        // using it as a recipient.
+        let norm = account["email"].as_str()?.trim().to_lowercase();
+        let email = mitch_lib::profile::canonical_delivery_email(
+            &state.store,
+            state.data_dir(),
+            &state.id_secret,
+            &norm,
+        )
+        .trim()
+        .to_lowercase();
         if !valid_email(&email) || !seen.insert(email.clone()) { return None; }
-        Some(json!({"email":email,"displayName":account["displayName"],"username":account["username"],"eligible":!unsub.contains(&email)}))
+        let eligible = !unsub.contains(&email) && !unsub.contains(&norm);
+        Some(json!({"email":email,"displayName":account["displayName"],"username":account["username"],"eligible":eligible}))
     }).collect()
 }
 
@@ -506,6 +533,23 @@ mod tests {
             .recipients
             .push("a@example.test,b@example.test".into());
         assert!(resolve_recipients(state, &draft).is_err());
+    }
+
+    #[test]
+    fn everyone_audience_sends_to_the_real_dotted_address_not_the_normalized_one() {
+        let fixture = Fixture::new();
+        let state = &fixture.state;
+        // The account is only known to the directory via its normalized,
+        // dot-stripped identity (how accounts::directory dedupes accounts),
+        // but the real mailbox needs the dot to deliver.
+        auth::names_set(&state.store, "sid-student", "jane.doe@student.rjuhsd.us");
+        let draft = Draft {
+            audience: "everyone".into(),
+            ..Draft::default()
+        };
+        let recipients = resolve_recipients(state, &draft).unwrap();
+        assert_eq!(recipients, vec!["jane.doe@student.rjuhsd.us"]);
+        assert!(!recipients.contains(&"janedoe@student.rjuhsd.us".to_string()));
     }
 
     #[test]
