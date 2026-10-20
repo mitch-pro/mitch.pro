@@ -1615,6 +1615,14 @@
       return d.toLocaleString('en-US', { hour12: true });
     }
 
+    // Safe decimal formatting for coin-log amounts: never throws, never
+    // renders the literal text "undefined" or "NaN" for a missing/malformed
+    // value from an older or hand-edited log line.
+    function fmtMoney(v) {
+      const n = Number(v);
+      return Number.isFinite(n) ? n.toFixed(4) : '—';
+    }
+
     function textOf(v) {
       if (v == null) return '';
       if (typeof v === 'object') return JSON.stringify(v);
@@ -2729,9 +2737,10 @@
       );
 
       table('coinLogs-table', ['Time', 'Email', 'Change', 'Before → After', 'Reason'], filtered.coinLogs || [], r => {
-        const cls = r.delta > 0 ? 'ok' : (r.delta < 0 ? 'warn' : '');
-        const sign = r.delta > 0 ? '+' : '';
-        return '<tr><td>' + esc(fmtTime(r.ts)) + '</td><td>' + esc(r.email) + '</td><td><span class="pill ' + cls + '">' + esc(sign + r.delta.toFixed(4)) + '</span></td><td>' + esc(r.before.toFixed(4)) + ' → ' + esc(r.after.toFixed(4)) + '</td><td>' + esc(r.reason) + '</td></tr>';
+        const delta = Number(r.delta);
+        const cls = delta > 0 ? 'ok' : (delta < 0 ? 'warn' : '');
+        const sign = delta > 0 ? '+' : '';
+        return '<tr><td>' + esc(fmtTime(r.ts)) + '</td><td>' + esc(r.email) + '</td><td><span class="pill ' + cls + '">' + esc(sign + fmtMoney(r.delta)) + '</span></td><td>' + esc(fmtMoney(r.before)) + ' → ' + esc(fmtMoney(r.after)) + '</td><td>' + esc(r.reason) + '</td></tr>';
       });
     }
 
@@ -2762,7 +2771,7 @@
       (filtered.profileReports || []).forEach(r => lines.push(['profileReports', fmtTime(r.ts), r.target, r.reporter, r.reason, r.status].map(csvEscape).join(',')));
       (filtered.chatReports || []).forEach(r => lines.push(['chatReports', fmtTime(r.ts), r.reportedBy, r.reason, JSON.stringify(r.context), ''].map(csvEscape).join(',')));
       (filtered.cheatLogs || []).forEach(r => lines.push(['cheatLogs', fmtTime(r.ts), r.email, r.game, r.details, r.ip].map(csvEscape).join(',')));
-      (filtered.coinLogs || []).forEach(r => lines.push(['coinLogs', fmtTime(r.ts), r.email, (r.delta > 0 ? '+' : '') + r.delta.toFixed(4), r.before.toFixed(4) + ' -> ' + r.after.toFixed(4), r.reason].map(csvEscape).join(',')));
+      (filtered.coinLogs || []).forEach(r => lines.push(['coinLogs', fmtTime(r.ts), r.email, (Number(r.delta) > 0 ? '+' : '') + fmtMoney(r.delta), fmtMoney(r.before) + ' -> ' + fmtMoney(r.after), r.reason].map(csvEscape).join(',')));
       download('admin-logs.csv', 'text/csv', lines.join('\n'));
     }
 

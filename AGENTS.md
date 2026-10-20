@@ -29,6 +29,13 @@
 - Never hardcode credentials, passwords, secret tokens, API keys, private emails, or personal contact addresses into source code, test fixtures, documentation, or admin tools.
 - Secrets and service configuration must always be sourced from environment variables, secure stores, or dynamic user/admin inputs.
 
+## Economy integrity (MitchCoins, shop, casino)
+
+- Any change touching coin balances, the shop catalog, or casino payouts must be checked for a path to risk-free or unbounded profit before it ships — not just "does it work," but "can a player use this to generate coins out of nothing, or guarantee a non-negative outcome on a bet." A feature that removes downside (e.g. refunding a loss) while keeping upside is an infinite-money bug even if no single line of code looks wrong in isolation; walk through what happens if a user plays it in a loop.
+- When removing an exploitable item, flag, or mechanic, close every path to it, not just the shop listing: strip the effect from the code that *honors* it (so an account that already has it active loses it immediately on deploy), and filter it out of any on-disk data override (e.g. `shop_catalog.json`) in case stale data still lists it — the same way `happy_hour_*` was retired. Removing only the storefront entry while leaving the effect live for existing holders is not a fix.
+- Don't maintain two independent copies of the same catalog/config (e.g. a second hardcoded item list for an admin view). A second copy is how a retired exploit item quietly reappears — it drifts out of sync with the real source of truth and nobody notices until it's live again. Delegate to the one real loader instead.
+- This applies to this specific codebase's casino/shop/coins code (`rust/crates/mitch-lib/src/{coins,shop}.rs`, `rust/crates/mitch-server/src/routes/casino.rs`, `.../me/cosmetics.rs`), not just literal money — the same reasoning applies to any limited/valuable resource (premium status, VM credits, etc).
+
 ## Verification and test discipline
 
 - Never push without local validation: autonomous agents must run `cargo test --workspace`, `cargo fmt --all -- --check`, and any relevant test suites locally before committing or pushing to `master`.
