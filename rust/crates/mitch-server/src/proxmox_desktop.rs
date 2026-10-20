@@ -951,7 +951,22 @@ impl ProxmoxDesktopService {
     /// `ensureOptimizedVmConfig(vmid, node)` (lib/proxmox_desktop.js:228-249)
     /// — the whole body is try/catch in the JS, so every failure path returns
     /// `None` (null) and only a successful pass marks the VMID optimized.
-    pub async fn ensure_optimized_vm_config(&self, vmid: i64, node: &str) -> Option<Value> {
+    ///
+    /// `is_byo_os` picks the display adapter: qxl is a paravirtualized
+    /// adapter that tracks dirty regions at the driver level instead of
+    /// making every remote viewer (VNC included, not just SPICE) poll and
+    /// diff a dumb framebuffer, and it's what BYO-OS VMs get — but the
+    /// curated Ubuntu template doesn't have the guest-side QXL driver (or
+    /// is running Wayland, which doesn't have mature QXL acceleration
+    /// either way) and that mismatch produces screen tearing, not a speed
+    /// win. Until the template itself is updated, template-cloned ("normal")
+    /// VMs stay on std VGA; only BYO-OS (custom or preset ISO) gets qxl.
+    pub async fn ensure_optimized_vm_config(
+        &self,
+        vmid: i64,
+        node: &str,
+        is_byo_os: bool,
+    ) -> Option<Value> {
         if self.lock_caches().optimized_vmids.contains(&vmid) {
             return None;
         }
@@ -965,18 +980,17 @@ impl ProxmoxDesktopService {
             if !jsval::truthy(&config["rng0"]) {
                 updates.insert("rng0".to_string(), json!("source=/dev/urandom"));
             }
-            // QXL is a paravirtualized display adapter that tracks dirty
-            // regions at the driver level instead of making every remote
-            // viewer (VNC included, not just SPICE) poll and diff a dumb
-            // framebuffer — std VGA was previously "optimized" here, but
-            // qxl is the actually-fast choice. Leave a VM alone if it's
-            // already on some qxl config (e.g. a custom memory size).
-            // 128MB (not 64) — this is ordinary VM RAM, not scarce host GPU
-            // VRAM, and a heavier desktop compositor (GNOME) running out of
-            // QXL buffer headroom mid-frame is a real source of tearing.
+            // 128MB qxl memory is ordinary VM RAM, not scarce host GPU VRAM
+            // — generous on purpose so a desktop compositor doesn't run out
+            // of buffer headroom mid-frame.
+            let target_vga = if is_byo_os {
+                "qxl,memory=128"
+            } else {
+                "std,memory=64"
+            };
             let vga = config["vga"].as_str().unwrap_or("");
-            if !vga.starts_with("qxl") {
-                updates.insert("vga".to_string(), json!("qxl,memory=128"));
+            if vga != target_vga {
+                updates.insert("vga".to_string(), json!(target_vga));
             }
             if !updates.is_empty() {
                 self.request(
@@ -1033,7 +1047,13 @@ impl ProxmoxDesktopService {
             && (requested_action == "start" || requested_action == "restart")
         {
             let node = self.node_of(record);
-            let _ = self.ensure_optimized_vm_config(vmid, &node).await;
+            // No templateVmid means this VM was built from an ISO
+            // (BYO-OS, custom or preset), not cloned from the curated
+            // template.
+            let is_byo_os = record["templateVmid"].as_f64().is_none();
+            let _ = self
+                .ensure_optimized_vm_config(vmid, &node, is_byo_os)
+                .await;
         }
         self.request(
             "POST",
@@ -1476,9 +1496,13 @@ impl ProxmoxDesktopService {
         config_body.insert("memory".to_string(), jsval::num_value(memory_mb));
         config_body.insert("cpu".to_string(), json!("host"));
         config_body.insert("rng0".to_string(), json!("source=/dev/urandom"));
+        // Template-cloned ("normal") VMs stay on std VGA — see
+        // ensure_optimized_vm_config's doc comment for why qxl is BYO-OS-only
+        // for now. This just inherits the template's own current vga either
+        // way, so it only matters the first time a template is ever cloned.
         config_body.insert(
             "vga".to_string(),
-            jsval::or(template_config.get("vga"), json!("qxl,memory=128")),
+            jsval::or(template_config.get("vga"), json!("std,memory=64")),
         );
         config_body.insert("balloon".to_string(), jsval::num_value(balloon));
         config_body.insert("agent".to_string(), json!(1));
