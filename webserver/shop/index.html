@@ -486,16 +486,12 @@
     builder_badge: '🛠',
     lucky_badge: '🍀',
     premium_star_badge: '⭐',
-    owner_fan_badge: '👑',
-    loaded_dice: '🎲',
-    casino_glitch_chip: '💥',
-    infinite_luck_charm: '⚡'
+    owner_fan_badge: '👑'
   };
 
   let coins = 0;
   let isPremium = false;
   let isAdmin = false;
-  let vipUntil = 0;
   let activeTab = 'all';
   let items = [];
   let inventory = defaultInventory();
@@ -558,7 +554,6 @@
 
   function owns(item) {
     if (item.type === 'premium') return isPremium;
-    if (item.costType === 'vip_casino_pass') return false;
     if (item.costType === 'ai_personality') return (inventory.ai || []).includes(item.id);
     const bucket = typeToBucket[item.costType];
     return !!bucket && (inventory.cosmetics[bucket] || []).includes(item.id);
@@ -598,23 +593,8 @@
     tabs.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => setTab(btn.dataset.tab)));
   }
 
-  function isBuffActive(item) {
-    if (!inventory?.status) return false;
-    const now = Date.now();
-    const s = inventory.status;
-    if (item.costType === 'loaded_dice') return (s.loadedDiceUntil || 0) > now;
-    if (item.costType === 'casino_glitch_chip') return (s.casinoGlitchUntil || 0) > now;
-    if (item.costType === 'infinite_luck_charm') return (s.infiniteLuckUntil || 0) > now;
-    if (item.costType === 'vip_casino_pass') return (s.vipUntil || 0) > now || vipUntil > now;
-    if (item.costType === 'bad_beat_insurance') return (s.badBeatInsuranceUntil || 0) > now;
-    if (item.costType === 'double_down_ticket') return (s.doubleDownUntil || 0) > now;
-    return false;
-  }
-
   function buttonLabel(item, owned, active) {
     if (locked(item)) return 'Premium Only';
-    if (isBuffActive(item)) return 'Active (Extend)';
-    if (item.costType === 'vip_casino_pass' && owned) return 'Active (Extend)';
     if (active) return 'Turn Off';
     if (owned && toggleable(item)) return 'Turn On';
     if (owned) return 'Owned';
@@ -844,7 +824,6 @@
       coins = Number(coinData.coins || 0);
       isPremium = !!me.isPremium;
       isAdmin = !!me.isAdmin;
-      vipUntil = Number(me.vipUntil || 0);
       inventory = Object.assign(defaultInventory(), invData || {});
       inventory.cosmetics = Object.assign(defaultInventory().cosmetics, inventory.cosmetics || {});
       items = Array.isArray(itemData.items) ? itemData.items : [];
@@ -863,33 +842,6 @@
 
       const status = inventory.status || {};
       const activeBuffs = [];
-      const now = Date.now();
-      if ((status.infiniteLuckUntil || 0) > now) {
-        const mins = Math.max(1, Math.ceil((status.infiniteLuckUntil - now) / 60000));
-        activeBuffs.push(`<span class="pill legendary">⚡ Infinite Luck Exploit (${mins}m left: 10X + Auto-Win + VIP)</span>`);
-      }
-      if ((status.loadedDiceUntil || 0) > now) {
-        const mins = Math.max(1, Math.ceil((status.loadedDiceUntil - now) / 60000));
-        activeBuffs.push(`<span class="pill gold">🎲 Loaded Dice (${mins}m left: Auto-Win Rig)</span>`);
-      }
-      if ((status.casinoGlitchUntil || 0) > now) {
-        const mins = Math.max(1, Math.ceil((status.casinoGlitchUntil - now) / 60000));
-        activeBuffs.push(`<span class="pill elite">💥 5X Glitch Multiplier (${mins}m left)</span>`);
-      }
-      if ((status.vipUntil || 0) > now || vipUntil > now) {
-        const maxVip = Math.max(status.vipUntil || 0, vipUntil || 0);
-        const mins = Math.max(1, Math.ceil((maxVip - now) / 60000));
-        activeBuffs.push(`<span class="pill gold">👑 VIP Casino Pass (${mins}m left: Unlimited Bet)</span>`);
-      }
-      if ((status.doubleDownUntil || 0) > now) {
-        const mins = Math.max(1, Math.ceil((status.doubleDownUntil - now) / 60000));
-        activeBuffs.push(`<span class="pill rare">🎯 Double Down (${mins}m left: 2X Win)</span>`);
-      }
-      if ((status.badBeatInsuranceUntil || 0) > now) {
-        const mins = Math.max(1, Math.ceil((status.badBeatInsuranceUntil - now) / 60000));
-        activeBuffs.push(`<span class="pill good">🛡️ Bad Beat Insurance (${mins}m left: 100% Refund)</span>`);
-      }
-
       if ((status.slotsFreeSpins || 0) > 0) {
         activeBuffs.push(`<span class="pill good">🎰 ${status.slotsFreeSpins} Free Spins Available</span>`);
       }

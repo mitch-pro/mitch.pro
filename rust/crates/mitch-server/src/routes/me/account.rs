@@ -831,7 +831,6 @@ fn me_root(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             "isBlogContributor": is_blog_contributor,
             "canBlogPost": has_email && can_write_blog_email(state, &email_str),
             "canGrantPremium": can_grant_premium,
-            "vipUntil": stats.get("vip_casino_until").and_then(|v| v.as_i64()).unwrap_or(0),
             "activeTheme": jsval::string(&jsval::or(cosmetics.get("activeTheme"), json!(""))),
             "activeAi": jsval::string(&jsval::or(cosmetics.get("activeAi"), json!(""))),
             "jwk": legacy_jwk,

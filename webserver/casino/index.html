@@ -655,7 +655,6 @@
           <button class="btn primary" onclick="goFullscreen('card-slots')" type="button">Play Slots</button>
           <div style="display:none;">
             <button class="btn primary" id="slots" type="button">Spin Classic Slots</button>
-            <button class="btn secondary" id="vip-slots" type="button">Spin VIP Slots</button>
           </div>
         </div>
       </article>
@@ -832,7 +831,7 @@
 
 <script>
 (function () {
-  var state = { coinSide: "heads", diceSide: "under", highLow: "higher", rps: "rock", cardColor: "red", keno: new Set(), bjBet: 0, busy: false, balance: null, vipUntil: 0 };
+  var state = { coinSide: "heads", diceSide: "under", highLow: "higher", rps: "rock", cardColor: "red", keno: new Set(), bjBet: 0, busy: false, balance: null };
   var $ = function (sel, root) { return (root || document).querySelector(sel); };
   var $$ = function (sel, root) { return Array.from((root || document).querySelectorAll(sel)); };
 
@@ -850,7 +849,7 @@
     if (!Number.isFinite(n) || n < 1) throw new Error("Enter a bet of at least 1 coin.");
     n = Number(n.toFixed(2));
     if (state.balance !== null && n > state.balance) throw new Error("Your bet cannot exceed your coin balance.");
-    if (state.vipUntil <= Date.now() && n > 500) throw new Error("Maximum bet is 500 coins. VIP Casino Passes raise this limit.");
+    if (n > 500) throw new Error("Maximum bet is 500 coins.");
     return n;
   }
   function showToast(msg) {
@@ -1050,20 +1049,10 @@
   $("#bet-max").onclick = function () {
     if (state.balance === null) return showToast("Sign in to see your available balance.");
     if (state.balance < 1) return showToast("You need at least 1 coin to place a bet.");
-    $("#bet").value = Math.floor(Math.min(state.balance, state.vipUntil > Date.now() ? state.balance : 500) * 100) / 100;
+    $("#bet").value = Math.floor(Math.min(state.balance, 500) * 100) / 100;
   };
-  async function refreshLimits() {
-    try {
-      var response = await fetch('/api/me/inventory', { credentials: 'include' });
-      if (!response.ok) return;
-      var inventory = await response.json();
-      state.vipUntil = Number(inventory.status?.vipUntil || 0);
-      var vip = state.vipUntil > Date.now();
-      document.querySelectorAll('[data-bet]').forEach(function(button) { button.disabled = !vip && Number(button.dataset.bet) > 500; });
-      $('#bet-limit').textContent = vip ? 'Bet up to your available balance.' : 'Up to 500 coins per bet. VIP passes raise the limit.';
-    } catch (_) {}
-  }
-  refreshLimits();
+  document.querySelectorAll('[data-bet]').forEach(function(button) { button.disabled = Number(button.dataset.bet) > 500; });
+  $('#bet-limit').textContent = 'Up to 500 coins per bet.';
   bindChoices();
   buildKeno();
   function updateVisibleCount() {
@@ -1085,10 +1074,6 @@
   $("#slots").onclick = function () { play(async function () {
     var d = await post("/api/casino/slots", { amount: bet() });
     result("Slots: " + d.rank, "Payout " + coins(d.win) + " coins at " + coins(d.mult) + "x.", d.net, itemRow(d.results));
-  }); };
-  $("#vip-slots").onclick = function () { play(async function () {
-    var d = await post("/api/casino/vip/slots", { amount: bet() });
-    result("VIP Slots: " + d.rank, "Payout " + coins(d.win) + " coins at " + coins(d.mult) + "x.", d.net, itemRow(d.results));
   }); };
   $("#roulette").onclick = function () { play(async function () {
     var type = $("#roulette-type").value;

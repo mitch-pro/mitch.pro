@@ -186,13 +186,16 @@ fn user_stats(state: &Arc<AppState>, norm: &str) -> Value {
     mitch_lib::user_stats::user_stats_get(&state.store, norm)
 }
 
-/// `isVip` — `stats[norm] && stats[norm].vip_casino_until > Date.now()`.
-fn is_vip(state: &Arc<AppState>, norm: &str) -> bool {
-    user_stats(state, norm)
-        .get("vip_casino_until")
-        .and_then(jsval::number)
-        .unwrap_or(0.0)
-        > now_millis() as f64
+/// The VIP Casino Pass (unlimited max bet) is retired — it let a round's
+/// bet size scale without limit, which combined with the also-retired
+/// bad-beat-insurance refund to turn a guaranteed-non-negative round into a
+/// guaranteed-large one. No new `vip_casino_until` can be granted (the shop
+/// item is gone), but this stays `false` outright rather than reading that
+/// field, so any balance already on a user's account from before this fix
+/// stops mattering the moment this deploys instead of lingering for up to
+/// the pass's original 24h.
+fn is_vip(_state: &Arc<AppState>, _norm: &str) -> bool {
+    false
 }
 
 /// `readCasinoBet` (server.js:23106-23117) — Number(body.amount), the
@@ -225,7 +228,7 @@ fn read_casino_bet(
     if !is_vip(state, norm) && bet > 500.0 {
         return Err(Box::new(resp(
             400,
-            &json!({ "error": "Maximum bet is 500 coins. Buy a VIP Casino Pass in the shop for unlimited betting!" }),
+            &json!({ "error": "Maximum bet is 500 coins." }),
         )));
     }
     Ok(js_num_from_fixed(&js_to_fixed(bet, 2)))
@@ -310,9 +313,17 @@ fn log_bet(state: &Arc<AppState>, user: &str, game: &str, amount: f64, outcome: 
     }
 }
 
-/// `settleCasinoRound` (server.js:23123-23156) — the double-down / bad-beat
-/// modifiers, the 4-decimal money rounding, intake/payout bookkeeping, the
-/// coin settlement, history + feed + stats.
+/// `settleCasinoRound` (server.js:23123-23156) — the 4-decimal money
+/// rounding, intake/payout bookkeeping, the coin settlement, history + feed
+/// + stats.
+///
+/// The original double-down / bad-beat modifiers are gone: bad-beat
+/// insurance refunded the bet on *any* loss outright, which made a round
+/// with any win chance above zero a guaranteed non-negative-EV bet — free
+/// money over enough rounds — and double-down then let that profit compound
+/// by doubling wins on top. Both were sold in the shop; removing the shop
+/// items alone wouldn't have closed this for whoever already had one
+/// active, so the effect is removed here too.
 fn settle_casino_round(
     state: &Arc<AppState>,
     player: &Round<'_>,
@@ -324,32 +335,14 @@ fn settle_casino_round(
 ) -> Settled {
     let (free_spin, prepaid) = opts;
     let (email, norm) = (player.email, player.norm);
-    let now = now_millis() as f64;
-    let entry = user_stats(state, norm);
-    let until = |key: &str| entry.get(key).and_then(jsval::number).unwrap_or(0.0);
-    // `(stats[norm].x || 0) > Date.now()` — NaN is falsy in JS, so an
-    // unparseable `x` reads as 0 too (jsval::number's None → 0.0), and a
-    // missing/falsy `stats[norm]` entry reads as 0 either way, so there's
-    // no separate "entry exists" check needed.
-    let is_double = until("double_down_until") > now;
-    let is_insured = until("bad_beat_insurance_until") > now;
-
-    let mut final_payout = payout;
-    let mut final_outcome = outcome.to_string();
-    if payout > bet && is_double {
-        final_payout = payout * 2.0;
-        final_outcome = format!("{outcome} (2X DOUBLE)");
-    } else if payout <= 0.0 && is_insured && !free_spin {
-        final_payout = bet;
-        final_outcome = "REFUNDED (INSURED)".to_string();
-    }
+    let final_outcome = outcome.to_string();
 
     // `Number(Math.max(0, finalPayout || 0).toFixed(4))` — NaN/0 are falsy
     // under `||`, and Math.max(0, x) clamps negatives to +0.
-    let fp = if final_payout.is_nan() || final_payout == 0.0 {
+    let fp = if payout.is_nan() || payout == 0.0 {
         0.0
     } else {
-        final_payout
+        payout
     };
     let safe_payout = js_num_from_fixed(&js_to_fixed(fp.max(0.0), 4));
     let effective_bet = if free_spin { 0.0 } else { bet };
@@ -982,10 +975,7 @@ fn bj_start(
         return resp(400, &json!({ "error": "invalid bet" }));
     }
     if !is_vip(state, norm) && bet > 500.0 {
-        return resp(
-            400,
-            &json!({ "error": "Maximum bet is 500 coins. Buy a VIP Casino Pass in the shop for unlimited betting!" }),
-        );
+        return resp(400, &json!({ "error": "Maximum bet is 500 coins." }));
     }
 
     add_casino_stat(&state.casino_intake, bet);
@@ -1858,10 +1848,7 @@ fn slots(
             return resp(400, &json!({ "error": "invalid bet" }));
         }
         if !is_vip && bet > 500.0 {
-            return resp(
-                400,
-                &json!({ "error": "Maximum bet is 500 coins. Buy a VIP Casino Pass in the shop for unlimited betting!" }),
-            );
+            return resp(400, &json!({ "error": "Maximum bet is 500 coins." }));
         }
     }
 
@@ -2407,5 +2394,118 @@ mod tests {
         assert_eq!(boost(50.0), 55.0);
         assert_eq!(boost(6.0), 6.6); // 6.6000000000000005 → '6.60'
         assert_eq!(boost(3.0), 3.3); // 3.3000000000000003 → '3.30'
+    }
+
+    fn test_state() -> (Arc<AppState>, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!(
+            "mitch-server-casino-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("data")).unwrap_or_default();
+        let cfg = crate::hosts::SiteConfig::load();
+        let cfg = crate::hosts::SiteConfig {
+            data_dir: dir.join("data"),
+            ..cfg
+        };
+        let store = Arc::new(
+            mitch_lib::data::DataStore::open(&dir, &dir.join("data"))
+                .unwrap_or_else(|e| panic!("store: {e}")),
+        );
+        (Arc::new(AppState::new(cfg, Arc::clone(&store))), dir)
+    }
+
+    // Regression coverage for the retired casino-buff exploit: bad-beat
+    // insurance refunded the bet on *any* loss, which made a round with any
+    // win chance a guaranteed non-negative-EV bet (free money over enough
+    // rounds), and double-down then doubled wins on top. Both flags are
+    // still readable stat fields (old purchases, or a stale data file), so
+    // the fix has to be "settle_casino_round no longer honors them" rather
+    // than just "the shop can't sell them anymore" — these tests set the
+    // flags directly, bypassing the shop entirely, the way an
+    // already-granted buff would still be set after this fix ships.
+    #[test]
+    fn bad_beat_insurance_no_longer_refunds_a_loss() {
+        let (state, dir) = test_state();
+        let email = "insured@example.test";
+        let norm = mitch_lib::auth::normalize_email(email);
+        mitch_lib::coins::add_coins(&state.store, state.data_dir(), email, 1000.0, 1.0, "seed");
+        let far_future = now_millis() as f64 + 60_000.0;
+        mitch_lib::user_stats::user_stats_set(
+            &state.store,
+            &norm,
+            &json!({ "bad_beat_insurance_until": far_future }),
+        );
+        let settled = settle_casino_round(
+            &state,
+            &Round { email, norm: &norm },
+            "Test Game",
+            100.0,
+            0.0, // a loss: zero payout
+            "LOSE",
+            (false, false),
+        );
+        // Before the fix this would be 0 (refunded) and the outcome would
+        // read "REFUNDED (INSURED)".
+        assert_eq!(settled.net, -100.0);
+        assert_eq!(settled.payout, 0.0);
+        assert_eq!(settled.new_balance, 900.0);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn double_down_no_longer_doubles_a_win() {
+        let (state, dir) = test_state();
+        let email = "doubler@example.test";
+        let norm = mitch_lib::auth::normalize_email(email);
+        mitch_lib::coins::add_coins(&state.store, state.data_dir(), email, 1000.0, 1.0, "seed");
+        let far_future = now_millis() as f64 + 60_000.0;
+        mitch_lib::user_stats::user_stats_set(
+            &state.store,
+            &norm,
+            &json!({ "double_down_until": far_future }),
+        );
+        let settled = settle_casino_round(
+            &state,
+            &Round { email, norm: &norm },
+            "Test Game",
+            100.0,
+            190.0, // a win at 1.9x
+            "WIN",
+            (false, false),
+        );
+        // Before the fix this would be 180 (doubled payout).
+        assert_eq!(settled.payout, 190.0);
+        assert_eq!(settled.net, 90.0);
+        assert_eq!(settled.new_balance, 1090.0);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn vip_casino_pass_no_longer_bypasses_the_bet_cap() {
+        let (state, dir) = test_state();
+        let email = "whale@example.test";
+        let norm = mitch_lib::auth::normalize_email(email);
+        mitch_lib::coins::add_coins(
+            &state.store,
+            state.data_dir(),
+            email,
+            100_000.0,
+            1.0,
+            "seed",
+        );
+        let far_future = now_millis() as f64 + 60_000.0;
+        mitch_lib::user_stats::user_stats_set(
+            &state.store,
+            &norm,
+            &json!({ "vip_casino_until": far_future }),
+        );
+        assert!(!is_vip(&state, &norm));
+        let err = read_casino_bet(&state, &json!({ "amount": 5000.0 }), email, &norm, 1.0)
+            .expect_err("a 5000-coin bet must still be rejected despite a vip_casino_until flag");
+        assert_eq!(err.status(), 400);
+        std::fs::remove_dir_all(dir).ok();
     }
 }

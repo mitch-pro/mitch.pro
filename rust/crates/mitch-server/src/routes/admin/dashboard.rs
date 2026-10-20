@@ -117,17 +117,13 @@ pub fn handle(
         if !ctx.is_any_admin(state) {
             return Some(forbidden());
         }
-        let catalog = state
-            .store
-            .read_document(&state.cfg.data_dir.join("shop_catalog.json"), json!(null));
-        let catalog = match catalog {
-            Value::Array(items) if !items.is_empty() => items,
-            _ => default_shop_catalog(),
-        };
-        let catalog: Vec<Value> = catalog
-            .into_iter()
-            .filter(|item| item.get("id").and_then(|v| v.as_str()) != Some("og_badge"))
-            .collect();
+        // Delegate to the same loader /api/shop/items uses, rather than a
+        // second hand-maintained catalog literal: a drifted-out-of-sync
+        // duplicate here is exactly how a retired item (the casino buffs
+        // this view used to still list) stays visible to admins, or worse
+        // gets resaved to shop_catalog.json, after it's gone everywhere
+        // else.
+        let catalog = mitch_lib::shop::load_shop_catalog(&state.store, &state.cfg.data_dir);
         return Some(json_response(
             200,
             json!({ "success": true, "catalog": catalog }),
@@ -359,108 +355,6 @@ pub fn repo_root() -> std::path::PathBuf {
     crate::hosts::SiteConfig::load().base_dir
 }
 
-/// `DEFAULT_SHOP_CATALOG` — verbatim from server.js:7027-7073 (used when no
-/// shop_catalog.json override exists).
-pub fn default_shop_catalog() -> Vec<Value> {
-    let items: &[(&str, &str, &str, &str, &str, i64)] = &[
-        ("premium", "Premium", "Premium", "premium", "Unlock Premium Chat, 2X typing/logic coin rewards, 2X Clicker/Riches offline gains, larger canvas brushes, exclusive profile frames/badges, and the epic chance to have an arcade game named after you!", 5000),
-        ("neon_purple", "Neon Purple Name", "Name Colors", "cosmetic", "A bright purple username for chat, profiles, and leaderboards.", 500),
-        ("electric_blue", "Electric Blue Name", "Name Colors", "cosmetic", "A sharp electric-blue username style.", 500),
-        ("mint_flash", "Mint Flash Name", "Name Colors", "cosmetic", "A clean mint username with a fresh glow.", 550),
-        ("rose_spark", "Rose Spark Name", "Name Colors", "cosmetic", "A warm rose username style with a soft highlight.", 550),
-        ("ember_red", "Ember Red Name", "Name Colors", "cosmetic", "A deep red username with a bolder presence.", 650),
-        ("void_white", "Void White Name", "Name Colors", "cosmetic", "A high-contrast white username for dark pages.", 750),
-        ("gold_glow", "Golden Glow Name", "Name Colors", "cosmetic", "A premium gold username glow.", 900),
-        ("rainbow_name", "Rainbow Name", "Name Colors", "cosmetic", "An admin-only animated rainbow username.", 2500),
-        ("verified_badge", "Verified Badge", "Badges", "cosmetic", "Adds a verified check badge beside your name.", 1000),
-        ("artist_badge", "Artist Badge", "Badges", "cosmetic", "A badge for canvas builders and pixel artists.", 900),
-        ("chess_badge", "Chess Badge", "Badges", "cosmetic", "A badge for chess regulars.", 900),
-        ("builder_badge", "Builder Badge", "Badges", "cosmetic", "A badge for people who help build the community.", 950),
-        ("lucky_badge", "Lucky Badge", "Badges", "cosmetic", "A rare-feeling badge for casino winners.", 1200),
-        ("premium_star_badge", "Premium Star Badge", "Badges", "cosmetic", "A premium star badge for your profile and chats.", 1400),
-        ("owner_fan_badge", "Mitch Fan Badge", "Badges", "cosmetic", "A simple badge for fans of the site.", 800),
-        ("chat_sparkles", "Chat Sparkles", "Chat Effects", "cosmetic", "Adds a subtle sparkle effect to your chat identity.", 850),
-        ("chat_shadow", "Chat Shadow", "Chat Effects", "cosmetic", "Adds a dark shadow accent to your chat identity.", 850),
-        ("chat_wave", "Chat Wave", "Chat Effects", "cosmetic", "A gentle animated wave effect for your chat name.", 1000),
-        ("chat_terminal", "Terminal Chat Style", "Chat Effects", "cosmetic", "A monospace terminal-style chat accent.", 1100),
-        ("chat_prism", "Prism Chat Style", "Chat Effects", "cosmetic", "A premium prism accent for chat.", 1600),
-        ("profile_grid", "Profile Grid Background", "Profile Effects", "cosmetic", "Adds a clean grid effect to your profile.", 900),
-        ("profile_stars", "Profile Starfield", "Profile Effects", "cosmetic", "Adds a starfield-style profile effect.", 1200),
-        ("profile_scanlines", "Profile Scanlines", "Profile Effects", "cosmetic", "Adds a retro scanline texture to your profile.", 950),
-        ("profile_gold_frame", "Gold Profile Frame", "Profile Effects", "cosmetic", "A premium gold frame accent for your profile.", 1800),
-        ("profile_neon_frame", "Neon Profile Frame", "Profile Effects", "cosmetic", "A premium neon frame accent for your profile.", 1800),
-        ("focus_theme", "Focus Theme", "Site Themes", "cosmetic", "A calm, low-distraction site accent.", 700),
-        ("arcade_theme", "Arcade Theme", "Site Themes", "cosmetic", "A brighter arcade-style site accent.", 900),
-        ("midnight_theme", "Midnight Theme", "Site Themes", "cosmetic", "A darker midnight accent for the site.", 900),
-        ("vip_pass", "VIP Casino Pass (24h)", "Passes", "pass", "Unlocks unlimited max bet amount in all casino games for 24 hours.", 250),
-        ("canvas_lock_pass", "Canvas Lock Pass", "Passes", "cosmetic", "Unlocks a saved canvas-tool preference toggle.", 1200),
-        ("quick_access_pass", "Quick Access Pass", "Passes", "cosmetic", "Unlocks a quick-access preference toggle.", 800),
-        ("daily_bonus_plus", "Daily Bonus Plus", "Passes", "cosmetic", "Unlocks a premium daily-bonus preference toggle.", 1500),
-    ];
-    // JS items carry optional costType/premiumOnly/adminOnly extras; encode the
-    // full variety via a second table.
-    let extras: &[(&str, &str, bool, bool)] = &[
-        ("premium", "", false, false),
-        ("neon_purple", "name_color", false, false),
-        ("electric_blue", "name_color", false, false),
-        ("mint_flash", "name_color", false, false),
-        ("rose_spark", "name_color", false, false),
-        ("ember_red", "name_color", false, false),
-        ("void_white", "name_color", false, false),
-        ("gold_glow", "name_color", true, false),
-        ("rainbow_name", "name_color", false, true),
-        ("verified_badge", "chat_badge", false, false),
-        ("artist_badge", "chat_badge", false, false),
-        ("chess_badge", "chat_badge", false, false),
-        ("builder_badge", "chat_badge", false, false),
-        ("lucky_badge", "chat_badge", false, false),
-        ("premium_star_badge", "chat_badge", true, false),
-        ("owner_fan_badge", "chat_badge", false, false),
-        ("chat_sparkles", "chat_effect", false, false),
-        ("chat_shadow", "chat_effect", false, false),
-        ("chat_wave", "chat_effect", false, false),
-        ("chat_terminal", "chat_effect", false, false),
-        ("chat_prism", "chat_effect", true, false),
-        ("profile_grid", "profile_effect", false, false),
-        ("profile_stars", "profile_effect", false, false),
-        ("profile_scanlines", "profile_effect", false, false),
-        ("profile_gold_frame", "profile_effect", true, false),
-        ("profile_neon_frame", "profile_effect", true, false),
-        ("focus_theme", "site_theme", false, false),
-        ("arcade_theme", "site_theme", false, false),
-        ("midnight_theme", "site_theme", false, false),
-        ("vip_pass", "vip_casino_pass", false, false),
-        ("canvas_lock_pass", "canvas_tool", false, false),
-        ("quick_access_pass", "canvas_tool", false, false),
-        ("daily_bonus_plus", "canvas_tool", true, false),
-    ];
-    items
-        .iter()
-        .zip(extras.iter())
-        .map(
-            |((id, name, section, typ, desc, cost), (id2, cost_type, premium_only, admin_only))| {
-                debug_assert_eq!(id, id2, "catalog id mismatch");
-                let mut item = json!({
-                    "id": id, "name": name, "section": section, "type": typ,
-                    "cost": cost, "desc": desc,
-                });
-                let obj = item.as_object_mut();
-                if let Some(obj) = obj {
-                    if !cost_type.is_empty() {
-                        obj.insert("costType".into(), json!(cost_type));
-                    }
-                    if *premium_only {
-                        obj.insert("premiumOnly".into(), json!(true));
-                    }
-                    if *admin_only {
-                        obj.insert("adminOnly".into(), json!(true));
-                    }
-                }
-                item
-            },
-        )
-        .collect()
-}
 /// Minimal `+`-safe percent decoding for query strings.
 fn percent_decode(s: &str) -> String {
     let plus_fixed = s.replace('+', " ");

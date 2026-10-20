@@ -56,16 +56,32 @@ pub fn default_shop_catalog() -> Value {
       { "id": "focus_theme", "name": "Focus Theme", "section": "Site Themes", "type": "cosmetic", "costType": "site_theme", "cost": 700, "desc": "A calm, low-distraction site accent." },
       { "id": "arcade_theme", "name": "Arcade Theme", "section": "Site Themes", "type": "cosmetic", "costType": "site_theme", "cost": 900, "desc": "A brighter arcade-style site accent." },
       { "id": "midnight_theme", "name": "Midnight Theme", "section": "Site Themes", "type": "cosmetic", "costType": "site_theme", "cost": 900, "desc": "A darker midnight accent for the site." },
-      { "id": "vip_pass", "name": "VIP Casino Pass (24h)", "section": "Passes", "type": "pass", "costType": "vip_casino_pass", "cost": 250, "desc": "Unlocks unlimited max bet amount in all casino games for 24 hours." },
       { "id": "canvas_lock_pass", "name": "Canvas Lock Pass", "section": "Passes", "type": "cosmetic", "costType": "canvas_tool", "cost": 1200, "desc": "Unlocks a saved canvas-tool preference toggle." },
       { "id": "quick_access_pass", "name": "Quick Access Pass", "section": "Passes", "type": "cosmetic", "costType": "canvas_tool", "cost": 800, "desc": "Unlocks a quick-access preference toggle." },
       { "id": "daily_bonus_plus", "name": "Daily Bonus Plus", "section": "Passes", "type": "cosmetic", "costType": "canvas_tool", "cost": 1500, "premiumOnly": true, "desc": "Unlocks a premium daily-bonus preference toggle." },
       { "id": "streak_freeze", "name": "Streak Freeze", "section": "Utility", "type": "utility", "costType": "streak_freeze", "cost": 150, "desc": "Automatically saves your Daily Login streak if you miss a day!" },
-      { "id": "double_down_ticket", "name": "Double Down Ticket (30m)", "section": "Utility", "type": "utility", "costType": "double_down_ticket", "cost": 500, "desc": "Active for 30 minutes. Doubles the payout of any casino game wins!" },
-      { "id": "bad_beat_insurance", "name": "Bad Beat Insurance (30m)", "section": "Utility", "type": "utility", "costType": "bad_beat_insurance", "cost": 300, "desc": "Active for 30 minutes. Refunds your entire bet if you lose any casino game round." },
       { "id": "slots_free_spin", "name": "Slots Free Spins (5x)", "section": "Utility", "type": "utility", "costType": "slots_free_spin", "cost": 200, "desc": "Adds 5 free spins to your account. Free spins let you play slots with zero coins at risk while keeping all winnings!" }
     ])
 }
+
+/// Casino "buff" cost types retired for letting a round be risk-free or
+/// uncapped (`bad_beat_insurance` refunded every loss outright, so any win
+/// chance above zero was a guaranteed long-run profit; `double_down_ticket`
+/// and `vip_casino_pass` then let that profit compound and scale with bet
+/// size) plus the always-rig novelty items that were never actually wired
+/// into the Rust casino's RNG (`loaded_dice`, `casino_glitch_chip`,
+/// `infinite_luck_charm`) but still cost real coins for nothing. Filtered
+/// here — not just dropped from `default_shop_catalog` — so a
+/// `shop_catalog.json` override left over from before this fix can't keep
+/// serving them.
+const RETIRED_CASINO_BUFF_COST_TYPES: &[&str] = &[
+    "vip_casino_pass",
+    "double_down_ticket",
+    "bad_beat_insurance",
+    "loaded_dice",
+    "casino_glitch_chip",
+    "infinite_luck_charm",
+];
 
 /// The boot-time `SHOP_CATALOG`: shop_catalog.json override (minus `og_badge`)
 /// when non-empty, else the default list. server.js:7256-7267.
@@ -82,6 +98,8 @@ pub fn load_shop_catalog(store: &DataStore, data_dir: &Path) -> Vec<Value> {
                             .and_then(|v| v.as_str())
                             .unwrap_or("")
                             .starts_with("happy_hour")
+                        && !RETIRED_CASINO_BUFF_COST_TYPES
+                            .contains(&item.get("costType").and_then(|v| v.as_str()).unwrap_or(""))
                 })
                 .cloned()
                 .collect();
@@ -130,7 +148,7 @@ pub fn shop_tier_for(item: &Value) -> &'static str {
     }
     if matches!(
         id,
-        "vip_pass" | "arcade_theme" | "midnight_theme" | "verified_badge" | "og_badge"
+        "arcade_theme" | "midnight_theme" | "verified_badge" | "og_badge"
     ) {
         return "uncommon";
     }
@@ -168,7 +186,6 @@ pub fn shop_perk_for(item: &Value) -> String {
             "profile_neon_frame",
             "Bright neon profile frame with stronger profile presence.",
         ),
-        ("vip_pass", "24 hours of unlimited casino max bets."),
         ("daily_bonus_plus", "Premium daily-bonus preference toggle."),
         (
             "canvas_lock_pass",
@@ -232,7 +249,6 @@ pub fn shop_base_cost_for(item: &Value) -> i64 {
                     "profile_effect" => 2.15,
                     "site_theme" => 1.8,
                     "ai_personality" => 2.35,
-                    "vip_casino_pass" => 3.2,
                     "canvas_tool" => 2.2,
                     _ => 0.0,
                 }
@@ -269,7 +285,6 @@ pub fn premium_discount_for(item: &Value) -> f64 {
         ("chat_prism", 0.09),
         ("profile_gold_frame", 0.07),
         ("profile_neon_frame", 0.07),
-        ("vip_pass", 0.04),
         ("daily_bonus_plus", 0.06),
         ("focus_theme", 0.20),
         ("arcade_theme", 0.18),
@@ -287,7 +302,6 @@ pub fn premium_discount_for(item: &Value) -> f64 {
         ("site_theme", 0.18),
         ("ai_personality", 0.09),
         ("canvas_tool", 0.11),
-        ("vip_casino_pass", 0.04),
     ];
     if let Some((_, d)) = by_type.iter().find(|(k, _)| *k == cost_type) {
         return *d;
@@ -622,9 +636,6 @@ pub fn build_inventory(
         "ai": ai,
         "items": items,
         "status": {
-            "vipUntil": stats.get("vip_casino_until").cloned().unwrap_or(json!(0)),
-            "doubleDownUntil": stats.get("double_down_until").cloned().unwrap_or(json!(0)),
-            "badBeatInsuranceUntil": stats.get("bad_beat_insurance_until").cloned().unwrap_or(json!(0)),
             "slotsFreeSpins": stats.get("slots_free_spins").cloned().unwrap_or(json!(0)),
             "streakFreezes": daily.get("streakFreezes").cloned().unwrap_or(json!(0)),
         }
@@ -661,18 +672,6 @@ pub fn owns_shop_item(
             .and_then(|v| v.as_array())
             .map(|arr| arr.iter().any(|v| v.as_str() == Some(id)))
             .unwrap_or(false);
-    }
-    if cost_type == "vip_casino_pass" {
-        let norm = auth::normalize_email(email);
-        let until = crate::user_stats::user_stats_get(store, &norm)
-            .get("vip_casino_until")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0);
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as f64)
-            .unwrap_or(0.0);
-        return until > now_ms;
     }
     if cost_type == "streak_freeze" {
         return false;
@@ -722,12 +721,20 @@ mod tests {
             .as_str()
             .unwrap_or("")
             .starts_with("happy_hour")));
+        assert!(catalog().iter().all(|item| !RETIRED_CASINO_BUFF_COST_TYPES
+            .contains(&item["costType"].as_str().unwrap_or(""))));
         store
             .write_document(
                 &data.join("shop_catalog.json"),
                 &json!([
                     {"id":"retired", "costType":"happy_hour_ticket"},
                     {"id":"retired_extension", "costType":"happy_hour_extension"},
+                    {"id":"vip_pass", "costType":"vip_casino_pass"},
+                    {"id":"double_down_ticket", "costType":"double_down_ticket"},
+                    {"id":"bad_beat_insurance", "costType":"bad_beat_insurance"},
+                    {"id":"loaded_dice", "costType":"loaded_dice"},
+                    {"id":"casino_glitch_chip", "costType":"casino_glitch_chip"},
+                    {"id":"infinite_luck_charm", "costType":"infinite_luck_charm"},
                     {"id":"neon_purple", "costType":"name_color"}
                 ]),
             )

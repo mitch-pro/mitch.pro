@@ -190,12 +190,6 @@ async fn shop_buy(
             obj.insert(norm.clone(), json!(mine));
         }
         let _ = state.store.write_document(&unlocked_file, &unlocked);
-    } else if cost_type == "vip_casino_pass" {
-        let minutes = item
-            .get("durationMinutes")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(1440.0);
-        bump_stat_until(state, &norm, "vip_casino_until", minutes);
     } else if cost_type == "streak_freeze" {
         let mut entry =
             mitch_lib::daily_logins::daily_login_get(&state.store, &norm).unwrap_or(json!({
@@ -215,18 +209,6 @@ async fn shop_buy(
             obj.insert("streakFreezes".to_string(), json!(freezes + 1));
         }
         mitch_lib::daily_logins::daily_login_set(&state.store, &norm, &entry);
-    } else if cost_type == "double_down_ticket" {
-        let minutes = item
-            .get("durationMinutes")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(30.0);
-        bump_stat_until(state, &norm, "double_down_until", minutes);
-    } else if cost_type == "bad_beat_insurance" {
-        let minutes = item
-            .get("durationMinutes")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(30.0);
-        bump_stat_until(state, &norm, "bad_beat_insurance_until", minutes);
     } else if cost_type == "slots_free_spin" {
         let mut entry = mitch_lib::user_stats::user_stats_get(&state.store, &norm);
         let current = entry
@@ -236,31 +218,6 @@ async fn shop_buy(
         let add = item.get("spinCount").and_then(|v| v.as_i64()).unwrap_or(5);
         if let Some(obj) = entry.as_object_mut() {
             obj.insert("slots_free_spins".to_string(), json!(current + add));
-        }
-        mitch_lib::user_stats::user_stats_set(&state.store, &norm, &entry);
-    } else if cost_type == "loaded_dice" {
-        bump_stat_until(state, &norm, "loaded_dice_until", 30.0);
-    } else if cost_type == "casino_glitch_chip" {
-        bump_stat_until(state, &norm, "casino_glitch_until", 20.0);
-    } else if cost_type == "infinite_luck_charm" {
-        let mut entry = mitch_lib::user_stats::user_stats_get(&state.store, &norm);
-        let now = mitch_lib::school::now_millis() as f64;
-        let current = entry
-            .get("infinite_luck_until")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0);
-        let until = now.max(current) + 30.0 * 60.0 * 1000.0;
-        if let Some(obj) = entry.as_object_mut() {
-            obj.insert("infinite_luck_until".to_string(), json!(until));
-            for key in [
-                "loaded_dice_until",
-                "casino_glitch_until",
-                "bad_beat_insurance_until",
-                "vip_casino_until",
-            ] {
-                let existing = obj.get(key).and_then(|v| v.as_f64()).unwrap_or(0.0);
-                obj.insert(key.to_string(), json!(existing.max(until)));
-            }
         }
         mitch_lib::user_stats::user_stats_set(&state.store, &norm, &entry);
     }
@@ -469,21 +426,6 @@ fn valid_email_shape(email: &str) -> bool {
     let local = parts.next().unwrap_or("");
     let rest = parts.next().unwrap_or("");
     !local.is_empty() && !rest.is_empty() && rest.contains('.') && parts.next().is_none()
-}
-
-/// `stats[norm][key] = max(now, current) + minutes * 60_000` — the shared
-/// shape behind vip_casino_pass/double_down_ticket/
-/// bad_beat_insurance/loaded_dice/casino_glitch_chip's "extend from now or
-/// from whenever the existing grant runs out" duration stacking.
-fn bump_stat_until(state: &Arc<AppState>, norm: &str, key: &str, duration_minutes: f64) {
-    let mut entry = mitch_lib::user_stats::user_stats_get(&state.store, norm);
-    let now = mitch_lib::school::now_millis() as f64;
-    let current = entry.get(key).and_then(|v| v.as_f64()).unwrap_or(0.0);
-    let until = now.max(current) + duration_minutes * 60.0 * 1000.0;
-    if let Some(obj) = entry.as_object_mut() {
-        obj.insert(key.to_string(), json!(until));
-    }
-    mitch_lib::user_stats::user_stats_set(&state.store, norm, &entry);
 }
 
 /// `GET /api/me/inventory` — server.js:11347-11356. Note the different 401
