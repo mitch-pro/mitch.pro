@@ -965,9 +965,15 @@ impl ProxmoxDesktopService {
             if !jsval::truthy(&config["rng0"]) {
                 updates.insert("rng0".to_string(), json!("source=/dev/urandom"));
             }
+            // QXL is a paravirtualized display adapter that tracks dirty
+            // regions at the driver level instead of making every remote
+            // viewer (VNC included, not just SPICE) poll and diff a dumb
+            // framebuffer — std VGA was previously "optimized" here, but
+            // qxl is the actually-fast choice. Leave a VM alone if it's
+            // already on some qxl config (e.g. a custom memory size).
             let vga = config["vga"].as_str().unwrap_or("");
-            if !jsval::truthy(&config["vga"]) || vga == "virtio" || vga == "std" {
-                updates.insert("vga".to_string(), json!("std,memory=64"));
+            if !vga.starts_with("qxl") {
+                updates.insert("vga".to_string(), json!("qxl,memory=64"));
             }
             if !updates.is_empty() {
                 self.request(
@@ -1469,7 +1475,7 @@ impl ProxmoxDesktopService {
         config_body.insert("rng0".to_string(), json!("source=/dev/urandom"));
         config_body.insert(
             "vga".to_string(),
-            jsval::or(template_config.get("vga"), json!("std,memory=64")),
+            jsval::or(template_config.get("vga"), json!("qxl,memory=64")),
         );
         config_body.insert("balloon".to_string(), jsval::num_value(balloon));
         config_body.insert("agent".to_string(), json!(1));
@@ -2127,7 +2133,7 @@ impl ProxmoxDesktopService {
         body.insert("balloon".to_string(), jsval::num_value(balloon));
         body.insert("cpu".to_string(), json!("host"));
         body.insert("rng0".to_string(), json!("source=/dev/urandom"));
-        body.insert("vga".to_string(), json!("std,memory=64"));
+        body.insert("vga".to_string(), json!("qxl,memory=64"));
         body.insert("agent".to_string(), json!(1));
         body.insert("scsihw".to_string(), json!("virtio-scsi-pci"));
         body.insert("net0".to_string(), json!(net0));
