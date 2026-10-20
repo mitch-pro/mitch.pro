@@ -450,6 +450,31 @@ async function getCaptchaResponse(actionName) {
 
 function resetCaptcha() {}
 
+// Transient fault handling: retries a POST only on conditions that are
+// actually transient (network drop, 5xx) — never on a normal 4xx response,
+// since that's a real answer (wrong password, bad code, etc.), not a fault.
+function _retryDelay(attempt, baseDelay) {
+  return baseDelay * Math.pow(2, attempt - 1) + Math.random() * baseDelay * 0.5;
+}
+async function fetchWithRetry(url, options, onRetry) {
+  var maxAttempts = 3, baseDelay = 500;
+  for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      var res = await fetch(url, options);
+      if (res.status >= 500 && res.status <= 599 && attempt < maxAttempts) {
+        if (onRetry) onRetry(attempt);
+        await new Promise(function (resolve) { setTimeout(resolve, _retryDelay(attempt, baseDelay)); });
+        continue;
+      }
+      return res;
+    } catch (err) {
+      if (attempt >= maxAttempts) throw err;
+      if (onRetry) onRetry(attempt);
+      await new Promise(function (resolve) { setTimeout(resolve, _retryDelay(attempt, baseDelay)); });
+    }
+  }
+}
+
 // Auto-fill from invite link (?ref=CODE&email=THEIR@EMAIL)
 (function() {
   try {
@@ -658,12 +683,12 @@ async function submit(isResend = false) {
   }
 
   try {
-    const r = await fetch('/api/signup', {
+    const r = await fetchWithRetry('/api/signup', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, username, nickname, gradYear, gender, referralSource, referralDetails, recaptcha_token: captcha, refCode: window._inviteRef || '' })
-    });
+    }, function () { msg.textContent = (isResend ? 'Resending code...' : 'Registering...') + ' retrying connection...'; });
     const d = await r.json();
     _submitInFlight = false;
     if (d.success) {
@@ -718,12 +743,12 @@ async function verifySignup() {
   const captcha = await getCaptchaResponse('verify_signup');
 
   try {
-    const r = await fetch('/api/verify-signup', {
+    const r = await fetchWithRetry('/api/verify-signup', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, code, recaptcha_token: captcha })
-    });
+    }, function () { tmsg.textContent = 'Verifying code... retrying connection...'; });
     const d = await r.json();
     _verifyInFlight = false;
     if (d.success) {
@@ -753,25 +778,34 @@ async function verifySignup() {
   }
 }
 
+var _resetRequestInFlight = false;
+
 async function requestReset() {
+  if (_resetRequestInFlight) return;
+
   const email = document.getElementById('reset-email').value.trim();
   const btn = document.getElementById('reset-request-btn');
   const msg = document.getElementById('rtmsg');
   if (!email) { msg.className = 'err'; msg.textContent = 'Enter your email.'; return; }
 
-  const captcha = await getCaptchaResponse('request_reset');
-
+  // Disable immediately, before the async captcha call below — otherwise
+  // the button looks unresponsive while reCAPTCHA resolves and an
+  // instinctive second click fires a second reset email.
+  _resetRequestInFlight = true;
   btn.disabled = true;
   msg.textContent = 'Sending reset code...';
   msg.className = '';
 
+  const captcha = await getCaptchaResponse('request_reset');
+
   try {
-    const r = await fetch('/api/request-access', {
+    const r = await fetchWithRetry('/api/request-access', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, recaptcha_token: captcha })
-    });
+    }, function () { msg.textContent = 'Sending reset code... retrying connection...'; });
     const d = await r.json();
+    _resetRequestInFlight = false;
     if (d.success) {
       msg.className = 'ok';
       msg.textContent = 'Reset code sent. Check your email.';
@@ -786,6 +820,7 @@ async function requestReset() {
       resetCaptcha();
     }
   } catch (e) {
+    _resetRequestInFlight = false;
     msg.className = 'err';
     msg.textContent = 'Server error.';
     btn.disabled = false;
@@ -877,7 +912,11 @@ function switchTab(tab) {
   }
 }
 
+var _loginInFlight = false;
+
 async function login() {
+  if (_loginInFlight) return;
+
   const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
   const msg = document.getElementById('login-msg');
@@ -889,19 +928,25 @@ async function login() {
     return;
   }
 
-  const captcha = await getCaptchaResponse('login');
+  // Disable immediately, before the async captcha call below — otherwise
+  // the button looks unresponsive while reCAPTCHA resolves and an
+  // instinctive second click fires a second /api/login.
+  _loginInFlight = true;
   btn.disabled = true;
   msg.textContent = 'Logging in...';
   msg.className = '';
   window._loginPassword = password;
+
+  const captcha = await getCaptchaResponse('login');
   try {
-    const r = await fetch('/api/login', {
+    const r = await fetchWithRetry('/api/login', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, recaptcha_token: captcha })
-    });
+    }, function () { msg.textContent = 'Logging in... retrying connection...'; });
     const d = await r.json();
+    _loginInFlight = false;
     if (d.success) {
       await confirmAuthSession(d.email);
       msg.textContent = 'Signing in...';
@@ -924,6 +969,7 @@ async function login() {
       resetCaptcha();
     }
   } catch (e) {
+    _loginInFlight = false;
     msg.className = 'err';
     msg.textContent = 'Server error.';
     btn.disabled = false;
@@ -944,12 +990,12 @@ async function verifyLogin2fa() {
   msg.className = '';
   msg.textContent = 'Verifying code...';
   try {
-    const r = await fetch('/api/verify-2fa', {
+    const r = await fetchWithRetry('/api/verify-2fa', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ temp_token: window._login2faToken, code })
-    });
+    }, function () { msg.textContent = 'Verifying code... retrying connection...'; });
     const d = await r.json();
     if (d.success) {
       await confirmAuthSession(d.email);
@@ -986,11 +1032,11 @@ async function loginWithPasskey() {
   msg.textContent = 'Waiting for your passkey...';
   try {
     const email = document.getElementById('login-email').value.trim();
-    const o = await fetch('/api/webauthn/login/options', {
+    const o = await fetchWithRetry('/api/webauthn/login/options', {
       method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email || undefined })
-    });
+    }, function () { msg.textContent = 'Waiting for your passkey... retrying connection...'; });
     const od = await o.json();
     if (!o.ok || !od.success) throw new Error(od.message || 'Could not start passkey sign-in.');
 
@@ -1005,11 +1051,11 @@ async function loginWithPasskey() {
     }
 
     msg.textContent = 'Verifying passkey...';
-    const r = await fetch('/api/webauthn/login/verify', {
+    const r = await fetchWithRetry('/api/webauthn/login/verify', {
       method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(assertion)
-    });
+    }, function () { msg.textContent = 'Verifying passkey... retrying connection...'; });
     const d = await r.json();
     if (d.success) {
       await confirmAuthSession(d.email);
@@ -1037,11 +1083,16 @@ async function loginWithPasskey() {
   }
 }
 
+var _claimTokenInFlight = false;
+
 async function claimToken(mode) {
+  if (_claimTokenInFlight) return;
+
   const isReset = mode === 'reset';
   const prefix = isReset ? 'reset-' : 'claim-';
   const tokenField = isReset ? 'reset-token' : 'token';
   const msgField = isReset ? 'rtmsg' : 'tmsg';
+  const btn = document.getElementById(isReset ? 'rbtn' : 'cbtn');
   var tok = document.getElementById(tokenField).value.trim();
   var password = document.getElementById(isReset ? 'reset-password' : 'claim-password').value;
   var confirm = document.getElementById(isReset ? 'reset-confirm-password' : 'claim-confirm-password').value;
@@ -1051,20 +1102,25 @@ async function claimToken(mode) {
   if (!password || password.length < 8) { tmsg.className = 'err'; tmsg.textContent = 'Password must be at least 8 characters.'; return; }
   if (password !== confirm) { tmsg.className = 'err'; tmsg.textContent = 'Passwords do not match.'; return; }
 
-  const captcha = await getCaptchaResponse('claim_token');
-
-
+  // Disable immediately, before the async captcha call below — otherwise
+  // the button looks unresponsive while reCAPTCHA resolves and an
+  // instinctive second click fires a second /api/claim-token.
+  _claimTokenInFlight = true;
+  if (btn) btn.disabled = true;
   tmsg.textContent = 'Verifying code...';
   tmsg.className = '';
 
+  const captcha = await getCaptchaResponse('claim_token');
+
   try {
-    const r = await fetch('/api/claim-token', {
+    const r = await fetchWithRetry('/api/claim-token', {
       method: 'POST',
       credentials: 'include',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ token: tok, password, recaptcha_token: captcha })
-    });
+    }, function () { tmsg.textContent = 'Verifying code... retrying connection...'; });
     const d = await r.json();
+    _claimTokenInFlight = false;
     if (d.success) {
       await confirmAuthSession(d.email);
       tmsg.textContent = 'Updating password...';
@@ -1077,11 +1133,14 @@ async function claimToken(mode) {
     } else {
       tmsg.className = 'err';
       tmsg.textContent = d.message || 'Invalid code.';
+      if (btn) btn.disabled = false;
       resetCaptcha();
     }
   } catch (e) {
+    _claimTokenInFlight = false;
     tmsg.className = 'err';
     tmsg.textContent = 'Server error.';
+    if (btn) btn.disabled = false;
     resetCaptcha();
   }
 }
