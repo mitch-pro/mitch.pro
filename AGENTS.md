@@ -36,6 +36,13 @@
 - Don't maintain two independent copies of the same catalog/config (e.g. a second hardcoded item list for an admin view). A second copy is how a retired exploit item quietly reappears — it drifts out of sync with the real source of truth and nobody notices until it's live again. Delegate to the one real loader instead.
 - This applies to this specific codebase's casino/shop/coins code (`rust/crates/mitch-lib/src/{coins,shop}.rs`, `rust/crates/mitch-server/src/routes/casino.rs`, `.../me/cosmetics.rs`), not just literal money — the same reasoning applies to any limited/valuable resource (premium status, VM credits, etc).
 
+## Documentation standards
+
+- Code should be documented well enough that someone unfamiliar with it can understand what it does and why without reading every line. Prefer doc comments on modules/functions that explain non-obvious behavior, invariants, or security assumptions over comments that just restate the code.
+- Subsystems with real complexity or security weight (the admin panel's page layout/format conventions, backend auth/security standards, the admin passphrase gate, CSRF enforcement, VM/Proxmox integration, the economy) should have a standalone doc under `docs/`, matching the existing pattern (see `docs/*.md`) — not just scattered inline comments. Keep these current: when the underlying behavior changes, update the doc in the same change, don't let it drift.
+- When adding a new subsystem or a new admin page, write its doc as part of that change, not as a follow-up.
+- If an AI works on code whose docs are missing or out of date, fix that as part of the same change — unless the subsystem is very large, in which case document only the part actually touched rather than trying to backfill the whole thing in one pass. Don't let "it's all undocumented" become an excuse to skip documenting the part you just changed, and don't let it become an excuse to burn a whole session rewriting docs for code you didn't touch.
+
 ## Verification and test discipline
 
 - Never push without local validation: autonomous agents must run `cargo test --workspace`, `cargo fmt --all -- --check`, and any relevant test suites locally before committing or pushing to `master`.
