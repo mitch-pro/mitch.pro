@@ -1399,7 +1399,7 @@ pub(crate) async fn handle(
     // POST /api/vm/byo-os/detach-iso — once the OS is installed, eject the
     // install ISO and drop it from the boot order so the next boot goes
     // straight to disk instead of back into the installer. Only meaningful
-    // for a BYO-OS computer (templateVmid is null — a template-cloned one
+    // for a BYO-OS or preset computer (templateVmid is null — a template-cloned one
     // never had an ISO attached in the first place).
     if path == "/api/vm/byo-os/detach-iso" && *method == Method::POST {
         if is_vm_banned(state, &actor.email) {
@@ -1409,10 +1409,22 @@ pub(crate) async fn handle(
             ));
         }
         let records = vmlib::get_virtual_machines_for_owner(&state.store, &actor.email);
-        let Some(record) = records.into_iter().find(|r| r.template_vmid.is_none()) else {
+        let req_id = body
+            .get("id")
+            .or_else(|| body.get("computerId"))
+            .and_then(Value::as_str);
+        let record = req_id
+            .and_then(|id| {
+                records
+                    .iter()
+                    .find(|r| r.id == id && r.template_vmid.is_none())
+                    .cloned()
+            })
+            .or_else(|| records.into_iter().find(|r| r.template_vmid.is_none()));
+        let Some(record) = record else {
             return Some(json_response(
                 404,
-                json!({ "error": "No BYO-OS computer found on your account." }),
+                json!({ "error": "No custom or preset computer found on your account." }),
             ));
         };
         let record_json = record.to_json();

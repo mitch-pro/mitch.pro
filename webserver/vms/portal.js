@@ -40,7 +40,7 @@
     const diskTotal = vm.diskTotal || (vm.upgrades?.diskGb ? vm.upgrades.diskGb * 1073741824 : 0);
     const memoryLoad = percent(vm.memoryUsed, memoryTotal);
     const diskLoad = percent(vm.diskUsed, diskTotal);
-    const isByoOs = /^Custom \(/.test(vm.operatingSystem || '');
+    const isByoOs = /^(Custom|Preset) \(/.test(vm.operatingSystem || '');
     const recentlyCreated = Number(vm.createdAt) > 0 && Date.now() - Number(vm.createdAt) < 15 * 60 * 1000;
     // Proxmox reports the VM "running" as soon as QEMU itself starts — long
     // before cloud-init finishes installing/configuring the guest OS inside,
@@ -157,7 +157,7 @@
       if (!confirm('Detach the install ISO? Only do this once your OS is fully installed — restart your computer afterward to boot from disk.')) return;
       pending.set(id, 'Detaching ISO...'); render();
       try {
-        const response = await fetch('/api/vm/byo-os/detach-iso', { method: 'POST', credentials: 'same-origin', headers, body: '{}' });
+        const response = await fetch('/api/vm/byo-os/detach-iso', { method: 'POST', credentials: 'same-origin', headers, body: JSON.stringify({ id }) });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || 'Could not detach the ISO.');
         $('refresh-status').textContent = data.message || 'ISO detached — restart your computer to boot from disk.';

@@ -530,9 +530,20 @@ pub(crate) fn vm_same_origin_request(headers: &HeaderMap) -> bool {
 /// canAccessVmRecord with the plain `isAdminEmail` option (no admin-grant
 /// requirement) and owner bypass.
 pub(crate) fn vm_record_allowed_for_actor(state: &AppState, record: &Value, actor: &Value) -> bool {
-    if actor.get("isOwner").map(jsval::truthy).unwrap_or(false)
-        || actor.get("isAdmin").map(jsval::truthy).unwrap_or(false)
-    {
+    if actor.get("isOwner").map(jsval::truthy).unwrap_or(false) {
+        return true;
+    }
+    let record_owner = jsval::str_or(record.get("ownerEmail"), "");
+    let actor_email = jsval::str_or(actor.get("email"), "");
+
+    // If the VM belongs to a primary/root site owner, ONLY that owner can access it.
+    // Co-owners and admins CANNOT access an owner's VM.
+    if !record_owner.is_empty() && mitch_lib::auth::is_owner_email(&state.store, &record_owner) {
+        return !actor_email.is_empty()
+            && actor_email.to_lowercase() == record_owner.to_lowercase();
+    }
+
+    if actor.get("isAdmin").map(jsval::truthy).unwrap_or(false) {
         return true;
     }
     mitch_lib::vm_security::can_access_vm_record(
@@ -2692,12 +2703,20 @@ pub fn handle_desktop_ws_upgrade(
     let record_opt = vmlib::get_virtual_machine_by_id(&state.store, &record_id);
     let record_json = record_opt.as_ref().map(|r| r.to_json());
     let actor_json = actor.to_json();
+    if let Some(ref rec) = record_json {
+        if !vm_record_allowed_for_actor(state, rec, &actor_json) {
+            return Some(json_response(
+                403,
+                json!({ "error": "You do not have permission to access this computer." }),
+            ));
+        }
+    }
     let (ok, status, _code) = validate_desktop_session(
         Some(&session),
         Some(&actor_json),
         record_json.as_ref(),
         now_ms() as f64,
-        |_| false,
+        |email| mitch_lib::auth::is_admin_email(&state.store, email),
         false,
         None,
     );
@@ -5536,6 +5555,23 @@ mod tests {
             &state,
             &record,
             &json!({"email":"another-admin@example.com","isAdmin":false})
+        ));
+        let owner_record =
+            json!({"id":"owner-fixture","ownerEmail":"admin@mitch.pro","status":"assigned"});
+        assert!(vm_record_allowed_for_actor(
+            &state,
+            &owner_record,
+            &json!({"email":"admin@mitch.pro","isAdmin":true,"isOwner":true})
+        ));
+        assert!(vm_record_allowed_for_actor(
+            &state,
+            &owner_record,
+            &json!({"email":"admin@mitch.pro","isAdmin":false,"isOwner":false})
+        ));
+        assert!(!vm_record_allowed_for_actor(
+            &state,
+            &owner_record,
+            &json!({"email":"co-owner@example.com","isAdmin":true,"isOwner":false})
         ));
         // activeFreeVms wins first.
         state

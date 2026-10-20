@@ -451,6 +451,15 @@ pub async fn handle(
 
         let record = vmlib::get_virtual_machine_by_vmid(&state.store, vmid);
         if let Some(ref rec) = record {
+            if !rec.owner_email.is_empty()
+                && auth::is_owner_email(&state.store, &rec.owner_email)
+                && !actor.is_owner
+            {
+                return Some(json_response(
+                    403,
+                    json!({ "error": "Co-owners and admins cannot reassign an owner's computer." }),
+                ));
+            }
             if rec.status != "unassigned" && auth::normalize_email(&rec.owner_email) != owner_email
             {
                 return Some(json_response(
@@ -611,6 +620,15 @@ pub async fn handle(
                 json!({ "error": "Computer not found." }),
             ));
         };
+        if !record.owner_email.is_empty()
+            && auth::is_owner_email(&state.store, &record.owner_email)
+            && !actor.is_owner
+        {
+            return Some(json_response(
+                403,
+                json!({ "error": "Co-owners and admins cannot unassign an owner's computer." }),
+            ));
+        }
 
         let success = vmlib::unassign_virtual_machine(&state.store, &record.id);
         if success {
@@ -1049,8 +1067,19 @@ pub async fn handle(
             ));
         };
 
-        let is_force = body.get("force").and_then(Value::as_bool).unwrap_or(false);
         let rec_json = record.to_json();
+        let record_owner = jsval::str_or(rec_json.get("ownerEmail"), "");
+        if !record_owner.is_empty()
+            && auth::is_owner_email(&state.store, &record_owner)
+            && !actor.is_owner
+        {
+            return Some(json_response(
+                403,
+                json!({ "error": "Co-owners and admins cannot delete an owner's computer." }),
+            ));
+        }
+
+        let is_force = body.get("force").and_then(Value::as_bool).unwrap_or(false);
         let del_res = crate::proxmox_desktop::desktop()
             .delete_guest(&rec_json, is_force)
             .await;
@@ -1163,6 +1192,15 @@ pub async fn handle(
                 json!({ "error": "Computer not found." }),
             ));
         };
+        if !record.owner_email.is_empty()
+            && auth::is_owner_email(&state.store, &record.owner_email)
+            && !actor.is_owner
+        {
+            return Some(json_response(
+                403,
+                json!({ "error": "Co-owners and admins cannot modify an owner's computer specs." }),
+            ));
+        }
 
         let cpu_opt = body.get("cpuCores").and_then(jsval::number);
         let mem_opt = body.get("memoryMb").and_then(jsval::number);
