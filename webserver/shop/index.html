@@ -730,11 +730,11 @@
   async function buyItem(item) {
     const recaptcha_token = await getShopCaptchaToken('buy_shop_item');
     try {
-      const r = await fetch('/api/shop/buy', {
+      const r = await fetchWithRetry('/api/shop/buy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ itemId: item.id, recaptcha_token })
-      });
+      }, () => showStatus('Retrying connection...', true));
       const data = await r.json().catch(() => ({}));
       if (!r.ok) return showStatus(data.error || 'Purchase failed', false);
       showStatus(data.message || 'Purchase successful', true);
@@ -746,11 +746,11 @@
 
   async function toggleItem(item, itemId) {
     try {
-      const r = await fetch('/api/me/cosmetics/equip', {
+      const r = await fetchWithRetry('/api/me/cosmetics/equip', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ itemId, type: item.costType })
-      });
+      }, () => showStatus('Retrying connection...', true));
       const data = await r.json().catch(() => ({}));
       if (!r.ok) return showStatus(data.error || 'Could not update item', false);
       showStatus(itemId ? 'Turned on' : 'Turned off', true);
@@ -763,11 +763,11 @@
   async function buyPremium() {
     const recaptcha_token = await getShopCaptchaToken('buy_premium');
     try {
-      const r = await fetch('/api/coins/buy-premium', {
+      const r = await fetchWithRetry('/api/coins/buy-premium', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ recaptcha_token })
-      });
+      }, () => showStatus('Retrying connection...', true));
       const data = await r.json().catch(() => ({}));
       if (!r.ok) return showStatus(data.error || 'Premium purchase failed', false);
       showStatus(data.message || 'Welcome to Premium', true);

@@ -568,7 +568,7 @@
     actionBusy = true;
     try {
     const recaptcha_token = await getMarketplaceCaptchaToken('buy_listing');
-    const r = await fetch('/api/marketplace/buy', {
+    const r = await fetchWithRetry('/api/marketplace/buy', {
       method: 'POST',
       credentials: 'include',
       headers: {'Content-Type': 'application/json'},

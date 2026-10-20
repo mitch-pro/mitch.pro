@@ -656,11 +656,11 @@ async function sendRequest() {
   
   const recaptcha_token = await getFriendsCaptchaToken('friend_request');
   try {
-    const r = await fetch('/api/friends/request', {
+    const r = await fetchWithRetry('/api/friends/request', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, recaptcha_token })
-    });
+    }, () => { msg.innerText = 'Sending request... retrying connection...'; });
     const d = await r.json();
     if (r.ok) {
       msg.style.color = '#d8b4fe';
@@ -683,7 +683,7 @@ async function sendRequest() {
 
 async function respond(friendEmail, action) {
   try {
-    const r = await fetch('/api/friends/request/respond', {
+    const r = await fetchWithRetry('/api/friends/request/respond', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: friendEmail, action })
@@ -697,7 +697,7 @@ async function respond(friendEmail, action) {
 
 async function cancelRequest(friendEmail) {
   try {
-    const r = await fetch('/api/friends/request/cancel', {
+    const r = await fetchWithRetry('/api/friends/request/cancel', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: friendEmail })

@@ -521,12 +521,12 @@
       btn.disabled = true;
       msg.className = 'msg'; msg.textContent = 'Sending...';
       try {
-        const res = await fetch('/api/invite/send', {
+        const res = await fetchWithRetry('/api/invite/send', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ to })
-        });
+        }, () => { msg.textContent = 'Sending... retrying connection...'; });
         const d = await res.json();
         if (res.status === 429) {
           msg.className = 'msg err';

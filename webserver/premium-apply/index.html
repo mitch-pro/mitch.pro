@@ -286,6 +286,7 @@
     to   { transform: scale(1);   opacity: 1; }
   }
 </style>
+<script src="/api.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -366,11 +367,11 @@ document.getElementById('form').addEventListener('submit', async e => {
   msg.textContent = '';
 
   try {
-    const r = await fetch('/api/apply', {
+    const r = await fetchWithRetry('/api/apply', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    });
+    }, () => { btn.textContent = 'Submitting… retrying connection…'; });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || 'Something went wrong.');
     document.getElementById('form').style.display = 'none';

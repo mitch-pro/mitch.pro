@@ -28,7 +28,7 @@
   button.addEventListener('click', async () => {
     button.disabled = true;
     try {
-      const response = await fetch('/api/daily-login/claim', {method:'POST',credentials:'same-origin'});
+      const response = await fetchWithRetry('/api/daily-login/claim', {method:'POST',credentials:'same-origin'}, () => { message.textContent = 'Claiming... retrying connection...'; });
       const data = await response.json(); if (!response.ok || !data.success) throw new Error(data.error || 'Couldn’t claim your reward.');
       await Promise.all([wallet(),daily()]);
     } catch(error) { message.textContent = error.message; button.disabled = false; }

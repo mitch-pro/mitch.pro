@@ -41,4 +41,34 @@
   };
 
   global.apiFetch = apiFetch;
+
+  // Retries a request only on conditions that are actually transient
+  // (network drop, 5xx) — never on a normal 4xx response, since that's a
+  // real answer (wrong password, already claimed, out of stock, etc.),
+  // not a fault. `onRetry(attemptNumber)` is called before each wait so
+  // callers can update their status message.
+  async function fetchWithRetry(url, options, onRetry) {
+    var maxAttempts = 3, baseDelay = 500;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        var res = await fetch(url, options);
+        if (res.status >= 500 && res.status <= 599 && attempt < maxAttempts) {
+          if (onRetry) onRetry(attempt);
+          await new Promise(function (resolve) {
+            setTimeout(resolve, baseDelay * Math.pow(2, attempt - 1) + Math.random() * baseDelay * 0.5);
+          });
+          continue;
+        }
+        return res;
+      } catch (err) {
+        if (attempt >= maxAttempts) throw err;
+        if (onRetry) onRetry(attempt);
+        await new Promise(function (resolve) {
+          setTimeout(resolve, baseDelay * Math.pow(2, attempt - 1) + Math.random() * baseDelay * 0.5);
+        });
+      }
+    }
+  }
+
+  global.fetchWithRetry = fetchWithRetry;
 })(typeof window !== 'undefined' ? window : globalThis);
