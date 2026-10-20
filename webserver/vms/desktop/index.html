@@ -25,6 +25,7 @@
       </div>
       <div class="power-menu" id="power-menu" hidden>
         <button type="button" id="reconnect-button">Reconnect display</button>
+        <button type="button" id="cursor-toggle-button" role="menuitemcheckbox" aria-checked="true">Browser Cursor: On</button>
         <button type="button" id="mobile-extend" class="mobile-menu-item">Session Time &amp; Extend</button>
         <button type="button" id="mobile-clipboard" class="mobile-menu-item" data-connected disabled>Clipboard</button>
         <button type="button" id="mobile-cad" class="mobile-menu-item" data-connected disabled>Ctrl+Alt+Del</button>
@@ -36,6 +37,7 @@
 
     <section class="display-frame" id="display-frame">
       <div id="screen" tabindex="0" aria-label="Remote Linux desktop"></div>
+      <div id="local-cursor" class="local-cursor" aria-hidden="true"></div>
       <div id="connection-cover" class="connection-cover" role="status">
         <span class="loader" id="connection-spinner" aria-hidden="true"></span>
         <h1 id="connection-title">Opening your desktop</h1>

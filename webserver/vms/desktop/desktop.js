@@ -159,6 +159,7 @@ function closeConnection() {
   clearInterval(uptimeInterval); uptimeInterval = null;
   const old = rfb; rfb = null; connected = false; connecting = false;
   if (old) { try { old.disconnect(); } catch {} }
+  hideLocalCursor();
 }
 function friendlyError(status, data) {
   if (status === 401) return 'Your session expired. Go back to My Computer to sign in again.';
@@ -290,6 +291,44 @@ more.addEventListener('click', () => { menu.hidden = !menu.hidden; more.setAttri
 menu.addEventListener('click', event => { const button = event.target.closest('[data-power]'); if (button) { hideMenu(); power(button.dataset.power); } });
 document.addEventListener('click', event => { if (!menu.contains(event.target) && !more.contains(event.target)) hideMenu(); });
 document.addEventListener('keydown', event => { if (event.key === 'Escape') hideMenu(); });
+
+// Browser-drawn cursor: some guest display adapters (virtio-gpu in
+// particular) don't reliably hand a visible cursor shape to noVNC over
+// VNC, and the browser's own pointer auto-hides after a moment in
+// fullscreen — leaving nothing visible. Draw our own, positioned against
+// display-frame (the element that actually goes fullscreen) so it works
+// in both modes without separate fullscreen handling. Off switch lives
+// in the 3-dot menu for anyone who'd rather see the guest's real cursor
+// shape (e.g. resize handles) and accept the fullscreen tradeoff.
+const localCursor = $('local-cursor'), cursorToggleBtn = $('cursor-toggle-button');
+let localCursorEnabled = true;
+try { localCursorEnabled = localStorage.getItem('desktop_local_cursor') !== 'off'; } catch {}
+function applyCursorToggleUi() {
+  if (!cursorToggleBtn) return;
+  cursorToggleBtn.textContent = `Browser Cursor: ${localCursorEnabled ? 'On' : 'Off'}`;
+  cursorToggleBtn.setAttribute('aria-checked', String(localCursorEnabled));
+}
+function hideLocalCursor() {
+  localCursor?.classList.remove('is-active');
+  screen.classList.remove('hide-native-cursor');
+}
+applyCursorToggleUi();
+screen.addEventListener('mousemove', event => {
+  if (!localCursorEnabled || !connected || !localCursor) return;
+  const rect = frame.getBoundingClientRect();
+  localCursor.style.left = `${event.clientX - rect.left}px`;
+  localCursor.style.top = `${event.clientY - rect.top}px`;
+  localCursor.classList.add('is-active');
+  screen.classList.add('hide-native-cursor');
+});
+screen.addEventListener('mouseleave', hideLocalCursor);
+cursorToggleBtn?.addEventListener('click', () => {
+  localCursorEnabled = !localCursorEnabled;
+  try { localStorage.setItem('desktop_local_cursor', localCursorEnabled ? 'on' : 'off'); } catch {}
+  applyCursorToggleUi();
+  if (!localCursorEnabled) hideLocalCursor();
+  hideMenu();
+});
 const clipboard = $('clipboard-dialog'), clipboardText = $('clipboard-text');
 function openClipboard() { hideMenu(); clipboard.returnValue = ''; clipboard.showModal(); }
 $('clipboard-button').addEventListener('click', openClipboard); $('mobile-clipboard').addEventListener('click', openClipboard);
