@@ -123,6 +123,11 @@ write speculative specs. A database error after a host success tells the admin
 to retry the same values. Proxmox itself has no transaction spanning CPU, memory,
 and disk changes, so a multi-resource failure can require such a retry.
 
+Resource limits: Only the primary site owner can enter unlimited custom hardware
+resources. For all other users—including co-owners and administrators—custom VM
+resources and admin resource edits are strictly capped at 8 CPU cores, 16 GB RAM
+(16384 MB), and 128 GB disk storage.
+
 `/admin/vms/` provides a resource dialog instead of three prompts. The old
 `downgrade-specs` URL remains a deployment compatibility alias for `resources`.
 Fleet management actions are grouped in a menu, with operational capacity and

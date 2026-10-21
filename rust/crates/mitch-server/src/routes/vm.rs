@@ -736,6 +736,22 @@ async fn owner_resources(state: &Arc<AppState>, headers: &HeaderMap, bytes: &[u8
             json!({"error":"Enter a whole number: at least 1 CPU core, 512 MB memory, or 40 GB storage."}),
         );
     };
+    if !actor.is_owner {
+        let max_allowed = match category {
+            "cpu" => 8.0,
+            "ram" => 16384.0,
+            "disk" => 128.0,
+            _ => {
+                return json_response(400, json!({"error":"Invalid category."}));
+            }
+        };
+        if value > max_allowed {
+            return json_response(
+                400,
+                json!({"error":"Resources for non-owners cannot exceed 8 CPU cores, 16 GB RAM (16384 MB), or 128 GB storage."}),
+            );
+        }
+    }
     let Some(_account_operation) =
         resource_operation(state, format!("owner-resources-{}", actor.email))
     else {
@@ -793,7 +809,7 @@ async fn owner_resources(state: &Arc<AppState>, headers: &HeaderMap, bytes: &[u8
             },
         );
         if let Err(error) = crate::proxmox_desktop::desktop()
-            .update_owner_hardware(record, cpu, memory, disk)
+            .update_hardware_policy(record, cpu, memory, disk, actor.is_owner)
             .await
         {
             tracing::warn!("Owner hardware update failed: {error:?}");
@@ -3538,6 +3554,7 @@ pub(crate) async fn handle(
             200,
             json!({
                 "ownerCustomization": can_customize_owner_vm(state, &actor),
+                "isOwner": actor.is_owner,
                 "catalog": mitch_lib::vm_security::vm_upgrade_catalog(),
                 "current": current,
                 "coins": coins,
@@ -4085,7 +4102,7 @@ pub(crate) async fn handle(
         };
 
         let clone_params = crate::proxmox_desktop::CloneDesktopParams {
-            owner_resources: can_customize_owner_vm(state, &actor),
+            owner_resources: actor.is_owner,
             template_vmid: Some(template_vmid),
             vmid: Some(vmid),
             hostname: hostname.clone(),
@@ -4404,7 +4421,7 @@ pub(crate) async fn handle(
         };
 
         let clone_params = crate::proxmox_desktop::CloneDesktopParams {
-            owner_resources: can_customize_owner_vm(state, &actor),
+            owner_resources: actor.is_owner,
             template_vmid: Some(template_vmid),
             vmid: Some(vmid),
             hostname: hostname.clone(),

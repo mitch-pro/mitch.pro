@@ -1215,6 +1215,20 @@ pub async fn handle(
                         json!({"error":"Use whole numbers: at least 1 CPU, 512 MB RAM, and 40 GB disk."}),
                     ));
                 };
+                if !actor.is_owner {
+                    let max_allowed = match *category {
+                        "cpu" => 8.0,
+                        "ram" => 16384.0,
+                        "disk" => 128.0,
+                        _ => f64::MAX,
+                    };
+                    if value > max_allowed {
+                        return Some(json_response(
+                            400,
+                            json!({"error":"Non-owner resources cannot exceed 8 CPU cores, 16 GB RAM (16384 MB), or 128 GB disk."}),
+                        ));
+                    }
+                }
                 values[index] = Some(value);
             }
         }
@@ -1271,7 +1285,7 @@ pub async fn handle(
             }
         }
         if let Err(error) = desktop
-            .update_owner_hardware(&original, cpu, memory, disk)
+            .update_hardware_policy(&original, cpu, memory, disk, actor.is_owner)
             .await
         {
             crate::routes::vm::vm_audit(

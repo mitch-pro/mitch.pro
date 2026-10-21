@@ -633,6 +633,10 @@
     </div>
   </header>
 
+  <div id="maintenance-banner" style="display: none; background: #dc2626; color: #fff; text-align: center; padding: 14px 20px; font-weight: 700; border-radius: 8px; margin: 15px 20px;">
+    Richard's Riches is temporarily disabled for maintenance.
+  </div>
+
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('businesses')">Businesses</button>
     <button class="tab-btn" onclick="switchTab('upgrades')">Upgrades (<span id="upgrades-count">0</span>)</button>
@@ -1214,6 +1218,13 @@
     try {
       const res = await fetch('/api/games/richard-riches/state', { credentials: 'include' });
       const data = await res.json();
+      if (!res.ok || !data.success || data.disabled) {
+        const mb = document.getElementById('maintenance-banner');
+        if (mb) mb.style.display = 'block';
+        const claimBtn = document.getElementById('claim-btn');
+        if (claimBtn) { claimBtn.disabled = true; claimBtn.textContent = 'Disabled'; }
+        return;
+      }
       if (data.success) {
         state = data.state;
         

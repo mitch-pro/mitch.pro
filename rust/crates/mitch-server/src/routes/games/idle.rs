@@ -362,6 +362,8 @@ pub fn process_adrian_sync(
     let last_ts = s.get("lastTs").and_then(jsval::number).unwrap_or(0.0);
     if now_f - last_ts > 30000.0 {
         apply_adrian_offline(&state.store, state.data_dir(), s, email, now);
+        set_num(s, "startTime", now_f);
+        set_num(s, "playtimeCoins", 0.0);
     }
 
     let is_premium = mitch_lib::auth::is_premium_email(&state.store, email);
@@ -369,7 +371,7 @@ pub fn process_adrian_sync(
     let (s_click, s_auto) = get_adrian_power(s.get("upgrades").unwrap_or(&json!({})));
 
     let last_ts = s.get("lastTs").and_then(jsval::number).unwrap_or(0.0);
-    let elapsed = (now_f - last_ts) / 1000.0;
+    let elapsed = ((now_f - last_ts) / 1000.0).clamp(0.0, 30.0);
     let max_possible_gain = ((s_auto * elapsed) + (s_click * 60.0 * elapsed)) * prem_mult;
     let points = s.get("points").and_then(jsval::number).unwrap_or(0.0);
     let actual_gain = client_points - points;
@@ -394,7 +396,7 @@ pub fn process_adrian_sync(
 
     let mut coins_to_grant = 0.0f64;
     let start_time = s.get("startTime").and_then(jsval::number).unwrap_or(now_f);
-    let session_elapsed = now_f - if start_time == 0.0 { now_f } else { start_time };
+    let session_elapsed = (now_f - if start_time == 0.0 { now_f } else { start_time }).clamp(0.0, 43200000.0);
     let total_playtime_coins = (session_elapsed / 600000.0).floor();
     let playtime_coins = s
         .get("playtimeCoins")
@@ -575,10 +577,22 @@ pub(crate) fn handle(
         "/api/games/adrian-clicker/sync" if *method == Method::POST => {
             Some(adrian_sync(state, headers, body, body_bytes))
         }
-        "/api/games/richard-riches/state" => Some(richard_state(state, headers)),
-        "/api/games/richard-riches/sync" if *method == Method::POST => {
-            Some(richard_sync(state, headers, body, body_bytes))
-        }
+        "/api/games/richard-riches/state" => Some(json_resp_str(
+            503,
+            js_stringify(&json!({
+                "success": false,
+                "disabled": true,
+                "message": "Richard's Riches is temporarily disabled for maintenance."
+            })),
+        )),
+        "/api/games/richard-riches/sync" if *method == Method::POST => Some(json_resp_str(
+            503,
+            js_stringify(&json!({
+                "success": false,
+                "disabled": true,
+                "message": "Richard's Riches is temporarily disabled for maintenance."
+            })),
+        )),
         _ => None,
     }
 }

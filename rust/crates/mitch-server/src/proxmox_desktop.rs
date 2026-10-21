@@ -1530,7 +1530,7 @@ impl ProxmoxDesktopService {
         let cpu_cores = if params.owner_resources {
             cpu_input.round().max(1.0)
         } else {
-            clamp_js(cpu_input.round(), 2.0, 16.0)
+            clamp_js(cpu_input.round(), 2.0, 8.0)
         };
         let mem_input = match params.memory_mb {
             Some(raw) if !raw.is_nan() && raw != 0.0 => raw,
@@ -1539,7 +1539,7 @@ impl ProxmoxDesktopService {
         let memory_mb = if params.owner_resources {
             mem_input.round().max(512.0)
         } else {
-            clamp_js(mem_input.round(), 2048.0, 65536.0)
+            clamp_js(mem_input.round(), 2048.0, 16384.0)
         };
         let clean_host = clean_hostname(&params.hostname, vmid);
         let clone_upid = self
@@ -1622,7 +1622,7 @@ impl ProxmoxDesktopService {
         let requested_disk_gb = if params.owner_resources {
             disk_input.round().max(40.0)
         } else {
-            clamp_js(disk_input.round(), 40.0, 256.0)
+            clamp_js(disk_input.round(), 40.0, 128.0)
         };
         if current_disk_gb != 0.0 && requested_disk_gb > current_disk_gb {
             // `['scsi0','virtio0','sata0'].find(key => config[key])` — when no
@@ -1733,7 +1733,7 @@ impl ProxmoxDesktopService {
         let cpu_cores = if params.owner_resources {
             cpu_input.round().max(1.0)
         } else {
-            clamp_js(cpu_input.round(), 2.0, 16.0)
+            clamp_js(cpu_input.round(), 2.0, 8.0)
         };
         let mem_input = match params.memory_mb {
             Some(raw) if !raw.is_nan() && raw != 0.0 => raw,
@@ -1742,7 +1742,7 @@ impl ProxmoxDesktopService {
         let memory_mb = if params.owner_resources {
             mem_input.round().max(512.0)
         } else {
-            clamp_js(mem_input.round(), 2048.0, 65536.0)
+            clamp_js(mem_input.round(), 2048.0, 16384.0)
         };
         let clean_host = clean_hostname(&params.hostname, vmid);
         let clone_upid = self
@@ -2313,7 +2313,7 @@ impl ProxmoxDesktopService {
         let mut cpu_cores = if params.owner_resources {
             cpu_input.round().max(1.0)
         } else {
-            clamp_js(cpu_input.round(), 2.0, 16.0)
+            clamp_js(cpu_input.round(), 2.0, 8.0)
         };
         let mem_input = match params.memory_mb {
             Some(raw) if !raw.is_nan() && raw != 0.0 => raw,
@@ -2322,7 +2322,7 @@ impl ProxmoxDesktopService {
         let mut memory_mb = if params.owner_resources {
             mem_input.round().max(512.0)
         } else {
-            clamp_js(mem_input.round(), 2048.0, 65536.0)
+            clamp_js(mem_input.round(), 2048.0, 16384.0)
         };
         let disk_input = match params.disk_gb {
             Some(raw) if !raw.is_nan() && raw != 0.0 => raw,
@@ -2331,7 +2331,7 @@ impl ProxmoxDesktopService {
         let mut disk_gb = if params.owner_resources {
             disk_input.round().max(40.0)
         } else {
-            clamp_js(disk_input.round(), 40.0, 256.0)
+            clamp_js(disk_input.round(), 40.0, 128.0)
         };
         if params.windows {
             cpu_cores = cpu_cores.max(2.0);
@@ -2607,7 +2607,7 @@ impl ProxmoxDesktopService {
             let cores = if owner_resources {
                 raw.round().max(1.0)
             } else {
-                clamp_js(raw.round(), 2.0, 16.0)
+                clamp_js(raw.round(), 2.0, 8.0)
             };
             updates.insert("cores".to_string(), js_num_value(cores));
         }
@@ -2615,7 +2615,7 @@ impl ProxmoxDesktopService {
             let mem = if owner_resources {
                 raw.round().max(512.0)
             } else {
-                clamp_js(raw.round(), 2048.0, 65536.0)
+                clamp_js(raw.round(), 2048.0, 16384.0)
             };
             updates.insert("memory".to_string(), js_num_value(mem));
             let balloon = if owner_resources {
@@ -2640,7 +2640,7 @@ impl ProxmoxDesktopService {
             let requested_disk_gb = if owner_resources {
                 raw.round().max(40.0)
             } else {
-                clamp_js(raw.round(), 40.0, 256.0)
+                clamp_js(raw.round(), 40.0, 128.0)
             };
             if owner_resources && (current_disk_gb == 0.0 || requested_disk_gb < current_disk_gb) {
                 return Err(ProxmoxServiceError::new(

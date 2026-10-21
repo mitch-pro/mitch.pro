@@ -264,7 +264,11 @@
       const badge = $('upgrade-coin-balance')?.closest('.user-coin-badge');
       if (badge) badge.hidden = owner;
       $('upgrade-title').textContent = owner ? 'Owner resources' : 'Computer resources';
-      $('upgrade-notice-copy').textContent = owner ? 'Owners and co-owners can enter custom resources without spending coins. Shut down your computer first. Available hardware and storage still depend on the host; disks can grow, but cannot shrink.' : 'Optional upgrades use earned MitchCoins. Hardware upgrades stay with your account.';
+      $('upgrade-notice-copy').textContent = owner
+        ? (upgradeData.isOwner
+            ? 'Owners can enter custom resources without spending coins. Shut down your computer first. Available hardware and storage still depend on the host; disks can grow, but cannot shrink.'
+            : 'Co-owners can enter custom resources up to 8 CPU cores, 16 GB memory, and 128 GB storage without spending coins. Shut down your computer first. Disks can grow, but cannot shrink.')
+        : 'Optional upgrades use earned MitchCoins. Hardware upgrades stay with your account.';
       renderUpgradeTab();
     } catch (err) {
       $('upgrade-status').textContent = err.message || 'Error loading upgrades.';
@@ -279,9 +283,17 @@
     const cat = activeUpgradeTab;
     if (upgradeData.ownerCustomization) {
       if (cat === 'session') { container.innerHTML = '<p class="owner-resource-note">Owner and co-owner computers have unlimited session time.</p>'; return; }
+      const isOwner = upgradeData.isOwner === true;
       const values = upgradeData.current || {};
-      const config = {cpu:{label:'CPU cores',value:values.cpuCores || 2,min:1,scale:1},ram:{label:'Memory (GB)',value:(values.memoryMb || 4096)/1024,min:.5,scale:1024},disk:{label:'Storage (GB)',value:values.diskGb || 64,min:values.diskGb || 40,scale:1}}[cat];
-      container.innerHTML = `<form id="owner-resource-form" class="owner-resource-form"><label for="owner-resource-value">${config.label}</label><div><input id="owner-resource-value" type="number" min="${config.min}" step="${cat === 'ram' ? '.5' : '1'}" value="${config.value}" required><button type="submit" class="primary-button" ${upgradeBusy ? 'disabled' : ''}>Save resources</button></div><p>No account tier or coin cost.</p></form>`;
+      const maxVals = isOwner ? {} : { cpu: 8, ram: 16, disk: 128 };
+      const config = {
+        cpu: { label: 'CPU cores', value: values.cpuCores || 2, min: 1, max: maxVals.cpu, scale: 1 },
+        ram: { label: 'Memory (GB)', value: (values.memoryMb || 4096) / 1024, min: .5, max: maxVals.ram, scale: 1024 },
+        disk: { label: 'Storage (GB)', value: values.diskGb || 64, min: values.diskGb || 40, max: maxVals.disk, scale: 1 }
+      }[cat];
+      const maxAttr = config.max ? `max="${config.max}"` : '';
+      const limitHint = !isOwner ? `<p style="font-size:0.85rem;color:#94a3b8;margin-top:4px;">Non-owner limit: up to 8 CPU cores, 16 GB RAM, and 128 GB storage.</p>` : '';
+      container.innerHTML = `<form id="owner-resource-form" class="owner-resource-form"><label for="owner-resource-value">${config.label}</label><div><input id="owner-resource-value" type="number" min="${config.min}" ${maxAttr} step="${cat === 'ram' ? '.5' : '1'}" value="${config.value}" required><button type="submit" class="primary-button" ${upgradeBusy ? 'disabled' : ''}>Save resources</button></div><p>No account tier or coin cost.</p>${limitHint}</form>`;
       $('owner-resource-form').onsubmit = async event => {
         event.preventDefault(); if (upgradeBusy) return;
         upgradeBusy = true; const button = event.currentTarget.querySelector('button'); button.disabled = true;
