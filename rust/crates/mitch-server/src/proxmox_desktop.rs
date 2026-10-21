@@ -1021,18 +1021,20 @@ impl ProxmoxDesktopService {
     /// would otherwise undo `windows_install_config`'s deliberate `std`
     /// choice the first time it runs after install.
     ///
-    /// `skip_vga` is the same kind of exception for anything else that
-    /// can't be detected from the bare Proxmox config alone — currently
-    /// just ChromeOS clones, whose template's own vga setting (whatever
-    /// the admin configured by hand) should never be overridden. The
-    /// caller (`power()`) computes it from the app's VM record, since this
-    /// function only ever sees Proxmox's own per-VM config, which carries
-    /// no "cloned from template X" information.
+    /// `prefer_gl` picks `virtio-gl` (VirGL — GPU-accelerated 3D, not just
+    /// the plain virtio-gpu 2D framebuffer) over the plain `virtio`
+    /// default, for ChromeOS clones and owner-owned VMs (owner's own
+    /// hardware, tested and confirmed working). Windows still wins over
+    /// this: Linux/ChromeOS have Mesa's inbox virtio-gpu GL driver,
+    /// Windows has neither that nor the plain one. The caller (`power()`)
+    /// computes this from the app's VM record, since this function only
+    /// ever sees Proxmox's own per-VM config, which carries no owner or
+    /// "cloned from template X" information.
     pub async fn ensure_optimized_vm_config(
         &self,
         vmid: i64,
         node: &str,
-        skip_vga: bool,
+        prefer_gl: bool,
     ) -> Option<Value> {
         if self.lock_caches().optimized_vmids.contains(&vmid) {
             return None;
@@ -1043,7 +1045,6 @@ impl ProxmoxDesktopService {
             let is_windows = config["ostype"]
                 .as_str()
                 .is_some_and(|t| t.starts_with("win"));
-            let skip_vga = skip_vga || is_windows;
             let mut updates = Map::new();
             if config["cpu"].as_str() != Some("host") {
                 updates.insert("cpu".to_string(), json!("host"));
@@ -1051,9 +1052,15 @@ impl ProxmoxDesktopService {
             if !jsval::truthy(&config["rng0"]) {
                 updates.insert("rng0".to_string(), json!("source=/dev/urandom"));
             }
-            // memory is a real suboption for virtio too, same as std/qxl —
-            // 128MB of ordinary VM RAM, not scarce host GPU VRAM.
-            let target_vga = "virtio,memory=128";
+            // memory is a real suboption for plain virtio too, same as
+            // std/qxl — 128MB of ordinary VM RAM, not scarce host GPU
+            // VRAM. virtio-gl doesn't take that suboption.
+            let target_vga = if prefer_gl {
+                "virtio-gl"
+            } else {
+                "virtio,memory=128"
+            };
+            let skip_vga = is_windows;
             let vga = config["vga"].as_str().unwrap_or("");
             if !skip_vga && vga != target_vga {
                 updates.insert("vga".to_string(), json!(target_vga));
@@ -1090,10 +1097,16 @@ impl ProxmoxDesktopService {
     }
 
     /// `power(record, requestedAction)` (lib/proxmox_desktop.js:281-293).
+    /// `owner_vm` is computed by the caller (`is_owner_email` on the VM's
+    /// owner — this service has no `DataStore` access to check that
+    /// itself) and just means "prefer VirGL" alongside the ChromeOS check
+    /// this function can already do on its own; irrelevant for any action
+    /// other than start/restart.
     pub async fn power(
         &self,
         record: &Value,
         requested_action: &str,
+        owner_vm: bool,
     ) -> Result<Value, ProxmoxServiceError> {
         let vmid = self.assert_vmid(jsval::number(&record["vmid"]))?;
         let action = match requested_action {
@@ -1117,7 +1130,7 @@ impl ProxmoxDesktopService {
                 .chromeos_template_vmid
                 .is_some_and(|t| record["templateVmid"].as_f64() == Some(t as f64));
             let _ = self
-                .ensure_optimized_vm_config(vmid, &node, is_chromeos_clone)
+                .ensure_optimized_vm_config(vmid, &node, owner_vm || is_chromeos_clone)
                 .await;
         }
         self.request(
@@ -1147,7 +1160,7 @@ impl ProxmoxDesktopService {
         let outcome: Result<Value, ProxmoxServiceError> = async {
             // `try { await power force-stop; await Bun.sleep(1000); } catch {}`
             // — the sleep only happens when the stop succeeded.
-            if self.power(record, "force-stop").await.is_ok() {
+            if self.power(record, "force-stop", false).await.is_ok() {
                 tokio::time::sleep(Duration::from_millis(1000)).await;
             }
             let upid = self
@@ -1764,6 +1777,11 @@ impl ProxmoxDesktopService {
         config_body.insert("memory".to_string(), jsval::num_value(memory_mb));
         config_body.insert("cpu".to_string(), json!("host"));
         config_body.insert("rng0".to_string(), json!("source=/dev/urandom"));
+        // VirGL (GPU-accelerated 3D), not just plain virtio-gpu — tested
+        // and confirmed working with ChromeOS Flex. See
+        // ensure_optimized_vm_config's doc comment for why Windows never
+        // gets this (irrelevant here: this function is ChromeOS-only).
+        config_body.insert("vga".to_string(), json!("virtio-gl"));
         config_body.insert("balloon".to_string(), jsval::num_value(balloon));
         config_body.insert("agent".to_string(), json!(1));
         if jsval::truthy(&template_config["sshkeys"]) {

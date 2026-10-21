@@ -10,6 +10,7 @@ let reconnectAttempts = 0, connected = false, connecting = false, disposed = fal
 let leaseState = { remainingSeconds: 21600, maxUptimeSeconds: 21600, canExtend: true, extended: false, isExempt: false };
 let hasWarned10m = false, hasWarned3m = false;
 let uptimeInterval = null;
+let isChromeOs = false;
 const uptimePillText = $('uptime-pill-text'), uptimeBtn = $('uptime-button');
 const uptimeDialog = $('uptime-dialog');
 
@@ -228,6 +229,9 @@ async function connect() {
     }
     if (token !== generation) return;
     if (typeof session.socketPath !== 'string' || !session.socketPath.startsWith('/api/vm/desktop/ws?session=')) throw new Error('The desktop connection could not be opened.');
+    isChromeOs = Boolean(session.isChromeOs);
+    if (isChromeOs) hideLocalCursor();
+    if (cursorToggleBtn) cursorToggleBtn.hidden = isChromeOs;
     const url = new URL(session.socketPath, location.origin); url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const client = new RFB(screen, url.href, { shared: true, credentials: session.credentials });
     session.credentials = null;
@@ -300,6 +304,9 @@ document.addEventListener('keydown', event => { if (event.key === 'Escape') hide
 // in both modes without separate fullscreen handling. Off switch lives
 // in the 3-dot menu for anyone who'd rather see the guest's real cursor
 // shape (e.g. resize handles) and accept the fullscreen tradeoff.
+// Suppressed entirely for ChromeOS (isChromeOs, set from the
+// desktop-session response): its VirGL console already draws its own
+// cursor, so the overlay would just be a second, misaligned one.
 const localCursor = $('local-cursor'), cursorToggleBtn = $('cursor-toggle-button');
 let localCursorEnabled = true;
 try { localCursorEnabled = localStorage.getItem('desktop_local_cursor') !== 'off'; } catch {}
@@ -314,7 +321,7 @@ function hideLocalCursor() {
 }
 applyCursorToggleUi();
 screen.addEventListener('mousemove', event => {
-  if (!localCursorEnabled || !connected || !localCursor) return;
+  if (!localCursorEnabled || !connected || !localCursor || isChromeOs) return;
   const rect = frame.getBoundingClientRect();
   localCursor.style.left = `${event.clientX - rect.left}px`;
   localCursor.style.top = `${event.clientY - rect.top}px`;

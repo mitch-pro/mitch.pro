@@ -30,6 +30,11 @@ pub struct VmRecord {
     pub disk_gb: f64,
     pub ip_address: String,
     pub status: String,
+    /// Admin-only, ChromeOS-only exemption from the inactivity/uptime
+    /// watchdog (`workers_vm.rs`) — set through `set_vm_keep_alive`, never
+    /// through `upsert_virtual_machine` (which would otherwise reset it
+    /// back to `false` on every ordinary create/recreate/reassign).
+    pub keep_alive: bool,
     pub created_at: f64,
     pub updated_at: f64,
 }
@@ -56,6 +61,7 @@ impl VmRecord {
         obj.insert("diskGb".into(), json!(self.disk_gb));
         obj.insert("ipAddress".into(), json!(self.ip_address));
         obj.insert("status".into(), json!(self.status));
+        obj.insert("keepAlive".into(), json!(self.keep_alive));
         obj.insert("createdAt".into(), json!(self.created_at));
         obj.insert("updatedAt".into(), json!(self.updated_at));
         Value::Object(obj)
@@ -84,6 +90,7 @@ fn vm_row_to_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<VmRecord> {
             .get::<_, Option<String>>("ip_address")?
             .unwrap_or_default(),
         status: row.get("status")?,
+        keep_alive: row.get::<_, i64>("keep_alive")? != 0,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })
@@ -283,6 +290,20 @@ pub fn unassign_virtual_machine(store: &DataStore, id: &str) -> bool {
     let result = conn.execute(
         "UPDATE virtual_machines SET owner_email = '', owner_user_id = '', status = 'unassigned', updated_at = ?1 WHERE id = ?2",
         rusqlite::params![now_millis(), id],
+    );
+    result.map(|n| n > 0).unwrap_or(false)
+}
+
+/// Sets (or clears) the inactivity/uptime-watchdog exemption on one VM. A
+/// dedicated narrow `UPDATE` — deliberately not folded into
+/// `upsert_virtual_machine`, which overwrites every other column on every
+/// ordinary create/recreate/reassign and would otherwise silently reset
+/// this back to `false` the next time any of those ran.
+pub fn set_vm_keep_alive(store: &DataStore, id: &str, enabled: bool) -> bool {
+    let conn = store.conn();
+    let result = conn.execute(
+        "UPDATE virtual_machines SET keep_alive = ?1, updated_at = ?2 WHERE id = ?3",
+        rusqlite::params![enabled as i64, now_millis(), id],
     );
     result.map(|n| n > 0).unwrap_or(false)
 }

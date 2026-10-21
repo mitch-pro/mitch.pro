@@ -236,6 +236,7 @@ impl DataStore {
                         disk_gb INTEGER NOT NULL DEFAULT 40,
                         ip_address TEXT DEFAULT '',
                         status TEXT NOT NULL DEFAULT 'assigned',
+                        keep_alive INTEGER NOT NULL DEFAULT 0,
                         created_at INTEGER NOT NULL,
                         updated_at INTEGER NOT NULL
                     );
@@ -445,6 +446,18 @@ impl DataStore {
             .any(|name| name == "expires_at");
         if !has_ban_expiry {
             conn.execute("ALTER TABLE blacklist ADD COLUMN expires_at INTEGER", [])?;
+        }
+        let has_vm_keep_alive = conn
+            .prepare("PRAGMA table_info(virtual_machines)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+            .iter()
+            .any(|name| name == "keep_alive");
+        if !has_vm_keep_alive {
+            conn.execute(
+                "ALTER TABLE virtual_machines ADD COLUMN keep_alive INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
         }
 
         // Repairs rows written before upsert_values' INSERT started

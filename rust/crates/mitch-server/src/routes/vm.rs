@@ -536,11 +536,14 @@ pub(crate) fn vm_record_allowed_for_actor(state: &AppState, record: &Value, acto
     let record_owner = jsval::str_or(record.get("ownerEmail"), "");
     let actor_email = jsval::str_or(actor.get("email"), "");
 
-    // If the VM belongs to a primary/root site owner, ONLY that owner can access it.
-    // Co-owners and admins CANNOT access an owner's VM.
-    if !record_owner.is_empty() && mitch_lib::auth::is_owner_email(&state.store, &record_owner) {
+    // If the VM belongs to a primary/root site owner, or to the owner's
+    // test-persona account, ONLY a real owner or that account's own
+    // session can access it. Co-owners and other admins CANNOT access
+    // it, unlike every other VM.
+    if mitch_lib::auth::is_vm_owner_locked(&state.store, &record_owner) {
         return !actor_email.is_empty()
-            && actor_email.to_lowercase() == record_owner.to_lowercase();
+            && (actor_email.to_lowercase() == record_owner.to_lowercase()
+                || mitch_lib::auth::is_owner_email(&state.store, &actor_email));
     }
 
     if actor.get("isAdmin").map(jsval::truthy).unwrap_or(false) {
@@ -4861,8 +4864,10 @@ pub(crate) async fn handle(
                 );
             }
 
+            let owner_vm = !record_owner.is_empty()
+                && mitch_lib::auth::is_owner_email(&state.store, &record_owner);
             match crate::proxmox_desktop::desktop()
-                .power(&record, &action)
+                .power(&record, &action, owner_vm)
                 .await
             {
                 Ok(task) => {
@@ -5106,12 +5111,24 @@ pub(crate) async fn handle(
 
                     let enc_session = mitch_lib::auth::encode_uri_component(&session_id);
                     let ticket = jsval::str_or(console_session.get("ticket"), "");
+                    // ChromeOS already draws its own cursor (and the VirGL
+                    // console doesn't forward a hardware cursor shape the
+                    // way the Ubuntu desktop's does), so the browser-drawn
+                    // overlay cursor would just be a second, misaligned one.
+                    let is_chrome_os = crate::proxmox_desktop::desktop()
+                        .chromeos_template_vmid()
+                        .map(|v| v as f64)
+                        .is_some_and(|chromeos_vmid| {
+                            record.get("templateVmid").and_then(Value::as_f64)
+                                == Some(chromeos_vmid)
+                        });
                     return Some(json_response(
                         201,
                         json!({
                             "socketPath": format!("/api/vm/desktop/ws?session={enc_session}"),
                             "credentials": { "password": ticket },
                             "expiresIn": (VM_DESKTOP_SESSION_TTL_MS / 1000.0).floor() as i64,
+                            "isChromeOs": is_chrome_os,
                         }),
                     ));
                 }
@@ -5291,6 +5308,30 @@ mod tests {
         assert!(!vm_record_allowed_for_actor(
             &state,
             &owner_record,
+            &json!({"email":"co-owner@example.com","isAdmin":true,"isOwner":false})
+        ));
+        // The owner's test-persona account gets the same lockout as a real
+        // owner's own VM, even though its own email isn't itself an owner
+        // email: its own session, and a real owner, can access it; no
+        // other admin/co-owner can.
+        let test_persona_record = json!({
+            "id":"test-persona-fixture",
+            "ownerEmail": mitch_lib::auth::OWNER_TEST_ACCOUNT_EMAIL,
+            "status":"assigned",
+        });
+        assert!(vm_record_allowed_for_actor(
+            &state,
+            &test_persona_record,
+            &json!({"email": mitch_lib::auth::OWNER_TEST_ACCOUNT_EMAIL, "isAdmin": false, "isOwner": false})
+        ));
+        assert!(vm_record_allowed_for_actor(
+            &state,
+            &test_persona_record,
+            &json!({"email":"admin@mitch.pro","isAdmin":true,"isOwner":false})
+        ));
+        assert!(!vm_record_allowed_for_actor(
+            &state,
+            &test_persona_record,
             &json!({"email":"co-owner@example.com","isAdmin":true,"isOwner":false})
         ));
         // activeFreeVms wins first.

@@ -426,6 +426,10 @@ fn ranked_players(
         if mitch_lib::auth::is_tester_email(store, norm) {
             continue;
         }
+        // The owner's test-persona account isn't a real student.
+        if norm == mitch_lib::auth::OWNER_TEST_ACCOUNT_EMAIL {
+            continue;
+        }
         let profile = profiles.get(norm).and_then(|v| v.as_object());
         let stats = user_stats.get(norm).and_then(|v| v.as_object());
         let cosm_val = mitch_lib::shop::cosmetics_get(store, norm);

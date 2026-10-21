@@ -233,14 +233,26 @@ pub(crate) async fn enforce_vm_max_uptime_worker(state: &AppState) {
             .and_then(jsval::number)
             .unwrap_or(0.0);
 
+        // Admin-only, ChromeOS-only "stay on 24/7" exemption
+        // (set_vm_keep_alive) — skips inactivity AND the daily/session
+        // uptime limit entirely, not just a longer timeout like the
+        // existing admin-owner carve-out below.
+        let keep_alive = record
+            .as_ref()
+            .and_then(|r| r.get("keepAlive"))
+            .map(jsval::truthy)
+            .unwrap_or(false);
+
         // Daily / session uptime expiration (only for non-exempt users)
         let is_uptime_expired =
-            !is_lease_exempt && remaining_seconds.map(|s| s <= 0.0).unwrap_or(false);
+            !is_lease_exempt && !keep_alive && remaining_seconds.map(|s| s <= 0.0).unwrap_or(false);
 
-        // Inactivity expiration (applies to ALL users, including admins after 30m)
+        // Inactivity expiration (applies to ALL users, including admins
+        // after 30m — but not a keep_alive ChromeOS VM, which skips this
+        // whole check).
         let mut is_inactive = false;
         let mut inactive_ms: u64 = 0;
-        if !has_open_socket {
+        if !has_open_socket && !keep_alive {
             let presence_last = state
                 .vm_page_presence
                 .lock()
@@ -333,7 +345,7 @@ pub(crate) async fn enforce_vm_max_uptime_worker(state: &AppState) {
                     );
                     crate::routes::vm::revoke_vm_desktop_connections(state, &record_key);
                     let _ = crate::proxmox_desktop::desktop()
-                        .power(rec, "force-stop")
+                        .power(rec, "force-stop", false)
                         .await;
                 } else {
                     let synthetic = json!({
@@ -342,7 +354,7 @@ pub(crate) async fn enforce_vm_max_uptime_worker(state: &AppState) {
                         "guestType": guest.get("type"),
                     });
                     let _ = crate::proxmox_desktop::desktop()
-                        .power(&synthetic, "force-stop")
+                        .power(&synthetic, "force-stop", false)
                         .await;
                 }
 
@@ -399,7 +411,7 @@ pub(crate) async fn enforce_vm_max_uptime_worker(state: &AppState) {
                     );
                     crate::routes::vm::revoke_vm_desktop_connections(state, &record_key);
                     if let Err(err) = crate::proxmox_desktop::desktop()
-                        .power(rec, "shutdown")
+                        .power(rec, "shutdown", false)
                         .await
                     {
                         tracing::warn!(
@@ -408,7 +420,7 @@ pub(crate) async fn enforce_vm_max_uptime_worker(state: &AppState) {
                             err
                         );
                         let _ = crate::proxmox_desktop::desktop()
-                            .power(rec, "force-stop")
+                            .power(rec, "force-stop", false)
                             .await;
                     }
                     if !owner_email.is_empty() {
@@ -425,12 +437,12 @@ pub(crate) async fn enforce_vm_max_uptime_worker(state: &AppState) {
                         "guestType": guest.get("type"),
                     });
                     if crate::proxmox_desktop::desktop()
-                        .power(&synthetic, "shutdown")
+                        .power(&synthetic, "shutdown", false)
                         .await
                         .is_err()
                     {
                         let _ = crate::proxmox_desktop::desktop()
-                            .power(&synthetic, "force-stop")
+                            .power(&synthetic, "force-stop", false)
                             .await;
                     }
                 }

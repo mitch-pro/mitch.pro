@@ -293,6 +293,18 @@ pub async fn handle(
                         &actor.to_json()
                     )),
                 );
+                let chromeos_vmid = pve.chromeos_template_vmid().map(|v| v as f64);
+                map.insert(
+                    "isChromeOs".into(),
+                    json!(
+                        chromeos_vmid.is_some()
+                            && record.get("templateVmid").and_then(Value::as_f64) == chromeos_vmid
+                    ),
+                );
+                map.insert(
+                    "keepAlive".into(),
+                    record.get("keepAlive").cloned().unwrap_or(json!(false)),
+                );
                 if is_owner && jsval::str_or(record.get("status"), "") != "unassigned" {
                     let creds = owner_vm_desktop_credentials(state, &record_id);
                     if !creds.is_null() {
@@ -465,10 +477,7 @@ pub async fn handle(
 
         let record = vmlib::get_virtual_machine_by_vmid(&state.store, vmid);
         if let Some(ref rec) = record {
-            if !rec.owner_email.is_empty()
-                && auth::is_owner_email(&state.store, &rec.owner_email)
-                && !actor.is_owner
-            {
+            if auth::is_vm_owner_locked(&state.store, &rec.owner_email) && !actor.is_owner {
                 return Some(json_response(
                     403,
                     json!({ "error": "Co-owners and admins cannot reassign an owner's computer." }),
@@ -636,10 +645,7 @@ pub async fn handle(
                 json!({ "error": "Computer not found." }),
             ));
         };
-        if !record.owner_email.is_empty()
-            && auth::is_owner_email(&state.store, &record.owner_email)
-            && !actor.is_owner
-        {
+        if auth::is_vm_owner_locked(&state.store, &record.owner_email) && !actor.is_owner {
             return Some(json_response(
                 403,
                 json!({ "error": "Co-owners and admins cannot unassign an owner's computer." }),
@@ -1091,10 +1097,7 @@ pub async fn handle(
 
         let rec_json = record.to_json();
         let record_owner = jsval::str_or(rec_json.get("ownerEmail"), "");
-        if !record_owner.is_empty()
-            && auth::is_owner_email(&state.store, &record_owner)
-            && !actor.is_owner
-        {
+        if auth::is_vm_owner_locked(&state.store, &record_owner) && !actor.is_owner {
             return Some(json_response(
                 403,
                 json!({ "error": "Co-owners and admins cannot delete an owner's computer." }),
@@ -1193,7 +1196,7 @@ pub async fn handle(
         let Some(record) = vmlib::get_virtual_machine_by_id(&state.store, id) else {
             return Some(json_response(404, json!({"error":"Computer not found."})));
         };
-        if auth::is_owner_email(&state.store, &record.owner_email) && !actor.is_owner {
+        if auth::is_vm_owner_locked(&state.store, &record.owner_email) && !actor.is_owner {
             return Some(json_response(
                 403,
                 json!({"error":"Only an owner can edit an owner's computer."}),
@@ -1303,6 +1306,60 @@ pub async fn handle(
         return Some(json_response(
             200,
             json!({"success":true,"message":"Resources updated."}),
+        ));
+    }
+
+    // POST /api/admin/vms/keep-alive — exempts a ChromeOS computer from the
+    // inactivity/uptime watchdog (workers_vm.rs) so it can stay on 24/7.
+    // Admin-only, ChromeOS-only, and still subject to the same owner-lock
+    // as every other admin VM action (so a co-owner can't flip this on an
+    // owner-locked VM either, even though that's a contradiction in
+    // practice — the owner-test-persona VM isn't meant to run unattended).
+    if path == "/api/admin/vms/keep-alive" && *method == Method::POST {
+        let Some(actor) = crate::routes::vm::authenticated_vm_actor(state, headers) else {
+            return Some(json_response(401, json!({"error":"Sign in required."})));
+        };
+        if !actor.is_admin {
+            return Some(super::forbidden());
+        }
+        let id = body.get("id").and_then(Value::as_str).unwrap_or("");
+        let Some(record) = vmlib::get_virtual_machine_by_id(&state.store, id) else {
+            return Some(json_response(404, json!({"error":"Computer not found."})));
+        };
+        if auth::is_vm_owner_locked(&state.store, &record.owner_email) && !actor.is_owner {
+            return Some(json_response(
+                403,
+                json!({"error":"Only an owner can edit an owner's computer."}),
+            ));
+        }
+        let chromeos_vmid = crate::proxmox_desktop::desktop()
+            .chromeos_template_vmid()
+            .map(|v| v as f64);
+        let is_chromeos_vm = chromeos_vmid.is_some() && record.template_vmid == chromeos_vmid;
+        if !is_chromeos_vm {
+            return Some(json_response(
+                400,
+                json!({"error":"Keep-alive is only available for ChromeOS computers."}),
+            ));
+        }
+        let enabled = body.get("enabled").map(jsval::truthy).unwrap_or(false);
+        if !vmlib::set_vm_keep_alive(&state.store, &record.id, enabled) {
+            return Some(json_response(
+                500,
+                json!({"error":"Could not update keep-alive."}),
+            ));
+        }
+        crate::routes::vm::vm_audit(
+            state,
+            &actor.email,
+            Some(&record.to_json()),
+            "VM_ADMIN_KEEP_ALIVE",
+            true,
+            Some(&json!({"enabled": enabled})),
+        );
+        return Some(json_response(
+            200,
+            json!({"success": true, "keepAlive": enabled}),
         ));
     }
 

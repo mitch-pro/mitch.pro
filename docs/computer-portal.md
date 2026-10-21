@@ -134,14 +134,21 @@ keys, TPM 2.0, host CPU, at least 2 cores / 4 GB RAM / 64 GB disk, standard disp
 and SATA/E1000e devices with inbox Windows drivers. Linux/custom defaults remain
 separate. See [Proxmox's Windows 11 recommendations](https://pve.proxmox.com/wiki/Windows_11_guest_best_practices).
 
-`ensure_optimized_vm_config` forces `vga=virtio` on every VM at power-on,
-with an exception list: Windows guests (detected from `ostype`) and any
-clone of the ChromeOS template (detected from the VM record's
-`templateVmid` matching the configured `chromeos_template_vmid` — the bare
-Proxmox config `ensure_optimized_vm_config` reads has no "cloned from
-template X" information, so this check has to happen in `power()`, which
-has the app's own VM record). Without this, either guest's hand-chosen
-display adapter gets silently overwritten on its next restart.
+`ensure_optimized_vm_config` forces a display adapter on every VM at
+power-on: `virtio,memory=128` by default, `virtio-gl` (VirGL — GPU-
+accelerated 3D, not just the plain virtio-gpu 2D framebuffer) for ChromeOS
+clones and owner-owned VMs, and nothing at all for Windows guests
+(`ostype` starting with `win` — vanilla Windows has neither driver).
+ChromeOS-clone detection (VM record's `templateVmid` matching the
+configured `chromeos_template_vmid`) and owner detection (`is_owner_email`
+on the record's `ownerEmail`) both have to happen in `power()`, not inside
+`ensure_optimized_vm_config` itself: the bare Proxmox config that function
+reads has no owner or "cloned from template X" information, and
+`ProxmoxDesktopService` has no `DataStore` access to look either up
+itself. Without the Windows exception, a Windows guest's display would be
+silently overwritten (black screen) on its next restart;
+`clone_chromeos_desktop` also sets `virtio-gl` directly at clone time, so
+a fresh ChromeOS clone doesn't wait for its first manual restart to get it.
 
 ## ChromeOS (BYO-OS preset)
 
@@ -171,3 +178,30 @@ an existing legacy BIOS installation require reinstalling; the confirmation
 explains that risk. Deployment does not silently convert existing guests. Guest
 CPU compatibility still depends on the physical host. Detaching an ISO selects
 the actual SCSI/SATA/VirtIO boot disk instead of assuming SCSI.
+
+### ChromeOS keep-alive (admin-only)
+
+`POST /api/admin/vms/keep-alive` sets a per-VM `keep_alive` column
+(`virtual_machines` table — a real column, not a JSON flag) that exempts one
+computer from `workers_vm.rs`'s inactivity *and* daily/session-uptime
+watchdog entirely, so it can run 24/7. Full admins only; the target must
+be an actual ChromeOS clone (`templateVmid` matching
+`PROXMOX_CHROMEOS_TEMPLATE_VMID`) or the request is rejected — it's not a
+general-purpose "never shut down" switch for any VM. Toggled from the
+admin fleet page's per-row "Manage" menu, which only shows the button for
+ChromeOS rows. `set_vm_keep_alive` is a dedicated narrow `UPDATE`,
+deliberately not folded into `upsert_virtual_machine` (which overwrites
+every other column on every ordinary create/recreate/reassign and would
+silently reset this back to `false`).
+
+### Owner-only test-persona account
+
+`newaccount123@student.rjuhsd.us` (`mitch_lib::auth::OWNER_TEST_ACCOUNT_EMAIL`)
+is a real account the owner uses to test the student experience, not a
+real student. `is_vm_owner_locked` (the single shared check behind every
+"can an admin touch this VM" gate — desktop access, reassign, unassign,
+delete, resource edits) treats its VM exactly like a primary owner's own
+VM: only a real owner, or that account's own session, can touch it; no
+co-owner or other admin can, unlike every other VM on the site. It's also
+excluded from the leaderboard (`ranked_players`), the same way tester
+accounts are.
