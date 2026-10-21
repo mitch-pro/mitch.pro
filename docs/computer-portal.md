@@ -134,6 +134,35 @@ keys, TPM 2.0, host CPU, at least 2 cores / 4 GB RAM / 64 GB disk, standard disp
 and SATA/E1000e devices with inbox Windows drivers. Linux/custom defaults remain
 separate. See [Proxmox's Windows 11 recommendations](https://pve.proxmox.com/wiki/Windows_11_guest_best_practices).
 
+`ensure_optimized_vm_config` forces `vga=virtio` on every VM at power-on,
+with an exception list: Windows guests (detected from `ostype`) and any
+clone of the ChromeOS template (detected from the VM record's
+`templateVmid` matching the configured `chromeos_template_vmid` — the bare
+Proxmox config `ensure_optimized_vm_config` reads has no "cloned from
+template X" information, so this check has to happen in `power()`, which
+has the app's own VM record). Without this, either guest's hand-chosen
+display adapter gets silently overwritten on its next restart.
+
+## ChromeOS (BYO-OS preset)
+
+ChromeOS Flex's distributed image is a raw disk image (what you'd `dd`
+onto a USB stick), not a bootable-CD ISO, so it can't go through the
+normal BYO-OS flow (attach an ISO as `media=cdrom`, boot the installer) —
+a from-scratch attempt using Proxmox's `import-from` disk option failed
+Proxmox's own parameter validation. Instead, an admin builds and installs
+ChromeOS by hand in a regular VM, converts it to a Proxmox template
+(`qm template <vmid>`, after shutting it down), and sets
+`PROXMOX_CHROMEOS_TEMPLATE_VMID` to that vmid. The BYO-OS preset
+("chromeos") then clones that template directly
+(`clone_chromeos_desktop`) — the same proven clone mechanism the normal
+desktop template uses, just without any cloud-init/credential setup
+(ChromeOS has no local Linux user to seed; each clone boots to the
+template's own Google sign-in, same as the original).
+
+Until `PROXMOX_CHROMEOS_TEMPLATE_VMID` is set, the "chromeos" preset is
+simply absent from `GET /api/vm/byo-os/presets` and `create-preset`
+returns 503 for it — there's no broken-looking option sitting in the UI.
+
 Existing custom VMs offer **Windows installer compatibility**. This is an
 explicit, authenticated, CSRF-protected action on the user's own stopped VM. It
 preserves disks and existing TPM/EFI state, grows storage to 64 GB when needed,

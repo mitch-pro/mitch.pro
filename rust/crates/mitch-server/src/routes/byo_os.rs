@@ -1131,12 +1131,22 @@ pub(crate) async fn handle(
     // "Economy integrity" — this is why presets are listed in exactly one
     // place, this array, rather than duplicated into a second config).
     if path == "/api/vm/byo-os/presets" && *method == Method::GET {
-        let items: Vec<Value> = PRESET_ISOS
+        let mut items: Vec<Value> = PRESET_ISOS
             .iter()
             .map(|preset| {
                 json!({ "id": preset.id, "name": preset.name, "cost": PRESET_ISO_COST_COINS })
             })
             .collect();
+        // Not in PRESET_ISOS (it clones a template, not an ISO) — only
+        // listed once an admin has actually configured the template vmid.
+        if crate::proxmox_desktop::desktop()
+            .chromeos_template_vmid()
+            .is_some()
+        {
+            items.push(
+                json!({ "id": "chromeos", "name": "ChromeOS", "cost": PRESET_ISO_COST_COINS }),
+            );
+        }
         return Some(json_response(200, json!({ "presets": items })));
     }
 
@@ -1160,11 +1170,37 @@ pub(crate) async fn handle(
         }
         let body: Value = serde_json::from_slice(body_bytes).unwrap_or(json!({}));
         let preset_id = jsval::str_or(body.get("presetId"), "");
-        let Some(preset) = preset_by_id(&preset_id) else {
+        // "chromeos" isn't in PRESET_ISOS at all — unlike every other
+        // preset (boot an ISO), it clones an admin-built, already-installed
+        // template (clone_chromeos_desktop), since ChromeOS Flex's image is
+        // a raw disk image, not a bootable-CD ISO. See that function's doc
+        // comment for why.
+        let is_chromeos = preset_id == "chromeos";
+        let preset = if is_chromeos {
+            None
+        } else {
+            preset_by_id(&preset_id)
+        };
+        if is_chromeos {
+            if crate::proxmox_desktop::desktop()
+                .chromeos_template_vmid()
+                .is_none()
+            {
+                return Some(json_response(
+                    503,
+                    json!({ "error": "ChromeOS isn't configured on this server yet." }),
+                ));
+            }
+        } else if preset.is_none() {
             return Some(json_response(
                 400,
                 json!({ "error": "Unknown preset ISO." }),
             ));
+        }
+        let preset_name = if is_chromeos {
+            "ChromeOS"
+        } else {
+            preset.map(|p| p.name).unwrap_or("")
         };
 
         // Checked up front, before anything (including the user's existing
@@ -1285,8 +1321,15 @@ pub(crate) async fn handle(
                     "guestType": "qemu",
                     "friendlyName": "My Computer (Preset OS)",
                     "hostname": candidate_hostname,
-                    "operatingSystem": format!("Preset ({})", preset.name),
-                    "templateVmid": Value::Null,
+                    "operatingSystem": format!("Preset ({})", preset_name),
+                    "templateVmid": if is_chromeos {
+                        crate::proxmox_desktop::desktop()
+                            .chromeos_template_vmid()
+                            .map(|v| json!(v as f64))
+                            .unwrap_or(Value::Null)
+                    } else {
+                        Value::Null
+                    },
                     "cpuCores": cpu_cores,
                     "memoryMb": memory_mb,
                     "diskGb": disk_gb,
@@ -1318,18 +1361,30 @@ pub(crate) async fn handle(
             ));
         };
 
-        let result = crate::proxmox_desktop::desktop()
-            .create_from_iso(&crate::proxmox_desktop::CreateFromIsoParams {
-                windows: preset.id == "windows",
-                owner_resources: crate::routes::vm::can_customize_owner_vm(state, &actor),
-                vmid: Some(vmid),
-                hostname: hostname.clone(),
-                cpu_cores: Some(cpu_cores),
-                memory_mb: Some(memory_mb),
-                disk_gb: Some(disk_gb),
-                iso_filename: preset.filename.to_string(),
-            })
-            .await;
+        let result = if is_chromeos {
+            crate::proxmox_desktop::desktop()
+                .clone_chromeos_desktop(&crate::proxmox_desktop::CloneChromeOsParams {
+                    owner_resources: crate::routes::vm::can_customize_owner_vm(state, &actor),
+                    vmid: Some(vmid),
+                    hostname: hostname.clone(),
+                    cpu_cores: Some(cpu_cores),
+                    memory_mb: Some(memory_mb),
+                })
+                .await
+        } else {
+            crate::proxmox_desktop::desktop()
+                .create_from_iso(&crate::proxmox_desktop::CreateFromIsoParams {
+                    windows: preset.map(|p| p.id == "windows").unwrap_or(false),
+                    owner_resources: crate::routes::vm::can_customize_owner_vm(state, &actor),
+                    vmid: Some(vmid),
+                    hostname: hostname.clone(),
+                    cpu_cores: Some(cpu_cores),
+                    memory_mb: Some(memory_mb),
+                    disk_gb: Some(disk_gb),
+                    iso_filename: preset.map(|p| p.filename.to_string()).unwrap_or_default(),
+                })
+                .await
+        };
         state
             .vm_power_requests
             .lock()
@@ -1344,7 +1399,7 @@ pub(crate) async fn handle(
                     &actor.email,
                     -PRESET_ISO_COST_COINS,
                     state.coin_multiplier(),
-                    &format!("byo-os preset: {}", preset.name),
+                    &format!("byo-os preset: {}", preset_name),
                 );
                 let mut merged = pending_record.clone();
                 if let Some(obj) = merged.as_object_mut() {

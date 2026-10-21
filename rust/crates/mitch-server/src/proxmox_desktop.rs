@@ -299,6 +299,14 @@ pub struct ProxmoxDesktopService {
     /// net0 already uses. A from-scratch VM has no template to inherit
     /// from, so this needs its own setting.
     vm_bridge: String,
+    /// vmid of an admin-built, already-installed ChromeOS Proxmox template
+    /// — `PROXMOX_CHROMEOS_TEMPLATE_VMID`. `None` when unset, which is the
+    /// normal state until an admin actually builds and configures one; the
+    /// ChromeOS BYO-OS preset is unavailable until then. Deliberately not
+    /// part of `template_vmids`: that list feeds the *default* managed
+    /// desktop's auto-pick (`.first()`), and ChromeOS must never become
+    /// that default.
+    chromeos_template_vmid: Option<i64>,
 }
 
 /// Constructor inputs (`{ host, port, node, tokenId, tokenSecret, legacyToken,
@@ -316,6 +324,7 @@ pub struct ProxmoxOptions {
     pub iso_storage: Option<String>,
     pub vm_disk_storage: Option<String>,
     pub vm_bridge: Option<String>,
+    pub chromeos_template_vmid: Option<f64>,
 }
 
 impl Default for ProxmoxOptions {
@@ -333,6 +342,7 @@ impl Default for ProxmoxOptions {
             iso_storage: None,
             vm_disk_storage: None,
             vm_bridge: None,
+            chromeos_template_vmid: None,
         }
     }
 }
@@ -349,6 +359,17 @@ pub struct CloneDesktopParams {
     pub disk_gb: Option<f64>,
     pub desktop_username: String,
     pub desktop_password: String,
+}
+
+/// `cloneChromeOsDesktop({ ... })` inputs. No `template_vmid` (always
+/// `chromeos_template_vmid`, not caller-chosen) and no username/password
+/// (no cloud-init, no local Linux user — see `clone_chromeos_desktop`).
+pub struct CloneChromeOsParams {
+    pub owner_resources: bool,
+    pub vmid: Option<f64>,
+    pub hostname: String,
+    pub cpu_cores: Option<f64>,
+    pub memory_mb: Option<f64>,
 }
 
 /// `createFromIso({ ... })` inputs — the BYO-OS parallel to
@@ -505,6 +526,10 @@ impl ProxmoxDesktopService {
                     v.trim().to_string()
                 }
             },
+            chromeos_template_vmid: options
+                .chromeos_template_vmid
+                .filter(|raw| raw.is_finite() && raw.fract() == 0.0 && *raw > 0.0)
+                .map(|raw| raw as i64),
         }
     }
 
@@ -567,6 +592,8 @@ impl ProxmoxDesktopService {
             iso_storage: env("PROXMOX_ISO_STORAGE"),
             vm_disk_storage: env("PROXMOX_VM_STORAGE"),
             vm_bridge: env("PROXMOX_VM_BRIDGE"),
+            chromeos_template_vmid: env("PROXMOX_CHROMEOS_TEMPLATE_VMID")
+                .map(|v| v.trim().parse::<f64>().unwrap_or(f64::NAN)),
         })
     }
 
@@ -584,6 +611,12 @@ impl ProxmoxDesktopService {
     /// `proxmoxDesktop.templateVmids` — the clone allowlist.
     pub fn template_vmids(&self) -> &[i64] {
         &self.template_vmids
+    }
+
+    /// `PROXMOX_CHROMEOS_TEMPLATE_VMID` — `None` until an admin configures
+    /// one; the ChromeOS BYO-OS preset stays unavailable until then.
+    pub fn chromeos_template_vmid(&self) -> Option<i64> {
+        self.chromeos_template_vmid
     }
 
     fn lock_caches(&self) -> MutexGuard<'_, Caches> {
@@ -987,7 +1020,20 @@ impl ProxmoxDesktopService {
     /// silently break its display on its next restart — this function
     /// would otherwise undo `windows_install_config`'s deliberate `std`
     /// choice the first time it runs after install.
-    pub async fn ensure_optimized_vm_config(&self, vmid: i64, node: &str) -> Option<Value> {
+    ///
+    /// `skip_vga` is the same kind of exception for anything else that
+    /// can't be detected from the bare Proxmox config alone — currently
+    /// just ChromeOS clones, whose template's own vga setting (whatever
+    /// the admin configured by hand) should never be overridden. The
+    /// caller (`power()`) computes it from the app's VM record, since this
+    /// function only ever sees Proxmox's own per-VM config, which carries
+    /// no "cloned from template X" information.
+    pub async fn ensure_optimized_vm_config(
+        &self,
+        vmid: i64,
+        node: &str,
+        skip_vga: bool,
+    ) -> Option<Value> {
         if self.lock_caches().optimized_vmids.contains(&vmid) {
             return None;
         }
@@ -997,6 +1043,7 @@ impl ProxmoxDesktopService {
             let is_windows = config["ostype"]
                 .as_str()
                 .is_some_and(|t| t.starts_with("win"));
+            let skip_vga = skip_vga || is_windows;
             let mut updates = Map::new();
             if config["cpu"].as_str() != Some("host") {
                 updates.insert("cpu".to_string(), json!("host"));
@@ -1008,7 +1055,7 @@ impl ProxmoxDesktopService {
             // 128MB of ordinary VM RAM, not scarce host GPU VRAM.
             let target_vga = "virtio,memory=128";
             let vga = config["vga"].as_str().unwrap_or("");
-            if !is_windows && vga != target_vga {
+            if !skip_vga && vga != target_vga {
                 updates.insert("vga".to_string(), json!(target_vga));
             }
             if !updates.is_empty() {
@@ -1066,7 +1113,12 @@ impl ProxmoxDesktopService {
             && (requested_action == "start" || requested_action == "restart")
         {
             let node = self.node_of(record);
-            let _ = self.ensure_optimized_vm_config(vmid, &node).await;
+            let is_chromeos_clone = self
+                .chromeos_template_vmid
+                .is_some_and(|t| record["templateVmid"].as_f64() == Some(t as f64));
+            let _ = self
+                .ensure_optimized_vm_config(vmid, &node, is_chromeos_clone)
+                .await;
         }
         self.request(
             "POST",
@@ -1608,6 +1660,158 @@ impl ProxmoxDesktopService {
             "cpuCores": jsval::num_value(cpu_cores),
             "memoryMb": jsval::num_value(memory_mb),
             "diskGb": jsval::num_value(current_disk_gb.max(requested_disk_gb)),
+        }))
+    }
+
+    /// Clones the admin-provided, already-installed ChromeOS template
+    /// (`chromeos_template_vmid`, `PROXMOX_CHROMEOS_TEMPLATE_VMID`) — the
+    /// BYO-OS "chromeos" preset's backend, used instead of `create_from_iso`
+    /// because the distributed ChromeOS Flex image is a raw disk image, not
+    /// a bootable-CD ISO (a from-scratch `import-from` attempt failed
+    /// Proxmox's own parameter validation; cloning a working hand-built
+    /// template sidesteps that entirely).
+    ///
+    /// Unlike `clone_desktop`, this skips cloud-init completely: there's no
+    /// local Linux user to seed (you sign into the clone with your own
+    /// Google account, same as the template), so no username/password, no
+    /// `ciuser`/`cipassword`, and no cloud-init-drive requirement on the
+    /// template. The disk size is whatever the template itself has — no
+    /// resize, since there's no "requested disk size" concept here yet.
+    pub async fn clone_chromeos_desktop(
+        &self,
+        params: &CloneChromeOsParams,
+    ) -> Result<Value, ProxmoxServiceError> {
+        let Some(template_vmid) = self.chromeos_template_vmid else {
+            return Err(ProxmoxServiceError::new(
+                "CHROMEOS_NOT_CONFIGURED",
+                "ChromeOS isn't configured on this server yet.",
+                503,
+            ));
+        };
+        let vmid = self.assert_vmid(params.vmid)?;
+        let template_config = self
+            .get_config(
+                &json!({ "vmid": template_vmid as f64, "node": self.node, "guestType": "qemu" }),
+            )
+            .await?;
+        let template_flag = jsval::number(&template_config["template"]).unwrap_or(f64::NAN);
+        if template_flag == 0.0 || template_flag.is_nan() {
+            return Err(ProxmoxServiceError::new(
+                "INVALID_TEMPLATE",
+                "The configured ChromeOS template is not actually a Proxmox template.",
+                400,
+            ));
+        }
+        let net0 = jsval::str_or(template_config.get("net0"), "");
+        static BRIDGE_RE: OnceLock<Regex> = OnceLock::new();
+        let bridge_re = BRIDGE_RE
+            .get_or_init(|| Regex::new(r"(?:^|,)bridge=").unwrap_or_else(|_| unreachable_regex()));
+        if net0.is_empty() || !bridge_re.is_match(&net0) {
+            return Err(ProxmoxServiceError::new(
+                "INVALID_TEMPLATE",
+                "The configured ChromeOS template does not have a configured network.",
+                400,
+            ));
+        }
+        let cpu_input = match params.cpu_cores {
+            Some(raw) if !raw.is_nan() && raw != 0.0 => raw,
+            _ => 2.0,
+        };
+        let cpu_cores = if params.owner_resources {
+            cpu_input.round().max(1.0)
+        } else {
+            clamp_js(cpu_input.round(), 2.0, 16.0)
+        };
+        let mem_input = match params.memory_mb {
+            Some(raw) if !raw.is_nan() && raw != 0.0 => raw,
+            _ => 4096.0,
+        };
+        let memory_mb = if params.owner_resources {
+            mem_input.round().max(512.0)
+        } else {
+            clamp_js(mem_input.round(), 2048.0, 65536.0)
+        };
+        let clean_host = clean_hostname(&params.hostname, vmid);
+        let clone_upid = self
+            .request(
+                "POST",
+                &format!(
+                    "/nodes/{}/qemu/{}/clone",
+                    encode_uri_component(&self.node),
+                    template_vmid
+                ),
+                Some(&json!({
+                    "newid": vmid,
+                    "name": clean_host,
+                    "full": 0,
+                    "pool": "sandboxes",
+                    "target": self.node,
+                })),
+                30_000,
+            )
+            .await?;
+        self.wait_for_task(&self.node, Some(&clone_upid), 120_000)
+            .await?;
+        let balloon = if params.owner_resources {
+            0.0
+        } else {
+            clamp_js((memory_mb / 4.0).floor(), 1024.0, 4096.0)
+        };
+        let mut config_body = Map::new();
+        config_body.insert("name".to_string(), json!(clean_host));
+        config_body.insert("cores".to_string(), jsval::num_value(cpu_cores));
+        config_body.insert("sockets".to_string(), json!(1));
+        config_body.insert("memory".to_string(), jsval::num_value(memory_mb));
+        config_body.insert("cpu".to_string(), json!("host"));
+        config_body.insert("rng0".to_string(), json!("source=/dev/urandom"));
+        config_body.insert("balloon".to_string(), jsval::num_value(balloon));
+        config_body.insert("agent".to_string(), json!(1));
+        if jsval::truthy(&template_config["sshkeys"]) {
+            config_body.insert("delete".to_string(), json!("sshkeys"));
+        }
+        self.request(
+            "PUT",
+            &format!(
+                "/nodes/{}/qemu/{}/config",
+                encode_uri_component(&self.node),
+                vmid
+            ),
+            Some(&Value::Object(config_body)),
+            DEFAULT_TIMEOUT_MS,
+        )
+        .await?;
+        // Marked optimized immediately, same as clone_desktop — cpu/rng0
+        // are already set above, and vga is left untouched (inherited from
+        // the template) rather than forced to virtio: `power()` also skips
+        // ensure_optimized_vm_config's vga override for any VM whose
+        // templateVmid matches this one, so this is really just avoiding a
+        // redundant GET/PUT round-trip on the very next start.
+        self.lock_caches().optimized_vmids.insert(vmid);
+
+        let start_upid = self
+            .request(
+                "POST",
+                &format!(
+                    "/nodes/{}/qemu/{}/status/start",
+                    encode_uri_component(&self.node),
+                    vmid
+                ),
+                Some(&json!({})),
+                DEFAULT_TIMEOUT_MS,
+            )
+            .await?;
+        if jsval::truthy(&start_upid) {
+            self.wait_for_task(&self.node, Some(&start_upid), 120_000)
+                .await?;
+        }
+
+        Ok(json!({
+            "vmid": jsval::num_value(vmid as f64),
+            "node": self.node,
+            "hostname": clean_host,
+            "cpuCores": jsval::num_value(cpu_cores),
+            "memoryMb": jsval::num_value(memory_mb),
+            "templateVmid": jsval::num_value(template_vmid as f64),
         }))
     }
 
@@ -2729,6 +2933,32 @@ mod tests {
             ..ProxmoxOptions::default()
         });
         assert_eq!(half.authorization, "");
+    }
+
+    #[test]
+    fn chromeos_template_vmid_rejects_non_positive_integers() {
+        let configured = ProxmoxDesktopService::new(ProxmoxOptions {
+            host: "pve.local".to_string(),
+            node: "tartarus".to_string(),
+            chromeos_template_vmid: Some(9012.0),
+            ..ProxmoxOptions::default()
+        });
+        assert_eq!(configured.chromeos_template_vmid(), Some(9012));
+        for bad in [0.0, -1.0, 1.5, f64::NAN, f64::INFINITY] {
+            let service = ProxmoxDesktopService::new(ProxmoxOptions {
+                host: "pve.local".to_string(),
+                node: "tartarus".to_string(),
+                chromeos_template_vmid: Some(bad),
+                ..ProxmoxOptions::default()
+            });
+            assert_eq!(service.chromeos_template_vmid(), None, "bad={bad}");
+        }
+        let unset = ProxmoxDesktopService::new(ProxmoxOptions {
+            host: "pve.local".to_string(),
+            node: "tartarus".to_string(),
+            ..ProxmoxOptions::default()
+        });
+        assert_eq!(unset.chromeos_template_vmid(), None);
     }
 
     #[test]
