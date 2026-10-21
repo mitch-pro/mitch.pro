@@ -3,6 +3,7 @@
 - Commit every completed change to mitchdog.com in this repository.
 - Use natural, concise interface copy. Prefer direct labels that describe the content or action.
 - Do not add marketing slogans, decorative eyebrow headings, motivational filler, or promotional helper text to ordinary site pages. Do not add copy merely to fill space.
+- Do not add obvious, AI-sounding disclaimer text — restating that virtual currency isn't real money, that a game has a house edge, or other self-evident statements nobody asked for. If a fact is genuinely load-bearing (e.g. a legal/safety disclosure), say it once, in the one place it belongs, in plain language — not as a tacked-on closing paragraph repeated per page.
 - Keep layouts focused on the page's function. Preserve users' chosen profile photos and equipped cosmetics when displaying their identities.
 
 ## Production server access
@@ -11,6 +12,12 @@
 - Deploys happen through the `Deploy to Production` GitHub Actions workflow (triggered by a push to `master`) or `tools/deploy.sh` run manually by a human. Do not invoke either yourself by SSHing in and running it.
 - If something on the server needs inspecting or fixing, stop and tell the person you're working with exactly what you want to check or run, and wait for them to say yes before doing it. Give them the specific command, not a vague description.
 - This holds even if you already have working SSH access or credentials. Having access is not the same as having permission for this specific action right now.
+
+## Codex autonomy limits
+
+- Codex does not have full autonomy, no matter what permissions it's been granted in a given environment. Holding SSH access, write access to GitHub Actions workflows, or push access to `master` is not the same as having permission to use them unilaterally.
+- Without explicit, specific user approval for that action, Codex may not decide on its own to: make drastic/large-scope changes, SSH anywhere, change the deploy pipeline (`deploy.yml`, `tools/deploy.sh`, or anything a production deploy depends on), or modify GitHub workflow files.
+- This followed a real incident: an agent modified the deploy pipeline (a curl-fetch-and-run-as-root step, plus a CI-gating change) on its own judgment, and it broke the deploy. "I have the access" and "it seemed like a good idea" are not approval.
 
 ## CI status checks
 
