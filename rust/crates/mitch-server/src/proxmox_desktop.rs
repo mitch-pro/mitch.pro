@@ -2592,7 +2592,7 @@ impl ProxmoxDesktopService {
             .await
     }
 
-    async fn update_hardware_policy(
+    pub async fn update_hardware_policy(
         &self,
         record: &Value,
         cpu_cores: Option<f64>,
