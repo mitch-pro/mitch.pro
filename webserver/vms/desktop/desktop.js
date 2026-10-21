@@ -292,17 +292,15 @@ menu.addEventListener('click', event => { const button = event.target.closest('[
 document.addEventListener('click', event => { if (!menu.contains(event.target) && !more.contains(event.target)) hideMenu(); });
 document.addEventListener('keydown', event => { if (event.key === 'Escape') hideMenu(); });
 
-// Browser-drawn cursor: some guest display adapters (virtio-gpu in
-// particular) don't reliably hand a visible cursor shape to noVNC over
-// VNC, and the browser's own pointer auto-hides after a moment in
-// fullscreen — leaving nothing visible. Draw our own, positioned against
-// display-frame (the element that actually goes fullscreen) so it works
-// in both modes without separate fullscreen handling. Off switch lives
-// in the 3-dot menu for anyone who'd rather see the guest's real cursor
-// shape (e.g. resize handles) and accept the fullscreen tradeoff.
-// Applies to ChromeOS/VirGL too — tried suppressing this overlay there on
-// the theory that VirGL draws its own cursor; in practice its VNC bridge
-// doesn't reliably show one either, so the overlay stays on for it.
+// Browser-drawn cursor: guest display adapters (virtio-gpu, VirGL, qxl —
+// anything other than plain std) don't reliably hand a visible cursor
+// shape to noVNC over VNC, and the browser's own pointer auto-hides
+// after a moment in fullscreen — leaving nothing visible at all. Draw
+// our own, positioned against display-frame (the element that actually
+// goes fullscreen) so it works in both modes without separate
+// fullscreen handling. Off switch lives in the 3-dot menu for anyone
+// who'd rather see the guest's real cursor shape (e.g. resize handles)
+// and accept the fullscreen tradeoff.
 const localCursor = $('local-cursor'), cursorToggleBtn = $('cursor-toggle-button');
 let localCursorEnabled = true;
 try { localCursorEnabled = localStorage.getItem('desktop_local_cursor') !== 'off'; } catch {}
@@ -316,6 +314,15 @@ function hideLocalCursor() {
   screen.classList.remove('hide-native-cursor');
 }
 applyCursorToggleUi();
+// Capture phase, not bubble (the default): noVNC's RFB attaches its own
+// mousemove handler directly to the canvas it creates inside #screen,
+// and that handler unconditionally calls stopPropagation() on every
+// mouse event (rfb.js's _handleMouse). A bubble-phase listener on
+// #screen — an ancestor of that canvas — never sees the event once
+// that fires; it's stopped before it bubbles back up. A capture-phase
+// listener runs on the way *down* to the target, before the canvas's
+// own bubble-phase handler executes at all, so it isn't affected by
+// that stopPropagation() call.
 screen.addEventListener('mousemove', event => {
   if (!localCursorEnabled || !connected || !localCursor) return;
   const rect = frame.getBoundingClientRect();
@@ -323,7 +330,7 @@ screen.addEventListener('mousemove', event => {
   localCursor.style.top = `${event.clientY - rect.top}px`;
   localCursor.classList.add('is-active');
   screen.classList.add('hide-native-cursor');
-});
+}, true);
 screen.addEventListener('mouseleave', hideLocalCursor);
 cursorToggleBtn?.addEventListener('click', () => {
   localCursorEnabled = !localCursorEnabled;
