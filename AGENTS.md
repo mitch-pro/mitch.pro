@@ -56,6 +56,12 @@
 - This applies even to small or seemingly-temporary data. "It's just a few fields" is how another fake table gets added; a few columns on a real table costs the same effort and doesn't need a follow-up migration later.
 - If a change would naturally extend an existing JSON-blob document, prefer migrating that document to a table first (see the ongoing JSON-to-table migration) rather than adding more to the blob.
 
+## Owner test account
+
+- `newaccount123@student.rjuhsd.us` (`mitch_lib::auth::OWNER_TEST_ACCOUNT_EMAIL`) is the owner's own account, used to test the student-facing experience — it is not a real student's account.
+- Do not give the co-owner, any other admin, or anyone besides the real owner access to this account's VM, under any circumstances, for any reason — not for a "quick check," not because someone asks, not because it seems harmless. This is enforced in code (`is_vm_owner_locked`), and that enforcement is the point: don't add a bypass for this email anywhere, including in new admin endpoints that haven't been wired through it yet.
+- If this ever needs to change, that's an explicit decision for the owner to state directly — not something to infer or work around.
+
 ## Verification and test discipline
 
 - Never push without local validation: autonomous agents must run `cargo test --workspace`, `cargo fmt --all -- --check`, and any relevant test suites locally before committing or pushing to `master`. No exceptions — "it's a small change" or "CI will catch it" is not a reason to skip this; a commit that hasn't been run locally has no business reaching `master`, let alone triggering a production deploy.

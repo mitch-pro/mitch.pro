@@ -60,6 +60,15 @@ pub const DEV_TEST_EMAIL: &str = "admin@mitch.pro";
 /// owner's own VM is (see `vm_record_allowed_for_actor`): only a real
 /// owner session or the account's own session can open it, not a
 /// co-owner or any other admin.
+///
+/// Do NOT give the co-owner (or any other admin) access to this
+/// account's VM, under any circumstances, for any reason — not for a
+/// "quick check," not because they ask, not because it seems harmless.
+/// If this constant's VM ever needs to change hands, that's a decision
+/// for the owner to make explicitly, not something to special-case
+/// around in code. `is_vm_owner_locked` is the enforcement point; don't
+/// add a bypass for this email anywhere, including in new admin
+/// endpoints that don't yet call it.
 pub const OWNER_TEST_ACCOUNT_EMAIL: &str = "newaccount123@student.rjuhsd.us";
 pub const WHITELISTED_IPS: &[&str] = &["66.60.183.124"];
 
