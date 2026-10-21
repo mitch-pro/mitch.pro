@@ -49,8 +49,9 @@ on top of it. Frontend is `webserver/casino/{index.html,casino.js,casino.css}`.
 
 ## Admin kill switch
 
-`AppState::casino_enabled` (an `AtomicBool`, persisted to
-`data/casino_settings.json`) gates every `/api/casino/*` mutating route.
+`AppState::casino_enabled` (an `AtomicBool`, persisted to the single-row
+`casino_settings` table — not a JSON file, per AGENTS.md's data-storage
+rule) gates every `/api/casino/*` mutating route.
 Toggle it with `POST /api/admin/casino/toggle` (full admins only) in the
 admin panel's Economy section. There's no separate casino audit log —
 every settle writes to the existing `logs/coins.log` with a

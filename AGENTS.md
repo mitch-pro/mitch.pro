@@ -43,6 +43,12 @@
 - When adding a new subsystem or a new admin page, write its doc as part of that change, not as a follow-up.
 - If an AI works on code whose docs are missing or out of date, fix that as part of the same change — unless the subsystem is very large, in which case document only the part actually touched rather than trying to backfill the whole thing in one pass. Don't let "it's all undocumented" become an excuse to skip documenting the part you just changed, and don't let it become an excuse to burn a whole session rewriting docs for code you didn't touch.
 
+## Data storage
+
+- No new JSON-blob storage. The old pattern — a `data/<thing>.json` file, or a row in the generic `json_documents` table holding a serialized blob — is legacy, being migrated away from, not a template to copy. Anything new gets a real SQL table (proper columns, types, and an index where it's looked up by something other than its primary key), the same way `coins`, `virtual_machines`, etc. already work.
+- This applies even to small or seemingly-temporary data. "It's just a few fields" is how another fake table gets added; a few columns on a real table costs the same effort and doesn't need a follow-up migration later.
+- If a change would naturally extend an existing JSON-blob document, prefer migrating that document to a table first (see the ongoing JSON-to-table migration) rather than adding more to the blob.
+
 ## Verification and test discipline
 
 - Never push without local validation: autonomous agents must run `cargo test --workspace`, `cargo fmt --all -- --check`, and any relevant test suites locally before committing or pushing to `master`. No exceptions — "it's a small change" or "CI will catch it" is not a reason to skip this; a commit that hasn't been run locally has no business reaching `master`, let alone triggering a production deploy.

@@ -198,8 +198,8 @@ pub struct AppState {
     /// `webauthnChallenges` (server.js:5643) — in-memory WebAuthn challenge store.
     pub webauthn_challenges: mitch_lib::webauthn::ChallengeStore,
 
-    /// Admin kill switch for the casino (`/casino/*`). Loaded from
-    /// `data/casino_settings.json` at boot, flipped by
+    /// Admin kill switch for the casino (`/casino/*`). Loaded from the
+    /// single-row `casino_settings` table at boot, flipped by
     /// `/api/admin/casino/toggle`, and checked by every casino route
     /// before any bet is accepted. `true` = casino is open.
     pub casino_enabled: std::sync::atomic::AtomicBool,
@@ -336,14 +336,7 @@ impl AppState {
                     .collect()
             })
             .unwrap_or_default();
-        let casino_enabled = store
-            .read_document(
-                &cfg.data_dir.join("casino_settings.json"),
-                serde_json::json!({"enabled": true}),
-            )
-            .get("enabled")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(true);
+        let casino_enabled = mitch_lib::casino::casino_enabled(&store);
         let canvas = crate::routes::canvas::CanvasState::load(&store, &cfg.data_dir.clone());
         let logic_dictionary = Self::load_logic_dictionary(&cfg.data_dir);
         let cv_games_map = Self::load_cv_games(&store, &cfg.data_dir);
@@ -539,13 +532,12 @@ impl AppState {
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    /// Flips the casino kill switch and persists it to
-    /// `data/casino_settings.json` so a restart doesn't silently reopen it.
+    /// Flips the casino kill switch and persists it to the
+    /// `casino_settings` table so a restart doesn't silently reopen it.
     pub fn set_casino_enabled(&self, enabled: bool) {
         self.casino_enabled
             .store(enabled, std::sync::atomic::Ordering::Relaxed);
-        let path = self.cfg.data_dir.join("casino_settings.json");
-        let _ = std::fs::write(path, serde_json::json!({"enabled": enabled}).to_string());
+        mitch_lib::casino::set_casino_enabled(&self.store, enabled);
     }
 }
 

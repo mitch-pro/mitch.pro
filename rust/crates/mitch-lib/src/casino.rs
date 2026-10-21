@@ -15,10 +15,14 @@
 //!   in one locked transaction — there is no "deduct the bet, then credit
 //!   the win" two-step that a crash or a race could land between.
 //! - Every game here is a pure function of `(bet, choice, rng draws) ->
-//!   payout`. None of them touch the database directly; the route layer
-//!   calls a `play_*`/`resolve_*` function to get a payout, then calls
-//!   `settle_bet` once. This keeps the money-moving code in exactly one
-//!   place no matter how many games get added.
+//!   payout`. None of the *game logic* touches the database directly; the
+//!   route layer calls a `play_*`/`resolve_*` function to get a payout,
+//!   then calls `settle_bet` once. This keeps the money-moving code in
+//!   exactly one place no matter how many games get added. (`casino_enabled`
+//!   / `set_casino_enabled` below are the one exception — they're admin
+//!   configuration, not a game outcome, and read/write the single-row
+//!   `casino_settings` table rather than a JSON file, per AGENTS.md's data-
+//!   storage rule.)
 //! - Blackjack and Poker are multi-request (deal, then act), so their
 //!   in-progress hand lives in server memory only (`AppState`), keyed by
 //!   normalized email, with the bet already debited at deal time. A
@@ -33,6 +37,7 @@
 //!   than hand-derived, specifically so a future paytable tweak can't
 //!   silently flip the edge.
 
+use crate::data::DataStore;
 use rand::seq::SliceRandom;
 use rand::Rng;
 
@@ -40,6 +45,31 @@ use rand::Rng;
 pub const MIN_BET: f64 = 1.0;
 /// Largest bet any game will accept, in one round.
 pub const MAX_BET: f64 = 5000.0;
+
+/// Whether the casino is currently open. Reads the single-row
+/// `casino_settings` table; defaults to `true` (open) if the row hasn't
+/// been written yet, i.e. an admin has never touched the kill switch.
+pub fn casino_enabled(store: &DataStore) -> bool {
+    store
+        .conn()
+        .query_row(
+            "SELECT enabled FROM casino_settings WHERE id = 1",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|v| v != 0)
+        .unwrap_or(true)
+}
+
+/// Flips the admin kill switch and persists it, so a restart doesn't
+/// silently reopen a casino an admin just closed.
+pub fn set_casino_enabled(store: &DataStore, enabled: bool) {
+    let _ = store.conn().execute(
+        "INSERT INTO casino_settings (id, enabled) VALUES (1, ?1)
+         ON CONFLICT(id) DO UPDATE SET enabled = ?1",
+        rusqlite::params![enabled as i64],
+    );
+}
 
 /// `true` if `bet` is a value a game is willing to accept at all —
 /// finite, and within `[MIN_BET, MAX_BET]`. Games still separately rely on
@@ -841,5 +871,29 @@ mod tests {
                 "payout {payout} exceeds 800x on a 10 bet"
             );
         }
+    }
+
+    fn temp_store(tag: &str) -> (std::path::PathBuf, DataStore) {
+        let base = std::env::temp_dir().join(format!(
+            "mitch-lib-casino-test-{tag}-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(base.join("data")).unwrap();
+        let store = DataStore::open(&base, &base.join("data")).unwrap();
+        (base, store)
+    }
+
+    #[test]
+    fn casino_enabled_defaults_true_and_persists_a_toggle() {
+        let (base, store) = temp_store("kill-switch");
+        assert!(casino_enabled(&store));
+        set_casino_enabled(&store, false);
+        assert!(!casino_enabled(&store));
+        set_casino_enabled(&store, true);
+        assert!(casino_enabled(&store));
+        std::fs::remove_dir_all(base).ok();
     }
 }

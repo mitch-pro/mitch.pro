@@ -270,14 +270,10 @@ impl DataStore {
                         lifetime_earned REAL NOT NULL DEFAULT 0,
                         updated_at INTEGER NOT NULL
                     );
-                    CREATE TABLE IF NOT EXISTS casino_rounds (
-                        email TEXT NOT NULL,
-                        id TEXT NOT NULL,
-                        result TEXT NOT NULL,
-                        ts INTEGER NOT NULL,
-                        PRIMARY KEY (email, id)
+                    CREATE TABLE IF NOT EXISTS casino_settings (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        enabled INTEGER NOT NULL DEFAULT 1
                     );
-                    CREATE INDEX IF NOT EXISTS casino_rounds_history ON casino_rounds(email, ts DESC);
                     CREATE TABLE IF NOT EXISTS blacklist (
                         email TEXT PRIMARY KEY,
                         reason TEXT NOT NULL DEFAULT 'Banned by admin',
