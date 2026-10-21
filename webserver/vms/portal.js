@@ -92,7 +92,7 @@
         ${vm.desktopSetup?.status === 'preparing' ? '<p class="desktop-setup-status" role="status">Preparing automatic sign-in and video support…</p>' : vm.desktopSetup?.status === 'failed' ? '<p class="desktop-setup-status failed" role="status">Desktop setup needs another try. Choose Repair desktop below.</p>' : ''}
         <div class="computer-actions">
           ${primaryAction}
-          ${isByoOs ? `<button type="button" class="control-button" data-action="detach-iso" ${busy ? 'disabled' : ''} title="Once your OS is installed, eject the install ISO so the next boot goes straight to disk">Detach ISO</button>` : ''}
+          ${isByoOs ? `<button type="button" class="control-button" data-action="windows-compatibility" ${busy ? 'disabled' : ''}>Windows installer compatibility</button><button type="button" class="control-button" data-action="detach-iso" ${busy ? 'disabled' : ''} title="Once your OS is installed, eject the install ISO so the next boot goes straight to disk">Detach ISO</button>` : ''}
           ${canExtend ? '<button type="button" class="control-button" data-action="extend">Extend 30m</button>' : running && dailyUsed ? '<button type="button" class="control-button" disabled title="Only one 30-minute extension is allowed per day">Extension used</button>' : ''}
           <details class="more-menu"><summary aria-label="More computer actions"><span aria-hidden="true">···</span> More</summary><div class="menu-panel" role="group" aria-label="Computer power and reset">
             ${running ? `${vm.managedDesktop ? '<button type="button" data-action="repair-desktop">Repair desktop</button>' : ''}<button type="button" data-action="restart" ${busy ? 'disabled' : ''}>Restart</button><button type="button" data-action="shutdown" ${busy ? 'disabled' : ''}>Shut Down</button><span class="menu-divider"></span>` : ''}
@@ -151,6 +151,17 @@
     if (!vm || pending.has(id)) return;
     if (action === 'recreate') {
       openProvisionModal('recreate');
+      return;
+    }
+    if (action === 'windows-compatibility') {
+      if (!confirm('Prepare this VM for a Windows 11 installation? Shut it down first. This enables UEFI, Secure Boot, and TPM 2.0, with at least 2 CPU cores 4 GB RAM, and 64 GB storage. An existing legacy BIOS installation may need reinstalling. Disks and files are preserved.')) return;
+      pending.set(id, 'Preparing Windows installer…'); render();
+      try {
+        const response = await fetch('/api/vm/byo-os/windows-compatibility', { method: 'POST', credentials: 'same-origin', headers, body: JSON.stringify({ id, confirmInstallerRepair: true }) });
+        const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Could not prepare the installer.');
+        $('refresh-status').textContent = data.message;
+      } catch (error) { $('refresh-status').textContent = error.message; }
+      finally { pending.delete(id); await load(); }
       return;
     }
     if (action === 'detach-iso') {

@@ -251,17 +251,6 @@ pub fn pixel_post(state: &Arc<AppState>, headers: &HeaderMap, body: &Value) -> R
         }
     }
 
-    // Shadow-banned painters get a shadow success before any paint lands.
-    if !email.is_empty()
-        && state
-            .shadow_bans
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .contains(&normalize_email(&email))
-    {
-        return json_response(200, json!({ "ok": true }));
-    }
-
     // Key order matters for persisted byte parity: color, painter, ts,
     // email?, premium?, admin?.
     let now = now_ms();

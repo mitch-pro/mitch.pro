@@ -989,13 +989,13 @@
         </div>
       </div>
       <div class="field">
-        <label>Page Location</label>
+        <label>Share activity</label>
         <div class="toggle-row">
           <label class="toggle-switch">
             <input type="checkbox" id="privHideLocationToggle">
             <span class="toggle-slider"></span>
           </label>
-          <span class="toggle-desc">Hide your current page from everyone, including friends and admins.</span>
+          <span class="toggle-desc">Share your current activity with friends. Off by default.</span>
         </div>
       </div>
       <div class="field">
@@ -2115,7 +2115,8 @@ function saveAll() {
     }));
     localStorage.setItem(PRIVACY_CONFIG_KEY, JSON.stringify({
       hideOnline:   document.getElementById('privHideOnlineToggle').checked,
-      hideLocation: document.getElementById('privHideLocationToggle').checked,
+      hideLocation: !document.getElementById('privHideLocationToggle').checked,
+      shareActivity: document.getElementById('privHideLocationToggle').checked,
       stealthDash:  document.getElementById('privStealthToggle').checked,
       noHistory:    document.getElementById('privNoHistoryToggle').checked,
       newsletter:   document.getElementById('privNewsletterToggle').checked,
@@ -2366,7 +2367,7 @@ async function deleteAccount() {
 
   var pk = load(PRIVACY_CONFIG_KEY, { hideOnline: false, hideLocation: false, stealthDash: false, noHistory: false, newsletter: true, blockProfile: false });
   document.getElementById('privHideOnlineToggle').checked   = !!pk.hideOnline;
-  document.getElementById('privHideLocationToggle').checked = !!pk.hideLocation;
+  document.getElementById('privHideLocationToggle').checked = pk.shareActivity === true && !pk.hideLocation;
   document.getElementById('privStealthToggle').checked      = !!pk.stealthDash;
   document.getElementById('privNoHistoryToggle').checked     = !!pk.noHistory;
   document.getElementById('privNewsletterToggle').checked    = pk.newsletter !== false;

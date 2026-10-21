@@ -842,11 +842,11 @@ function renderOnlineMembers(members) {
   var wrap = document.getElementById('online-members-wrap');
   var list = document.getElementById('online-members-list');
   var allMembers = (members || []).slice().sort(function(a, b) {
-    return Number(!!b.online) - Number(!!a.online) || String(a.displayName || a.email || '').localeCompare(String(b.displayName || b.email || ''));
+    return window.MitchPeople.compare(a, b);
   });
   var online = allMembers.filter(function(m) { return m.online; });
   var signature = JSON.stringify(allMembers.map(function(m) {
-    return [m.email || '', m.displayName || '', m.pfp || '', m.badge || '', m.color || '', !!m.online, m.activity || m.playing || '', m.page || '', m.status || ''];
+    return [m.email || '', m.displayName || '', m.pfp || '', m.badge || '', m.color || '', !!m.online, m.activity || m.playing || '', m.page || '', m.status || '', m.role || '', m.lastActive || 0];
   }));
   if (signature === window._onlineMembersSignature) return;
   window._onlineMembersSignature = signature;
@@ -900,8 +900,8 @@ function renderOnlineMembers(members) {
       : '<span class="member-presence-avatar member-presence-initials" aria-hidden="true">' + escText(initials) + '</span>';
     var statusText = escText(m.online ? ((m.status === 'away' ? 'Away · ' : '') + (m.activity || m.playing || 'Online now')) : 'Offline');
     var tooltip = email.includes('@') ? email : '';
-    return '<a class="member-presence-card name ' + escText(colorClass) + (m.online ? ' is-online' : ' is-offline') + '" href="/profile/?u=' + encodeURIComponent(email) + '" title="' + escText(tooltip) + '">' +
-      avatar + '<span class="member-presence-copy"><span class="member-presence-name name ' + escText(colorClass) + '">' + nameContent + badgeHtml + '</span><span class="member-presence-status"><span class="online-dot"></span>' + statusText + '</span></span></a>';
+    return '<a class="member-presence-card name ' + escText(colorClass) + (m.online ? ' is-online' : ' is-offline') + '" href="/profile/?u=' + encodeURIComponent(m.handle || email) + '" title="' + escText(tooltip) + '">' +
+      avatar + '<span class="member-presence-copy"><span class="member-presence-name name ' + escText(colorClass) + '">' + nameContent + badgeHtml + '</span><span class="member-presence-rank">' + escText(window.MitchPeople.rank(m)) + (m.friendStatus === 'friends' ? ' · Friend' : '') + '</span><span class="member-presence-status"><span class="online-dot"></span>' + statusText + '</span></span></a>';
   }).join('');
   wrap.style.display = '';
 }
@@ -2767,6 +2767,8 @@ if (document.readyState === 'loading') {
   initHome();
 }
 </script>
+<script src="/people.js"></script>
+<style>.member-presence-rank{display:block;font-size:10px;color:var(--t-fg2,#99a3b3);margin:2px 0}.member-presence-copy{min-width:0}</style>
 </head>
 
 <body data-shell="off" class="home mitch-design">

@@ -59,7 +59,6 @@ fn members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let is_admin = auth::is_admin_id(&state.store, &state.id_secret, &sid, node_env_test);
     let now = mitch_lib::school::now_millis();
     let viewer_norm = auth::normalize_email(&viewer_email);
-    touch_active_email(state, &viewer_email, now);
 
     let tokens = mitch_lib::tokens::token_all(&state.store);
     let profiles = mitch_lib::profiles::profile_all(&state.store);
@@ -198,6 +197,7 @@ fn members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         let presence = presence_map.get(&norm).cloned().unwrap_or_default();
         let public_status = if presence.online { "online" } else { "offline" };
         member.insert("online".into(), json!(presence.online));
+        member.insert("lastActive".into(), json!(presence.last_active));
         member.insert(
             "playing".into(),
             json!(if can_view_activity {
@@ -343,7 +343,7 @@ fn member_req_between(req: &Value, from_norm: &str, to_norm: &str) -> bool {
 }
 
 /// The role ladder (server.js:19133-19141).
-fn member_role(state: &Arc<AppState>, email: &str) -> &'static str {
+pub(crate) fn member_role(state: &Arc<AppState>, email: &str) -> &'static str {
     let norm = auth::normalize_email(email);
     if auth::is_co_owner_email(&state.store, email) {
         "co-owner/developer"
@@ -753,18 +753,24 @@ fn sync_privacy_prefs(state: &Arc<AppState>, uid: &str, body: &Value, existing: 
         },
         other => other.clone(),
     };
-    if let Some(hide) = pref
+    let mut presence = state
+        .user_presence
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let rec = presence.entry(norm).or_default();
+    rec.hide_location = pref
         .get("hideLocation")
         .or_else(|| pref.get("hidePageLocation"))
         .and_then(Value::as_bool)
-    {
-        let mut presence = state
-            .user_presence
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        let rec = presence.entry(norm).or_default();
-        rec.hide_location = hide;
-    }
+        .unwrap_or(true);
+    rec.hide_online = pref
+        .get("hideOnline")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    rec.share_activity = pref
+        .get("shareActivity")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
 }
 
 /// The newsletter-unsub sync block (server.js:17278-17297).
@@ -834,33 +840,6 @@ fn member_gate(state: &Arc<AppState>, headers: &HeaderMap) -> Option<(String, St
 /// `isRevoked(id)` (server.js:2769) — key presence in the revoked_ids table.
 fn is_revoked_id(state: &Arc<AppState>, sid: &str) -> bool {
     mitch_lib::revoked::revoked_id_exists(&state.store, sid)
-}
-
-/// `touchActiveEmail(email, now)` (server.js:3396-3404) — the 10s-throttled
-/// `last_active_at` stamp in user_stats.json. JS keeps `userStats` as an
-/// in-process cache; the Rust port reads/writes the document directly.
-fn touch_active_email(state: &Arc<AppState>, email: &str, now: i64) {
-    if email.is_empty() {
-        return;
-    }
-    let norm = auth::normalize_email(email);
-    let mut entry = mitch_lib::user_stats::user_stats_get(&state.store, &norm);
-    // `if (!stats[norm]) stats[norm] = {}` — falsy entries are replaced.
-    if !jsval::truthy(&entry) {
-        entry = json!({});
-    }
-    let Some(obj) = entry.as_object_mut() else {
-        return; // JS: property set on a truthy primitive silently no-ops
-    };
-    let last = obj
-        .get("last_active_at")
-        .and_then(jsval::number)
-        .unwrap_or(0.0);
-    if (now as f64) - last < 10_000.0 {
-        return;
-    }
-    obj.insert("last_active_at".into(), json!(now));
-    mitch_lib::user_stats::user_stats_set(&state.store, &norm, &entry);
 }
 
 #[cfg(test)]
@@ -1036,6 +1015,7 @@ mod tests {
                 "activity": "Browsing the shop",
                 "visible": true,
                 "focused": false,
+                "shareActivity": true,
                 "interaction": 1
             }),
             None,

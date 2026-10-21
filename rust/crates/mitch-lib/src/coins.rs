@@ -281,7 +281,13 @@ pub fn reset_all_coins(store: &DataStore, data_dir: &Path, reason: &str) -> usiz
 /// Shared `logs/coins.log` TSV append, factored out of `add_coins`/
 /// `set_coins`/`cap_coins_above` so every balance mutation leaves the same
 /// audit trail.
-fn log_coin_change(data_dir: &Path, norm_email: &str, before: f64, after: f64, reason: &str) {
+pub(crate) fn log_coin_change(
+    data_dir: &Path,
+    norm_email: &str,
+    before: f64,
+    after: f64,
+    reason: &str,
+) {
     let ts = js_iso_date();
     let delta = after - before;
     let sign = if delta >= 0.0 { "+" } else { "" };

@@ -227,10 +227,10 @@ use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
 use mitch_lib::vm as vmlib;
 use mitch_lib::vm_security::{
-    can_user_extend, compute_cooldown_remaining, format_uptime_duration,
-    get_remaining_daily_vm_seconds, is_daily_vm_limit_reached, validate_desktop_session,
-    VM_COOLDOWN_DURATION_MS, VM_DAILY_MAX_SECONDS, VM_DEFAULT_CPU_CORES, VM_DEFAULT_DISK_GB,
-    VM_DEFAULT_MEMORY_MB, VM_FLEET_MAX_CORES, VM_FLEET_MAX_MEMORY_MB, VM_MAX_CONCURRENT_RUNNING,
+    can_user_extend, compute_cooldown_remaining, get_remaining_daily_vm_seconds,
+    is_daily_vm_limit_reached, validate_desktop_session, VM_COOLDOWN_DURATION_MS,
+    VM_DAILY_MAX_SECONDS, VM_DEFAULT_CPU_CORES, VM_DEFAULT_DISK_GB, VM_DEFAULT_MEMORY_MB,
+    VM_FLEET_MAX_CORES, VM_FLEET_MAX_MEMORY_MB, VM_MAX_CONCURRENT_RUNNING,
 };
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -681,7 +681,7 @@ pub(crate) fn can_customize_owner_vm(state: &AppState, actor: &VmActor) -> bool 
     actor.is_owner || mitch_lib::auth::is_co_owner_email(&state.store, &actor.email)
 }
 
-fn owner_resource_value(category: &str, value: &Value) -> Option<f64> {
+pub(crate) fn owner_resource_value(category: &str, value: &Value) -> Option<f64> {
     let value = value.as_f64()?;
     let minimum = match category {
         "cpu" => 1.0,
@@ -693,7 +693,7 @@ fn owner_resource_value(category: &str, value: &Value) -> Option<f64> {
         .then_some(value)
 }
 
-struct ResourceOperation<'a> {
+pub(crate) struct ResourceOperation<'a> {
     state: &'a AppState,
     key: String,
 }
@@ -706,7 +706,10 @@ impl Drop for ResourceOperation<'_> {
             .release(&self.key, 0.0);
     }
 }
-fn resource_operation<'a>(state: &'a AppState, key: String) -> Option<ResourceOperation<'a>> {
+pub(crate) fn resource_operation<'a>(
+    state: &'a AppState,
+    key: String,
+) -> Option<ResourceOperation<'a>> {
     let acquired = state
         .vm_power_gate
         .lock()
@@ -768,7 +771,7 @@ async fn owner_resources(state: &Arc<AppState>, headers: &HeaderMap, bytes: &[u8
                 )
             }
         };
-        if runtime["status"] != "stopped" {
+        if runtime["state"] != "stopped" {
             return json_response(
                 409,
                 json!({"error":"Shut down your computer before changing its resources."}),
@@ -1184,34 +1187,6 @@ pub(crate) fn get_vm_lease(
                 if let Some(obj) = lease.as_object_mut() {
                     obj.insert("trackedUptime".to_string(), json!(normalized_uptime));
                 }
-                let rec = vmlib::get_virtual_machine_by_id(&state.store, record_id);
-                let vmid = rec.as_ref().map(|r| r.vmid);
-                let vm_name = rec
-                    .as_ref()
-                    .map(|r| {
-                        if !r.friendly_name.is_empty() {
-                            r.friendly_name.clone()
-                        } else if !r.hostname.is_empty() {
-                            r.hostname.clone()
-                        } else {
-                            "My Computer".to_string()
-                        }
-                    })
-                    .unwrap_or_else(|| "My Computer".to_string());
-                vmlib::record_vm_usage_sample(
-                    &state.store,
-                    None,
-                    &mitch_lib::vm_security::get_vm_day_key(now_ms()),
-                    None,
-                    None,
-                    owner_email,
-                    record_id,
-                    vmid,
-                    &vm_name,
-                    normalized_uptime,
-                    "",
-                    true,
-                );
             }
         }
         lease.get("extended").map(jsval::truthy).unwrap_or(false)
@@ -1262,261 +1237,6 @@ pub(crate) fn clear_vm_lease(state: &AppState, record_id: &str) {
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .remove(record_id);
-}
-
-// ── fleet usage stats (server.js:27304-27430) — serves the admin batch ──────
-
-/// `getVmFleetUsageStats(dayKey)` (server.js:27304-27430).
-pub(crate) fn get_vm_fleet_usage_stats(state: &AppState, day_key: &str) -> Value {
-    let resolved_day = if day_key.is_empty() {
-        mitch_lib::vm_security::get_vm_day_key(now_ms())
-    } else {
-        day_key.to_string()
-    };
-    let records = vmlib::list_virtual_machines(&state.store, true);
-    let record_jsons: Vec<Value> = records.iter().map(|r| r.to_json()).collect();
-
-    // activeSessions from the live desktop sockets (server.js:27307-27321).
-    let _now = now_ms();
-    let mut active_by_record: std::collections::HashMap<String, Vec<String>> =
-        std::collections::HashMap::new();
-    {
-        let sockets = state
-            .vm_desktop_sockets
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        for client in sockets.values() {
-            let d = &client.data;
-            let record_id = jsval::str_or(d.get("recordId"), "");
-            if record_id.is_empty() {
-                continue;
-            }
-            let actor = jsval::str_or(d.get("actorEmail"), "");
-            let owner = jsval::str_or(d.get("ownerEmail"), "");
-            let user = if actor.is_empty() { owner } else { actor };
-            active_by_record.entry(record_id).or_default().push(user);
-        }
-    }
-
-    let timeline = vmlib::get_vm_usage_timeline(&state.store, &resolved_day);
-    let daily_usage = load_vm_json(state, "vm_daily_usage.json", json!({}));
-    let profiles = mitch_lib::profiles::profile_all(&state.store);
-
-    // Build the user email set across records, dailyUsage and timeline
-    // (server.js:27328-27333) — insertion-ordered like the JS Set.
-    let mut user_emails: Vec<String> = Vec::new();
-    for r in &record_jsons {
-        let owner = jsval::str_or(r.get("ownerEmail"), "");
-        if !owner.is_empty() {
-            let norm = mitch_lib::auth::normalize_email(&owner);
-            if !user_emails.contains(&norm) {
-                user_emails.push(norm);
-            }
-        }
-    }
-    if let Some(obj) = daily_usage.as_object() {
-        for key in obj.keys() {
-            if key.is_empty() {
-                continue;
-            }
-            let norm = mitch_lib::auth::normalize_email(key);
-            if !user_emails.contains(&norm) {
-                user_emails.push(norm);
-            }
-        }
-    }
-    if let Some(hours) = timeline.get("hours").and_then(Value::as_array) {
-        for h in hours {
-            if let Some(users) = h.get("users").and_then(Value::as_array) {
-                for u in users {
-                    let email = jsval::str_or(u.get("email"), "");
-                    if !email.is_empty() {
-                        let norm = mitch_lib::auth::normalize_email(&email);
-                        if !user_emails.contains(&norm) {
-                            user_emails.push(norm);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    let mut records_by_owner: std::collections::HashMap<String, &Value> =
-        std::collections::HashMap::new();
-    for r in &record_jsons {
-        let owner = jsval::str_or(r.get("ownerEmail"), "");
-        if !owner.is_empty() {
-            records_by_owner.insert(mitch_lib::auth::normalize_email(&owner), r);
-        }
-    }
-
-    let mut rankings: Vec<Value> = Vec::new();
-    let mut total_fleet_seconds_today = 0.0;
-
-    for email in &user_emails {
-        let norm = mitch_lib::auth::normalize_email(email);
-        let profile = profiles.get(&norm).cloned().unwrap_or_else(|| json!({}));
-        let record = records_by_owner.get(&norm).copied();
-        let user_daily = daily_usage.get(&norm).cloned().unwrap_or_else(|| json!({}));
-
-        let mut today_seconds = js_num_or(user_daily.get(&resolved_day), 0.0).max(0.0);
-
-        // Also take the max timeline-sample uptime for today.
-        let mut max_timeline_uptime = 0.0;
-        let mut timeline_sample_count = 0i64;
-        if let Some(hours) = timeline.get("hours").and_then(Value::as_array) {
-            for h in hours {
-                let user = h.get("users").and_then(Value::as_array).and_then(|users| {
-                    users
-                        .iter()
-                        .find(|u| {
-                            mitch_lib::auth::normalize_email(&jsval::str_or(u.get("email"), ""))
-                                == norm
-                        })
-                        .cloned()
-                });
-                if let Some(u) = user {
-                    timeline_sample_count +=
-                        u.get("samples").and_then(jsval::number).unwrap_or(0.0) as i64;
-                    let mu = u
-                        .get("maxUptimeSeconds")
-                        .and_then(jsval::number)
-                        .unwrap_or(0.0);
-                    if mu > max_timeline_uptime {
-                        max_timeline_uptime = mu;
-                    }
-                }
-            }
-        }
-        if max_timeline_uptime > today_seconds {
-            today_seconds = max_timeline_uptime;
-        }
-
-        // All-time seconds: sum across every day in the daily usage record.
-        let mut all_time_seconds = 0.0;
-        if let Some(obj) = user_daily.as_object() {
-            for secs in obj.values() {
-                all_time_seconds += js_num_or(Some(secs), 0.0).max(0.0);
-            }
-        }
-        if today_seconds > all_time_seconds {
-            all_time_seconds = today_seconds;
-        }
-
-        total_fleet_seconds_today += today_seconds;
-
-        let active_users = record
-            .map(|r| jsval::str_or(r.get("id"), ""))
-            .and_then(|id| active_by_record.get(&id).cloned())
-            .unwrap_or_default();
-        let is_in_use = !active_users.is_empty();
-        // recordViews is not supplied by any current caller → view is null,
-        // so isRunning is just the in-use flag.
-        let is_running = is_in_use;
-
-        let display_name = {
-            let dn = profile
-                .get("displayName")
-                .filter(|v| jsval::truthy(v))
-                .map(jsval::string);
-            dn.or_else(|| {
-                profile
-                    .get("nickname")
-                    .filter(|v| jsval::truthy(v))
-                    .map(jsval::string)
-            })
-            .unwrap_or_else(|| mitch_lib::profile::default_username_for_email(&norm))
-        };
-        let vm_name = record
-            .map(|r| {
-                let vmid = r.get("vmid").and_then(jsval::number).unwrap_or(0.0);
-                let fallback = format!("VM {}", jsval::num_value(vmid));
-                r.get("friendlyName")
-                    .and_then(Value::as_str)
-                    .or_else(|| r.get("hostname").and_then(Value::as_str))
-                    .unwrap_or(&fallback)
-                    .to_string()
-            })
-            .unwrap_or_else(|| "My Computer".to_string());
-
-        rankings.push(json!({
-            "email": norm,
-            "displayName": display_name,
-            "vmName": vm_name,
-            "vmRecordId": record.map(|r| jsval::str_or(r.get("id"), "")).unwrap_or_default(),
-            "vmid": record.and_then(|r| r.get("vmid")).and_then(jsval::number).filter(|v| *v != 0.0).map(jsval::num_value).unwrap_or(Value::Null),
-            "todaySeconds": today_seconds,
-            "todayFormatted": format_uptime_duration(today_seconds),
-            "allTimeSeconds": all_time_seconds,
-            "allTimeFormatted": format_uptime_duration(all_time_seconds),
-            "isRunning": is_running,
-            "isInUse": is_in_use,
-            "activeUsers": active_users,
-            "activeUsersCount": active_users.len(),
-            "samplesToday": timeline_sample_count,
-        }));
-    }
-
-    // Sort: most uptime today first; ties broken by all-time uptime.
-    rankings.sort_by(|a, b| {
-        let at = a.get("todaySeconds").and_then(jsval::number).unwrap_or(0.0);
-        let bt = b.get("todaySeconds").and_then(jsval::number).unwrap_or(0.0);
-        let aa = a
-            .get("allTimeSeconds")
-            .and_then(jsval::number)
-            .unwrap_or(0.0);
-        let ba = b
-            .get("allTimeSeconds")
-            .and_then(jsval::number)
-            .unwrap_or(0.0);
-        bt.partial_cmp(&at)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then(ba.partial_cmp(&aa).unwrap_or(std::cmp::Ordering::Equal))
-    });
-    for (idx, item) in rankings.iter_mut().enumerate() {
-        if let Some(obj) = item.as_object_mut() {
-            obj.insert("rank".to_string(), json!(idx + 1));
-        }
-    }
-
-    let top_user = if rankings
-        .first()
-        .and_then(|r| r.get("todaySeconds"))
-        .and_then(jsval::number)
-        .unwrap_or(0.0)
-        > 0.0
-    {
-        rankings.first().cloned()
-    } else {
-        None
-    };
-    let running_now = rankings
-        .iter()
-        .filter(|r| r.get("isRunning").map(jsval::truthy).unwrap_or(false))
-        .count() as i64;
-    let peak_running_today = timeline
-        .get("peakConcurrentToday")
-        .and_then(jsval::number)
-        .unwrap_or(0.0)
-        .max(running_now as f64) as i64;
-    let active_users_today = rankings
-        .iter()
-        .filter(|r| r.get("todaySeconds").and_then(jsval::number).unwrap_or(0.0) > 0.0)
-        .count() as i64;
-
-    json!({
-        "dayKey": resolved_day,
-        "hourlyTimeline": timeline.get("hours").cloned().unwrap_or_else(|| json!([])),
-        "rankings": rankings,
-        "summary": {
-            "topUser": top_user.unwrap_or(Value::Null),
-            "peakRunningToday": peak_running_today,
-            "totalFleetSecondsToday": total_fleet_seconds_today,
-            "totalFleetHoursToday": mitch_lib::data::js_to_fixed(total_fleet_seconds_today / 3600.0, 1),
-            "activeUsersToday": active_users_today,
-            "totalTrackedUsers": rankings.len(),
-        },
-    })
 }
 
 // ── eligibility + capacity (server.js:27509-27596) ───────────────────────────

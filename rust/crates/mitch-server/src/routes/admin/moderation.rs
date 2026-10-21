@@ -71,9 +71,12 @@ pub fn handle(
                 ))
             })
             .collect();
+        let vm_bans = state.vm_bans.read().unwrap_or_else(|e| e.into_inner());
+        let byo_bans = state.byo_os_bans.read().unwrap_or_else(|e| e.into_inner());
+        let restrictions:Vec<Value>=vm_bans.union(&byo_bans).map(|email|json!({"email":email,"vm":vm_bans.contains(email),"byoOs":byo_bans.contains(email)})).collect();
         return Some(json_response(
             200,
-            json!({ "bans": bans, "supportsTimedBans":true,"supportsChatCleanup":true, "chatCleanup":mitch_lib::chat_cleanup::statuses(&state.store) }),
+            json!({ "bans": bans, "restrictions":restrictions, "supportsTimedBans":true,"supportsChatCleanup":true, "chatCleanup":mitch_lib::chat_cleanup::statuses(&state.store) }),
         ));
     }
     // POST /api/admin/moderators (admins only).
@@ -232,56 +235,10 @@ pub fn handle(
     if (path == "/api/admin/shadow-ban" || path == "/api/admin/restricted-mode")
         && *method == Method::POST
     {
-        if !ctx.is_any_admin(state) {
-            return Some(forbidden());
-        }
-        let target = super::resolve_admin_target(
-            state,
-            body.get("email").and_then(|v| v.as_str()).unwrap_or(""),
-        );
-        if !valid_email(&target) {
-            return Some(json_response(
-                400,
-                json!({ "error":"valid email required" }),
-            ));
-        }
-        if mitch_lib::auth::is_admin_email(&state.store, &target) {
-            return Some(json_response(
-                403,
-                json!({ "error":"cannot restrict admins or owners" }),
-            ));
-        }
-        if !ctx.is_admin(state) {
-            return Some(queue_account_action(state, ctx, "shadow_ban", body));
-        }
-        let active = match toggle_shadow_ban(state, &target) {
-            Ok(active) => active,
-            Err((status, error)) => return Some(json_response(status, json!({ "error":error }))),
-        };
-        let actor = mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, &ctx.sid)
-            .unwrap_or_else(|| "moderator".to_string());
-        let role = if ctx.is_admin(state) {
-            "admin"
-        } else {
-            "moderator"
-        };
-        mitch_lib::admin::log_admin_action(
-            &state.store,
-            &state.cfg.data_dir,
-            &actor,
-            "shadow_ban",
-            json!({
-                "target": target,
-                "active": active,
-                "ip": ctx.ip,
-                "userAgent": headers
-                    .get("user-agent")
-                    .and_then(|v| v.to_str().ok())
-                    .unwrap_or("unknown"),
-                "role": role,
-            }),
-        );
-        return Some(json_response(200, json!({ "ok": true, "active": active })));
+        return Some(json_response(
+            410,
+            json!({"error":"Shadow bans have been retired. Use account bans with a visible reason and duration."}),
+        ));
     }
 
     // POST /api/admin/vm-ban (toggle) — bars a user from ALL VM features,
@@ -1235,24 +1192,53 @@ fn toggle_ban_set(
     file: &str,
     action_name: &str,
 ) -> Response {
-    let target =
-        mitch_lib::auth::normalize_email(body.get("email").and_then(|v| v.as_str()).unwrap_or(""));
-    if target.is_empty() {
-        return json_response(400, json!({ "error": "valid email required" }));
+    if !ctx.is_admin(state) {
+        return forbidden();
+    }
+    let target = super::resolve_admin_target(
+        state,
+        body.get("email").and_then(Value::as_str).unwrap_or(""),
+    );
+    if !valid_email(&target) {
+        return json_response(
+            400,
+            json!({"error":"Choose an existing account by username or email."}),
+        );
+    }
+    if mitch_lib::auth::is_admin_email(&state.store, &target) {
+        return json_response(
+            403,
+            json!({"error":"Admins and owners cannot be restricted from this panel."}),
+        );
+    }
+    if body.get("banned").is_some_and(|v| !v.is_boolean()) {
+        return json_response(400, json!({"error":"banned must be true or false."}));
     }
     let active;
     {
         let mut bans = set.write().unwrap_or_else(|e| e.into_inner());
-        if bans.contains(&target) {
-            bans.remove(&target);
+        let mut updated = bans.clone();
+        active = body
+            .get("banned")
+            .and_then(Value::as_bool)
+            .unwrap_or_else(|| !bans.contains(&target));
+        if active {
+            updated.insert(target.clone());
         } else {
-            bans.insert(target.clone());
+            updated.remove(&target);
         }
-        active = bans.contains(&target);
-        let arr: Vec<Value> = bans.iter().map(|b| json!(b)).collect();
-        let _ = state
+        let values: Vec<_> = updated.iter().cloned().collect();
+        if state
             .store
-            .write_document(&state.cfg.base_dir.join(file), &json!(arr));
+            .write_document(&state.cfg.base_dir.join(file), &json!(values))
+            .is_err()
+        {
+            return json_response(
+                500,
+                json!({"error":"Could not save the restriction. Nothing changed."}),
+            );
+        }
+        *bans = updated;
     }
     let actor = mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, &ctx.sid)
         .unwrap_or_else(|| "moderator".to_string());
@@ -1268,6 +1254,7 @@ fn toggle_ban_set(
         action_name,
         json!({
             "target": target,
+            "reason": body.get("reason").and_then(Value::as_str).unwrap_or(""),
             "active": active,
             "ip": ctx.ip,
             "userAgent": headers
@@ -1278,34 +1265,6 @@ fn toggle_ban_set(
         }),
     );
     json_response(200, json!({ "ok": true, "active": active }))
-}
-
-fn toggle_shadow_ban(state: &Arc<AppState>, target: &str) -> Result<bool, (u16, String)> {
-    if !valid_email(target) {
-        return Err((400, "valid email required".into()));
-    }
-    if mitch_lib::auth::is_admin_email(&state.store, target) {
-        return Err((403, "cannot restrict admins or owners".into()));
-    }
-    let mut bans = state.shadow_bans.write().unwrap_or_else(|e| e.into_inner());
-    let mut updated = bans.clone();
-    let was_restricted = updated
-        .iter()
-        .any(|email| mitch_lib::auth::normalize_email(email) == target);
-    updated.retain(|email| mitch_lib::auth::normalize_email(email) != target);
-    if !was_restricted {
-        updated.insert(target.to_string());
-    }
-    let entries: Vec<&String> = updated.iter().collect();
-    state
-        .store
-        .write_document(
-            &state.cfg.data_dir.join("shadow_bans.json"),
-            &json!(entries),
-        )
-        .map_err(|_| (500, "Could not save the account restriction.".to_string()))?;
-    *bans = updated;
-    Ok(!was_restricted)
 }
 
 fn queue_account_action(
@@ -1739,18 +1698,10 @@ pub fn execute_moderator_approved_action(
             );
             Ok(json!({ "ok": true }))
         }
-        "shadow_ban" => {
-            let target = super::resolve_admin_target(state, s("email").as_str().unwrap_or(""));
-            let active = toggle_shadow_ban(state, &target)?;
-            mitch_lib::admin::log_admin_action(
-                &state.store,
-                &state.cfg.data_dir,
-                actor,
-                "shadow_ban",
-                json!({ "target": target, "active": active }).merge(requested_by()),
-            );
-            Ok(json!({ "ok": true, "active": active }))
-        }
+        "shadow_ban" => Err((
+            410,
+            "Shadow bans have been retired. Use account bans.".into(),
+        )),
         "ban_account" | "unban_account" => {
             let email = payload.get("email").and_then(Value::as_str).unwrap_or("");
             let result = if action == "ban_account" {

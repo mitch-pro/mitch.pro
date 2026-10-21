@@ -47,11 +47,12 @@ function boot(initialMode = 'success') {
     if (params.get('q')) result = { ...result, players: params.get('q') === 'hero' ? [hero] : [], matchCount: params.get('q') === 'hero' ? 1 : 0 };
     if (mode === 'tester') result = { ...result, isTester: true, me: null };
     if (mode === 'empty') result = { ...result, players: [], top: [], me: null, total: 0, matchCount: 0 };
+    if (mode === 'relative') result = { ...result, players: [{ ...profile, pfp:'/avatars/fixture.png', background:'/backgrounds/fixture.webp' }] };
     if (mode === 'unsafe') result = { ...result, players: [{ ...profile, pfp: 'javascript:alert(1)', background: 'data:text/html;base64,aGk=', activeColor: '__proto__', activeProfileEffect: 'constructor', activeBadge: 'constructor' }] };
     return { ok: true, json: async () => result };
   };
   runInNewContext(code, {
-    document, fetch, URL, URLSearchParams, AbortController, HTMLImageElement: class {},
+    document, fetch, location: { origin: "https://example.test" }, URL, URLSearchParams, AbortController, HTMLImageElement: class {},
     setTimeout: fn => { timers.set(++timerId, fn); return timerId; }, clearTimeout: id => timers.delete(id),
     setInterval: fn => intervals.push(fn),
   });
@@ -131,3 +132,8 @@ assert.match(failed.get('rank-list').innerHTML, /Try again/);
 failed.mode('success'); failed.get('retry-board').emit('click'); await tick();
 assert.match(failed.get('rank-list').innerHTML, /Nova &lt;script&gt;/);
 console.log('Leaderboard UI checks passed: profiles, cosmetics, ranks, categories, search, races, refresh, empty/error/tester states, and unsafe input.');
+
+const relative = boot('relative');
+await tick();
+assert.match(relative.get('rank-list').innerHTML,/https:\/\/example.test\/avatars\/fixture.png/);
+assert.match(relative.get('rank-list').innerHTML,/https:\/\/example.test\/backgrounds\/fixture.webp/);

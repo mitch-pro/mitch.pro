@@ -26,13 +26,13 @@ pub async fn handle(
         return Some(friend_request(state, headers, body_bytes).await);
     }
     if path == "/api/friends/request/cancel" && method == Method::POST {
-        return Some(request_cancel(state, headers, body_bytes));
+        return Some(request_cancel(state, headers, body_bytes).await);
     }
     if path == "/api/friends/request/respond" && method == Method::POST {
         return Some(request_respond(state, headers, body_bytes).await);
     }
     if path == "/api/friends/remove" && method == Method::POST {
-        return Some(friends_remove(state, headers, body_bytes));
+        return Some(friends_remove(state, headers, body_bytes).await);
     }
     if path == "/api/friends/list" {
         return Some(friends_list(state, headers));
@@ -100,229 +100,73 @@ async fn friend_request(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: 
         return json_response(400, json!({ "error": "cannot friend request yourself" }));
     }
 
-    let already = mitch_lib::friends::friends_get(&state.store, &norm)
-        .as_array()
-        .map(|list| {
-            list.iter()
-                .any(|f| auth::normalize_email(&jsval::string(f)) == friend_email)
-        })
-        .unwrap_or(false);
-    if already {
-        return json_response(400, json!({ "error": "already friends" }));
-    }
-
-    let requests_file = data_file(state, "friend_requests.json");
-    let mut requests = state.store.read_document(&requests_file, json!([]));
-    if let Some(arr) = requests.as_array_mut() {
-        // Reverse request exists → auto-accept (server.js:16105-16131).
-        let reverse_idx = arr.iter().position(|r| {
-            auth::normalize_email(&jsval::string(&jsval::or(r.get("from"), json!(""))))
-                == friend_email
-                && auth::normalize_email(&jsval::string(&jsval::or(r.get("to"), json!("")))) == norm
-        });
-        if let Some(idx) = reverse_idx {
-            arr.remove(idx);
-            let _ = state.store.write_document(&requests_file, &requests);
-
-            mitch_lib::friends::friends_add(&state.store, &norm, &friend_email);
-            mitch_lib::friends::friends_add(&state.store, &friend_email, &norm);
-
-            send_web_push_clean(
-                state,
-                &friend_email,
-                &json!({
-                    "title": "Friend Request Accepted",
-                    "body": format!("{} accepted your friend request!", mitch_lib::admin::mask_email(&email)),
-                    "url": notification_url("/"),
-                }),
-            )
-            .await;
-            return json_response(200, json!({ "ok": true, "status": "accepted" }));
-        }
-
-        // Duplicate request exists (server.js:16133-16137).
-        let dup_idx = arr.iter().position(|r| {
-            auth::normalize_email(&jsval::string(&jsval::or(r.get("from"), json!("")))) == norm
-                && auth::normalize_email(&jsval::string(&jsval::or(r.get("to"), json!(""))))
-                    == friend_email
-        });
-        if dup_idx.is_some() {
-            return json_response(400, json!({ "error": "request already sent" }));
-        }
-    }
-
-    // Create the pending request (server.js:16139-16154).
-    if let Some(arr) = requests.as_array_mut() {
-        arr.push(json!({
-            "from": norm,
-            "to": friend_email,
-            "timestamp": mitch_lib::school::now_millis(),
-        }));
-    }
-    let _ = state.store.write_document(&requests_file, &requests);
-
-    send_web_push_clean(
-        state,
-        &friend_email,
-        &json!({
-            "title": "New Friend Request",
-            "body": format!("{} sent you a friend request!", mitch_lib::admin::mask_email(&email)),
-            "url": notification_url("/"),
-        }),
-    )
-    .await;
-    json_response(200, json!({ "ok": true, "status": "pending" }))
+    apply_friend_action(state, &email, &friend_email, "request").await
 }
 
-/// `/api/friends/request/cancel` (server.js:16154-16173).
-fn request_cancel(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Response {
-    let email = match session_email(state, headers) {
-        Ok(e) => e,
-        Err((code, msg)) => return json_response(code, json!({ "error": msg })),
-    };
-    let Some(body) = parse_body_strict(body_bytes) else {
-        return json_response(400, json!({ "error": "bad json" }));
-    };
-    let resolved = profile::resolve_target_email(
-        &state.store,
-        state.data_dir(),
-        &state.id_secret,
-        &jsval::string(&jsval::or(body.get("email"), json!(""))),
-    );
-    let Some(resolved) = resolved else {
-        return json_response(400, json!({ "error": "invalid email" }));
-    };
-    let friend_email = auth::normalize_email(&resolved);
-    let norm = auth::normalize_email(&email);
-
-    let requests_file = data_file(state, "friend_requests.json");
-    let mut requests = state.store.read_document(&requests_file, json!([]));
-    let idx = requests.as_array().map(|arr| {
-        arr.iter().position(|r| {
-            auth::normalize_email(&jsval::string(&jsval::or(r.get("from"), json!("")))) == norm
-                && auth::normalize_email(&jsval::string(&jsval::or(r.get("to"), json!(""))))
-                    == friend_email
-        })
-    });
-    match idx {
-        Some(Some(i)) => {
-            if let Some(arr) = requests.as_array_mut() {
-                arr.remove(i);
-            }
-        }
-        _ => {
-            return json_response(
-                400,
-                json!({ "error": "no pending request found to this user" }),
-            )
-        }
-    }
-    let _ = state.store.write_document(&requests_file, &requests);
-    json_response(200, json!({ "ok": true }))
-}
-
-/// `/api/friends/request/respond` (server.js:16182-16229).
-async fn request_respond(
+fn action_target(
     state: &Arc<AppState>,
     headers: &HeaderMap,
-    body_bytes: &[u8],
-) -> Response {
-    let email = match session_email(state, headers) {
-        Ok(e) => e,
-        Err((code, msg)) => return json_response(code, json!({ "error": msg })),
-    };
-    let Some(body) = parse_body_strict(body_bytes) else {
-        return json_response(400, json!({ "error": "bad json" }));
-    };
-    let resolved = profile::resolve_target_email(
+    bytes: &[u8],
+) -> Result<(String, String, Value), (u16, &'static str)> {
+    let email = session_email(state, headers)?;
+    let body = parse_body_strict(bytes).ok_or((400, "Invalid request."))?;
+    let target = profile::resolve_target_email(
         &state.store,
         state.data_dir(),
         &state.id_secret,
-        &jsval::string(&jsval::or(body.get("email"), json!(""))),
-    );
-    let Some(resolved) = resolved else {
-        return json_response(400, json!({ "error": "invalid email" }));
-    };
-    let friend_email = auth::normalize_email(&resolved);
-    let action = jsval::string(&jsval::or(body.get("action"), json!("")))
-        .trim()
-        .to_lowercase();
-    if action != "accept" && action != "reject" {
-        return json_response(400, json!({ "error": "invalid action" }));
-    }
-
-    let norm = auth::normalize_email(&email);
-    let requests_file = data_file(state, "friend_requests.json");
-    let mut requests = state.store.read_document(&requests_file, json!([]));
-    let idx = requests.as_array().map(|arr| {
-        arr.iter().position(|r| {
-            auth::normalize_email(&jsval::string(&jsval::or(r.get("from"), json!(""))))
-                == friend_email
-                && auth::normalize_email(&jsval::string(&jsval::or(r.get("to"), json!("")))) == norm
-        })
-    });
-    match idx {
-        Some(Some(i)) => {
-            if let Some(arr) = requests.as_array_mut() {
-                arr.remove(i);
-            }
-        }
-        _ => {
-            return json_response(
-                400,
-                json!({ "error": "no pending request found from this user" }),
-            )
-        }
-    }
-    let _ = state.store.write_document(&requests_file, &requests);
-
-    if action == "accept" {
-        mitch_lib::friends::friends_add(&state.store, &norm, &friend_email);
-        mitch_lib::friends::friends_add(&state.store, &friend_email, &norm);
-
-        send_web_push_clean(
-            state,
-            &friend_email,
-            &json!({
-                "title": "Friend Request Accepted",
-                "body": format!("{} accepted your friend request!", mitch_lib::admin::mask_email(&email)),
-                "url": notification_url("/"),
-            }),
-        )
-        .await;
-    }
-    json_response(200, json!({ "ok": true }))
+        body["email"].as_str().unwrap_or(""),
+    )
+    .ok_or((400, "Account not found."))?;
+    Ok((email, target, body))
 }
 
-/// `/api/friends/remove` (server.js:16230-16264) — always `{ok:true}`.
-fn friends_remove(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Response {
-    let email = match session_email(state, headers) {
-        Ok(e) => e,
-        Err((code, msg)) => return json_response(code, json!({ "error": msg })),
-    };
-    let Some(body) = parse_body_strict(body_bytes) else {
-        return json_response(400, json!({ "error": "bad json" }));
-    };
-    let resolved = profile::resolve_target_email(
-        &state.store,
-        state.data_dir(),
-        &state.id_secret,
-        &jsval::string(&jsval::or(body.get("email"), json!(""))),
-    );
-    let Some(resolved) = resolved else {
-        return json_response(400, json!({ "error": "invalid email" }));
-    };
-    let friend_email = auth::normalize_email(&resolved);
-    let norm = auth::normalize_email(&email);
-
-    for (key, other) in [(&norm, &friend_email), (&friend_email, &norm)] {
-        let mut list = mitch_lib::friends::friends_get(&state.store, key);
-        if let Some(arr) = list.as_array_mut() {
-            arr.retain(|f| auth::normalize_email(&jsval::string(f)) != *other);
-            mitch_lib::friends::friends_set(&state.store, key, &list);
-        }
+async fn apply_friend_action(
+    state: &Arc<AppState>,
+    email: &str,
+    target: &str,
+    action: &str,
+) -> Response {
+    let (status, changed) =
+        match mitch_lib::friends::change_request(&state.store, email, target, action) {
+            Ok(result) => result,
+            Err(message) => return json_response(400, json!({"error":message})),
+        };
+    if changed && matches!(status, "pending" | "accepted") {
+        let title = if status == "pending" {
+            "New friend request"
+        } else {
+            "Friend request accepted"
+        };
+        send_web_push_clean(state,target,&json!({"title":title,"body":mitch_lib::admin::mask_email(email),"url":"/friends/","tag":format!("friend-request:{}",auth::normalize_email(email))})).await;
     }
-    json_response(200, json!({ "ok": true }))
+    crate::ws::trigger_notification_refresh(state);
+    json_response(200, json!({"ok":true,"status":status}))
+}
+
+async fn request_cancel(state: &Arc<AppState>, headers: &HeaderMap, bytes: &[u8]) -> Response {
+    let (email, target, _) = match action_target(state, headers, bytes) {
+        Ok(value) => value,
+        Err((code, error)) => return json_response(code, json!({"error":error})),
+    };
+    apply_friend_action(state, &email, &target, "cancel").await
+}
+async fn request_respond(state: &Arc<AppState>, headers: &HeaderMap, bytes: &[u8]) -> Response {
+    let (email, target, body) = match action_target(state, headers, bytes) {
+        Ok(value) => value,
+        Err((code, error)) => return json_response(code, json!({"error":error})),
+    };
+    let action = body["action"].as_str().unwrap_or("");
+    if !matches!(action, "accept" | "reject") {
+        return json_response(400, json!({"error":"Choose accept or reject."}));
+    }
+    apply_friend_action(state, &email, &target, action).await
+}
+async fn friends_remove(state: &Arc<AppState>, headers: &HeaderMap, bytes: &[u8]) -> Response {
+    let (email, target, _) = match action_target(state, headers, bytes) {
+        Ok(value) => value,
+        Err((code, error)) => return json_response(code, json!({"error":error})),
+    };
+    apply_friend_action(state, &email, &target, "remove").await
 }
 
 /// `/api/friends/list` (server.js:23856-23887).
@@ -374,6 +218,8 @@ fn friends_list(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
                 "page": presence.page,
                 "status": presence.status,
                 "lastSeen": presence.last_seen,
+                "lastActive": presence.last_active,
+                "role": super::members::member_role(state, f),
             })
         })
         .collect();
@@ -420,15 +266,6 @@ fn requests_pending(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
-
-/// `notificationUrl` (server.js:2053-2055).
-fn notification_url(path: &str) -> String {
-    if path.starts_with('/') {
-        path.to_string()
-    } else {
-        format!("/{}", path)
-    }
-}
 
 /// `encodeURIComponent` (JS semantics — see `auth::encode_uri_component`).
 pub(crate) fn encode_uri_component(s: &str) -> String {

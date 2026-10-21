@@ -270,6 +270,14 @@ impl DataStore {
                         lifetime_earned REAL NOT NULL DEFAULT 0,
                         updated_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS casino_rounds (
+                        email TEXT NOT NULL,
+                        id TEXT NOT NULL,
+                        result TEXT NOT NULL,
+                        ts INTEGER NOT NULL,
+                        PRIMARY KEY (email, id)
+                    );
+                    CREATE INDEX IF NOT EXISTS casino_rounds_history ON casino_rounds(email, ts DESC);
                     CREATE TABLE IF NOT EXISTS blacklist (
                         email TEXT PRIMARY KEY,
                         reason TEXT NOT NULL DEFAULT 'Banned by admin',
@@ -1183,6 +1191,48 @@ impl DataStore {
         Ok(())
     }
 
+    /// Read, edit, and commit a SQLite JSON document under one write transaction.
+    /// Editors must not call back into this store while the connection is locked.
+    /// Chat-cleanup filtering also runs here, so an atomic edit cannot restore banned content.
+    pub fn mutate_document<R>(
+        &self,
+        file: &Path,
+        default: Value,
+        edit: impl FnOnce(&mut Value) -> R,
+    ) -> Result<R, DataError> {
+        use rusqlite::OptionalExtension;
+        if !self.should_store_in_db(file) || file.extension().is_none_or(|ext| ext != "json") {
+            return Err("Atomic updates require a SQLite JSON document".into());
+        }
+        let key = self.relative_key(file);
+        let mut conn = self.conn();
+        let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let raw: Option<String> = tx
+            .query_row(
+                "SELECT content FROM json_documents WHERE path=?1",
+                [&key],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let raw = match raw {
+            Some(raw) => Some(raw),
+            None => match std::fs::read_to_string(file) {
+                Ok(raw) => Some(raw),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+                Err(error) => return Err(error.into()),
+            },
+        };
+        let mut value = match raw {
+            Some(raw) => serde_json::from_str(&raw)?,
+            None => default,
+        };
+        let result = edit(&mut value);
+        crate::chat_cleanup::filter_document(&tx, &key, &mut value);
+        tx.execute("INSERT INTO json_documents(path,content,updated_at) VALUES(?1,?2,?3) ON CONFLICT(path) DO UPDATE SET content=excluded.content,updated_at=excluded.updated_at",rusqlite::params![key,js_stringify_pretty(&value),now_millis()])?;
+        tx.commit()?;
+        Ok(result)
+    }
+
     /// Atomically replace an existing SQLite JSON document if it is unchanged.
     /// Used to claim a reviewed newsletter once, including across app processes.
     pub fn compare_exchange_document(
@@ -1659,6 +1709,60 @@ pub fn js_quote(s: &str) -> String {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn first_atomic_edit_preserves_legacy_document_contents() {
+        let path = std::env::temp_dir().join(format!(
+            "atomic-legacy-{}",
+            crate::crypto::random_bytes_hex(12)
+        ));
+        std::fs::create_dir_all(path.join("data")).unwrap();
+        let file = path.join("data/legacy.json");
+        std::fs::write(&file, r#"["existing"]"#).unwrap();
+        let store = DataStore::open(&path, &path.join("data")).unwrap();
+        store
+            .mutate_document(&file, json!([]), |value| {
+                value.as_array_mut().unwrap().push(json!("new"))
+            })
+            .unwrap();
+        assert_eq!(
+            store.read_document(&file, json!([])),
+            json!(["existing", "new"])
+        );
+        drop(store);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn concurrent_document_edits_do_not_lose_appends() {
+        let path = std::env::temp_dir().join(format!(
+            "atomic-document-{}",
+            crate::crypto::random_bytes_hex(12)
+        ));
+        std::fs::create_dir_all(path.join("data")).unwrap();
+        let store = std::sync::Arc::new(DataStore::open(&path, &path.join("data")).unwrap());
+        let handles: Vec<_> = (0..16)
+            .map(|i| {
+                let store = store.clone();
+                std::thread::spawn(move || {
+                    store
+                        .mutate_document(
+                            &store.data_dir().join("atomic.json"),
+                            json!([]),
+                            |value| value.as_array_mut().unwrap().push(json!(i)),
+                        )
+                        .unwrap()
+                })
+            })
+            .collect();
+        for handle in handles {
+            handle.join().unwrap();
+        }
+        let list = store.read_document(&path.join("data/atomic.json"), json!([]));
+        assert_eq!(list.as_array().unwrap().len(), 16);
+        drop(store);
+        std::fs::remove_dir_all(path).unwrap();
+    }
 
     #[test]
     fn resolve_db_path_falls_back_to_data_dir_when_unset() {

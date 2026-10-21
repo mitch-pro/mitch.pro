@@ -192,13 +192,28 @@ fn resolve_recipients(state: &AppState, draft: &Draft) -> Result<Vec<String>, &'
     } else {
         draft.recipients.clone()
     };
+    let known: std::collections::BTreeMap<String, String> = directory(state)
+        .into_iter()
+        .filter_map(|account| {
+            account["email"]
+                .as_str()
+                .map(|email| (mitch_lib::auth::normalize_email(email), email.to_string()))
+        })
+        .collect();
     let mut recipients = BTreeSet::new();
     for candidate in candidates {
-        let email = candidate.trim().to_lowercase();
+        let raw = candidate.trim().to_lowercase();
+        let norm = mitch_lib::auth::normalize_email(&raw);
+        let email = known.get(&norm).cloned().unwrap_or(raw);
+        if email.ends_with("@student.rjuhsd.us")
+            && !email.split('@').next().unwrap_or("").contains('.')
+        {
+            return Err("A student address needs a period between the first and last names. Choose the registered address or enter it in full.");
+        }
         if !valid_email(&email) {
             return Err("One of the recipient email addresses is invalid.");
         }
-        if !unsub.contains(&email) {
+        if !unsub.contains(&email) && !unsub.contains(&norm) {
             recipients.insert(email);
         }
     }
@@ -532,6 +547,24 @@ mod tests {
         draft
             .recipients
             .push("a@example.test,b@example.test".into());
+        assert!(resolve_recipients(state, &draft).is_err());
+    }
+
+    #[test]
+    fn selected_aliases_resolve_to_one_dotted_student_mailbox_and_obey_unsubscribe() {
+        let fixture = Fixture::new();
+        let state = &fixture.state;
+        let dotted = concat!("fixture", ".", "member@student.rjuhsd.us");
+        auth::names_set(&state.store, "sid-selected-student", dotted);
+        let mut draft = Draft {
+            audience: "selected".into(),
+            recipients: vec!["fixturemember@mitch.pro".into(), dotted.into()],
+            ..Draft::default()
+        };
+        assert_eq!(resolve_recipients(state, &draft).unwrap(), vec![dotted]);
+        newsletter_unsub::newsletter_unsub_add(&state.store, "fixturemember@student.rjuhsd.us");
+        assert!(resolve_recipients(state, &draft).is_err());
+        draft.recipients = vec!["unknownstudent@student.rjuhsd.us".into()];
         assert!(resolve_recipients(state, &draft).is_err());
     }
 

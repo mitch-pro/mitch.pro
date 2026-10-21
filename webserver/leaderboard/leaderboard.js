@@ -35,7 +35,7 @@
     if (typeof value !== 'string' || /[\u0000-\u001f\u007f]/.test(value)) return '';
     if (allowData && /^data:image\/(png|jpe?g|gif|webp|avif);base64,[a-z0-9+/=\s]+$/i.test(value)) return value;
     try {
-      const url = new URL(value);
+      const url = new URL(value, location.origin);
       return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? url.href : '';
     } catch { return ''; }
   }

@@ -39,6 +39,17 @@ jobs:
       - name: Install Chromium
         working-directory: .
         run: npx playwright install --with-deps chromium
+      - name: Shared UI and notification regressions
+        working-directory: .
+        run: |
+          node tests/test_leaderboard_ui.mjs
+          node tests/test_service_worker_unit.js
+          node tests/test_notifications.mjs
+      - name: Admin, VM, casino and presence browser regressions
+        working-directory: .
+        run: |
+          node tests/test_admin_modernization.mjs
+          node tests/test_presence_browser.mjs
       - name: Newsletter editor and delivery regressions
         working-directory: .
         run: node tests/test_admin_email_browser.mjs

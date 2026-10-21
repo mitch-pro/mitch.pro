@@ -1,0 +1,344 @@
+/* Shared admin surfaces inherit the website theme and keep destructive actions distinct. */
+.admin-page {
+  --accent:var(--t-ac,#789ce8);
+  background:var(--t-bg,#111418)!important;
+  color:var(--t-fg,#e9ecf1);
+  font-family:Inter,system-ui,sans-serif;
+  line-height:1.5
+}
+
+.admin-page::before,.admin-page::after,.admin-page .staff-eyebrow {
+  display:none!important
+}
+
+.admin-page .shell {
+  width:min(1240px,calc(100% - 48px));
+  max-width:1240px;
+  margin:auto;
+  padding:32px 0 64px;
+  display:block
+}
+
+.admin-page .topbar {
+  display:flex;
+  align-items:center;
+  gap:16px;
+  padding:0 0 24px;
+  background:none;
+  border:0;
+  position:static;
+  box-shadow:none
+}
+
+.admin-page .topbar h1 {
+  font-size:32px;
+  letter-spacing:-.04em;
+  font-weight:650;
+  margin:0
+}
+
+.admin-page .staff-logo {
+  height:36px;
+  width:36px;
+  border-radius:9px
+}
+
+.admin-page .status {
+  margin-left:auto;
+  font-size:12px;
+  color:var(--t-fg2)
+}
+
+.admin-page .staff-panel-switcher {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  padding:14px 0;
+  border-block:1px solid var(--t-bd);
+  margin:0 0 24px;
+  background:none
+}
+
+.admin-page .staff-panel-switcher a {
+  display:flex;
+  gap:8px;
+  align-items:center;
+  padding:9px 12px;
+  border:1px solid transparent;
+  border-radius:8px;
+  color:var(--t-fg2);
+  background:none;
+  text-decoration:none
+}
+
+.admin-page .staff-panel-switcher a.active,.admin-page .staff-panel-switcher a:hover {
+  border-color:var(--t-bd);
+  background:var(--t-bg2);
+  color:var(--t-fg)
+}
+
+.admin-page .staff-panel-switcher small,.admin-page .staff-panel-switcher span {
+  display:none
+}
+
+.admin-page .staff-panel-switcher b {
+  font-weight:550;
+  font-size:13px
+}
+
+.admin-shortcuts {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+  margin:24px 0
+}
+
+.admin-shortcut {
+  display:grid;
+  gap:6px;
+  padding:22px;
+  border:1px solid var(--t-bd,#303640);
+  border-radius:12px;
+  background:var(--t-bg2,#191e25);
+  color:var(--t-fg);
+  text-decoration:none
+}
+
+.admin-shortcut[hidden] {
+  display:none
+}
+
+.admin-shortcut strong {
+  font-size:18px;
+  font-weight:600;
+  letter-spacing:-.02em
+}
+
+.admin-shortcut span {
+  font-size:13px;
+  color:var(--t-fg2)
+}
+
+.newsletter-shortcut {
+  border-color:color-mix(in srgb,var(--t-ac,#789ce8) 55%,var(--t-bd));
+  background:color-mix(in srgb,var(--t-ac,#789ce8) 8%,var(--t-bg2))
+}
+
+.admin-shortcut:hover {
+  border-color:var(--t-ac)
+}
+
+.admin-page .notice,.admin-page .role-note {
+  padding:10px 0;
+  border:0;
+  background:none;
+  color:var(--t-fg2);
+  font-size:12px
+}
+
+.admin-page .admin-layout {
+  display:grid;
+  grid-template-columns:200px minmax(0,1fr);
+  gap:28px;
+  margin-top:24px
+}
+
+.admin-page .admin-nav,.admin-page .tool-nav {
+  background:none;
+  border:0;
+  padding:0;
+  box-shadow:none
+}
+
+.admin-page .tool-group {
+  padding:0;
+  scroll-margin-top:30px
+}
+
+.admin-page .section-head {
+  border-bottom:1px solid var(--t-bd);
+  padding:0 0 14px;
+  margin:0 0 18px
+}
+
+.admin-page .section-head h2 {
+  font-size:22px;
+  font-weight:600;
+  letter-spacing:-.025em
+}
+
+.admin-page .section-head .tag {
+  display:none
+}
+
+.admin-page .action-card,.admin-page .panel,.admin-page .card {
+  background:var(--t-bg2,#191e25)!important;
+  border:1px solid var(--t-bd)!important;
+  border-radius:11px;
+  box-shadow:none!important;
+  padding:20px;
+  animation:none
+}
+
+.admin-page .action-card h2 {
+  font-size:16px;
+  font-weight:600;
+  letter-spacing:-.015em
+}
+
+.admin-page .action-card p {
+  font-size:13px;
+  color:var(--t-fg2);
+  line-height:1.6
+}
+
+.admin-page input,.admin-page textarea,.admin-page select {
+  background:var(--t-bg,#111418)!important;
+  color:var(--t-fg);
+  border:1px solid var(--t-bd);
+  border-radius:7px;
+  font:inherit;
+  font-size:13px;
+  padding:10px 12px;
+  box-shadow:none
+}
+
+.admin-page button,.admin-page .btn {
+  background:var(--t-bg3,#252d39);
+  color:var(--t-fg);
+  border:1px solid var(--t-bd);
+  border-radius:7px;
+  padding:9px 13px;
+  font:inherit;
+  font-size:13px;
+  font-weight:550;
+  box-shadow:none;
+  text-transform:none;
+  letter-spacing:0
+}
+
+.admin-page button:hover,.admin-page .btn:hover {
+  border-color:var(--t-ac);
+  transform:none
+}
+
+.admin-page :focus-visible {
+  outline:2px solid var(--t-ac);
+  outline-offset:3px
+}
+
+.admin-page button:disabled {
+  opacity:.5;
+  cursor:wait
+}
+
+.admin-page .danger button {
+  color:#f0a1a7
+}
+
+.admin-page table {
+  font-size:13px
+}
+
+.admin-page th {
+  text-transform:none;
+  letter-spacing:0
+}
+
+.admin-page .moderation-panel,.admin-page .grid {
+  gap:16px
+}
+
+@media(max-width:800px) {
+  .admin-page .shell {
+    width:calc(100% - 28px);
+    padding-top:20px
+  }
+  .admin-page .admin-layout {
+    grid-template-columns:1fr
+  }
+  .admin-shortcuts {
+    grid-template-columns:1fr
+  }
+  .admin-page .topbar {
+    flex-wrap:wrap
+  }
+  .admin-page .status {
+    margin-left:0
+  }
+  .admin-page .staff-panel-switcher {
+    gap:4px
+  }
+}
+
+.admin-page .tool-area,.admin-page .action-card,.admin-page .panel,.admin-page .card,.admin-page .admin-layout>* {
+  min-width:0;
+  max-width:100%;
+  box-sizing:border-box
+}
+
+.admin-page input,.admin-page select,.admin-page textarea {
+  min-width:0!important;
+  max-width:100%;
+  box-sizing:border-box
+}
+
+.admin-page .table-wrap {
+  max-width:100%;
+  overflow:auto
+}
+
+.admin-page .admin-nav a {
+  color:var(--t-fg2);
+  font-size:13px;
+  padding:10px 12px;
+  border-radius:7px;
+  text-decoration:none
+}
+
+.admin-page .admin-nav a.active {
+  background:var(--t-bg2);
+  color:var(--t-fg)
+}
+
+@media(max-width:600px) {
+  .admin-page .cards {
+    grid-template-columns:repeat(2,minmax(0,1fr))
+  }
+  .admin-page .actions-panel,.admin-page .moderation-panel,.admin-page .approval-grid {
+    grid-template-columns:minmax(0,1fr)
+  }
+  .admin-page .action-card {
+    padding:16px
+  }
+  .admin-page .action-card h2 {
+    overflow-wrap:anywhere
+  }
+  .admin-page .shell .topbar h1 {
+    font-size:28px
+  }
+  .admin-page .shell .topbar {
+    gap:10px
+  }
+  .admin-page .action-card>div[style] {
+    min-width:0!important
+  }
+  .admin-page form {
+    min-width:0
+  }
+}
+
+#lock-box-unlocked-container {
+  flex-wrap:wrap;
+  max-width:100%;
+  min-width:0
+}
+
+#lock-box-unlocked-container button {
+  white-space:normal;
+  overflow-wrap:anywhere
+}
+
+.admin-page [hidden] {
+  display:none!important
+}

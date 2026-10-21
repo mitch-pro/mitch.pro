@@ -60,3 +60,11 @@ form{display:grid;grid-template-columns:1fr 1fr;gap:13px}label{display:grid;gap:
 .audit-detail{grid-column:1/-1;display:none;color:var(--t-fg);font-size:.72rem;padding-top:4px;overflow-wrap:anywhere}
 .audit-row.expanded .audit-detail{display:block}
 @media(max-width:560px){.fleet-bulk-actions{margin-left:0}}
+
+dialog{max-width:440px;width:calc(100% - 32px);background:#171b22;color:#e7eaf0;border:1px solid #343b48;border-radius:14px;padding:24px}dialog::backdrop{background:#0009}dialog label{display:grid;gap:8px;margin:16px 0}.dialog-actions{display:flex;gap:10px;justify-content:flex-end}dialog p{color:#a6adbb;line-height:1.5}.eyebrow{display:none}.admin-header h1{letter-spacing:-.03em}.capacity-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.fleet-actions{gap:6px}.fleet-actions button,.fleet-actions a{border-radius:7px}.admin-grid{grid-template-columns:1fr 1fr}@media(max-width:700px){.capacity-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-grid{grid-template-columns:1fr}}
+
+.vm-actions-menu{position:relative}.vm-actions-menu summary{cursor:pointer;padding:6px 10px;font-size:12px;border:1px solid #343b48;border-radius:7px}.vm-actions-menu>div{position:absolute;right:0;top:100%;z-index:20;min-width:180px;display:grid;gap:6px;padding:10px;background:#171b22;border:1px solid #343b48;border-radius:9px;box-shadow:0 12px 24px #0005}.vm-actions-menu:not([open])>div{display:none}.fleet-item:has(.vm-actions-menu[open]){position:relative;z-index:21}
+
+.provision-tools{margin:20px 0;border:1px solid var(--line);border-radius:10px;padding:18px;background:var(--t-bg2)}.provision-tools>summary{cursor:pointer;font-weight:600}.provision-tools .admin-grid{margin-top:20px}.admin-shell{padding-top:32px}.admin-header h1{font-size:clamp(28px,4vw,42px);line-height:1.1;font-weight:650}.admin-header .back{margin-bottom:16px}.capacity-grid strong{font-size:1rem}.fleet-panel{margin-bottom:20px}
+
+@media(max-width:560px){.fleet-search{flex-basis:100%;width:100%;max-width:none;order:-1}.fleet-filters,.fleet-bulk-actions{flex-basis:100%;margin-left:0}}

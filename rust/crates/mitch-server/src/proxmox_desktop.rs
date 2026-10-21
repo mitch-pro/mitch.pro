@@ -356,6 +356,7 @@ pub struct CloneDesktopParams {
 /// cloud-init image to seed, the user sets up login themselves during
 /// their own OS install.
 pub struct CreateFromIsoParams {
+    pub windows: bool,
     pub owner_resources: bool,
     pub vmid: Option<f64>,
     pub hostname: String,
@@ -363,6 +364,24 @@ pub struct CreateFromIsoParams {
     pub memory_mb: Option<f64>,
     pub disk_gb: Option<f64>,
     pub iso_filename: String,
+}
+
+/// A new Windows installer gets TPM 2.0, signed UEFI variables and inbox display support.
+/// Existing installations are never silently switched from legacy BIOS to UEFI.
+fn windows_install_config(body: &mut Map<String, Value>, storage: &str) {
+    body.insert("ostype".into(), json!("win11"));
+    body.insert("machine".into(), json!("q35"));
+    body.insert("bios".into(), json!("ovmf"));
+    body.insert(
+        "efidisk0".into(),
+        json!(format!("{storage}:1,efitype=4m,pre-enrolled-keys=1")),
+    );
+    body.insert(
+        "tpmstate0".into(),
+        json!(format!("{storage}:1,version=v2.0")),
+    );
+    body.insert("vga".into(), json!("std,memory=128"));
+    body.insert("balloon".into(), json!(0));
 }
 
 /// Module-level accessor for the process-wide Proxmox desktop service.
@@ -2059,7 +2078,7 @@ impl ProxmoxDesktopService {
             Some(raw) if !raw.is_nan() && raw != 0.0 => raw,
             _ => 2.0,
         };
-        let cpu_cores = if params.owner_resources {
+        let mut cpu_cores = if params.owner_resources {
             cpu_input.round().max(1.0)
         } else {
             clamp_js(cpu_input.round(), 2.0, 16.0)
@@ -2068,7 +2087,7 @@ impl ProxmoxDesktopService {
             Some(raw) if !raw.is_nan() && raw != 0.0 => raw,
             _ => 4096.0,
         };
-        let memory_mb = if params.owner_resources {
+        let mut memory_mb = if params.owner_resources {
             mem_input.round().max(512.0)
         } else {
             clamp_js(mem_input.round(), 2048.0, 65536.0)
@@ -2077,11 +2096,16 @@ impl ProxmoxDesktopService {
             Some(raw) if !raw.is_nan() && raw != 0.0 => raw,
             _ => 64.0,
         };
-        let disk_gb = if params.owner_resources {
+        let mut disk_gb = if params.owner_resources {
             disk_input.round().max(40.0)
         } else {
             clamp_js(disk_input.round(), 40.0, 256.0)
         };
+        if params.windows {
+            cpu_cores = cpu_cores.max(2.0);
+            memory_mb = memory_mb.max(4096.0);
+            disk_gb = disk_gb.max(64.0);
+        }
         let balloon = if params.owner_resources {
             0.0
         } else {
@@ -2168,6 +2192,17 @@ impl ProxmoxDesktopService {
         // apply guest-specific quirks (e.g. Windows-only defaults) that
         // don't fit.
         body.insert("ostype".to_string(), json!("other"));
+        if params.windows {
+            windows_install_config(&mut body, &self.vm_disk_storage);
+            if let Some(disk) = body.remove("scsi0") {
+                body.insert("sata0".into(), disk);
+            }
+            body.insert("boot".into(), json!("order=ide2;sata0"));
+            // Preserve the configured sandbox bridge while using Windows' inbox NIC driver.
+            if let Some(Value::String(net)) = body.get_mut("net0") {
+                *net = net.replacen("virtio", "e1000e", 1);
+            }
+        }
 
         let create_upid = self
             .request(
@@ -2213,17 +2248,91 @@ impl ProxmoxDesktopService {
     /// counterpart to `create_from_iso`'s `ide2`/`boot` setup. Takes effect
     /// on the VM's next boot; doesn't restart it itself.
     pub async fn detach_iso(&self, node: &str, vmid: i64) -> Result<(), ProxmoxServiceError> {
+        let record = json!({"node":node,"vmid":vmid});
+        let config = self.get_config(&record).await?;
+        let disk = ["scsi0", "sata0", "virtio0"]
+            .into_iter()
+            .find(|key| {
+                config
+                    .get(*key)
+                    .and_then(Value::as_str)
+                    .is_some_and(|disk| !disk.contains("media=cdrom"))
+            })
+            .ok_or_else(|| {
+                ProxmoxServiceError::new(
+                    "NO_BOOT_DISK",
+                    "No installed disk found. The ISO was left attached.",
+                    409,
+                )
+            })?;
         self.request(
             "PUT",
-            &format!("/nodes/{}/qemu/{}/config", encode_uri_component(node), vmid),
-            Some(&json!({
-                "ide2": "none,media=cdrom",
-                "boot": "order=scsi0",
-            })),
+            &format!("/nodes/{}/qemu/{vmid}/config", encode_uri_component(node)),
+            Some(&json!({"ide2":"none,media=cdrom","boot":format!("order={disk}")})),
             DEFAULT_TIMEOUT_MS,
         )
         .await?;
         Ok(())
+    }
+
+    /// Explicit installer repair only: preserve existing TPM/EFI state and all disks.
+    /// Changing legacy firmware can require reinstalling an already-installed guest.
+    pub async fn prepare_windows_installer(
+        &self,
+        record: &Value,
+    ) -> Result<Value, ProxmoxServiceError> {
+        let config = self.get_config(record).await?;
+        let mut updates = Map::new();
+        windows_install_config(&mut updates, &self.vm_disk_storage);
+        updates.insert("cpu".into(), json!("host"));
+        let disk_gb = parse_disk_gb(&config);
+        if disk_gb == 0.0 {
+            return Err(ProxmoxServiceError::new(
+                "UNKNOWN_DISK_SIZE",
+                "Could not verify the installed disk size. No firmware settings changed.",
+                409,
+            ));
+        }
+        if disk_gb < 64.0 {
+            self.update_owner_hardware(record, None, None, Some(64.0))
+                .await?;
+        }
+
+        if config.get("efidisk0").is_some() {
+            updates.remove("efidisk0");
+        }
+        if config.get("tpmstate0").is_some() {
+            updates.remove("tpmstate0");
+        }
+        updates.insert(
+            "cores".into(),
+            json!(config
+                .get("cores")
+                .and_then(jsval::number)
+                .unwrap_or(2.0)
+                .max(2.0)),
+        );
+        updates.insert(
+            "memory".into(),
+            json!(config
+                .get("memory")
+                .and_then(jsval::number)
+                .unwrap_or(4096.0)
+                .max(4096.0)),
+        );
+        let applied = json!({"cpuCores":updates["cores"],"memoryMb":updates["memory"],"diskGb":disk_gb.max(64.0)});
+        let vmid = self.assert_vmid(jsval::number(&record["vmid"]))?;
+        self.request(
+            "PUT",
+            &format!(
+                "/nodes/{}/qemu/{vmid}/config",
+                encode_uri_component(&self.node_of(record))
+            ),
+            Some(&Value::Object(updates)),
+            DEFAULT_TIMEOUT_MS,
+        )
+        .await?;
+        Ok(applied)
     }
 
     /// `updateHardware(record, { cpuCores, memoryMb, diskGb })`

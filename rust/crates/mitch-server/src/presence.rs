@@ -33,6 +33,7 @@ pub struct PresenceView {
     pub page: String,
     pub status: String,
     pub last_seen: i64,
+    pub last_active: i64,
 }
 
 impl PresenceView {
@@ -123,6 +124,21 @@ fn apply(
         .get("seq")
         .and_then(Value::as_u64)
         .ok_or("invalid sequence")?;
+    if record
+        .sessions
+        .get(id)
+        .is_some_and(|old| sequence <= old.sequence)
+    {
+        return Ok(false);
+    }
+    record.hide_online = payload
+        .get("hideOnline")
+        .and_then(Value::as_bool)
+        .unwrap_or(record.hide_online);
+    record.share_activity = payload
+        .get("shareActivity")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let hide_location = payload
         .get("hideLocation")
         .or_else(|| payload.get("hidePageLocation"))
@@ -134,18 +150,12 @@ fn apply(
         record.hide_location = false;
     }
     let raw_page = payload.get("page").and_then(Value::as_str).unwrap_or("");
-    let page = if hide_location || record.hide_location || raw_page.is_empty() {
-        String::new()
-    } else {
-        page_path(raw_page).ok_or("invalid page")?
-    };
-    if record
-        .sessions
-        .get(id)
-        .is_some_and(|old| sequence <= old.sequence)
-    {
-        return Ok(false);
-    }
+    let page =
+        if !record.share_activity || hide_location || record.hide_location || raw_page.is_empty() {
+            String::new()
+        } else {
+            page_path(raw_page).ok_or("invalid page")?
+        };
     let visible = payload
         .get("visible")
         .and_then(Value::as_bool)
@@ -234,6 +244,12 @@ fn view(record: Option<&UserPresence>, socket_seen: i64, now: i64) -> PresenceVi
             ..Default::default()
         };
     };
+    if record.hide_online {
+        return PresenceView {
+            status: "offline".into(),
+            ..Default::default()
+        };
+    }
     let selected = record
         .sessions
         .values()
@@ -241,13 +257,13 @@ fn view(record: Option<&UserPresence>, socket_seen: i64, now: i64) -> PresenceVi
         .max_by_key(|tab| (tab.focused, tab.visible, tab.changed_at, &tab.page));
     let legacy_online =
         record.modern_seen == 0 && now - record.last_seen < PRESENCE_FALLBACK_TTL_MS;
-    let online = selected.is_some() || legacy_online || socket_online;
-    let (activity, page, status) = if record.hide_location {
+    let online = selected.is_some() || legacy_online || (record.modern_seen == 0 && socket_online);
+    let (activity, page, status) = if record.hide_location || !record.share_activity {
         (
             String::new(),
             String::new(),
             if let Some(tab) = selected {
-                if tab.focused {
+                if tab.focused && now - tab.changed_at < 120_000 {
                     "active"
                 } else {
                     "away"
@@ -262,7 +278,11 @@ fn view(record: Option<&UserPresence>, socket_seen: i64, now: i64) -> PresenceVi
         (
             tab.activity.clone(),
             tab.page.clone(),
-            if tab.focused { "active" } else { "away" },
+            if tab.focused && now - tab.changed_at < 120_000 {
+                "active"
+            } else {
+                "away"
+            },
         )
     } else if legacy_online {
         let raw = text(&record.playing, 120);
@@ -292,7 +312,16 @@ fn view(record: Option<&UserPresence>, socket_seen: i64, now: i64) -> PresenceVi
         activity: if online { activity } else { String::new() },
         page: if online { page } else { String::new() },
         status: status.into(),
-        last_seen: record.last_seen.max(socket_seen),
+        last_seen: if record.share_activity && !record.hide_location {
+            record.last_seen.max(socket_seen)
+        } else {
+            0
+        },
+        last_active: if record.share_activity && !record.hide_location {
+            selected.map_or(0, |tab| tab.changed_at)
+        } else {
+            0
+        },
     }
 }
 
@@ -479,7 +508,7 @@ mod tests {
     use super::*;
     use serde_json::json;
     fn packet(id: &str, seq: u64, page: &str, focused: bool) -> Value {
-        json!({"clientId":id,"seq":seq,"page":page,"activity":format!("Viewing {page}"),"visible":true,"focused":focused,"interaction":0})
+        json!({"clientId":id,"seq":seq,"page":page,"activity":format!("Viewing {page}"),"visible":true,"focused":focused,"interaction":0,"shareActivity":true})
     }
     #[test]
     fn foreground_tab_wins_over_late_background_heartbeats() {
@@ -538,7 +567,7 @@ mod tests {
             200 + PRESENCE_FALLBACK_TTL_MS,
             200 + PRESENCE_FALLBACK_TTL_MS,
         );
-        assert!(connected.online);
+        assert!(!connected.online);
         assert!(connected.page.is_empty());
     }
     #[test]
@@ -563,6 +592,24 @@ mod tests {
             400
         )
         .is_err());
+    }
+    #[test]
+    fn privacy_defaults_and_hide_online_apply_to_every_consumer() {
+        let mut record = UserPresence::default();
+        let mut payload = packet("private", 1, "/shop/", true);
+        payload.as_object_mut().unwrap().remove("shareActivity");
+        apply(&mut record, &payload, None, 100).unwrap();
+        let visible = view(Some(&record), 0, 101);
+        assert!(visible.online);
+        assert!(visible.activity.is_empty());
+        assert_eq!(visible.last_active, 0);
+        payload["seq"] = json!(2);
+        payload["hideOnline"] = json!(true);
+        apply(&mut record, &payload, None, 200).unwrap();
+        let hidden = view(Some(&record), 201, 201);
+        assert!(!hidden.online);
+        assert_eq!(hidden.last_seen, 0);
+        assert!(hidden.page.is_empty());
     }
     #[test]
     fn pure_heartbeats_do_not_broadcast_activity_changes() {

@@ -319,6 +319,16 @@ pub fn sanitize_profile_image_url(
         if raw.len() > max_url_length {
             return String::new();
         }
+        if raw.starts_with('/') && !raw.starts_with("//") && !raw.contains('\\') {
+            if let Ok(base) = url::Url::parse("https://profile.invalid/") {
+                if let Ok(resolved) = base.join(raw) {
+                    if resolved.origin() == base.origin() {
+                        return raw.to_string();
+                    }
+                }
+            }
+            return String::new();
+        }
         match url::Url::parse(raw) {
             Ok(u) => {
                 if u.scheme() != "https" && u.scheme() != "http" {
@@ -712,6 +722,22 @@ pub fn ensure_profile_defaults(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn root_relative_profile_images_stay_on_site() {
+        assert_eq!(
+            sanitize_profile_image_url("/backgrounds/fixture.webp", false, 1000, 0),
+            "/backgrounds/fixture.webp"
+        );
+        assert_eq!(
+            sanitize_profile_image_url("//foreign.example.test/avatar.png", false, 1000, 0),
+            ""
+        );
+        assert_eq!(
+            sanitize_profile_image_url("/\\foreign.example.test/avatar.png", false, 1000, 0),
+            ""
+        );
+    }
 
     #[test]
     fn default_usernames_match_js() {

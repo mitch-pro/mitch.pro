@@ -157,7 +157,7 @@ pub async fn handle(
     method: &Method,
     path: &str,
     headers: &HeaderMap,
-    search: &str,
+    _search: &str,
     body: &Value,
     ctx: &AdminCtx,
 ) -> Resp {
@@ -174,7 +174,9 @@ pub async fn handle(
 
     // GET /api/admin/vms/overview (server.js:20620-20691)
     if path == "/api/admin/vms/overview" && *method == Method::GET {
-        if let Some((code, msg)) = state.rate_limit_check(&ctx.ip, "anon", "/api/admin/vms") {
+        if let Some((code, msg)) =
+            state.rate_limit_check(&ctx.ip, &format!("id:{}", ctx.sid), "/api/admin/vms")
+        {
             return Some(json_response(code, json!({ "error": msg })));
         }
         let actor = match crate::routes::vm::authenticated_vm_actor(state, headers) {
@@ -263,6 +265,24 @@ pub async fn handle(
                     "assignmentStatus".into(),
                     record.get("status").cloned().unwrap_or(Value::Null),
                 );
+                let owner =
+                    mitch_lib::auth::normalize_email(record["ownerEmail"].as_str().unwrap_or(""));
+                map.insert(
+                    "ownerVmBanned".into(),
+                    json!(state
+                        .vm_bans
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .contains(&owner)),
+                );
+                map.insert(
+                    "ownerByoBanned".into(),
+                    json!(state
+                        .byo_os_bans
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .contains(&owner)),
+                );
                 map.insert("activeUsers".into(), json!(active_users));
                 map.insert("isCurrentlyInUse".into(), json!(!active_users.is_empty()));
                 map.insert(
@@ -314,10 +334,6 @@ pub async fn handle(
             .get("memoryMb")
             .and_then(jsval::number)
             .unwrap_or(0.0) as i64;
-
-        let query_map = crate::handler::query(search);
-        let day_key = query_map.get("day").cloned().unwrap_or_default();
-        let usage_stats = crate::routes::vm::get_vm_fleet_usage_stats(state, &day_key);
 
         let assigned_vmids: std::collections::HashSet<i64> = records
             .iter()
@@ -377,7 +393,7 @@ pub async fn handle(
                 "maxFleetCores": mitch_lib::vm_security::VM_FLEET_MAX_CORES,
                 "maxFleetMemoryMb": mitch_lib::vm_security::VM_FLEET_MAX_MEMORY_MB,
                 "maxRunningNonAdminLimit": mitch_lib::vm_security::VM_MAX_CONCURRENT_RUNNING,
-                "usageStats": usage_stats,
+
                 "viewerIsOwner": is_owner,
             }),
         ));
@@ -385,7 +401,9 @@ pub async fn handle(
 
     // GET /api/admin/vms/stats (server.js:20693-20701)
     if path == "/api/admin/vms/stats" && *method == Method::GET {
-        if let Some((code, msg)) = state.rate_limit_check(&ctx.ip, "anon", "/api/admin/vms") {
+        if let Some((code, msg)) =
+            state.rate_limit_check(&ctx.ip, &format!("id:{}", ctx.sid), "/api/admin/vms")
+        {
             return Some(json_response(code, json!({ "error": msg })));
         }
         let actor = match crate::routes::vm::authenticated_vm_actor(state, headers) {
@@ -398,18 +416,14 @@ pub async fn handle(
                 json!({ "error": "Admin access required." }),
             ));
         }
-        let query_map = crate::handler::query(search);
-        let day_key = query_map.get("day").cloned().unwrap_or_default();
-        let usage_stats = crate::routes::vm::get_vm_fleet_usage_stats(state, &day_key);
-        return Some(json_response(
-            200,
-            json!({ "ok": true, "usageStats": usage_stats }),
-        ));
+        return Some(json_response(200, json!({ "ok": true, "usageStats": {} })));
     }
 
     // POST /api/admin/vms/assign (server.js:20703-20735)
     if path == "/api/admin/vms/assign" && *method == Method::POST {
-        if let Some((code, msg)) = state.rate_limit_check(&ctx.ip, "anon", "/api/admin/vms") {
+        if let Some((code, msg)) =
+            state.rate_limit_check(&ctx.ip, &format!("id:{}", ctx.sid), "/api/admin/vms")
+        {
             return Some(json_response(code, json!({ "error": msg })));
         }
         let actor = match crate::routes::vm::authenticated_vm_actor(state, headers) {
@@ -598,7 +612,9 @@ pub async fn handle(
 
     // POST /api/admin/vms/unassign (server.js:20737-20752)
     if path == "/api/admin/vms/unassign" && *method == Method::POST {
-        if let Some((code, msg)) = state.rate_limit_check(&ctx.ip, "anon", "/api/admin/vms") {
+        if let Some((code, msg)) =
+            state.rate_limit_check(&ctx.ip, &format!("id:{}", ctx.sid), "/api/admin/vms")
+        {
             return Some(json_response(code, json!({ "error": msg })));
         }
         let actor = match crate::routes::vm::authenticated_vm_actor(state, headers) {
@@ -648,7 +664,9 @@ pub async fn handle(
 
     // POST /api/admin/vms/create (server.js:20754-20800)
     if path == "/api/admin/vms/create" && *method == Method::POST {
-        if let Some((code, msg)) = state.rate_limit_check(&ctx.ip, "anon", "/api/admin/vms") {
+        if let Some((code, msg)) =
+            state.rate_limit_check(&ctx.ip, &format!("id:{}", ctx.sid), "/api/admin/vms")
+        {
             return Some(json_response(code, json!({ "error": msg })));
         }
         let actor = match crate::routes::vm::authenticated_vm_actor(state, headers) {
@@ -942,7 +960,9 @@ pub async fn handle(
 
     // POST /api/admin/vms/credentials (server.js:20802-20823)
     if path == "/api/admin/vms/credentials" && *method == Method::POST {
-        if let Some((code, msg)) = state.rate_limit_check(&ctx.ip, "anon", "/api/admin/vms") {
+        if let Some((code, msg)) =
+            state.rate_limit_check(&ctx.ip, &format!("id:{}", ctx.sid), "/api/admin/vms")
+        {
             return Some(json_response(code, json!({ "error": msg })));
         }
         let actor = match crate::routes::vm::authenticated_vm_actor(state, headers) {
@@ -1038,7 +1058,9 @@ pub async fn handle(
 
     // POST /api/admin/vms/delete (server.js:20825-20875)
     if path == "/api/admin/vms/delete" && *method == Method::POST {
-        if let Some((code, msg)) = state.rate_limit_check(&ctx.ip, "anon", "/api/admin/vms") {
+        if let Some((code, msg)) =
+            state.rate_limit_check(&ctx.ip, &format!("id:{}", ctx.sid), "/api/admin/vms")
+        {
             return Some(json_response(code, json!({ "error": msg })));
         }
         let actor = match crate::routes::vm::authenticated_vm_actor(state, headers) {
@@ -1155,108 +1177,132 @@ pub async fn handle(
         ));
     }
 
-    // POST /api/admin/vms/downgrade-specs — admin override of a computer's
-    // cpu/memory/disk, independent of the user's own paid-upgrade path.
-    // Reuses update_hardware, the same Proxmox resize call the paid upgrade
-    // flow uses (routes/vm.rs's /api/vm/my-computer/upgrade handler) — cores
-    // and memory move freely in either direction; disk only ever grows (a
-    // live virtual disk can't be safely shrunk without guest cooperation,
-    // so update_hardware already no-ops a smaller disk request rather than
-    // risk data loss).
-    if path == "/api/admin/vms/downgrade-specs" && *method == Method::POST {
-        if let Some((code, msg)) = state.rate_limit_check(&ctx.ip, "anon", "/api/admin/vms") {
-            return Some(json_response(code, json!({ "error": msg })));
-        }
-        let actor = match crate::routes::vm::authenticated_vm_actor(state, headers) {
-            Some(a) => a,
-            None => return Some(json_response(401, json!({ "error": "Sign in required." }))),
+    // The old path remains an alias for clients open during deployment.
+    if matches!(
+        path,
+        "/api/admin/vms/resources" | "/api/admin/vms/downgrade-specs"
+    ) && *method == Method::POST
+    {
+        let Some(actor) = crate::routes::vm::authenticated_vm_actor(state, headers) else {
+            return Some(json_response(401, json!({"error":"Sign in required."})));
         };
         if !actor.is_admin {
-            return Some(json_response(
-                403,
-                json!({ "error": "Admin access required." }),
-            ));
+            return Some(super::forbidden());
         }
-
-        let vmid_fallback = jsval::str_or(body.get("vmid"), "");
-        let id_str = jsval::str_or(body.get("id"), &vmid_fallback);
-        let record = vmlib::get_virtual_machine_by_id(&state.store, &id_str).or_else(|| {
-            id_str
-                .parse::<f64>()
-                .ok()
-                .and_then(|v| vmlib::get_virtual_machine_by_vmid(&state.store, v))
-        });
-        let Some(record) = record else {
-            return Some(json_response(
-                404,
-                json!({ "error": "Computer not found." }),
-            ));
+        let id = body.get("id").and_then(Value::as_str).unwrap_or("");
+        let Some(record) = vmlib::get_virtual_machine_by_id(&state.store, id) else {
+            return Some(json_response(404, json!({"error":"Computer not found."})));
         };
-        if !record.owner_email.is_empty()
-            && auth::is_owner_email(&state.store, &record.owner_email)
-            && !actor.is_owner
-        {
+        if auth::is_owner_email(&state.store, &record.owner_email) && !actor.is_owner {
             return Some(json_response(
                 403,
-                json!({ "error": "Co-owners and admins cannot modify an owner's computer specs." }),
+                json!({"error":"Only an owner can edit an owner's computer."}),
             ));
         }
-
-        let cpu_opt = body.get("cpuCores").and_then(jsval::number);
-        let mem_opt = body.get("memoryMb").and_then(jsval::number);
-        let disk_opt = body.get("diskGb").and_then(jsval::number);
-        if cpu_opt.is_none() && mem_opt.is_none() && disk_opt.is_none() {
-            return Some(json_response(
-                400,
-                json!({ "error": "Provide at least one of cpuCores, memoryMb, diskGb." }),
-            ));
-        }
-
-        let mut rec_json = record.to_json();
-        vmlib::update_virtual_machine_specs(&state.store, &record.id, cpu_opt, mem_opt, disk_opt);
-        if let Some(c) = cpu_opt {
-            rec_json["cpuCores"] = json!(c);
-        }
-        if let Some(m) = mem_opt {
-            rec_json["memoryMb"] = json!(m);
-        }
-        if let Some(d) = disk_opt {
-            rec_json["diskGb"] = json!(d);
-        }
-
-        let mut proxmox_error = None;
-        if crate::proxmox_desktop::desktop().configured() {
-            if let Err(e) = crate::proxmox_desktop::desktop()
-                .update_hardware(&rec_json, cpu_opt, mem_opt, disk_opt)
-                .await
-            {
-                proxmox_error = Some(crate::routes::vm::friendly_vm_error(&e.into()).1);
+        let mut values = [None; 3];
+        for (index, (field, category)) in
+            [("cpuCores", "cpu"), ("memoryMb", "ram"), ("diskGb", "disk")]
+                .iter()
+                .enumerate()
+        {
+            if let Some(raw) = body.get(*field) {
+                let Some(value) = crate::routes::vm::owner_resource_value(category, raw) else {
+                    return Some(json_response(
+                        400,
+                        json!({"error":"Use whole numbers: at least 1 CPU, 512 MB RAM, and 40 GB disk."}),
+                    ));
+                };
+                values[index] = Some(value);
             }
         }
-
+        let [cpu, memory, disk] = values;
+        if values.iter().all(Option::is_none) {
+            return Some(json_response(
+                400,
+                json!({"error":"Choose resources to update."}),
+            ));
+        }
+        if disk.is_some_and(|size| size < record.disk_gb) {
+            return Some(json_response(
+                400,
+                json!({"error":"Disk size can grow, but cannot shrink."}),
+            ));
+        }
+        let Some(_operation) = crate::routes::vm::resource_operation(state, record.id.clone())
+        else {
+            return Some(json_response(
+                409,
+                json!({"error":"Another computer operation is in progress."}),
+            ));
+        };
+        let desktop = crate::proxmox_desktop::desktop();
+        if !desktop.configured() {
+            return Some(json_response(
+                503,
+                json!({"error":"Computer service unavailable. No settings changed."}),
+            ));
+        }
+        let original = record.to_json();
+        let runtime = match desktop.get_status(&original).await {
+            Ok(runtime) => runtime,
+            Err(_) => {
+                return Some(json_response(
+                    503,
+                    json!({"error":"Could not check computer status. No settings changed."}),
+                ))
+            }
+        };
+        match runtime["state"].as_str() {
+            Some("stopped") => {}
+            Some("running" | "paused" | "suspended") => {
+                return Some(json_response(
+                    409,
+                    json!({"error":"Shut down the computer before editing resources."}),
+                ))
+            }
+            _ => {
+                return Some(json_response(
+                    503,
+                    json!({"error":"Computer status is unknown. Refresh and try again."}),
+                ))
+            }
+        }
+        if let Err(error) = desktop
+            .update_owner_hardware(&original, cpu, memory, disk)
+            .await
+        {
+            crate::routes::vm::vm_audit(
+                state,
+                &actor.email,
+                Some(&original),
+                "VM_ADMIN_RESOURCE_UPDATE",
+                false,
+                None,
+            );
+            return Some(json_response(
+                502,
+                json!({"error":crate::routes::vm::friendly_vm_error(&error.into()).1}),
+            ));
+        }
+        if vmlib::update_owner_virtual_machine_specs(&state.store, &record.id, cpu, memory, disk)
+            .is_none()
+        {
+            return Some(json_response(
+                500,
+                json!({"error":"The host applied the resources, but saving failed. Retry the same values to finish."}),
+            ));
+        }
         crate::routes::vm::vm_audit(
             state,
             &actor.email,
-            Some(&rec_json),
-            "VM_ADMIN_SPEC_OVERRIDE",
-            proxmox_error.is_none(),
-            Some(&json!({
-                "cpuCores": cpu_opt,
-                "memoryMb": mem_opt,
-                "diskGb": disk_opt,
-                "proxmoxError": proxmox_error,
-            })),
+            Some(&original),
+            "VM_ADMIN_RESOURCE_UPDATE",
+            true,
+            Some(&json!({"cpuCores":cpu,"memoryMb":memory,"diskGb":disk})),
         );
-
         return Some(json_response(
             200,
-            json!({
-                "success": true,
-                "message": match &proxmox_error {
-                    Some(e) => format!("Specs updated in the system; the running VM may need a restart to pick up the change ({e})."),
-                    None => "Specs updated.".to_string(),
-                },
-            }),
+            json!({"success":true,"message":"Resources updated."}),
         ));
     }
 

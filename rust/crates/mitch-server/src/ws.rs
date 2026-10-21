@@ -196,6 +196,10 @@ pub async fn notify_friends_online(state: &Arc<AppState>, email: &str) {
     if norm.is_empty() {
         return;
     }
+    let now = mitch_lib::school::now_millis();
+    if !crate::presence::current(state, &norm, now).online {
+        return;
+    }
     let friends = mitch_lib::friends::friends_get(&state.store, &norm);
     let Some(my_list) = friends.as_array().cloned() else {
         return;
@@ -208,10 +212,22 @@ pub async fn notify_friends_online(state: &Arc<AppState>, email: &str) {
     if vapid_public.is_empty() {
         return; // JS parity: `if (sub && VAPID_PUBLIC)`.
     }
+    {
+        let mut notices = state
+            .friend_online_notices
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        notices.retain(|_, at| now - *at < 86400000);
+        if notices.get(&norm).is_some_and(|at| now - *at < 300000) {
+            return;
+        }
+        notices.insert(norm.clone(), now);
+    }
     let payload = json!({
         "title": "Friend Online",
         "body": format!("{sender_name} is now online!"),
-        "url": "/",
+        "url": "/friends/",
+        "tag": format!("friend-online:{norm}"),
     });
     for friend in my_list {
         let friend_raw = mitch_lib::jsval::string(&friend);

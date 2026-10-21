@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mitch-pro-cache-v54';
+const CACHE_NAME = 'mitch-pro-cache-v55';
 const ASSETS = [
   '/favicon.ico',
   '/manifest.json',
@@ -148,16 +148,20 @@ const isThemeJs = requestUrl.pathname === '/theme.js';
 // notification would be redundant (and annoying mid-conversation).
 async function isUserInActiveChat(targetUrl) {
   try {
-    const cs = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-    const isMatrix = typeof targetUrl === 'string' && targetUrl.includes('/matrix');
-    return cs.some(c => {
-      try {
-        if (!c.url || !c.url.startsWith(self.location.origin)) return false;
-        if (c.visibilityState !== 'visible') return false;
-        const p = new URL(c.url).pathname;
-        if (isMatrix) return p.startsWith('/matrix');
-        return p.startsWith('/encrypt');
-      } catch { return false; }
+    const target = new URL(notificationTargetUrl(targetUrl), self.location.origin);
+    if (!/^\/(matrix|encrypt)(?:\/|$)/.test(target.pathname)) return false;
+    function conversationKey(url) {
+      if (url.pathname.startsWith('/encrypt')) return 'encrypt:' + (url.searchParams.get('group') ? 'group:' + url.searchParams.get('group') : 'dm:' + (url.searchParams.get('to') || '').toLowerCase());
+      const roomPath = url.pathname.match(/^\/matrix\/(?:home|direct)\/([^/]+)/);
+      if (roomPath) return 'matrix:' + roomPath[1];
+      const room = url.hash.match(/^#\/room\/([^/]+)/);
+      return room ? 'matrix:' + room[1] : url.pathname + url.search + url.hash;
+    }
+    const windows = await clients.matchAll({ type:'window', includeUncontrolled:true });
+    return windows.some(client => {
+      if (client.visibilityState !== 'visible' || !client.focused) return false;
+      const current = new URL(client.url);
+      return current.origin === self.location.origin && conversationKey(current) === conversationKey(target);
     });
   } catch { return false; }
 }
@@ -170,25 +174,30 @@ self.addEventListener('push', e => {
   try { data = Object.assign(data, JSON.parse(e.data.text())); } catch {}
   const isCall = (data.tag && data.tag.startsWith('matrix-call')) || data.type === 'call';
 
-  e.waitUntil(isUserInActiveChat(data.url).then(inChat => {
+  e.waitUntil(isUserInActiveChat(data.url).then(async inChat => {
     // Already inside active chat on this device — stay quiet, UNLESS it's an incoming call
     if (inChat && !isCall) return;
 
+    const target = notificationTargetUrl(data.url);
+    const tag = data.tag || data.id || 'mitch:' + target;
+    const existing = await self.registration.getNotifications({ tag });
+    const eventId = String(data.id || data.eventId || '');
+    if (eventId && existing.some(notice => notice.data?.eventId === eventId)) return;
     return self.registration.showNotification(data.title, {
       body: data.body,
       icon: notifyIcon(),
       badge: notifyIcon(),
-      tag: data.tag || undefined,
-      renotify: Boolean(data.tag),
+      tag,
+      renotify: false,
       vibrate: isCall ? [300, 100, 300, 100, 300, 100, 600] : [90, 45, 90],
       requireInteraction: isCall || Boolean(data.requireInteraction),
       actions: isCall ? [
         { action: 'answer', title: '📞 Join Call' },
         { action: 'decline', title: 'Dismiss' }
       ] : [
-        { action: 'open', title: 'Open Chat' }
+        { action: 'open', title: 'Open' }
       ],
-      data: { url: data.url, type: data.type || (isCall ? 'call' : 'message') }
+      data: { url: target, eventId, type: data.type || (isCall ? 'call' : 'message') }
     });
   }));
 });
@@ -199,16 +208,12 @@ self.addEventListener('push', e => {
 // its path so we never navigate the rjuhsd.school PWA to a foreign origin
 // that would demand a fresh login.
 function notificationTargetUrl(raw) {
-  let u = String(raw || '/matrix/');
   try {
-    const resolved = new URL(u, self.registration.scope);
-    if (resolved.origin !== self.location.origin) {
-      return resolved.pathname + resolved.search + resolved.hash || '/matrix/';
-    }
-    return resolved.href;
-  } catch {
-    return '/matrix/';
-  }
+    const resolved = new URL(String(raw || '/notifications/'), self.registration.scope);
+    if (!['https:','http:'].includes(resolved.protocol) || resolved.username || resolved.password) return '/notifications/';
+    if (resolved.origin !== self.location.origin && !['mitchdog.com','mitch.pro','rjuhsd.school'].includes(resolved.hostname)) return '/notifications/';
+    return resolved.pathname + resolved.search + resolved.hash;
+  } catch { return '/notifications/'; }
 }
 
 self.addEventListener('notificationclick', e => {
@@ -217,20 +222,11 @@ self.addEventListener('notificationclick', e => {
 
   const url = notificationTargetUrl(e.notification.data?.url);
   e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async cs => {
-    // Hand the URL to an existing app window and let it present the target
-    // in its in-app browser sheet (Apple-style), instead of navigating the
-    // whole PWA window away from whatever the user had open.
-    for (const c of cs) {
-      if (!c.url.startsWith(self.location.origin) || !('focus' in c)) continue;
-      try { await c.focus(); } catch {}
-      if (url.includes('/matrix')) {
-        if ('navigate' in c) {
-          try { await c.navigate(url); return c; } catch {}
-        }
-      } else {
-        c.postMessage({ type: 'open-in-app-browser', url });
-        return c;
-      }
+    const local = cs.filter(c => new URL(c.url).origin === self.location.origin);
+    local.sort((a,b) => Number(b.focused) - Number(a.focused));
+    for (const client of local) {
+      if (!('navigate' in client)) continue;
+      try { const next = await client.navigate(new URL(url,self.location.origin).href); if (next) await next.focus(); return; } catch {}
     }
     return clients.openWindow(url);
   }));

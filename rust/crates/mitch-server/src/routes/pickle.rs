@@ -386,15 +386,6 @@ async fn chat_send(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]
     msg.insert("reactions".to_string(), json!({}));
     let msg = Value::Object(msg);
 
-    // Shadow-banned senders get a success response with nothing stored.
-    if state
-        .shadow_bans
-        .read()
-        .unwrap_or_else(|e| e.into_inner())
-        .contains(&norm_email)
-    {
-        return json_response(200, json!({ "ok": true }));
-    }
     let mut next_history = history.as_array().cloned().unwrap_or_default();
     next_history.push(msg.clone());
     let start = next_history.len().saturating_sub(1000);

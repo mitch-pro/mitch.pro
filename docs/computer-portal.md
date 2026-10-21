@@ -110,3 +110,35 @@ Authenticated administrators can open and manage all registered computers, inclu
 To build another image, use a dedicated VM in the 9000–9999 range, apply `rust/crates/mitch-server/guest/desktop-setup.sh` with a temporary build username, verify the desktop and video playback, then run `tools/seal-managed-desktop-template.sh <vmid> <build-user>` on the Proxmox host. The sealer removes the temporary user, credentials and SSH host keys, cleans cloud-init/machine identity, and converts the stopped VM into a template. Validate a fresh clone with a different username before changing the allowlist. Do not edit a template disk used by linked clones.
 
 Validation for 9011: a fresh recipient clone reached graphical.target in about 20 seconds, logged in with its own username, retained no build-user home, and had no failed system services. The prior repaired clone reached graphical.target in about 17 seconds on a subsequent cold boot. These timings cover the system target; the first desktop session takes additional time to load.
+
+## Resource edits and Windows installers
+
+Owner and admin resource edits use the normalized Proxmox runtime `state` field.
+Only a fresh `stopped` state permits a change; running VMs return 409, and an
+unavailable or unknown state returns 503. The saved assignment status is not a
+power-state source. A shared VM operation lock prevents competing power and
+resource edits in the app. Values must be finite whole numbers, and disks cannot
+shrink. Proxmox is updated before the account record is saved; host errors do not
+write speculative specs. A database error after a host success tells the admin
+to retry the same values. Proxmox itself has no transaction spanning CPU, memory,
+and disk changes, so a multi-resource failure can require such a retry.
+
+`/admin/vms/` provides a resource dialog instead of three prompts. The old
+`downgrade-specs` URL remains a deployment compatibility alias for `resources`.
+Fleet management actions are grouped in a menu, with operational capacity and
+recent audit records kept visible. Personal usage charts are no longer collected
+or exposed in this page.
+
+New Windows presets use Q35, OVMF UEFI, a 4M EFI variables disk with pre-enrolled
+keys, TPM 2.0, host CPU, at least 2 cores / 4 GB RAM / 64 GB disk, standard display,
+and SATA/E1000e devices with inbox Windows drivers. Linux/custom defaults remain
+separate. See [Proxmox's Windows 11 recommendations](https://pve.proxmox.com/wiki/Windows_11_guest_best_practices).
+
+Existing custom VMs offer **Windows installer compatibility**. This is an
+explicit, authenticated, CSRF-protected action on the user's own stopped VM. It
+preserves disks and existing TPM/EFI state, grows storage to 64 GB when needed,
+and raises CPU/RAM minimums before returning success. Firmware changes can make
+an existing legacy BIOS installation require reinstalling; the confirmation
+explains that risk. Deployment does not silently convert existing guests. Guest
+CPU compatibility still depends on the physical host. Detaching an ISO selects
+the actual SCSI/SATA/VirtIO boot disk instead of assuming SCSI.

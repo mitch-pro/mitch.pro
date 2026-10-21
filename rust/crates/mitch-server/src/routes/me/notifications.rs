@@ -2,9 +2,8 @@
 //! 18899-19045): `/api/me/coin-gifts` (+`/read`), `/api/me/notif-prefs`
 //! GET/POST, `/api/me/notifications` (+`/read`), `/api/me/complete-tutorial`.
 //!
-//! JS notes preserved: `coin-gifts`, `notifications`, and their `/read`
-//! twins have NO method check (any verb matches); every auth check reads
-//! `cookies['studentId'] || cookies['id'] || ''`.
+//! Read mutations require POST and pass the global CSRF gate. Destinations are
+//! local paths; displayed addresses never serve as message recipient identifiers.
 
 use super::me_uid;
 use super::{cookies_of, data_file, json_response, parse_body_strict};
@@ -24,7 +23,21 @@ pub(crate) fn handle(
     body: &Value,
     body_bytes: &[u8],
 ) -> Option<Response> {
-    // No-method-check endpoints first (JS matches on path alone).
+    if matches!(
+        path,
+        "/api/me/coin-gifts/read" | "/api/me/notifications/read"
+    ) && *method != Method::POST
+    {
+        return Some(json_response(
+            405,
+            json!({"error":"Use POST to update notifications."}),
+        ));
+    }
+    if (path.starts_with("/api/me/notifications") || path.starts_with("/api/me/coin-gifts"))
+        && crate::presence::authenticated_email(state, headers).is_none()
+    {
+        return Some(json_response(401, json!({"error":"Sign in required."})));
+    }
     if path == "/api/me/coin-gifts/read" {
         return Some(me_coin_gifts_read(state, headers, body, body_bytes));
     }
@@ -285,6 +298,7 @@ fn me_notifications(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         }
         let amount = g.get("amount").and_then(jsval::number).unwrap_or(0.0);
         notices.push(json!({
+            "url": "/coins/",
             "type": "coin_gift",
             "id": jsval::string_of(g.get("id")),
             "title": "Coin gift received",
@@ -303,7 +317,7 @@ fn me_notifications(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         .read_document(&data_file(state, "dms.json"), json!([]));
     let now = now_millis();
     // DM notices grouped per sender.
-    let mut dm_by_sender: std::collections::HashMap<String, (i64, i64, String)> =
+    let mut dm_by_sender: std::collections::HashMap<String, (i64, i64, String, String)> =
         std::collections::HashMap::new(); // count, latestTs, latestText
     for m in dms.as_array().into_iter().flatten() {
         if mitch_lib::chat::is_message_expired(&state.store, state.data_dir(), m, false, now) {
@@ -319,12 +333,14 @@ fn me_notifications(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             continue;
         }
         let ts = m.get("ts").and_then(jsval::number).unwrap_or(0.0) as i64;
-        let entry = dm_by_sender
-            .entry(from.clone())
-            .or_insert((0, 0, String::new()));
+        let entry =
+            dm_by_sender
+                .entry(from.clone())
+                .or_insert((0, 0, String::new(), String::new()));
         entry.0 += 1;
         if ts >= entry.1 {
             entry.1 = ts;
+            entry.3 = jsval::str_or(m.get("clientId").or_else(|| m.get("id")), "");
             let mut text = dm_content_of(m, &state.id_secret);
             if serde_json::from_str::<Value>(&text)
                 .map(|p| p.get("e2e").is_some())
@@ -337,7 +353,7 @@ fn me_notifications(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             entry.2 = text.chars().take(120).collect();
         }
     }
-    for (from, (count, latest_ts, latest_text)) in &dm_by_sender {
+    for (from, (count, latest_ts, latest_text, latest_id)) in &dm_by_sender {
         let display = mitch_lib::profile::display_email(
             &state.store,
             state.data_dir(),
@@ -348,11 +364,12 @@ fn me_notifications(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             "type": "dm",
             "id": format!("dm:{}", from),
             "from": display,
+            "fromKey": from,
             "title": format!("{} encrypted chat message{}", count, if *count == 1 { "" } else { "s" }),
             "body": format!("From {}", display),
             "detail": if latest_text.is_empty() { String::new() } else { format!("Latest: {}", latest_text) },
             "ts": latest_ts,
-            "url": notification_url("/encrypt/"),
+            "url": format!("/encrypt/?to={}&message={}", urlencoding_encode(from),urlencoding_encode(latest_id)),
         }));
     }
 
@@ -375,7 +392,7 @@ fn me_notifications(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             my_group_ids.insert(jsval::string(&jsval::or(group.get("id"), json!(""))));
         }
     }
-    let mut group_by_id: std::collections::HashMap<String, (i64, i64, String)> =
+    let mut group_by_id: std::collections::HashMap<String, (i64, i64, String, String)> =
         std::collections::HashMap::new(); // count, latestTs, name
     for m in dms.as_array().into_iter().flatten() {
         if m.get("kind").and_then(|v| v.as_str()) != Some("group") {
@@ -404,13 +421,16 @@ fn me_notifications(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         }
         let ts = m.get("ts").and_then(jsval::number).unwrap_or(0.0) as i64;
         let name = jsval::str_or(m.get("groupName"), "Group chat");
-        let entry = group_by_id.entry(group_id).or_insert((0, 0, name));
+        let entry = group_by_id
+            .entry(group_id)
+            .or_insert((0, 0, name, String::new()));
         entry.0 += 1;
         if ts >= entry.1 {
             entry.1 = ts;
+            entry.3 = jsval::str_or(m.get("clientId").or_else(|| m.get("id")), "");
         }
     }
-    for (group_id, (count, latest_ts, name)) in &group_by_id {
+    for (group_id, (count, latest_ts, name, latest_id)) in &group_by_id {
         notices.push(json!({
             "type": "group_dm",
             "id": format!("group:{}", group_id),
@@ -419,7 +439,7 @@ fn me_notifications(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             "body": "Encrypted group chat",
             "detail": "Open Secure Chat to read the conversation.",
             "ts": latest_ts,
-            "url": notification_url("/encrypt/"),
+            "url": format!("/encrypt/?group={}&message={}", urlencoding_encode(group_id),urlencoding_encode(latest_id)),
         }));
     }
 
@@ -437,7 +457,15 @@ fn me_notifications(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             continue;
         }
         let room_id = jsval::str_or(mn.get("roomId"), "");
-        let room_fallback = format!("/matrix/#/room/{}", urlencoding_encode(&room_id));
+        let mut room_fallback = format!("/matrix/home/{}", urlencoding_encode(&room_id));
+        if let Some(event) = mn
+            .get("eventId")
+            .and_then(Value::as_str)
+            .filter(|v| !v.is_empty())
+        {
+            room_fallback.push('/');
+            room_fallback.push_str(&urlencoding_encode(event));
+        }
         // JS object literal: absent keys (undefined) are dropped by
         // JSON.stringify — mirror by only inserting present source keys.
         let mut obj = Map::new();
@@ -472,6 +500,8 @@ fn me_notifications(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         let tb = b.get("ts").and_then(jsval::number).unwrap_or(0.0);
         tb.partial_cmp(&ta).unwrap_or(std::cmp::Ordering::Equal)
     });
+    let mut seen = std::collections::HashSet::new();
+    notices.retain(|notice| seen.insert(format!("{}:{}", notice["type"], notice["id"])));
     let unread = notices.len();
     let top = notices.into_iter().take(25).collect::<Vec<_>>();
     json_response(200, json!({ "notifications": top, "unread": unread }))
@@ -479,11 +509,22 @@ fn me_notifications(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
 
 /// `notificationUrl` (server.js:2053-2055).
 fn notification_url(path: &str) -> String {
-    if path.starts_with('/') {
-        path.to_string()
-    } else {
-        format!("/{}", path)
+    let Ok(url) = url::Url::parse("https://mitchdog.com/").and_then(|base| base.join(path)) else {
+        return "/".into();
+    };
+    if !matches!(url.scheme(), "http" | "https")
+        || !matches!(url.host_str(), Some("mitchdog.com" | "mitch.pro"))
+        || !url.username().is_empty()
+        || url.password().is_some()
+    {
+        return "/".into();
     }
+    format!(
+        "{}{}{}",
+        url.path(),
+        url.query().map(|q| format!("?{q}")).unwrap_or_default(),
+        url.fragment().map(|f| format!("#{f}")).unwrap_or_default()
+    )
 }
 
 /// `encodeURIComponent` for the matrix room fragment.
@@ -540,7 +581,11 @@ fn me_notifications_read(
     };
     let norm = auth::normalize_email(&email);
 
-    let mark_all = jsval::truthy(body.get("all").unwrap_or(&Value::Null));
+    let mark_all = body.get("all").and_then(Value::as_bool).unwrap_or(false);
+    let before_ts = body
+        .get("beforeTs")
+        .and_then(Value::as_i64)
+        .unwrap_or(i64::MAX);
     let coin_gift_ids: std::collections::HashSet<String> = body
         .get("coinGiftIds")
         .and_then(|v| v.as_array())
@@ -573,7 +618,6 @@ fn me_notifications_read(
 
     // 2. DMs + group reads.
     let dms_file = data_file(state, "dms.json");
-    let mut dms = state.store.read_document(&dms_file, json!([]));
     let groups = state
         .store
         .read_document(&data_file(state, "groups.json"), json!([]));
@@ -593,53 +637,64 @@ fn me_notifications_read(
             readable_group_ids.insert(jsval::string(&jsval::or(group.get("id"), json!(""))));
         }
     }
-    let mut dms_changed = false;
-    if let Some(arr) = dms.as_array_mut() {
-        for m in arr.iter_mut() {
-            if m.get("kind").and_then(|v| v.as_str()) == Some("group") {
-                let group_id = jsval::string(&jsval::or(m.get("groupId"), json!("")));
-                let already = m
-                    .get("readBy")
-                    .and_then(|v| v.as_array())
-                    .map(|readers| {
-                        readers
-                            .iter()
-                            .any(|r| auth::normalize_email(&jsval::str_or(Some(r), "")) == norm)
-                    })
-                    .unwrap_or(false);
-                if readable_group_ids.contains(&group_id)
-                    && (mark_all || group_ids.contains(&group_id))
-                    && !already
-                {
-                    if let Some(obj) = m.as_object_mut() {
-                        let mut readers = obj
-                            .get("readBy")
-                            .and_then(|v| v.as_array())
-                            .cloned()
-                            .unwrap_or_default();
-                        readers.push(json!(email));
-                        obj.insert("readBy".into(), Value::Array(readers));
-                        dms_changed = true;
-                    }
+    let updated = state.store.mutate_document(&dms_file, json!([]), |dms| {
+        let mut dms_changed = false;
+        if let Some(arr) = dms.as_array_mut() {
+            for m in arr.iter_mut() {
+                if !mark_all && m.get("ts").and_then(Value::as_i64).unwrap_or(0) > before_ts {
+                    continue;
                 }
-            } else {
-                let to = auth::normalize_email(&jsval::str_or(m.get("to"), ""));
-                if to == norm
-                    && !m.get("read").and_then(|v| v.as_bool()).unwrap_or(false)
-                    && (mark_all
-                        || dm_froms
-                            .contains(&auth::normalize_email(&jsval::str_or(m.get("from"), ""))))
-                {
-                    if let Some(obj) = m.as_object_mut() {
-                        obj.insert("read".into(), json!(true));
-                        dms_changed = true;
+                if m.get("kind").and_then(|v| v.as_str()) == Some("group") {
+                    let group_id = jsval::string(&jsval::or(m.get("groupId"), json!("")));
+                    let already = m
+                        .get("readBy")
+                        .and_then(|v| v.as_array())
+                        .map(|readers| {
+                            readers
+                                .iter()
+                                .any(|r| auth::normalize_email(&jsval::str_or(Some(r), "")) == norm)
+                        })
+                        .unwrap_or(false);
+                    if readable_group_ids.contains(&group_id)
+                        && (mark_all || group_ids.contains(&group_id))
+                        && !already
+                    {
+                        if let Some(obj) = m.as_object_mut() {
+                            let mut readers = obj
+                                .get("readBy")
+                                .and_then(|v| v.as_array())
+                                .cloned()
+                                .unwrap_or_default();
+                            readers.push(json!(email));
+                            obj.insert("readBy".into(), Value::Array(readers));
+                            dms_changed = true;
+                        }
+                    }
+                } else {
+                    let to = auth::normalize_email(&jsval::str_or(m.get("to"), ""));
+                    if to == norm
+                        && !m.get("read").and_then(|v| v.as_bool()).unwrap_or(false)
+                        && (mark_all
+                            || dm_froms.contains(&auth::normalize_email(&jsval::str_or(
+                                m.get("from"),
+                                "",
+                            ))))
+                    {
+                        if let Some(obj) = m.as_object_mut() {
+                            obj.insert("read".into(), json!(true));
+                            dms_changed = true;
+                        }
                     }
                 }
             }
         }
-    }
-    if dms_changed {
-        let _ = state.store.write_document(&dms_file, &dms);
+        dms_changed
+    });
+    if updated.is_err() {
+        return json_response(
+            503,
+            json!({"error":"Could not save message read state. Try again."}),
+        );
     }
 
     // 3. Matrix notifications (ids from matrixIds/matrixRoomIds, plus
@@ -660,41 +715,51 @@ fn me_notifications_read(
         }
     }
     let matrix_file = data_file(state, "matrix_notifications.json");
-    let mut all_matrix = state.store.read_document(&matrix_file, json!({}));
-    let mut matrix_changed = false;
-    let mut mine_matrix: Vec<Value> = all_matrix
-        .get(norm.as_str())
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default();
-    for n in mine_matrix.iter_mut() {
-        let id = jsval::string_of(n.get("id"));
-        let room_id = jsval::string_of(n.get("roomId"));
-        if mark_all || matrix_ids.contains(&id) || matrix_room_ids.contains(&room_id) {
-            if !n.get("read").and_then(|v| v.as_bool()).unwrap_or(false) {
-                matrix_changed = true;
+    let updated = state
+        .store
+        .mutate_document(&matrix_file, json!({}), |all_matrix| {
+            let mut matrix_changed = false;
+            let mut mine_matrix: Vec<Value> = all_matrix
+                .get(norm.as_str())
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
+            for n in mine_matrix.iter_mut() {
+                let id = jsval::string_of(n.get("id"));
+                let room_id = jsval::string_of(n.get("roomId"));
+                if !mark_all && n.get("ts").and_then(Value::as_i64).unwrap_or(0) > before_ts {
+                    continue;
+                }
+                if mark_all || matrix_ids.contains(&id) || matrix_room_ids.contains(&room_id) {
+                    if !n.get("read").and_then(|v| v.as_bool()).unwrap_or(false) {
+                        matrix_changed = true;
+                    }
+                    if let Some(obj) = n.as_object_mut() {
+                        obj.insert("read".into(), json!(true));
+                    }
+                    cancel_pending_matrix_email_alert(
+                        state,
+                        &norm,
+                        n.get("roomId").and_then(|v| v.as_str()).unwrap_or(""),
+                    );
+                }
             }
-            if let Some(obj) = n.as_object_mut() {
-                obj.insert("read".into(), json!(true));
+            if matrix_changed {
+                if let Some(obj) = all_matrix.as_object_mut() {
+                    obj.insert(norm.clone(), Value::Array(mine_matrix));
+                }
             }
-            cancel_pending_matrix_email_alert(
-                state,
-                &norm,
-                n.get("roomId").and_then(|v| v.as_str()).unwrap_or(""),
-            );
+            matrix_changed
+        });
+    match updated {
+        Ok(true) => crate::ws::trigger_notification_refresh(state),
+        Ok(false) => {}
+        Err(_) => {
+            return json_response(
+                503,
+                json!({"error":"Could not save notification read state. Try again."}),
+            )
         }
-    }
-    if matrix_changed {
-        if let Some(obj) = all_matrix.as_object_mut() {
-            obj.insert(norm.clone(), Value::Array(mine_matrix));
-        }
-        let _ = state.store.write_document(&matrix_file, &all_matrix);
-        // JS also calls triggerNotificationRefresh() (server.js:3120-3127).
-        crate::ws::broadcast(
-            state,
-            crate::ws::WsRecipients::All,
-            json!({ "type": "refresh_notifications" }).to_string(),
-        );
     }
 
     json_response(200, json!({ "ok": true }))

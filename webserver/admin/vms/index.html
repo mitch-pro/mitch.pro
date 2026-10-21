@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0e1116">
-  <title>Computer Admin · mitch.pro</title>
+  <title>Virtual machines · mitch.pro</title>
   <link rel="icon" href="/favicon.ico">
   <link rel="stylesheet" href="/admin/vms/admin-vms.css?v=4">
 </head>
 <body class="computer-admin">
   <main class="admin-shell">
     <header class="admin-header">
-      <div><a href="/admin/" class="back">← Admin tools</a><p class="eyebrow">Infrastructure</p><h1>Computer Admin</h1><p>Create and assign graphical Linux computers without opening Proxmox.</p></div>
+      <div><a href="/admin/" class="back">Administration</a><h1>Virtual machines</h1></div>
       <div class="service-state" id="service-state"><i></i><span>Checking service</span></div>
     </header>
 
@@ -39,64 +39,31 @@
       <article><span>Memory</span><strong id="memory-capacity">—</strong><div><i id="memory-bar"></i></div></article>
       <article><span>Host storage</span><strong id="storage-capacity">—</strong><div><i id="storage-bar"></i></div></article>
       <article><span>Assigned</span><strong id="assigned-capacity">—</strong><small>customer computers</small></article>
-      <article><span>Active In Use</span><strong id="active-sessions-count">—</strong><small id="active-sessions-sub">0 users on desktop</small></article>
-      <article><span>Running Fleet</span><strong id="running-vms-count">—</strong><small id="running-vms-sub">max 36 cores / 96 GB RAM</small></article>
+      <article><span>Desktop sessions</span><strong id="active-sessions-count">—</strong><small id="active-sessions-sub">0 users on desktop</small></article>
+      <article><span>Running resources</span><strong id="running-vms-count">—</strong><small id="running-vms-sub">max 36 cores / 96 GB RAM</small></article>
     </section>
 
-    <section class="panel analytics-panel" id="analytics-panel">
-      <div class="panel-head">
-        <div>
-          <p class="eyebrow">Telemetry &amp; Activity</p>
-          <h2>Fleet Usage &amp; Uptime (Today)</h2>
+    <section class="panel fleet-panel">
+      <div class="panel-head"><div><p class="eyebrow">Customers</p><h2>Assigned computers</h2></div><button id="refresh-button">Refresh</button></div>
+      <div class="fleet-toolbar">
+        <div class="fleet-filters" id="fleet-filters" role="group" aria-label="Filter by status">
+          <button type="button" class="fleet-filter active" data-filter="all">All</button>
+          <button type="button" class="fleet-filter" data-filter="running">Running</button>
+          <button type="button" class="fleet-filter" data-filter="stopped">Stopped</button>
+          <button type="button" class="fleet-filter" data-filter="provisioning">Provisioning</button>
+          <button type="button" class="fleet-filter" data-filter="failed">Failed</button>
         </div>
-        <div class="analytics-badges">
-          <span class="stat-pill" id="top-user-pill">Top user: <strong id="top-user-display">—</strong></span>
-          <span class="stat-pill">Fleet uptime: <strong id="fleet-total-hours">—</strong></span>
-          <span class="stat-pill">Peak concurrent: <strong id="fleet-peak-concurrent">—</strong></span>
-        </div>
-      </div>
-
-      <div class="chart-box">
-        <div class="chart-header">
-          <div class="chart-title-group">
-            <span class="chart-subtitle">Hourly Concurrency &amp; User Sessions Throughout Day</span>
-          </div>
-          <div class="chart-legend">
-            <span><i class="legend-running"></i> Running Computers</span>
-            <span><i class="legend-active"></i> Active Sessions</span>
-          </div>
-        </div>
-        <div class="chart-container" id="chart-container">
-          <canvas id="usage-chart" height="180"></canvas>
-          <div id="chart-tooltip" class="chart-tooltip" style="display:none;"></div>
+        <input type="search" id="fleet-search" class="fleet-search" placeholder="Search names, usernames, email, VM ID, or hostname">
+        <div class="fleet-bulk-actions">
+          <button type="button" id="bulk-reboot">Reboot selected</button>
+          <button type="button" id="bulk-shutdown-inactive">Shut down all inactive</button>
         </div>
       </div>
-
-      <div class="leaderboard-section">
-        <div class="leaderboard-header">
-          <h3 style="margin: 0; font-size: 1rem; color: #f1f5f9;">🏆 Uptime Leaderboard</h3>
-          <small class="leaderboard-hint" style="color: var(--muted); font-size: 0.8rem;">Ranked by today's computer uptime (not anonymous)</small>
-        </div>
-        <div class="leaderboard-table-wrapper" style="margin-top: 10px;">
-          <table class="leaderboard-table">
-            <thead>
-              <tr>
-                <th style="width: 50px;">Rank</th>
-                <th>User</th>
-                <th>Computer</th>
-                <th>Today's Uptime</th>
-                <th>All-Time</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="leaderboard-body">
-              <tr><td colspan="6" class="empty">Loading uptime leaderboard…</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <div class="fleet-list" id="fleet-list"><p class="empty">Loading computers…</p></div>
+      <p class="form-status" id="fleet-status" role="status"></p>
     </section>
 
+    <details class="provision-tools"><summary>Create or assign a VM</summary>
     <section class="admin-grid">
       <article class="panel create-panel">
         <div class="panel-head"><div><p class="eyebrow">Provision</p><h2>Create a computer</h2></div><span class="badge">Linux desktop</span></div>
@@ -120,31 +87,23 @@
       </article>
     </section>
 
-    <section class="panel fleet-panel">
-      <div class="panel-head"><div><p class="eyebrow">Customers</p><h2>Assigned computers</h2></div><button id="refresh-button">Refresh</button></div>
-      <div class="fleet-toolbar">
-        <div class="fleet-filters" id="fleet-filters" role="group" aria-label="Filter by status">
-          <button type="button" class="fleet-filter active" data-filter="all">All</button>
-          <button type="button" class="fleet-filter" data-filter="running">Running</button>
-          <button type="button" class="fleet-filter" data-filter="stopped">Stopped</button>
-          <button type="button" class="fleet-filter" data-filter="provisioning">Provisioning</button>
-          <button type="button" class="fleet-filter" data-filter="failed">Failed</button>
-        </div>
-        <input type="search" id="fleet-search" class="fleet-search" placeholder="Search names, usernames, email, VM ID, or hostname">
-        <div class="fleet-bulk-actions">
-          <button type="button" id="bulk-reboot">Reboot selected</button>
-          <button type="button" id="bulk-shutdown-inactive">Shut down all inactive</button>
-        </div>
-      </div>
-      <div class="fleet-list" id="fleet-list"><p class="empty">Loading computers…</p></div>
-      <p class="form-status" id="fleet-status" role="status"></p>
-    </section>
-
+    </details>
     <section class="panel audit-panel">
       <div class="panel-head"><div><p class="eyebrow">Security history</p><h2>Recent activity</h2></div></div>
       <div class="audit-list" id="audit-list"><p class="empty">No activity yet.</p></div>
     </section>
   </main>
-  <script src="/admin/vms/admin-vms.js?v=4" defer></script>
+  <dialog id="resource-dialog" aria-labelledby="resource-title">
+    <form id="resource-form">
+      <h2 id="resource-title">Edit resources</h2><p id="resource-machine"></p>
+      <label>CPU cores<input id="resource-cpu" type="number" min="1" step="1" required></label>
+      <label>Memory (MB)<input id="resource-memory" type="number" min="512" step="1" required></label>
+      <label>Storage (GB)<input id="resource-disk" type="number" min="40" step="1" required></label>
+      <p>Shut down the VM before saving. Storage can grow, but cannot shrink.</p>
+      <p id="resource-status" role="status"></p>
+      <div class="dialog-actions"><button type="button" id="resource-cancel">Cancel</button><button type="submit" class="primary">Save resources</button></div>
+    </form>
+  </dialog>
+  <script src="/admin/vms/admin-vms.js?v=5" defer></script>
 </body>
 </html>

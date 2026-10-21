@@ -3321,22 +3321,27 @@ fn api_notifications_read(state: &AppState, headers: &HeaderMap, body_bytes: &[u
         .unwrap_or("");
 
     let notif_file = state.data_dir().join("matrix_notifications.json");
-    let mut all = state.store.read_document(&notif_file, json!({}));
-    let mut changed = false;
-
-    if let Some(list) = all.get_mut(&norm).and_then(|v| v.as_array_mut()) {
-        for n in list.iter_mut() {
-            let n_room = n.get("roomId").and_then(|v| v.as_str()).unwrap_or("");
-            if (room_id.is_empty() || n_room == room_id) && n.get("read") != Some(&json!(true)) {
-                changed = true;
-                n["read"] = json!(true);
+    let saved = state.store.mutate_document(&notif_file, json!({}), |all| {
+        let mut changed = false;
+        if let Some(list) = all.get_mut(&norm).and_then(Value::as_array_mut) {
+            for notice in list {
+                if (room_id.is_empty() || notice["roomId"] == room_id) && notice["read"] != true {
+                    notice["read"] = json!(true);
+                    changed = true;
+                }
             }
         }
-    }
-
-    if changed {
-        let _ = state.store.write_document(&notif_file, &all);
-        crate::ws::trigger_notification_refresh(state);
+        changed
+    });
+    match saved {
+        Ok(true) => crate::ws::trigger_notification_refresh(state),
+        Ok(false) => {}
+        Err(_) => {
+            return cors_json_response(
+                503,
+                json!({"error":"Could not save notification read state."}),
+            )
+        }
     }
 
     cors_json_response(200, json!({ "ok": true }))
@@ -5968,138 +5973,174 @@ pub fn record_matrix_email_sent(state: &AppState, member_norm: &str) {
     }
 }
 
-pub fn add_matrix_notification(state: &AppState, target_norm: &str, notif: &Value) {
+pub fn add_matrix_notification(state: &AppState, target_norm: &str, notif: &Value) -> bool {
     if target_norm.is_empty() {
-        return;
+        return false;
     }
     let notif_file = state.data_dir().join("matrix_notifications.json");
-    let mut all = state.store.read_document(&notif_file, json!({}));
-    if !all.is_object() {
-        all = json!({});
-    }
+    let updated = state
+        .store
+        .mutate_document(&notif_file, json!({}), |all| {
+            if !all.is_object() {
+                *all = json!({});
+            }
 
-    let room_id = notif.get("roomId").and_then(|v| v.as_str()).unwrap_or("");
-    let n_type = notif
-        .get("type")
-        .and_then(|v| v.as_str())
-        .unwrap_or("matrix");
-    let sender = notif
-        .get("sender")
-        .and_then(|v| v.as_str())
-        .unwrap_or("Someone");
-    let room_title = notif
-        .get("roomTitle")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-    let is_direct = notif
-        .get("isDirect")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-    let now = now_millis();
+            let room_id = notif.get("roomId").and_then(|v| v.as_str()).unwrap_or("");
+            let n_type = notif
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("matrix");
+            let sender = notif
+                .get("sender")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Someone");
+            let room_title = notif
+                .get("roomTitle")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let is_direct = notif
+                .get("isDirect")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let now = now_millis();
 
-    let list = match all.get_mut(target_norm).and_then(|v| v.as_array_mut()) {
-        Some(l) => l,
-        None => {
-            if let Some(obj) = all.as_object_mut() {
-                obj.entry(target_norm.to_string())
-                    .or_insert_with(|| json!([]));
-                if let Some(l) = obj.get_mut(target_norm).and_then(|v| v.as_array_mut()) {
-                    l
-                } else {
-                    return;
+            let list = match all.get_mut(target_norm).and_then(|v| v.as_array_mut()) {
+                Some(l) => l,
+                None => {
+                    if let Some(obj) = all.as_object_mut() {
+                        obj.entry(target_norm.to_string())
+                            .or_insert_with(|| json!([]));
+                        if let Some(l) = obj.get_mut(target_norm).and_then(|v| v.as_array_mut()) {
+                            l
+                        } else {
+                            return false;
+                        }
+                    } else {
+                        return false;
+                    }
                 }
-            } else {
-                return;
-            }
-        }
-    };
-
-    let existing_idx = list.iter().position(|n| {
-        n.get("read") != Some(&json!(true))
-            && n.get("roomId").and_then(|v| v.as_str()) == Some(room_id)
-            && n.get("type").and_then(|v| v.as_str()) == Some(n_type)
-    });
-
-    if let Some(idx) = existing_idx {
-        let mut existing = list.remove(idx);
-        let count = existing.get("count").and_then(|v| v.as_i64()).unwrap_or(1) + 1;
-        existing["count"] = json!(count);
-        existing["ts"] = json!(now);
-        if let Some(detail) = notif.get("detail").and_then(|v| v.as_str()) {
-            if !detail.is_empty() {
-                existing["detail"] = json!(detail);
-            }
-        }
-        if n_type == "matrix_call" {
-            existing["title"] = json!(format!("📞 Active call from {sender}"));
-        } else if n_type == "matrix_invite" {
-            if let Some(t) = notif.get("title").and_then(|v| v.as_str()) {
-                existing["title"] = json!(t);
-            }
-        } else {
-            let updated_title = if is_direct {
-                format!("{count} messages from {sender}")
-            } else if !room_title.is_empty() {
-                format!("{count} new messages in {room_title}")
-            } else {
-                format!("{count} new messages in chat")
             };
-            existing["title"] = json!(updated_title);
-        }
-        list.insert(0, existing);
-    } else {
-        let item_id = notif
-            .get("id")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| format!("matrix:{room_id}:{now}"));
-        let default_title = if is_direct {
-            format!("Message from {sender}")
-        } else if !room_title.is_empty() {
-            format!("New message from {sender} in {room_title}")
-        } else {
-            "New message in chat".to_string()
-        };
-        let title = notif
-            .get("title")
-            .and_then(|v| v.as_str())
-            .unwrap_or(&default_title);
-        let body = notif
-            .get("body")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Matrix Chat");
-        let detail = notif.get("detail").and_then(|v| v.as_str()).unwrap_or("");
-        let enc_room = urlencoding_encode(room_id);
-        let default_url = format!("/matrix/home/{enc_room}/");
-        let url = notif
-            .get("url")
-            .and_then(|v| v.as_str())
-            .unwrap_or(&default_url);
 
-        let item = json!({
-            "id": item_id,
-            "type": n_type,
-            "roomId": room_id,
-            "title": title,
-            "body": body,
-            "detail": detail,
-            "sender": sender,
-            "roomTitle": room_title,
-            "isDirect": is_direct,
-            "count": 1,
-            "ts": now,
-            "url": url,
-            "read": false
-        });
-        list.insert(0, item);
+            let event_id = notif.get("eventId").and_then(Value::as_str).unwrap_or("");
+            if !event_id.is_empty()
+                && list.iter().any(|notice| {
+                    notice
+                        .get("eventIds")
+                        .and_then(Value::as_array)
+                        .is_some_and(|ids| ids.iter().any(|id| id == event_id))
+                })
+            {
+                return false;
+            }
+            let existing_idx = list.iter().position(|n| {
+                n.get("read") != Some(&json!(true))
+                    && n.get("roomId").and_then(|v| v.as_str()) == Some(room_id)
+                    && n.get("type").and_then(|v| v.as_str()) == Some(n_type)
+            });
+
+            if let Some(idx) = existing_idx {
+                let mut existing = list.remove(idx);
+                let count = existing.get("count").and_then(|v| v.as_i64()).unwrap_or(1) + 1;
+                existing["count"] = json!(count);
+                existing["ts"] = json!(now);
+                if let Some(url) = notif.get("url") {
+                    existing["url"] = url.clone();
+                }
+                if !event_id.is_empty() {
+                    let mut ids = existing
+                        .get("eventIds")
+                        .and_then(Value::as_array)
+                        .cloned()
+                        .unwrap_or_default();
+                    ids.push(json!(event_id));
+                    if ids.len() > 100 {
+                        ids.remove(0);
+                    }
+                    existing["eventIds"] = json!(ids);
+                    existing["eventId"] = json!(event_id);
+                }
+                if let Some(detail) = notif.get("detail").and_then(|v| v.as_str()) {
+                    if !detail.is_empty() {
+                        existing["detail"] = json!(detail);
+                    }
+                }
+                if n_type == "matrix_call" {
+                    existing["title"] = json!(format!("📞 Active call from {sender}"));
+                } else if n_type == "matrix_invite" {
+                    if let Some(t) = notif.get("title").and_then(|v| v.as_str()) {
+                        existing["title"] = json!(t);
+                    }
+                } else {
+                    let updated_title = if is_direct {
+                        format!("{count} messages from {sender}")
+                    } else if !room_title.is_empty() {
+                        format!("{count} new messages in {room_title}")
+                    } else {
+                        format!("{count} new messages in chat")
+                    };
+                    existing["title"] = json!(updated_title);
+                }
+                list.insert(0, existing);
+            } else {
+                let item_id = notif
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| format!("matrix:{room_id}:{now}"));
+                let default_title = if is_direct {
+                    format!("Message from {sender}")
+                } else if !room_title.is_empty() {
+                    format!("New message from {sender} in {room_title}")
+                } else {
+                    "New message in chat".to_string()
+                };
+                let title = notif
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(&default_title);
+                let body = notif
+                    .get("body")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Matrix Chat");
+                let detail = notif.get("detail").and_then(|v| v.as_str()).unwrap_or("");
+                let enc_room = urlencoding_encode(room_id);
+                let default_url = format!("/matrix/home/{enc_room}/");
+                let url = notif
+                    .get("url")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(&default_url);
+
+                let item = json!({
+                    "id": item_id,
+                    "type": n_type,
+                    "roomId": room_id,
+                    "title": title,
+                    "body": body,
+                    "detail": detail,
+                    "sender": sender,
+                    "roomTitle": room_title,
+                    "isDirect": is_direct,
+                    "count": 1,
+                    "ts": now,
+                    "url": url,
+                    "eventId":event_id,
+                    "eventIds":if event_id.is_empty(){json!([])}else{json!([event_id])},
+                    "read": false
+                });
+                list.insert(0, item);
+            }
+
+            if list.len() > 50 {
+                list.truncate(50);
+            }
+
+            true
+        })
+        .unwrap_or(false);
+    if updated {
+        crate::ws::trigger_notification_refresh(state);
     }
-
-    if list.len() > 50 {
-        list.truncate(50);
-    }
-
-    let _ = state.store.write_document(&notif_file, &all);
-    crate::ws::trigger_notification_refresh(state);
+    updated
 }
 
 #[derive(Clone)]
@@ -6401,6 +6442,7 @@ async fn dispatch_matrix_message_notifications(
     event_type: &str,
     body_bytes: &[u8],
     headers: &HeaderMap,
+    event_id: &str,
 ) {
     if event_type != "m.room.message" && event_type != "m.room.encrypted" {
         return;
@@ -6469,7 +6511,11 @@ async fn dispatch_matrix_message_notifications(
     };
 
     let enc_room = urlencoding_encode(room_id);
-    let notif_url = format!("/matrix/home/{enc_room}/");
+    let notif_url = if event_id.is_empty() {
+        format!("/matrix/home/{enc_room}/")
+    } else {
+        format!("/matrix/home/{enc_room}/{}/", urlencoding_encode(event_id))
+    };
 
     let vapid_public = std::env::var("VAPID_PUBLIC_KEY").unwrap_or_default();
 
@@ -6500,11 +6546,12 @@ async fn dispatch_matrix_message_notifications(
             notif_title.clone()
         };
 
-        add_matrix_notification(
+        let fresh = add_matrix_notification(
             state,
             &member_norm,
             &json!({
                 "roomId": room_id,
+                "eventId":event_id,
                 "type": "matrix",
                 "title": title_to_use,
                 "body": notif_body,
@@ -6516,6 +6563,9 @@ async fn dispatch_matrix_message_notifications(
             }),
         );
 
+        if !fresh {
+            continue;
+        }
         if !vapid_public.is_empty() {
             if let Some(sub) = mitch_lib::push_subs::push_sub_get(&state.store, &member_norm) {
                 let push_payload = json!({
@@ -6523,6 +6573,7 @@ async fn dispatch_matrix_message_notifications(
                     "body": preview_text,
                     "url": notif_url,
                     "tag": format!("matrix-{room_id}"),
+                    "eventId":event_id,
                 });
                 let st = state.clone();
                 let vp = vapid_public.clone();
@@ -7714,8 +7765,17 @@ pub async fn handle_matrix_gateway(
                         )
                         .await;
                     } else if event_type == "m.room.message" || event_type == "m.room.encrypted" {
+                        let sent_event = serde_json::from_slice::<Value>(&bytes)
+                            .ok()
+                            .and_then(|value| value["event_id"].as_str().map(String::from))
+                            .unwrap_or_default();
                         dispatch_matrix_message_notifications(
-                            state, &room_id, event_type, body_bytes, headers,
+                            state,
+                            &room_id,
+                            event_type,
+                            body_bytes,
+                            headers,
+                            &sent_event,
                         )
                         .await;
                     }
@@ -8011,6 +8071,46 @@ pub async fn admin_conduit_health(state: &Arc<AppState>) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn matrix_notification_retries_do_not_increment_and_latest_message_updates_destination() {
+        let (state, dir) = test_state();
+        let mut notice = json!({"roomId":"!fixture:example.test","eventId":"$one","type":"matrix","url":"/matrix/home/fixture/one/"});
+        assert!(add_matrix_notification(
+            &state,
+            "receiver@example.test",
+            &notice
+        ));
+        assert!(!add_matrix_notification(
+            &state,
+            "receiver@example.test",
+            &notice
+        ));
+        notice["eventId"] = json!("$two");
+        notice["url"] = json!("/matrix/home/fixture/two/");
+        assert!(add_matrix_notification(
+            &state,
+            "receiver@example.test",
+            &notice
+        ));
+        let stored = state.store.read_document(
+            &state.data_dir().join("matrix_notifications.json"),
+            json!({}),
+        );
+        assert_eq!(stored["receiver@example.test"][0]["count"], 2);
+        assert_eq!(
+            stored["receiver@example.test"][0]["url"],
+            "/matrix/home/fixture/two/"
+        );
+        notice["eventId"] = json!("$one");
+        assert!(!add_matrix_notification(
+            &state,
+            "receiver@example.test",
+            &notice
+        ));
+        drop(state);
+        std::fs::remove_dir_all(dir).ok();
+    }
 
     #[test]
     fn destructive_cleanup_resolves_email_keys_without_matching_neighbor_names() {

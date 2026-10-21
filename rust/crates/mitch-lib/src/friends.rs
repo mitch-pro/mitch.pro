@@ -127,6 +127,121 @@ pub fn rename_friend_references(store: &DataStore, old_norm: &str, new_norm: &st
     }
 }
 
+/// Apply a friend action and both membership lists in one write transaction.
+/// The result's `changed` flag is the sole permission to emit a push alert;
+/// retries and simultaneous requests cannot generate duplicate notifications.
+pub fn change_request(
+    store: &DataStore,
+    from: &str,
+    to: &str,
+    action: &str,
+) -> Result<(&'static str, bool), &'static str> {
+    use rusqlite::{params, OptionalExtension, TransactionBehavior};
+    use std::collections::BTreeSet;
+    let (from, to) = (
+        crate::auth::normalize_email(from),
+        crate::auth::normalize_email(to),
+    );
+    if from.is_empty() || to.is_empty() || from == to {
+        return Err("Choose another account.");
+    }
+    let mut conn = store.conn();
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|_| "Could not update friends.")?;
+    let key = store.relative_key(&store.data_dir().join("friend_requests.json"));
+    let raw: Option<String> = tx
+        .query_row(
+            "SELECT content FROM json_documents WHERE path=?1",
+            [&key],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|_| "Could not load requests.")?;
+    let raw = match raw {
+        Some(raw) => Some(raw),
+        None => match std::fs::read_to_string(store.data_dir().join("friend_requests.json")) {
+            Ok(raw) => Some(raw),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(_) => return Err("Could not load requests."),
+        },
+    };
+    let mut requests: Vec<Value> = match raw {
+        Some(raw) => serde_json::from_str(&raw).map_err(|_| "Could not read requests.")?,
+        None => vec![],
+    };
+    let get_list = |email: &str| -> Result<BTreeSet<String>, &'static str> {
+        let raw: Option<String> = tx
+            .query_row(
+                "SELECT data FROM friend_lists WHERE email=?1",
+                [email],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|_| "Could not load friends.")?;
+        let list: Vec<String> = match raw {
+            Some(raw) => serde_json::from_str(&raw).map_err(|_| "Could not read friends.")?,
+            None => vec![],
+        };
+        Ok(list
+            .iter()
+            .map(|email| crate::auth::normalize_email(email))
+            .collect())
+    };
+    let (mut mine, mut theirs) = (get_list(&from)?, get_list(&to)?);
+    let mutual = mine.contains(&to) && theirs.contains(&from);
+    let between = |r: &Value, a: &str, b: &str| {
+        crate::auth::normalize_email(r["from"].as_str().unwrap_or("")) == a
+            && crate::auth::normalize_email(r["to"].as_str().unwrap_or("")) == b
+    };
+    let incoming = requests.iter().any(|r| between(r, &to, &from));
+    let outgoing = requests.iter().any(|r| between(r, &from, &to));
+    let (status, changed, connect) = match action {
+        "request" if mutual => ("accepted", false, Some(true)),
+        "request" if incoming => ("accepted", true, Some(true)),
+        "request" if outgoing => ("pending", false, None),
+        "request" => {
+            requests.push(json!({"from":from,"to":to,"timestamp":now_millis()}));
+            ("pending", true, None)
+        }
+        "accept" if incoming => ("accepted", true, Some(true)),
+        "accept" if mutual => ("accepted", false, Some(true)),
+        "accept" => return Err("No pending request from this account."),
+        "reject" => ("rejected", incoming, None),
+        "cancel" => ("cancelled", outgoing, None),
+        "remove" => (
+            "removed",
+            mine.contains(&to) || theirs.contains(&from),
+            Some(false),
+        ),
+        _ => return Err("Invalid friend action."),
+    };
+    if matches!(action, "accept" | "remove") || connect == Some(true) {
+        requests.retain(|r| !between(r, &from, &to) && !between(r, &to, &from));
+    } else if action == "reject" {
+        requests.retain(|r| !between(r, &to, &from));
+    } else if action == "cancel" {
+        requests.retain(|r| !between(r, &from, &to));
+    }
+    if let Some(connect) = connect {
+        if connect {
+            mine.insert(to.clone());
+            theirs.insert(from.clone());
+        } else {
+            mine.remove(&to);
+            theirs.remove(&from);
+        }
+        for (email, list) in [(&from, mine), (&to, theirs)] {
+            let encoded = serde_json::to_string(&list).map_err(|_| "Could not save friends.")?;
+            tx.execute("INSERT INTO friend_lists(email,data,updated_at) VALUES(?1,?2,?3) ON CONFLICT(email) DO UPDATE SET data=excluded.data,updated_at=excluded.updated_at",params![email,encoded,now_millis()]).map_err(|_|"Could not save friends.")?;
+        }
+    }
+    let encoded = serde_json::to_string(&requests).map_err(|_| "Could not save requests.")?;
+    tx.execute("INSERT INTO json_documents(path,content,updated_at) VALUES(?1,?2,?3) ON CONFLICT(path) DO UPDATE SET content=excluded.content,updated_at=excluded.updated_at",params![key,encoded,now_millis()]).map_err(|_|"Could not save requests.")?;
+    tx.commit().map_err(|_| "Could not save friends.")?;
+    Ok((status, changed))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -143,6 +258,74 @@ mod tests {
         DataStore::open(&base, &base.join("data")).unwrap()
     }
 
+    #[test]
+    fn mutual_requests_and_retries_update_both_lists_once() {
+        let store = std::sync::Arc::new(temp_store("request-atomic"));
+        let handles: Vec<_> = (0..8)
+            .map(|_| {
+                let store = store.clone();
+                std::thread::spawn(move || {
+                    change_request(
+                        &store,
+                        "sender@example.test",
+                        "receiver@example.test",
+                        "request",
+                    )
+                    .unwrap()
+                })
+            })
+            .collect();
+        let changes = handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .filter(|(_, changed)| *changed)
+            .count();
+        assert_eq!(changes, 1);
+        assert_eq!(
+            change_request(
+                &store,
+                "receiver@example.test",
+                "sender@example.test",
+                "request"
+            ),
+            Ok(("accepted", true))
+        );
+        assert_eq!(
+            change_request(
+                &store,
+                "receiver@example.test",
+                "sender@example.test",
+                "accept"
+            ),
+            Ok(("accepted", false))
+        );
+        assert_eq!(
+            friends_get(&store, "receiver@example.test"),
+            json!(["sender@example.test"])
+        );
+        assert_eq!(
+            friends_get(&store, "sender@example.test"),
+            json!(["receiver@example.test"])
+        );
+        assert_eq!(
+            change_request(
+                &store,
+                "receiver@example.test",
+                "sender@example.test",
+                "remove"
+            ),
+            Ok(("removed", true))
+        );
+        assert_eq!(
+            change_request(
+                &store,
+                "receiver@example.test",
+                "sender@example.test",
+                "remove"
+            ),
+            Ok(("removed", false))
+        );
+    }
     #[test]
     fn get_defaults_to_empty_array() {
         let store = temp_store("default");

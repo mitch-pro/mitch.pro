@@ -36,7 +36,7 @@
           <p>Blocks this account across the website. Other people on the same network keep access.</p>
           <form id="ban-form">
             <label for="ban-email">Account</label>
-            <input id="ban-email" type="email" autocomplete="off" placeholder="name@student.rjuhsd.us" required>
+            <input id="ban-email" type="text" autocomplete="off" placeholder="Username or email" required>
             <label for="ban-duration">Ban duration</label>
             <select id="ban-duration" required>
               <option value="" disabled selected>Choose a duration</option>
@@ -58,12 +58,24 @@
           <p>Remove an account ban or restriction using the account’s email address.</p>
           <form id="restore-form">
             <label for="restore-email">Account</label>
-            <input id="restore-email" type="email" autocomplete="off" placeholder="name@student.rjuhsd.us" required>
+            <input id="restore-email" type="text" autocomplete="off" placeholder="Username or email" required>
             <button type="submit">Restore access</button>
             <p id="restore-status" class="bans-status" role="status"></p>
           </form>
         </section>
       </div>
+
+      <section class="bans-panel" aria-labelledby="restrictions-title">
+        <h2 id="restrictions-title">VM restrictions</h2>
+        <p>Limit VM features without blocking the rest of the website.</p>
+        <form id="restriction-form">
+          <label for="restriction-account">Account</label><input id="restriction-account" required placeholder="Username or email" autocomplete="off">
+          <label for="restriction-scope">Feature</label><select id="restriction-scope"><option value="vm-ban">All virtual machines</option><option value="byo-os-ban">BYO-OS only</option></select>
+          <label for="restriction-reason">Reason for the audit log</label><input id="restriction-reason" required maxlength="200">
+          <button type="submit">Restrict access</button><p id="restriction-status" class="bans-status" role="status"></p>
+        </form>
+        <div id="restriction-list"></div>
+      </section>
 
       <section class="bans-panel bans-roster" aria-labelledby="banned-title">
         <header class="bans-list-heading"><div><h2 id="banned-title">Banned accounts</h2><p id="bans-summary"></p></div><button id="refresh-bans" type="button">Refresh</button></header>

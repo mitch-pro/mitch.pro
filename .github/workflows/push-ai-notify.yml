@@ -20,6 +20,7 @@ jobs:
       github.actor != 'Mitch-Fogler' &&
       github.event.forced == false &&
       github.event.deleted == false &&
+      !contains(github.event.head_commit.message, '[quiet]') &&
       github.event.before != '0000000000000000000000000000000000000000'
     steps:
       - name: Checkout

@@ -570,10 +570,7 @@
       }
     }
   </style>
-  <link rel="stylesheet" href="/admin/admin-dayboard.css?v=9">
-  <link rel="stylesheet" href="/staff-galaxy.css?v=4">
-  <link rel="stylesheet" href="/admin/admin-command.css?v=1">
-  <link rel="stylesheet" href="/staff-command-v2.css?v=1">
+  <link rel="stylesheet" href="/admin/admin.css?v=1">
 </head>
 <body id="command-center" class="admin-page admin-locked">
   <main class="shell">
@@ -589,74 +586,18 @@
     </div>
     <nav class="staff-panel-switcher" aria-label="Staff workspaces">
       <a class="owner-switch" href="#owner-tools" hidden><span>&#9733;</span><b>Owner tools</b><small>Site operations</small></a>
-      <a class="active" href="#approval-tools"><span>&#9881;</span><b>Admin tools</b><small>Full control center</small></a>
+      <a class="active" href="#approval-tools"><span>&#9881;</span><b>Admin tools</b><small>Administration</small></a>
       <a href="/admin/bans/"><span aria-hidden="true">&#8856;</span><b>Bans</b><small>Account access</small></a>
-      <a href="/moderator/"><span>&#10003;</span><b>Moderator tools</b><small>Safety workspace</small></a>
+      <a href="/moderator/"><span>&#10003;</span><b>Moderator tools</b><small>Reports and review</small></a>
     </nav>
 
-    <details class="staff-school-details"><summary>School calendar &amp; weather</summary>
-    <section class="admin-dayboard" aria-labelledby="admin-dayboard-title">
-      <header class="admin-dayboard-head">
-        <div>
-          <p><span></span> LIVE COMMAND VIEW</p>
-          <h2 id="admin-dayboard-title">Today at Woodcreek</h2>
-        </div>
-        <div class="admin-live-clock" aria-live="polite">
-          <strong id="admin-live-time">--:--:--</strong>
-          <span id="admin-live-date">Loading local time</span>
-        </div>
-      </header>
-      <div class="admin-dayboard-grid">
-        <article class="admin-day-card admin-weather" id="admin-weather-card">
-          <div class="admin-card-head">
-            <div><small>ROSEVILLE WEATHER</small><h3 id="admin-weather-condition">Connecting</h3></div>
-            <span class="admin-live-pill" id="admin-weather-state"><i></i> LIVE</span>
-          </div>
-          <div class="admin-weather-now">
-            <span class="admin-weather-icon" id="admin-weather-icon" aria-hidden="true">☀</span>
-            <strong id="admin-weather-temp">--°</strong>
-          </div>
-          <div class="admin-weather-metrics">
-            <span><small>FEELS</small><b id="admin-weather-feels">--°</b></span>
-            <span><small>HIGH / LOW</small><b id="admin-weather-range">--° / --°</b></span>
-            <span><small>WIND</small><b id="admin-weather-wind">-- mph</b></span>
-          </div>
-          <footer id="admin-weather-updated">Open-Meteo forecast</footer>
-        </article>
-
-        <article class="admin-day-card admin-calendar">
-          <div class="admin-card-head">
-            <div><small>SCHOOL CALENDAR</small><h3 id="admin-calendar-title">This month</h3></div>
-            <div class="admin-calendar-nav">
-              <button type="button" id="admin-cal-prev" aria-label="Previous month">‹</button>
-              <button type="button" id="admin-cal-today">Today</button>
-              <button type="button" id="admin-cal-next" aria-label="Next month">›</button>
-            </div>
-          </div>
-          <div class="admin-calendar-week"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
-          <div class="admin-calendar-days" id="admin-calendar-days"></div>
-          <div class="admin-calendar-agenda"><small>UP NEXT</small><ol id="admin-school-events"><li>Loading Woodcreek events…</li></ol></div>
-        </article>
-
-        <article class="admin-day-card admin-bells">
-          <div class="admin-card-head">
-            <div><small>WOODCREEK HIGH SCHOOL</small><h3>Today’s bell schedule</h3></div>
-            <span class="admin-live-pill" id="admin-bell-state"><i></i> CHECKING</span>
-          </div>
-          <div class="admin-bell-summary">
-            <strong id="admin-bell-current">Checking today’s schedule</strong>
-            <span id="admin-bell-countdown">Pacific time</span>
-          </div>
-          <ol class="admin-periods" id="admin-periods"></ol>
-          <footer><span id="admin-bell-note">Period names only — no personal class data</span><a href="https://rjuhsd.school/">Open bell schedule </a></footer>
-        </article>
-      </div>
+    <section class="admin-shortcuts" aria-label="Administration shortcuts">
+      <a id="newsletter-management" class="admin-shortcut newsletter-shortcut" href="/admin/email/" hidden><strong>Newsletter management</strong><span>Compose, preview, and choose recipients</span></a>
+      <a class="admin-shortcut" href="/admin/bans/"><strong>Account access</strong><span>Review bans and restore accounts</span></a>
+      <a id="vm-management" class="admin-shortcut" href="/admin/vms/" hidden><strong>Virtual machines</strong><span>Manage computers and resources</span></a>
+      <a class="admin-shortcut" href="/leaderboard/"><strong>Leaderboard</strong><span>View current rankings</span></a>
     </section>
-
-    </details>
-    <div class="notice" id="policy-note">
-      Security monitoring dashboard: admin actions, reports, moderation signals, and operational status are shown for authorized staff. Private chat history is not exposed here.
-    </div>
+    <div class="notice" id="policy-note">Administrative changes are recorded in the audit log.</div>
     <div class="role-note" id="role-note">Checking your permission level...</div>
 
     <!-- Passphrase Protection Lock Box -->
@@ -947,7 +888,7 @@
 
     <section class="tool-group" id="moderation-tools">
       <div class="section-head">
-        <h2>Live Safety</h2>
+        <h2>Moderation</h2>
         <span class="tag">broadcast, bans, traffic</span>
       </div>
     <div class="moderation-panel">
@@ -958,22 +899,15 @@
         <button id="broadcast-submit" type="submit">Broadcast alert</button>
         <div id="broadcast-status" class="form-status"></div>
       </form>
-      <form class="action-card" onsubmit="shadowBan(event)">
-        <h2>Shadow-Ban</h2>
-        <p>User can still use site, but no one sees their pixels/chat.</p>
-        <input id="shadow-email" type="email" placeholder="user@email.com" required>
-        <button type="submit">Apply Shadow-Ban</button>
-        <div id="shadow-status" class="form-status"></div>
-      </form>
       <div class="action-card"><h2>Account bans</h2><p>Review banned accounts, block access, or restore an account.</p><a class="btn" href="/admin/bans/">Manage bans</a></div>
       <div class="action-card">
-        <h2>Live Traffic Feed</h2>
+        <h2>Service activity</h2>
         <p>Real-time page visits.</p>
         <div id="traffic-feed" class="live-feed"></div>
       </div>
       <div class="action-card" id="mod-profile-card" style="grid-column: 1 / -1;">
         <h2 style="margin:0 0 6px;">Unified User Moderation Profile</h2>
-        <p style="margin-top:0; color:var(--t-fg2); font-size:0.82rem;">Look up a student by email or Matrix ID to see every room, power level, ban/mute state, and global ban/shadow-ban status in one place, then restore their account with a single click.</p>
+        <p style="margin-top:0; color:var(--t-fg2); font-size:0.82rem;">Look up an account by email or Matrix ID to see every room, power level, ban/mute state, and global ban/shadow-ban status in one place, then restore their account with a single click.</p>
         <form onsubmit="lookupModerationProfile(event)" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
           <input id="mod-profile-query" type="text" placeholder="user@school.edu or @user:mitch.pro" required style="flex:1; min-width:220px;">
           <button type="submit">Look up</button>
@@ -2067,20 +2001,6 @@
       } catch(e) {}
     }
 
-    async function shadowBan(e) {
-      e.preventDefault();
-      setStatus('shadow-status', 'Submitting...', '');
-      try {
-        const d = await postAdmin('/api/admin/restricted-mode', {
-          email: document.getElementById('shadow-email').value,
-        });
-        setStatus('shadow-status', d.pending ? pendingText(d) : ('Shadow-ban ' + (d.active ? 'applied' : 'removed')), 'ok');
-        if (d.pending) loadModeratorRequests();
-      } catch (err) {
-        setStatus('shadow-status', err.message, 'err');
-      }
-    }
-
     async function lookupModerationProfile(e) {
       e.preventDefault();
       const q = document.getElementById('mod-profile-query').value.trim();
@@ -2128,15 +2048,15 @@
           <tbody>${roomRows}</tbody>
         </table></div>
         <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;">
-          ${canRestore ? `<button type="button" class="mini warn" onclick='restoreFromModProfile(${JSON.stringify(data.email)})'>Restore account (unban + unmute everywhere)</button>` : ''}
-          <button type="button" class="mini ${data.vmBanned ? 'ok' : 'warn'}" onclick='toggleVmBanFromModProfile(${JSON.stringify(data.email)}, "vm")'>${data.vmBanned ? 'Unban from VMs' : 'Ban from VMs'}</button>
-          <button type="button" class="mini ${data.byoOsBanned ? 'ok' : 'warn'}" onclick='toggleVmBanFromModProfile(${JSON.stringify(data.email)}, "byoOs")'>${data.byoOsBanned ? 'Unban from BYO-OS' : 'Ban from BYO-OS'}</button>
+          ${canRestore ? `<button type="button" class="mini warn" onclick='restoreFromModProfile(${esc(JSON.stringify(data.email))})'>Restore account (unban + unmute everywhere)</button>` : ''}
+          <button type="button" class="mini ${data.vmBanned ? 'ok' : 'warn'}" onclick='setVmRestrictionFromModProfile(${esc(JSON.stringify(data.email))}, "vm", ${!data.vmBanned})'>${data.vmBanned ? 'Unban from VMs' : 'Ban from VMs'}</button>
+          <button type="button" class="mini ${data.byoOsBanned ? 'ok' : 'warn'}" onclick='setVmRestrictionFromModProfile(${esc(JSON.stringify(data.email))}, "byoOs", ${!data.byoOsBanned})'>${data.byoOsBanned ? 'Unban from BYO-OS' : 'Ban from BYO-OS'}</button>
         </div>
       `;
     }
 
     async function restoreFromModProfile(email) {
-      if (!(await customConfirm('Full Account Restore', `Unban ${email} everywhere: account ban, shadow-ban, IP bans, and all Matrix room bans/mutes/negative power levels will be cleared. Continue?`))) return;
+      if (!(await customConfirm('Full Account Restore', `Unban ${email} everywhere: account ban, IP bans, and all Matrix room bans/mutes/negative power levels will be cleared. Continue?`))) return;
       try {
         const d = await postAdmin('/api/admin/unban-account', { email });
         await customAlert('Account Restored', (d.existed ? 'Unbanned ' : 'No account ban existed for ') + d.targetEmail + '. Matrix room state is being restored in the background.');
@@ -2146,16 +2066,12 @@
       }
     }
 
-    // Toggle endpoints (/api/admin/vm-ban, /api/admin/byo-os-ban) ban if not
-    // already banned, unban if already banned — this is the only place that
-    // calls them independent of a specific VM row, so it's the one surface
-    // that can undo a ban for someone with no VM left to show a row for.
-    async function toggleVmBanFromModProfile(email, kind) {
+    async function setVmRestrictionFromModProfile(email, kind, banned) {
       const url = kind === 'byoOs' ? '/api/admin/byo-os-ban' : '/api/admin/vm-ban';
       const label = kind === 'byoOs' ? 'BYO-OS' : 'VMs';
-      if (!(await customConfirm(`Toggle ${label} ban`, `Toggle "banned from ${label}" for ${email}?`))) return;
+      if (!(await customConfirm(`${banned ? 'Restrict' : 'Restore'} ${label} access`, `${banned ? 'Restrict' : 'Restore'} ${label} access for ${email}?`))) return;
       try {
-        const d = await postAdmin(url, { email });
+        const d = await postAdmin(url, { email, banned });
         await customAlert('Updated', `${email} is now ${d.active ? 'banned from' : 'unbanned from'} ${label}.`);
         lookupModerationProfile({ preventDefault() {} });
       } catch (err) {
@@ -3674,6 +3590,8 @@
         return;
       }
       currentUser = await rMe.json();
+      document.getElementById('newsletter-management').hidden = !currentUser.isAdmin;
+      document.getElementById('vm-management').hidden = !currentUser.isAdmin;
       document.body.classList.toggle('owner-mode', !!currentUser.isOwner);
       const ownerSwitch = document.querySelector('.owner-switch');
       if (ownerSwitch) ownerSwitch.hidden = !currentUser.isOwner;

@@ -79,3 +79,12 @@ node tests/test_admin_email_browser.mjs
 The browser suite starts an isolated app and a local mock mail service. It never
 sends real email. Set `NEWSLETTER_ARTIFACT_DIR` to a directory outside the repo to
 export an example HTML file and preview screenshots during the test.
+
+Student delivery addresses are resolved from the registered canonical mailbox
+for both selected and everyone audiences. Authentication's dot-stripped identity
+is used only for matching and unsubscribe checks, never as a delivery address.
+Selected aliases deduplicate to that mailbox and honor unsubscribes under either
+identity. An unresolved student address missing the first/last-name period is
+rejected rather than guessing where a dot belongs. The admin homepage newsletter
+shortcut is visible only after full-admin verification; both its HTML page and
+its API enforce that role server-side. Preview/review still never deliver mail.

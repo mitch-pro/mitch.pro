@@ -1056,6 +1056,7 @@ pub(crate) async fn handle(
         // time) — this just builds the VM against it.
         let result = crate::proxmox_desktop::desktop()
             .create_from_iso(&crate::proxmox_desktop::CreateFromIsoParams {
+                windows: false,
                 owner_resources: crate::routes::vm::can_customize_owner_vm(state, &actor),
                 vmid: Some(vmid),
                 hostname: hostname.clone(),
@@ -1319,6 +1320,7 @@ pub(crate) async fn handle(
 
         let result = crate::proxmox_desktop::desktop()
             .create_from_iso(&crate::proxmox_desktop::CreateFromIsoParams {
+                windows: preset.id == "windows",
                 owner_resources: crate::routes::vm::can_customize_owner_vm(state, &actor),
                 vmid: Some(vmid),
                 hostname: hostname.clone(),
@@ -1401,7 +1403,11 @@ pub(crate) async fn handle(
     // straight to disk instead of back into the installer. Only meaningful
     // for a BYO-OS or preset computer (templateVmid is null — a template-cloned one
     // never had an ISO attached in the first place).
-    if path == "/api/vm/byo-os/detach-iso" && *method == Method::POST {
+    if matches!(
+        path,
+        "/api/vm/byo-os/detach-iso" | "/api/vm/byo-os/windows-compatibility"
+    ) && *method == Method::POST
+    {
         if is_vm_banned(state, &actor.email) {
             return Some(json_response(
                 403,
@@ -1414,14 +1420,9 @@ pub(crate) async fn handle(
             .get("id")
             .or_else(|| body.get("computerId"))
             .and_then(Value::as_str);
-        let record = req_id
-            .and_then(|id| {
-                records
-                    .iter()
-                    .find(|r| r.id == id && r.template_vmid.is_none())
-                    .cloned()
-            })
-            .or_else(|| records.into_iter().find(|r| r.template_vmid.is_none()));
+        let record = records.into_iter().find(|record| {
+            record.template_vmid.is_none() && req_id.is_none_or(|id| record.id == id)
+        });
         let Some(record) = record else {
             return Some(json_response(
                 404,
@@ -1429,6 +1430,70 @@ pub(crate) async fn handle(
             ));
         };
         let record_json = record.to_json();
+        if path.ends_with("/windows-compatibility") {
+            if body["confirmInstallerRepair"] != true {
+                return Some(json_response(
+                    400,
+                    json!({"error":"Confirm this is a Windows installer repair. An existing legacy BIOS installation may need reinstalling."}),
+                ));
+            }
+            let Some(_operation) = crate::routes::vm::resource_operation(state, record.id.clone())
+            else {
+                return Some(json_response(
+                    409,
+                    json!({"error":"Another computer operation is in progress."}),
+                ));
+            };
+            let service = crate::proxmox_desktop::desktop();
+            let runtime = match service.get_status(&record_json).await {
+                Ok(value) => value,
+                Err(_) => {
+                    return Some(json_response(
+                        503,
+                        json!({"error":"Could not check the computer's status."}),
+                    ))
+                }
+            };
+            if runtime["state"] != "stopped" {
+                return Some(json_response(
+                    409,
+                    json!({"error":"Shut down the computer before preparing the Windows installer."}),
+                ));
+            }
+            let applied = match service.prepare_windows_installer(&record_json).await {
+                Ok(applied) => applied,
+                Err(error) => {
+                    let friendly = crate::routes::vm::friendly_vm_error(&error.into());
+                    return Some(json_response(friendly.0, json!({"error":friendly.1})));
+                }
+            };
+            if vmlib::update_owner_virtual_machine_specs(
+                &state.store,
+                &record.id,
+                applied["cpuCores"].as_f64(),
+                applied["memoryMb"].as_f64(),
+                applied["diskGb"].as_f64(),
+            )
+            .is_none()
+            {
+                return Some(json_response(
+                    500,
+                    json!({"error":"The host is configured, but saving failed. Retry this action to finish saving the computer record."}),
+                ));
+            }
+            vm_audit(
+                state,
+                &actor.email,
+                Some(&record_json),
+                "WINDOWS_INSTALLER_PREPARED",
+                true,
+                None,
+            );
+            return Some(json_response(
+                200,
+                json!({"ok":true,"message":"Windows installer configured with UEFI, Secure Boot, and TPM 2.0. Start the VM to continue setup."}),
+            ));
+        }
         let node = jsval::str_or(
             record_json.get("node"),
             crate::proxmox_desktop::desktop().node(),

@@ -366,6 +366,7 @@ pub(crate) async fn handle(
         (m, Fanout::Dm { to_canonical })
     };
 
+    msg.insert("id".into(), json!(crypto::random_bytes_hex(16)));
     // Non-E2E messages never touch disk in the clear: seal text+image at rest.
     if encrypted_envelope.is_none() {
         let payload = json!({
@@ -387,6 +388,20 @@ pub(crate) async fn handle(
     if effective_expiry > 0.0 {
         msg.insert("autoDelete".into(), js_num_value(effective_expiry));
     }
+    fn message_key(message: &Value) -> String {
+        format!(
+            "{}:{}:{}:{}",
+            message["from"],
+            message["to"],
+            message["groupId"],
+            message
+                .get("clientId")
+                .or_else(|| message.get("id"))
+                .or_else(|| message.get("ts"))
+                .unwrap_or(&Value::Null)
+        )
+    }
+    let previous_keys: std::collections::HashSet<_> = dms.iter().map(message_key).collect();
     dms.push(Value::Object(msg.clone()));
     let pruned = dm::prune_dms(
         &state.store,
@@ -395,10 +410,39 @@ pub(crate) async fn handle(
         store.pickle,
         now as f64,
     );
-    state
+    let retained_keys: std::collections::HashSet<_> = pruned.iter().map(message_key).collect();
+    let new_key = message_key(&Value::Object(msg.clone()));
+    let saved = state
         .store
-        .write_document(&data_file(state, store.dms), &Value::Array(pruned))
-        .ok();
+        .mutate_document(&data_file(state, store.dms), json!([]), |current| {
+            let Some(messages) = current.as_array_mut() else {
+                return Err(());
+            };
+            if !client_id.is_empty() {
+                if let Some(existing) = messages
+                    .iter()
+                    .find(|existing| message_key(existing) == new_key)
+                {
+                    return Ok(Some(existing.clone()));
+                }
+            }
+            messages.retain(|message| {
+                !previous_keys.contains(&message_key(message))
+                    || retained_keys.contains(&message_key(message))
+            });
+            messages.push(Value::Object(msg.clone()));
+            Ok(None)
+        });
+    match saved {
+        Ok(Ok(None)) => {}
+        Ok(Ok(Some(existing))) => return Some(dup_response(state, &existing)),
+        _ => {
+            return Some(json_response(
+                503,
+                json!({"error":"Could not save your message. Retry the same request."}),
+            ))
+        }
+    }
 
     match &fanout {
         Fanout::Group {
@@ -406,8 +450,12 @@ pub(crate) async fn handle(
             group_name,
         } => {
             let group_url = notification_url(&chat_app_url(&format!(
-                "?group={}",
-                encode_uri_component(&group_id)
+                "?group={}&message={}",
+                encode_uri_component(&group_id),
+                encode_uri_component(&jsval::str_or(
+                    msg.get("clientId").or_else(|| msg.get("id")),
+                    ""
+                ))
             )));
             for member in members.iter() {
                 let member_norm =
@@ -426,7 +474,8 @@ pub(crate) async fn handle(
                         "title": format!("{sender_display} in {group_name}"),
                         "body": notify_body,
                         "url": group_url,
-                        "tag": format!("group-{group_id}-{now}"),
+                        "tag": format!("group-{group_id}"),
+                        "eventId":msg.get("clientId").or_else(||msg.get("id")),
                     });
                     crate::routes::push::send_web_push_clean(state, &member_norm, &payload).await;
                 } else {
@@ -444,8 +493,12 @@ pub(crate) async fn handle(
             // recActive comes from e2eUsers (the /ws batch) — always false here.
             if notif_allowed(state, to_canonical, "dm") {
                 let dm_url = notification_url(&chat_app_url(&format!(
-                    "?to={}",
-                    encode_uri_component(&sender_canonical)
+                    "?to={}&message={}",
+                    encode_uri_component(&sender_canonical),
+                    encode_uri_component(&jsval::str_or(
+                        msg.get("clientId").or_else(|| msg.get("id")),
+                        ""
+                    ))
                 )));
                 if !vapid_public.is_empty()
                     && mitch_lib::push_subs::push_sub_get(&state.store, to_canonical).is_some()
@@ -454,7 +507,8 @@ pub(crate) async fn handle(
                         "title": format!("Message from {sender_display}"),
                         "body": notify_body,
                         "url": dm_url,
-                        "tag": format!("dm-{now}"),
+                        "tag": format!("dm-{sender_norm}"),
+                        "eventId":msg.get("clientId").or_else(||msg.get("id")),
                     });
                     crate::routes::push::send_web_push_clean(state, to_canonical, &payload).await;
                 } else {

@@ -365,6 +365,7 @@
   }
   @media (max-width: 380px) { .friend-grid { grid-template-columns: 1fr; } }
 </style>
+<script src="/people.js"></script>
 </head>
 <body class="friends-page">
 <main class="app-main friends-shell">
@@ -549,11 +550,11 @@ async function loadFriends() {
     }
     const d = await r.json();
     if (request !== friendsRequest) return;
-    const list = d.friends || [];
+    const list = (d.friends || []).slice().sort(window.MitchPeople.compare);
     document.getElementById('friendCount').textContent = String(list.length);
     document.getElementById('onlineCount').textContent = String(list.filter(function(friend) { return friend.online; }).length);
     if (list.length === 0) {
-      grid.innerHTML = '<div class="empty-state" style="grid-column: 1/-1;">No friends added yet. Search a member above to add someone!</div>';
+      grid.innerHTML = '<div class="empty-state" style="grid-column: 1/-1;">No friends yet. Search for a username above.</div>';
       return;
     }
     grid.innerHTML = list.map(f => {
@@ -573,7 +574,7 @@ async function loadFriends() {
           <a class="friend-avatar" href="${escText(profileUrl)}">${pfp ? `<img src="${escText(pfp)}" alt="" loading="lazy" decoding="async" onerror="this.classList.add('is-broken')"><span class="avatar-fallback">${escText(friendInitials(name))}</span>` : `<span class="avatar-fallback">${escText(friendInitials(name))}</span>`}</a>
           <div class="friend-info">
             <a class="friend-name name ${escText(f.color || '')}" href="${escText(profileUrl)}">${escText(name)}</a>
-            <span class="friend-email">${escText(masked)}</span>
+            <span class="friend-email">${escText(masked)} · ${escText(window.MitchPeople.rank(f))}</span>
             <span class="friend-status ${statusClass}">
               <span class="status-dot"></span>
               ${escText(statusText)}
@@ -581,7 +582,7 @@ async function loadFriends() {
           </div>
           <div class="friend-actions">
             <a class="btn-action friend-message" href="/matrix/?dm=${encodeURIComponent(f.handle || email)}">Chat</a>
-            <button onclick="removeFriend('${escText(email)}')" class="btn-remove" title="Remove friend" aria-label="Remove ${escText(name)}">&times;</button>
+            <button data-friend-action="remove" data-account="${escText(email)}" class="btn-remove" title="Remove friend" aria-label="Remove ${escText(name)}">&times;</button>
           </div>
         </article>
       `;
@@ -611,8 +612,8 @@ async function loadPending() {
         <div class="request-item">
           <span style="font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; margin-right: 10px;">${escText(req.maskedFrom)}</span>
           <div style="shrink: 0;">
-            <button onclick="respond('${escText(req.from)}', 'accept')" class="btn-action btn-accept">Accept</button>
-            <button onclick="respond('${escText(req.from)}', 'reject')" class="btn-action btn-deny">Reject</button>
+            <button data-friend-action="accept" data-account="${escText(req.from)}" class="btn-action btn-accept">Accept</button>
+            <button data-friend-action="reject" data-account="${escText(req.from)}" class="btn-action btn-deny">Reject</button>
           </div>
         </div>
       `).join('');
@@ -624,7 +625,7 @@ async function loadPending() {
       outList.innerHTML = outgoing.map(req => `
         <div class="request-item">
           <span style="color: var(--t-fg2); opacity: 0.8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; margin-right: 10px;">${escText(req.maskedTo)}</span>
-          <button onclick="cancelRequest('${escText(req.to)}')" class="btn-action btn-deny" style="shrink: 0;">Cancel</button>
+          <button data-friend-action="cancel" data-account="${escText(req.to)}" class="btn-action btn-deny" style="shrink: 0;">Cancel</button>
         </div>
       `).join('');
     }
@@ -647,15 +648,15 @@ async function sendRequest() {
   const btn = document.getElementById('friendSubmitBtn');
   const msg = document.getElementById('addStatusMsg');
   const email = input.value.trim();
-  if (!email) return;
+  if (!email || btn.disabled) return;
   
   btn.disabled = true;
   msg.style.display = 'block';
   msg.style.color = 'var(--t-ac, #3b82f6)';
   msg.innerText = 'Sending request...';
   
-  const recaptcha_token = await getFriendsCaptchaToken('friend_request');
   try {
+    const recaptcha_token = await getFriendsCaptchaToken('friend_request');
     const r = await fetchWithRetry('/api/friends/request', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -664,7 +665,7 @@ async function sendRequest() {
     const d = await r.json();
     if (r.ok) {
       msg.style.color = '#d8b4fe';
-      msg.innerText = d.status === 'accepted' ? 'Friend request accepted (already mutual)!' : 'Friend request sent!';
+      msg.innerText = d.status === 'accepted' ? 'You are now friends.' : 'Friend request sent.';
       input.value = '';
       loadFriends();
       loadPending();
@@ -681,48 +682,22 @@ async function sendRequest() {
   }
 }
 
-async function respond(friendEmail, action) {
+const pendingFriendActions = new Set();
+document.addEventListener('click', async event => {
+  const button=event.target.closest('[data-friend-action]');
+  if (!button) return;
+  const {account,friendAction}=button.dataset;
+  if (pendingFriendActions.has(account)) return;
+  if (friendAction==='remove' && !(await customConfirm('Remove friend','Remove this person from your friends?'))) return;
+  const path=friendAction==='remove'?'/api/friends/remove':friendAction==='cancel'?'/api/friends/request/cancel':'/api/friends/request/respond';
+  pendingFriendActions.add(account);button.disabled=true;
   try {
-    const r = await fetchWithRetry('/api/friends/request/respond', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: friendEmail, action })
-    });
-    if (r.ok) {
-      loadFriends();
-      loadPending();
-    }
-  } catch(e) {}
-}
-
-async function cancelRequest(friendEmail) {
-  try {
-    const r = await fetchWithRetry('/api/friends/request/cancel', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: friendEmail })
-    });
-    if (r.ok) {
-      loadFriends();
-      loadPending();
-    }
-  } catch(e) {}
-}
-
-async function removeFriend(friendEmail) {
-  if (!(await customConfirm('Remove Friend', 'Are you sure you want to remove this friend?'))) return;
-  try {
-    const r = await fetch('/api/friends/remove', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: friendEmail })
-    });
-    if (r.ok) {
-      loadFriends();
-      loadPending();
-    }
-  } catch(e) {}
-}
+    const response=await fetchWithRetry(path,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-Mitch-Requested-With':'1'},body:JSON.stringify({email:account,action:friendAction})});
+    const data=await response.json();if(!response.ok)throw new Error(data.error || 'Could not update friends.');
+    await Promise.all([loadFriends(),loadPending()]);
+  } catch(error) { const message=document.getElementById('addStatusMsg');message.style.display='block';message.style.color='var(--t-fg)';message.textContent=error.message; }
+  finally {pendingFriendActions.delete(account);button.disabled=false;}
+});
 
 function sendHeartbeat() { window.MitchPresence?.send(); }
 

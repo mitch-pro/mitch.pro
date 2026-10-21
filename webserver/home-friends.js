@@ -4,7 +4,7 @@
   const section = document.createElement('section');
   section.className = 'home-friends';
   section.setAttribute('aria-label', 'Friends activity');
-  section.innerHTML = '<header><h2>Friends <span class="home-friend-count"></span></h2><a href="https://mitchdog.com/members/">See All</a></header><div class="home-friend-list"></div>';
+  section.innerHTML = '<header><h2>Friends <span class="home-friend-count"></span></h2><a href="/friends/">Manage friends</a></header><div class="home-friend-list"></div>';
   hero.after(section);
   const list = section.querySelector('.home-friend-list');
   function activityLabel(friend) {
@@ -21,10 +21,10 @@
     section.classList.toggle('is-empty',!friends.length);
     if (!friends.length) {
       const empty = document.createElement('div'); empty.className = 'home-friends-empty';
-      empty.innerHTML = '<a class="home-friend-add" href="https://mitchdog.com/members/" aria-label="Add friends"><span aria-hidden="true">+</span></a><div><strong>Add some friends</strong><small>Find people and send a friend request.</small></div>';
+      empty.innerHTML = '<a class="home-friend-add" href="/friends/" aria-label="Add friends"><span aria-hidden="true">+</span></a><div><strong>Find friends</strong><small></small></div>';
       list.append(empty); return;
     }
-    friends.sort((a,b) => Number(b.online)-Number(a.online)).forEach(friend => {
+    friends.sort(window.MitchPeople?.compare || ((a,b) => Number(b.online)-Number(a.online))).forEach(friend => {
       const card = document.createElement('a'); card.className = 'home-friend' + (friend.online ? ' online' : '');
       card.href = '/profile/?u=' + encodeURIComponent(friend.handle || '');
       const avatar = document.createElement('span'); avatar.className = 'home-friend-avatar';

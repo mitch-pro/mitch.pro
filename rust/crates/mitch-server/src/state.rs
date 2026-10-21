@@ -42,6 +42,7 @@ pub struct AppState {
     pub pickle_presence: std::sync::Mutex<Vec<(String, i64)>>,
     /// Per-account document sessions and legacy activity fallback.
     #[allow(dead_code)]
+    pub friend_online_notices: std::sync::Mutex<std::collections::HashMap<String, i64>>,
     pub user_presence: std::sync::Mutex<std::collections::HashMap<String, UserPresence>>,
     /// `matrixPendingEmailAlerts` (server.js:8497) — key `norm:roomId`.
     /// The delayed-alert scheduler itself lands with the Step 11 DM group;
@@ -262,6 +263,8 @@ pub struct UserPresence {
     pub playing: String,
     pub modern_seen: i64,
     pub hide_location: bool,
+    pub hide_online: bool,
+    pub share_activity: bool,
     pub sessions: std::collections::HashMap<String, crate::presence::TabPresence>,
     pub last_reported: Option<crate::presence::PresenceView>,
 }
@@ -289,18 +292,8 @@ impl AppState {
             tracing::warn!("id_secret load failed: {e}");
             vec![0u8; 32]
         });
-        let shadow_bans: std::collections::HashSet<String> = store
-            .read_document(
-                &cfg.base_dir.join("data/shadow_bans.json"),
-                serde_json::json!([]),
-            )
-            .as_array()
-            .map(|a| {
-                a.iter()
-                    .filter_map(|v| v.as_str().map(str::to_string))
-                    .collect()
-            })
-            .unwrap_or_default();
+        // Historical shadow bans are retained only for audit cleanup, never loaded as active restrictions.
+        let shadow_bans = std::collections::HashSet::new();
         let load_ban_set = |file: &str| -> std::collections::HashSet<String> {
             store
                 .read_document(&cfg.base_dir.join(file), serde_json::json!([]))
@@ -345,6 +338,7 @@ impl AppState {
             prox_blocklist: std::sync::RwLock::new(prox_blocklist),
             featured_game_href: std::sync::RwLock::new(String::new()),
             pickle_presence: std::sync::Mutex::new(Vec::new()),
+            friend_online_notices: std::sync::Mutex::new(std::collections::HashMap::new()),
             user_presence: std::sync::Mutex::new(std::collections::HashMap::new()),
             matrix_pending_email_alerts: std::sync::Mutex::new(std::collections::HashMap::new()),
             pending_security_codes: std::sync::Mutex::new(std::collections::HashMap::new()),

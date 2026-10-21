@@ -1279,6 +1279,9 @@ pub async fn handle(
         // (game-portal at server.js:16320, game-categories at 19081,
         // game-stats at 19107 — all before dm at 19452). Idle games land
         // here; chess-vs in a later batch.
+        if let Some(resp) = crate::routes::casino::handle(&state, &method, &path, headers, &body) {
+            return resp;
+        }
         if let Some(resp) =
             crate::routes::games::handle(&state, &method, &path, headers, &body, body_bytes)
         {
@@ -1532,6 +1535,18 @@ pub async fn handle(
         }
     }
 
+    // Canonical admin entry points must not depend on the deployed directory overlay.
+    if matches!(method, Method::GET | Method::HEAD)
+        && matches!(path.as_str(), "/admin" | "/admin.html")
+    {
+        let suffix = if search.is_empty() {
+            String::new()
+        } else {
+            format!("?{search}")
+        };
+        return redirect(&format!("/admin/{suffix}"), 302);
+    }
+
     // 8. Trailing-slash redirect for directories under WEBROOT.
     if path != "/" && !path.ends_with('/') {
         if let Some(disk) = safe_webroot_path(&webroot, &path) {
@@ -1577,7 +1592,20 @@ pub async fn handle(
         && (HTML_OPEN.contains(&html_base.as_str())
             || html_base.starts_with("/games")
             || html_base.starts_with("/matrix"));
-    if is_html_request && (html_base == "/admin/vms" || html_base.starts_with("/admin/vms/")) {
+    if is_html_request && (html_base == "/admin" || html_base.starts_with("/admin/")) {
+        let ctx = crate::routes::admin::admin_ctx(&state, headers);
+        if !state.check_password_cookie(headers, None) || state.is_revoked_id(&ctx.sid) {
+            return redirect("/enroll/?next=%2Fadmin%2F", 302);
+        }
+        if !ctx.is_any_admin(&state) {
+            return err_resp(403, Some("Staff access required."), None);
+        }
+    }
+    if is_html_request
+        && ["/admin/vms", "/admin/email", "/admin/bans"]
+            .iter()
+            .any(|base| html_base == *base || html_base.starts_with(&format!("{base}/")))
+    {
         match authenticated_vm_actor(&state, headers, node_env_test) {
             None => return redirect("/enroll/", 302),
             Some((_, _, is_admin)) if !is_admin => {

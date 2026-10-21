@@ -48,7 +48,7 @@
   function isLocationHidden() {
     try {
       const priv = JSON.parse(localStorage.getItem('_prefPrivacy') || '{}');
-      return !!(priv.hideLocation || priv.hidePageLocation);
+      return priv.shareActivity !== true || !!(priv.hideLocation || priv.hidePageLocation);
     } catch (_) { return false; }
   }
   function details() {
@@ -63,7 +63,8 @@
     }
     return { type: 'presence_ping', clientId, seq: ++sequence, interaction,
       page: hideLocation ? '' : pathOf(page), activity: hideLocation ? '' : clean(activity), visible: !document.hidden,
-      focused: !document.hidden && document.hasFocus(), ended: !alive, hideLocation };
+      focused: !document.hidden && document.hasFocus(), ended: !alive, hideLocation,
+      shareActivity: !hideLocation, hideOnline: (() => { try { return !!JSON.parse(localStorage.getItem('_prefPrivacy') || '{}').hideOnline; } catch { return false; } })() };
   }
   function send(ended = false) {
     if (!alive && !ended) return;

@@ -1,7 +1,6 @@
 //! VM background workers and boot tasks (Step 13 batch 4).
 //!
 //! Replaces the VM `setInterval` timers and startup block in `server.js`:
-//! - `sampleVmUsageWorker` (server.js:27432-27507) — every 60s + on boot
 //! - `purgeExpiredVmsWorker` (server.js:28465-28492) — every 3600s + on boot
 //! - `pruneInactiveFreeVmsWorker` (server.js:28494-28511) — every 300s + on boot
 //! - `enforceVmMaxUptimeWorker` (server.js:27874-27986) — every 15s
@@ -15,9 +14,8 @@
 use crate::state::AppState;
 use mitch_lib::jsval;
 use mitch_lib::vm as vmlib;
-use mitch_lib::vm_security::{get_vm_day_key, is_vm_inactive};
-use serde_json::{json, Value};
-use std::collections::HashMap;
+use mitch_lib::vm_security::is_vm_inactive;
+use serde_json::json;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -27,112 +25,6 @@ fn now_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
-}
-
-/// `sampleVmUsageWorker()` (server.js:27432-27507) — records usage snapshots
-/// for all running VMs into SQLite `vm_usage_samples`.
-pub(crate) async fn sample_vm_usage_worker(state: &AppState) {
-    let now = now_ms() as f64;
-    let day_key = get_vm_day_key(now as i64);
-
-    let mut active_sockets_by_record: HashMap<String, Vec<String>> = HashMap::new();
-    {
-        let sockets = state
-            .vm_desktop_sockets
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        for client in sockets.values() {
-            let d = &client.data;
-            let rec_id = jsval::str_or(d.get("recordId"), "");
-            if !rec_id.is_empty() {
-                let user =
-                    jsval::str_or(d.get("actorEmail"), &jsval::str_or(d.get("ownerEmail"), ""));
-                if !user.is_empty() {
-                    active_sockets_by_record
-                        .entry(rec_id)
-                        .or_default()
-                        .push(user);
-                }
-            }
-        }
-    }
-
-    let records = vmlib::list_virtual_machines(&state.store, true);
-    let guests = if crate::proxmox_desktop::desktop().configured() {
-        crate::proxmox_desktop::desktop()
-            .list_guests()
-            .await
-            .unwrap_or_default()
-    } else {
-        Vec::new()
-    };
-    let guests_by_vmid: HashMap<i64, &Value> = guests
-        .iter()
-        .filter_map(|g| g.get("vmid").and_then(jsval::number).map(|v| (v as i64, g)))
-        .collect();
-
-    for record in records {
-        if record.owner_email.is_empty() {
-            continue;
-        }
-        let guest = guests_by_vmid.get(&(record.vmid as i64));
-        let mut is_running = false;
-        let mut uptime = 0.0;
-
-        if let Some(g) = guest {
-            let st = jsval::str_or(g.get("status"), "");
-            if st == "running" || st == "paused" {
-                is_running = true;
-                uptime = g.get("uptime").and_then(jsval::number).unwrap_or(0.0);
-            }
-        }
-
-        if !is_running {
-            let presence = state
-                .vm_page_presence
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .get(&record.id)
-                .copied();
-            if let Some(last_seen) = presence {
-                if now - (last_seen as f64) < 15.0 * 60.0 * 1000.0 {
-                    is_running = true;
-                }
-            }
-        }
-
-        let active_users = active_sockets_by_record
-            .get(&record.id)
-            .cloned()
-            .unwrap_or_default();
-        if !active_users.is_empty() {
-            is_running = true;
-        }
-
-        if is_running {
-            let vm_name = if !record.friendly_name.is_empty() {
-                &record.friendly_name
-            } else if !record.hostname.is_empty() {
-                &record.hostname
-            } else {
-                &record.id
-            };
-            vmlib::record_vm_usage_sample(
-                &state.store,
-                Some(now),
-                &day_key,
-                None,
-                None,
-                &record.owner_email,
-                &record.id,
-                Some(record.vmid),
-                vm_name,
-                uptime,
-                &active_users.join(","),
-                true,
-            );
-        }
-    }
 }
 
 /// `purgeExpiredVmsWorker()` (server.js:28465-28492) — deletes VMs whose
@@ -623,19 +515,6 @@ pub fn spawn(state: Arc<AppState>) {
         let state_c = Arc::clone(&state);
         tokio::spawn(async move {
             cleanup_all_ephemeral_vms(&state_c).await;
-        });
-    }
-
-    // 2. sampleVmUsageWorker — every 60s + immediate run
-    {
-        let state = Arc::clone(&state);
-        tokio::spawn(async move {
-            sample_vm_usage_worker(&state).await;
-            let mut interval = tokio::time::interval(Duration::from_secs(60));
-            loop {
-                interval.tick().await;
-                sample_vm_usage_worker(&state).await;
-            }
         });
     }
 

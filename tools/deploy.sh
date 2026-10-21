@@ -84,6 +84,7 @@ main() {
     NTFY_PASS="${NTFY_PASS:-}"
 
     send_notification() {
+        [ "${MITCH_DEPLOY_QUIET:-0}" = "1" ] && return 0
         [ -z "${NTFY_TOPIC:-}" ] && return 0
         local msg="$1"
         local title="${2:-Deploy Status}"

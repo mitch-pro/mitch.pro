@@ -77,6 +77,7 @@
     $('ban-form').querySelector('button').disabled = busy || !timedBansReady;
     if (!timedBansReady) status('ban-status','Ban management is updating. Use Refresh in a moment to continue.');
     else if (!wasReady) status('ban-status','');
+    renderRestrictions(data.restrictions || []);
     render();
     $('passphrase-lock').hidden = true;
     $('bans-workspace').hidden = false;
@@ -96,6 +97,28 @@
       if (['invalid_passphrase','passphrase_not_configured'].includes(error.code)) {setup=error.code==='passphrase_not_configured';showLock();}
     } finally {setBusy(false);}
   }
+  function renderRestrictions(rows) {
+    const list = $('restriction-list'); list.replaceChildren();
+    if (!rows.length) { const empty = document.createElement('p'); empty.className='bans-empty'; empty.textContent='No VM restrictions.'; list.append(empty); }
+    rows.sort((a,b)=>a.email.localeCompare(b.email)).forEach(row=>{
+      const item = document.createElement('article'); item.className='ban-entry';
+      const name = document.createElement('strong'); name.textContent=row.email; item.append(name);
+      for (const [key,scope,label] of [['vm','vm-ban','Restore VM access'],['byoOs','byo-os-ban','Restore BYO-OS']]) {
+        if (!row[key]) continue;
+        const button = document.createElement('button'); button.type='button';button.textContent=label;
+        button.addEventListener('click',()=>restriction(scope,row.email,false));item.append(button);
+      }
+      list.append(item);
+    });
+  }
+  async function restriction(scope,email,banned,reason='') {
+    if (busy) return;
+    setBusy(true);status('restriction-status','Saving…');
+    try { await request('/api/admin/'+scope,{method:'POST',body:JSON.stringify({email,banned,reason})});await loadBans();status('restriction-status',banned?'VM access restricted.':'VM access restored.'); }
+    catch (error) {status('restriction-status',error.message,true);}
+    finally {setBusy(false);}
+  }
+  $('restriction-form').addEventListener('submit',event=>{event.preventDefault();restriction($('restriction-scope').value,$('restriction-account').value.trim(),true,$('restriction-reason').value.trim());});
   $('ban-form').addEventListener('submit',event=>{
     event.preventDefault();
     if (busy || !timedBansReady) return;

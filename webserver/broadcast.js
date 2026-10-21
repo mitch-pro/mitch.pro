@@ -1,4 +1,6 @@
 (function setupBroadcast() {
+    if (window.__mitchBroadcastReady) return;
+    window.__mitchBroadcastReady = true;
     var ws;
     var presenceTimer;
     var reconnectTimer;
@@ -78,7 +80,7 @@
       }
       if (data.type === 'admin_broadcast') {
         if (!hasSeenBroadcast(data)) showBroadcast(data.message);
-      } else if (data.type === 'refresh_notifications') {
+      } else if ((data.type === 'refresh_notifications' || data.type === 'notifications_refresh')) {
         if (typeof window.__refreshNotifications === 'function') {
           window.__refreshNotifications();
         }
@@ -244,6 +246,13 @@
 })();
 
 (function setupNotifications() {
+  if (window.__mitchNotificationsReady) return;
+  window.__mitchNotificationsReady = true;
+  var loading = false, reloadRequested = false, unreadTotal = 0;
+  var pendingReads = new Set();
+  var changes;
+  try { changes = new BroadcastChannel('mitch-notifications'); changes.onmessage = function () { loadNotifications(); }; } catch (_) {}
+
   function escText(t) {
     var d = document.createElement('div');
     d.textContent = t == null ? '' : String(t);
@@ -367,7 +376,7 @@
   }
 
   function showMessageToast(message) {
-    if (!message || location.pathname.startsWith('/encrypt') || location.pathname.startsWith('/matrix')) return;
+    if (!message || document.hidden || !document.hasFocus()) return;
     removePushPrompt();
     var stack = document.getElementById('sw-message-toasts');
     if (!stack) {
@@ -384,7 +393,7 @@
     toast.className = 'sw-message-toast';
     toast.innerHTML = '<span class="sw-message-toast-icon" aria-hidden="true"><img src="/icon-192.png" alt=""></span>' +
       '<span class="sw-message-toast-copy"><b>' + escText(title) + '</b><span>New encrypted message</span></span>' +
-      '<a href="/matrix/">Open</a>';
+      '<a href="' + escText(message.kind === 'group' ? '/encrypt/?group=' + encodeURIComponent(message.groupId || '') : '/encrypt/?to=' + encodeURIComponent(message.from || '')) + '">Open</a>';
     stack.prepend(toast);
     while (stack.children.length > 3) stack.lastElementChild.remove();
     setTimeout(function() { if (toast.parentNode) toast.remove(); }, 9000);
@@ -400,7 +409,21 @@
     var mine = String(identity && identity.email || '').toLowerCase();
     var sender = String(message.from || '').toLowerCase();
     if (!mine || !sender || sender === mine) return;
-    showMessageToast(message);
+    var key = String(message.id || message.messageId || '');
+    if (!key) return;
+    async function present() {
+      try {
+        var seen = JSON.parse(localStorage.getItem('mitch-notice-seen') || '{}');
+        if (seen[key]) return;
+        Object.keys(seen).forEach(function (id) { if (Date.now() - seen[id] > 86400000) delete seen[id]; });
+        seen[key] = Date.now();
+        localStorage.setItem('mitch-notice-seen', JSON.stringify(Object.fromEntries(Object.entries(seen).slice(-200))));
+      } catch (_) {}
+      showMessageToast(message);
+    }
+    if (!document.hidden && document.hasFocus()) {
+      if (navigator.locks) await navigator.locks.request('mitch-notice-toast', present); else await present();
+    }
   };
 
   window.__enableSiteNotifications = function() {
@@ -481,17 +504,28 @@
   }
 
   async function loadNotifications() {
+    if (document.hidden) return;
+    if (loading) { reloadRequested = true; return; }
+    loading = true;
     try {
-      var r = await fetch('/api/me/notifications', { credentials: 'include' });
-      if (!r.ok) return;
-      var d = await r.json();
-      _notifications = d.notifications || [];
+      var r = await fetch('/api/me/notifications', { credentials: 'same-origin', cache: 'no-store' });
+      if (!r.ok) throw new Error('Notifications unavailable');
+      var d = await r.json(), seen = new Set();
+      _notifications = (d.notifications || []).filter(function (n) {
+        var key = n.type + ':' + n.id;
+        if (seen.has(key) || pendingReads.has(key)) return false;
+        seen.add(key); return true;
+      });
+      unreadTotal = Math.max(_notifications.length, Number(d.unread) || 0);
       renderNotifications();
-    } catch(e) {}
+    } catch (_) {
+      var list = document.getElementById('sw-notif-list');
+      if (list && !_notifications.length) list.textContent = 'Notifications could not load. Reopen this panel to try again.';
+    } finally { loading = false; if (reloadRequested) { reloadRequested = false; setTimeout(loadNotifications, 200); } }
   }
 
   function renderNotifications() {
-    var count = _notifications.length;
+    var count = unreadTotal;
     var badge = document.getElementById('sw-notif-count');
     var list = document.getElementById('sw-notif-list');
     if (!badge || !list) return;
@@ -500,7 +534,7 @@
     var readAll = document.getElementById('sw-notif-read-all');
     if (readAll) readAll.disabled = count === 0;
     refreshPushUpsell();
-    if (!count) {
+    if (!_notifications.length) {
       list.innerHTML = '<div class="sw-notif-empty">No unread notifications</div>';
       return;
     }
@@ -554,32 +588,35 @@
       : n.type === 'group_dm'
         ? { groupIds: [n.groupId] }
       : n.type === 'dm'
-        ? { dmFroms: [n.from] }
+        ? { dmFroms: [n.fromKey || n.from] }
       : (n.type === 'matrix' || n.type === 'matrix_call' || n.type === 'matrix_invite')
-        ? { matrixIds: [n.id], matrixRoomIds: [n.matrixRoomId] }
+        ? (n.id ? { matrixIds: [n.id] } : { matrixRoomIds: [n.matrixRoomId] })
         : {};
-    _notifications = _notifications.filter(function(item) { return item !== n; });
-    renderNotifications();
-    await fetch('/api/me/notifications/read', {
-      method: 'POST',
-      credentials: 'include',
-      keepalive: !!navigating,
-      headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
-      body: JSON.stringify(body),
-    }).catch(function(){});
-    loadNotifications();
+    body.beforeTs = n.ts;
+    var key = n.type + ':' + n.id;
+    if (pendingReads.has(key)) return;
+    pendingReads.add(key);
+    try {
+      var response = await fetch('/api/me/notifications/read', {
+        method: 'POST', credentials: 'same-origin', keepalive: !!navigating,
+        headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' }, body: JSON.stringify(body)
+      });
+      if (!response.ok) throw new Error('Could not mark read');
+      _notifications = _notifications.filter(function(item) { return item !== n; });
+      unreadTotal = Math.max(0, unreadTotal - 1); renderNotifications();
+      changes?.postMessage('read');
+    } catch (_) { if (!navigating) { var list = document.getElementById('sw-notif-list'); if (list) list.setAttribute('aria-label', 'Could not save. Please try again.'); } }
+    finally { pendingReads.delete(key); if (!navigating) loadNotifications(); }
   }
 
   async function markAllNotificationsRead() {
-    if (!_notifications.length) return;
-    _notifications = [];
-    renderNotifications();
-    await fetch('/api/me/notifications/read', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
-      body: JSON.stringify({ all: true }),
-    }).catch(function(){});
+    if (!unreadTotal || pendingReads.has('all')) return;
+    pendingReads.add('all');
+    try {
+      var response = await fetch('/api/me/notifications/read', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' }, body: JSON.stringify({ all: true }) });
+      if (!response.ok) throw new Error('Could not mark read');
+      _notifications = []; unreadTotal = 0; renderNotifications(); changes?.postMessage('read');
+    } catch (_) { var list = document.getElementById('sw-notif-list'); if (list) list.setAttribute('aria-label', 'Could not mark all read. Please try again.'); } finally { pendingReads.delete('all'); loadNotifications(); }
   }
 
   // ── Alerts manager: one button to turn push alerts on/off ───────────────
@@ -683,6 +720,7 @@
     setupPushEnrollment();
     window.__refreshNotifications = loadNotifications;
     setInterval(loadNotifications, 30000);
+    document.addEventListener('visibilitychange', loadNotifications);
   }
 
   if (document.body) init();

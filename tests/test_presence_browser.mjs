@@ -47,7 +47,7 @@ try {
   async function contextFor(browser, user) {
     const context = await browser.newContext({ serviceWorkers: 'block', reducedMotion: 'reduce' });
     await context.addCookies([{ name: 'id', value: user.sid, url: base }]);
-    await context.addInitScript(() => localStorage.setItem('_mitch_cookie_consent', 'accepted'));
+    await context.addInitScript(() => { localStorage.setItem('_mitch_cookie_consent', 'accepted'); localStorage.setItem('_prefPrivacy',JSON.stringify({shareActivity:true})); });
     await context.route('**/*', route => new URL(route.request().url()).origin === base ? route.continue() : route.abort());
     return context;
   }
@@ -153,22 +153,22 @@ try {
   assert(legacyHtml.indexOf('/presence.js') < legacyHtml.indexOf('</head>'));
   await second.goto(base + '/preferences/');
   await second.waitForSelector('#privHideLocationToggle', { state: 'attached' });
-  assert.equal(await second.evaluate(() => document.getElementById('privHideLocationToggle').checked), false);
-  await second.evaluate(() => {
-    const input = document.getElementById('privHideLocationToggle');
-    input.checked = true;
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-  });
-  await until(async () => (await actorStatus(carolApi))?.page === '', 'Friend must not see page when hideLocation is enabled in preferences');
-  assert.equal((await actorStatus(adminApi)).page, '', 'Admin must not see page when hideLocation is enabled in preferences');
-  assert.equal((await actorStatus(carolApi)).online, true, 'Online status remains visible when hideLocation is enabled');
-  console.log('PASS: preferences hideLocation toggle hides page from both friends and admins');
+  assert.equal(await second.evaluate(() => document.getElementById('privHideLocationToggle').checked), true);
   await second.evaluate(() => {
     const input = document.getElementById('privHideLocationToggle');
     input.checked = false;
     input.dispatchEvent(new Event('change', { bubbles: true }));
   });
-  await until(async () => (await actorStatus(carolApi))?.page === '/preferences/', 'Unchecking hideLocation restores page visibility');
+  await until(async () => (await actorStatus(carolApi))?.page === '', 'Friend must not see page when activity sharing is off in preferences');
+  assert.equal((await actorStatus(adminApi)).page, '', 'Admin must not see page when activity sharing is off in preferences');
+  assert.equal((await actorStatus(carolApi)).online, true, 'Online status remains visible when activity sharing is off');
+  console.log('PASS: preferences activity sharing toggle hides page from both friends and admins');
+  await second.evaluate(() => {
+    const input = document.getElementById('privHideLocationToggle');
+    input.checked = true;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await until(async () => (await actorStatus(carolApi))?.page === '/preferences/', 'Enabling activity sharing restores page visibility');
   await second.goto(base + '/');
   await until(async () => (await actorStatus())?.page === '/', 'Return from HTTP-only Matrix to a broadcast-connected page');
   await second.waitForFunction(() => window.__testSockets?.some(socket => socket.readyState === WebSocket.OPEN));
@@ -176,7 +176,7 @@ try {
   await until(async () => !(await actorStatus())?.online, 'Last-tab disconnect must go offline within 5 seconds', 5500).catch(async error => {console.log('CLOSE DEBUG',{status:await actorStatus(),pages:actor.pages().map(p=>p.url()),packets:packets.slice(-15)});throw error;});
   await until(async () => (await friendWatcher.locator('.friend-status').innerText()).includes('Offline'), 'Friends must clear activity after the last tab closes');
   const post = data => actor.request.post(base + '/api/presence/heartbeat', { data });
-  const packet = { clientId: 'fallback-client', seq: 10, page: '/members/?secret=hidden', activity: 'Viewing people', visible: true, focused: true, interaction: 1 };
+  const packet = { shareActivity: true, clientId: 'fallback-client', seq: 10, page: '/members/?secret=hidden', activity: 'Viewing people', visible: true, focused: true, interaction: 1 };
   assert.equal((await post(packet)).status(), 200);
   assert.equal((await post({ ...packet, seq: 9, page: '/shop/' })).status(), 200);
   assert.equal((await actorStatus()).page, '/members/');
