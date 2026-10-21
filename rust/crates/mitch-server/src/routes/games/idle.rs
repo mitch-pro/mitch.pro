@@ -10,6 +10,8 @@
 //! bodies go out through `mitch_lib::data::js_stringify` (exact
 //! ECMAScript number rendering: `1e+22`, no `.0`), not serde_json.
 
+#![allow(dead_code)]
+
 use axum::http::{HeaderMap, Method};
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -578,22 +580,10 @@ pub(crate) fn handle(
         "/api/games/adrian-clicker/sync" if *method == Method::POST => {
             Some(adrian_sync(state, headers, body, body_bytes))
         }
-        "/api/games/richard-riches/state" => Some(json_resp_str(
-            503,
-            js_stringify(&json!({
-                "success": false,
-                "disabled": true,
-                "message": "Richard's Riches is temporarily disabled for maintenance."
-            })),
-        )),
-        "/api/games/richard-riches/sync" if *method == Method::POST => Some(json_resp_str(
-            503,
-            js_stringify(&json!({
-                "success": false,
-                "disabled": true,
-                "message": "Richard's Riches is temporarily disabled for maintenance."
-            })),
-        )),
+        "/api/games/richard-riches/state" => Some(richard_state(state, headers)),
+        "/api/games/richard-riches/sync" if *method == Method::POST => {
+            Some(richard_sync(state, headers, body, body_bytes))
+        }
         _ => None,
     }
 }
@@ -844,225 +834,31 @@ fn adrian_sync(
     )
 }
 
-/// `GET /api/games/richard-riches/state` — server.js:22964-22986.
-fn richard_state(state: &Arc<AppState>, headers: &HeaderMap) -> axum::response::Response {
-    let email = match crate::routes::games::games_email(state, headers) {
-        Ok(e) => e,
-        Err(resp) => return *resp,
-    };
-    let norm = mitch_lib::auth::normalize_email(&email);
-    let now = now_millis();
-
-    let existing = mitch_lib::minigames::mini_session_get(&state.store, &norm, "richard");
-    let (s, offline_gain) = match existing {
-        None => {
-            let s = default_richard_session(now);
-            mitch_lib::minigames::mini_session_set(&state.store, &norm, "richard", &s);
-            (s, 0.0)
-        }
-        Some(mut s) => {
-            let gain = apply_richard_offline(&state.store, state.data_dir(), &mut s, &email, now);
-            if gain > 0.0 {
-                mitch_lib::minigames::mini_session_set(&state.store, &norm, "richard", &s);
-            }
-            (s, gain)
-        }
-    };
-
+/// `GET /api/games/richard-riches/state` — Richard's Riches is temporarily disabled for maintenance.
+fn richard_state(_state: &Arc<AppState>, _headers: &HeaderMap) -> axum::response::Response {
     json_resp_str(
-        200,
+        503,
         js_stringify(&json!({
-            "success": true,
-            "state": s,
-            "offlineGain": jsval::num_value(offline_gain),
+            "success": false,
+            "disabled": true,
+            "message": "Richard's Riches is temporarily disabled for maintenance."
         })),
     )
 }
 
-/// `POST /api/games/richard-riches/sync` — server.js:22988-23056.
+/// `POST /api/games/richard-riches/sync` — Richard's Riches is temporarily disabled for maintenance.
 fn richard_sync(
-    state: &Arc<AppState>,
-    headers: &HeaderMap,
+    _state: &Arc<AppState>,
+    _headers: &HeaderMap,
     _body: &Value,
-    body_bytes: &[u8],
+    _body_bytes: &[u8],
 ) -> axum::response::Response {
-    let Some(body) = crate::routes::me::parse_body_strict(body_bytes) else {
-        return json_resp_str(400, js_stringify(&json!({ "success": false })));
-    };
-    let email = match crate::routes::games::games_email(state, headers) {
-        Ok(e) => e,
-        Err(resp) => return *resp,
-    };
-    let norm = mitch_lib::auth::normalize_email(&email);
-    let now = now_millis();
-    let mut s = mitch_lib::minigames::mini_session_get(&state.store, &norm, "richard")
-        .unwrap_or_else(|| default_richard_session(now));
-
-    // clientCash = Math.min(1e290, Number(body.state?.cash) || 0)
-    let client_cash = body
-        .get("state")
-        .and_then(|st| st.get("cash"))
-        .and_then(jsval::number)
-        .unwrap_or(0.0)
-        .min(1e290);
-
-    let elapsed = (now as f64 - s.get("lastTs").and_then(jsval::number).unwrap_or(0.0)) / 1000.0;
-    if elapsed > 0.0 {
-        let is_premium = mitch_lib::auth::is_premium_email(&state.store, &email);
-        let prem_mult = if is_premium { 2.0 } else { 1.0 };
-        let cash_per_sec = get_richard_power(&s, false);
-        let lemon_mult = if owned_upgrade(&s, "lemon_1") {
-            3.0
-        } else {
-            1.0
-        };
-        let mut global_mult = 1.0;
-        if owned_upgrade(&s, "all_1") {
-            global_mult *= 2.0;
-        }
-        if owned_upgrade(&s, "all_2") {
-            global_mult *= 3.0;
-        }
-        if owned_upgrade(&s, "all_3") {
-            global_mult *= 5.0;
-        }
-        let lemon_lvl = s
-            .get("levels")
-            .and_then(|l| l.get("lemon"))
-            .and_then(jsval::number)
-            .unwrap_or(1.0);
-        let lemon_revenue = lemon_lvl * 1.0 * lemon_mult * global_mult * prem_mult;
-        let max_clicks_per_sec = 5.0;
-        let max_possible_gain =
-            ((cash_per_sec * elapsed) + (max_clicks_per_sec * lemon_revenue * elapsed)) * prem_mult;
-        let cash = s.get("cash").and_then(jsval::number).unwrap_or(0.0);
-        let actual_gain = client_cash - cash;
-
-        if actual_gain > max_possible_gain * 3.0 && actual_gain > 100.0 {
-            mitch_lib::admin::log_cheat(
-                &state.store,
-                state.data_dir(),
-                &email,
-                "Richard's Riches",
-                &format!(
-                    "Attempted impossible gain of {} cash (max possible: {})",
-                    js_to_exponential(actual_gain, 2),
-                    js_to_exponential(max_possible_gain, 2)
-                ),
-                "unknown",
-            );
-            set_num(&mut s, "cash", (cash + max_possible_gain).min(1e290));
-        } else {
-            set_num(&mut s, "cash", cash.max(client_cash).min(1e290));
-        }
-    }
-
-    if body.get("state").map(jsval::truthy).unwrap_or(false) {
-        let st = body.get("state").cloned().unwrap_or(json!({}));
-        // s.levels = body.state.levels || s.levels (JS truthiness fallback).
-        for key in ["levels", "managers", "upgrades"] {
-            let incoming = st.get(key).cloned();
-            let keep = s.get(key).cloned().unwrap_or(json!({}));
-            let value = match incoming {
-                Some(v) if jsval::truthy(&v) => v,
-                _ => keep,
-            };
-            if let Some(map) = s.as_object_mut() {
-                map.insert(key.to_string(), value);
-            }
-        }
-    }
-
-    let claim = body
-        .get("claim")
-        .map(|v| v == &json!(true) || v == &json!("true"))
-        .unwrap_or(false);
-    let mut coins_to_grant = 0.0f64;
-    if claim {
-        let mut coins = s.get("coins").and_then(jsval::number).unwrap_or(0.0);
-        let mut cash = s.get("cash").and_then(jsval::number).unwrap_or(0.0);
-        loop {
-            let cost_of_next = (100.0 * 3f64.powf(coins)).floor();
-            if cash >= cost_of_next {
-                cash -= cost_of_next;
-                coins += 1.0;
-                coins_to_grant += 1.0;
-            } else {
-                break;
-            }
-        }
-        set_num(&mut s, "coins", coins);
-        set_num(&mut s, "cash", cash);
-    }
-
-    let start_time = s
-        .get("startTime")
-        .and_then(jsval::number)
-        .unwrap_or(now as f64);
-    let session_elapsed = now as f64
-        - if start_time == 0.0 {
-            now as f64
-        } else {
-            start_time
-        };
-    let total_playtime_coins = (session_elapsed / 600000.0).floor();
-    let playtime_coins = s
-        .get("playtimeCoins")
-        .and_then(jsval::number)
-        .unwrap_or(0.0);
-    let pending_playtime_bonus = total_playtime_coins - playtime_coins;
-    if pending_playtime_bonus > 0.0 {
-        coins_to_grant += pending_playtime_bonus;
-        set_num(
-            &mut s,
-            "playtimeCoins",
-            playtime_coins + pending_playtime_bonus,
-        );
-    }
-
-    if coins_to_grant > 0.0 {
-        let is_premium = mitch_lib::auth::is_premium_email(&state.store, &email);
-        let bonus_count = (if is_premium {
-            coins_to_grant * 2.0
-        } else {
-            coins_to_grant
-        }) * 100.0;
-        mitch_lib::coins::add_coins(
-            &state.store,
-            state.cfg.data_dir.as_path(),
-            &email,
-            bonus_count,
-            state.coin_multiplier(),
-            "",
-        );
-        mitch_lib::achievements::update_stat(
-            &state.store,
-            state.data_dir(),
-            &email,
-            "richard_coins",
-            bonus_count,
-            state.coin_multiplier(),
-        );
-        tracing::info!(
-            "[richard-riches] {email} earned {bonus_count} MitchCoins (Claim: {claim}, Playtime: {})",
-            pending_playtime_bonus > 0.0
-        );
-    }
-
-    set_num(&mut s, "lastTs", now as f64);
-    mitch_lib::minigames::mini_session_set(&state.store, &norm, "richard", &s);
-
     json_resp_str(
-        200,
+        503,
         js_stringify(&json!({
-            "success": true,
-            "serverCash": s.get("cash").cloned().unwrap_or(json!(0)),
-            "serverCoins": s.get("coins").cloned().unwrap_or(json!(0)),
-            "globalCoins": jsval::num_value(mitch_lib::coins::get_coins(
-                &state.store,
-                state.data_dir(),
-                &email,
-            )),
+            "success": false,
+            "disabled": true,
+            "message": "Richard's Riches is temporarily disabled for maintenance."
         })),
     )
 }
