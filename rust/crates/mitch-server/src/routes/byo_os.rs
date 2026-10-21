@@ -114,11 +114,6 @@ const PRESET_ISOS: &[PresetIso] = &[
         name: "Kali Linux",
         filename: "preset-kali.iso",
     },
-    PresetIso {
-        id: "chromeos",
-        name: "ChromeOS",
-        filename: "preset-chromeos.iso",
-    },
 ];
 
 fn preset_by_id(id: &str) -> Option<&'static PresetIso> {
@@ -1062,7 +1057,6 @@ pub(crate) async fn handle(
         let result = crate::proxmox_desktop::desktop()
             .create_from_iso(&crate::proxmox_desktop::CreateFromIsoParams {
                 windows: false,
-                chromeos: false,
                 owner_resources: crate::routes::vm::can_customize_owner_vm(state, &actor),
                 vmid: Some(vmid),
                 hostname: hostname.clone(),
@@ -1327,7 +1321,6 @@ pub(crate) async fn handle(
         let result = crate::proxmox_desktop::desktop()
             .create_from_iso(&crate::proxmox_desktop::CreateFromIsoParams {
                 windows: preset.id == "windows",
-                chromeos: preset.id == "chromeos",
                 owner_resources: crate::routes::vm::can_customize_owner_vm(state, &actor),
                 vmid: Some(vmid),
                 hostname: hostname.clone(),
@@ -1577,17 +1570,17 @@ mod tests {
     }
 
     #[test]
-    fn preset_catalog_has_six_unique_ids_and_filenames() {
-        assert_eq!(PRESET_ISOS.len(), 6);
+    fn preset_catalog_has_five_unique_ids_and_filenames() {
+        assert_eq!(PRESET_ISOS.len(), 5);
         let ids: std::collections::HashSet<_> = PRESET_ISOS.iter().map(|p| p.id).collect();
-        assert_eq!(ids.len(), 6, "preset ids must be unique");
+        assert_eq!(ids.len(), 5, "preset ids must be unique");
         let filenames: std::collections::HashSet<_> =
             PRESET_ISOS.iter().map(|p| p.filename).collect();
-        assert_eq!(filenames.len(), 6, "preset filenames must be unique");
+        assert_eq!(filenames.len(), 5, "preset filenames must be unique");
         for preset in PRESET_ISOS {
             assert!(preset.filename.ends_with(".iso"));
         }
-        for want in ["windows", "mint", "arch", "tails", "kali", "chromeos"] {
+        for want in ["windows", "mint", "arch", "tails", "kali"] {
             assert!(
                 preset_by_id(want).is_some(),
                 "expected a preset with id {want:?}"
