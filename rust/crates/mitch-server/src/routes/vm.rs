@@ -5111,24 +5111,12 @@ pub(crate) async fn handle(
 
                     let enc_session = mitch_lib::auth::encode_uri_component(&session_id);
                     let ticket = jsval::str_or(console_session.get("ticket"), "");
-                    // ChromeOS already draws its own cursor (and the VirGL
-                    // console doesn't forward a hardware cursor shape the
-                    // way the Ubuntu desktop's does), so the browser-drawn
-                    // overlay cursor would just be a second, misaligned one.
-                    let is_chrome_os = crate::proxmox_desktop::desktop()
-                        .chromeos_template_vmid()
-                        .map(|v| v as f64)
-                        .is_some_and(|chromeos_vmid| {
-                            record.get("templateVmid").and_then(Value::as_f64)
-                                == Some(chromeos_vmid)
-                        });
                     return Some(json_response(
                         201,
                         json!({
                             "socketPath": format!("/api/vm/desktop/ws?session={enc_session}"),
                             "credentials": { "password": ticket },
                             "expiresIn": (VM_DESKTOP_SESSION_TTL_MS / 1000.0).floor() as i64,
-                            "isChromeOs": is_chrome_os,
                         }),
                     ));
                 }
