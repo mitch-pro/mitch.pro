@@ -1025,12 +1025,14 @@ fn richard_sync(
 
     if coins_to_grant > 0.0 {
         let is_premium = mitch_lib::auth::is_premium_email(&state.store, &email);
-        // Was 100/200 — the playtime-bonus exploit's actual payout, not
-        // just its frequency, so this comes down too.
+        // Was 100/200, then 50/100 — the playtime-bonus exploit's actual
+        // payout, not just its frequency, so this comes down too. One
+        // unit is 10 minutes, so this is 25*6=150 / 50*6=300 coins/hour
+        // (non-premium/premium) at the capped rate.
         let bonus_count = if is_premium {
-            coins_to_grant * 100.0
-        } else {
             coins_to_grant * 50.0
+        } else {
+            coins_to_grant * 25.0
         };
         mitch_lib::coins::add_coins(
             &state.store,

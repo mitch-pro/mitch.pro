@@ -34,10 +34,12 @@ before the *next* one, over and over. That requires active scripting
 effort for a bounded, modest ceiling — not a passive "leave it running"
 or "don't check it for a week" exploit.
 
-Per-unit payout is 50 MitchCoins (non-premium) / 100 (premium) for
-Richard's Riches — reduced from 100/200 at the same time as the reset fix,
-since the exploit was about both the frequency *and* the size of each
-payout. Adrian's Clicker's playtime bonus pays 1/2 (non-premium/premium),
+Per-unit payout is 25 MitchCoins (non-premium) / 50 (premium) for
+Richard's Riches — one unit is 10 minutes, so that's 150/300 coins per
+hour at the capped rate. Reduced from 100/200 at the same time as the
+reset fix (then 50/100, then this), since the exploit was about both the
+frequency *and* the size of each payout. Adrian's Clicker's playtime
+bonus pays 1/2 (non-premium/premium),
 much smaller because it's additionally gated behind an explicit `claim`
 rather than granted on every sync.
 
