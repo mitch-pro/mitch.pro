@@ -980,6 +980,13 @@ impl ProxmoxDesktopService {
     /// A bare `vga=virtio` was tried and reverted once before (see the
     /// Sept 18 "noVNC black screen" commits) — confirmed working now,
     /// tested through mitch.pro's own VM console, not just Proxmox's.
+    ///
+    /// Exception: Windows guests (`ostype` starting with `win`, set by
+    /// `windows_install_config`) are left alone here. Vanilla Windows has
+    /// no inbox virtio-gpu driver, so forcing virtio on a Windows VM would
+    /// silently break its display on its next restart — this function
+    /// would otherwise undo `windows_install_config`'s deliberate `std`
+    /// choice the first time it runs after install.
     pub async fn ensure_optimized_vm_config(&self, vmid: i64, node: &str) -> Option<Value> {
         if self.lock_caches().optimized_vmids.contains(&vmid) {
             return None;
@@ -987,6 +994,9 @@ impl ProxmoxDesktopService {
         let path = format!("/nodes/{}/qemu/{}/config", encode_uri_component(node), vmid);
         let outcome: Result<Option<Value>, ProxmoxServiceError> = async {
             let config = self.request("GET", &path, None, DEFAULT_TIMEOUT_MS).await?;
+            let is_windows = config["ostype"]
+                .as_str()
+                .is_some_and(|t| t.starts_with("win"));
             let mut updates = Map::new();
             if config["cpu"].as_str() != Some("host") {
                 updates.insert("cpu".to_string(), json!("host"));
@@ -998,7 +1008,7 @@ impl ProxmoxDesktopService {
             // 128MB of ordinary VM RAM, not scarce host GPU VRAM.
             let target_vga = "virtio,memory=128";
             let vga = config["vga"].as_str().unwrap_or("");
-            if vga != target_vga {
+            if !is_windows && vga != target_vga {
                 updates.insert("vga".to_string(), json!(target_vga));
             }
             if !updates.is_empty() {
