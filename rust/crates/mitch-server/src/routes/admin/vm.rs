@@ -1225,7 +1225,9 @@ pub async fn handle(
                     if value > max_allowed {
                         return Some(json_response(
                             400,
-                            json!({"error":"Non-owner resources cannot exceed 8 CPU cores, 16 GB RAM (16384 MB), or 128 GB disk."}),
+                            json!({
+                                "error": "Non-owner resources cannot exceed 8 CPU cores, 16 GB RAM (16384 MB), or 128 GB disk."
+                            }),
                         ));
                     }
                 }

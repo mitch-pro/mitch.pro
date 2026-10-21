@@ -396,7 +396,8 @@ pub fn process_adrian_sync(
 
     let mut coins_to_grant = 0.0f64;
     let start_time = s.get("startTime").and_then(jsval::number).unwrap_or(now_f);
-    let session_elapsed = (now_f - if start_time == 0.0 { now_f } else { start_time }).clamp(0.0, 43200000.0);
+    let session_elapsed =
+        (now_f - if start_time == 0.0 { now_f } else { start_time }).clamp(0.0, 43200000.0);
     let total_playtime_coins = (session_elapsed / 600000.0).floor();
     let playtime_coins = s
         .get("playtimeCoins")

@@ -748,7 +748,9 @@ async fn owner_resources(state: &Arc<AppState>, headers: &HeaderMap, bytes: &[u8
         if value > max_allowed {
             return json_response(
                 400,
-                json!({"error":"Resources for non-owners cannot exceed 8 CPU cores, 16 GB RAM (16384 MB), or 128 GB storage."}),
+                json!({
+                    "error": "Resources for non-owners cannot exceed 8 CPU cores, 16 GB RAM (16384 MB), or 128 GB storage."
+                }),
             );
         }
     }
