@@ -42,7 +42,9 @@ It does not contact production or invoke delivery endpoints.
 A push whose head commit includes `[quiet]` skips the AI push-summary notification
 workflow. The normal production workflow waits for the complete Rust/browser/Blooket CI
 workflow for the same revision to succeed before it can deploy. It uses a commit-pinned copy of
-`tools/deploy.sh` with `MITCH_DEPLOY_QUIET=1` for that rollout. This bootstrap is
+`tools/deploy.sh` with `MITCH_DEPLOY_QUIET=1` as the deployment account for that rollout.
+The account must already have Docker access; the quiet path never invokes an
+arbitrary privileged shell or prompts for a sudo password. This bootstrap is
 necessary because the installed script may predate quiet support. Its usual
 locking, blue/green deployment and health checks still run. Quiet mode suppresses
 only deployment notifications; it does not change application email settings or
