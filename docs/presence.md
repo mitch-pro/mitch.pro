@@ -76,3 +76,11 @@ requests and response retries report their existing result; only a real state
 change can emit an alert. Accepting a reverse request creates one mutual
 friendship; removing one clears both lists. The request ledger remains distinct
 from ephemeral online/activity presence.
+
+Preference sync and document reports use the same activity-sharing defaults:
+missing `shareActivity` keeps activity private, while a missing legacy
+`hideLocation` flag does not contradict an explicit opt-in. Explicit legacy
+hide flags remain enforced.
+The browser fixture sets `USERDATA_DIR` to its temporary directory so preference
+sync is exercised without reading or writing production userdata. The server
+default remains `/opt/userdata`.

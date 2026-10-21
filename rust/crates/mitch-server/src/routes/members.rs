@@ -657,10 +657,13 @@ fn premium_members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
 // ── /api/userdata ────────────────────────────────────────────────────────────
 
 /// `userdataPath(idVal)` (server.js:2755-2761) — sha256(id)[0..32] dir under
-/// `USERDATA_DIR`; `null` on any filesystem failure → 503.
+/// `USERDATA_DIR` (default `/opt/userdata`); an unavailable directory returns 503.
 pub(crate) fn userdata_path(id_val: &str) -> Option<std::path::PathBuf> {
     let hex = crypto::sha256_hex(id_val.as_bytes());
-    let dir = std::path::Path::new(USERDATA_DIR).join(&hex[..32]);
+    let root = std::env::var_os("USERDATA_DIR")
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| USERDATA_DIR.into());
+    let dir = std::path::Path::new(&root).join(&hex[..32]);
     std::fs::create_dir_all(&dir).ok()?;
     Some(dir.join("data.json"))
 }
@@ -758,11 +761,17 @@ fn sync_privacy_prefs(state: &Arc<AppState>, uid: &str, body: &Value, existing: 
         .lock()
         .unwrap_or_else(|e| e.into_inner());
     let rec = presence.entry(norm).or_default();
+    apply_presence_privacy(rec, &pref);
+}
+
+/// Sharing is opt-in; an absent legacy hide flag must not contradict an
+/// explicit opt-in during a background preference sync.
+fn apply_presence_privacy(rec: &mut crate::state::UserPresence, pref: &Value) {
     rec.hide_location = pref
         .get("hideLocation")
         .or_else(|| pref.get("hidePageLocation"))
         .and_then(Value::as_bool)
-        .unwrap_or(true);
+        .unwrap_or(false);
     rec.hide_online = pref
         .get("hideOnline")
         .and_then(Value::as_bool)
@@ -845,6 +854,38 @@ fn is_revoked_id(state: &Arc<AppState>, sid: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn synced_privacy_matches_document_sharing_defaults() {
+        let mut record = crate::state::UserPresence::default();
+        apply_presence_privacy(&mut record, &json!({"shareActivity": true}));
+        assert!(record.share_activity);
+        assert!(!record.hide_location);
+        assert!(!record.hide_online);
+
+        apply_presence_privacy(
+            &mut record,
+            &json!({"shareActivity": true, "hideLocation": true, "hideOnline": true}),
+        );
+        assert!(record.hide_location);
+        assert!(record.hide_online);
+
+        apply_presence_privacy(&mut record, &json!({"newsletter": true}));
+        assert!(
+            !record.share_activity,
+            "Legacy preferences never opt in implicitly"
+        );
+        apply_presence_privacy(&mut record, &json!({"shareActivity": false}));
+        assert!(!record.share_activity);
+        apply_presence_privacy(
+            &mut record,
+            &json!({"shareActivity": true, "hidePageLocation": true}),
+        );
+        assert!(
+            record.hide_location,
+            "Legacy explicit hiding remains enforced"
+        );
+    }
 
     /// `sha256(sid).hex[0..32]` — golden from bun for a sample sid.
     #[test]

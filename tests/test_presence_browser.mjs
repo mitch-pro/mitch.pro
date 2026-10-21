@@ -16,7 +16,7 @@ const port = socket.address().port; await new Promise(resolve => socket.close(re
 const base = 'http://127.0.0.1:' + port;
 const server = spawn(root + '/rust/target/debug/mitch-server', [], {
   cwd: root, stdio: 'ignore', env: { ...process.env, DATA_DIR: data, MITCH_BASE: root,
-    NODE_ENV: 'test', GOD_MODE: '0', PORT: String(port), VAPID_PUBLIC_KEY: '', RECAPTCHA_SITE_KEY: '',
+    USERDATA_DIR: data + '/userdata', NODE_ENV: 'test', GOD_MODE: '0', PORT: String(port), VAPID_PUBLIC_KEY: '', RECAPTCHA_SITE_KEY: '',
     PVE_URL: 'https://127.0.0.1:1', PROXMOX_HOST: '127.0.0.1', PROXMOX_PORT: '1' }
 });
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -72,7 +72,8 @@ try {
   }));
   await watcher.goto(base + '/');
   await watcher.waitForFunction(() => window.MitchPresence);
-  const packets = [], pageErrors = [];
+  const packets = [], pageErrors = [], heartbeatResponses = [];
+  actor.on('response', r => { if (r.url().endsWith('/api/presence/heartbeat')) heartbeatResponses.push(r.status()); });
   actor.on('request', r => { if (r.url().endsWith('/api/presence/heartbeat')) packets.push({http:r.postData()}); });
   const page = await actor.newPage();
   page.on('pageerror', e => pageErrors.push(e.message));
@@ -130,8 +131,14 @@ try {
     for (const socket of window.__testSockets || []) socket.close();
     window.MitchPresence.setTransport(() => false);
   });
+  // Reproduce the preference save that can race transport cleanup on navigation.
+  const preferenceSave = second.waitForResponse(response =>
+    response.url() === base + '/api/userdata' && response.request().method() === 'POST');
+  await second.evaluate(() => window._mitchSync.save());
+  assert.equal((await preferenceSave).status(), 200, 'Isolated preference sync must reach the local server');
   await delay(3700);
-  assert.equal((await actorStatus()).page, '/', 'WebSocket cleanup must preserve a newer HTTP fallback heartbeat');
+  const fallbackStatus = await actorStatus();
+  assert.equal(fallbackStatus.page, '/', 'WebSocket cleanup must preserve a newer HTTP fallback heartbeat: ' + JSON.stringify({status:fallbackStatus,details:await second.evaluate(()=>window.MitchPresence.details()),packets:packets.slice(-20),heartbeatResponses}));
   await second.goto(base + '/vms/desktop/');
   await until(async () => (await actorStatus())?.activity === 'Using a VM desktop', 'VM desktop bypass pages must report presence');
   await second.goto(base + '/matrix/presence-fixture');
