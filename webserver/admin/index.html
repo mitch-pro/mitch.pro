@@ -883,6 +883,12 @@
         <button onclick="setMultiplier()">Update Multiplier</button>
         <div id="multiplier-status" class="form-status"></div>
       </div>
+      <div class="action-card">
+        <h2>Casino Kill Switch</h2>
+        <p>Current: <span id="casino-status">Loading…</span></p>
+        <button onclick="toggleCasino()">Toggle Casino</button>
+        <div id="casino-toggle-status" class="form-status"></div>
+      </div>
     </div>
     </section>
 
@@ -2112,6 +2118,30 @@
       }
     }
 
+
+    async function loadCasinoStatus() {
+      const el = document.getElementById('casino-status');
+      if (!el) return;
+      try {
+        const res = await fetch('/api/casino/status', { credentials: 'include', cache: 'no-store' });
+        const d = await res.json();
+        el.textContent = d.enabled ? 'Open' : 'Disabled';
+      } catch {
+        el.textContent = 'Unknown';
+      }
+    }
+
+    async function toggleCasino() {
+      setStatus('casino-toggle-status', 'Submitting...', '');
+      try {
+        const d = await postAdmin('/api/admin/casino/toggle', {});
+        setStatus('casino-toggle-status', d.pending ? pendingText(d) : (d.enabled ? 'Casino is now open.' : 'Casino disabled.'), 'ok');
+        if (d.pending) loadModeratorRequests();
+        else document.getElementById('casino-status').textContent = d.enabled ? 'Open' : 'Disabled';
+      } catch (err) {
+        setStatus('casino-toggle-status', err.message, 'err');
+      }
+    }
 
     async function addProxBlock(e) {
       e.preventDefault();
@@ -3669,6 +3699,7 @@
       await loadShopCatalog();
       await loadMatrixModeration();
       loadConduitHealth();
+      loadCasinoStatus();
       if (currentUser.isAdmin && location.hash === '#logs-tools') {
         loadAppLogs();
       }

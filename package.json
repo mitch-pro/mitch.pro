@@ -18,7 +18,7 @@
     "test:js": "bun run test:unit:legacy && bun run test:integration",
     "test:integration": "bun tests/test_runner.js",
     "test:integration:auth": "bun tests/test_auth_session_integration.js",
-    "test:casino:browser": "node tests/test_casino_buttons_browser.mjs",
+    "test:admin:browser": "node tests/test_admin_modernization.mjs",
     "test:integration:daily-login": "bun tests/test_daily_login.js",
     "test:blooket": "node tests/test_blooket_answers.mjs && node tests/test_blooket_connection.mjs && node tests/test_blooket_controller.mjs"
   },

@@ -1,28 +1,99 @@
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#14171c"><title>Casino · mitch.pro</title>
-  <link rel="icon" href="/favicon.ico"><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/casino/casino.css">
-  <script src="/api.js"></script><script src="/app-shell.js" defer></script><script src="/casino/casino.js" defer></script>
-</head>
-<body>
-  <main class="casino-main">
-    <header class="casino-heading"><div><a href="/">mitch.pro</a><h1>Casino</h1><p>Play with MitchCoins.</p></div><a href="/coins/" class="wallet"><span>Your balance</span><strong id="balance">—</strong><span>MitchCoins</span></a></header>
-    <div class="casino-layout">
-      <section class="game-panel" aria-labelledby="game-title">
-        <nav id="games" aria-label="Choose a game"><button type="button" data-game="flip" aria-pressed="true">Coin flip</button><button type="button" data-game="dice" aria-pressed="false">Dice</button><button type="button" data-game="roulette" aria-pressed="false">Roulette</button></nav>
-        <div class="game-stage"><h2 id="game-title">Coin flip</h2><div id="result" role="status" aria-live="polite">Heads or tails</div><p id="result-detail">Choose a side to play.</p></div>
-        <form id="bet-form">
-          <fieldset id="choices"><legend>Your choice</legend></fieldset>
-          <div class="bet-controls"><label for="stake">Bet amount<input id="stake" type="number" min="1" max="10000" step="1" value="10" required inputmode="numeric"></label><button type="submit" id="play" disabled>Place bet</button></div>
-          <p id="status" role="status" aria-live="polite">Loading your balance…</p>
-        </form>
-        <button id="retry" type="button" hidden>Check this round</button>
-      </section>
-      <aside class="rules-panel"><h2>How it works</h2><p id="rules"></p><dl><dt>Return on a win</dt><dd id="payout"></dd><dt>House edge</dt><dd id="edge"></dd></dl><p class="fine-print">Payouts include your bet. Coins can be lost. Shop effects and earning multipliers do not apply. No real money is involved.</p><a href="/coins/">MitchCoin history</a></aside>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Casino — mitch.pro</title><meta name="description" content="Coinflip, Dice, Slots, Blackjack, and Poker, played with MitchCoins."><link rel="canonical" href="https://mitchdog.com/casino/"><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/casino/casino.css"><script src="/api.js"></script><script src="/app-shell.js" defer></script><script src="/casino/casino.js" defer></script></head>
+<body><main class="app-main casino-main">
+<header class="casino-heading"><img src="/mitchcoin.svg?v=3" width="64" height="64" alt=""><div><h1>Casino</h1><p>Coinflip, Dice, Slots, Blackjack, and Poker. MitchCoins only — no cash value, and the house keeps a small edge on every game.</p></div></header>
+
+<section class="casino-wallet" aria-label="Your wallet">
+  <div><span>Your balance</span><strong id="casino-balance">—</strong></div>
+  <p id="casino-disabled-note" class="casino-disabled-note" hidden>The casino is temporarily disabled. Check back later.</p>
+</section>
+
+<nav class="casino-tabs" role="tablist" aria-label="Choose a game">
+  <button type="button" class="casino-tab is-active" data-tab="coinflip" role="tab" aria-selected="true">Coinflip</button>
+  <button type="button" class="casino-tab" data-tab="dice" role="tab" aria-selected="false">Dice</button>
+  <button type="button" class="casino-tab" data-tab="slots" role="tab" aria-selected="false">Slots</button>
+  <button type="button" class="casino-tab" data-tab="blackjack" role="tab" aria-selected="false">Blackjack</button>
+  <button type="button" class="casino-tab" data-tab="poker" role="tab" aria-selected="false">Poker</button>
+</nav>
+
+<section class="casino-panel is-active" id="panel-coinflip" role="tabpanel">
+  <h2>Coinflip</h2>
+  <p class="casino-rules">Pick heads or tails. A correct call pays 1.92× your bet.</p>
+  <form id="coinflip-form" class="casino-bet-form">
+    <label for="coinflip-bet">Bet</label>
+    <input type="number" id="coinflip-bet" min="1" max="5000" step="1" value="10" required>
+    <div class="casino-choice-group" role="group" aria-label="Pick a side">
+      <button type="button" class="casino-choice is-active" data-choice="heads">Heads</button>
+      <button type="button" class="casino-choice" data-choice="tails">Tails</button>
     </div>
-    <section class="history-panel" aria-labelledby="history-title"><header><h2 id="history-title">Recent rounds</h2><button id="refresh" type="button">Refresh</button></header><div class="table-wrap"><table><thead><tr><th>Time</th><th>Game</th><th>Choice</th><th>Result</th><th>Bet</th><th>Net change</th></tr></thead><tbody id="history"><tr><td colspan="6">Loading rounds…</td></tr></tbody></table></div></section>
-  </main>
-</body>
-</html>
+    <button type="submit" class="btn-primary">Flip</button>
+  </form>
+  <div class="casino-result" id="coinflip-result" aria-live="polite"></div>
+</section>
+
+<section class="casino-panel" id="panel-dice" role="tabpanel" hidden>
+  <h2>Dice</h2>
+  <p class="casino-rules">Roll 1–100. Pick a target and a direction — the farther the odds are against you, the bigger the payout.</p>
+  <form id="dice-form" class="casino-bet-form">
+    <label for="dice-bet">Bet</label>
+    <input type="number" id="dice-bet" min="1" max="5000" step="1" value="10" required>
+    <div class="casino-choice-group" role="group" aria-label="Direction">
+      <button type="button" class="casino-choice is-active" data-direction="under">Roll under</button>
+      <button type="button" class="casino-choice" data-direction="over">Roll over</button>
+    </div>
+    <label for="dice-target">Target (<span id="dice-target-value">50</span>)</label>
+    <input type="range" id="dice-target" min="2" max="98" value="50">
+    <p class="casino-live-odds" id="dice-odds"></p>
+    <button type="submit" class="btn-primary">Roll</button>
+  </form>
+  <div class="casino-result" id="dice-result" aria-live="polite"></div>
+</section>
+
+<section class="casino-panel" id="panel-slots" role="tabpanel" hidden>
+  <h2>Slots</h2>
+  <p class="casino-rules">Three reels. Match symbols for a payout; any Cherry on an otherwise-blank spin pays a small consolation.</p>
+  <form id="slots-form" class="casino-bet-form">
+    <label for="slots-bet">Bet</label>
+    <input type="number" id="slots-bet" min="1" max="5000" step="1" value="10" required>
+    <div class="casino-reels" id="slots-reels" aria-hidden="true"><span>🍒</span><span>🍒</span><span>🍒</span></div>
+    <button type="submit" class="btn-primary">Spin</button>
+  </form>
+  <div class="casino-result" id="slots-result" aria-live="polite"></div>
+</section>
+
+<section class="casino-panel" id="panel-blackjack" role="tabpanel" hidden>
+  <h2>Blackjack</h2>
+  <p class="casino-rules">Dealer stands on every 17. Blackjack pays 3:2.</p>
+  <form id="blackjack-bet-form" class="casino-bet-form">
+    <label for="blackjack-bet">Bet</label>
+    <input type="number" id="blackjack-bet" min="1" max="5000" step="1" value="10" required>
+    <button type="submit" class="btn-primary">Deal</button>
+  </form>
+  <div class="casino-hands" id="blackjack-hands" hidden>
+    <div><h3>Dealer</h3><div class="casino-cards" id="blackjack-dealer-cards"></div></div>
+    <div><h3>You (<span id="blackjack-player-value">0</span>)</h3><div class="casino-cards" id="blackjack-player-cards"></div></div>
+  </div>
+  <div class="casino-actions" id="blackjack-actions" hidden>
+    <button type="button" class="btn-primary" id="blackjack-hit">Hit</button>
+    <button type="button" class="btn-ghost" id="blackjack-stand">Stand</button>
+  </div>
+  <div class="casino-result" id="blackjack-result" aria-live="polite"></div>
+</section>
+
+<section class="casino-panel" id="panel-poker" role="tabpanel" hidden>
+  <h2>Poker</h2>
+  <p class="casino-rules">5-card draw, Jacks or Better. Hold the cards you want to keep, then draw once. A pair of Jacks or better pushes; anything less pays nothing.</p>
+  <form id="poker-bet-form" class="casino-bet-form">
+    <label for="poker-bet">Bet</label>
+    <input type="number" id="poker-bet" min="1" max="5000" step="1" value="10" required>
+    <button type="submit" class="btn-primary">Deal</button>
+  </form>
+  <div class="casino-cards casino-poker-hand" id="poker-hand" hidden></div>
+  <div class="casino-actions" id="poker-actions" hidden>
+    <button type="button" class="btn-primary" id="poker-draw">Draw</button>
+  </div>
+  <div class="casino-result" id="poker-result" aria-live="polite"></div>
+</section>
+
+<p class="casino-note">MitchCoins are virtual points with no cash value. Every game here has a built-in house edge — the longer you play, the more the odds favor the house.</p>
+</main></body></html>

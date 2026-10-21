@@ -197,6 +197,23 @@ pub struct AppState {
     pub latest_admin_broadcast: std::sync::Mutex<Option<AdminBroadcastEvent>>,
     /// `webauthnChallenges` (server.js:5643) — in-memory WebAuthn challenge store.
     pub webauthn_challenges: mitch_lib::webauthn::ChallengeStore,
+
+    /// Admin kill switch for the casino (`/casino/*`). Loaded from
+    /// `data/casino_settings.json` at boot, flipped by
+    /// `/api/admin/casino/toggle`, and checked by every casino route
+    /// before any bet is accepted. `true` = casino is open.
+    pub casino_enabled: std::sync::atomic::AtomicBool,
+    /// In-progress Blackjack hands, keyed by normalized email. Server-
+    /// memory only — see the safety-model doc comment on
+    /// `mitch_lib::casino` for why a crash mid-hand losing the bet (rather
+    /// than persisting partial hands) is an accepted tradeoff.
+    pub blackjack_games:
+        std::sync::Mutex<std::collections::HashMap<String, mitch_lib::casino::BlackjackGame>>,
+    /// In-progress 5-card draw Poker hands (dealt, not yet drawn), keyed
+    /// by normalized email. Same server-memory-only tradeoff as
+    /// `blackjack_games`.
+    pub poker_games:
+        std::sync::Mutex<std::collections::HashMap<String, mitch_lib::casino::PokerGame>>,
 }
 
 /// A record in `e2eUsers` (server.js:15384). `priv_key`/`server_pub_hex` are
@@ -319,6 +336,14 @@ impl AppState {
                     .collect()
             })
             .unwrap_or_default();
+        let casino_enabled = store
+            .read_document(
+                &cfg.data_dir.join("casino_settings.json"),
+                serde_json::json!({"enabled": true}),
+            )
+            .get("enabled")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
         let canvas = crate::routes::canvas::CanvasState::load(&store, &cfg.data_dir.clone());
         let logic_dictionary = Self::load_logic_dictionary(&cfg.data_dir);
         let cv_games_map = Self::load_cv_games(&store, &cfg.data_dir);
@@ -386,6 +411,9 @@ impl AppState {
             last_capacity_ntfy: std::sync::Mutex::new(std::collections::HashMap::new()),
             latest_admin_broadcast: std::sync::Mutex::new(None),
             webauthn_challenges: mitch_lib::webauthn::ChallengeStore::new(),
+            casino_enabled: std::sync::atomic::AtomicBool::new(casino_enabled),
+            blackjack_games: std::sync::Mutex::new(std::collections::HashMap::new()),
+            poker_games: std::sync::Mutex::new(std::collections::HashMap::new()),
         }
     }
 
@@ -504,6 +532,20 @@ impl AppState {
     /// `isRevoked(id)` (server.js:2927-2930).
     pub fn is_revoked_id(&self, sid: &str) -> bool {
         mitch_lib::revoked::revoked_id_exists(&self.store, sid)
+    }
+
+    pub fn casino_enabled(&self) -> bool {
+        self.casino_enabled
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Flips the casino kill switch and persists it to
+    /// `data/casino_settings.json` so a restart doesn't silently reopen it.
+    pub fn set_casino_enabled(&self, enabled: bool) {
+        self.casino_enabled
+            .store(enabled, std::sync::atomic::Ordering::Relaxed);
+        let path = self.cfg.data_dir.join("casino_settings.json");
+        let _ = std::fs::write(path, serde_json::json!({"enabled": enabled}).to_string());
     }
 }
 

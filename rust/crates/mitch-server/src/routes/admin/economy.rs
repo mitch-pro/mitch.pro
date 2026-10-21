@@ -44,6 +44,28 @@ pub fn handle(
         ));
     }
 
+    // POST /api/admin/casino/toggle (admins only) — the casino kill switch.
+    // Every `/api/casino/*` route checks `state.casino_enabled()` before
+    // accepting a bet.
+    if path == "/api/admin/casino/toggle" && *method == Method::POST {
+        if !ctx.is_admin(state) {
+            return Some(forbidden());
+        }
+        let enabled = !state.casino_enabled();
+        state.set_casino_enabled(enabled);
+        mitch_lib::admin::log_admin_action(
+            &state.store,
+            &state.cfg.data_dir,
+            &ctx.email(state),
+            "casino_toggle",
+            json!({ "enabled": enabled }),
+        );
+        return Some(json_response(
+            200,
+            json!({ "ok": true, "enabled": enabled }),
+        ));
+    }
+
     // POST /api/admin/trigger-daily-summary (admins; 401 on failure per JS).
     if path == "/api/admin/trigger-daily-summary" && *method == Method::POST {
         if state.rate_limit_check(&ctx.ip, "anon", path).is_some() {

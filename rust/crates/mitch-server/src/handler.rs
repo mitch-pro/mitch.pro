@@ -1263,6 +1263,12 @@ pub async fn handle(
         {
             return resp;
         }
+        // casino group: Coinflip, Dice, Slots, Blackjack, Poker.
+        if let Some(resp) =
+            crate::routes::casino::handle(&state, &method, &path, headers, body_bytes)
+        {
+            return resp;
+        }
         // friends/* group (Step 9 batch 4).
         if let Some(resp) =
             crate::routes::friends::handle(&state, &method, &path, headers, body_bytes).await
@@ -1279,9 +1285,6 @@ pub async fn handle(
         // (game-portal at server.js:16320, game-categories at 19081,
         // game-stats at 19107 — all before dm at 19452). Idle games land
         // here; chess-vs in a later batch.
-        if let Some(resp) = crate::routes::casino::handle(&state, &method, &path, headers, &body) {
-            return resp;
-        }
         if let Some(resp) =
             crate::routes::games::handle(&state, &method, &path, headers, &body, body_bytes)
         {

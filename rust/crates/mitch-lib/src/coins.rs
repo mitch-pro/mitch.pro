@@ -148,6 +148,85 @@ pub fn add_coins(
     log_coin_change(data_dir, &norm, before, after, reason);
 }
 
+/// What stopped a bet from settling.
+#[derive(Debug, PartialEq, Eq)]
+pub enum BetError {
+    /// `bet` or `payout` was non-finite, zero, or negative.
+    InvalidAmount,
+    /// The account's balance (checked inside the same locked transaction
+    /// as the debit, not beforehand) was less than `bet`.
+    InsufficientFunds,
+}
+
+/// Atomically resolves one casino bet: debits `bet` and credits `payout`
+/// (pass `0.0` for a loss) against the same row, inside one `BEGIN
+/// IMMEDIATE` transaction — there is no window between "check the
+/// balance" and "write the new balance" where a second concurrent bet for
+/// the same email could read the same stale balance and also pass, which
+/// is how a race turns two legitimate-looking bets into a free one. This
+/// is the only function that should ever move money for a casino game;
+/// every game's route handler computes its outcome from a server-side RNG
+/// draw *before* calling this (never from client-supplied input) and then
+/// calls this once per round.
+///
+/// Returns `Err(InsufficientFunds)` — leaving the balance untouched — if
+/// the account can't cover `bet`. Never allows a balance to go negative.
+pub fn settle_bet(
+    store: &DataStore,
+    data_dir: &Path,
+    email: &str,
+    bet: f64,
+    payout: f64,
+    reason: &str,
+) -> Result<(f64, f64), BetError> {
+    if email.is_empty() || !bet.is_finite() || bet <= 0.0 || !payout.is_finite() || payout < 0.0 {
+        return Err(BetError::InvalidAmount);
+    }
+    let norm = normalize_email(email);
+    let net = js_round4(payout - bet);
+
+    let (before, after) = {
+        let conn = store.conn();
+        if conn.execute_batch("BEGIN IMMEDIATE").is_err() {
+            return Err(BetError::InvalidAmount);
+        }
+        let before = conn
+            .query_row(
+                "SELECT balance FROM coins WHERE email = ?1",
+                rusqlite::params![norm],
+                |row| row.get::<_, f64>(0),
+            )
+            .unwrap_or(0.0);
+        if before < bet {
+            let _ = conn.execute_batch("ROLLBACK");
+            return Err(BetError::InsufficientFunds);
+        }
+        let lifetime_before = conn
+            .query_row(
+                "SELECT lifetime_earned FROM coins WHERE email = ?1",
+                rusqlite::params![norm],
+                |row| row.get::<_, f64>(0),
+            )
+            .unwrap_or(0.0);
+        let after = js_round4(before + net);
+        let lifetime_after = if net > 0.0 {
+            lifetime_before + net
+        } else {
+            lifetime_before
+        };
+        let _ = conn.execute(
+            "INSERT INTO coins (email, balance, lifetime_earned, updated_at) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(email) DO UPDATE SET balance = ?2, lifetime_earned = ?3, updated_at = ?4",
+            rusqlite::params![norm, after, lifetime_after, now_millis()],
+        );
+        let _ = conn.execute_batch("COMMIT");
+        (before, after)
+    };
+
+    log_coin_change(data_dir, &norm, before, after, reason);
+    Ok((before, after))
+}
+
 /// Sets a balance to an exact value — an admin correction, not an earn/spend
 /// event: unlike `add_coins`, this never applies the coin multiplier and
 /// never touches `lifetime_earned`. Returns the prior balance.
@@ -740,6 +819,109 @@ mod tests {
             h.join().unwrap();
         }
         assert_eq!(get_coins(&store, &data, "racer@mitch.pro"), 20.0);
+        std::fs::remove_dir_all(&*base).ok();
+    }
+
+    #[test]
+    fn settle_bet_rejects_a_bet_the_balance_cannot_cover() {
+        let (base, data, store) = temp_store("bet-insufficient");
+        add_coins(&store, &data, "poor@mitch.pro", 10.0, 1.0, "seed");
+        let err =
+            settle_bet(&store, &data, "poor@mitch.pro", 10.01, 0.0, "casino:test").unwrap_err();
+        assert_eq!(err, BetError::InsufficientFunds);
+        // Balance must be untouched by the rejected bet.
+        assert_eq!(get_coins(&store, &data, "poor@mitch.pro"), 10.0);
+        std::fs::remove_dir_all(base).ok();
+    }
+
+    #[test]
+    fn settle_bet_rejects_non_finite_or_non_positive_amounts() {
+        let (base, data, store) = temp_store("bet-invalid");
+        add_coins(&store, &data, "p@mitch.pro", 10.0, 1.0, "seed");
+        assert_eq!(
+            settle_bet(&store, &data, "p@mitch.pro", 0.0, 0.0, "x").unwrap_err(),
+            BetError::InvalidAmount
+        );
+        assert_eq!(
+            settle_bet(&store, &data, "p@mitch.pro", -5.0, 0.0, "x").unwrap_err(),
+            BetError::InvalidAmount
+        );
+        assert_eq!(
+            settle_bet(&store, &data, "p@mitch.pro", f64::NAN, 0.0, "x").unwrap_err(),
+            BetError::InvalidAmount
+        );
+        assert_eq!(
+            settle_bet(&store, &data, "p@mitch.pro", 1.0, f64::INFINITY, "x").unwrap_err(),
+            BetError::InvalidAmount
+        );
+        assert_eq!(
+            settle_bet(&store, &data, "p@mitch.pro", 1.0, -1.0, "x").unwrap_err(),
+            BetError::InvalidAmount
+        );
+        assert_eq!(get_coins(&store, &data, "p@mitch.pro"), 10.0);
+        std::fs::remove_dir_all(base).ok();
+    }
+
+    #[test]
+    fn settle_bet_debits_on_loss_and_credits_net_on_win() {
+        let (base, data, store) = temp_store("bet-settle");
+        add_coins(&store, &data, "player@mitch.pro", 100.0, 1.0, "seed");
+        // Loss: payout 0, balance drops by the full bet.
+        settle_bet(
+            &store,
+            &data,
+            "player@mitch.pro",
+            10.0,
+            0.0,
+            "casino:coinflip:loss",
+        )
+        .unwrap();
+        assert_eq!(get_coins(&store, &data, "player@mitch.pro"), 90.0);
+        // Win: payout 19.2 on a 10 bet nets +9.2.
+        settle_bet(
+            &store,
+            &data,
+            "player@mitch.pro",
+            10.0,
+            19.2,
+            "casino:coinflip:win",
+        )
+        .unwrap();
+        assert_eq!(get_coins(&store, &data, "player@mitch.pro"), 99.2);
+        std::fs::remove_dir_all(base).ok();
+    }
+
+    #[test]
+    fn settle_bet_never_goes_negative_under_concurrent_bets() {
+        // 20 threads each bet the player's entire 10-coin balance on a
+        // guaranteed loss at the same instant. Exactly one must succeed;
+        // the other 19 must see InsufficientFunds and touch nothing — if
+        // the balance check and the debit weren't in the same locked
+        // transaction, several could read "10" before any of them wrote
+        // back, and the balance would go negative.
+        let (base, data, store) = temp_store("bet-race");
+        add_coins(&store, &data, "racer@mitch.pro", 10.0, 1.0, "seed");
+        let store = std::sync::Arc::new(store);
+        let data = std::sync::Arc::new(data);
+        let mut handles = Vec::new();
+        for _ in 0..20 {
+            let store = store.clone();
+            let data = data.clone();
+            handles.push(std::thread::spawn(move || {
+                settle_bet(
+                    &store,
+                    &data,
+                    "racer@mitch.pro",
+                    10.0,
+                    0.0,
+                    "casino:test:loss",
+                )
+            }));
+        }
+        let results: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        let ok_count = results.iter().filter(|r| r.is_ok()).count();
+        assert_eq!(ok_count, 1);
+        assert_eq!(get_coins(&store, &data, "racer@mitch.pro"), 0.0);
         std::fs::remove_dir_all(&*base).ok();
     }
 

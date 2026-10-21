@@ -125,20 +125,10 @@ try{
       await page.locator('#ban-email').fill('member');await page.locator('#ban-duration').selectOption('1h');await page.locator('#ban-reason').fill('Local fixture account ban');await page.locator('#ban-form button').click();await page.locator('#ban-confirm button[value="ban"]').click();await page.locator('#ban-list').getByRole('button',{name:'Restore access'}).waitFor();await page.locator('#ban-list').getByRole('button',{name:'Restore access'}).click();await page.locator('#ban-list').getByText('No banned accounts.').waitFor();
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'ban management overflow');
     }
-    await page.goto(base+'/casino/');await page.locator('#play').waitFor({state:'visible'});await page.waitForFunction(()=>!document.querySelector('#play').disabled);
-    for(const game of ['flip','dice','roulette']){await page.locator(`[data-game="${game}"]`).click();await page.locator('#play').click();await page.waitForFunction(()=>document.querySelector('#status').textContent==='Round complete.');}
-    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'casino overflow '+width);
-    if(width===390)await page.screenshot({path:'/tmp/mitch-casino-modern.png',fullPage:true});
     await page.close();
     // Reset the fixture VM after checking a real editor submission.
     db.prepare('UPDATE virtual_machines SET cpu_cores=6 WHERE id=?').run('fixture-vm');config.cores=6;
   }
-  const id=randomUUID(),bet={id,game:'flip',choice:'heads',stake:10};
-  const first=await(await post('member','/api/casino/play',bet)).json();const balanceBefore=db.prepare('SELECT balance FROM coins WHERE email=?').get(emails.member).balance;
-  const duplicate=await(await post('member','/api/casino/play',bet)).json();assert.deepEqual(first,duplicate);assert.equal(db.prepare('SELECT balance FROM coins WHERE email=?').get(emails.member).balance,balanceBefore);
-  assert.equal((await post('member','/api/casino/play',{...bet,choice:'tails'})).status(),409);
-  assert.equal((await post('member','/api/casino/play',{...bet,id:randomUUID(),stake:10.5})).status(),400);
-  assert.equal((await post('member','/api/casino/play',{...bet,id:randomUUID()},{Origin:'https://foreign.example.test'})).status(),403);
   doc('friend_requests.json',[{from:emails.admin,to:emails.member,timestamp:Date.now()}]);
   const friendsPage=await contexts.member.newPage();await friendsPage.setViewportSize({width:390,height:900});friendsPage.on('pageerror',error=>errors.push(error.message));
   await friendsPage.goto(base+'/friends/');await friendsPage.locator('[data-friend-action="accept"]').click();await friendsPage.locator('.friend-item').waitFor();
@@ -163,7 +153,7 @@ try{
   assert.equal((await post('admin','/api/admin/vm-ban',{email:emails.owner,banned:true})).status(),403);
   assert.equal((await post('admin','/api/admin/vm-ban',{email:emails.member,banned:false})).status(),200);
   assert.deepEqual(errors,[]);
-  console.log('PASS: admin dashboard, resource editor and casino at desktop/tablet/mobile sizes; casino idempotency, invalid bets and CSRF. No delivery endpoints called; notification fixtures stay in the local database.');
+  console.log('PASS: admin dashboard and resource editor at desktop/tablet/mobile sizes; bans, friends, and notifications. No delivery endpoints called; notification fixtures stay in the local database.');
 }finally{
   db?.close();await browser?.close();const stopped=once(child,'exit');child.kill('SIGTERM');await stopped;
   await new Promise(r=>proxmox.close(r));await rm(fixture,{recursive:true,force:true});
