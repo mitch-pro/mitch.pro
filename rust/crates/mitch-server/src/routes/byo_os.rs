@@ -1062,6 +1062,7 @@ pub(crate) async fn handle(
         let result = crate::proxmox_desktop::desktop()
             .create_from_iso(&crate::proxmox_desktop::CreateFromIsoParams {
                 windows: false,
+                chromeos: false,
                 owner_resources: crate::routes::vm::can_customize_owner_vm(state, &actor),
                 vmid: Some(vmid),
                 hostname: hostname.clone(),
@@ -1326,6 +1327,7 @@ pub(crate) async fn handle(
         let result = crate::proxmox_desktop::desktop()
             .create_from_iso(&crate::proxmox_desktop::CreateFromIsoParams {
                 windows: preset.id == "windows",
+                chromeos: preset.id == "chromeos",
                 owner_resources: crate::routes::vm::can_customize_owner_vm(state, &actor),
                 vmid: Some(vmid),
                 hostname: hostname.clone(),

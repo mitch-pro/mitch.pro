@@ -357,6 +357,10 @@ pub struct CloneDesktopParams {
 /// their own OS install.
 pub struct CreateFromIsoParams {
     pub windows: bool,
+    /// ChromeOS Flex's distributed image is a raw disk image, not a
+    /// bootable-CD ISO — there's no installer to boot from `media=cdrom`.
+    /// See `create_from_iso`'s handling of this flag.
+    pub chromeos: bool,
     pub owner_resources: bool,
     pub vmid: Option<f64>,
     pub hostname: String,
@@ -365,6 +369,11 @@ pub struct CreateFromIsoParams {
     pub disk_gb: Option<f64>,
     pub iso_filename: String,
 }
+
+/// The size `create_from_iso` grows a ChromeOS Flex scsi0 up to after
+/// importing the raw image onto it — bigger than the image itself (a few
+/// GB), small enough to leave scsi1 as the "real" disk.
+const CHROMEOS_FLASH_DISK_GB: f64 = 12.0;
 
 /// A new Windows installer gets TPM 2.0, signed UEFI variables and inbox display support.
 /// Existing installations are never silently switched from legacy BIOS to UEFI.
@@ -2212,6 +2221,32 @@ impl ProxmoxDesktopService {
             if let Some(Value::String(net)) = body.get_mut("net0") {
                 *net = net.replacen("virtio", "e1000e", 1);
             }
+        } else if params.chromeos {
+            // ChromeOS Flex's distributed image is a raw disk image (what
+            // you'd normally `dd` onto a USB stick), not a bootable-CD
+            // ISO — there's no installer to run from `media=cdrom`. Import
+            // it directly onto scsi0 (Proxmox's `import-from` disk option,
+            // 8.1+) instead of attaching it as removable media, and keep a
+            // second, normal-sized scsi1 disk for anything else. scsi0 gets
+            // grown to CHROMEOS_FLASH_DISK_GB after creation, below —
+            // import-from takes the source image's own size at create time.
+            body.remove("ide2");
+            body.insert(
+                "scsi0".to_string(),
+                json!(format!(
+                    "{}:0,import-from={}:iso/{}",
+                    self.vm_disk_storage, self.iso_storage, params.iso_filename
+                )),
+            );
+            body.insert(
+                "scsi1".to_string(),
+                json!(format!(
+                    "{}:{}",
+                    self.vm_disk_storage,
+                    jsval::num_value(disk_gb)
+                )),
+            );
+            body.insert("boot".to_string(), json!("order=scsi0;scsi1"));
         }
 
         let create_upid = self
@@ -2224,6 +2259,29 @@ impl ProxmoxDesktopService {
             .await?;
         self.wait_for_task(&self.node, Some(&create_upid), 120_000)
             .await?;
+
+        if params.chromeos {
+            let resize_body = json!({
+                "disk": "scsi0",
+                "size": format!("{CHROMEOS_FLASH_DISK_GB}G"),
+            });
+            let resize_upid = self
+                .request(
+                    "PUT",
+                    &format!(
+                        "/nodes/{}/qemu/{}/resize",
+                        encode_uri_component(&self.node),
+                        vmid
+                    ),
+                    Some(&resize_body),
+                    DEFAULT_TIMEOUT_MS,
+                )
+                .await?;
+            if jsval::truthy(&resize_upid) {
+                self.wait_for_task(&self.node, Some(&resize_upid), 120_000)
+                    .await?;
+            }
+        }
 
         let start_upid = self
             .request(
