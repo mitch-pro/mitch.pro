@@ -185,6 +185,12 @@
   margin: 10px 0;
 }
 
+.companion-mine-no-images {
+  font-size: 13px;
+  opacity: 0.7;
+  margin: 4px 0 10px;
+}
+
 .companion-mine-mood-tile {
   text-align: center;
   font-size: 12px;

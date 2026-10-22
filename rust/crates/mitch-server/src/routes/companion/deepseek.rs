@@ -8,23 +8,44 @@
 //! DeepSeek's `response_format: {"type": "json_schema"}` is rejected
 //! outright ("this response_format type is unavailable now" — verified
 //! live before writing this, not assumed), so there's no schema-level
-//! `enum` to constrain `mood` the way Gemini/Groq could. Only
-//! `{"type": "json_object"}` (valid-JSON-but-unconstrained-shape) is
-//! available, so the valid moods are spelled out in the prompt text
-//! instead, and the existing post-parse validation (reject if the
-//! returned mood isn't in `moods`, try the next model) is now the *only*
-//! enforcement, not a backstop — don't remove it.
+//! `enum` to constrain `mood` the way Gemini/Groq could — the valid moods
+//! are spelled out in the prompt text instead.
+//!
+//! `response_format: {"type": "json_object"}` was tried next and made
+//! things *worse*: with a realistic multi-turn system prompt,
+//! `deepseek-flash` intermittently returned `finish_reason: "stop"` with
+//! **blank/whitespace-only content** — not an error, not a truncation
+//! (`reasoning_tokens` was low each time this happened), just nothing —
+//! roughly half the time under rapid testing. That's the "companion AI
+//! failed... half the time" bug this module exists to not reproduce.
+//! Dropping `response_format` entirely and relying on the prompt alone
+//! made the blank-content failures go away in the same testing (verified
+//! live, several rounds, not assumed) — in exchange for the model
+//! occasionally wrapping the JSON in a little prose, which
+//! `extract_reply` below now tolerates by extracting the first `{...}`
+//! substring, same trick `routes/team.rs` already uses for Groq. If
+//! `response_format` is ever reintroduced here, re-run the rapid-fire
+//! test in this module's PR/commit history first — it reproduces in
+//! single-digit numbers of requests.
 
 use mitch_lib::companion::ChatMessage;
 use serde_json::{json, Value};
 
 /// Verified live against `GET /models` before picking this: `deepseek-flash`
 /// (DeepSeek-V4.1-Flash) is the cheap tier — $0.14/M input, $0.28/M output
-/// as of writing, vs. `deepseek-v4-pro`'s $0.435+/M — and still a capable
-/// general chat model, just the budget one. `deepseek-v4-pro` is the
-/// fallback. Keep it on the cheap tier — that's the explicit, repeated
-/// requirement across every provider this has gone through.
-const MODELS: &[&str] = &["deepseek-flash", "deepseek-v4-pro"];
+/// as of writing, vs. `deepseek-v4-pro`'s $0.435+/M (several times the
+/// price). Explicitly never fall back to `deepseek-v4-pro` on failure —
+/// that was tried and rejected: a failure here should retry the cheap
+/// model, not quietly escalate to a pricier one. Keep it on the cheap
+/// tier — that's the explicit, repeated requirement across every provider
+/// this has gone through.
+const MODEL: &str = "deepseek-flash";
+
+/// Most failures seen in testing were transient (occasional malformed
+/// JSON from the model, not a real outage), so retrying the same cheap
+/// model a few times is both safe cost-wise and likely to succeed —
+/// unlike escalating to `deepseek-v4-pro`, which is not on the table.
+const MAX_ATTEMPTS: u32 = 3;
 
 /// What the character is told about mitch.pro itself, so it can answer
 /// real questions about the site instead of only ever talking about
@@ -117,30 +138,32 @@ pub async fn chat(
     messages.push(json!({ "role": "user", "content": message }));
 
     let body = json!({
-        "model": "", // set per attempt below
+        "model": MODEL,
         "messages": messages,
         "effort": "low",
         "max_tokens": 400,
-        "response_format": { "type": "json_object" }
     });
 
-    for model in MODELS {
-        let mut attempt = body.clone();
-        attempt["model"] = json!(model);
+    for attempt_num in 0..MAX_ATTEMPTS {
+        let model = MODEL;
         let resp = reqwest::Client::new()
             .post("https://api.deepseek.com/chat/completions")
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {api_key}"))
-            .json(&attempt)
+            .json(&body)
             .timeout(std::time::Duration::from_secs(20))
             .send()
             .await;
         let Ok(resp) = resp else {
-            tracing::error!("[companion] deepseek request error ({model})");
+            tracing::error!("[companion] deepseek request error ({model}, attempt {attempt_num})");
             continue;
         };
         let status = resp.status().as_u16();
         if status == 429 || status == 503 {
+            let body = resp.text().await.unwrap_or_default();
+            tracing::error!(
+                "[companion] deepseek {model} returned {status} (rate/overload): {body}"
+            );
             continue;
         }
         if !(200..300).contains(&status) {
@@ -148,7 +171,12 @@ pub async fn chat(
             tracing::error!("[companion] deepseek {model} returned {status}: {body}");
             continue;
         }
-        let Ok(data) = resp.json::<Value>().await else {
+        let Ok(raw_text) = resp.text().await else {
+            tracing::error!("[companion] deepseek {model}: failed to read response body");
+            continue;
+        };
+        let Ok(data) = serde_json::from_str::<Value>(&raw_text) else {
+            tracing::error!("[companion] deepseek {model}: non-JSON HTTP body: {raw_text}");
             continue;
         };
         let text = data
@@ -158,28 +186,10 @@ pub async fn chat(
             .and_then(|m| m.get("content"))
             .and_then(|t| t.as_str())
             .unwrap_or("");
-        let Ok(parsed) = serde_json::from_str::<Value>(text) else {
+        let Some((reply, mood, remember)) = extract_reply(text, moods) else {
+            tracing::error!("[companion] deepseek {model}: no usable reply in content: {text:?}");
             continue;
         };
-        let reply = parsed
-            .get("reply")
-            .and_then(|v| v.as_str())
-            .unwrap_or_default()
-            .to_string();
-        let mood = parsed
-            .get("mood")
-            .and_then(|v| v.as_str())
-            .unwrap_or_default()
-            .to_string();
-        if reply.is_empty() || !moods.iter().any(|m| m == &mood) {
-            continue;
-        }
-        let remember = parsed
-            .get("remember")
-            .and_then(|v| v.as_str())
-            .unwrap_or_default()
-            .trim()
-            .to_string();
         return Ok(ChatReply {
             reply,
             mood,
@@ -187,4 +197,125 @@ pub async fn chat(
         });
     }
     Err("companion AI failed".to_string())
+}
+
+/// Picks apart whatever the model actually sent, most-strict-first:
+/// 1. The whole trimmed text is the JSON object we asked for.
+/// 2. The model wrapped the JSON in a little prose — same `{...}`
+///    substring trick `routes/team.rs` uses for Groq.
+/// 3. The model ignored the format and just replied in plain prose —
+///    treat the whole trimmed text as the reply rather than discarding a
+///    perfectly good in-character response over a formatting slip.
+///
+/// An invalid or missing `mood` in any of these falls back to a default
+/// rather than discarding an otherwise-good reply — getting the sprite
+/// wrong is a much smaller problem than throwing the reply away.
+/// Returns `None` only when there's truly nothing to show (blank/
+/// whitespace-only content) — the one case still worth retrying for.
+fn extract_reply(text: &str, moods: &[String]) -> Option<(String, String, String)> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if let Some(parsed) = serde_json::from_str::<Value>(trimmed)
+        .ok()
+        .or_else(|| extract_json_object(trimmed))
+    {
+        let reply = parsed
+            .get("reply")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
+        if !reply.is_empty() {
+            let raw_mood = parsed.get("mood").and_then(|v| v.as_str()).unwrap_or("");
+            // Case/whitespace-insensitive match: the model reliably picks
+            // one of the moods it was given, just not always byte-for-byte
+            // (e.g. "Happy" instead of "happy") — the canonical spelling
+            // from `moods` is what gets returned either way, since that's
+            // what the image lookup and the DB row are keyed on.
+            let mood = moods
+                .iter()
+                .find(|valid| valid.eq_ignore_ascii_case(raw_mood.trim()))
+                .cloned()
+                .unwrap_or_else(|| {
+                    if !raw_mood.is_empty() {
+                        tracing::error!(
+                            "[companion] deepseek: mood {raw_mood:?} didn't match any of {moods:?}, guessing instead"
+                        );
+                    }
+                    guess_mood(reply, moods)
+                });
+            let remember = parsed
+                .get("remember")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            return Some((reply.to_string(), mood, remember));
+        }
+    }
+    // No JSON object at all, or one with an empty "reply" — the model
+    // ignored the format. Use the raw text itself rather than failing.
+    let mood = guess_mood(trimmed, moods);
+    Some((trimmed.to_string(), mood, String::new()))
+}
+
+/// The first `{` through its matching last `}`, parsed as JSON — `None`
+/// if there's no `{` at all or that substring isn't valid JSON.
+fn extract_json_object(text: &str) -> Option<Value> {
+    let open = text.find('{')?;
+    let close_rel = text[open..].rfind('}')?;
+    serde_json::from_str(&text[open..=open + close_rel]).ok()
+}
+
+/// Simple keyword sniffing on the reply text itself, used whenever the
+/// model didn't hand back a usable `mood` field (it drops the JSON
+/// wrapper entirely more often as the conversation history grows — a real
+/// DeepSeek quirk, not something this can force). Picking a mood this way
+/// is obviously cruder than asking the model, but it's free (no second API
+/// call) and, critically, isn't a fixed value: landing on the exact same
+/// mood every single time a character has one literally named "default"
+/// or alphabetically first is the bug this exists to avoid (that's what
+/// "the bot never changes mood" turned out to be).
+fn guess_mood(reply: &str, moods: &[String]) -> String {
+    const KEYWORDS: &[(&str, &[&str])] = &[
+        (
+            "happy",
+            &[
+                "happy", "glad", "yay", "great", "awesome", "love", "excited", "fun",
+            ],
+        ),
+        ("sad", &["sad", "sorry", "upset", "cry", "down", "hurt"]),
+        ("angry", &["angry", "mad", "furious", "annoyed", "frustrat"]),
+        ("pout", &["pout", "hmph", "fine.", "whatever", "embarrass"]),
+        ("surprised", &["surprised", "wow", "whoa", "shock"]),
+    ];
+    let lower = reply.to_lowercase();
+    for (category, hints) in KEYWORDS {
+        if hints.iter().any(|h| lower.contains(h)) {
+            if let Some(m) = moods.iter().find(|m| m.eq_ignore_ascii_case(category)) {
+                return m.clone();
+            }
+        }
+    }
+    // No keyword hit (or no matching mood for the category that did) —
+    // pick randomly rather than always the same one. Mildly deprioritize
+    // anything that looks like a deliberate fallback/placeholder name so
+    // a character with e.g. "idle"/"default" among its moods doesn't just
+    // trade a static wrong answer for a *frequent* one.
+    let candidates: Vec<&String> = moods
+        .iter()
+        .filter(|m| {
+            let l = m.to_lowercase();
+            !l.contains("default") && !l.contains("idle")
+        })
+        .collect();
+    let pool = if candidates.is_empty() {
+        moods.iter().collect::<Vec<_>>()
+    } else {
+        candidates
+    };
+    use rand::Rng;
+    let idx = rand::rng().random_range(0..pool.len());
+    pool[idx].clone()
 }

@@ -34,23 +34,40 @@ subsystem — no `server.js` equivalent.
   AGENTS.md's data-storage rule. Saving reloads `/companion/` so its own
   view immediately reflects the new setting; every other page picks it up
   on next load since the widget reads settings fresh each time.
-- One DeepSeek API call per chat message (`deepseek-flash`, the cheap
-  tier of DeepSeek's current lineup — $0.14/M input, $0.28/M output as of
-  writing, verified live against `GET /models` before picking it, not
-  assumed; falls back to `deepseek-v4-pro` on a 429/503/bad response; see
-  `routes/companion/deepseek.rs`). Provider history: Gemini → Groq →
+- One DeepSeek API call per chat message (`deepseek-flash` only — never
+  `deepseek-v4-pro`, which costs several times as much; a failure retries
+  the same cheap model up to `MAX_ATTEMPTS` times instead of escalating;
+  see `routes/companion/deepseek.rs`). Provider history: Gemini → Groq →
   DeepSeek, each switch on request, each time over cost/billing friction
-  with the previous one (Gemini's free tier needs a prepaid Google Cloud
-  billing account past a point; Groq's own API has no such issue, that
-  switch was purely "use this provider instead"). DeepSeek's
-  `response_format: {"type": "json_schema"}` is rejected outright by the
-  live API ("this response_format type is unavailable now") — only
-  `{"type": "json_object"}` works, which enforces valid JSON but not a
-  schema, so the valid moods are spelled out in the prompt text and the
-  post-parse mood check in `deepseek.rs` is now the only enforcement, not
-  a backstop. The character's current page (`location.pathname` —
-  whichever page the person is actually on, not always `/companion/`) is
-  passed in as context ("page access").
+  with the previous one.
+- **No `response_format` is sent at all** — this was tried twice and both
+  times made things worse, confirmed live both times, not assumed:
+  `json_schema` is rejected outright by the API ("this response_format
+  type is unavailable now"), and `json_object` intermittently made
+  `deepseek-flash` return `finish_reason: "stop"` with **blank content**
+  — not an error, nothing to parse, roughly half of requests under
+  realistic multi-turn load. That was the "companion AI failed... half
+  the time" bug. Dropping `response_format` fixed it (verified with the
+  same rapid-fire reproduction, repeatedly, 0 failures after). The cost:
+  the model sometimes wraps the JSON in a little prose, or skips the JSON
+  entirely and just replies in plain text — `extract_reply` in
+  `deepseek.rs` handles both (strip to the first `{...}` substring; if
+  that still fails, treat the whole reply as the message text) rather
+  than failing the whole request over a formatting slip.
+- Mood selection has the same "model didn't give something to work with"
+  problem one level down: with no mood field to parse, a *fixed* default
+  (e.g. always the alphabetically-first mood) looks identical to "the
+  character is stuck" — which is exactly what a real user reported the
+  first time this shipped, because one of their characters had a mood
+  literally named so it sorted first. `guess_mood` in `deepseek.rs` does
+  cheap local keyword sniffing on the reply text instead (happy/sad/angry/
+  pout/surprised), falling back to a *random* pick among the character's
+  moods — deliberately deprioritizing anything named like a placeholder
+  ("default"/"idle") — rather than one fixed value, specifically so a
+  parsing miss reads as "picked something" rather than "frozen."
+- The character's current page (`location.pathname` — whichever page the
+  person is actually on, not always `/companion/`) is passed in as
+  context ("page access").
 - Uses `DEEPSEEK_API_KEY`. Not shared with any other feature in this
   codebase (unlike the Groq version, which shared a key/quota with
   `routes/team.rs`'s support-email assistant).

@@ -170,9 +170,12 @@
         status.textContent = (res.data && res.data.error) || 'Could not create character.';
         return;
       }
-      status.textContent = 'Created.';
+      status.textContent = 'Created — add its mood images below in "Your characters".';
       $('companion-create-form').reset();
-      loadMine();
+      loadMine().then(function () {
+        var card = document.getElementById('mine-' + res.data.id);
+        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
       loadCharacters();
     });
   });
@@ -180,7 +183,7 @@
   // ---- Your characters ----
 
   function loadMine() {
-    api('/api/companion/mine').then(function (res) {
+    return api('/api/companion/mine').then(function (res) {
       if (!res.ok) return;
       mine = res.data.characters || [];
       renderMine();
@@ -197,19 +200,22 @@
     mine.forEach(function (c) {
       var card = document.createElement('div');
       card.className = 'companion-mine-card';
+      card.id = 'mine-' + c.id;
       card.innerHTML =
         '<h3>' + escapeHtml(c.name) + (c.needsReview ? ' <span class="companion-review-tag">Pending review</span>' : '') + '</h3>' +
-        '<label>Name</label><input type="text" class="mine-name" maxlength="60" value="' + escapeHtml(c.name) + '">' +
-        '<label>Personality prompt</label><textarea class="mine-prompt" rows="4" maxlength="4000">' + escapeHtml(c.personalityPrompt) + '</textarea>' +
-        '<label>Price for others to unlock (coins)</label><input type="number" class="mine-price" min="0" step="1" value="' + c.priceCoins + '">' +
+        '<label>Mood images</label>' +
+        (c.moods && c.moods.length ? '' : '<p class="companion-mine-no-images">No images yet — add at least one below so this character can be used.</p>') +
         '<div class="companion-mine-moods"></div>' +
-        '<button type="button" class="mine-save-btn">Save changes</button>' +
-        '<button type="button" class="mine-delete-btn">Delete character</button>' +
         '<form class="companion-mine-image-form">' +
         '<input type="text" class="mine-mood-name" placeholder="mood name (e.g. happy)" maxlength="40" required>' +
         '<input type="file" class="mine-mood-file" accept="image/png,image/jpeg,image/webp,image/gif" required>' +
-        '<button type="submit">Upload image</button>' +
-        '</form>';
+        '<button type="submit">Add mood image</button>' +
+        '</form>' +
+        '<label>Name</label><input type="text" class="mine-name" maxlength="60" value="' + escapeHtml(c.name) + '">' +
+        '<label>Personality prompt</label><textarea class="mine-prompt" rows="4" maxlength="4000">' + escapeHtml(c.personalityPrompt) + '</textarea>' +
+        '<label>Price for others to unlock (coins)</label><input type="number" class="mine-price" min="0" step="1" value="' + c.priceCoins + '">' +
+        '<button type="button" class="mine-save-btn">Save changes</button>' +
+        '<button type="button" class="mine-delete-btn">Delete character</button>';
 
       var moodsEl = card.querySelector('.companion-mine-moods');
       (c.moods || []).forEach(function (mood) {
