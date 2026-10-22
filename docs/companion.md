@@ -1,8 +1,8 @@
 # Desktop companion characters
 
-A small anime-style character you can chat with (Groq-backed) and drag
-around the screen, visible site-wide once you turn it on. New subsystem —
-no `server.js` equivalent.
+A small anime-style character you can chat with (DeepSeek-backed) and
+drag around the screen, visible site-wide once you turn it on. New
+subsystem — no `server.js` equivalent.
 
 ## Scope
 
@@ -34,20 +34,26 @@ no `server.js` equivalent.
   AGENTS.md's data-storage rule. Saving reloads `/companion/` so its own
   view immediately reflects the new setting; every other page picks it up
   on next load since the widget reads settings fresh each time.
-- One Groq API call per chat message (`openai/gpt-oss-20b`, the cheapest
-  Groq model that's both a general-purpose chat model and supports
-  `structured_outputs` — verified live against `GET /openai/v1/models`
-  before picking it, not assumed; falls back to `openai/gpt-oss-120b` on a
-  429/503/bad response; see `routes/companion/groq.rs`). Originally built
-  against Gemini; switched to Groq on request because Gemini's free tier
-  requires a prepaid Google Cloud billing account past a point, which the
-  owner didn't want to pay into — Groq has a real free tier with no prepay
-  step. The character's current page (`location.pathname` — whichever
-  page the person is actually on, not always `/companion/`) is passed in
-  as context ("page access").
-- Uses `GROQ_API_KEY`, the same env var `routes/team.rs`'s support-email
-  assistant already uses — same Groq account/quota, shared between both
-  features.
+- One DeepSeek API call per chat message (`deepseek-flash`, the cheap
+  tier of DeepSeek's current lineup — $0.14/M input, $0.28/M output as of
+  writing, verified live against `GET /models` before picking it, not
+  assumed; falls back to `deepseek-v4-pro` on a 429/503/bad response; see
+  `routes/companion/deepseek.rs`). Provider history: Gemini → Groq →
+  DeepSeek, each switch on request, each time over cost/billing friction
+  with the previous one (Gemini's free tier needs a prepaid Google Cloud
+  billing account past a point; Groq's own API has no such issue, that
+  switch was purely "use this provider instead"). DeepSeek's
+  `response_format: {"type": "json_schema"}` is rejected outright by the
+  live API ("this response_format type is unavailable now") — only
+  `{"type": "json_object"}` works, which enforces valid JSON but not a
+  schema, so the valid moods are spelled out in the prompt text and the
+  post-parse mood check in `deepseek.rs` is now the only enforcement, not
+  a backstop. The character's current page (`location.pathname` —
+  whichever page the person is actually on, not always `/companion/`) is
+  passed in as context ("page access").
+- Uses `DEEPSEEK_API_KEY`. Not shared with any other feature in this
+  codebase (unlike the Groq version, which shared a key/quota with
+  `routes/team.rs`'s support-email assistant).
 - The last 10 messages (5 exchanges) per (user, character) are stored in
   `companion_chat_messages` and replayed as prior `contents` turns on every
   call, so the character has real short-term conversational memory, not
@@ -59,7 +65,7 @@ no `server.js` equivalent.
   These are read back and listed in the system prompt on every call ("Things
   you remember about this person from earlier conversations").
 - The system prompt also gives the character: a factual blurb about what
-  mitch.pro is (`SITE_INFO` in `groq.rs`), and the caller's own email,
+  mitch.pro is (`SITE_INFO` in `deepseek.rs`), and the caller's own email,
   display name, MitchCoin balance, and premium status. None of this is
   meant to be volunteered unprompted — it's there so the character can
   answer real questions about the site/itself/the user's account without
@@ -127,16 +133,11 @@ other admin-facing notices already use) pointing at the existing
 character deleted if it's a problem. Editing a character's name/prompt/
 price re-flags `needs_review` — new content, worth another look.
 
-## Requires `GROQ_API_KEY`
+## Requires `DEEPSEEK_API_KEY`
 
-Chat returns `503 companion AI is not configured` until `GROQ_API_KEY` is
-set in the environment. Never commit this key — export it in your shell
-or add it to the untracked `.env`.
-
-`GROQ_API_KEY` is shared with `routes/team.rs`'s support-email assistant —
-same key, same account, same quota. If the companion starts eating into
-rate limits that feature needs, that's a real constraint to weigh, not a
-surprise.
+Chat returns `503 companion AI is not configured` until `DEEPSEEK_API_KEY`
+is set in the environment. Never commit this key — export it in your
+shell or add it to the untracked `.env`.
 
 ## Data model
 
@@ -146,11 +147,11 @@ surprise.
   characters.
 - `companion_character_images` (character_id, mood, file, updated_at) — one
   row per mood the character has art for. "Mood" is free text, not a fixed
-  enum: whatever moods a character has images for become the exact `enum`
-  constraint on the Groq call's JSON-schema `response_format` for that
-  character, so it can only ever reply with a mood it has a sprite for.
-  `idle` is treated as the fallback display mood when nothing else has
-  loaded yet.
+  enum: whatever moods a character has images for become the exact list
+  spelled out in the DeepSeek prompt (and the only valid values the
+  post-parse check in `deepseek.rs` accepts) for that character, so it
+  can only ever reply with a mood it has a sprite for. `idle` is treated
+  as the fallback display mood when nothing else has loaded yet.
 - `companion_user_settings` (email, enabled, active_character_id)
 - `companion_chat_messages` (email, character_id, role, content, created_at)
   — rolling chat history, read back as the last 10 rows per (email,
@@ -203,8 +204,7 @@ rendering, not just the owner).
 ## Rate limits (`mitch_lib::auth::rate_limit_for`)
 
 `/api/companion/chat` is capped at 12/min — "rate limited but not harshly"
-was the explicit ask, since every call costs a real Groq API charge
-(shared quota with `routes/team.rs`, see above).
+was the explicit ask, since every call costs a real DeepSeek API charge.
 
 ## If you touch this again
 
@@ -229,21 +229,20 @@ was the explicit ask, since every call costs a real Groq API charge
   and rate-limited at 12/min), but if this ever needs an actual cap or a
   "clear my history" action, add it the same way `add_memory` already caps
   `companion_memories` rather than leaving it unbounded.
-- The Groq call sends `User-Agent: python-requests/2.31.0` (matching
-  `routes/team.rs`'s existing Groq caller exactly) — without it, some edge
-  in front of Groq 403s with `{"error":{"message":"Access denied..."}}`.
-  Don't drop that header if you touch this call.
-- Separately: while building this, the exact same 403 reproduced from one
-  test environment specifically over IPv4 (confirmed with `curl -4` vs
-  `curl -6`, and by pinning `reqwest::ClientBuilder::resolve()` to each
-  address family directly) — Groq/Cloudflare was blocking that
-  environment's IPv4 egress while its IPv6 egress worked fine, independent
-  of the User-Agent fix above. Root cause confirmed: a VPN on the client
-  machine. Turning it off fixed it immediately. If `/api/companion/chat`
-  ever reliably 403s with that exact message, check for a VPN first, then
-  IPv4 vs IPv6 reachability to `api.groq.com` from that host — not the
-  integration code, which was independently verified correct against the
-  raw API before this was ever diagnosed as a network issue.
+- History from the Groq-backed version of this feature (relevant if a
+  future provider switch ever lands back on something behind an
+  aggressive WAF): Groq 403'd every request with reqwest's default
+  `User-Agent`, fixed by spoofing `python-requests/2.31.0` (matching
+  `routes/team.rs`'s own Groq caller). Separately, the exact same 403
+  reproduced from one test environment specifically over IPv4 (confirmed
+  with `curl -4` vs `curl -6`, and by pinning
+  `reqwest::ClientBuilder::resolve()` to each address family directly) —
+  traced to a VPN on that machine; turning it off fixed it immediately.
+  DeepSeek hasn't needed either workaround so far, but if
+  `/api/companion/chat` ever reliably fails against whatever provider is
+  current, check for a VPN and try spoofing the `User-Agent` before
+  assuming the integration code itself is broken — it was independently
+  verified correct against the raw API both times this came up.
 - All the new economy endpoints (`subscribe`, `unlock`, `mine*`) got their
   own `rate_limit_for` entries rather than falling through to the
   `__default__` 100/min — cheap to add at the same time as the route, and

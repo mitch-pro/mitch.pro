@@ -1,20 +1,20 @@
 //! `/api/companion/*` + `/api/admin/companion/*` — the desktop companion
 //! character feature. New subsystem, no `server.js` equivalent: a small
 //! anime-style character widget the user can enable site-wide, chat with
-//! (Groq-backed), and drag around the screen.
+//! (DeepSeek-backed), and drag around the screen.
 //!
 //! Full scope now built, including the economy (see
 //! `mitch_lib::companion`'s module doc for the exploit walk-through):
 //! admin-authored presets, user-created custom characters with creator-set
 //! pricing (`mine.rs`), a MitchCoins subscription gate plus per-character
-//! unlock pricing (`economy.rs`), Groq-backed chat with short-term memory,
+//! unlock pricing (`economy.rs`), DeepSeek-backed chat with short-term memory,
 //! and the admin review queue for user-generated prompts.
 //!
 //! See `docs/companion.md`.
 
 mod admin;
+mod deepseek;
 mod economy;
-mod groq;
 mod mine;
 
 use crate::routes::me::{cookies_of, json_response, me_uid, parse_body_strict};
@@ -186,7 +186,7 @@ async fn chat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> 
     if message.is_empty() {
         return json_response(400, json!({ "error": "empty message" }));
     }
-    // 2000 chars is generous for a chat bubble and keeps the Groq call cheap.
+    // 2000 chars is generous for a chat bubble and keeps the DeepSeek call cheap.
     let message: String = message.chars().take(2000).collect();
     let page = str_or(body.get("page"), "");
     let page: String = page.chars().take(200).collect();
@@ -215,12 +215,12 @@ async fn chat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> 
     } else {
         character.moods.clone()
     };
-    let api_key = std::env::var("GROQ_API_KEY").unwrap_or_default();
+    let api_key = std::env::var("DEEPSEEK_API_KEY").unwrap_or_default();
     if api_key.is_empty() {
         return json_response(503, json!({ "error": "companion AI is not configured" }));
     }
 
-    let user = groq::UserContext {
+    let user = deepseek::UserContext {
         email: email.clone(),
         display_name: display_name_for(state, &email),
         mitchcoin_balance: mitch_lib::coins::get_coins(&state.store, state.data_dir(), &email),
@@ -232,7 +232,7 @@ async fn chat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> 
         mitch_lib::companion::recent_chat_messages(&state.store, &email, &character.id, 10);
     let memories = mitch_lib::companion::recent_memories(&state.store, &email, &character.id);
 
-    match groq::chat(
+    match deepseek::chat(
         &api_key,
         &character.name,
         &character.personality_prompt,

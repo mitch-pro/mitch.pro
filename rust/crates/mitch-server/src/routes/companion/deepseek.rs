@@ -1,26 +1,30 @@
-//! The Groq API call behind `/api/companion/chat`. No `server.js`
-//! equivalent — same OpenAI-compatible shape `routes/team.rs`'s support-email
-//! assistant already uses (`GROQ_API_KEY`, `api.groq.com/openai/v1/chat/completions`),
-//! but with its own model choice and a JSON-schema `response_format` for
-//! structured output instead of team.rs's regex-scraped `{...}` extraction.
+//! The DeepSeek API call behind `/api/companion/chat`. No `server.js`
+//! equivalent — an OpenAI-compatible chat-completions shape, same family as
+//! `routes/team.rs`'s Groq call and the Groq version of this module it
+//! replaced.
 //!
-//! Switched from Gemini to Groq on request — Gemini's free tier requires a
-//! prepaid Google Cloud billing account past a certain point, which the
-//! owner didn't want to pay into. Groq has a genuinely free tier with no
-//! such prepay step.
+//! Switched Gemini → Groq → DeepSeek on request, each time for the same
+//! reason: cost/billing friction with the previous provider. Unlike Groq,
+//! DeepSeek's `response_format: {"type": "json_schema"}` is rejected
+//! outright ("this response_format type is unavailable now" — verified
+//! live before writing this, not assumed), so there's no schema-level
+//! `enum` to constrain `mood` the way Gemini/Groq could. Only
+//! `{"type": "json_object"}` (valid-JSON-but-unconstrained-shape) is
+//! available, so the valid moods are spelled out in the prompt text
+//! instead, and the existing post-parse validation (reject if the
+//! returned mood isn't in `moods`, try the next model) is now the *only*
+//! enforcement, not a backstop — don't remove it.
 
 use mitch_lib::companion::ChatMessage;
 use serde_json::{json, Value};
 
-/// Verified live against `GET /openai/v1/models` before picking this:
-/// `openai/gpt-oss-20b` is the cheapest Groq model that's actually a
-/// general-purpose chat model (not a prompt-guard classifier) and supports
-/// `structured_outputs` — $0.075/M input, $0.3/M output tokens as of
-/// writing. `openai/gpt-oss-120b` (same feature set, ~2x the price) is the
-/// fallback. Do not swap in a bigger/pricier model here to "improve"
-/// replies — "cheapest model" was the explicit requirement, same as it was
-/// for the Gemini version this replaced.
-const MODELS: &[&str] = &["openai/gpt-oss-20b", "openai/gpt-oss-120b"];
+/// Verified live against `GET /models` before picking this: `deepseek-flash`
+/// (DeepSeek-V4.1-Flash) is the cheap tier — $0.14/M input, $0.28/M output
+/// as of writing, vs. `deepseek-v4-pro`'s $0.435+/M — and still a capable
+/// general chat model, just the budget one. `deepseek-v4-pro` is the
+/// fallback. Keep it on the cheap tier — that's the explicit, repeated
+/// requirement across every provider this has gone through.
+const MODELS: &[&str] = &["deepseek-flash", "deepseek-v4-pro"];
 
 /// What the character is told about mitch.pro itself, so it can answer
 /// real questions about the site instead of only ever talking about
@@ -50,8 +54,8 @@ pub struct UserContext {
 /// `message`, given the page the user is currently viewing (the "page
 /// access" the feature asked for), who they are, what's happened in the
 /// last few turns, and what the character has chosen to remember about
-/// them before. `moods` must be non-empty; the model is constrained to
-/// pick one of them via the JSON schema's `enum`.
+/// them before. `moods` must be non-empty; the model is asked (in the
+/// prompt, not the request schema — see module doc) to pick one of them.
 #[allow(clippy::too_many_arguments)]
 pub async fn chat(
     api_key: &str,
@@ -72,6 +76,7 @@ pub async fn chat(
             memories.join("\n- ")
         )
     };
+    let moods_list = moods.join(", ");
 
     let system_prompt = format!(
         "You are {character_name}, a small desktop companion character living on the \
@@ -87,12 +92,13 @@ pub async fn chat(
          talk. The one rule is you must stay fully in character while doing it: never \
          break character to say you're an AI or a language model.\n\
          Keep replies short — one to three sentences unless asked to elaborate.\n\
-         Respond with a JSON object: \"reply\" is what you say, \"mood\" is exactly one \
-         of your available moods (whichever best matches your reaction), and \"remember\" \
-         is optional — only fill it in with a short note (a fact, preference, or ongoing \
-         thing about this person worth recalling next time) when something in THIS \
-         message is actually worth remembering; leave it empty otherwise. Don't repeat a \
-         memory you already have.",
+         Respond with ONLY a JSON object (no other text) of this exact shape: \
+         {{\"reply\": string, \"mood\": string, \"remember\": string}}. \"reply\" is what \
+         you say. \"mood\" MUST be exactly one of these, spelled exactly as shown, nothing \
+         else: {moods_list}. \"remember\" is optional — only fill it in with a short note \
+         (a fact, preference, or ongoing thing about this person worth recalling next \
+         time) when something in THIS message is actually worth remembering; leave it as \
+         an empty string otherwise. Don't repeat a memory you already have.",
         email = user.email,
         display_name = user.display_name,
         balance = user.mitchcoin_balance,
@@ -113,42 +119,24 @@ pub async fn chat(
     let body = json!({
         "model": "", // set per attempt below
         "messages": messages,
-        "reasoning_effort": "low",
+        "effort": "low",
         "max_tokens": 400,
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {
-                "name": "companion_reply",
-                "schema": {
-                    "type": "object",
-                    "properties": {
-                        "reply": { "type": "string" },
-                        "mood": { "type": "string", "enum": moods },
-                        "remember": { "type": "string" }
-                    },
-                    "required": ["reply", "mood", "remember"],
-                    "additionalProperties": false
-                }
-            }
-        }
+        "response_format": { "type": "json_object" }
     });
 
     for model in MODELS {
         let mut attempt = body.clone();
         attempt["model"] = json!(model);
-        // User-Agent spoof matches `team.rs`'s existing Groq caller — Groq
-        // (or something in front of it) 403s reqwest's default UA string.
         let resp = reqwest::Client::new()
-            .post("https://api.groq.com/openai/v1/chat/completions")
+            .post("https://api.deepseek.com/chat/completions")
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {api_key}"))
-            .header("User-Agent", "python-requests/2.31.0")
             .json(&attempt)
             .timeout(std::time::Duration::from_secs(20))
             .send()
             .await;
         let Ok(resp) = resp else {
-            tracing::error!("[companion] groq request error ({model})");
+            tracing::error!("[companion] deepseek request error ({model})");
             continue;
         };
         let status = resp.status().as_u16();
@@ -157,7 +145,7 @@ pub async fn chat(
         }
         if !(200..300).contains(&status) {
             let body = resp.text().await.unwrap_or_default();
-            tracing::error!("[companion] groq {model} returned {status}: {body}");
+            tracing::error!("[companion] deepseek {model} returned {status}: {body}");
             continue;
         }
         let Ok(data) = resp.json::<Value>().await else {
