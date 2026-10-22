@@ -1,0 +1,31 @@
+.staff-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.staff-link-card {
+  display: block;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 16px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.staff-link-card h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.staff-link-card p {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.staff-link-card[data-locked] {
+  opacity: 0.45;
+  cursor: default;
+}

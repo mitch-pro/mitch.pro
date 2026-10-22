@@ -1084,6 +1084,7 @@ pub fn rate_limit_for(endpoint: &str) -> (u32, u32) {
         "/api/admin/companion/characters/image" => (20, 60),
         "/api/admin/companion/characters/set-default" => (30, 60),
         "/api/admin/companion/characters/mark-reviewed" => (30, 60),
+        "/api/staff-hub/status" => (60, 60),
         _ => (100, 60), // __default__
     }
 }

@@ -36,6 +36,7 @@ pub mod proxy;
 pub mod push;
 pub mod service_auth;
 pub mod ssh_ws;
+pub mod staff_hub;
 pub mod team;
 pub mod tor;
 pub mod vm;

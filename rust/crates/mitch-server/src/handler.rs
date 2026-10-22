@@ -1369,6 +1369,11 @@ pub async fn handle(
                 return resp;
             }
         }
+        // staff hub status — new subsystem, no server.js equivalent.
+        if let Some(resp) = crate::routes::staff_hub::handle(&state, &method, &path, headers).await
+        {
+            return resp;
+        }
         // Unmatched /api/ paths fall through to static 404 (same as bun).
     }
 
