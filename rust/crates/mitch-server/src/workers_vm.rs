@@ -505,7 +505,11 @@ async fn cleanup_all_ephemeral_vms(state: &Arc<AppState>) {
     println!("[startup] Checking for leftover ephemeral containers on Proxmox...");
     let existing_ids = crate::routes::vm::get_existing_vmids().await;
     for id in 200..210 {
-        if existing_ids.contains_key(&id) {
+        // The persistent provisioning pool also starts at 200. A registered
+        // computer is never a leftover disposable guest, regardless of role.
+        if existing_ids.contains_key(&id)
+            && vmlib::get_virtual_machine_by_vmid(&state.store, id as f64).is_none()
+        {
             println!("[startup] Leftover ephemeral VMID {id} detected. Wiping...");
             let state_c = Arc::clone(state);
             tokio::spawn(async move {

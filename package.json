@@ -20,7 +20,7 @@
     "test:integration:auth": "bun tests/test_auth_session_integration.js",
     "test:admin:browser": "node tests/test_admin_modernization.mjs",
     "test:integration:daily-login": "bun tests/test_daily_login.js",
-    "test:blooket": "node tests/test_blooket_answers.mjs && node tests/test_blooket_connection.mjs && node tests/test_blooket_controller.mjs"
+    "test:blooket": "node tests/test_blooket_answers.mjs && node tests/test_blooket_connection.mjs && node tests/test_blooket_controller.mjs && node tests/test_blooket_runtime.mjs && node tests/test_blooket_service.mjs"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^14.0.0",
@@ -33,6 +33,7 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0"
+    "@playwright/test": "^1.63.0",
+    "ws": "^8.22.0"
   }
 }

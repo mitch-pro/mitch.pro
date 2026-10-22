@@ -1,113 +1,90 @@
+import { GAME_CONTROLS } from "./blooket-controls.mjs";
 import {
-  PIN_SELECTOR,
-  NAME_SELECTOR,
-  visibleField,
-  submitJoinField,
-} from "./blooket-connection.mjs";
-export const QUESTION_SELECTOR =
-  '[class*="questionText"], [class*="QuestionText"], [class*="questionHolder"], [class*="questionContainer"]';
-export const TYPING_SELECTOR =
-  'input[class*="typingInput"], input[placeholder*="type" i], input[placeholder*="answer" i]';
-export const ANSWER_SELECTORS = [
-  '[class*="answerContainer"]',
-  '[class*="answerWrapper"]',
-  '[class*="answersHolder"] > div',
-  '[class*="answersHolder"] > button',
-  '[class*="answersWrapper"] > div',
-  '[class*="answerCard"]',
-  '[role="button"][class*="answer"]',
-];
+  readGameScreen,
+  inspectGameDocument,
+  inspectOptions,
+} from "./blooket-screen.mjs";
+import { submitJoinField } from "./blooket-connection.mjs";
+export {
+  QUESTION_SELECTOR,
+  TYPING_SELECTOR,
+  ANSWER_SELECTORS,
+} from "./blooket-screen.mjs";
 const clean = (value) =>
   String(value ?? "")
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
 
-// Submit through the visible game control once; never click the next screen blindly.
-export async function submitAnswer(page, state, choice, active = () => true) {
+/** Re-observe after the configured delay. A question key identifies an occurrence,
+ * not just its wording; the browser checks it again before dispatching a click.
+ */
+export async function submitAnswer(
+  page,
+  observed,
+  choice,
+  active = () => true,
+) {
   if (!active()) return null;
+  const current = await readGameScreen(page);
+  if (!current.hasQuestion || !active()) return null;
   if (
-    (await visibleField(page, PIN_SELECTOR).count()) ||
-    (await visibleField(page, NAME_SELECTOR).count())
+    observed.questionKey
+      ? observed.questionKey !== current.questionKey
+      : clean(observed.questionText) !== clean(current.questionText) ||
+        JSON.stringify((observed.answers || []).map(clean)) !==
+          JSON.stringify(current.answers.map(clean))
   )
     return null;
-  const heading = page
-    .locator(QUESTION_SELECTOR)
-    .filter({ visible: true })
-    .first();
-  if (await heading.count()) {
-    const current = clean(await heading.innerText());
-    if (current && state.questionText && current !== clean(state.questionText))
-      return null;
-  }
-  if (state.questionType === "typing") {
-    const input = page
-      .locator(TYPING_SELECTOR)
-      .filter({ visible: true })
-      .first();
-    if (!(await input.count())) return null;
-    if (!active()) return null;
+  if (current.questionType === "typing") {
+    const input = page.locator(
+      `[data-tylerium-control="${current.inputTarget}"]`,
+    );
+    if (!active() || !(await input.isEnabled())) return null;
     await input.fill(choice.humanKeystrokes ? "" : choice.text);
     if (choice.humanKeystrokes)
       for (const char of choice.text) {
         if (!active()) return null;
-        await input.pressSequentially(char, {
-          delay: 40 + Math.floor(Math.random() * 50),
-        });
+        await input.pressSequentially(char, { delay: 40 });
       }
-    if (!active()) return null;
+    const ready = await readGameScreen(page);
+    if (!active() || ready.questionKey !== current.questionKey) return null;
     await submitJoinField(input);
-    return { text: choice.text };
+    return { text: choice.text, questionKey: current.questionKey };
   }
-  for (const selector of ANSWER_SELECTORS) {
-    const cards = page.locator(selector).filter({ visible: true });
-    const count = await cards.count();
-    if (count < 2) continue;
-    const texts = await cards.allInnerTexts();
-    const index = texts.findIndex((text) => clean(text) === clean(choice.text));
-    if (index < 0) continue;
-    if (!active()) return null;
-    const card = cards.nth(index),
-      box = choice.clickOffsets ? await card.boundingBox() : null;
-    if (!active()) return null;
-    await card.click({
-      timeout: 2000,
-      ...(box
-        ? {
-            position: {
-              x: box.width * (0.3 + Math.random() * 0.4),
-              y: box.height * (0.3 + Math.random() * 0.4),
-            },
-          }
-        : {}),
-    });
-    return { text: texts[index].trim() };
-  }
-  return null;
+  const index = current.answers.findIndex(
+    (answer) => clean(answer) === clean(choice.text),
+  );
+  if (index < 0 || !active()) return null;
+  return page.evaluate(inspectGameDocument, {
+    ...inspectOptions(),
+    intent: {
+      questionKey: current.questionKey,
+      index,
+      text: choice.text,
+    },
+  });
 }
 
 export async function advanceFeedback(page, active = () => true) {
   if (!active()) return false;
-  for (const selector of [
-    '[class*="nextButton"]',
-    '[class*="feedbackContainer"]',
-    '[class*="feedbackWrapper"]',
-    '[class*="feedback"]',
-  ]) {
+  const state = await readGameScreen(page);
+  if (state.hasQuestion || !(state.hasFeedback || state.hasNext)) return false;
+  for (const selector of GAME_CONTROLS.feedback) {
     const control = page.locator(selector).filter({ visible: true }).first();
     if ((await control.count()) && active()) {
       await control.click({ timeout: 1500 });
       return true;
     }
   }
-  const prompt = page
+  const control = page
     .getByText(
-      /^(?:click|press) anywhere (?:to (?:continue|go next)|to cast)|^(?:continue|go next|claim|collect)$/i,
+      /^(?:click|press) anywhere to (?:continue|go next|cast)|^(?:continue|go next|claim|collect)$/i,
     )
     .filter({ visible: true })
     .first();
-  if ((await prompt.count()) && active()) {
-    await prompt.click({ timeout: 1500 });
+  if ((await control.count()) && active()) {
+    await control.click({ timeout: 1500 });
     return true;
   }
   return false;
