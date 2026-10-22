@@ -46,10 +46,7 @@
     return data;
   }
 
-  // Tracked so the create button can warn before permanently deleting an
-  // existing computer — /api/vm/byo-os/create itself now deletes whatever
-  // computer the user already has (template or BYO-OS) before building the
-  // new one, the same way the template path's "Delete & Recreate" does.
+  // Ordinary accounts replace their computer; staff can add another VM.
   let hasExistingComputer = false;
 
   async function refreshIsoState() {
@@ -74,7 +71,8 @@
         }
       }
       hasExistingComputer = !!(
-        computersData && Array.isArray(computersData.computers) && computersData.computers.length > 0
+        computersData && computersData.canCreateAdditional !== true &&
+        Array.isArray(computersData.computers) && computersData.computers.length > 0
       );
       const createBtn = $('byo-os-create-btn');
       if (createBtn) {

@@ -16,34 +16,43 @@ await mkdir(join(fixture,'data'));
 await symlink(join(repo,'webserver'),join(fixture,'webserver'));
 const secret = randomBytes(32), pass = randomUUID();
 await writeFile(join(fixture,'data/id_secret.key'),secret);
-const emails = {owner:'owner@example.test',admin:'admin@example.test',moderator:'moderator@example.test',member:'member@example.test'};
-await writeFile(join(fixture,'data/admins.json'),JSON.stringify({owners:[emails.owner],admins:[emails.admin]}));
+const emails = {owner:'owner@example.test',admin:'admin@example.test',coowner:'coowner@example.test',moderator:'moderator@example.test',member:'member@example.test'};
+await writeFile(join(fixture,'data/admins.json'),JSON.stringify({owners:[emails.owner],coOwners:[emails.coowner],admins:[emails.admin]}));
 await writeFile(join(fixture,'data/moderators.json'),JSON.stringify([emails.moderator]));
 execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-keyout',join(fixture,'key.pem'),'-out',join(fixture,'cert.pem'),'-days','1','-subj','/CN=localhost'],{stdio:'ignore'});
-let vmState='stopped', failUpdate=false, updates=[];
+let vmState='stopped', failUpdate=false, updates=[], policyGuests=null, startupLists=0;
+const createdGuests=new Set(), deletedGuests=[], powerCommands=[];
 let config={cores:2,memory:4096,scsi0:'fixture:vm-140-disk-0,size=64G',ide2:'fixture:iso/windows.iso,media=cdrom'};
 const proxmox=httpsServer({key:await readFile(join(fixture,'key.pem')),cert:await readFile(join(fixture,'cert.pem'))},async(req,res)=>{
   const path = new URL(req.url,'https://localhost').pathname;
   let raw='';for await(const chunk of req)raw+=chunk;
   const form=Object.fromEntries(new URLSearchParams(raw));
   let data={};
-  if(path.endsWith('/status/current'))data={status:vmState,maxmem:4294967296,maxdisk:68719476736,cpus:config.cores,uptime:0};
+  const guestId=Number(path.match(/\/(?:qemu|lxc)\/(\d+)/)?.[1]);
+  if(path.endsWith('/qemu') && req.method==='POST') {createdGuests.add(Number(form.vmid));data=null;}
+  else if(path.endsWith('/clone')) {createdGuests.add(Number(form.newid));data=null;}
+  else if(req.method==='DELETE' && /\/(?:qemu|lxc)\/\d+$/.test(path)) {deletedGuests.push(guestId);createdGuests.delete(guestId);data=null;}
+  else if(/\/status\/(start|shutdown|stop|reboot)$/.test(path)) {powerCommands.push({id:guestId,action:path.split('/').at(-1)});data=null;}
+  else if(path.endsWith('/config') && guestId===9010) data={template:1,ide2:'fixture:cloudinit',scsi0:'fixture:base-disk,size=64G',net0:'virtio,bridge=vmbr0'};
+  else if(path.endsWith('/status/current'))data={status:vmState,maxmem:4294967296,maxdisk:68719476736,cpus:config.cores,uptime:0};
   else if(path.endsWith('/config')){
     if(req.method==='PUT'){
       updates.push(form);
       if(failUpdate){res.writeHead(500,{'content-type':'application/json'});res.end(JSON.stringify({errors:{fixture:'Host rejected update'}}));return;}
       config={...config,...form};data=null;
     }else data=config;
-  }else if(path.endsWith('/qemu'))data=[{vmid:140,name:'Fixture VM',status:vmState,cpus:config.cores,maxmem:Number(config.memory)*1048576,maxdisk:68719476736}];
+  }else if(path.endsWith('/lxc')) {startupLists++;data=[];}
+  else if(path.endsWith('/qemu')) {startupLists++;data=policyGuests || [{vmid:140,name:'Fixture VM',status:vmState,cpus:config.cores,maxmem:Number(config.memory)*1048576,maxdisk:68719476736}];}
   else if(path.endsWith('/status'))data={cpu:0,memory:{used:0,total:34359738368},rootfs:{used:0,total:1099511627776},cpuinfo:{cpus:8}};
   else if(path.endsWith('/resize')){updates.push(form);data=null;}
-  else if(path.endsWith('/resources'))data=[];
+  else if(path.endsWith('/resources'))data=policyGuests || [{vmid:140,type:'qemu',node:'fixture',name:'Fixture VM',status:vmState},...Array.from(createdGuests,id=>({vmid:id,type:'qemu',node:'fixture',name:'Created fixture',status:'stopped'}))];
   res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({data}));
 });
 proxmox.listen(0,'127.0.0.1');await once(proxmox,'listening');
 const probe=httpServer();probe.listen(0,'127.0.0.1');await once(probe,'listening');const port=probe.address().port;await new Promise(r=>probe.close(r));
 const base=`http://127.0.0.1:${port}`;
-const child=spawn(join(repo,'rust/target/debug/mitch-server'),[],{cwd:fixture,stdio:['ignore','ignore','pipe'],env:{...process.env,NODE_ENV:'production',GOD_MODE:'0',MITCH_BASE:fixture,DATA_DIR:join(fixture,'data'),MITCH_DB_PATH:join(fixture,'data/test.db'),PORT:String(port),PROXMOX_HOST:'127.0.0.1',PROXMOX_PORT:String(proxmox.address().port),PROXMOX_NODE:'fixture',PROXMOX_TOKEN_ID:randomUUID(),PROXMOX_TOKEN_SECRET:randomUUID(),PROXMOX_VERIFY_TLS:'false',PROXMOX_DESKTOP_TEMPLATES:'9010',CONDUIT_HOST:'127.0.0.1',CONDUIT_PORT:'1',MAIL_RS_URL:'http://127.0.0.1:1',NTFY_TOPIC:'',NTFY_URL:'',VAPID_PRIVATE_KEY:'',RUST_LOG:'error'}});
+const startServer=()=>spawn(join(repo,'rust/target/debug/mitch-server'),[],{cwd:fixture,stdio:['ignore','ignore','pipe'],env:{...process.env,NODE_ENV:'production',GOD_MODE:'0',MITCH_BASE:fixture,DATA_DIR:join(fixture,'data'),MITCH_DB_PATH:join(fixture,'data/test.db'),PORT:String(port),PROXMOX_HOST:'127.0.0.1',PROXMOX_PORT:String(proxmox.address().port),PROXMOX_NODE:'fixture',PVE_URL:`https://127.0.0.1:${proxmox.address().port}/api2/json`,PVE_NODE:'fixture',PVE_TOKEN:randomUUID(),PVE_SSH_HOST:'127.0.0.1',PVE_SSH_PORT:'1',PROXMOX_TOKEN_ID:randomUUID(),PROXMOX_TOKEN_SECRET:randomUUID(),PROXMOX_VERIFY_TLS:'false',PROXMOX_DESKTOP_TEMPLATES:'9010',CONDUIT_HOST:'127.0.0.1',CONDUIT_PORT:'1',MAIL_RS_URL:'http://127.0.0.1:1',NTFY_TOPIC:'',NTFY_URL:'',VAPID_PRIVATE_KEY:'',RUST_LOG:'error'}});
+let child=startServer();
 let stderr='';child.stderr.on('data',data=>{stderr+=data});
 let browser,db;
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
@@ -152,6 +161,78 @@ try{
   assert(restrictions.restrictions.find(row=>row.email===emails.member).vm);
   assert.equal((await post('admin','/api/admin/vm-ban',{email:emails.owner,banned:true})).status(),403);
   assert.equal((await post('admin','/api/admin/vm-ban',{email:emails.member,banned:false})).status(),200);
+  doc('applications.json',[{email:emails.member,status:'approved',type:'premium'}]);
+  const computersFor=async(role)=>(await(await contexts[role].request.get(base+'/api/vm/computers')).json());
+  for(const role of ['owner','admin','coowner']) {
+    assert.equal((await computersFor(role)).canCreateAdditional,true);
+    const seedId=150+['owner','admin','coowner'].indexOf(role);
+    db.prepare('INSERT INTO virtual_machines(id,owner_email,proxmox_vmid,proxmox_node,hostname,friendly_name,operating_system,cpu_cores,memory_mb,disk_gb,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').run('existing-'+role,emails[role],seedId,'fixture','seed-fixture','Existing fixture','Linux',2,4096,64,1,1);
+    const created=await post(role,'/api/vm/my-computer/create',{});
+    assert.equal(created.status(),201,await created.text());
+    assert.equal((await computersFor(role)).computers.length,2);
+  }
+  assert.equal((await computersFor('member')).canCreateAdditional,false);
+  assert.equal((await computersFor('moderator')).canCreateAdditional,false);
+  assert.equal((await post('member','/api/vm/my-computer/create',{})).status(),409);
+  const ownerComputers=(await computersFor('owner')).computers;
+  const adminComputers=(await computersFor('admin')).computers;
+  assert.equal((await post('admin','/api/vm/my-computer/recreate',{})).status(),409);
+  assert.equal((await post('admin','/api/vm/my-computer/recreate',{id:ownerComputers[0].id})).status(),404);
+  assert.equal(deletedGuests.length,0,'Adding staff computers must never delete existing guests');
+  doc('byo_os_isos.json',{[emails.coowner]:{filename:'fixture.iso',proxmoxFilename:'fixture.iso',sizeBytes:1048576}});
+  const fromIso=await post('coowner','/api/vm/byo-os/create',{});
+  assert.equal(fromIso.status(),201,await fromIso.text());
+  assert.equal((await computersFor('coowner')).computers.length,3);
+  assert.equal(deletedGuests.length,0,'Staff ISO creation must preserve other computers');
+
+  const replacement=await post('admin','/api/vm/my-computer/recreate',{id:adminComputers[0].id});
+  assert.equal(replacement.status(),201,await replacement.text());
+  assert.equal(deletedGuests.length,1);
+  assert(db.prepare('SELECT id FROM virtual_machines WHERE id=?').get(adminComputers[1].id),'Recreation must preserve the other VM');
+  assert.equal((await computersFor('admin')).computers.length,2);
+  assert.equal((await post('owner','/api/vm/owner-resources',{category:'cpu',value:3})).status(),409);
+  const untouched=ownerComputers[1];
+  const changed=await post('owner','/api/vm/owner-resources',{id:ownerComputers[0].id,category:'cpu',value:3});
+  assert.equal(changed.status(),200,await changed.text());
+  assert.equal(db.prepare('SELECT cpu_cores FROM virtual_machines WHERE id=?').get(untouched.id).cpu_cores,untouched.cpuCores);
+  for(const [role,width]of [['admin',390],['owner',1440],['member',390]]) {
+    const page=await contexts[role].newPage();await page.setViewportSize({width,height:950});
+    page.on('pageerror',error=>errors.push(error.message));await page.goto(base+'/vms/');
+    await page.locator('#computer-grid .computer-card').first().waitFor();
+    assert.equal(await page.locator('#add-computer-button').isVisible(),role!=='member');
+    if(role!=='member') {
+      await page.locator('#add-computer-button').click();assert(await page.locator('#provision-dialog').isVisible());await page.locator('#provision-cancel').click();
+      const card=page.locator('.computer-card').first();
+      await card.locator('.more-menu summary').click();await card.locator('[data-action="recreate"]').click();
+      const request=page.waitForRequest(req=>req.url().endsWith('/api/vm/my-computer/recreate'));
+      await page.route(base+'/api/vm/my-computer/recreate',route=>route.fulfill({status:409,json:{error:'Fixture: recreation paused'}}));
+      await page.locator('#provision-submit').click();
+      assert.equal((await request).postDataJSON().id,await card.getAttribute('data-id'),'Recreate UI must send the selected VM ID');
+    }
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Multi-VM portal overflow');await page.close();
+  }
+  // Old, unattended guests exercise the actual 15-second watchdog, including
+  // the original 30-minute staff timeout. Every guest is a local mock.
+  const oldGuests=[['owner',181],['admin',182],['member',183],['coowner',184]];
+  for(const [role,id]of oldGuests) db.prepare('INSERT INTO virtual_machines(id,owner_email,proxmox_vmid,proxmox_node,hostname,friendly_name,operating_system,cpu_cores,memory_mb,disk_gb,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').run('unattended-'+role,emails[role],id,'fixture','old-fixture','Old fixture','Linux',2,4096,64,1,1);
+  policyGuests=oldGuests.map(([role,id])=>({vmid:id,node:'fixture',type:'qemu',name:'Old '+role,status:'running',uptime:86400}));
+  const deadline=Date.now()+20000;
+  while(!powerCommands.some(command=>command.id===183&&command.action==='shutdown')&&Date.now()<deadline)await delay(100);
+  assert(powerCommands.some(command=>command.id===183&&command.action==='shutdown'),'Ordinary idle VM should still be shut down');
+  assert(!powerCommands.some(command=>[181,182,184].includes(command.id)),'Owner and admin VMs must stay running while unattended');
+  console.log('PASS: staff multiple VMs, additive creation, targeted recreation/resources, portal controls, and real watchdog exemptions.');
+  const registered=db.prepare('SELECT proxmox_vmid AS vmid FROM virtual_machines WHERE proxmox_vmid BETWEEN 200 AND 209').all();
+  assert(registered.length>0,'Restart fixture must cover overlapping persistent/disposable VM IDs');
+  policyGuests=registered.map(({vmid})=>({vmid,type:'qemu',node:'fixture',name:'Registered fixture',status:'stopped'}));
+  const deletesBeforeRestart=deletedGuests.length, listsBeforeRestart=startupLists;
+  let stopped=once(child,'exit');child.kill('SIGTERM');await stopped;
+  child=startServer();child.stderr.on('data',data=>{stderr+=data});
+  const restartDeadline=Date.now()+10000;
+  while(startupLists<listsBeforeRestart+2&&Date.now()<restartDeadline)await delay(100);
+  assert(startupLists>=listsBeforeRestart+2,'Restart must exercise both legacy guest lists');
+  await delay(500);
+  assert.equal(deletedGuests.length,deletesBeforeRestart,'Application restart must never delete a registered VM');
+  console.log('PASS: application restart preserves registered computers in the former ephemeral range.');
   assert.deepEqual(errors,[]);
   console.log('PASS: admin dashboard and resource editor at desktop/tablet/mobile sizes; bans, friends, and notifications. No delivery endpoints called; notification fixtures stay in the local database.');
 }finally{

@@ -892,6 +892,16 @@ pub(crate) async fn handle(
         // Same lock namespace the template path's create/recreate use — a
         // user can only have one computer-provisioning operation in flight
         // at a time, regardless of which path (template or BYO-OS) started it.
+        let replacement = if actor.is_admin || actor.is_owner {
+            None
+        } else {
+            let selection: Value = serde_json::from_slice(body_bytes).unwrap_or(json!({}));
+            match crate::routes::vm::own_computer_target(state, &actor, &selection) {
+                Ok(record) => record,
+                Err((status, error)) => return Some(json_response(status, json!({"error":error}))),
+            }
+        };
+
         let lock_key = format!("byo-os-create-{}", actor.email);
         {
             let mut requests = state
@@ -913,18 +923,9 @@ pub(crate) async fn handle(
             );
         }
 
-        // Delete any existing computer(s) first — same as the template
-        // path's "Delete & Recreate" does. This lets BYO-OS create double as
-        // "replace my computer with a fresh one from a newly uploaded ISO"
-        // instead of requiring a separate delete step through the template UI.
-        let old_records = vmlib::get_virtual_machines_for_owner(&state.store, &actor.email);
-        tracing::warn!(
-            "[byo-os create] delete-loop found {} existing record(s) for {}",
-            old_records.len(),
-            actor.email
-        );
-        for old_rec in old_records {
-            let old = old_rec.to_json();
+        // Ordinary accounts replace their selected computer. Staff creation
+        // preserves every existing VM and its desktop sessions.
+        if let Some(old) = replacement {
             let old_id = jsval::str_or(old.get("id"), "");
             if let Err(err) = crate::proxmox_desktop::desktop()
                 .delete_guest(&old, true)
@@ -1214,6 +1215,16 @@ pub(crate) async fn handle(
             ));
         }
 
+        let replacement = if actor.is_admin || actor.is_owner {
+            None
+        } else {
+            let selection: Value = serde_json::from_slice(body_bytes).unwrap_or(json!({}));
+            match crate::routes::vm::own_computer_target(state, &actor, &selection) {
+                Ok(record) => record,
+                Err((status, error)) => return Some(json_response(status, json!({"error":error}))),
+            }
+        };
+
         let lock_key = format!("byo-os-create-{}", actor.email);
         {
             let mut requests = state
@@ -1235,9 +1246,7 @@ pub(crate) async fn handle(
             );
         }
 
-        let old_records = vmlib::get_virtual_machines_for_owner(&state.store, &actor.email);
-        for old_rec in old_records {
-            let old = old_rec.to_json();
+        if let Some(old) = replacement {
             let old_id = jsval::str_or(old.get("id"), "");
             if let Err(err) = crate::proxmox_desktop::desktop()
                 .delete_guest(&old, true)
