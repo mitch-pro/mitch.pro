@@ -19,6 +19,20 @@ session storage on the client. The global CSRF gate rejects foreign origins on
 mutations; clients send `X-Mitch-Requested-With: 1`. A successful page load does
 not grant API access or bypass the passphrase gate.
 
+Every admin tool's frontend is responsible for wiring this itself — the
+server-side gate in `handler.rs` enforces it regardless, but a tool that
+never sends `X-Admin-Passphrase` just fails every write with
+`invalid_passphrase` for any full admin (moderators are exempt, and a
+local dev-superuser session on localhost bypasses it, both of which can
+mask a missing frontend wire-up during testing). `/admin/bans/`'s
+`bans.js` is the reference implementation: check
+`GET /api/admin/passphrase-status` on load, show a lock screen if unset
+or not yet entered this session, cache the entered passphrase in
+`sessionStorage`, send it as `X-Admin-Passphrase` on every request, and
+re-show the lock screen on any `invalid_passphrase`/
+`passphrase_not_configured` response. `/admin/companion/` (see
+`docs/companion.md`) follows the same pattern.
+
 Account bans use `/admin/bans/`: searchable records, a visible reason, explicit
 duration, confirmation, expiry, restoration, and chat-cleanup status. Usernames
 and registered addresses resolve through the existing account directory. VM and

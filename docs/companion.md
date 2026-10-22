@@ -292,3 +292,17 @@ was the explicit ask, since every call costs a real DeepSeek API charge.
   `__default__` 100/min — cheap to add at the same time as the route, and
   `/api/companion/mine/delete` in particular should stay tighter than the
   others (it's destructive).
+- `/admin/companion/` shipped *without* the `X-Admin-Passphrase` wiring
+  every other admin tool needs — documented in `docs/admin-panel.md`, not
+  invented there for this writeup — and nobody caught it until a real
+  admin hit `invalid_passphrase` trying to create a character in
+  production. It went unnoticed in dev because a local dev-superuser
+  session on localhost bypasses the passphrase check entirely (see
+  `admin_gate` in `handler.rs`), so testing through that path looks
+  identical whether the frontend sends the header or not. Fixed by
+  porting `/admin/bans/`'s `bans.js` lock-screen pattern over verbatim
+  (`companion.js`: `headers()` attaches `X-Admin-Passphrase` from
+  `sessionStorage`, every request re-shows the lock screen on
+  `invalid_passphrase`/`passphrase_not_configured`). If you add another
+  admin page here, check `docs/admin-panel.md` *first* — don't rediscover
+  this the same way.

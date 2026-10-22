@@ -205,16 +205,22 @@
   </header>
   <script>
     // Never hardcode the mitch.pro link target — pull it from data/site.json
-    // (served at /api/site-info) so it tracks whatever the "alternate"
-    // domain actually is if that ever changes.
+    // (served at /api/site-info). "primary" and "alternate" have already
+    // swapped which one is mitch.pro once, so check both fields for
+    // whichever actually points at mitch.pro instead of assuming either
+    // name — robust to the next swap too.
     fetch('/api/site-info', { credentials: 'same-origin', cache: 'no-store' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (info) {
-        if (!info || !info.alternate) return;
+        if (!info) return;
+        var target = [info.primary, info.alternate].find(function (u) {
+          return u && /mitch\.pro$/i.test(new URL(u).hostname);
+        }) || info.alternate || info.primary;
+        if (!target) return;
         var link = document.getElementById('powered-by-link');
         var name = document.getElementById('powered-by-name');
-        link.href = info.alternate;
-        try { name.textContent = new URL(info.alternate).hostname; } catch (e) {}
+        link.href = target;
+        try { name.textContent = new URL(target).hostname; } catch (e) {}
       })
       .catch(function () {});
   </script>

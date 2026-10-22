@@ -2,9 +2,27 @@
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
   var editingId = '';
+  var setup = false;
 
   function headers() {
-    return { 'X-Mitch-Requested-With': '1' };
+    var result = { 'X-Mitch-Requested-With': '1' };
+    var pass = sessionStorage.getItem('admin_passphrase');
+    if (pass) result['X-Admin-Passphrase'] = pass;
+    return result;
+  }
+
+  function status(id, text, isError) {
+    $(id).textContent = text;
+    $(id).dataset.error = String(!!isError);
+  }
+
+  function showLock() {
+    $('companion-workspace').hidden = true;
+    $('passphrase-lock').hidden = false;
+    $('lock-heading').textContent = setup ? 'Set your admin passphrase' : 'Unlock companion management';
+    $('unlock-button').textContent = setup ? 'Save and unlock' : 'Unlock';
+    $('admin-passphrase').autocomplete = setup ? 'new-password' : 'current-password';
+    status('access-status', 'Admin access verified. Enter your passphrase to continue.');
   }
 
   function requestJson(url, options) {
@@ -14,10 +32,27 @@
     return fetch(url, Object.assign({ credentials: 'same-origin', cache: 'no-store' }, options, { headers: h }))
       .then(function (r) {
         return r.json().then(function (data) {
-          if (!r.ok) throw new Error(data.error || 'request failed');
+          if (!r.ok) {
+            var error = new Error(data.error || 'request failed');
+            error.code = data.error;
+            throw error;
+          }
           return data;
         });
       });
+  }
+
+  // Any admin API call can come back needing the passphrase (it may have
+  // never been set, or sessionStorage's cached one may be stale/wrong) --
+  // re-show the lock screen instead of just failing silently.
+  function withLockHandling(promise) {
+    return promise.catch(function (error) {
+      if (error.code === 'invalid_passphrase' || error.code === 'passphrase_not_configured') {
+        setup = error.code === 'passphrase_not_configured';
+        showLock();
+      }
+      throw error;
+    });
   }
 
   function escapeHtml(s) {
@@ -31,7 +66,10 @@
   }
 
   function loadCharacters() {
-    requestJson('/api/admin/companion/characters').then(function (data) {
+    return withLockHandling(requestJson('/api/admin/companion/characters')).then(function (data) {
+      $('passphrase-lock').hidden = true;
+      $('companion-workspace').hidden = false;
+      status('access-status', 'Admin access verified.');
       renderList(data.characters || []);
     });
   }
@@ -76,10 +114,10 @@
           '<div>' + escapeHtml(mood) + '</div>' +
           '<button type="button" class="remove-mood-btn">Remove</button>';
         tile.querySelector('.remove-mood-btn').addEventListener('click', function () {
-          requestJson('/api/admin/companion/characters/image/delete', {
+          withLockHandling(requestJson('/api/admin/companion/characters/image/delete', {
             method: 'POST',
             body: JSON.stringify({ id: c.id, mood: mood }),
-          }).then(loadCharacters);
+          })).then(loadCharacters).catch(function () {});
         });
         moodsEl.appendChild(tile);
       });
@@ -96,26 +134,26 @@
         window.scrollTo(0, 0);
       });
       card.querySelector('.default-btn').addEventListener('click', function () {
-        requestJson('/api/admin/companion/characters/set-default', {
+        withLockHandling(requestJson('/api/admin/companion/characters/set-default', {
           method: 'POST',
           body: JSON.stringify({ id: c.id }),
-        }).then(loadCharacters);
+        })).then(loadCharacters).catch(function () {});
       });
       var reviewedBtn = card.querySelector('.reviewed-btn');
       if (reviewedBtn) {
         reviewedBtn.addEventListener('click', function () {
-          requestJson('/api/admin/companion/characters/mark-reviewed', {
+          withLockHandling(requestJson('/api/admin/companion/characters/mark-reviewed', {
             method: 'POST',
             body: JSON.stringify({ id: c.id }),
-          }).then(loadCharacters);
+          })).then(loadCharacters).catch(function () {});
         });
       }
       card.querySelector('.delete-btn').addEventListener('click', function () {
         if (!confirm('Delete "' + c.name + '" and all its images?')) return;
-        requestJson('/api/admin/companion/characters/delete', {
+        withLockHandling(requestJson('/api/admin/companion/characters/delete', {
           method: 'POST',
           body: JSON.stringify({ id: c.id }),
-        }).then(loadCharacters);
+        })).then(loadCharacters).catch(function () {});
       });
       card.querySelector('.companion-image-form').addEventListener('submit', function (e) {
         e.preventDefault();
@@ -128,12 +166,20 @@
         fetch('/api/admin/companion/characters/image', {
           method: 'POST',
           credentials: 'same-origin',
-          headers: { 'X-Mitch-Requested-With': '1' },
+          headers: headers(),
           body: form,
         })
           .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
           .then(function (res) {
-            if (!res.ok) { alert(res.data.error || 'upload failed'); return; }
+            if (!res.ok) {
+              if (res.data.error === 'invalid_passphrase' || res.data.error === 'passphrase_not_configured') {
+                setup = res.data.error === 'passphrase_not_configured';
+                showLock();
+                return;
+              }
+              alert(res.data.error || 'upload failed');
+              return;
+            }
             loadCharacters();
           });
       });
@@ -154,23 +200,63 @@
 
   $('character-form').addEventListener('submit', function (e) {
     e.preventDefault();
-    var status = $('character-status');
-    status.textContent = 'Saving...';
+    status('character-status', 'Saving...');
     var payload = {
       name: $('character-name').value.trim(),
       personalityPrompt: $('character-prompt').value.trim(),
       priceCoins: Number($('character-price').value) || 0,
     };
     if (editingId) payload.id = editingId;
-    requestJson('/api/admin/companion/characters', { method: 'POST', body: JSON.stringify(payload) })
+    withLockHandling(requestJson('/api/admin/companion/characters', { method: 'POST', body: JSON.stringify(payload) }))
       .then(function () {
-        status.textContent = 'Saved.';
+        status('character-status', 'Saved.');
         resetForm();
         loadCharacters();
       })
-      .catch(function (err) { status.textContent = err.message; });
+      .catch(function (err) { status('character-status', err.message, true); });
   });
   $('character-cancel-edit').addEventListener('click', resetForm);
 
-  loadCharacters();
+  $('passphrase-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    $('unlock-button').disabled = true;
+    status('unlock-status', 'Checking…');
+    var pass = $('admin-passphrase').value;
+    fetch('/api/admin/passphrase-status', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1', 'X-Admin-Passphrase': pass },
+      body: JSON.stringify({ passphrase: pass }),
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (res) {
+        if (!res.ok) {
+          throw new Error(res.data.error === 'invalid_passphrase' ? 'Incorrect passphrase.' : res.data.error || 'Could not unlock companion management.');
+        }
+        sessionStorage.setItem('admin_passphrase', pass);
+        $('admin-passphrase').value = '';
+        return loadCharacters();
+      })
+      .then(function () { status('unlock-status', ''); })
+      .catch(function (error) { status('unlock-status', error.message, true); })
+      .finally(function () { $('unlock-button').disabled = false; });
+  });
+
+  (function init() {
+    requestJson('/api/me').then(function (me) {
+      if (!me.isAdmin && !me.isOwner && !me.isCoOwner) {
+        status('access-status', 'Admin access is required to manage companion characters.', true);
+        return;
+      }
+      return requestJson('/api/admin/passphrase-status').then(function (config) {
+        setup = !config.set;
+        if (!setup && sessionStorage.getItem('admin_passphrase')) {
+          return loadCharacters().catch(function (error) {
+            if (error.code !== 'invalid_passphrase' && error.code !== 'passphrase_not_configured') throw error;
+          });
+        }
+        showLock();
+      });
+    }).catch(function (error) { status('access-status', error.message, true); });
+  })();
 })();

@@ -123,3 +123,7 @@
   width: 120px;
   display: inline-block;
 }
+
+[data-error="true"] {
+  color: #e8705f;
+}
