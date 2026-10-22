@@ -116,7 +116,11 @@ pub async fn chat(
          Respond with ONLY a JSON object (no other text) of this exact shape: \
          {{\"reply\": string, \"mood\": string, \"remember\": string}}. \"reply\" is what \
          you say. \"mood\" MUST be exactly one of these, spelled exactly as shown, nothing \
-         else: {moods_list}. \"remember\" is optional — only fill it in with a short note \
+         else: {moods_list}. Actually look at what you're about to say and pick whichever \
+         of those genuinely matches that reaction — happy for a happy reply, angry for an \
+         angry one, and so on. Don't default to the same mood out of habit or because it's \
+         first in the list; it should change turn to turn as the conversation does. \
+         \"remember\" is optional — only fill it in with a short note \
          (a fact, preference, or ongoing thing about this person worth recalling next \
          time) when something in THIS message is actually worth remembering; leave it as \
          an empty string otherwise. Don't repeat a memory you already have.",
@@ -128,12 +132,21 @@ pub async fn chat(
 
     let mut messages: Vec<Value> = vec![json!({ "role": "system", "content": system_prompt })];
     messages.extend(history.iter().map(|m| {
-        let role = if m.role == "model" {
-            "assistant"
+        if m.role == "model" {
+            // Replay the assistant's own past turns in the exact JSON
+            // shape it's asked for live, not as plain prose. Replaying
+            // plain text teaches the model mid-conversation "this chat is
+            // freeform," and it reliably drops the JSON format a few
+            // turns in as a result — confirmed live, this was the real
+            // cause of "the bot never changes mood": once it stops
+            // emitting a mood field at all, every reply falls through to
+            // the fallback guesser. Keeping history in-format is what
+            // keeps the model in-format.
+            let turn = json!({ "reply": m.content, "mood": m.mood, "remember": "" });
+            json!({ "role": "assistant", "content": turn.to_string() })
         } else {
-            "user"
-        };
-        json!({ "role": role, "content": m.content })
+            json!({ "role": "user", "content": m.content })
+        }
     }));
     messages.push(json!({ "role": "user", "content": message }));
 
@@ -256,6 +269,9 @@ fn extract_reply(text: &str, moods: &[String]) -> Option<(String, String, String
     }
     // No JSON object at all, or one with an empty "reply" — the model
     // ignored the format. Use the raw text itself rather than failing.
+    tracing::error!(
+        "[companion] deepseek: no JSON object in content, guessing mood from reply text: {trimmed:?}"
+    );
     let mood = guess_mood(trimmed, moods);
     Some((trimmed.to_string(), mood, String::new()))
 }

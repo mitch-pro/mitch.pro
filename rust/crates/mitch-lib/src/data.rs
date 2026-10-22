@@ -429,6 +429,7 @@ impl DataStore {
                         character_id TEXT NOT NULL,
                         role TEXT NOT NULL,
                         content TEXT NOT NULL,
+                        mood TEXT NOT NULL DEFAULT '',
                         created_at INTEGER NOT NULL
                     );
                     CREATE TABLE IF NOT EXISTS companion_memories (

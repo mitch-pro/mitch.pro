@@ -343,11 +343,15 @@ pub fn set_user_settings(store: &DataStore, email: &str, enabled: bool, active_c
     );
 }
 
-/// One turn of chat history. `role` is `"user"` or `"model"`.
+/// One turn of chat history. `role` is `"user"` or `"model"`. `mood` is
+/// empty for user turns; for model turns it's what that reply actually
+/// used, so the provider module can replay history in the *same* JSON
+/// shape it asks for live — see the module doc on why that matters.
 #[derive(Debug, Clone)]
 pub struct ChatMessage {
     pub role: String,
     pub content: String,
+    pub mood: String,
 }
 
 pub fn add_chat_message(
@@ -356,14 +360,15 @@ pub fn add_chat_message(
     character_id: &str,
     role: &str,
     content: &str,
+    mood: &str,
 ) {
     let norm = normalize_email(email);
     let now = now_millis();
     let conn = store.conn();
     let _ = conn.execute(
-        "INSERT INTO companion_chat_messages (email, character_id, role, content, created_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5)",
-        rusqlite::params![norm, character_id, role, content, now],
+        "INSERT INTO companion_chat_messages (email, character_id, role, content, mood, created_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        rusqlite::params![norm, character_id, role, content, mood, now],
     );
 }
 
@@ -379,7 +384,7 @@ pub fn recent_chat_messages(
     let norm = normalize_email(email);
     let conn = store.conn();
     let Ok(mut stmt) = conn.prepare(
-        "SELECT role, content FROM companion_chat_messages \
+        "SELECT role, content, mood FROM companion_chat_messages \
          WHERE email = ?1 AND character_id = ?2 ORDER BY created_at DESC, id DESC LIMIT ?3",
     ) else {
         return Vec::new();
@@ -388,6 +393,7 @@ pub fn recent_chat_messages(
         Ok(ChatMessage {
             role: row.get::<_, String>(0)?,
             content: row.get::<_, String>(1)?,
+            mood: row.get::<_, String>(2)?,
         })
     }) else {
         return Vec::new();

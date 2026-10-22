@@ -54,17 +54,39 @@ subsystem — no `server.js` equivalent.
   `deepseek.rs` handles both (strip to the first `{...}` substring; if
   that still fails, treat the whole reply as the message text) rather
   than failing the whole request over a formatting slip.
-- Mood selection has the same "model didn't give something to work with"
-  problem one level down: with no mood field to parse, a *fixed* default
-  (e.g. always the alphabetically-first mood) looks identical to "the
-  character is stuck" — which is exactly what a real user reported the
-  first time this shipped, because one of their characters had a mood
-  literally named so it sorted first. `guess_mood` in `deepseek.rs` does
-  cheap local keyword sniffing on the reply text instead (happy/sad/angry/
-  pout/surprised), falling back to a *random* pick among the character's
-  moods — deliberately deprioritizing anything named like a placeholder
-  ("default"/"idle") — rather than one fixed value, specifically so a
-  parsing miss reads as "picked something" rather than "frozen."
+- **Why the model kept dropping the JSON format a few turns into a
+  conversation (root cause, found after the `response_format` fix above
+  didn't fully explain it):** chat history was being replayed to the API
+  as plain prose — `{"role": "assistant", "content": "<the stored
+  reply text>"}` — because that's what's stored
+  (`companion_chat_messages` only ever held the reply text, not the
+  mood). Seeing its own past turns written as freeform prose taught the
+  model, mid-conversation, "this chat doesn't use the JSON format," and
+  it would stop emitting one — confirmed by direct A/B testing against
+  the raw API: identical system prompt, identical moods, only the
+  *style* of the fake history differed (flat filler lines vs. realistic
+  in-character prose), and only the latter reproduced the format drop.
+  Fixed by storing the `mood` alongside every model turn
+  (`companion_chat_messages.mood`) and replaying history in the *exact*
+  `{"reply", "mood", "remember"}` shape the live prompt asks for, not as
+  bare text — confirmed fixed with a 7-turn emotionally-varied live
+  conversation afterward: 0 fallbacks, every mood both valid and
+  contextually right (happy for good news, sad for feeling down, pout for
+  an annoyed/embarrassed moment, etc).
+- Mood selection still has a fallback for the cases above that can't be
+  fully eliminated (the model occasionally drops the field even with
+  in-format history): `guess_mood` in `deepseek.rs` does cheap local
+  keyword sniffing on the reply text (happy/sad/angry/pout/surprised),
+  falling back to a *random* pick among the character's moods —
+  deliberately deprioritizing anything named like a placeholder
+  ("default"/"idle") — rather than one fixed value. A fixed default (e.g.
+  always the alphabetically-first mood) looks identical to "the character
+  is stuck," which is exactly what got reported the first time this
+  shipped, because one of the characters in testing had a mood literally
+  named so it sorted first. Every time this fallback actually fires, it
+  logs `"guessing mood from reply text"` or `"didn't match any of"` —
+  check for those specifically to tell whether a given reply's mood was
+  the model's own choice or a guess.
 - The character's current page (`location.pathname` — whichever page the
   person is actually on, not always `/companion/`) is passed in as
   context ("page access").
@@ -72,9 +94,10 @@ subsystem — no `server.js` equivalent.
   codebase (unlike the Groq version, which shared a key/quota with
   `routes/team.rs`'s support-email assistant).
 - The last 10 messages (5 exchanges) per (user, character) are stored in
-  `companion_chat_messages` and replayed as prior `contents` turns on every
-  call, so the character has real short-term conversational memory, not
-  just a single stateless message.
+  `companion_chat_messages` (now with each model turn's `mood` alongside
+  its text — see above) and replayed as prior turns on every call, so the
+  character has real short-term conversational memory, not just a single
+  stateless message.
 - The character can also choose to persist a short freeform note about the
   person into `companion_memories` (its `remember` field in the structured
   response, alongside `reply`/`mood` — empty when it has nothing worth
@@ -170,10 +193,14 @@ shell or add it to the untracked `.env`.
   can only ever reply with a mood it has a sprite for. `idle` is treated
   as the fallback display mood when nothing else has loaded yet.
 - `companion_user_settings` (email, enabled, active_character_id)
-- `companion_chat_messages` (email, character_id, role, content, created_at)
-  — rolling chat history, read back as the last 10 rows per (email,
-  character_id); never trimmed automatically (cheap to keep: it's just
-  text, and `recent_chat_messages` only ever reads the tail of it).
+- `companion_chat_messages` (email, character_id, role, content, mood,
+  created_at) — rolling chat history, read back as the last 10 rows per
+  (email, character_id); never trimmed automatically (cheap to keep: it's
+  just text, and `recent_chat_messages` only ever reads the tail of it).
+  `mood` is empty for user turns; for model turns it's what that reply
+  actually used, so history can be replayed to the provider in the same
+  JSON shape the live prompt asks for — see the Scope section above for
+  why that's load-bearing, not cosmetic.
 - `companion_memories` (email, character_id, content, created_at) — capped
   at 50 rows per (email, character_id) by `add_memory`, which deletes
   anything past the 50 most recent on every insert.

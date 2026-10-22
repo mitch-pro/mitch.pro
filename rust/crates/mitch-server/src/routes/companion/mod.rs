@@ -252,6 +252,7 @@ async fn chat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> 
                 &character.id,
                 "user",
                 &message,
+                "",
             );
             mitch_lib::companion::add_chat_message(
                 &state.store,
@@ -259,6 +260,7 @@ async fn chat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> 
                 &character.id,
                 "model",
                 &r.reply,
+                &r.mood,
             );
             if !r.remember.is_empty() {
                 mitch_lib::companion::add_memory(&state.store, &email, &character.id, &r.remember);
