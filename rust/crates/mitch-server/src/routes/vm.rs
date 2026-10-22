@@ -421,38 +421,6 @@ impl VmActor {
     }
 }
 
-/// Resolve a self-service action without guessing when an account has several
-/// computers. Only owned, assigned records are candidates; IDs never grant access.
-pub(crate) fn own_computer_target(
-    state: &AppState,
-    actor: &VmActor,
-    body: &Value,
-) -> Result<Option<Value>, (u16, &'static str)> {
-    let records: Vec<Value> = vmlib::get_virtual_machines_for_owner(&state.store, &actor.email)
-        .into_iter()
-        .map(|record| record.to_json())
-        .collect();
-    select_own_computer(&records, body.get("id").and_then(Value::as_str))
-}
-
-fn select_own_computer(
-    records: &[Value],
-    requested_id: Option<&str>,
-) -> Result<Option<Value>, (u16, &'static str)> {
-    if let Some(id) = requested_id {
-        return records
-            .iter()
-            .find(|record| record["id"].as_str() == Some(id))
-            .cloned()
-            .map(Some)
-            .ok_or((404, "Computer not found."));
-    }
-    if records.len() > 1 {
-        return Err((409, "Choose which computer to change."));
-    }
-    Ok(records.first().cloned())
-}
-
 /// `isRevoked(id)` — key presence in the revoked_ids table.
 pub(crate) fn is_revoked_id(state: &AppState, sid: &str) -> bool {
     mitch_lib::revoked::revoked_id_exists(&state.store, sid)
@@ -794,10 +762,12 @@ async fn owner_resources(state: &Arc<AppState>, headers: &HeaderMap, bytes: &[u8
             json!({"error":"A resource update is already in progress. Try again in a moment."}),
         );
     };
-    let record = match own_computer_target(state, &actor, &body) {
-        Ok(record) => record,
-        Err((status, error)) => return json_response(status, json!({"error":error})),
-    };
+    let records = vmlib::get_virtual_machines_for_owner(&state.store, &actor.email);
+    let record = records.iter().map(|r| r.to_json()).find(|r| {
+        r["ownerEmail"]
+            .as_str()
+            .is_some_and(|email| mitch_lib::auth::normalize_email(email) == actor.email)
+    });
     if let Some(record) = &record {
         let Some(_computer_operation) =
             resource_operation(state, jsval::str_or(record.get("id"), ""))
@@ -3563,7 +3533,6 @@ pub(crate) async fn handle(
             200,
             json!({
                 "computers": computers,
-                "canCreateAdditional": actor.is_admin || actor.is_owner,
                 "serviceAvailable": crate::proxmox_desktop::desktop().configured(),
                 "isEligible": is_eligible_for_free_vm(state, &actor.email, actor.is_admin),
             }),
@@ -3736,10 +3705,13 @@ pub(crate) async fn handle(
             ));
         }
 
-        let mut vm_record = match own_computer_target(state, &actor, &body) {
-            Ok(record) => record,
-            Err((status, error)) => return Some(json_response(status, json!({"error":error}))),
-        };
+        let user_vms: Vec<Value> =
+            vmlib::get_virtual_machines_for_owner(&state.store, &actor.email)
+                .into_iter()
+                .map(|r| r.to_json())
+                .filter(|r| jsval::str_or(r.get("status"), "") != "unassigned")
+                .collect();
+        let mut vm_record = user_vms.into_iter().next();
         let mut is_vm_running = false;
         if let Some(rec) = &vm_record {
             if crate::proxmox_desktop::desktop().configured() {
@@ -3928,7 +3900,7 @@ pub(crate) async fn handle(
                 .map(|r| r.to_json())
                 .filter(|r| jsval::str_or(r.get("status"), "") != "unassigned")
                 .collect();
-        if !existing.is_empty() && !actor.is_admin && !actor.is_owner {
+        if !existing.is_empty() {
             return Some(json_response(
                 409,
                 json!({ "error": "You already have a computer assigned. Use the recreate option if you want to start fresh." }),
@@ -4020,31 +3992,13 @@ pub(crate) async fn handle(
                 .vm_power_requests
                 .lock()
                 .unwrap_or_else(|e| e.into_inner());
-            if requests.contains_key(&lock_key)
-                || requests.contains_key(&format!("recreate-{}", actor.email))
-                || requests.contains_key(&format!("byo-os-create-{}", actor.email))
-            {
+            if requests.contains_key(&lock_key) {
                 return Some(json_response(
                     409,
                     json!({ "error": "A computer is already being created for your account." }),
                 ));
             }
             requests.insert(lock_key.clone(), json!({ "startedAt": now_ms() as f64 }));
-        }
-
-        if !actor.is_admin
-            && !actor.is_owner
-            && !vmlib::get_virtual_machines_for_owner(&state.store, &actor.email).is_empty()
-        {
-            state
-                .vm_power_requests
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .remove(&lock_key);
-            return Some(json_response(
-                409,
-                json!({"error":"You already have a computer assigned."}),
-            ));
         }
 
         let email_prefix = actor.email.split('@').next().unwrap_or("student");
@@ -4311,11 +4265,6 @@ pub(crate) async fn handle(
             }
         };
 
-        let replacement = match own_computer_target(state, &actor, &body) {
-            Ok(record) => record,
-            Err((status, error)) => return Some(json_response(status, json!({"error":error}))),
-        };
-
         let lock_key = format!("recreate-{}", actor.email);
         {
             let mut requests = state
@@ -4324,7 +4273,6 @@ pub(crate) async fn handle(
                 .unwrap_or_else(|e| e.into_inner());
             if requests.contains_key(&lock_key)
                 || requests.contains_key(&format!("create-{}", actor.email))
-                || requests.contains_key(&format!("byo-os-create-{}", actor.email))
             {
                 return Some(json_response(
                     409,
@@ -4374,8 +4322,10 @@ pub(crate) async fn handle(
             }
         };
 
-        // 1. Replace only the selected owned computer.
-        if let Some(old) = replacement {
+        // 1. Delete existing computer(s) owned by user
+        let existing_records = vmlib::get_virtual_machines_for_owner(&state.store, &actor.email);
+        for old_rec in existing_records {
+            let old = old_rec.to_json();
             let old_id = jsval::str_or(old.get("id"), "");
             if let Err(err) = crate::proxmox_desktop::desktop()
                 .delete_guest(&old, true)
@@ -5275,27 +5225,6 @@ pub(crate) fn schedule_desktop_setup(state: &Arc<AppState>, record: &Value, forc
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn selecting_one_of_multiple_owned_computers_requires_an_exact_id() {
-        let records = vec![json!({"id":"first"}), json!({"id":"second"})];
-        assert_eq!(
-            select_own_computer(&records, Some("second")).unwrap(),
-            Some(records[1].clone())
-        );
-        assert_eq!(select_own_computer(&records, None).unwrap_err().0, 409);
-        assert_eq!(
-            select_own_computer(&records, Some("someone-elses-vm"))
-                .unwrap_err()
-                .0,
-            404
-        );
-        assert_eq!(
-            select_own_computer(&records[..1], None).unwrap(),
-            Some(records[0].clone())
-        );
-        assert_eq!(select_own_computer(&[], None).unwrap(), None);
-    }
 
     #[test]
     fn owner_resource_values_allow_beyond_paid_tiers_and_reject_invalid_values() {
