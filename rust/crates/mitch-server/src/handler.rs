@@ -416,6 +416,25 @@ fn manifest_response(manifest: serde_json::Value) -> Response {
         .expect("static response")
 }
 
+/// Keep old catalog bookmarks on the current library without redirecting any
+/// playable `/games/<slug>/` pages or API requests.
+fn games_library_redirect(path: &str, method: &Method, search: &str) -> Option<Response> {
+    if !matches!(*method, Method::GET | Method::HEAD)
+        || !matches!(
+            path,
+            "/games" | "/games/" | "/games/index" | "/games/index.html" | "/games/index.htm"
+        )
+    {
+        return None;
+    }
+    let destination = if search.is_empty() {
+        "/game-portal/".to_string()
+    } else {
+        format!("/game-portal/?{search}")
+    };
+    Some(redirect(&destination, 302))
+}
+
 /// lib/site_redirects.js bellScheduleRedirect — GET/HEAD only.
 fn bell_schedule_redirect(path: &str, method: &Method, search: &str) -> Option<Response> {
     if method != Method::GET && method != Method::HEAD {
@@ -617,6 +636,10 @@ pub async fn handle(
             return crate::routes::auth::sso_bridge(&state, headers, &format!("back={encoded}"));
         }
         return redirect(&canonical_destination, 308);
+    }
+
+    if let Some(response) = games_library_redirect(&path, &method, &search) {
+        return response;
     }
 
     // 1. Bell/blooket redirects.
@@ -2430,5 +2453,35 @@ mod rjuhsd_school_url_tests {
             &cfg,
         );
         assert_eq!(canonical_of(&html), "https://mitch.pro/rjuhsd/");
+    }
+}
+
+#[cfg(test)]
+mod games_library_tests {
+    use super::*;
+    #[test]
+    fn legacy_catalog_redirects_leave_game_and_api_routes_untouched() {
+        for path in [
+            "/games",
+            "/games/",
+            "/games/index",
+            "/games/index.html",
+            "/games/index.htm",
+        ] {
+            for method in [Method::GET, Method::HEAD] {
+                let response = games_library_redirect(path, &method, "q=run%203").unwrap();
+                assert_eq!(response.status(), 302);
+                assert_eq!(response.headers()["location"], "/game-portal/?q=run%203");
+            }
+            assert!(games_library_redirect(path, &Method::POST, "").is_none());
+        }
+        for path in [
+            "/games/run3/",
+            "/games/cookie-clicker/index.html",
+            "/api/games",
+            "/game-portal/",
+        ] {
+            assert!(games_library_redirect(path, &Method::GET, "").is_none());
+        }
     }
 }

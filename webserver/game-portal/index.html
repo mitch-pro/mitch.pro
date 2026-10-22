@@ -5,22 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#17191b">
   <meta name="description" content="Play games on mitch.pro and earn MitchCoins while you play.">
-  <title>Games — mitch.games</title>
+  <title>Games — Mitchdog</title>
   <link rel="icon" href="/icon-192.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./ui/style.css">
+  <link rel="stylesheet" href="./ui/style.css?v=3">
   <script defer src="./ui/lucide.min.js"></script>
-  <script defer src="./ui/app.js?v=2"></script>
+  <script defer src="./ui/popularity.js?v=1"></script>
+  <script defer src="./ui/app.js?v=3"></script>
 </head>
 <body data-shell="off">
   <div class="shell">
     <aside class="sidebar" id="sidebar" aria-label="Game navigation">
-      <a class="brand" href="./" aria-label="mitch.games home"><img src="/icon-192.png" alt="" width="38" height="38"><span>mitch.games</span></a>
+      <a class="brand" href="/" target="_top" aria-label="Mitchdog homepage"><img src="/icon-192.png" alt="" width="38" height="38"><span>Mitchdog</span></a>
       <div class="side-group-label">Library</div>
       <nav class="side-nav" aria-label="Library">
-        <button class="side-link" type="button" data-view="all"><i data-lucide="compass"></i><span>Discover</span></button>
+        <button class="side-link" type="button" data-view="all"><i data-lucide="compass"></i><span>All games</span></button>
         <button class="side-link" type="button" data-view="favorites"><i data-lucide="heart"></i><span>Saved</span></button>
         <button class="side-link" type="button" data-view="recent"><i data-lucide="history"></i><span>Recently played</span></button>
       </nav>
@@ -31,12 +29,12 @@
         <div class="sidebar-recent-list" id="sidebar-recent-list"></div>
       </section>
       <a class="school-shortcut" href="https://rjuhsd.school/"><img src="/rjuhsd-assets/district-logo.png" alt="" width="38" height="38"><span>School schedules<small>rjuhsd.school</small></span></a>
-      <div class="sidebar-foot"><a href="https://mitchdog.com/">Back to mitch.pro</a></div>
+      <div class="sidebar-foot"><a href="/" target="_top">Back to homepage</a></div>
     </aside>
     <div class="content">
       <header class="topbar">
-        <button class="mobile-menu icon-button" id="mobile-menu" type="button" aria-label="Open menu" aria-expanded="false"><i data-lucide="menu"></i></button>
-        <span class="topbar-location"><strong id="current-view-name">Discover</strong></span>
+        <div class="topbar-navigation"><button class="mobile-menu icon-button" id="mobile-menu" type="button" aria-label="Open menu" aria-expanded="false"><i data-lucide="menu"></i></button>
+        <nav class="topbar-location" aria-label="Breadcrumb"><a href="/" target="_top">Home</a><span aria-hidden="true">/</span><strong id="current-view-name">Games</strong></nav></div>
         <div class="topbar-actions"><a class="wallet-link" id="wallet-link" href="/coins/?v=2" aria-label="MitchCoins balance"><img src="/mitchcoin.svg?v=3" alt=""><span id="wallet-balance">—</span></a><label class="search-box"><i data-lucide="search"></i><input id="search" type="search" placeholder="Search games" autocomplete="off" aria-label="Search games"><kbd>/</kbd></label><button class="icon-button shuffle-button" id="shuffle" type="button" aria-label="Play a random game" title="Play a random game">Random</button></div>
       </header>
       <main class="main">
@@ -44,33 +42,17 @@
           <div><h1 id="page-title">Games</h1><p id="library-count">Loading games…</p></div>
           <div class="coin-summary"><img src="/mitchcoin.svg?v=3" alt="" width="34" height="34"><div class="coin-summary-copy"><strong id="reward-title">Checking rewards</strong><small id="reward-detail">MitchCoins</small><span class="reward-meter" aria-hidden="true"><i id="reward-progress"></i></span></div></div>
         </div>
-        <section class="spotlight" id="spotlight" aria-label="Featured game">
-          <div class="spotlight-art"><img id="spotlight-image" alt="" src="/game-portal/icons/slope.webp" fetchpriority="high"></div>
-          <div class="spotlight-info">
-            <span class="spotlight-kicker">Featured game</span>
-            <div><span id="spotlight-meta" class="spotlight-category">Arcade</span><h2 id="spotlight-title">Slope</h2><p id="spotlight-description">Keep the ball on track.</p></div>
-            <button id="spotlight-play" class="play-button" type="button">Play Slope</button>
-          </div>
+        <section id="quick-picks-section" class="quick-section" aria-labelledby="popular-heading">
+          <div class="section-heading"><h2 id="popular-heading">Popular games</h2><a class="browse-link" href="#catalog">Browse all games</a></div>
+          <div class="quick-grid" id="quick-grid" aria-label="Popular games"></div>
         </section>
-        <section class="school-section" aria-labelledby="school-heading">
-          <div class="section-heading"><h2 id="school-heading">RJUHSD schools</h2><a class="school-schedules-link" href="https://rjuhsd.school/">Bell schedules</a></div>
-          <nav class="school-grid" aria-label="School bell schedules">
-            <a class="school-link" href="https://rjuhsd.school/#schedule-panel"><span class="school-logo"><img src="/rjuhsd-assets/woodcreek-logo.png" alt="" width="48" height="48"></span><span>Woodcreek</span></a>
-            <a class="school-link" href="https://rjuhsd.school/roseville/#schedule-panel"><span class="school-logo"><img src="/rjuhsd-assets/roseville-logo.png" alt="" width="48" height="48"></span><span>Roseville</span></a>
-            <a class="school-link" href="https://rjuhsd.school/granitebay/#schedule-panel"><span class="school-logo"><img src="/rjuhsd-assets/granitebay-logo.png" alt="" width="48" height="48"></span><span>Granite Bay</span></a>
-            <a class="school-link" href="https://rjuhsd.school/antelope/#schedule-panel"><span class="school-logo"><img src="/rjuhsd-assets/antelope-logo.png" alt="" width="48" height="48"></span><span>Antelope</span></a>
-            <a class="school-link" href="https://rjuhsd.school/westpark/#schedule-panel"><span class="school-logo"><img src="/rjuhsd-assets/westpark-logo.png" alt="" width="48" height="48"></span><span>West Park</span></a>
-            <a class="school-link" href="https://rjuhsd.school/oakmont/#schedule-panel"><span class="school-logo"><img src="/rjuhsd-assets/oakmont-logo.png" alt="" width="48" height="48"></span><span>Oakmont</span></a>
-          </nav>
-        </section>
-        <section id="quick-picks-section" class="quick-section"><div class="section-heading"><h2>Popular games</h2></div><div class="quick-grid" id="quick-grid"></div></section>
-        <section class="catalog-section" aria-label="All games"><div class="section-heading catalog-heading-row"><h2 id="catalog-heading">Browse games</h2><span class="result-count" id="result-count" aria-live="polite"></span></div><div class="filters" id="filters" aria-label="Filter by category"></div><div class="game-grid" id="game-grid"></div><div id="empty-state" class="empty-state" hidden><i data-lucide="search-x"></i><h3>No games found</h3><p>Try another search or category.</p><button id="clear-filters" type="button">Clear filters</button></div><button id="load-more" class="load-more" type="button" hidden>Show more games</button></section>
+        <section class="catalog-section" id="catalog" aria-label="All games"><div class="section-heading catalog-heading-row"><h2 id="catalog-heading">All games</h2><div class="catalog-controls"><span class="result-count" id="result-count" aria-live="polite"></span><label id="sort-control" class="sort-control">Sort <select id="sort-games" aria-label="Sort games"><option value="popular">Popular first</option><option value="alphabetical">A–Z</option></select></label></div></div><div class="filters" id="filters" aria-label="Filter by category"></div><div class="game-grid" id="game-grid"></div><div id="empty-state" class="empty-state" hidden><i data-lucide="search-x"></i><h3>No games found</h3><p>Try another search or category.</p><button id="clear-filters" type="button">Clear filters</button></div><button id="load-more" class="load-more" type="button" hidden>Show more games</button></section>
       </main>
-      <footer class="footer"><span>mitch.games</span><span>Games and artwork belong to their respective creators. <a href="./ui/THIRD_PARTY_NOTICES.md">Open-source credits</a></span></footer>
+      <footer class="footer"><a href="/" target="_top">Mitchdog homepage</a><span>Games and artwork belong to their respective creators. <a href="./ui/THIRD_PARTY_NOTICES.md">Open-source credits</a></span></footer>
     </div>
   </div>
   <button id="menu-scrim" class="menu-scrim" type="button" aria-label="Close menu" hidden></button>
-  <section id="player" class="player" role="dialog" aria-modal="true" aria-labelledby="player-title" hidden><div class="player-bar"><button id="player-back" type="button">Back to games</button><strong id="player-title"></strong><div class="player-actions"><span class="player-reward" id="player-reward">Checking MitchCoins</span><span id="open-source-credit" hidden>Open-source game</span><button id="player-fullscreen" type="button">Fullscreen</button><a id="player-new-tab" href="#" target="_blank" rel="noopener noreferrer">New tab</a></div></div><iframe id="player-frame" title="Game" allow="fullscreen; autoplay; gamepad" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups allow-modals allow-downloads"></iframe></section>
+  <section id="player" class="player" role="dialog" aria-modal="true" aria-labelledby="player-title" hidden><div class="player-bar"><button id="player-back" type="button">Back to games</button><strong id="player-title"></strong><a class="player-home" href="/" target="_top">Home</a><div class="player-actions"><span class="player-reward" id="player-reward">Checking MitchCoins</span><span id="open-source-credit" hidden>Open-source game</span><button id="player-fullscreen" type="button">Fullscreen</button><a id="player-new-tab" href="#" target="_blank" rel="noopener noreferrer">New tab</a></div></div><iframe id="player-frame" title="Game" allow="fullscreen; autoplay; gamepad" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups allow-modals allow-downloads"></iframe></section>
   <div class="coin-toast" id="coin-toast" role="status" aria-live="polite"></div>
 </body>
 </html>

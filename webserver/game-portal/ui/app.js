@@ -6,7 +6,8 @@
     games: [],
     category: 'All',
     view: 'all',
-    query: '',
+    query: new URLSearchParams(location.search).get('q') || '',
+    sort: 'popular',
     limit: 60,
     current: null,
     rewardTimer: null,
@@ -17,33 +18,11 @@
     favorites: readList('mitch.games.catalog.favorites'),
     recent: readList('mitch.games.catalog.recent')
   };
-  const featuredTitles = ['Slope', 'Subway Surfers', 'Retro Bowl', 'Cookie Clicker', 'Run 3'];
-  const frontPageTitles = [
-    'Slope', 'Subway Surfers', 'Retro Bowl', 'Cookie Clicker', 'Run 3',
-    'Minecraft TD', 'EaglercraftX (Minecraft 1.8.8)', 'Basketball Stars', '2048', 'Friday Night Funkin',
-    'Crossy Road', 'Flappy Bird', 'Snow Rider 3D', 'Drift Boss', 'Tunnel Rush',
-    'Basket Bros', 'Basket Random', 'Fireboy and Watergirl 1', 'MotoX3M', 'Happy Wheels',
-    'Duck Life', 'Stickman Hook', 'Paper.io 2', 'Temple Run 2', 'Doodle Jump',
-    'Five Nights at Freddy\'s', 'Bitlife', 'Tetris', 'Pac-Man', 'Bloons Tower Defense',
-    'Bloons Tower Defence 5', 'Little Alchemy', 'Wordle +', 'Tiny Fishing', 'Jetpack Joyride',
-    'Geometry Dash', 'Drift Hunters', 'Rooftop Snipers', 'Papa\'s Freezeria', 'Learn to Fly',
-    'Bloxorz', 'Age Of War', 'The Impossible Quiz', 'Super Mario Bros.', 'Super Mario World',
-    'Mario Kart 64', 'Sonic the Hedgehog', 'Pokemon Emerald Version (Gen III)', 'Super Smash Flash', 'Vex',
-    'Vex 2', 'Vex 3', 'Vex 4', 'Vex 5', 'Vex 6', 'Vex 7', 'Vex 8',
-    'Riddle School', 'Breaking the Bank', 'Stealing the Diamond', 'Escaping the Prison'
-  ];
-  const frontPageRank = new Map(frontPageTitles.map((title, index) => [title.toLowerCase(), index]));
+  const discovery = window.MitchGameDiscovery;
   const categories = ['All', 'Arcade', 'Action', 'Racing', 'Sports', 'Multiplayer', 'Puzzle', 'Retro', 'Casual', 'Horror'];
   const player = byId('player');
   const frame = byId('player-frame');
   const search = byId('search');
-  const revealObserver = 'IntersectionObserver' in window ? new IntersectionObserver(entries => {
-    for (const entry of entries) {
-      if (!entry.isIntersecting) continue;
-      entry.target.classList.add('is-visible');
-      revealObserver.unobserve(entry.target);
-    }
-  }, { rootMargin: '0px 0px 70px 0px', threshold: 0.05 }) : null;
   let previousFocus = null;
 
   function readList(key) {
@@ -58,7 +37,9 @@
   }
 
   function plainText(value) {
-    const node = new DOMParser().parseFromString(String(value || ''), 'text/html');
+    const raw = String(value || '');
+    if (!/[<&]/.test(raw)) return raw.replace(/\s+/g, ' ').trim();
+    const node = new DOMParser().parseFromString(raw, 'text/html');
     return (node.body.textContent || '').replace(/\s+/g, ' ').trim();
   }
 
@@ -123,10 +104,6 @@
     if (window.lucide?.createIcons) window.lucide.createIcons();
   }
 
-  function findGame(title) {
-    return state.games.find(game => game.title.toLowerCase() === title.toLowerCase());
-  }
-
   function imageFor(game) {
     const thumb = document.createElement('div');
     thumb.className = 'thumb';
@@ -149,17 +126,18 @@
   function makeCard(game, compact = false) {
     const card = document.createElement('article');
     card.className = compact ? 'quick-card' : 'game-card';
+    card.dataset.gameId = game.id;
     const info = document.createElement('div');
     info.className = 'card-info';
     const title = document.createElement('strong');
     title.textContent = game.title;
     const category = document.createElement('small');
-    category.textContent = game.category;
+    category.textContent = game.category + (canEmbed(game) ? '' : ' · Opens in new tab');
     info.append(title, category);
     const open = document.createElement('button');
     open.className = 'card-open';
     open.type = 'button';
-    open.setAttribute('aria-label', 'Play ' + game.title);
+    open.setAttribute('aria-label', 'Play ' + game.title + (canEmbed(game) ? '' : ' (opens in new tab)'));
     open.addEventListener('click', () => launch(game));
     const favorite = document.createElement('button');
     favorite.className = 'favorite-button' + (state.favorites.includes(game.id) ? ' is-saved' : '');
@@ -174,6 +152,7 @@
   function toggleFavorite(id) {
     state.favorites = state.favorites.includes(id) ? state.favorites.filter(item => item !== id) : [id, ...state.favorites];
     saveList('mitch.games.catalog.favorites', state.favorites);
+    renderFeatured();
     render();
   }
 
@@ -200,6 +179,7 @@
   }
 
   function closePlayer() {
+    if (player.hidden) return;
     stopRewardLoop(true);
     state.current = null;
     window.MitchPresence?.setActivity(null);
@@ -208,7 +188,7 @@
     document.body.style.overflow = '';
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     render();
-    previousFocus?.focus?.();
+    (previousFocus?.isConnected ? previousFocus : search).focus();
   }
 
   function randomGame() {
@@ -225,6 +205,7 @@
     if (data.authenticated === false) {
       state.authenticated = false;
       byId('wallet-balance').textContent = 'Sign in';
+      byId('wallet-link').href = '/enroll/?next=' + encodeURIComponent('/game-portal/');
       byId('wallet-link').setAttribute('aria-label', 'Sign in to earn MitchCoins');
       byId('reward-title').textContent = 'Sign in to earn';
       byId('reward-detail').textContent = 'Play games to collect MitchCoins';
@@ -237,6 +218,7 @@
     state.dailyCap = Number(data.dailyCap || 240);
     state.rewardPerMinute = Number(data.rewardPerMinute || 2);
     byId('wallet-balance').textContent = formatCoins(data.coins);
+    byId('wallet-link').href = '/coins/?v=2';
     byId('wallet-link').setAttribute('aria-label', `${formatCoins(data.coins)} MitchCoins. Open wallet`);
     byId('reward-title').textContent = state.dailyEarned >= state.dailyCap
       ? 'Daily rewards complete'
@@ -292,16 +274,12 @@
   }
 
   function renderFeatured() {
-    const slope = findGame('Slope') || state.games[0];
-    if (slope) {
-      byId('spotlight-title').textContent = slope.title;
-      byId('spotlight-meta').textContent = slope.category;
-      if (slope.image) byId('spotlight-image').src = slope.image;
-      byId('spotlight-play').textContent = `Play ${slope.title}`;
-      byId('spotlight-description').textContent = slope.title === 'Slope' ? 'Keep the ball on track.' : `Play ${slope.title} from the game library.`;
-      byId('spotlight-play').onclick = () => launch(slope);
-    }
-    const picks = featuredTitles.slice(1).map(findGame).filter(Boolean);
+    const seen = new Set();
+    const picks = [...state.games].sort(discovery.compare).filter(game => {
+      const key = discovery.key(game.title);
+      if (discovery.rank(game.title) === Number.MAX_SAFE_INTEGER || seen.has(key)) return false;
+      seen.add(key); return true;
+    }).slice(0, 12);
     byId('quick-grid').replaceChildren(...picks.map(game => makeCard(game, true)));
   }
 
@@ -311,18 +289,14 @@
       if (state.view === 'favorites' && !state.favorites.includes(game.id)) return false;
       if (state.view === 'recent' && !state.recent.includes(game.id)) return false;
       if (state.category !== 'All' && game.category !== state.category) return false;
-      return !query || game.search.includes(query);
+      const titleQuery = discovery.key(query);
+      return !query || game.search.includes(query) || (titleQuery && discovery.key(game.title).includes(titleQuery));
     });
     if (state.view === 'recent') games.sort((a, b) => state.recent.indexOf(a.id) - state.recent.indexOf(b.id));
     else if (state.view === 'favorites') games.sort((a, b) => state.favorites.indexOf(a.id) - state.favorites.indexOf(b.id));
-    else games.sort((a, b) => {
-      const aRank = frontPageRank.get(a.title.toLowerCase()) ?? Infinity;
-      const bRank = frontPageRank.get(b.title.toLowerCase()) ?? Infinity;
-      if (aRank !== bRank) return aRank - bRank;
-      const aLocalArt = a.image.startsWith('/game-portal/icons/') ? 0 : 1;
-      const bLocalArt = b.image.startsWith('/game-portal/icons/') ? 0 : 1;
-      return aLocalArt - bLocalArt || a.title.localeCompare(b.title);
-    });
+    else games.sort(state.sort === 'alphabetical'
+      ? (a, b) => a.title.localeCompare(b.title)
+      : discovery.compare);
     return games;
   }
 
@@ -386,19 +360,14 @@
 
   function render() {
     const games = filteredGames();
-    const viewName = state.view === 'favorites' ? 'Saved' : state.view === 'recent' ? 'Recently played' : (state.category === 'All' ? 'Discover' : state.category);
+    const viewName = state.view === 'favorites' ? 'Saved' : state.view === 'recent' ? 'Recently played' : (state.category === 'All' ? 'Games' : state.category);
     byId('current-view-name').textContent = viewName;
     byId('page-title').textContent = state.view === 'favorites' ? 'Saved games' : state.view === 'recent' ? 'Recently played' : 'Games';
-    byId('spotlight').hidden = !!state.query || state.view !== 'all';
-    byId('quick-picks-section').hidden = !!state.query || state.view !== 'all';
-    byId('catalog-heading').textContent = state.view === 'favorites' ? 'Saved games' : (state.view === 'recent' ? 'Recently played' : 'Browse games');
+    byId('quick-picks-section').hidden = !!state.query || state.view !== 'all' || state.category !== 'All';
+    byId('sort-control').hidden = state.view !== 'all';
+    byId('catalog-heading').textContent = state.view === 'favorites' ? 'Saved games' : (state.view === 'recent' ? 'Recently played' : 'All games');
     byId('result-count').textContent = `${games.length.toLocaleString()} ${games.length === 1 ? 'game' : 'games'}`;
-    revealObserver?.disconnect();
     byId('game-grid').replaceChildren(...games.slice(0, state.limit).map(game => makeCard(game)));
-    for (const card of byId('game-grid').children) {
-      if (revealObserver) revealObserver.observe(card);
-      else card.classList.add('is-visible');
-    }
     byId('empty-state').hidden = games.length > 0;
     byId('load-more').hidden = games.length <= state.limit;
     renderFilters();
@@ -432,6 +401,9 @@
           });
         }
       }
+      const artwork = new Map();
+      for (const game of games) if (game.image) artwork.set(discovery.key(game.title), game.image);
+      for (const game of games) if (!game.image) game.image = artwork.get(discovery.key(game.title)) || '';
       state.games = games;
       byId('library-count').textContent = `${games.length.toLocaleString()} games in the library`;
       renderFeatured();
@@ -444,6 +416,8 @@
     }
   }
 
+  search.value = state.query;
+  byId('sort-games').addEventListener('change', event => { state.sort = event.target.value; state.limit = 60; render(); });
   search.addEventListener('input', () => { state.query = search.value; state.limit = 60; render(); });
   function closeMenu() {
     byId('sidebar').classList.remove('is-open');
@@ -461,7 +435,7 @@
   byId('clear-filters').addEventListener('click', () => { state.category = 'All'; state.view = 'all'; state.query = ''; search.value = ''; render(); });
   byId('load-more').addEventListener('click', () => { state.limit += 60; render(); });
   byId('shuffle').addEventListener('click', randomGame);
-  byId('player-back').addEventListener('click', closePlayer);
+  byId('player-back').addEventListener('click', () => closePlayer());
   byId('player-fullscreen').addEventListener('click', () => frame.requestFullscreen?.().catch(() => {}));
   document.addEventListener('visibilitychange', () => { if (!player.hidden) heartbeat(document.visibilityState === 'visible'); });
   window.addEventListener('pagehide', () => { if (!player.hidden) stopRewardLoop(true); });
