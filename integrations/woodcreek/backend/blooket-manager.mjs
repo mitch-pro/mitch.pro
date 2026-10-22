@@ -4,25 +4,13 @@ import {
   normalizeSettings,
   targetAccuracy,
 } from "./blooket-settings.mjs";
-import { readGameScreen } from "./blooket-screen.mjs";
-import { playMinigame } from "./blooket-minigames.mjs";
+import { joinGame } from "./blooket-join.mjs";
 import { JoinScheduler } from "./join-scheduler.mjs";
-import {
-  submitAnswer,
-  advanceFeedback,
-  chooseAnswer,
-} from "./blooket-answers.mjs";
+import { startBotLoop, performBotAnswer } from "./blooket-runner.mjs";
+import { randomUUID } from "node:crypto";
 import { EventEmitter } from "events";
 import { chromium } from "playwright";
-import {
-  PLAYER_URL,
-  PIN_SELECTOR,
-  NAME_SELECTOR,
-  normalizePin,
-  visibleField,
-  submitJoinField,
-  readJoinScreen,
-} from "./blooket-connection.mjs";
+import { PLAYER_URL, normalizePin } from "./blooket-connection.mjs";
 import { FlareSolverrClient } from "./flaresolverr-client.mjs";
 
 const CHROME_PATH = process.env.CHROME_PATH || chromium.executablePath();
@@ -39,6 +27,8 @@ export * from "./blooket-names.mjs";
 export class BlooketInstanceManager extends EventEmitter {
   constructor() {
     super();
+    this.sessionId = randomUUID();
+    this.stateVersion = 0;
     this.browser = null;
     this.browserPromise = null;
     this.fleetGeneration = 0;
@@ -107,7 +97,6 @@ export class BlooketInstanceManager extends EventEmitter {
         "--disable-background-timer-throttling",
         "--disable-backgrounding-occluded-windows",
         "--disable-renderer-backgrounding",
-        "--disable-blink-features=AutomationControlled",
         "--blink-settings=imagesEnabled=false",
         "--no-first-run",
       ],
@@ -121,6 +110,7 @@ export class BlooketInstanceManager extends EventEmitter {
       for (const instance of this.instances.values()) {
         if (instance.cancelled || ["error", "ended"].includes(instance.status))
           continue;
+        instance.answerAbort?.abort();
         clearTimeout(instance.pollTimer);
         instance.runVersion++;
         instance.status = "error";
@@ -285,34 +275,6 @@ export class BlooketInstanceManager extends EventEmitter {
     this.customNames = cleanNames;
     this.log(`Joining ${safeCount} bots…`, "system");
 
-    if (this.useFlareSolverr) {
-      this.log(
-        "Consulting FlareSolverr for Cloudflare clearance session & tokens...",
-        "system",
-      );
-      try {
-        const clearance = await this.flaresolverr.getClearance();
-        if (clearance && clearance.cookies.length > 0) {
-          this.log(
-            `FlareSolverr clearance active (${clearance.cookies.length} cookies, ${clearance.latencyMs}ms).`,
-            "info",
-          );
-        } else {
-          this.log(
-            "FlareSolverr unavailable; proceeding with direct browser launch.",
-            "warn",
-          );
-        }
-      } catch (err) {
-        this.log(
-          `FlareSolverr clearance notice: ${err.message}. Proceeding directly.`,
-          "warn",
-        );
-      }
-    }
-
-    if (generation !== this.fleetGeneration) return;
-    await this.ensureBrowser();
     if (generation !== this.fleetGeneration) return;
 
     // Strict deduplication pass: eliminate any duplicate/repeating names and ensure short, real names
@@ -447,6 +409,7 @@ export class BlooketInstanceManager extends EventEmitter {
       instance.runVersion === version &&
       this.instances.get(instance.id) === instance;
     const startTime = Date.now();
+    instance.joinSubmitted = false;
     instance.status = "queued";
     instance.statusText = "Waiting to join...";
     try {
@@ -461,7 +424,7 @@ export class BlooketInstanceManager extends EventEmitter {
               /invalid game pin|game (lobby )?is full|maximum player capacity|game session has already concluded/i.test(
                 err.message,
               );
-            if (attempt === 0 && !fatal) {
+            if (attempt === 0 && !fatal && !instance.joinSubmitted) {
               instance.addEvent(
                 `Connection interrupted. Retrying: ${err.message}`,
                 "warn",
@@ -553,16 +516,6 @@ export class BlooketInstanceManager extends EventEmitter {
     instance.page = await context.newPage();
     ensureActive();
     await instance.page.addInitScript(() => {
-      try {
-        Object.defineProperty(navigator, "webdriver", { get: () => undefined });
-        window.chrome = { runtime: {}, loadTimes() {}, csi() {}, app: {} };
-        Object.defineProperty(navigator, "plugins", {
-          get: () => [1, 2, 3, 4, 5],
-        });
-        Object.defineProperty(navigator, "languages", {
-          get: () => ["en-US", "en"],
-        });
-      } catch {}
       const style = document.createElement("style");
       style.textContent =
         "*, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }";
@@ -648,167 +601,26 @@ export class BlooketInstanceManager extends EventEmitter {
       await instance.page.waitForTimeout(150);
     }
 
-    // Phase 4: Submit Game PIN
-    instance.phase = "PHASE_PIN_INPUT";
-    instance.status = "entering_pin";
-    instance.statusText = `Submitting Game PIN: ${pin}`;
-    instance.addEvent(`Entering Game PIN: ${pin}`, "info", "PHASE_PIN_INPUT");
-    this.emit("state-change", this.getState());
-
-    ensureActive();
-    const pinInput = visibleField(instance.page, PIN_SELECTOR);
-    await pinInput.waitFor({ state: "visible", timeout: 20000 });
-    await pinInput.fill(pin);
-    await submitJoinField(pinInput);
-
-    // Phase 5: PIN Verification & Wait for Nickname field
-    instance.phase = "PHASE_PIN_VERIFY";
-    let nameInputFound = false;
-    let randomNameFound = false;
-    const pinWaitStart = Date.now();
-
-    while (Date.now() - pinWaitStart < 22000) {
-      ensureActive();
-      const checkRes = await readJoinScreen(instance.page).catch(() => null);
-
-      if (checkRes) {
-        if (checkRes.invalidPin) {
-          throw new Error(
-            "Invalid Game PIN: Blooket reported that this game could not be found.",
-          );
-        }
-        if (checkRes.isEnded) {
-          throw new Error("Game session has already concluded.");
-        }
-        if (checkRes.isFull) {
-          throw new Error(
-            "Game lobby is full (maximum player capacity reached).",
-          );
-        }
-        if (checkRes.hasName) {
-          nameInputFound = true;
-          break;
-        }
-        if (checkRes.hasRandom) {
-          randomNameFound = true;
-          break;
-        }
-      }
-
-      await instance.page.waitForTimeout(100);
-    }
-
-    if (!nameInputFound && !randomNameFound) {
-      const lateCheck = await instance.page
-        .evaluate(() => document.body.innerText)
-        .catch(() => "");
-      if (/invalid|not found|does not exist/i.test(lateCheck)) {
-        throw new Error("Invalid Game PIN: PIN rejected by Blooket.");
-      }
-      throw new Error(
-        "Nickname input not found. Possible PIN rejection or slow network response.",
-      );
-    }
-
-    // Phase 6: Submit Nickname with Auto-Retry on duplicates/filters
-    instance.phase = "PHASE_NAME_INPUT";
-    instance.status = "entering_name";
-
-    let inLobbyConfirmed = false;
-    let joinedGame = false;
-    let nicknameAttempts = 0;
-
-    while (!inLobbyConfirmed && nicknameAttempts < 4) {
-      ensureActive();
-      nicknameAttempts++;
-      instance.statusText = `Submitting nickname: ${instance.name}`;
-      instance.addEvent(
-        `Entering nickname "${instance.name}" (attempt ${nicknameAttempts})`,
-        "info",
-        "PHASE_NAME_INPUT",
-      );
-      this.emit("state-change", this.getState());
-
-      if (randomNameFound) {
-        const randomBtn = instance.page
-          .locator(
-            'button:has-text("Generate"), button:has-text("Spin"), [class*="randomButton"]',
-          )
-          .first();
-        await randomBtn.click().catch(() => {});
-        await instance.page.waitForTimeout(400);
-        const joinBtn = instance.page
-          .locator(
-            'button:has-text("Join"), button:has-text("Let\'s Go"), form button, button[type="submit"]',
-          )
-          .first();
-        if (await joinBtn.isVisible().catch(() => false)) {
-          await joinBtn.click().catch(() => {});
-        }
-      } else {
-        // Native Playwright input fill ensures React's synthetic input tracker registers the nickname
-        const nameInput = visibleField(instance.page, NAME_SELECTOR);
-        await nameInput.waitFor({ state: "visible", timeout: 8000 });
-        await nameInput.fill(instance.name);
-        await submitJoinField(nameInput);
-      }
-
-      // Phase 7: Strict Multi-Stage Lobby Confirmation
-      instance.phase = "PHASE_NAME_VERIFY";
-      const verifyStart = Date.now();
-
-      while (Date.now() - verifyStart < 14000) {
-        ensureActive();
-        const check = await readJoinScreen(instance.page).catch(() => null);
-
-        if (!check) {
-          await instance.page.waitForTimeout(100);
-          continue;
-        }
-
-        if (check.isFull) {
-          throw new Error(
-            "Game lobby is full (maximum player capacity reached).",
-          );
-        }
-        if (check.isEnded) {
-          throw new Error("Game session has already concluded.");
-        }
-
-        if (check.isTaken) {
-          instance.addEvent(
-            `Nickname "${instance.name}" was rejected/taken; auto-picking fresh tag...`,
-            "warn",
-            "PHASE_NAME_INPUT",
-          );
-          const usedNames = new Set(
-            [...this.instances.values()].map((i) => i.name.toLowerCase()),
-          );
-          instance.name = this.generateUniqueRealName(usedNames);
-          break; // break to outer loop to resubmit new name
-        }
-
-        // CONFIRMATION: Name input GONE, PIN input GONE, and either lobby text or blook box visible or URL is lobby
-        const currentUrl = instance.page ? instance.page.url() : "";
-        const isLobbyUrl = currentUrl.includes("/lobby");
-        if (
-          !check.hasName &&
-          !check.hasPin &&
-          (check.hasLobbyTxt || check.hasBlooks || check.hasGame || isLobbyUrl)
-        ) {
-          inLobbyConfirmed = true;
-          joinedGame = check.hasGame;
-          break;
-        }
-        await instance.page.waitForTimeout(100);
-      }
-    }
-
-    if (!inLobbyConfirmed) {
-      throw new Error(
-        `Failed to confirm lobby entry for "${instance.name}". Nickname prompt did not advance or lobby failed to load.`,
-      );
-    }
+    instance.joinSubmitted = false;
+    const joined = await joinGame(instance.page, instance, {
+      active,
+      phase: (phase, status, text) => {
+        instance.phase = phase;
+        instance.status = status;
+        instance.statusText = text;
+        instance.addEvent(text, "info", phase);
+        this.emit("state-change", this.getState());
+      },
+      freshName: () =>
+        this.generateUniqueRealName(
+          new Set(
+            [...this.instances.values()].map((other) =>
+              other.name.toLowerCase(),
+            ),
+          ),
+        ),
+    });
+    const joinedGame = joined.hasGame;
 
     ensureActive();
     // Phase 8: In Genuine Lobby
@@ -958,6 +770,7 @@ export class BlooketInstanceManager extends EventEmitter {
       throw new Error(
         "Up to 50 bots can be connected or queued. Stop one before retrying.",
       );
+    inst.answerAbort?.abort();
     inst.retrying = true;
     inst.status = "queued";
     inst.runVersion++;
@@ -1082,188 +895,7 @@ export class BlooketInstanceManager extends EventEmitter {
   }
 
   startBotLoop(instance) {
-    const version = instance.runVersion;
-    const active = () =>
-      !instance.cancelled &&
-      instance.runVersion === version &&
-      this.instances.get(instance.id) === instance;
-    if (instance.pollTimer) {
-      clearInterval(instance.pollTimer);
-      clearTimeout(instance.pollTimer);
-    }
-
-    const step = async () => {
-      if (!active()) return;
-      if (!instance.page || instance.page.isClosed()) {
-        if (!["error", "ended"].includes(instance.status)) {
-          this.handleBotError(
-            instance,
-            new Error("Browser page closed. Retry to reconnect."),
-            instance.startTime,
-          );
-          await instance.context?.close().catch(() => {});
-          instance.context = null;
-          instance.page = null;
-        }
-        return;
-      }
-
-      if (instance.pollRunning || instance.isAnswering) return;
-      clearTimeout(instance.pollTimer);
-
-      instance.pollRunning = true;
-
-      try {
-        const state = await readGameScreen(instance.page);
-        if (!active()) return;
-        instance.pollFailures = 0;
-        if (state.ended) {
-          instance.status = "ended";
-          instance.phase = "PHASE_ENDED";
-          instance.statusText = "Game ended.";
-          instance.forceAnswerOnce = false;
-          const context = instance.context;
-          instance.page = null;
-          instance.context = null;
-          await context?.close().catch(() => {});
-          this.emit("state-change", this.getState());
-          return;
-        }
-
-        // Distinguish an explicit host removal from a lost connection.
-        const hostRemoved = state.hasKicked && !state.hasQuestion;
-        if (hostRemoved || state.hasPinInput || state.hasNameInput) {
-          instance.connectionLostAt ??= Date.now();
-          if (hostRemoved || Date.now() - instance.connectionLostAt >= 2500) {
-            instance.status = "error";
-            instance.phase = hostRemoved
-              ? "PHASE_REMOVED"
-              : "PHASE_DISCONNECTED";
-            instance.statusText = hostRemoved
-              ? "Removed by the host."
-              : "Connection closed.";
-            instance.diagnostic = {
-              category: "CONNECTION",
-              code: hostRemoved ? "HOST_REMOVED" : "CONNECTION_LOST",
-              explanation: instance.statusText,
-              remediation: hostRemoved
-                ? ["Check with the host before joining again."]
-                : ["Check whether the game is still running, then retry."],
-            };
-            instance.addEvent(instance.statusText, "error", instance.phase);
-            this.emit("state-change", this.getState());
-            await instance.context?.close().catch(() => {});
-            instance.context = null;
-            instance.page = null;
-          }
-          return;
-        }
-        instance.connectionLostAt = null;
-
-        // 3. In genuine lobby
-        if (state.inLobby && instance.status !== "lobby") {
-          instance.status = "lobby";
-          instance.phase = "PHASE_LOBBY";
-          instance.statusText = "Waiting for the host.";
-          this.emit("state-change", this.getState());
-          return;
-        }
-
-        // 4. Feedback / Transition / Next Screen Auto-Dismiss (Continuous Unblocking)
-        if (
-          (this.autoAnswerGlobal || instance.forceAnswerOnce) &&
-          (state.hasFeedback ||
-            state.hasNext ||
-            state.hasChestReward ||
-            state.isTransitionScreen)
-        ) {
-          if (
-            await advanceFeedback(
-              instance.page,
-              () =>
-                active() && (this.autoAnswerGlobal || instance.forceAnswerOnce),
-            ).catch(() => false)
-          ) {
-            instance.lastAnswerAttemptKey = null;
-          }
-          return;
-        }
-
-        if (
-          this.autoMinigames &&
-          (this.autoAnswerGlobal || instance.forceAnswerOnce)
-        ) {
-          const generation = this.answerGeneration;
-          const enabled = () =>
-            active() &&
-            generation === this.answerGeneration &&
-            (this.autoAnswerGlobal || instance.forceAnswerOnce);
-          if (await playMinigame(instance.page, state, this, enabled)) {
-            instance.lastAnswerAttemptKey = null;
-            return;
-          }
-        }
-
-        // Answer only this bot’s current question.
-        if (state.hasQuestion) {
-          if (instance.status !== "game") {
-            instance.status = "game";
-            instance.phase = "PHASE_GAME";
-            instance.statusText = "Game connected.";
-            instance.addEvent(
-              "Game match began · Answering questions",
-              "action",
-              "PHASE_GAME",
-            );
-            this.emit("state-change", this.getState());
-          }
-
-          const qData = {
-            questionText: state.questionText,
-            answers:
-              state.answers.length > 0 ? state.answers : state.domAnswers,
-            correctAnswers: state.correctAnswers || [],
-            questionType: state.questionType || "mc",
-            hasQuestion: true,
-          };
-
-          const currentQKey =
-            (qData.questionText || "") + "::" + qData.answers.join("|");
-
-          this.latestQuestion = {
-            ...qData,
-            botName: instance.name,
-            timestamp: Date.now(),
-          };
-          if (this.autoAnswerGlobal || instance.forceAnswerOnce) {
-            const force = Boolean(instance.forceAnswerOnce);
-            if (instance.lastAnswerAttemptKey !== currentQKey) {
-              if (await this.performBotAnswer(instance, qData, { force }))
-                instance.forceAnswerOnce = false;
-            }
-          }
-        }
-      } catch (err) {
-        if (active()) {
-          instance.pollFailures = (instance.pollFailures || 0) + 1;
-          if (instance.pollFailures === 3)
-            this.log(
-              `Could not read game screen: ${err.message}`,
-              "warn",
-              instance.name,
-            );
-        }
-      } finally {
-        if (instance.runVersion === version) instance.pollRunning = false;
-        if (active() && instance.page && !instance.page.isClosed()) {
-          const nextDelay = this.pollDelay(instance);
-          instance.pollTimer = setTimeout(step, nextDelay);
-        }
-      }
-    };
-
-    instance.pollNow = step;
-    instance.pollTimer = setTimeout(step, 80 + (instance.fleetIndex % 10) * 25);
+    return startBotLoop(this, instance);
   }
 
   pollDelay(instance) {
@@ -1274,86 +906,8 @@ export class BlooketInstanceManager extends EventEmitter {
         : 300;
   }
 
-  async performBotAnswer(instance, state, { force = false } = {}) {
-    if (
-      (!this.autoAnswerGlobal && !force) ||
-      instance.isAnswering ||
-      instance.cancelled ||
-      !instance.page ||
-      instance.page.isClosed()
-    )
-      return;
-    const page = instance.page,
-      version = instance.runVersion,
-      generation = this.answerGeneration;
-    const active = () =>
-      this.answerGeneration === generation &&
-      !instance.cancelled &&
-      instance.runVersion === version &&
-      instance.page === page &&
-      !page.isClosed() &&
-      (this.autoAnswerGlobal || force);
-    const questionKey =
-      (state.questionText || "") + "::" + (state.answers || []).join("|");
-    if (instance.lastAnswerAttemptKey === questionKey) return;
-    instance.isAnswering = true;
-    try {
-      let delay = 0;
-      if (this.answerSpeedMode !== "instant") {
-        const min = Math.max(0, this.answerDelayMinMs || 0),
-          max = Math.max(min, this.answerDelayMaxMs || min);
-        delay = min + Math.floor(Math.random() * (max - min + 1));
-        if (this.adaptiveReadingTime)
-          delay = Math.max(
-            delay,
-            Math.min(2000, (state.questionText || "").length * 12),
-          );
-        if (this.staggerFleet) delay += (instance.fleetIndex % 4) * 40;
-      }
-      if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
-      if (!active()) return;
-      const choice = chooseAnswer(state, this, instance);
-      if (!choice) return false;
-      const submitted = await submitAnswer(
-        page,
-        state,
-        {
-          ...choice,
-          humanKeystrokes: this.humanKeystrokes,
-          clickOffsets: this.clickOffsets,
-        },
-        active,
-      );
-      if (!submitted || !active()) return false;
-      instance.lastAnswerAttemptKey = questionKey;
-      instance.lastAnswerAttemptTime = Date.now();
-      instance.questionsAnswered++;
-      this.totalQuestionsAnswered++;
-      if (choice.known) {
-        instance.knownAnswers++;
-        this.totalKnownAnswers++;
-        const isCorrect = (state.correctAnswers || []).some(
-          (answer) =>
-            String(answer).trim().toLowerCase() ===
-            submitted.text.trim().toLowerCase(),
-        );
-        if (isCorrect) {
-          instance.streak++;
-          instance.correctAnswers++;
-          this.totalCorrectAnswers++;
-        } else instance.streak = 0;
-      } else instance.streak = 0;
-      instance.lastAnswer = submitted.text;
-      instance.addEvent(
-        `Answered: "${submitted.text}"`,
-        "action",
-        "PHASE_GAME",
-      );
-      this.emit("state-change", this.getState());
-      return true;
-    } finally {
-      if (instance.runVersion === version) instance.isAnswering = false;
-    }
+  performBotAnswer(instance, state, options) {
+    return performBotAnswer(this, instance, state, options);
   }
 
   async shuffleLobbyBlooks() {
@@ -1518,6 +1072,8 @@ export class BlooketInstanceManager extends EventEmitter {
   async stopBot(id) {
     const inst = this.instances.get(id);
     if (!inst) return;
+    inst.answerAbort?.abort();
+    inst.runVersion++;
     inst.cancelled = true;
     this.joinScheduler.cancelInactive();
     this.instances.delete(id);
@@ -1544,6 +1100,7 @@ export class BlooketInstanceManager extends EventEmitter {
     this.stopping = true;
     this.fleetGeneration++;
     for (const instance of this.instances.values()) {
+      instance.answerAbort?.abort();
       instance.cancelled = true;
       clearTimeout(instance.pollTimer);
     }
@@ -1590,7 +1147,11 @@ export class BlooketInstanceManager extends EventEmitter {
       this.autoAnswerGlobal = enabled;
       if (changed || !enabled) this.answerGeneration++;
       for (const instance of this.instances.values()) {
-        if (!enabled) instance.forceAnswerOnce = false;
+        if (!enabled) {
+          instance.forceAnswerOnce = false;
+          instance.answerAbort?.abort();
+          instance.answerStatus = "Paused";
+        }
         if (
           enabled &&
           changed &&
@@ -1622,6 +1183,7 @@ export class BlooketInstanceManager extends EventEmitter {
       score: i.score,
       place: i.place,
       lastAnswer: i.lastAnswer,
+      answerStatus: i.answerStatus || "Paused",
       pingMs: i.pingMs,
       diagnostic: i.diagnostic,
       timeline: i.timeline,
@@ -1648,6 +1210,8 @@ export class BlooketInstanceManager extends EventEmitter {
         : null;
 
     return {
+      sessionId: this.sessionId,
+      revision: ++this.stateVersion,
       pin: this.currentPin,
       baseName: this.baseName,
       namingStyle: this.namingStyle,

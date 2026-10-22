@@ -22,13 +22,17 @@ function sendFrame(socket, value) {
   const header = data.length < 126 ? Buffer.from([129, data.length]) : Buffer.from([129,126,data.length >> 8,data.length & 255]);
   socket.write(Buffer.concat([header,data]));
 }
-function broadcastState() { for (const socket of sockets) sendFrame(socket,{type:'state',state:shared}); }
+function broadcastState() { shared.sessionId='fixture-session';shared.revision=(shared.revision||0)+1;for (const socket of sockets) sendFrame(socket,{type:'state',state:shared}); }
+let rejectNextSettings = false;
 const uiRoot = resolve(root,'integrations/woodcreek/public');
 const upstream = httpServer(async (req,res) => {
   requests.push({path:req.url, cookie:req.headers.cookie,authorization:req.headers.authorization});
   if(req.method==='POST') {
     const chunks=[];for await(const chunk of req)chunks.push(chunk);
-    const body=JSON.parse(Buffer.concat(chunks));commands.push(body);if('accuracy'in body)shared.accuracyRate=body.accuracy;if('autoAnswer'in body)shared.autoAnswer=body.autoAnswer;broadcastState();
+    const body=JSON.parse(Buffer.concat(chunks));commands.push(body);
+    if (rejectNextSettings && body.op==='settings') { rejectNextSettings=false;res.writeHead(400,{'content-type':'application/json'});return res.end(JSON.stringify({error:'Settings were rejected.'})); }
+    if (body.op==='stop-bot') shared.instances=shared.instances.filter(bot=>bot.id!==body.id);
+    if('accuracy'in body)shared.accuracyRate=body.accuracy;if('autoAnswer'in body)shared.autoAnswer=body.autoAnswer;broadcastState();
     res.writeHead(200,{'content-type':'application/json'});return res.end(JSON.stringify({success:true}));
   }
   const pathname=new URL(req.url,'http://fixture').pathname;
@@ -136,18 +140,36 @@ try {
   assert.equal(await page.locator('link[rel=icon]').getAttribute('href'),'/blooket-bot/assets/clever-portal.ico');
   assert.equal(await page.getByText('Server status',{exact:true}).count(),0);
   assert.equal(await page.locator('#btn-answering').innerText(),'Start answering');
+  rejectNextSettings=true;
+  await page.locator('#btn-answering').click();
+  await page.getByText('Settings were rejected.',{exact:true}).waitFor();
+  assert.equal(await page.locator('#btn-answering').innerText(),'Start answering');
+  assert.equal(await page.locator('#btn-answering').isDisabled(),false,'A failed command must release the button');
+  await page.locator('#dismiss-connection-error').click();
   await page.locator('#btn-answering').click();
   await page.getByRole('button',{name:'Stop answering',exact:true}).waitFor();
   assert.equal(shared.autoAnswer,true);
+  for(const socket of sockets) sendFrame(socket,{type:'state',state:{...shared,revision:shared.revision-1,autoAnswer:false}});
+  await page.waitForTimeout(50);
+  assert.equal(await page.locator('#btn-answering').innerText(),'Stop answering','An older socket snapshot cannot overwrite an acknowledged HTTP result');
   direct.send(JSON.stringify({op:'settings',autoAnswer:false}));
   await page.getByRole('button',{name:'Start answering',exact:true}).waitFor();
   shared.instances=[{id:'fixture-bot',name:'Fixture',blook:'cat',status:'game',statusText:'Game connected.',questionsAnswered:0,streak:0,timeline:[],technicalTrace:[]}];broadcastState();
   await page.waitForFunction(()=>!document.getElementById('btn-tool-master-solver').disabled);
-  await page.locator('#btn-tool-master-solver').evaluate(button=>button.click());
+  await page.locator('#btn-open-cheats').click();
+  await page.locator('#btn-tool-master-solver').click();
   await page.getByRole('button',{name:'Stop answering',exact:true}).waitFor();
+  await page.locator('#tools-dialog [data-close]').click();
   assert(!requests.some(request=>request.path==='/api/fleet/inject'),'Tools answering must use the shared controller rather than inject another loop');
   direct.send(JSON.stringify({op:'settings',autoAnswer:false}));
   await page.getByRole('button',{name:'Start answering',exact:true}).waitFor();
+  const previousCommands=commands.length;
+  await page.locator('#btn-force-answer').click();
+  await until(async()=>!await page.locator('#btn-force-answer').isDisabled(),'Manual answer acknowledgement releases the control');
+  assert.equal(commands.slice(previousCommands).filter(command=>command.op==='force-answer').length,1,'Answer once sends a single command');
+  await page.locator('.bot-row').getByRole('button',{name:'Stop',exact:true}).click();
+  await page.locator('.bot-row').waitFor({state:'detached'});
+  assert(commands.some(command=>command.op==='stop-bot'&&command.id==='fixture-bot'),'Individual stop reaches the service through the authenticated bridge');
   shared.instances=[];broadcastState();
   const fonts=await page.evaluate(async()=>{await document.fonts.ready;return [...document.fonts].filter(font=>font.status==='loaded').map(font=>font.family)});
   assert(fonts.includes('Manrope')&&fonts.includes('JetBrainsMono'),'Tylerium fonts must load through the Mitch mount');
@@ -160,10 +182,10 @@ try {
   assert.equal(await page.locator('#accuracy-badge-box').textContent(),'95%');
   for(const width of [1440,768,390,320]) {await page.setViewportSize({width,height:1000});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Mounted dashboard must fit '+width+' '+JSON.stringify(await page.evaluate(()=>[...document.querySelectorAll('body *')].filter(el=>el.getBoundingClientRect().right>innerWidth+1&&el.getBoundingClientRect().width>0).slice(0,15).map(el=>({tag:el.tagName,id:el.id,class:el.className,right:el.getBoundingClientRect().right})))));}
   await page.setViewportSize({width:1440,height:1050});
+  await page.screenshot({path:'/tmp/mitch-blooket-dashboard.png',fullPage:true});
   assert(await page.locator('script[src="/presence.js?v=1"]').count());
   assert((await actor.request.head(base+'/blooket-bot/')).ok());
   await page.locator('.site-nav [href="#gameplay-settings"]').click();
-  await page.locator('.gameplay-tab-btn[data-tab="accuracy"]').click();
   await page.locator('#range-accuracy').focus();
   await page.locator('#range-accuracy').evaluate(input=>{input.value='92';input.dispatchEvent(new Event('input',{bubbles:true}));});
   await until(async()=>shared.accuracyRate===92,'WebSocket command and state round trip');

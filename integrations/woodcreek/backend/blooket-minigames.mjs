@@ -1,3 +1,4 @@
+import { GAME_CONTROLS } from "./blooket-controls.mjs";
 // One visible action per poll. Never follow a click with a coordinate or key burst.
 export async function playMinigame(page, state, settings, active = () => true) {
   if (!active() || state.hasQuestion) return false;
@@ -22,65 +23,27 @@ export async function playMinigame(page, state, settings, active = () => true) {
     const index =
       { chest_1: 0, chest_2: 1, chest_3: 2 }[settings.chestStrategy] ??
       "random";
-    return click(
-      [
-        'img[alt^="Chest "]',
-        '[class*="choiceBox"]',
-        '[class*="treasureChoice"]',
-        '[class*="chestContainer"]',
-      ],
-      index,
-    );
+    return click(GAME_CONTROLS.chests, index);
   }
   if (state.hasCrypto) {
-    if (
-      await click(
-        [
-          '[class*="passwordChoice"]',
-          '[class*="passwordOption"]',
-          '[class*="guessTile"]',
-        ],
-        "random",
-      )
-    )
-      return true;
+    if (await click(GAME_CONTROLS.passwords, "random")) return true;
     return click(
-      ['[class*="cryptoPlayerCard"]', '[class*="hackVictim"]'],
+      GAME_CONTROLS.cryptoPlayers,
       settings.cryptoTarget === "random" ? "random" : 0,
     );
   }
   if (state.hasSwap) {
-    if (settings.swapTarget === "never")
-      return click(['[class*="closeButton"]', '[class*="cancelButton"]']);
+    if (settings.swapTarget === "never") return click(GAME_CONTROLS.cancel);
     return click(
-      ['[class*="playerCard"]', '[class*="playerChoice"]'],
+      GAME_CONTROLS.players,
       settings.swapTarget === "random" ? "random" : 0,
     );
   }
-  if (state.hasFish)
-    return click([
-      '[class*="castButton"]',
-      '[class*="reelButton"]',
-      '[class*="fishingButton"]',
-    ]);
+  if (state.hasFish) return click(GAME_CONTROLS.fishing);
   if (state.hasPerk) {
     const index = { defense: 1, speed: 2 }[settings.brawlStat] ?? 0;
-    if (
-      await click(
-        [
-          '[class*="upgradeCard"]',
-          '[class*="perkBox"]',
-          '[class*="abilityUpgrade"]',
-        ],
-        index,
-      )
-    )
-      return true;
-    return click([
-      '[class*="restockButton"]',
-      '[class*="serveCustomer"]',
-      '[class*="feedCustomer"]',
-    ]);
+    if (await click(GAME_CONTROLS.upgrades, index)) return true;
+    return click(GAME_CONTROLS.cafe);
   }
   return false;
 }

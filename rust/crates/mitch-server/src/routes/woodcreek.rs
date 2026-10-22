@@ -65,6 +65,7 @@ fn allowed_path(relative: &str, method: &Method) -> bool {
         | "api/fleet/stop"
         | "api/stop-all"
         | "api/stop"
+        | "api/bot/stop"
         | "api/bot/retry"
         | "api/bot/retry-all"
         | "api/fleet/force-answer"
@@ -299,6 +300,8 @@ mod tests {
         assert!(allowed_path("", &Method::GET));
         assert!(allowed_path("api/state", &Method::GET));
         assert!(allowed_path("api/fleet/launch", &Method::POST));
+        assert!(allowed_path("api/bot/stop", &Method::POST));
+        assert!(!allowed_path("api/bot/stop", &Method::GET));
         assert!(!allowed_path("api/fleet/launch", &Method::GET));
         assert!(!allowed_path("api/state", &Method::POST));
         assert!(allowed_path(

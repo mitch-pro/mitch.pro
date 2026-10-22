@@ -72,35 +72,91 @@ Mitch server in production authentication mode. It checks the profile, PKCE,
 state, code persistence and concurrent consumption, cookies, CSRF, token
 integrity, grant revocation, and linked Mitch logout without production data.
 
-## Blooket connection updates
+## Controller and dashboard
 
-`integrations/woodcreek/backend/blooket-connection.mjs` centralizes the browser
-join selectors and validates 6–9 digit Game PINs. It finds visible fields, submits
-each form once, and distinguishes a full/ended game from a temporary connection
-failure. Browser creation is shared across concurrent joins. Stops cancel queued
-joins and late contexts; failed joins release their contexts; retries cannot
-start a second lifecycle for the same connection. Browser disconnects preserve
-failed entries so they can be retried. Blooket's own client resources are allowed
-to load, and a refreshed navigation uses the new HTTP response status.
+The main dashboard is a document plus `woodcreek.js` and `woodcreek.css`.
+It sends mutations over authenticated HTTP with a 12-second acknowledgement
+limit. A timed-out command is never retried automatically: the operation may
+already have reached the service. Buttons are released on success, rejection,
+network failure, and timeout. Only the edited settings are submitted; loading
+or reconnecting does not write settings. Existing WebSocket command clients
+remain supported. The WebSocket supplies shared state and logs, checks a
+heartbeat, and reconnects with bounded backoff. State snapshots have an ephemeral
+service ID and revision so an older WebSocket update cannot overwrite a newer
+HTTP response. No new state or activity is written to storage.
 
-The dashboard reports command failures, avoids overlapping reconnects, and the
-Node WebSocket server checks heartbeats. Unmeasured latency is no longer shown
-as random data. `node tests/test_blooket_connection.mjs` uses real Chromium with
-fully intercepted Blooket pages to exercise these cases without joining games.
+The interface keeps Tylerium branding, saved account photos and cosmetics, and
+the Clever Portal title/favicon. Join, start/pause, answer once, retry, stop, and
+connection details are explicit controls. Each connection reports its actual
+answering state, including waiting for an answer or an unsupported screen.
+Diagnostics and screenshots are available in its Details dialog. Activity is
+bounded and deduplicated in memory. Optional script files remain separate from
+the core controller; known auto-answer scripts use the shared controller instead
+of installing another answer daemon. This does not make arbitrary legacy scripts
+compatible with every Blooket version.
 
-The browser tab is titled Clever Portal and uses Clever's favicon. The visible
-interface remains Tylerium Services. Server status controls are removed.
+### Joining
 
-Joining now uses a service-wide scheduler (two simultaneous joins, 400ms
-spacing) shared by launch and retry operations. Cgroup process/memory admission
-checks stop fresh browser contexts from exhausting the container. The app's
-process limit was raised live from 512 to 1024 after its process limit counter
-reported 39 failures, without restarting the current session. The Compose app
-limit persists that change. CPU and memory limits were not increased.
+`blooket-connection.mjs` centralizes Game PIN/nickname selectors and form
+submission. `blooket-join.mjs` owns the join stages. Each form submits once;
+only an explicit nickname rejection permits another name. An uncertain response
+after submitting a nickname is reported for manual retry instead of creating
+another connection that could replace the first player. A fresh browser retry
+is allowed only before nickname submission. Explicit host removals never cause
+automatic rejoining.
 
-Answering starts off and is controlled by the visible Start answering / Stop
-answering button. Each bot submits its own current question once, respects a
-pause during its configured delay, and never performs blind mouse/keyboard
-bursts on the next screen. The duplicate 40ms page daemon was removed. Feedback
-advances once through its visible control. `node tests/test_blooket_answers.mjs`
-checks answering and queue limits with local pages only.
+A service-wide scheduler limits joins and retries to two concurrent operations,
+400 ms apart. Cgroup process/memory admission checks and the existing 50-bot cap
+remain in force. Reservation happens before asynchronous browser startup.
+Blooket's own client resources can load; analytics, fonts, and media are skipped.
+A cached verification session may be reused; launch no longer waits for a
+preemptive clearance request. Navigation challenges retain the existing service
+verification path. Failure releases the affected browser context. Stops cancel
+pending work, including contexts created after cancellation.
+
+### Answering
+
+`blooket-controls.mjs` is the shared selector registry for observation and
+interaction. `blooket-screen.mjs` reads visible controls and makes bounded,
+read-only checks of matching React props, state, hooks, and question banks.
+Rich question/answer HTML is normalized before exact matching. Question banks
+are consulted only when the current component lacks a key. Ambiguous keys are
+not reported as known answers. The snapshot contains only the visible question,
+not the full question bank or arbitrary client state.
+
+A question key identifies its document, live controls, wording, choices, and
+available React question index. A repeated question with new controls is a new
+occurrence. `blooket-answers.mjs` re-observes after a delay and checks the key
+again in the browser before clicking. The click and last check share one browser
+JavaScript task. Typing uses the visible input and a final question check before
+submitting. Unknown multiple-choice keys can be guessed and do not affect known
+answer accuracy; a typing question without a key waits.
+
+`blooket-runner.mjs` serializes each connection's question, feedback, and
+minigame processing. An AbortController interrupts a pending answer delay when
+paused, stopped, retried, or disconnected. A dispatched answer is counted even
+if pause arrives immediately afterward. Feedback takes precedence over retained
+question nodes. Explicit continuation prompts work without a button element.
+Only one action is sent for a persistent transition; changed controls or a new
+question release that action lock. There are no blind coordinate/key bursts.
+Ended games close their context, and closed pages become retryable failures.
+
+### Verification and deployment boundary
+
+Run `npm run test:blooket` for join, answer, scheduler, controller, and actual
+Node service fixtures. After building the Rust server, run
+`node tests/test_blooket_bridge_browser.mjs` and
+`node tests/test_woodcreek_accounts.mjs`. These use isolated databases, loopback
+services, intercepted player pages, and test accounts. They never join a real
+game or send a production command. Coverage includes repeated questions, HTML,
+hooks/banks, stale screens, immediate pause, unconfirmed joins, persistent
+feedback, rejected commands, individual stop, responsive layout, and shared
+accounts/CSRF. Live compatibility still requires a game hosted for validation;
+public unauthenticated player requests may be rejected by Blooket.
+
+A Mitch deployment updates the bridge, including the existing per-bot stop API's
+POST allowlist. It does **not** publish `integrations/woodcreek` to the separate
+Woodcreek container. That source must be copied to its existing application
+build context and rebuilt separately, after checking for active sessions. Do
+not change workflows or access the host without the specific approval required
+by `AGENTS.md`. See `integrations/woodcreek/README.md` for the existing layout.

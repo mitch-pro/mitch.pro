@@ -2,13 +2,17 @@ import { HTTP_COMMANDS, executeCommand } from "./blooket-commands.mjs";
 import http from "node:http";
 import { createAccountAuth } from "./woodcreek-auth.mjs";
 import fs from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer, WebSocket } from "ws";
 import { BlooketInstanceManager } from "./blooket-manager.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PUBLIC_DIR = path.resolve(__dirname, "public");
+const PUBLIC_DIR = path.resolve(
+  __dirname,
+  existsSync(path.join(__dirname, "public")) ? "public" : "../public",
+);
 const PORT = Number(process.env.PORT || 8093);
 const HOST = "0.0.0.0";
 const accountAuth = createAccountAuth();

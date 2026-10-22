@@ -22,7 +22,22 @@ export async function submitJoinField(field) {
   // Submit exactly once. A second click can hit the next screen's button.
   if ((await button.count()) && (await button.isEnabled()))
     await button.click();
-  else await field.press("Enter");
+  else {
+    for (let depth = 1; depth <= 3; depth++) {
+      const parent = field.locator(
+        "xpath=" + Array(depth).fill("..").join("/"),
+      );
+      const adjacent = parent
+        .getByRole("button", { name: /^(join|continue|next|go|let.s go)$/i })
+        .filter({ visible: true })
+        .first();
+      if ((await adjacent.count()) && (await adjacent.isEnabled())) {
+        await adjacent.click();
+        return;
+      }
+    }
+    await field.press("Enter");
+  }
 }
 export async function readJoinScreen(page) {
   return page.evaluate(

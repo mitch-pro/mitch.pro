@@ -84,6 +84,16 @@ export async function executeCommand(
       };
     }
     case "inject-script": {
+      const label = `${payload.scriptName || ""} ${path.basename(payload.fileName || "")}`;
+      if (/auto[\s_-]*answer|master[\s_-]*solver/i.test(label)) {
+        if (/once/i.test(label)) await manager.forceAnswerAll();
+        else manager.updateSettings({ autoAnswer: true });
+        return {
+          success: true,
+          state: manager.getState(),
+          message: "Answering enabled.",
+        };
+      }
       const scriptCode =
         payload.scriptCode ||
         (await readCheatScript(publicDir, payload.fileName));
