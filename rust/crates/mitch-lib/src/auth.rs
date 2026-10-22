@@ -1068,6 +1068,22 @@ pub fn rate_limit_for(endpoint: &str) -> (u32, u32) {
         "/api/vm/my-computer/recreate" => (5, 60),
         "/api/vm/upgrades" => (30, 60),
         "/api/vm/upgrade" => (15, 60),
+        // Companion chat calls the Groq API per message — "rate limited
+        // but not harshly" per the feature's own cost-control requirement.
+        "/api/companion/chat" => (12, 60),
+        "/api/companion/settings" => (30, 60),
+        "/api/companion/characters" => (60, 60),
+        "/api/companion/subscribe" => (10, 60),
+        "/api/companion/characters/unlock" => (20, 60),
+        "/api/companion/mine" => (20, 60),
+        "/api/companion/mine/update" => (20, 60),
+        "/api/companion/mine/delete" => (10, 60),
+        "/api/companion/mine/image" => (20, 60),
+        "/api/companion/mine/image/delete" => (20, 60),
+        "/api/admin/companion/characters" => (30, 60),
+        "/api/admin/companion/characters/image" => (20, 60),
+        "/api/admin/companion/characters/set-default" => (30, 60),
+        "/api/admin/companion/characters/mark-reviewed" => (30, 60),
         _ => (100, 60), // __default__
     }
 }

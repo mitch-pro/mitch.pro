@@ -133,6 +133,8 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/sw.js",
     "/popup.js",
     "/pwa-install.js",
+    "/companion-widget.js",
+    "/companion-widget.css",
     "/games/chess-bot/chessboard.min.js",
     "/games/chess-bot/chessboard.min.css",
     "/bell/schedule.js",
@@ -1354,6 +1356,18 @@ pub async fn handle(
         .await
         {
             return resp;
+        }
+        // companion group — new subsystem, no server.js equivalent. Covers
+        // both /api/companion/* and /api/admin/companion/* (the latter
+        // already passed the global /api/admin/* gate above).
+        if path.starts_with("/api/companion/") || path.starts_with("/api/admin/companion/") {
+            if let Some(resp) = crate::routes::companion::handle(
+                &state, &method, &path, headers, body_bytes, &search,
+            )
+            .await
+            {
+                return resp;
+            }
         }
         // Unmatched /api/ paths fall through to static 404 (same as bun).
     }

@@ -157,6 +157,12 @@ pub fn inject_page(
         if !raw.contains("/pwa-install.js") {
             inject_str.push_str("<script src=\"/pwa-install.js\" defer></script>\n");
         }
+        // companion-widget.js fetches /api/companion/settings itself and
+        // renders nothing at all unless the viewer has it enabled — safe to
+        // load on every page the same way popup.js/pwa-install.js are.
+        if !raw.contains("/companion-widget.js") {
+            inject_str.push_str("<script src=\"/companion-widget.js?v=1\" defer></script>\n<link rel=\"stylesheet\" href=\"/companion-widget.css\">\n");
+        }
         if !raw.contains("name=\"viewport\"") {
             inject_str.push_str("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content\">\n");
         } else {

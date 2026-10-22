@@ -36,6 +36,14 @@ pub fn inject_shared_head(html: &str) -> String {
         let block = "<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n<script src=\"/popup.js?v=3\"></script>\n<script src=\"/pwa-install.js\" defer></script>\n<link rel=\"manifest\" href=\"/manifest.json\">\n<meta name=\"theme-color\" content=\"#05070d\">\n<meta name=\"mobile-web-app-capable\" content=\"yes\">\n<meta name=\"apple-mobile-web-app-capable\" content=\"yes\">\n<meta name=\"apple-mobile-web-app-status-bar-style\" content=\"black-translucent\">\n<link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"/apple-touch-icon.png\">\n</head>";
         html = html.replacen("</head>", block, 1);
     }
+    // Independent of the popup.js guard above: a page that already
+    // hardcodes popup.js in its own markup (e.g. the homepage) would
+    // otherwise short-circuit this whole block and silently drop the
+    // companion widget on exactly those pages.
+    if !html.contains("/companion-widget.js") {
+        let block = "<script src=\"/companion-widget.js?v=1\" defer></script>\n<link rel=\"stylesheet\" href=\"/companion-widget.css\">\n</head>";
+        html = html.replacen("</head>", block, 1);
+    }
     if html.contains("name=\"viewport\"") {
         if !html.contains("viewport-fit") {
             html = replace_first_viewport(&html, ", viewport-fit=cover");

@@ -1,0 +1,125 @@
+.companion-form-panel {
+  max-width: 560px;
+  margin-bottom: 32px;
+}
+
+.companion-form-panel label {
+  display: block;
+  margin-top: 10px;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.companion-form-panel input[type="text"],
+.companion-form-panel input[type="number"],
+.companion-form-panel textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: #1b1e24;
+  color: #e9ecf1;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 8px;
+  margin-top: 4px;
+  font: inherit;
+}
+
+.companion-form-panel button {
+  margin-top: 12px;
+  margin-right: 8px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 0;
+  background: var(--t-ac, #789ce8);
+  color: #0b0d11;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.companion-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.companion-card h3 {
+  margin: 0 0 6px;
+}
+
+.companion-default-tag {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--t-ac, #789ce8);
+  color: #0b0d11;
+  vertical-align: middle;
+}
+
+.companion-review-tag {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #e8a84f;
+  color: #0b0d11;
+  vertical-align: middle;
+}
+
+.companion-card .companion-creator {
+  font-size: 12px;
+  opacity: 0.6;
+  margin: -4px 0 8px;
+}
+
+.companion-card .companion-prompt {
+  opacity: 0.75;
+  font-size: 13px;
+  white-space: pre-wrap;
+  margin: 6px 0 12px;
+}
+
+.companion-moods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.companion-mood-tile {
+  text-align: center;
+  font-size: 12px;
+}
+
+.companion-mood-tile img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.companion-mood-tile button {
+  font-size: 11px;
+  padding: 2px 6px;
+}
+
+.companion-card-actions,
+.companion-image-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.companion-image-form input[type="text"] {
+  width: 120px;
+  display: inline-block;
+}

@@ -398,6 +398,62 @@ impl DataStore {
                         email TEXT PRIMARY KEY,
                         created_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS companion_characters (
+                        id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        personality_prompt TEXT NOT NULL,
+                        is_preset INTEGER NOT NULL DEFAULT 0,
+                        is_default INTEGER NOT NULL DEFAULT 0,
+                        needs_review INTEGER NOT NULL DEFAULT 0,
+                        creator_email TEXT NOT NULL DEFAULT '',
+                        price_coins REAL NOT NULL DEFAULT 0,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL
+                    );
+                    CREATE TABLE IF NOT EXISTS companion_character_images (
+                        character_id TEXT NOT NULL REFERENCES companion_characters(id) ON DELETE CASCADE,
+                        mood TEXT NOT NULL,
+                        file TEXT NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        PRIMARY KEY (character_id, mood)
+                    );
+                    CREATE TABLE IF NOT EXISTS companion_user_settings (
+                        email TEXT PRIMARY KEY,
+                        enabled INTEGER NOT NULL DEFAULT 0,
+                        active_character_id TEXT NOT NULL DEFAULT '',
+                        updated_at INTEGER NOT NULL
+                    );
+                    CREATE TABLE IF NOT EXISTS companion_chat_messages (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        email TEXT NOT NULL,
+                        character_id TEXT NOT NULL,
+                        role TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        created_at INTEGER NOT NULL
+                    );
+                    CREATE TABLE IF NOT EXISTS companion_memories (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        email TEXT NOT NULL,
+                        character_id TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        created_at INTEGER NOT NULL
+                    );
+                    CREATE TABLE IF NOT EXISTS companion_subscriptions (
+                        email TEXT PRIMARY KEY,
+                        expires_at INTEGER NOT NULL DEFAULT 0,
+                        updated_at INTEGER NOT NULL
+                    );
+                    CREATE TABLE IF NOT EXISTS companion_character_unlocks (
+                        email TEXT NOT NULL,
+                        character_id TEXT NOT NULL REFERENCES companion_characters(id) ON DELETE CASCADE,
+                        unlocked_at INTEGER NOT NULL,
+                        PRIMARY KEY (email, character_id)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_companion_characters_creator ON companion_characters (creator_email);
+                    CREATE INDEX IF NOT EXISTS idx_companion_character_images_char ON companion_character_images (character_id);
+                    CREATE INDEX IF NOT EXISTS idx_companion_chat_messages_lookup ON companion_chat_messages (email, character_id, created_at DESC);
+                    CREATE INDEX IF NOT EXISTS idx_companion_memories_lookup ON companion_memories (email, character_id, created_at DESC);
+                    CREATE INDEX IF NOT EXISTS idx_companion_character_unlocks_char ON companion_character_unlocks (character_id);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs (ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_level ON app_logs (level, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_category ON app_logs (category, ts DESC);

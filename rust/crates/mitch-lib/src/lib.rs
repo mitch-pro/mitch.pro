@@ -24,6 +24,7 @@ pub mod blog;
 pub mod casino;
 pub mod chat;
 pub mod coins;
+pub mod companion;
 pub mod config;
 pub mod crypto;
 pub mod daily_logins;

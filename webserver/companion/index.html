@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Companion — mitch.pro</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/companion/setup.css">
+  <script src="/app-shell.js" defer></script>
+  <script src="/companion/setup.js?v=1" defer></script>
+  <!-- companion-widget.js/.css are injected site-wide by the shared page
+       pipeline (pipeline.rs) — no need to include them here too. -->
+</head>
+<body class="companion-setup-page">
+  <main class="companion-setup-shell">
+    <header class="companion-setup-top">
+      <a href="/">mitch.pro</a>
+      <h1>Companion</h1>
+      <p id="companion-setup-status" role="status">Loading...</p>
+    </header>
+
+    <section class="companion-setup-section">
+      <h2>Subscription</h2>
+      <p id="companion-subscription-status">Loading...</p>
+      <div class="companion-subscription-buttons">
+        <button type="button" id="companion-sub-week">Subscribe for 1 week (750 coins)</button>
+        <button type="button" id="companion-sub-month">Subscribe for 1 month (1500 coins)</button>
+      </div>
+    </section>
+
+    <label class="companion-setup-toggle">
+      <input type="checkbox" id="companion-setup-enabled">
+      Enable companion
+    </label>
+
+    <div id="companion-setup-grid" class="companion-setup-grid"></div>
+
+    <button type="button" id="companion-setup-save">Save</button>
+
+    <section class="companion-setup-section">
+      <h2>Create your own character</h2>
+      <p>Costs 500 coins to create. Set a price for other people to unlock it — you keep 25% of whatever they pay.</p>
+      <form id="companion-create-form">
+        <label for="companion-create-name">Name</label>
+        <input id="companion-create-name" type="text" maxlength="60" required>
+        <label for="companion-create-prompt">Personality prompt</label>
+        <textarea id="companion-create-prompt" rows="6" maxlength="4000" required></textarea>
+        <label for="companion-create-price">Price for others to unlock (coins, 0 = free)</label>
+        <input id="companion-create-price" type="number" min="0" step="1" value="0">
+        <button type="submit">Create (500 coins)</button>
+        <p id="companion-create-status" role="status"></p>
+      </form>
+    </section>
+
+    <section class="companion-setup-section">
+      <h2>Your characters</h2>
+      <div id="companion-mine-list"></div>
+    </section>
+  </main>
+</body>
+</html>
