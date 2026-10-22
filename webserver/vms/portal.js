@@ -8,7 +8,7 @@
   const upDialog = $('upgrade-dialog');
   const headers = { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' };
   const pending = new Map();
-  let computers = [], loading = false, provisionMode = 'create', provisionId = null, upgradeVmId = null;
+  let computers = [], loading = false, provisionMode = 'create';
   let upgradeData = null, activeUpgradeTab = 'cpu', upgradeBusy = false;
   const esc = value => String(value ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const bytes = value => Number(value) ? `${(Number(value) / 1073741824).toLocaleString(undefined, { maximumFractionDigits: 1 })} GB` : '\u2014';
@@ -118,7 +118,6 @@
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Your computers could not be reached.');
       computers = Array.isArray(data.computers) ? data.computers : [];
-      $('add-computer-button')?.classList.toggle('is-hidden', data.canCreateAdditional !== true || !computers.length);
       if (data.isEligible === false) {
         $('empty-create-box')?.classList.add('is-hidden');
         $('empty-unauthorized-box')?.classList.remove('is-hidden');
@@ -151,7 +150,7 @@
     const vm = computers.find(item => item.id === id);
     if (!vm || pending.has(id)) return;
     if (action === 'recreate') {
-      openProvisionModal('recreate', id);
+      openProvisionModal('recreate');
       return;
     }
     if (action === 'windows-compatibility') {
@@ -198,10 +197,9 @@
     } catch (error) { pending.delete(id); render(); $('refresh-status').textContent = error.message; }
   }
 
-  function openProvisionModal(mode, id = null) {
+  function openProvisionModal(mode) {
     if (!provDialog) return;
     provisionMode = mode;
-    provisionId = id;
     const isRecreate = mode === 'recreate';
     $('provision-eyebrow').textContent = isRecreate ? 'Recreate Computer' : 'New Computer';
     $('provision-title').textContent = isRecreate ? 'Delete & Recreate Computer' : 'Create Computer';
@@ -214,7 +212,6 @@
 
   $('provision-cancel')?.addEventListener('click', () => provDialog?.close());
   $('create-vm-btn')?.addEventListener('click', () => openProvisionModal('create'));
-  $('add-computer-button')?.addEventListener('click', () => openProvisionModal('create'));
 
   $('provision-form')?.addEventListener('submit', async event => {
     event.preventDefault();
@@ -227,7 +224,7 @@
         method: 'POST',
         credentials: 'same-origin',
         headers,
-        body: JSON.stringify(provisionId ? { id: provisionId } : {}),
+        body: '{}',
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Failed to provision computer.');
@@ -251,12 +248,7 @@
     } catch (_) {}
   }
 
-  async function openUpgradeModal(id = null) {
-    upgradeVmId = id || (computers.length === 1 ? computers[0].id : null);
-    if (!upgradeVmId && computers.length > 1) {
-      $('refresh-status').textContent = 'Choose Edit specs on the computer you want to change.';
-      return;
-    }
+  async function openUpgradeModal() {
     if (!upDialog) return;
     $('upgrade-status').textContent = '';
     upDialog.showModal();
@@ -269,12 +261,6 @@
         $('upgrade-coin-balance').textContent = Math.floor(upgradeData.coins || 0).toLocaleString();
       }
       const owner = upgradeData.ownerCustomization === true;
-      const selected = computers.find(computer => computer.id === upgradeVmId);
-      if (owner && selected) upgradeData.current = {
-        ...upgradeData.current, cpuCores: selected.cpuCores,
-        memoryMb: selected.memoryTotal ? selected.memoryTotal / 1048576 : selected.upgrades?.memoryMb,
-        diskGb: selected.diskTotal ? selected.diskTotal / 1073741824 : selected.upgrades?.diskGb
-      };
       const badge = $('upgrade-coin-balance')?.closest('.user-coin-badge');
       if (badge) badge.hidden = owner;
       $('upgrade-title').textContent = owner ? 'Owner resources' : 'Computer resources';
@@ -314,7 +300,7 @@
         const status = $('upgrade-status'); status.textContent = 'Saving resources…';
         try {
           const value = Number($('owner-resource-value').value) * config.scale;
-          const response = await fetch('/api/vm/owner-resources',{method:'POST',credentials:'same-origin',headers,body:JSON.stringify({id:upgradeVmId,category:cat,value})});
+          const response = await fetch('/api/vm/owner-resources',{method:'POST',credentials:'same-origin',headers,body:JSON.stringify({category:cat,value})});
           const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Could not save resources.');
           upgradeData.current = result.upgrades; status.textContent = 'Resources saved.'; await load();
         } catch (error) { status.textContent = error.message; }
@@ -412,7 +398,7 @@
         method: 'POST',
         credentials: 'same-origin',
         headers,
-        body: JSON.stringify({ id: upgradeVmId, category, targetValue, duration: duration || (category === 'session' ? sessionDurationMode : undefined) }),
+        body: JSON.stringify({ category, targetValue, duration: duration || (category === 'session' ? sessionDurationMode : undefined) }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Failed to apply upgrade.');
@@ -468,7 +454,7 @@
     const id = cardEl?.dataset.id;
     if (!id) return;
     if (action === 'open-upgrade') {
-      openUpgradeModal(id);
+      openUpgradeModal();
       return;
     }
     if (action === 'repair-desktop') {

@@ -210,31 +210,3 @@ VM: only a real owner, or that account's own session, can touch it; no
 co-owner or other admin can, unlike every other VM on the site. It's also
 excluded from the leaderboard (`ranked_players`), the same way tester
 accounts are.
-
-### Staff VM availability and multiple computers
-
-Owners, co-owners, and full administrators can create additional computers from
-My Computer using **Add computer**. Template, custom ISO, and preset creation
-preserve their existing computers. Ordinary accounts retain the one-computer
-limit and ISO replacement flow. Role checks come from the authenticated account;
-`canCreateAdditional` only controls the portal button.
-
-Staff-owned computers are exempt from automatic daily/session and inactivity
-shutdowns for every OS. They stay running when their desktop tab closes; manual
-shutdown, restart, and deletion still work. The watchdog clears any pending
-automatic shutdown when the owner becomes staff or keep-alive is enabled. This
-policy does not start computers that were intentionally stopped or recover them
-from a host outage. Existing ChromeOS keep-alive exemptions remain supported. Startup
-cleanup skips every registered computer, including IDs 200–209 that overlap the
-old disposable pool; application restarts must not delete assigned VMs.
-
-Recreation and resource edits include the selected computer's `id`. The server
-resolves that ID only within the caller's assigned computers, returns 404 for an
-unowned ID, and rejects requests with no ID when several computers exist. A
-recreation replaces only that selected computer. Account-wide upgrade defaults
-and existing per-VM hardware limits remain in force; additional computers do not
-grant access to another account's VM or bypass the owner-test-account lock.
-
-Validation includes the watchdog's staff/ordinary policy, VM selection and
-ownership regressions, plus isolated API/browser checks for adding, recreating,
-and editing one VM without changing the others. No production guests are used.

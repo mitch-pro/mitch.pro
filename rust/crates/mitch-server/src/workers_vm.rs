@@ -81,9 +81,6 @@ pub(crate) async fn prune_inactive_free_vms_worker(state: &AppState) {
             .unwrap_or_else(|e| e.into_inner());
         vms.iter()
             .filter_map(|(email, entry)| {
-                if mitch_lib::auth::is_admin_email(&state.store, email) {
-                    return None;
-                }
                 let last_active = entry
                     .get("lastActive")
                     .and_then(jsval::number)
@@ -189,18 +186,6 @@ pub(crate) async fn enforce_vm_max_uptime_worker(state: &AppState) {
         let is_admin =
             !owner_email.is_empty() && mitch_lib::auth::is_admin_email(&state.store, &owner_email);
 
-        // Staff-owned computers stay running until explicitly stopped. Clear
-        // an old watchdog decision too, including after a role promotion.
-        let keep_alive = record_opt.as_ref().is_some_and(|record| record.keep_alive);
-        if is_admin || keep_alive {
-            state
-                .vm_shutdown_initiated
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .remove(&record_key);
-            continue;
-        }
-
         let now = now_ms() as i64;
         let uptime = guest.get("uptime").and_then(jsval::number).unwrap_or(0.0);
         let lease =
@@ -248,14 +233,26 @@ pub(crate) async fn enforce_vm_max_uptime_worker(state: &AppState) {
             .and_then(jsval::number)
             .unwrap_or(0.0);
 
+        // Admin-only, ChromeOS-only "stay on 24/7" exemption
+        // (set_vm_keep_alive) — skips inactivity AND the daily/session
+        // uptime limit entirely, not just a longer timeout like the
+        // existing admin-owner carve-out below.
+        let keep_alive = record
+            .as_ref()
+            .and_then(|r| r.get("keepAlive"))
+            .map(jsval::truthy)
+            .unwrap_or(false);
+
         // Daily / session uptime expiration (only for non-exempt users)
         let is_uptime_expired =
-            !is_lease_exempt && remaining_seconds.map(|s| s <= 0.0).unwrap_or(false);
+            !is_lease_exempt && !keep_alive && remaining_seconds.map(|s| s <= 0.0).unwrap_or(false);
 
-        // Staff and explicitly kept-alive computers were excluded above.
+        // Inactivity expiration (applies to ALL users, including admins
+        // after 30m — but not a keep_alive ChromeOS VM, which skips this
+        // whole check).
         let mut is_inactive = false;
         let mut inactive_ms: u64 = 0;
-        if !has_open_socket {
+        if !has_open_socket && !keep_alive {
             let presence_last = state
                 .vm_page_presence
                 .lock()
@@ -294,7 +291,11 @@ pub(crate) async fn enforce_vm_max_uptime_worker(state: &AppState) {
         if is_inactive || is_uptime_expired || shutdown_initiated.is_some() {
             let shutdown_reason = if shutdown_initiated.is_some() {
                 if is_inactive {
-                    "inactivity_10m"
+                    if is_admin {
+                        "inactivity_30m"
+                    } else {
+                        "inactivity_10m"
+                    }
                 } else if is_daily_limit {
                     "daily_limit_reached"
                 } else if is_uptime_expired {
@@ -303,7 +304,11 @@ pub(crate) async fn enforce_vm_max_uptime_worker(state: &AppState) {
                     "shutdown_timeout_10m"
                 }
             } else if is_inactive {
-                "inactivity_10m"
+                if is_admin {
+                    "inactivity_30m"
+                } else {
+                    "inactivity_10m"
+                }
             } else if is_daily_limit {
                 "daily_limit_reached"
             } else {
@@ -607,9 +612,9 @@ mod tests {
         let admin_29m = now - (29.0 * 60.0 * 1000.0);
         assert!(!is_vm_inactive(admin_29m, now, true));
 
-        // Staff remain exempt after the former 30-minute boundary.
+        // Admin: 30 minutes ago -> inactive
         let admin_30m = now - (30.0 * 60.0 * 1000.0);
-        assert!(!is_vm_inactive(admin_30m, now, true));
+        assert!(is_vm_inactive(admin_30m, now, true));
     }
 
     #[test]
