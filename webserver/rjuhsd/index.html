@@ -196,12 +196,28 @@
   <div class="announcement-bar"><div class="announcement-inner"><span class="pulse-dot"></span><strong>RJUHSD.SCHOOL</strong><span id="announcement-text">Loading today’s campus schedule…</span><button id="pwa-install-btn" class="pwa-install-btn" type="button" style="display:none;" aria-label="Install App"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Install App</button><span class="announcement-time" id="header-clock">--:-- --</span></div></div>
   <header class="site-header">
     <a class="brand" href="/" aria-label="rjuhsd.school home"><span class="brand-logo"><img class="site-logo" src="/icon-192.png" alt="RJUHSD School Hub" width="35" height="35"></span><span class="brand-copy"><strong>Woodcreek High School</strong><small>woodcreek now</small></span></a>
+    <a class="powered-by-link" id="powered-by-link" href="https://mitch.pro" target="_blank" rel="noopener"><span>Powered by</span> <strong id="powered-by-name">mitch.pro</strong></a>
     <nav aria-label="Primary navigation"><a href="#today">Today</a><a href="#schedule-panel">Schedule</a><a href="#schools">Schools</a><a href="#tools">Tools</a></nav>
     <div class="header-actions">
       <label class="school-choice">School<select id="school-select" aria-label="Choose school"></select></label>
       <button class="icon-button" id="theme-btn" type="button" aria-label="Switch color theme"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.5 1.5m11.2 11.2 1.5 1.5M2 12h2m16 0h2M4.9 19.1l1.5-1.5M17.6 6.4l1.5-1.5"/></svg></button>
     </div>
   </header>
+  <script>
+    // Never hardcode the mitch.pro link target — pull it from data/site.json
+    // (served at /api/site-info) so it tracks whatever the "alternate"
+    // domain actually is if that ever changes.
+    fetch('/api/site-info', { credentials: 'same-origin', cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (info) {
+        if (!info || !info.alternate) return;
+        var link = document.getElementById('powered-by-link');
+        var name = document.getElementById('powered-by-name');
+        link.href = info.alternate;
+        try { name.textContent = new URL(info.alternate).hostname; } catch (e) {}
+      })
+      .catch(function () {});
+  </script>
   <main id="main">
     <section class="hero" id="today">
       <div class="hero-graphic" aria-hidden="true"><img src="/rjuhsd-assets/woodcreek.png" alt=""><i class="ring ring-one"></i><i class="ring ring-two"></i><i class="ring ring-three"></i></div>

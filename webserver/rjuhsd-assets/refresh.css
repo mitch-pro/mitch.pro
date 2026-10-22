@@ -7,6 +7,9 @@
 .school-hub .brand-copy strong{font:650 14px/1.35 var(--sans);max-width:25ch;white-space:normal}
 .school-hub .brand-logo{width:38px;height:38px;background:none;border:0;box-shadow:none}
 .school-hub .brand-logo img{width:38px;height:38px;object-fit:contain;border-radius:0}
+.school-hub .powered-by-link{display:flex;align-items:center;gap:4px;height:38px;padding:0 13px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink);font-size:12px;font-weight:500;text-decoration:none;white-space:nowrap}
+.school-hub .powered-by-link strong{font-weight:700}
+.school-hub .powered-by-link:hover{background:var(--card-solid)}
 .school-hub .site-header nav{gap:3px;margin:0 0 0 auto}
 .school-hub .site-header nav a{height:38px;padding:0 13px;font-size:13px;font-weight:500;letter-spacing:0;text-transform:none;border:0;border-radius:9px}
 .school-hub .site-header nav a:hover{background:var(--card)}
@@ -83,7 +86,8 @@
 .school-hub .mobile-nav-dock .dock-item{padding:13px 8px;font-size:12px;min-width:0;text-transform:none;letter-spacing:0}
 .school-hub .footer-bottom{font-size:11px;gap:14px}
 .school-hub #weather-widget{position:relative!important;inset:auto!important;width:min(calc(100% - 32px),360px)!important;margin:24px auto!important;box-shadow:none!important}
-@media(max-width:1000px){.school-hub .site-header{gap:12px}.school-hub .site-header nav{display:none}.school-hub .header-actions{margin-left:auto}.school-hub .hero{padding:26px;gap:26px}.school-hub .schedule-grid{grid-template-columns:minmax(0,1fr) 210px}.school-hub .snapshot article{padding:16px}}
+@media(max-width:1000px){.school-hub .site-header{gap:12px}.school-hub .site-header nav{display:none}.school-hub .powered-by-link{margin-left:auto}.school-hub .header-actions{margin-left:0}.school-hub .hero{padding:26px;gap:26px}.school-hub .schedule-grid{grid-template-columns:minmax(0,1fr) 210px}.school-hub .snapshot article{padding:16px}}
+@media(max-width:700px){.school-hub .powered-by-link span{display:none}.school-hub .powered-by-link{padding:0 10px}}
 @media(max-width:700px){.school-hub main#main,.school-hub .site-header{width:calc(100% - 28px)}.school-hub .site-header{min-height:76px;padding:14px 0}.school-hub .brand-copy strong{font-size:12px;max-width:16ch}.school-hub .hero{grid-template-columns:1fr;padding:24px;gap:28px}.school-hub .hero-date-panel{margin-bottom:18px}.school-hub .hero h1{font-size:36px}.school-hub .hero h1 br{display:none}.school-hub .hero h1 em:before{content:' '}.school-hub .hero-actions{margin-top:20px}.school-hub .live-card{padding:20px}.school-hub .countdown-center .countdown{font-size:56px}.school-hub .snapshot{grid-template-columns:repeat(2,minmax(0,1fr))}.school-hub .snapshot article{border-bottom:1px solid var(--line)}.school-hub .snapshot article:nth-child(2n){border-right:0}.school-hub .snapshot article:nth-last-child(-n+2){border-bottom:0}.school-hub .dashboard-section{padding:22px 18px;margin-top:24px}.school-hub .schedule-grid{grid-template-columns:1fr}.school-hub .day-brief{display:none}.school-hub .section-title-row h2{font-size:23px}.school-hub .school-choice select{width:116px;min-width:0;max-width:116px;font-size:12px}.school-hub .header-actions{gap:6px}.school-hub .icon-button{width:34px;height:36px}.school-hub .brand-logo,.school-hub .brand-logo img{width:30px;height:30px}}
 @media(max-width:360px){.school-hub .brand-copy strong{font-size:11px;max-width:12ch}.school-hub .brand{gap:8px}.school-hub .school-choice select{width:102px;max-width:102px;padding-left:8px}.school-hub .hero{padding:20px 16px}.school-hub .live-card{padding:18px 14px}.school-hub .live-next{flex-wrap:wrap}.school-hub .snapshot article{padding:12px;gap:8px}.school-hub .snapshot strong{font-size:14px}}
 @media(prefers-reduced-motion:reduce){.school-hub *{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
