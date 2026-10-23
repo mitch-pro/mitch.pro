@@ -61,8 +61,16 @@
     });
   }
 
+  // Bumped only on an actual image upload/delete (see below), not on
+  // every render — `loadCharacters()` runs after almost every action
+  // here (create/update/delete/set-default/mark-reviewed/...), so a
+  // blanket cache-buster on every call defeats the server's
+  // `Cache-Control: private, max-age=3600` on this endpoint entirely and
+  // turns routine admin use into a flood of fresh image requests. See
+  // the matching comment in webserver/companion/setup.js.
+  var imgVersion = 0;
   function imageUrl(id, mood) {
-    return '/api/companion/character-image?id=' + encodeURIComponent(id) + '&mood=' + encodeURIComponent(mood) + '&t=' + Date.now();
+    return '/api/companion/character-image?id=' + encodeURIComponent(id) + '&mood=' + encodeURIComponent(mood) + '&v=' + imgVersion;
   }
 
   function loadCharacters() {
@@ -117,7 +125,7 @@
           withLockHandling(requestJson('/api/admin/companion/characters/image/delete', {
             method: 'POST',
             body: JSON.stringify({ id: c.id, mood: mood }),
-          })).then(loadCharacters).catch(function () {});
+          })).then(function () { imgVersion++; return loadCharacters(); }).catch(function () {});
         });
         moodsEl.appendChild(tile);
       });
@@ -180,6 +188,7 @@
               alert(res.data.error || 'upload failed');
               return;
             }
+            imgVersion++;
             loadCharacters();
           });
       });

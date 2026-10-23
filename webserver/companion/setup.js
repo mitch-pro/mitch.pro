@@ -20,8 +20,20 @@
     });
   }
 
+  // Bumped only when an image is actually uploaded/removed (see
+  // loadMine's callers below) so a just-changed mood's picture is never
+  // shown stale. A blanket `&t=' + Date.now()` here (the previous
+  // version) defeated the server's `Cache-Control: private,
+  // max-age=3600` on every single call — every grid/mood re-render
+  // (which happens often: after every unlock, save, create, upload...)
+  // issued a brand new network request for every character/mood shown,
+  // which is what actually blew through the rate limit and produced a
+  // wall of 429s during normal use, not abuse. Reusing the same URL
+  // across unrelated re-renders lets the browser serve those straight
+  // from cache instead.
+  var imgVersion = 0;
   function imageUrl(id, mood) {
-    return '/api/companion/character-image?id=' + encodeURIComponent(id) + '&mood=' + encodeURIComponent(mood) + '&t=' + Date.now();
+    return '/api/companion/character-image?id=' + encodeURIComponent(id) + '&mood=' + encodeURIComponent(mood) + '&v=' + imgVersion;
   }
 
   function formatExpiry(ms) {
@@ -229,7 +241,7 @@
           '<button type="button" class="mine-remove-mood-btn">Remove</button>';
         tile.querySelector('.mine-remove-mood-btn').addEventListener('click', function () {
           api('/api/companion/mine/image/delete', { method: 'POST', body: JSON.stringify({ id: c.id, mood: mood }) })
-            .then(loadMine);
+            .then(function () { imgVersion++; loadMine(); });
         });
         moodsEl.appendChild(tile);
       });
@@ -274,6 +286,7 @@
           .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
           .then(function (res) {
             if (!res.ok) { alert(res.data.error || 'upload failed'); return; }
+            imgVersion++;
             loadMine();
           });
       });
