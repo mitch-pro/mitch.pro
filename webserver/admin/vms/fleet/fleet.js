@@ -48,6 +48,7 @@ import RFB from '/novnc/core/rfb.js';
   const btnToggleJiggler = $('btn-toggle-jiggler');
   const btnPowerOnAll = $('btn-power-on-all');
   const btnPowerOffAll = $('btn-power-off-all');
+  const btnForceStopAll = $('btn-force-stop-all');
   const btnDeleteAllFleet = $('btn-delete-all-fleet');
   const btnDeleteLocalFleet = $('btn-delete-local-fleet');
   const btnRefresh = $('btn-refresh');
@@ -148,8 +149,16 @@ import RFB from '/novnc/core/rfb.js';
       rfb.scaleViewport = true;
       rfb.resizeSession = false;
       rfb.clipViewport = false;
-      rfb.showDotCursor = false;
+      rfb.showDotCursor = true;
       rfb.background = '#000000';
+
+      if (targetContainer) {
+        const cursor = document.createElement('div');
+        cursor.id = 'single-local-cursor';
+        cursor.className = 'local-cursor';
+        cursor.setAttribute('aria-hidden', 'true');
+        targetContainer.appendChild(cursor);
+      }
 
       rfb.addEventListener('connect', () => {
         client.connected = true;
@@ -158,6 +167,9 @@ import RFB from '/novnc/core/rfb.js';
         const badge = client.cardEl.querySelector('.status-indicator');
         if (badge) {
           badge.className = 'status-indicator running';
+        }
+        if (currentFocusedVmId === vmId) {
+          try { rfb.focus(); } catch (_) {}
         }
       });
 
@@ -238,6 +250,29 @@ import RFB from '/novnc/core/rfb.js';
   }
 
   btnBackToGrid.addEventListener('click', closeSingleView);
+
+  singleScreenContainer.addEventListener('mousemove', event => {
+    const localCursor = singleScreenContainer.querySelector('#single-local-cursor');
+    if (!localCursor || !singleView.classList.contains('active')) return;
+    const rect = singleScreenContainer.getBoundingClientRect();
+    localCursor.style.left = `${event.clientX - rect.left}px`;
+    localCursor.style.top = `${event.clientY - rect.top}px`;
+    localCursor.classList.add('is-active');
+  }, true);
+
+  singleScreenContainer.addEventListener('mouseleave', () => {
+    const localCursor = singleScreenContainer.querySelector('#single-local-cursor');
+    if (localCursor) localCursor.classList.remove('is-active');
+  });
+
+  singleScreenContainer.addEventListener('mousedown', () => {
+    if (currentFocusedVmId) {
+      const client = vmClients.get(currentFocusedVmId);
+      if (client?.rfb) {
+        try { client.rfb.focus(); } catch (_) {}
+      }
+    }
+  });
 
   // Render the 24 cards
   function renderFleet() {
@@ -412,6 +447,26 @@ import RFB from '/novnc/core/rfb.js';
       btnPowerOffAll.disabled = false;
     }
   });
+
+  if (btnForceStopAll) {
+    btnForceStopAll.addEventListener('click', async () => {
+      if (!confirm('Force stop all 24 ChromeOS fleet VMs immediately? (Unsaved data may be lost)')) return;
+      btnForceStopAll.disabled = true;
+      setGlobalStatus('Force stopping all 24 ChromeOS VMs...');
+      try {
+        await api('/api/admin/vms/fleet/power', { action: 'force-stop' });
+        setGlobalStatus('Force stop command sent to all 24 VMs.');
+        for (const id of vmClients.keys()) {
+          disconnectVm(id);
+        }
+        setTimeout(loadFleet, 2500);
+      } catch (err) {
+        setGlobalStatus(err.message, true);
+      } finally {
+        btnForceStopAll.disabled = false;
+      }
+    });
+  }
 
   btnRefresh.addEventListener('click', () => {
     loadFleet();

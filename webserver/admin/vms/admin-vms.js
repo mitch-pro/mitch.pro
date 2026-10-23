@@ -478,6 +478,10 @@
         powerOffBtn.style.display = 'none';
       }
     }
+    const forceStopBtn = $('btn-force-stop-fleet');
+    if (forceStopBtn) {
+      forceStopBtn.style.display = runningFleet.length > 0 ? 'inline-flex' : 'none';
+    }
   }
 
   const btnCreateFleet = $('btn-create-chromeos-fleet');
@@ -526,6 +530,24 @@
         status('owner-fleet-status', err.message, 'error');
       } finally {
         btnPoweroffFleet.disabled = false;
+      }
+    });
+  }
+
+  const btnForceStopFleet = $('btn-force-stop-fleet');
+  if (btnForceStopFleet) {
+    btnForceStopFleet.addEventListener('click', async () => {
+      if (!confirm('Force stop all running ChromeOS fleet VMs immediately? (Unsaved data may be lost)')) return;
+      btnForceStopFleet.disabled = true;
+      status('owner-fleet-status', 'Force stopping fleet VMs...');
+      try {
+        await api('/api/admin/vms/fleet/power', { action: 'force-stop' });
+        status('owner-fleet-status', 'Fleet VMs force stopped.', 'success');
+        await load();
+      } catch (err) {
+        status('owner-fleet-status', err.message, 'error');
+      } finally {
+        btnForceStopFleet.disabled = false;
       }
     });
   }

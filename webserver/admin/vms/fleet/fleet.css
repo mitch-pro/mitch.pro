@@ -369,6 +369,34 @@ button.danger:hover {
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: default !important;
+}
+
+.single-screen-container * {
+  cursor: default !important;
+}
+
+.single-screen-container.hide-native-cursor,
+.single-screen-container.hide-native-cursor * {
+  cursor: none !important;
+}
+
+.local-cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 22px;
+  height: 22px;
+  margin: -2px 0 0 -2px;
+  pointer-events: none;
+  z-index: 1000;
+  display: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 2 4 20 9 15 12 22 15 21 12 14 19 14Z' fill='white' stroke='black' stroke-width='1.2' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center/contain;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,.6));
+}
+
+.local-cursor.is-active {
+  display: block;
 }
 
 .single-screen-container canvas {

@@ -26,6 +26,7 @@
         <button type="button" id="btn-toggle-jiggler">Pause Jiggler</button>
         <button type="button" id="btn-power-on-all" class="primary">Turn On All</button>
         <button type="button" id="btn-power-off-all" class="danger">Power Off All</button>
+        <button type="button" id="btn-force-stop-all" class="danger" title="Force stop all running fleet VMs">Force Stop All</button>
         <button type="button" id="btn-delete-all-fleet" class="danger">Delete Fleet</button>
         <button type="button" id="btn-delete-local-fleet" class="danger" title="Remove fleet from mitch.pro database only without contacting Proxmox">Delete mitch.pro only</button>
         <button type="button" id="btn-refresh">Refresh</button>
@@ -66,6 +67,7 @@
       </div>
       <div id="single-screen-container" class="single-screen-container">
         <!-- RFB attaches here in single mode -->
+        <div id="single-local-cursor" class="local-cursor" aria-hidden="true"></div>
       </div>
     </section>
   </div>
