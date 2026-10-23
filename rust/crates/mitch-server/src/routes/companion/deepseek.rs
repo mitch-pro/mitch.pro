@@ -403,52 +403,54 @@ fn strip_markdown_code_fence(text: &str) -> &str {
     t
 }
 
+fn compile_regex(pattern: &str) -> regex::Regex {
+    match regex::Regex::new(pattern) {
+        Ok(r) => r,
+        Err(_) => match regex::Regex::new("$^") {
+            Ok(r) => r,
+            Err(_) => unreachable!(),
+        },
+    }
+}
+
 static RE_TRAILING_COMMA: std::sync::LazyLock<regex::Regex> =
-    std::sync::LazyLock::new(|| regex::Regex::new(r",\s*([}\]])").unwrap());
+    std::sync::LazyLock::new(|| compile_regex(r",\s*([}\]])"));
 static RE_MISSING_COMMA: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-    regex::Regex::new(
+    compile_regex(
         r#"("[^"\\]*(?:\\.[^"\\]*)*"|\b(?:true|false|null|[0-9]+(?:\.[0-9]+)?))\s*\n\s*("?[a-zA-Z_][a-zA-Z0-9_]*"?\s*:)"#,
     )
-    .unwrap()
 });
-static RE_UNQUOTED_KEYS: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-    regex::Regex::new(r#"([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:"#).unwrap()
-});
+static RE_UNQUOTED_KEYS: std::sync::LazyLock<regex::Regex> =
+    std::sync::LazyLock::new(|| compile_regex(r#"([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:"#));
 static RE_BOOL_TRUE: std::sync::LazyLock<regex::Regex> =
-    std::sync::LazyLock::new(|| regex::Regex::new(r":\s*True\b").unwrap());
+    std::sync::LazyLock::new(|| compile_regex(r":\s*True\b"));
 static RE_BOOL_FALSE: std::sync::LazyLock<regex::Regex> =
-    std::sync::LazyLock::new(|| regex::Regex::new(r":\s*False\b").unwrap());
+    std::sync::LazyLock::new(|| compile_regex(r":\s*False\b"));
 static RE_NONE: std::sync::LazyLock<regex::Regex> =
-    std::sync::LazyLock::new(|| regex::Regex::new(r":\s*None\b").unwrap());
+    std::sync::LazyLock::new(|| compile_regex(r":\s*None\b"));
 
 static RE_REPLY_KEY: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-    regex::Regex::new(r#"(?i)["']?(?:reply|message|response|text)["']?\s*:"#).unwrap()
+    compile_regex(r#"(?i)["']?(?:reply|message|response|text)["']?\s*:"#)
 });
 static RE_NEXT_FIELD: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-    regex::Regex::new(
+    compile_regex(
         r#"(?i)(?:,\s*["']?(?:mood|emotion|remember|action|custom_?js|coin_?request_?percent)["']?\s*:|\s*\}\s*$)"#,
     )
-    .unwrap()
 });
 static RE_MOOD: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-    regex::Regex::new(r#"(?i)["']?(?:mood|emotion)["']?\s*:\s*["']?([a-zA-Z_-]+)["']?"#).unwrap()
+    compile_regex(r#"(?i)["']?(?:mood|emotion)["']?\s*:\s*["']?([a-zA-Z_-]+)["']?"#)
 });
 static RE_ACTION: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-    regex::Regex::new(r#"(?i)["']?(?:action)["']?\s*:\s*["']?([a-zA-Z_-]+)["']?"#).unwrap()
+    compile_regex(r#"(?i)["']?(?:action)["']?\s*:\s*["']?([a-zA-Z_-]+)["']?"#)
 });
 static RE_REMEMBER: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-    regex::Regex::new(r#"(?i)["']?(?:remember)["']?\s*:\s*["']([^"'\\]*(?:\\.[^"'\\]*)*)["']"#)
-        .unwrap()
+    compile_regex(r#"(?i)["']?(?:remember)["']?\s*:\s*["']([^"'\\]*(?:\\.[^"'\\]*)*)["']"#)
 });
 static RE_CUSTOM_JS: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-    regex::Regex::new(r#"(?i)["']?(?:custom_?js)["']?\s*:\s*["']([^"'\\]*(?:\\.[^"'\\]*)*)["']"#)
-        .unwrap()
+    compile_regex(r#"(?i)["']?(?:custom_?js)["']?\s*:\s*["']([^"'\\]*(?:\\.[^"'\\]*)*)["']"#)
 });
 static RE_COIN_PERCENT: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-    regex::Regex::new(
-        r#"(?i)["']?(?:coin_?request_?percent)["']?\s*:\s*["']?([0-9]+(?:\.[0-9]+)?)"#,
-    )
-    .unwrap()
+    compile_regex(r#"(?i)["']?(?:coin_?request_?percent)["']?\s*:\s*["']?([0-9]+(?:\.[0-9]+)?)"#)
 });
 
 fn unescape_json_string(s: &str) -> String {
@@ -602,16 +604,12 @@ fn repair_json_string(candidate: &str) -> String {
             in_str = true;
         } else if ch == '{' {
             open_braces += 1;
-        } else if ch == '}' {
-            if open_braces > 0 {
-                open_braces -= 1;
-            }
+        } else if ch == '}' && open_braces > 0 {
+            open_braces -= 1;
         } else if ch == '[' {
             open_brackets += 1;
-        } else if ch == ']' {
-            if open_brackets > 0 {
-                open_brackets -= 1;
-            }
+        } else if ch == ']' && open_brackets > 0 {
+            open_brackets -= 1;
         }
     }
     if in_str {
@@ -813,7 +811,7 @@ fn clean_plain_text_reply(text: &str) -> String {
     if (t.starts_with('"') && t.ends_with('"') && t.len() >= 2)
         || (t.starts_with('\'') && t.ends_with('\'') && t.len() >= 2)
     {
-        t = &t[1..t.len() - 1].trim();
+        t = t[1..t.len() - 1].trim();
     }
     unescape_json_string(t)
 }
@@ -883,6 +881,7 @@ fn guess_mood(reply: &str, moods: &[String]) -> String {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
