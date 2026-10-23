@@ -340,6 +340,18 @@ pub fn character_image_file(store: &DataStore, character_id: &str, mood: &str) -
     .ok()
 }
 
+/// Fallback on-disk filename for a character if the requested mood has no image.
+/// Prefers 'idle', then alphabetical first.
+pub fn character_fallback_image_file(store: &DataStore, character_id: &str) -> Option<String> {
+    let conn = store.conn();
+    conn.query_row(
+        "SELECT file FROM companion_character_images WHERE character_id = ?1 ORDER BY (mood = 'idle') DESC, mood ASC LIMIT 1",
+        rusqlite::params![character_id],
+        |row| row.get::<_, String>(0),
+    )
+    .ok()
+}
+
 /// Defaults to disabled with no character picked — opt-in, matching the
 /// "site-wide, only if they have companion on" requirement.
 pub fn get_user_settings(store: &DataStore, email: &str) -> UserSettings {

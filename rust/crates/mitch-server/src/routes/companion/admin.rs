@@ -331,28 +331,44 @@ pub(super) fn serve_image(
     let Some(mood) = sanitize_mood(mood) else {
         return json_response(400, json!({ "error": "invalid mood" }));
     };
-    let Some(file) = mitch_lib::companion::character_image_file(&state.store, id, &mood) else {
-        return json_response(404, json!({ "error": "not found" }));
-    };
-    let path = images_dir(state, id).join(&file);
-    let Ok(bytes) = std::fs::read(&path) else {
-        return json_response(404, json!({ "error": "not found" }));
-    };
-    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-    let mime = match ext {
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "webp" => "image/webp",
-        "gif" => "image/gif",
-        _ => "application/octet-stream",
-    };
+
+    let maybe_file = mitch_lib::companion::character_image_file(&state.store, id, &mood)
+        .or_else(|| mitch_lib::companion::character_fallback_image_file(&state.store, id));
+
+    if let Some(file) = maybe_file {
+        let path = images_dir(state, id).join(&file);
+        if let Ok(bytes) = std::fs::read(&path) {
+            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+            let mime = match ext {
+                "png" => "image/png",
+                "jpg" | "jpeg" => "image/jpeg",
+                "webp" => "image/webp",
+                "gif" => "image/gif",
+                "svg" => "image/svg+xml",
+                _ => "application/octet-stream",
+            };
+            return (
+                axum::http::StatusCode::OK,
+                [
+                    (axum::http::header::CONTENT_TYPE, mime),
+                    (axum::http::header::CACHE_CONTROL, "private, max-age=3600"),
+                ],
+                bytes,
+            )
+                .into_response();
+        }
+    }
+
+    // Fallback: serve a clean SVG companion avatar so the widget never breaks with 404
+    const FALLBACK_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120"><defs><radialGradient id="g" cx="50%" cy="40%" r="55%"><stop offset="0%" stop-color="#60a5fa"/><stop offset="100%" stop-color="#3b82f6"/></radialGradient></defs><circle cx="60" cy="60" r="54" fill="url(#g)"/><ellipse cx="60" cy="72" rx="34" ry="24" fill="#ffffff" opacity="0.9"/><circle cx="44" cy="52" r="7" fill="#1e293b"/><circle cx="76" cy="52" r="7" fill="#1e293b"/><circle cx="46" cy="50" r="2.5" fill="#ffffff"/><circle cx="78" cy="50" r="2.5" fill="#ffffff"/><circle cx="34" cy="62" r="5.5" fill="#f472b6" opacity="0.6"/><circle cx="86" cy="62" r="5.5" fill="#f472b6" opacity="0.6"/><path d="M 49 66 Q 60 76 71 66" fill="none" stroke="#1e293b" stroke-width="4" stroke-linecap="round"/></svg>"##;
+
     (
         axum::http::StatusCode::OK,
         [
-            (axum::http::header::CONTENT_TYPE, mime),
-            (axum::http::header::CACHE_CONTROL, "private, max-age=3600"),
+            (axum::http::header::CONTENT_TYPE, "image/svg+xml"),
+            (axum::http::header::CACHE_CONTROL, "private, max-age=300"),
         ],
-        bytes,
+        FALLBACK_SVG.as_bytes().to_vec(),
     )
         .into_response()
 }

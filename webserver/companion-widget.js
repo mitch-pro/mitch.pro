@@ -64,6 +64,12 @@
     currentMood = moods.indexOf('idle') !== -1 ? 'idle' : moods[0];
     sprite.src = imageUrl(state.activeCharacterId, currentMood);
     sprite.alt = character ? character.name : 'Companion';
+    sprite.onerror = function () {
+      if (!this.dataset.fallback) {
+        this.dataset.fallback = '1';
+        this.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><circle cx="60" cy="60" r="54" fill="%233b82f6"/><ellipse cx="60" cy="72" rx="34" ry="24" fill="%23ffffff" opacity="0.9"/><circle cx="44" cy="52" r="7" fill="%231e293b"/><circle cx="76" cy="52" r="7" fill="%231e293b"/><path d="M 49 66 Q 60 76 71 66" fill="none" stroke="%231e293b" stroke-width="4" stroke-linecap="round"/></svg>';
+      }
+    };
     root.appendChild(sprite);
     document.body.appendChild(root);
     el.root = root;
