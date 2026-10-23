@@ -165,7 +165,7 @@ fn accept_coin_request(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &
             json!({ "error": "no pending coin request from this character" }),
         );
     }
-    let percent = offered_percent.clamp(0.0, 10.0);
+    let percent = offered_percent.clamp(0.0, 100.0);
     let balance = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &email);
     let amount = balance * percent / 100.0;
     if amount > 0.0 {

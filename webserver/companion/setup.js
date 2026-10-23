@@ -132,7 +132,6 @@
         return;
       }
       $('companion-setup-enabled').checked = !!res.data.enabled;
-      $('companion-setup-allow-coin-requests').checked = !!res.data.allowCoinRequests;
       selectedId = res.data.activeCharacterId || '';
       renderSubscription(res.data);
       status.textContent = '';
@@ -153,10 +152,9 @@
       return;
     }
     status.textContent = 'Saving...';
-    var allowCoinRequests = $('companion-setup-allow-coin-requests').checked;
     api('/api/companion/settings', {
       method: 'POST',
-      body: JSON.stringify({ enabled: enabled, activeCharacterId: selectedId, allowCoinRequests: allowCoinRequests }),
+      body: JSON.stringify({ enabled: enabled, activeCharacterId: selectedId }),
     }).then(function (res) {
       if (!res.ok) {
         status.textContent = (res.data && res.data.error) || 'Could not save.';

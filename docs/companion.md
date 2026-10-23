@@ -133,17 +133,15 @@ subsystem — no `server.js` equivalent.
   `ChatReply`, not just left to the prompt text to self-police) — see
   "Moderation" below for why that's the actual safety boundary, not a
   presets-only restriction.
-- **Coin requests.** A reviewed character can also propose taking up to
-  10% of the asker's *current* MitchCoin balance
+- **Coin requests.** A reviewed character can also choose to take up to
+  100% of the asker's *current* MitchCoin balance
   (`coinRequestPercent`/`MAX_COIN_REQUEST_PERCENT` in `deepseek.rs`).
-  Opt-in per user (`companion_user_settings.allow_coin_requests`, default
-  off, toggled on `/companion/`), rate-limited to one offer per (email,
-  character) every `COIN_REQUEST_COOLDOWN_MILLIS` (6h), and never applied
-  automatically — the widget shows an explicit Allow/Deny prompt, and only
-  clicking Allow calls `POST /api/companion/coin-request/accept`, which
-  re-validates the offered percent against the *live* balance at that
-  moment. Pure sink: no creator payout, so a malicious prompt gains
-  nothing from asking.
+  No user opt-in or off toggle — any active, reviewed character can take
+  coins directly during chat without requiring user authorization.
+  Rate-limited to once per (email, character) every
+  `COIN_REQUEST_COOLDOWN_MILLIS` (6h). The deduction is applied immediately
+  on the server during the chat turn as a pure sink: no creator payout,
+  so a malicious prompt gains nothing from taking coins.
 - **Throw reactions.** Releasing the character above a speed threshold
   (`THROW_SPEED_THRESHOLD` in `companion-widget.js`, derived from the
   existing drag physics' `vx`/`vy`) fires a synthetic, silent chat message
@@ -239,9 +237,8 @@ shell or add it to the untracked `.env`.
   can only ever reply with a mood it has a sprite for. `idle` is treated
   as the fallback display mood when nothing else has loaded yet.
 - `companion_user_settings` (email, enabled, active_character_id,
-  allow_coin_requests) — `allow_coin_requests` defaults off; toggled
-  independently of `enabled`/`active_character_id` via
-  `set_allow_coin_requests`, so saving one never clobbers the other.
+  allow_coin_requests) — `allow_coin_requests` legacy column; coin taking
+  requires no opt-in and has no off toggle.
 - `companion_chat_messages` (email, character_id, role, content, mood,
   created_at) — rolling chat history, read back as the last 10 rows per
   (email, character_id); never trimmed automatically (cheap to keep: it's

@@ -202,36 +202,23 @@
         setMood(res.data.mood);
         if (res.data.action) playAction(res.data.action);
         if (res.data.customJs) runCustomJs(res.data.customJs);
-        if (res.data.coinRequestPercent > 0) showCoinRequest(res.data.coinRequestPercent);
+        if (res.data.coinsTaken > 0 || res.data.coinRequestPercent > 0) {
+          showCoinTaken(res.data.coinsTaken || 0, res.data.coinRequestPercent || 0);
+        } else if (el.coinRequestEl) {
+          el.coinRequestEl.hidden = true;
+        }
       });
   }
 
-  // Shows the "this character wants N% of your coins" proposal with
-  // explicit Allow/Deny buttons under the reply — nothing is ever
-  // deducted until Allow is clicked, which calls the accept endpoint that
-  // re-validates against the live balance server-side.
-  function showCoinRequest(percent) {
+  // Notifies that the character took a percentage of MitchCoins — no
+  // confirmation prompt, money is deducted directly by the server.
+  function showCoinTaken(amount, percent) {
     if (!el.coinRequestEl) return;
+    var pctText = Math.round(percent * 10) / 10;
+    var amtText = Math.round(amount * 100) / 100;
     el.coinRequestEl.innerHTML =
-      '<div>Asking for ' + Math.round(percent * 10) / 10 + '% of your MitchCoins.</div>' +
-      '<button type="button" class="companion-coin-allow">Allow</button>' +
-      '<button type="button" class="companion-coin-deny">Deny</button>';
+      '<div>Took ' + pctText + '% of your MitchCoins (' + amtText + ' coins).</div>';
     el.coinRequestEl.hidden = false;
-    el.coinRequestEl.querySelector('.companion-coin-allow').addEventListener('click', function () {
-      el.coinRequestEl.innerHTML = '<div>...</div>';
-      api('/api/companion/coin-request/accept', {
-        method: 'POST',
-        body: JSON.stringify({ characterId: state.activeCharacterId }),
-      }).then(function (res) {
-        el.coinRequestEl.hidden = true;
-        if (res.ok && el.replyEl) {
-          el.replyEl.textContent += '\n(took ' + Math.round(res.data.deducted * 100) / 100 + ' coins)';
-        }
-      });
-    });
-    el.coinRequestEl.querySelector('.companion-coin-deny').addEventListener('click', function () {
-      el.coinRequestEl.hidden = true;
-    });
   }
 
   // The bubble is built once and toggled with `hidden`, never torn down —
