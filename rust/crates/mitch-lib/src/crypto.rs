@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 //! At-rest crypto + ID helpers — byte-faithful port of server.js's
 //! `sealAtRest`/`openAtRest` (dm + totp purposes), the `makeEmailId` HMAC
 //! scheme, and the ID_SECRET bootstrap.

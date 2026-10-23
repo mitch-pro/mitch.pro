@@ -82,6 +82,7 @@ pub fn is_path(path: &str) -> bool {
 
 /// This grant is accepted only by the dedicated introspection/revoke endpoints.
 /// Its AEAD key is purpose-separated from every other use of ID_SECRET.
+#[allow(deprecated)]
 pub fn issue(state: &AppState, headers: &HeaderMap) -> Option<String> {
     crate::presence::authenticated_email(state, headers)?;
     let cookies = crate::routes::me::cookies_of(state, headers);
@@ -107,6 +108,7 @@ pub fn issue(state: &AppState, headers: &HeaderMap) -> Option<String> {
     Some(format!("wc1.{}", URL_SAFE_NO_PAD.encode(bytes)))
 }
 
+#[allow(deprecated)]
 fn open(state: &AppState, token: &str) -> Option<Grant> {
     if token.len() > 4096 {
         return None;

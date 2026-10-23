@@ -24,6 +24,7 @@ fn vm_credentials_key(id_secret: &[u8]) -> [u8; 32] {
     mitch_lib::crypto::hmac_sha256(id_secret, b"vm-desktop-credentials-v1")
 }
 
+#[allow(deprecated)]
 pub fn encrypt_vm_password(id_secret: &[u8], password: &str) -> String {
     use aes_gcm::aead::generic_array::GenericArray;
     use aes_gcm::aead::Aead;
@@ -55,6 +56,7 @@ pub fn encrypt_vm_password(id_secret: &[u8], password: &str) -> String {
     )
 }
 
+#[allow(deprecated)]
 pub fn decrypt_vm_password(id_secret: &[u8], value: &str) -> String {
     use aes_gcm::aead::generic_array::GenericArray;
     use aes_gcm::aead::Aead;
