@@ -69,6 +69,10 @@
         <span class="jiggler-dot" id="mirror-dot" style="background: #a855f7;"></span>
         <span id="mirror-status-text">Mirroring is OFF</span>
       </div>
+      <div class="coords-display-pill" id="coords-display-pill" title="Click anywhere on a VM screen to inspect coordinates">
+        <span class="coords-icon">📍</span>
+        <span id="coords-text">Click screen for coords</span>
+      </div>
     </section>
 
     <!-- 24-Machine Multi-Screen Grid -->
@@ -88,6 +92,9 @@
           <span id="single-vm-status" class="badge">Running</span>
         </div>
         <div class="fleet-toolbar">
+          <div class="coords-display-pill" id="single-coords-display" title="Coordinates in focused VM (click to set Broadcast target)">
+            <span>📍 Coords: <strong id="single-coords-text">X: --, Y: --</strong></span>
+          </div>
           <button type="button" id="btn-single-toggle-mirror" style="background: rgba(168, 85, 247, 0.2); border-color: #a855f7; color: #d8b4fe;">🪞 Mirror Controls: OFF</button>
           <button type="button" id="btn-single-restart">Restart</button>
           <button type="button" id="btn-single-power" class="danger">Power Off</button>

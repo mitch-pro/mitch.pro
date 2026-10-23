@@ -60,6 +60,10 @@ import RFB from '/novnc/core/rfb.js';
   const btnBroadcastClick = $('btn-broadcast-click');
   const broadcastIndicator = $('broadcast-indicator');
   const mirrorStatusText = $('mirror-status-text');
+  const coordsDisplayPill = $('coords-display-pill');
+  const coordsText = $('coords-text');
+  const singleCoordsDisplay = $('single-coords-display');
+  const singleCoordsText = $('single-coords-text');
   const btnPowerOnAll = $('btn-power-on-all');
   const btnPowerOffAll = $('btn-power-off-all');
   const btnForceStopAll = $('btn-force-stop-all');
@@ -164,6 +168,122 @@ import RFB from '/novnc/core/rfb.js';
     broadcastClick(x, y);
   });
 
+  // Coordinates tracking & feedback
+  let lastRecordedCoords = null;
+
+  function updateLiveCoords(fbX, fbY) {
+    if (typeof fbX !== 'number' || typeof fbY !== 'number' || isNaN(fbX) || isNaN(fbY)) return;
+    if (singleCoordsText) {
+      singleCoordsText.textContent = `X: ${fbX}, Y: ${fbY}`;
+    }
+  }
+
+  function handleCoordinateClick(fbX, fbY, visualPoint, vmId) {
+    if (typeof fbX !== 'number' || typeof fbY !== 'number' || isNaN(fbX) || isNaN(fbY)) return;
+    lastRecordedCoords = { x: fbX, y: fbY };
+
+    // Update broadcast inputs
+    if (broadcastX) broadcastX.value = fbX;
+    if (broadcastY) broadcastY.value = fbY;
+
+    // Update coordinate labels
+    const label = `Clicked: (${fbX}, ${fbY})`;
+    if (coordsText) coordsText.textContent = label;
+    if (singleCoordsText) singleCoordsText.textContent = `X: ${fbX}, Y: ${fbY}`;
+
+    // Flash highlights
+    coordsDisplayPill?.classList.add('highlight');
+    singleCoordsDisplay?.classList.add('highlight');
+    setTimeout(() => {
+      coordsDisplayPill?.classList.remove('highlight');
+      singleCoordsDisplay?.classList.remove('highlight');
+    }, 700);
+
+    // Show floating bubble & ripple if visual point given
+    if (visualPoint && visualPoint.container) {
+      const bubble = document.createElement('div');
+      bubble.className = 'click-coord-bubble';
+      bubble.textContent = `(${fbX}, ${fbY})`;
+      bubble.style.left = `${visualPoint.localX}px`;
+      bubble.style.top = `${visualPoint.localY}px`;
+      visualPoint.container.appendChild(bubble);
+
+      const ripple = document.createElement('div');
+      ripple.className = 'click-coord-ripple';
+      ripple.style.left = `${visualPoint.localX}px`;
+      ripple.style.top = `${visualPoint.localY}px`;
+      visualPoint.container.appendChild(ripple);
+
+      setTimeout(() => {
+        bubble.remove();
+        ripple.remove();
+      }, 1900);
+    }
+
+    // Try to copy to clipboard
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(`${fbX}, ${fbY}`).catch(() => {});
+    }
+
+    setGlobalStatus(`📍 Clicked VM coordinates: X=${fbX}, Y=${fbY} (copied to Broadcast Click inputs)`);
+  }
+
+  function computeFbCoords(e, container, rfb) {
+    if (!container) return null;
+    const canvas = container.querySelector('canvas');
+    if (!canvas) return null;
+
+    const rect = canvas.getBoundingClientRect();
+    const elemX = e.clientX - rect.left;
+    const elemY = e.clientY - rect.top;
+
+    let fbX, fbY;
+    if (rfb && rfb._display && typeof rfb._display.absX === 'function') {
+      fbX = Math.round(rfb._display.absX(elemX));
+      fbY = Math.round(rfb._display.absY(elemY));
+    } else {
+      const scaleX = (canvas.width || 1024) / (rect.width || 1);
+      const scaleY = (canvas.height || 768) / (rect.height || 1);
+      fbX = Math.round(elemX * scaleX);
+      fbY = Math.round(elemY * scaleY);
+    }
+
+    const containerRect = container.getBoundingClientRect();
+    const localX = e.clientX - containerRect.left;
+    const localY = e.clientY - containerRect.top;
+
+    const maxWidth = (rfb && rfb._fbWidth) || canvas.width || 4000;
+    const maxHeight = (rfb && rfb._fbHeight) || canvas.height || 4000;
+
+    return {
+      fbX: Math.max(0, Math.min(maxWidth, fbX)),
+      fbY: Math.max(0, Math.min(maxHeight, fbY)),
+      localX,
+      localY,
+      container
+    };
+  }
+
+  coordsDisplayPill?.addEventListener('click', () => {
+    if (lastRecordedCoords) {
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(`${lastRecordedCoords.x}, ${lastRecordedCoords.y}`).catch(() => {});
+      }
+      setGlobalStatus(`Copied coordinates (${lastRecordedCoords.x}, ${lastRecordedCoords.y}) to clipboard.`);
+    } else {
+      setGlobalStatus('Click anywhere on a VM screen to view its coordinates.');
+    }
+  });
+
+  singleCoordsDisplay?.addEventListener('click', () => {
+    if (lastRecordedCoords) {
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(`${lastRecordedCoords.x}, ${lastRecordedCoords.y}`).catch(() => {});
+      }
+      setGlobalStatus(`Copied coordinates (${lastRecordedCoords.x}, ${lastRecordedCoords.y}) to clipboard.`);
+    }
+  });
+
   // Update counts
   function updateCounts() {
     $('count-total').textContent = fleetList.length;
@@ -183,7 +303,6 @@ import RFB from '/novnc/core/rfb.js';
         const x = client.jiggleState ? 200 : 204;
         const y = 200;
         try {
-          // Send pointer move without buttons
           if (typeof client.rfb._sendMouse === 'function') {
             client.rfb._sendMouse(x, y, 0);
             jiggledCount++;
@@ -216,6 +335,28 @@ import RFB from '/novnc/core/rfb.js';
     }
   });
 
+  // Staggered connection queue to prevent Proxmox pveproxy connection drops (1011)
+  const connectQueue = [];
+  let isProcessingQueue = false;
+
+  function queueConnectVm(vmId, targetContainer) {
+    if (!connectQueue.some(item => item.vmId === vmId)) {
+      connectQueue.push({ vmId, targetContainer });
+    }
+    processConnectQueue();
+  }
+
+  async function processConnectQueue() {
+    if (isProcessingQueue) return;
+    isProcessingQueue = true;
+    while (connectQueue.length > 0) {
+      const item = connectQueue.shift();
+      await connectVm(item.vmId, item.targetContainer);
+      await new Promise(r => setTimeout(r, 120));
+    }
+    isProcessingQueue = false;
+  }
+
   // Connect RFB to a VM
   async function connectVm(vmId, targetContainer) {
     const client = vmClients.get(vmId);
@@ -223,8 +364,8 @@ import RFB from '/novnc/core/rfb.js';
     if (client.connecting || client.connected) return;
 
     client.connecting = true;
-    const overlay = client.cardEl.querySelector('.screen-overlay');
-    if (overlay) {
+    const overlay = client.cardEl ? client.cardEl.querySelector('.screen-overlay') : null;
+    if (overlay && currentFocusedVmId !== vmId) {
       overlay.classList.remove('hidden');
       overlay.innerHTML = '<div class="spinner"></div><p>Connecting to desktop...</p>';
     }
@@ -237,6 +378,7 @@ import RFB from '/novnc/core/rfb.js';
       url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
 
       const container = targetContainer || client.viewportEl;
+      if (!container) return;
       container.innerHTML = '';
 
       const rfb = new RFB(container, url.href, {
@@ -262,9 +404,17 @@ import RFB from '/novnc/core/rfb.js';
       const origSendMouse = rfb._sendMouse.bind(rfb);
       rfb._sendMouse = function (x, y, mask) {
         origSendMouse(x, y, mask);
+        const fbX = rfb._display ? Math.round(rfb._display.absX(x)) : Math.round(x);
+        const fbY = rfb._display ? Math.round(rfb._display.absY(y)) : Math.round(y);
+
+        if (currentFocusedVmId === vmId) {
+          updateLiveCoords(fbX, fbY);
+          if (mask !== 0) {
+            handleCoordinateClick(fbX, fbY, null, vmId);
+          }
+        }
+
         if (!mirrorActive) return;
-        const fbX = rfb._display ? rfb._display.absX(x) : x;
-        const fbY = rfb._display ? rfb._display.absY(y) : y;
         for (const [otherId, otherClient] of vmClients.entries()) {
           if (otherId === vmId) continue;
           if (otherClient.rfb && otherClient.connected && otherClient.rfb._rfbConnectionState === 'connected') {
@@ -292,8 +442,9 @@ import RFB from '/novnc/core/rfb.js';
       rfb.addEventListener('connect', () => {
         client.connected = true;
         client.connecting = false;
+        client.retries = 0;
         if (overlay) overlay.classList.add('hidden');
-        const badge = client.cardEl.querySelector('.status-indicator');
+        const badge = client.cardEl?.querySelector('.status-indicator');
         if (badge) {
           badge.className = 'status-indicator running';
         }
@@ -302,14 +453,32 @@ import RFB from '/novnc/core/rfb.js';
         }
       });
 
-      rfb.addEventListener('disconnect', () => {
+      rfb.addEventListener('disconnect', (e) => {
+        const wasConnected = client.connected;
         client.connected = false;
         client.connecting = false;
+
+        // Auto-retry up to 3 times with backoff if disconnected during initial boot
+        client.retries = (client.retries || 0) + 1;
+        if (client.vm.status === 'running' && client.retries <= 3 && !wasConnected) {
+          if (overlay && currentFocusedVmId !== vmId) {
+            overlay.classList.remove('hidden');
+            overlay.innerHTML = `<div class="spinner"></div><p>Waiting for desktop display... (retry ${client.retries}/3)</p>`;
+          }
+          setTimeout(() => {
+            if (client.vm.status === 'running') {
+              connectVm(vmId, targetContainer);
+            }
+          }, 3000);
+          return;
+        }
+
         if (overlay && currentFocusedVmId !== vmId) {
           overlay.classList.remove('hidden');
           overlay.innerHTML = '<p>Disconnected</p><button type="button" class="btn-reconnect">Reconnect</button>';
-          overlay.querySelector('.btn-reconnect')?.addEventListener('click', e => {
-            e.stopPropagation();
+          overlay.querySelector('.btn-reconnect')?.addEventListener('click', ev => {
+            ev.stopPropagation();
+            client.retries = 0;
             connectVm(vmId);
           });
         }
@@ -319,11 +488,27 @@ import RFB from '/novnc/core/rfb.js';
     } catch (err) {
       client.connecting = false;
       client.connected = false;
+      client.retries = (client.retries || 0) + 1;
+
+      if (client.vm.status === 'running' && client.retries <= 3) {
+        if (overlay && currentFocusedVmId !== vmId) {
+          overlay.classList.remove('hidden');
+          overlay.innerHTML = `<div class="spinner"></div><p>Booting desktop... (retry ${client.retries}/3)</p>`;
+        }
+        setTimeout(() => {
+          if (client.vm.status === 'running') {
+            connectVm(vmId, targetContainer);
+          }
+        }, 3000);
+        return;
+      }
+
       if (overlay) {
         overlay.classList.remove('hidden');
         overlay.innerHTML = `<p>${esc(err.message)}</p><button type="button" class="btn-retry">Retry</button>`;
-        overlay.querySelector('.btn-retry')?.addEventListener('click', e => {
-          e.stopPropagation();
+        overlay.querySelector('.btn-retry')?.addEventListener('click', ev => {
+          ev.stopPropagation();
+          client.retries = 0;
           connectVm(vmId);
         });
       }
@@ -374,7 +559,7 @@ import RFB from '/novnc/core/rfb.js';
     // Reconnect in grid view
     const client = vmClients.get(vmId);
     if (client && client.vm.status === 'running') {
-      connectVm(vmId, client.viewportEl);
+      queueConnectVm(vmId, client.viewportEl);
     }
   }
 
@@ -388,6 +573,24 @@ import RFB from '/novnc/core/rfb.js';
     localCursor.style.top = `${event.clientY - rect.top}px`;
     localCursor.classList.add('is-active');
   }, true);
+
+  singleScreenContainer.addEventListener('pointerdown', event => {
+    if (!currentFocusedVmId) return;
+    const client = vmClients.get(currentFocusedVmId);
+    const coords = computeFbCoords(event, singleScreenContainer, client?.rfb);
+    if (coords) {
+      handleCoordinateClick(coords.fbX, coords.fbY, coords, currentFocusedVmId);
+    }
+  }, { capture: true });
+
+  singleScreenContainer.addEventListener('pointermove', event => {
+    if (!currentFocusedVmId) return;
+    const client = vmClients.get(currentFocusedVmId);
+    const coords = computeFbCoords(event, singleScreenContainer, client?.rfb);
+    if (coords) {
+      updateLiveCoords(coords.fbX, coords.fbY);
+    }
+  }, { capture: true, passive: true });
 
   singleScreenContainer.addEventListener('mouseleave', () => {
     const localCursor = singleScreenContainer.querySelector('#single-local-cursor');
@@ -406,6 +609,10 @@ import RFB from '/novnc/core/rfb.js';
   // Render the 24 cards
   function renderFleet() {
     if (fleetList.length === 0) {
+      for (const id of vmClients.keys()) {
+        disconnectVm(id);
+      }
+      vmClients.clear();
       gridView.innerHTML = `
         <div class="empty-state" style="grid-column: 1 / -1;">
           <h2>No ChromeOS fleet VMs found</h2>
@@ -426,6 +633,41 @@ import RFB from '/novnc/core/rfb.js';
       return;
     }
 
+    // Fast in-place status update if cards already match
+    const existingCards = gridView.querySelectorAll('.screen-card');
+    if (existingCards.length === fleetList.length && vmClients.size === fleetList.length) {
+      for (const vm of fleetList) {
+        const client = vmClients.get(vm.id);
+        if (!client) continue;
+        client.vm = vm;
+        const isRunning = vm.status === 'running';
+        const indicator = client.cardEl.querySelector('.status-indicator');
+        if (indicator) {
+          indicator.className = `status-indicator ${isRunning ? 'running' : 'stopped'}`;
+        }
+        const btnPower = client.cardEl.querySelector('.btn-card-power');
+        if (btnPower) {
+          btnPower.textContent = isRunning ? 'Stop' : 'Start';
+        }
+        const overlay = client.cardEl.querySelector('.screen-overlay');
+        if (!isRunning) {
+          disconnectVm(vm.id);
+          if (overlay) {
+            overlay.classList.remove('hidden');
+            overlay.innerHTML = '<p>Computer is stopped</p><button type="button" class="btn-overlay-start primary">Start computer</button>';
+          }
+        } else if (!client.connected && !client.connecting && currentFocusedVmId !== vm.id) {
+          queueConnectVm(vm.id, client.viewportEl);
+        }
+      }
+      return;
+    }
+
+    // Full DOM rebuild: disconnect any existing clients cleanly first
+    for (const id of vmClients.keys()) {
+      disconnectVm(id);
+    }
+    vmClients.clear();
     gridView.innerHTML = '';
 
     for (const vm of fleetList) {
@@ -519,12 +761,13 @@ import RFB from '/novnc/core/rfb.js';
         connecting: false,
         cardEl: card,
         viewportEl,
-        jiggleState: false
+        jiggleState: false,
+        retries: 0
       });
 
-      // If running, auto-connect RFB
+      // If running, queue connection
       if (isRunning && currentFocusedVmId !== vm.id) {
-        connectVm(vm.id, viewportEl);
+        queueConnectVm(vm.id, viewportEl);
       }
     }
   }
