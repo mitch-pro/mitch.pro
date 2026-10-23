@@ -312,98 +312,510 @@ struct ParsedReply {
     coin_request_percent: f64,
 }
 
-/// Picks apart whatever the model actually sent, most-strict-first:
-/// 1. The whole trimmed text is the JSON object we asked for.
-/// 2. The model wrapped the JSON in a little prose — same `{...}`
-///    substring trick `routes/team.rs` uses for Groq.
-/// 3. The model ignored the format and just replied in plain prose —
-///    treat the whole trimmed text as the reply rather than discarding a
-///    perfectly good in-character response over a formatting slip.
+/// Picks apart whatever the model actually sent, with resilient auto-repair:
+/// 1. Markdown code fences and surrounding prose are stripped.
+/// 2. Malformed JSON syntax (trailing commas, literal newlines in strings,
+///    single quotes, unquoted keys, Python booleans, missing closing braces)
+///    is repaired and parsed.
+/// 3. If standard JSON parsing still fails (e.g. unescaped quotes in strings),
+///    resilient regex field extraction extracts `reply`, `mood`, `action`, etc.
+/// 4. If the model ignored the format and replied in plain prose, clean up
+///    any stray markdown/braces and treat the trimmed text as the reply.
 ///
-/// An invalid or missing `mood` in any of these falls back to a default
-/// rather than discarding an otherwise-good reply — getting the sprite
-/// wrong is a much smaller problem than throwing the reply away.
-/// Returns `None` only when there's truly nothing to show (blank/
-/// whitespace-only content) — the one case still worth retrying for.
+/// Returns `None` only when there's truly nothing to show (blank/whitespace
+/// only content or empty reply) — triggering an API retry.
 fn extract_reply(text: &str, moods: &[String]) -> Option<ParsedReply> {
     let trimmed = text.trim();
     if trimmed.is_empty() {
         return None;
     }
-    if let Some(parsed) = serde_json::from_str::<Value>(trimmed)
+
+    let fence_stripped = strip_markdown_code_fence(trimmed);
+
+    // 1. Try parsing directly or from candidate {...} block with auto-repair
+    let json_candidate = if let Some(open) = fence_stripped.find('{') {
+        if let Some(close_rel) = fence_stripped[open..].rfind('}') {
+            &fence_stripped[open..=open + close_rel]
+        } else {
+            &fence_stripped[open..]
+        }
+    } else {
+        fence_stripped
+    };
+
+    let parsed_val = serde_json::from_str::<Value>(json_candidate)
         .ok()
-        .or_else(|| extract_json_object(trimmed))
-    {
-        let reply = parsed
-            .get("reply")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .trim();
-        if !reply.is_empty() {
-            let raw_mood = parsed.get("mood").and_then(|v| v.as_str()).unwrap_or("");
-            // Case/whitespace-insensitive match: the model reliably picks
-            // one of the moods it was given, just not always byte-for-byte
-            // (e.g. "Happy" instead of "happy") — the canonical spelling
-            // from `moods` is what gets returned either way, since that's
-            // what the image lookup and the DB row are keyed on.
-            let mood = moods
-                .iter()
-                .find(|valid| valid.eq_ignore_ascii_case(raw_mood.trim()))
-                .cloned()
-                .unwrap_or_else(|| {
-                    if !raw_mood.is_empty() {
-                        tracing::error!(
-                            "[companion] deepseek: mood {raw_mood:?} didn't match any of {moods:?}, guessing instead"
-                        );
-                    }
-                    guess_mood(reply, moods)
-                });
-            let remember = parsed
-                .get("remember")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .trim()
-                .to_string();
-            let action = parsed
-                .get("action")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .trim()
-                .to_string();
-            let custom_js = parsed
-                .get("customJs")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let coin_request_percent = parsed
-                .get("coinRequestPercent")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0)
-                .clamp(0.0, MAX_COIN_REQUEST_PERCENT);
-            return Some(ParsedReply {
-                reply: reply.to_string(),
-                mood,
-                remember,
-                action,
-                custom_js,
-                coin_request_percent,
-            });
+        .or_else(|| {
+            let repaired = repair_json_string(json_candidate);
+            serde_json::from_str::<Value>(&repaired).ok()
+        });
+
+    if let Some(val) = parsed_val {
+        if let Some(reply) = extract_value_to_parsed_reply(&val, moods) {
+            return Some(reply);
         }
     }
-    // No JSON object at all, or one with an empty "reply" — the model
-    // ignored the format. Use the raw text itself rather than failing.
+
+    // 2. If JSON parsing failed or had empty reply, try resilient regex extraction
+    if let Some(reply) = extract_fields_resilient(fence_stripped, moods) {
+        return Some(reply);
+    }
+    if fence_stripped != trimmed {
+        if let Some(reply) = extract_fields_resilient(trimmed, moods) {
+            return Some(reply);
+        }
+    }
+
+    // 3. Fall back to plain prose response (model skipped format entirely).
+    // Clean any stray code fences, braces, or wrapping quotes so raw JSON syntax
+    // is never displayed in the speech bubble.
+    let cleaned = clean_plain_text_reply(fence_stripped);
+    if cleaned.is_empty() {
+        return None;
+    }
+
     tracing::error!(
-        "[companion] deepseek: no JSON object in content, guessing mood from reply text: {trimmed:?}"
+        "[companion] deepseek: no JSON object in content, guessing mood from reply text: {cleaned:?}"
     );
-    let mood = guess_mood(trimmed, moods);
+    let mood = guess_mood(&cleaned, moods);
     Some(ParsedReply {
-        reply: trimmed.to_string(),
+        reply: cleaned,
         mood,
         remember: String::new(),
         action: String::new(),
         custom_js: String::new(),
         coin_request_percent: 0.0,
     })
+}
+
+fn strip_markdown_code_fence(text: &str) -> &str {
+    let t = text.trim();
+    if let Some(rest) = t.strip_prefix("```") {
+        let after_lang = if let Some(idx) = rest.find('\n') {
+            &rest[idx + 1..]
+        } else {
+            rest
+        };
+        if let Some(end) = after_lang.rfind("```") {
+            return after_lang[..end].trim();
+        }
+    }
+    t
+}
+
+static RE_TRAILING_COMMA: std::sync::LazyLock<regex::Regex> =
+    std::sync::LazyLock::new(|| regex::Regex::new(r",\s*([}\]])").unwrap());
+static RE_MISSING_COMMA: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(
+        r#"("[^"\\]*(?:\\.[^"\\]*)*"|\b(?:true|false|null|[0-9]+(?:\.[0-9]+)?))\s*\n\s*("?[a-zA-Z_][a-zA-Z0-9_]*"?\s*:)"#,
+    )
+    .unwrap()
+});
+static RE_UNQUOTED_KEYS: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(r#"([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:"#).unwrap()
+});
+static RE_BOOL_TRUE: std::sync::LazyLock<regex::Regex> =
+    std::sync::LazyLock::new(|| regex::Regex::new(r":\s*True\b").unwrap());
+static RE_BOOL_FALSE: std::sync::LazyLock<regex::Regex> =
+    std::sync::LazyLock::new(|| regex::Regex::new(r":\s*False\b").unwrap());
+static RE_NONE: std::sync::LazyLock<regex::Regex> =
+    std::sync::LazyLock::new(|| regex::Regex::new(r":\s*None\b").unwrap());
+
+static RE_REPLY_KEY: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(r#"(?i)["']?(?:reply|message|response|text)["']?\s*:"#).unwrap()
+});
+static RE_NEXT_FIELD: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(
+        r#"(?i)(?:,\s*["']?(?:mood|emotion|remember|action|custom_?js|coin_?request_?percent)["']?\s*:|\s*\}\s*$)"#,
+    )
+    .unwrap()
+});
+static RE_MOOD: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(r#"(?i)["']?(?:mood|emotion)["']?\s*:\s*["']?([a-zA-Z_-]+)["']?"#).unwrap()
+});
+static RE_ACTION: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(r#"(?i)["']?(?:action)["']?\s*:\s*["']?([a-zA-Z_-]+)["']?"#).unwrap()
+});
+static RE_REMEMBER: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(r#"(?i)["']?(?:remember)["']?\s*:\s*["']([^"'\\]*(?:\\.[^"'\\]*)*)["']"#)
+        .unwrap()
+});
+static RE_CUSTOM_JS: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(r#"(?i)["']?(?:custom_?js)["']?\s*:\s*["']([^"'\\]*(?:\\.[^"'\\]*)*)["']"#)
+        .unwrap()
+});
+static RE_COIN_PERCENT: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(
+        r#"(?i)["']?(?:coin_?request_?percent)["']?\s*:\s*["']?([0-9]+(?:\.[0-9]+)?)"#,
+    )
+    .unwrap()
+});
+
+fn unescape_json_string(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('n') => out.push('\n'),
+                Some('r') => out.push('\r'),
+                Some('t') => out.push('\t'),
+                Some('"') => out.push('"'),
+                Some('\'') => out.push('\''),
+                Some('\\') => out.push('\\'),
+                Some('/') => out.push('/'),
+                Some(other) => {
+                    out.push('\\');
+                    out.push(other);
+                }
+                None => out.push('\\'),
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// Repairs common LLM JSON syntax errors:
+/// - Strips C/JS-style comments
+/// - Escapes literal control chars (\n, \r, \t) inside string values
+/// - Converts single quotes around strings/keys to double quotes
+/// - Removes trailing commas before } or ]
+/// - Inserts missing commas between lines of properties
+/// - Quotes unquoted keys
+/// - Converts Python True/False/None to true/false/null
+/// - Closes unclosed quotes and braces
+fn repair_json_string(candidate: &str) -> String {
+    let mut out = String::with_capacity(candidate.len() + 32);
+    let chars: Vec<char> = candidate.chars().collect();
+    let len = chars.len();
+    let mut i = 0;
+    let mut in_double_quote = false;
+    let mut in_single_quote = false;
+    let mut escape = false;
+
+    while i < len {
+        let c = chars[i];
+        if in_double_quote {
+            if escape {
+                escape = false;
+                out.push(c);
+            } else if c == '\\' {
+                escape = true;
+                out.push(c);
+            } else if c == '"' {
+                in_double_quote = false;
+                out.push(c);
+            } else if c == '\n' {
+                out.push_str("\\n");
+            } else if c == '\r' {
+                out.push_str("\\r");
+            } else if c == '\t' {
+                out.push_str("\\t");
+            } else if (c as u32) < 0x20 {
+                out.push(' ');
+            } else {
+                out.push(c);
+            }
+        } else if in_single_quote {
+            if escape {
+                escape = false;
+                if c != '\'' {
+                    out.push('\\');
+                }
+                out.push(c);
+            } else if c == '\\' {
+                escape = true;
+            } else if c == '\'' {
+                in_single_quote = false;
+                out.push('"');
+            } else if c == '"' {
+                out.push_str("\\\"");
+            } else if c == '\n' {
+                out.push_str("\\n");
+            } else if c == '\r' {
+                out.push_str("\\r");
+            } else if c == '\t' {
+                out.push_str("\\t");
+            } else if (c as u32) < 0x20 {
+                out.push(' ');
+            } else {
+                out.push(c);
+            }
+        } else {
+            // Outside strings: skip comments
+            if c == '/' && i + 1 < len && chars[i + 1] == '/' {
+                i += 2;
+                while i < len && chars[i] != '\n' {
+                    i += 1;
+                }
+                continue;
+            }
+            if c == '/' && i + 1 < len && chars[i + 1] == '*' {
+                i += 2;
+                while i + 1 < len && !(chars[i] == '*' && chars[i + 1] == '/') {
+                    i += 1;
+                }
+                i += 2;
+                continue;
+            }
+            if c == '"' {
+                in_double_quote = true;
+                out.push(c);
+            } else if c == '\'' {
+                in_single_quote = true;
+                out.push('"');
+            } else {
+                out.push(c);
+            }
+        }
+        i += 1;
+    }
+
+    if in_double_quote || in_single_quote {
+        out.push('"');
+    }
+
+    let out = RE_TRAILING_COMMA.replace_all(&out, "$1");
+    let out = RE_MISSING_COMMA.replace_all(&out, "$1,\n$2");
+    let out = RE_UNQUOTED_KEYS.replace_all(&out, r#"$1"$2":"#);
+    let out = RE_BOOL_TRUE.replace_all(&out, ": true");
+    let out = RE_BOOL_FALSE.replace_all(&out, ": false");
+    let mut out = RE_NONE.replace_all(&out, ": null").to_string();
+
+    // Balance unclosed braces and brackets
+    let mut open_braces: i32 = 0;
+    let mut open_brackets: i32 = 0;
+    let mut in_str = false;
+    let mut esc = false;
+    for ch in out.chars() {
+        if in_str {
+            if esc {
+                esc = false;
+            } else if ch == '\\' {
+                esc = true;
+            } else if ch == '"' {
+                in_str = false;
+            }
+        } else if ch == '"' {
+            in_str = true;
+        } else if ch == '{' {
+            open_braces += 1;
+        } else if ch == '}' {
+            if open_braces > 0 {
+                open_braces -= 1;
+            }
+        } else if ch == '[' {
+            open_brackets += 1;
+        } else if ch == ']' {
+            if open_brackets > 0 {
+                open_brackets -= 1;
+            }
+        }
+    }
+    if in_str {
+        out.push('"');
+    }
+    for _ in 0..open_brackets {
+        out.push(']');
+    }
+    for _ in 0..open_braces {
+        out.push('}');
+    }
+
+    out
+}
+
+fn resolve_mood(raw_mood: &str, reply: &str, moods: &[String]) -> String {
+    let raw = raw_mood.trim();
+    if let Some(valid) = moods.iter().find(|m| m.eq_ignore_ascii_case(raw)) {
+        return valid.clone();
+    }
+    if !raw.is_empty() {
+        tracing::error!(
+            "[companion] deepseek: mood {raw:?} didn't match any of {moods:?}, guessing instead"
+        );
+    }
+    guess_mood(reply, moods)
+}
+
+fn extract_value_to_parsed_reply(val: &Value, moods: &[String]) -> Option<ParsedReply> {
+    let reply = val
+        .get("reply")
+        .or_else(|| val.get("message"))
+        .or_else(|| val.get("text"))
+        .or_else(|| val.get("response"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+
+    if reply.is_empty() {
+        return None;
+    }
+
+    let raw_mood = val
+        .get("mood")
+        .or_else(|| val.get("emotion"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let mood = resolve_mood(raw_mood, reply, moods);
+
+    let remember = val
+        .get("remember")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+
+    let action = val
+        .get("action")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+
+    let custom_js = val
+        .get("customJs")
+        .or_else(|| val.get("custom_js"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let coin_request_percent = val
+        .get("coinRequestPercent")
+        .or_else(|| val.get("coin_request_percent"))
+        .and_then(|v| {
+            if let Some(n) = v.as_f64() {
+                Some(n)
+            } else if let Some(s) = v.as_str() {
+                s.trim().trim_end_matches('%').parse::<f64>().ok()
+            } else {
+                None
+            }
+        })
+        .unwrap_or(0.0)
+        .clamp(0.0, MAX_COIN_REQUEST_PERCENT);
+
+    Some(ParsedReply {
+        reply: reply.to_string(),
+        mood,
+        remember,
+        action,
+        custom_js,
+        coin_request_percent,
+    })
+}
+
+fn extract_fields_resilient(text: &str, moods: &[String]) -> Option<ParsedReply> {
+    let reply_match = RE_REPLY_KEY.find(text)?;
+    let after_reply = text[reply_match.end()..].trim_start();
+    if after_reply.is_empty() {
+        return None;
+    }
+
+    let (raw_reply, _) = if let Some(stripped) = after_reply.strip_prefix('"') {
+        if let Some(m) = RE_NEXT_FIELD.find(stripped) {
+            let inside = &stripped[..m.start()].trim_end();
+            let inside = inside.strip_suffix('"').unwrap_or(inside);
+            (inside, &stripped[m.start()..])
+        } else if let Some(last_quote) = stripped.rfind('"') {
+            (&stripped[..last_quote], &stripped[last_quote + 1..])
+        } else {
+            let inside = stripped.trim_end_matches(['}', ' ', '\n', '\r', '\t']);
+            (inside, "")
+        }
+    } else if let Some(stripped) = after_reply.strip_prefix('\'') {
+        if let Some(m) = RE_NEXT_FIELD.find(stripped) {
+            let inside = &stripped[..m.start()].trim_end();
+            let inside = inside.strip_suffix('\'').unwrap_or(inside);
+            (inside, &stripped[m.start()..])
+        } else if let Some(last_quote) = stripped.rfind('\'') {
+            (&stripped[..last_quote], &stripped[last_quote + 1..])
+        } else {
+            let inside = stripped.trim_end_matches(['}', ' ', '\n', '\r', '\t']);
+            (inside, "")
+        }
+    } else if let Some(m) = RE_NEXT_FIELD.find(after_reply) {
+        let inside = &after_reply[..m.start()].trim_end();
+        let inside = inside.trim_matches(['"', '\'']);
+        (inside, &after_reply[m.start()..])
+    } else {
+        let inside = after_reply.trim_end_matches(['}', ' ', '\n', '\r', '\t']);
+        let inside = inside.trim_matches(['"', '\'']);
+        (inside, "")
+    };
+
+    let reply = unescape_json_string(raw_reply).trim().to_string();
+    if reply.is_empty() {
+        return None;
+    }
+
+    let raw_mood = RE_MOOD
+        .captures(text)
+        .and_then(|c| c.get(1))
+        .map(|m| m.as_str())
+        .unwrap_or("");
+    let mood = resolve_mood(raw_mood, &reply, moods);
+
+    let action = RE_ACTION
+        .captures(text)
+        .and_then(|c| c.get(1))
+        .map(|m| m.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let remember = RE_REMEMBER
+        .captures(text)
+        .and_then(|c| c.get(1))
+        .map(|m| unescape_json_string(m.as_str()))
+        .unwrap_or_default();
+
+    let custom_js = RE_CUSTOM_JS
+        .captures(text)
+        .and_then(|c| c.get(1))
+        .map(|m| unescape_json_string(m.as_str()))
+        .unwrap_or_default();
+
+    let coin_request_percent = RE_COIN_PERCENT
+        .captures(text)
+        .and_then(|c| c.get(1))
+        .and_then(|m| m.as_str().parse::<f64>().ok())
+        .unwrap_or(0.0)
+        .clamp(0.0, MAX_COIN_REQUEST_PERCENT);
+
+    Some(ParsedReply {
+        reply,
+        mood,
+        remember,
+        action,
+        custom_js,
+        coin_request_percent,
+    })
+}
+
+fn clean_plain_text_reply(text: &str) -> String {
+    let mut t = text.trim();
+    if let Some(stripped) = t.strip_prefix("```") {
+        if let Some(idx) = stripped.find('\n') {
+            t = &stripped[idx + 1..];
+        } else {
+            t = stripped;
+        }
+        if let Some(end) = t.rfind("```") {
+            t = &t[..end];
+        }
+        t = t.trim();
+    }
+    if t.starts_with('{') && t.ends_with('}') && t.len() >= 2 {
+        t = t[1..t.len() - 1].trim();
+    }
+    if (t.starts_with('"') && t.ends_with('"') && t.len() >= 2)
+        || (t.starts_with('\'') && t.ends_with('\'') && t.len() >= 2)
+    {
+        t = &t[1..t.len() - 1].trim();
+    }
+    unescape_json_string(t)
 }
 
 /// `raw` (whatever the model sent for `action`) if it case-insensitively
@@ -416,14 +828,6 @@ fn sanitize_action(raw: &str) -> String {
         .find(|a| a.eq_ignore_ascii_case(raw.trim()))
         .map(|a| a.to_string())
         .unwrap_or_default()
-}
-
-/// The first `{` through its matching last `}`, parsed as JSON — `None`
-/// if there's no `{` at all or that substring isn't valid JSON.
-fn extract_json_object(text: &str) -> Option<Value> {
-    let open = text.find('{')?;
-    let close_rel = text[open..].rfind('}')?;
-    serde_json::from_str(&text[open..=open + close_rel]).ok()
 }
 
 /// Simple keyword sniffing on the reply text itself, used whenever the
@@ -476,4 +880,147 @@ fn guess_mood(reply: &str, moods: &[String]) -> String {
     use rand::Rng;
     let idx = rand::rng().random_range(0..pool.len());
     pool[idx].clone()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_moods() -> Vec<String> {
+        vec![
+            "happy".into(),
+            "sad".into(),
+            "angry".into(),
+            "pout".into(),
+            "surprised".into(),
+        ]
+    }
+
+    #[test]
+    fn test_valid_json() {
+        let input = r#"{"reply": "Hello friend!", "mood": "happy", "action": "wave"}"#;
+        let parsed = extract_reply(input, &sample_moods()).unwrap();
+        assert_eq!(parsed.reply, "Hello friend!");
+        assert_eq!(parsed.mood, "happy");
+        assert_eq!(parsed.action, "wave");
+    }
+
+    #[test]
+    fn test_markdown_code_fence() {
+        let input = "```json\n{\"reply\": \"Hello from code block!\", \"mood\": \"happy\"}\n```";
+        let parsed = extract_reply(input, &sample_moods()).unwrap();
+        assert_eq!(parsed.reply, "Hello from code block!");
+        assert_eq!(parsed.mood, "happy");
+    }
+
+    #[test]
+    fn test_markdown_code_fence_with_prose() {
+        let input = "Here is my response:\n```json\n{\"reply\": \"I am ready!\", \"mood\": \"happy\", \"action\": \"jump\"}\n```\nHope that helps!";
+        let parsed = extract_reply(input, &sample_moods()).unwrap();
+        assert_eq!(parsed.reply, "I am ready!");
+        assert_eq!(parsed.mood, "happy");
+        assert_eq!(parsed.action, "jump");
+    }
+
+    #[test]
+    fn test_trailing_comma() {
+        let input = r#"{"reply": "Watch out!", "mood": "angry", "coinRequestPercent": 50,}"#;
+        let parsed = extract_reply(input, &sample_moods()).unwrap();
+        assert_eq!(parsed.reply, "Watch out!");
+        assert_eq!(parsed.mood, "angry");
+        assert_eq!(parsed.coin_request_percent, 50.0);
+    }
+
+    #[test]
+    fn test_literal_newlines_in_string() {
+        let input = "{\n  \"reply\": \"Line one\nLine two\",\n  \"mood\": \"happy\"\n}";
+        let parsed = extract_reply(input, &sample_moods()).unwrap();
+        assert_eq!(parsed.reply, "Line one\nLine two");
+        assert_eq!(parsed.mood, "happy");
+    }
+
+    #[test]
+    fn test_single_quoted_json() {
+        let input = "{'reply': 'Single quotes!', 'mood': 'happy', 'action': 'dance'}";
+        let parsed = extract_reply(input, &sample_moods()).unwrap();
+        assert_eq!(parsed.reply, "Single quotes!");
+        assert_eq!(parsed.mood, "happy");
+        assert_eq!(parsed.action, "dance");
+    }
+
+    #[test]
+    fn test_unquoted_keys() {
+        let input = "{ reply: \"Unquoted keys!\", mood: \"happy\", action: \"spin\" }";
+        let parsed = extract_reply(input, &sample_moods()).unwrap();
+        assert_eq!(parsed.reply, "Unquoted keys!");
+        assert_eq!(parsed.mood, "happy");
+        assert_eq!(parsed.action, "spin");
+    }
+
+    #[test]
+    fn test_python_booleans_and_comments() {
+        let input = "{\n  // A comment here\n  \"reply\": \"Python style!\",\n  \"mood\": \"happy\",\n  \"remember\": \"cool\",\n  \"is_bot\": False\n}";
+        let parsed = extract_reply(input, &sample_moods()).unwrap();
+        assert_eq!(parsed.reply, "Python style!");
+        assert_eq!(parsed.mood, "happy");
+        assert_eq!(parsed.remember, "cool");
+    }
+
+    #[test]
+    fn test_missing_comma_between_properties() {
+        let input = "{\n  \"reply\": \"Missing comma!\"\n  \"mood\": \"happy\"\n  \"coinRequestPercent\": 25\n}";
+        let parsed = extract_reply(input, &sample_moods()).unwrap();
+        assert_eq!(parsed.reply, "Missing comma!");
+        assert_eq!(parsed.mood, "happy");
+        assert_eq!(parsed.coin_request_percent, 25.0);
+    }
+
+    #[test]
+    fn test_unescaped_quotes_in_reply() {
+        let input = r#"{"reply": "He said "hello there!" to me.", "mood": "happy", "coinRequestPercent": 100}"#;
+        let parsed = extract_reply(input, &sample_moods()).unwrap();
+        assert_eq!(parsed.reply, "He said \"hello there!\" to me.");
+        assert_eq!(parsed.mood, "happy");
+        assert_eq!(parsed.coin_request_percent, 100.0);
+    }
+
+    #[test]
+    fn test_truncated_json() {
+        let input = r#"{"reply": "I am about to take all your coins!""#;
+        let parsed = extract_reply(input, &sample_moods()).unwrap();
+        assert_eq!(parsed.reply, "I am about to take all your coins!");
+    }
+
+    #[test]
+    fn test_string_coin_request_percent() {
+        let input = r#"{"reply": "Pay tax!", "mood": "angry", "coinRequestPercent": "75%"}"#;
+        let parsed = extract_reply(input, &sample_moods()).unwrap();
+        assert_eq!(parsed.reply, "Pay tax!");
+        assert_eq!(parsed.mood, "angry");
+        assert_eq!(parsed.coin_request_percent, 75.0);
+    }
+
+    #[test]
+    fn test_snake_case_keys() {
+        let input = r#"{"response": "Snake case!", "emotion": "angry", "custom_js": "alert(1)", "coin_request_percent": 30}"#;
+        let parsed = extract_reply(input, &sample_moods()).unwrap();
+        assert_eq!(parsed.reply, "Snake case!");
+        assert_eq!(parsed.mood, "angry");
+        assert_eq!(parsed.custom_js, "alert(1)");
+        assert_eq!(parsed.coin_request_percent, 30.0);
+    }
+
+    #[test]
+    fn test_plain_text_fallback_strips_stray_syntax() {
+        let input = "```\nJust a regular message without json!\n```";
+        let parsed = extract_reply(input, &sample_moods()).unwrap();
+        assert_eq!(parsed.reply, "Just a regular message without json!");
+    }
+
+    #[test]
+    fn test_empty_input_returns_none() {
+        assert!(extract_reply("", &sample_moods()).is_none());
+        assert!(extract_reply("   ", &sample_moods()).is_none());
+        assert!(extract_reply("```json\n\n```", &sample_moods()).is_none());
+    }
 }

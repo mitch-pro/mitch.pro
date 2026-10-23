@@ -49,11 +49,12 @@ subsystem — no `server.js` equivalent.
   realistic multi-turn load. That was the "companion AI failed... half
   the time" bug. Dropping `response_format` fixed it (verified with the
   same rapid-fire reproduction, repeatedly, 0 failures after). The cost:
-  the model sometimes wraps the JSON in a little prose, or skips the JSON
-  entirely and just replies in plain text — `extract_reply` in
-  `deepseek.rs` handles both (strip to the first `{...}` substring; if
-  that still fails, treat the whole reply as the message text) rather
-  than failing the whole request over a formatting slip.
+  the model sometimes wraps the JSON in a little prose, skips the JSON
+  entirely, or produces malformed JSON (trailing commas, literal newlines in
+  strings, unquoted keys, single quotes, unescaped quotes in the reply text,
+  or truncated syntax) — `extract_reply` in `deepseek.rs` automatically repairs
+  and recovers valid fields (and falls back to resilient regex field extraction)
+  rather than failing the request or displaying raw JSON code in the speech bubble.
 - **Why the model kept dropping the JSON format a few turns into a
   conversation (root cause, found after the `response_format` fix above
   didn't fully explain it):** chat history was being replayed to the API
