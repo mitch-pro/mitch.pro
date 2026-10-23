@@ -38,6 +38,7 @@ import RFB from '/novnc/core/rfb.js';
   let jigglerTimer = null;
   let currentFocusedVmId = null;
   let statusPollTimer = null;
+  let mirrorActive = false;
 
   // UI Elements
   const gridView = $('grid-view');
@@ -46,6 +47,19 @@ import RFB from '/novnc/core/rfb.js';
   const jigglerPill = $('jiggler-pill');
   const jigglerDot = $('jiggler-dot');
   const btnToggleJiggler = $('btn-toggle-jiggler');
+  const btnToggleMirror = $('btn-toggle-mirror');
+  const btnSingleToggleMirror = $('btn-single-toggle-mirror');
+  const broadcastBar = $('broadcast-bar');
+  const broadcastTextInput = $('broadcast-text-input');
+  const btnBroadcastType = $('btn-broadcast-type');
+  const btnBroadcastEnter = $('btn-broadcast-enter');
+  const btnBroadcastTab = $('btn-broadcast-tab');
+  const btnBroadcastBackspace = $('btn-broadcast-backspace');
+  const broadcastX = $('broadcast-x');
+  const broadcastY = $('broadcast-y');
+  const btnBroadcastClick = $('btn-broadcast-click');
+  const broadcastIndicator = $('broadcast-indicator');
+  const mirrorStatusText = $('mirror-status-text');
   const btnPowerOnAll = $('btn-power-on-all');
   const btnPowerOffAll = $('btn-power-off-all');
   const btnForceStopAll = $('btn-force-stop-all');
@@ -65,6 +79,90 @@ import RFB from '/novnc/core/rfb.js';
     fleetGlobalStatus.textContent = msg;
     fleetGlobalStatus.style.color = isError ? 'var(--danger)' : 'var(--muted)';
   }
+
+  function toggleMirroring(force) {
+    mirrorActive = typeof force === 'boolean' ? force : !mirrorActive;
+    const label = mirrorActive ? '🪞 Mirror Controls: ON' : '🪞 Mirror Controls: OFF';
+    if (btnToggleMirror) btnToggleMirror.textContent = label;
+    if (btnSingleToggleMirror) btnSingleToggleMirror.textContent = label;
+    if (broadcastBar) broadcastBar.classList.toggle('mirroring-active', mirrorActive);
+    if (broadcastIndicator) broadcastIndicator.classList.toggle('active', mirrorActive);
+    if (mirrorStatusText) {
+      mirrorStatusText.textContent = mirrorActive ? 'Mirroring is ACTIVE (All 24 VMs)' : 'Mirroring is OFF';
+    }
+  }
+
+  btnToggleMirror?.addEventListener('click', () => toggleMirroring());
+  btnSingleToggleMirror?.addEventListener('click', () => toggleMirroring());
+
+  async function broadcastTypeText(text) {
+    if (!text) return;
+    setGlobalStatus(`Typing "${text}" across all connected Chromebooks...`);
+    for (let i = 0; i < text.length; i++) {
+      const code = text.charCodeAt(i);
+      for (const client of vmClients.values()) {
+        if (client.rfb && client.connected && client.rfb._rfbConnectionState === 'connected') {
+          try {
+            client.rfb.sendKey(code, null, true);
+            client.rfb.sendKey(code, null, false);
+          } catch (_) {}
+        }
+      }
+      await new Promise(r => setTimeout(r, 25));
+    }
+    setGlobalStatus('Finished typing broadcast text.');
+  }
+
+  function broadcastKey(keysym, code) {
+    for (const client of vmClients.values()) {
+      if (client.rfb && client.connected && client.rfb._rfbConnectionState === 'connected') {
+        try {
+          client.rfb.sendKey(keysym, code, true);
+          client.rfb.sendKey(keysym, code, false);
+        } catch (_) {}
+      }
+    }
+  }
+
+  function broadcastClick(x, y) {
+    setGlobalStatus(`Clicking at (${x}, ${y}) across all connected Chromebooks...`);
+    for (const client of vmClients.values()) {
+      if (client.rfb && client.connected && client.rfb._rfbConnectionState === 'connected') {
+        try {
+          RFB.messages.pointerEvent(client.rfb._sock, x, y, 0);
+          RFB.messages.pointerEvent(client.rfb._sock, x, y, 1);
+          setTimeout(() => {
+            try {
+              RFB.messages.pointerEvent(client.rfb._sock, x, y, 0);
+            } catch (_) {}
+          }, 80);
+        } catch (_) {}
+      }
+    }
+  }
+
+  btnBroadcastType?.addEventListener('click', () => {
+    const text = broadcastTextInput.value;
+    if (text) {
+      broadcastTypeText(text);
+      broadcastTextInput.value = '';
+    }
+  });
+
+  broadcastTextInput?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      btnBroadcastType?.click();
+    }
+  });
+
+  btnBroadcastEnter?.addEventListener('click', () => broadcastKey(0xff0d, 'Enter'));
+  btnBroadcastTab?.addEventListener('click', () => broadcastKey(0xff09, 'Tab'));
+  btnBroadcastBackspace?.addEventListener('click', () => broadcastKey(0xff08, 'Backspace'));
+  btnBroadcastClick?.addEventListener('click', () => {
+    const x = Number(broadcastX.value) || 500;
+    const y = Number(broadcastY.value) || 300;
+    broadcastClick(x, y);
+  });
 
   // Update counts
   function updateCounts() {
@@ -159,6 +257,37 @@ import RFB from '/novnc/core/rfb.js';
         cursor.setAttribute('aria-hidden', 'true');
         targetContainer.appendChild(cursor);
       }
+
+      // Hook mouse & keyboard for mirroring across all VMs when active
+      const origSendMouse = rfb._sendMouse.bind(rfb);
+      rfb._sendMouse = function (x, y, mask) {
+        origSendMouse(x, y, mask);
+        if (!mirrorActive) return;
+        const fbX = rfb._display ? rfb._display.absX(x) : x;
+        const fbY = rfb._display ? rfb._display.absY(y) : y;
+        for (const [otherId, otherClient] of vmClients.entries()) {
+          if (otherId === vmId) continue;
+          if (otherClient.rfb && otherClient.connected && otherClient.rfb._rfbConnectionState === 'connected') {
+            try {
+              RFB.messages.pointerEvent(otherClient.rfb._sock, fbX, fbY, mask);
+            } catch (_) {}
+          }
+        }
+      };
+
+      const origSendKey = rfb.sendKey.bind(rfb);
+      rfb.sendKey = function (keysym, code, down) {
+        origSendKey(keysym, code, down);
+        if (!mirrorActive) return;
+        for (const [otherId, otherClient] of vmClients.entries()) {
+          if (otherId === vmId) continue;
+          if (otherClient.rfb && otherClient.connected && otherClient.rfb._rfbConnectionState === 'connected') {
+            try {
+              otherClient.rfb.sendKey(keysym, code, down);
+            } catch (_) {}
+          }
+        }
+      };
 
       rfb.addEventListener('connect', () => {
         client.connected = true;

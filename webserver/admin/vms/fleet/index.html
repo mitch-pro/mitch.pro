@@ -24,6 +24,7 @@
           <span>Mouse Jiggler Active</span>
         </div>
         <button type="button" id="btn-toggle-jiggler">Pause Jiggler</button>
+        <button type="button" id="btn-toggle-mirror" style="background: rgba(168, 85, 247, 0.2); border-color: #a855f7; color: #d8b4fe;">🪞 Mirror Controls: OFF</button>
         <button type="button" id="btn-power-on-all" class="primary">Turn On All</button>
         <button type="button" id="btn-power-off-all" class="danger">Power Off All</button>
         <button type="button" id="btn-force-stop-all" class="danger" title="Force stop all running fleet VMs">Force Stop All</button>
@@ -42,6 +43,34 @@
       <div id="fleet-global-status"></div>
     </div>
 
+    <!-- Broadcast & Mirror Control Bar -->
+    <section class="broadcast-bar" id="broadcast-bar">
+      <div class="broadcast-section">
+        <label for="broadcast-text-input" class="broadcast-label">Type on all 24:</label>
+        <div class="broadcast-input-group">
+          <input type="text" id="broadcast-text-input" placeholder="Type text to send to all 24 VMs..." autocomplete="off">
+          <button type="button" id="btn-broadcast-type" class="primary">Type</button>
+          <button type="button" id="btn-broadcast-enter">Enter ↵</button>
+          <button type="button" id="btn-broadcast-tab">Tab ⇥</button>
+          <button type="button" id="btn-broadcast-backspace">⌫</button>
+        </div>
+      </div>
+      <div class="broadcast-section">
+        <label class="broadcast-label">Move & click on all:</label>
+        <div class="broadcast-input-group">
+          <span>X:</span>
+          <input type="number" id="broadcast-x" value="500" min="0" max="4000" style="width: 70px;">
+          <span>Y:</span>
+          <input type="number" id="broadcast-y" value="300" min="0" max="4000" style="width: 70px;">
+          <button type="button" id="btn-broadcast-click">Click on all</button>
+        </div>
+      </div>
+      <div class="broadcast-status-indicator" id="broadcast-indicator">
+        <span class="jiggler-dot" id="mirror-dot" style="background: #a855f7;"></span>
+        <span id="mirror-status-text">Mirroring is OFF</span>
+      </div>
+    </section>
+
     <!-- 24-Machine Multi-Screen Grid -->
     <main id="grid-view" class="screen-grid">
       <div class="empty-state" style="grid-column: 1 / -1;">
@@ -59,6 +88,7 @@
           <span id="single-vm-status" class="badge">Running</span>
         </div>
         <div class="fleet-toolbar">
+          <button type="button" id="btn-single-toggle-mirror" style="background: rgba(168, 85, 247, 0.2); border-color: #a855f7; color: #d8b4fe;">🪞 Mirror Controls: OFF</button>
           <button type="button" id="btn-single-restart">Restart</button>
           <button type="button" id="btn-single-power" class="danger">Power Off</button>
           <button type="button" id="btn-single-delete" class="danger">Delete</button>
