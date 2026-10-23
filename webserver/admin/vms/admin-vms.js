@@ -530,6 +530,46 @@
     });
   }
 
+  const btnDeleteFleet = $('btn-delete-chromeos-fleet');
+  if (btnDeleteFleet) {
+    btnDeleteFleet.addEventListener('click', async () => {
+      if (!confirm('Are you sure you want to delete the ChromeOS fleet VMs? This will permanently delete only VMs that have "chromeos" in the name.')) {
+        return;
+      }
+      btnDeleteFleet.disabled = true;
+      status('owner-fleet-status', 'Deleting ChromeOS fleet VMs...');
+      try {
+        const res = await api('/api/admin/vms/fleet/delete-chromeos', { all: true });
+        status('owner-fleet-status', res.message || 'ChromeOS fleet deleted.', 'success');
+        await load();
+      } catch (err) {
+        status('owner-fleet-status', err.message, 'error');
+      } finally {
+        btnDeleteFleet.disabled = false;
+      }
+    });
+  }
+
+  const btnDeleteLocal = $('btn-delete-chromeos-local');
+  if (btnDeleteLocal) {
+    btnDeleteLocal.addEventListener('click', async () => {
+      if (!confirm('Delete ChromeOS fleet records from mitch.pro database only? This skips Proxmox and assumes the VMs were manually deleted on the host.')) {
+        return;
+      }
+      btnDeleteLocal.disabled = true;
+      status('owner-fleet-status', 'Removing ChromeOS fleet records from database...');
+      try {
+        const res = await api('/api/admin/vms/fleet/delete-chromeos', { all: true, localOnly: true });
+        status('owner-fleet-status', res.message || 'Records removed from database.', 'success');
+        await load();
+      } catch (err) {
+        status('owner-fleet-status', err.message, 'error');
+      } finally {
+        btnDeleteLocal.disabled = false;
+      }
+    });
+  }
+
   load();
   const timer = setInterval(() => {
     const locked = $('passphrase-lock-box')?.style.display === 'block';

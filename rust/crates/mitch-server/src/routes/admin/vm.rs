@@ -1460,9 +1460,22 @@ pub async fn handle(
             ));
         }
 
-        let mut existing_vmids: Vec<f64> = all_records.iter().map(|r| r.vmid).collect();
         let pve = crate::proxmox_desktop::desktop();
         let template_vmid = pve.chromeos_template_vmid().unwrap_or(9020);
+        let guests = pve.list_guests().await.unwrap_or_default();
+        let mut used_vmids: std::collections::HashSet<i64> = std::collections::HashSet::new();
+        for guest in &guests {
+            if let Some(n) = jsval::number(&guest["vmid"]) {
+                if n.is_finite() {
+                    used_vmids.insert(n as i64);
+                }
+            }
+        }
+        for r in &all_records {
+            used_vmids.insert(r.vmid as i64);
+        }
+
+        let mut next_vmid = 300i64;
         let mut created_count = 0;
 
         for i in 1..=24 {
@@ -1471,28 +1484,18 @@ pub async fn handle(
                 continue;
             }
 
-            let vmid = match pve
-                .next_available_vmid(PVE_VMID_MIN as f64, PVE_VMID_MAX as f64, &existing_vmids)
-                .await
-            {
-                Ok(v) => v as f64,
-                Err(_) => {
-                    let mut candidate = 300.0;
-                    while existing_vmids.contains(&candidate)
-                        || (200.0..=210.0).contains(&candidate)
-                    {
-                        candidate += 1.0;
-                    }
-                    candidate
-                }
-            };
-            existing_vmids.push(vmid);
+            while used_vmids.contains(&next_vmid) || (200..=210).contains(&next_vmid) {
+                next_vmid += 1;
+            }
+            let vmid = next_vmid as f64;
+            used_vmids.insert(next_vmid);
+            next_vmid += 1;
 
             let friendly_name = format!("ChromeOS Fleet {:02}", i);
             let id = format!("vm-{}", vmid as i64);
 
             if pve.chromeos_template_vmid().is_some() {
-                let _ = pve
+                let clone_res = pve
                     .clone_chromeos_desktop(&crate::proxmox_desktop::CloneChromeOsParams {
                         owner_resources: true,
                         vmid: Some(vmid),
@@ -1501,6 +1504,10 @@ pub async fn handle(
                         memory_mb: Some(4096.0),
                     })
                     .await;
+                if let Err(e) = clone_res {
+                    eprintln!("[fleet-chromeos] Failed to clone {}: {:?}", hostname, e);
+                    continue;
+                }
             }
 
             let rec_json = json!({
@@ -1614,6 +1621,136 @@ pub async fn handle(
                 "success": true,
                 "action": action,
                 "affected": fleet.len(),
+            }),
+        ));
+    }
+
+    // POST /api/admin/vms/fleet/delete-chromeos — deletes owner ChromeOS fleet machines
+    // SAFETY: Strictly requires that each VM to be deleted has "chromeos" in its name
+    // (friendlyName or hostname), is owned by the owner, is NOT the template, and is NOT in 200..=210.
+    if path == "/api/admin/vms/fleet/delete-chromeos" && *method == Method::POST {
+        let Some(actor) = crate::routes::vm::authenticated_vm_actor(state, headers) else {
+            return Some(json_response(401, json!({"error": "Sign in required."})));
+        };
+        if !auth::is_owner_email(&state.store, &actor.email) {
+            return Some(json_response(
+                403,
+                json!({"error": "Owner access required."}),
+            ));
+        }
+
+        let target_id = jsval::str_or(body.get("id"), "");
+        let local_only = body
+            .get("localOnly")
+            .and_then(Value::as_bool)
+            .or_else(|| body.get("dbOnly").and_then(Value::as_bool))
+            .unwrap_or(false);
+        let all_records = vmlib::list_virtual_machines(&state.store, true);
+        let norm_actor = auth::normalize_email(&actor.email);
+        let pve = crate::proxmox_desktop::desktop();
+        let template_vmid = pve.chromeos_template_vmid();
+
+        let mut to_delete = Vec::new();
+        for r in &all_records {
+            if auth::normalize_email(&r.owner_email) != norm_actor {
+                continue;
+            }
+            if !target_id.is_empty() && r.id != target_id {
+                continue;
+            }
+            // CRITICAL SAFETY CHECK: only VMs that have "chromeos" in the name
+            let name_lower = r.friendly_name.to_lowercase();
+            let host_lower = r.hostname.to_lowercase();
+            if !name_lower.contains("chromeos") && !host_lower.contains("chromeos") {
+                continue;
+            }
+            // NEVER delete the template
+            if Some(r.vmid as i64) == template_vmid {
+                continue;
+            }
+            // NEVER delete persistent provisioning pool
+            if (200.0..=210.0).contains(&r.vmid) {
+                continue;
+            }
+            to_delete.push(r.clone());
+        }
+
+        let mut deleted_names = Vec::new();
+        let mut deleted_vmids = Vec::new();
+        for vm in &to_delete {
+            if !local_only {
+                let rec_json = vm.to_json();
+                let _ = pve.delete_guest(&rec_json, true).await;
+            }
+            vmlib::delete_virtual_machine(&state.store, &vm.id);
+            remove_vm_desktop_credentials(state, &vm.id);
+            crate::routes::vm::revoke_vm_desktop_connections(state, &vm.id);
+            deleted_names.push(vm.hostname.clone());
+            deleted_vmids.push(vm.vmid);
+        }
+
+        // If deleting all and not local_only, also clean up any orphaned ChromeOS guests on Proxmox
+        // that have "chromeos" in their name, vmid >= 300, and not already in SQLite
+        if !local_only && target_id.is_empty() {
+            if let Ok(guests) = pve.list_guests().await {
+                for guest in guests {
+                    let vmid = guest.get("vmid").and_then(Value::as_i64).unwrap_or(0);
+                    let name = guest
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_lowercase();
+                    if vmid >= 300
+                        && Some(vmid) != template_vmid
+                        && !(200..=210).contains(&vmid)
+                        && name.contains("chromeos")
+                        && !deleted_vmids.contains(&(vmid as f64))
+                    {
+                        let dummy_rec = json!({
+                            "vmid": vmid,
+                            "node": pve.node(),
+                            "guestType": "qemu",
+                        });
+                        let _ = pve.delete_guest(&dummy_rec, true).await;
+                        deleted_names.push(format!("vmid-{}", vmid));
+                    }
+                }
+            }
+        }
+
+        crate::routes::vm::vm_audit(
+            state,
+            &actor.email,
+            None,
+            "FLEET_CHROMEOS_DELETED",
+            true,
+            Some(&json!({
+                "deletedCount": deleted_names.len(),
+                "deleted": deleted_names,
+                "localOnly": local_only,
+            })),
+        );
+
+        let msg = if local_only {
+            format!(
+                "Deleted {} ChromeOS fleet computer(s) from mitch.pro database only.",
+                deleted_names.len()
+            )
+        } else {
+            format!(
+                "Deleted {} ChromeOS fleet computer(s).",
+                deleted_names.len()
+            )
+        };
+
+        return Some(json_response(
+            200,
+            json!({
+                "success": true,
+                "message": msg,
+                "deletedCount": deleted_names.len(),
+                "deleted": deleted_names,
+                "localOnly": local_only,
             }),
         ));
     }
@@ -1922,5 +2059,41 @@ mod tests {
         assert!(valid_actions.contains(&"restart"));
         assert!(valid_actions.contains(&"force-stop"));
         assert!(!valid_actions.contains(&"destroy"));
+    }
+
+    #[test]
+    fn test_chromeos_name_filter() {
+        let is_chromeos_named = |friendly: &str, host: &str| {
+            friendly.to_lowercase().contains("chromeos") || host.to_lowercase().contains("chromeos")
+        };
+        assert!(is_chromeos_named("ChromeOS Fleet 01", "chromeos-fleet-01"));
+        assert!(is_chromeos_named("My Machine", "chromeos-fleet-05"));
+        assert!(is_chromeos_named("ChromeOS Flex Test", "student-vm"));
+        assert!(!is_chromeos_named("Ubuntu Desktop", "computer-1"));
+        assert!(!is_chromeos_named("Windows 11 Pro", "win-vm"));
+        assert!(!is_chromeos_named("Production DB", "db-prod"));
+    }
+
+    #[test]
+    fn test_fleet_vmid_allocation_starts_at_300() {
+        let mut used = std::collections::HashSet::new();
+        used.insert(100);
+        used.insert(200);
+        used.insert(205);
+        used.insert(250);
+        used.insert(300);
+        used.insert(301);
+
+        let mut next_vmid = 300i64;
+        let mut allocated = Vec::new();
+        for _ in 0..3 {
+            while used.contains(&next_vmid) || (200..=210).contains(&next_vmid) {
+                next_vmid += 1;
+            }
+            allocated.push(next_vmid);
+            used.insert(next_vmid);
+            next_vmid += 1;
+        }
+        assert_eq!(allocated, vec![302, 303, 304]);
     }
 }

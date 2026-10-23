@@ -48,12 +48,15 @@ import RFB from '/novnc/core/rfb.js';
   const btnToggleJiggler = $('btn-toggle-jiggler');
   const btnPowerOnAll = $('btn-power-on-all');
   const btnPowerOffAll = $('btn-power-off-all');
+  const btnDeleteAllFleet = $('btn-delete-all-fleet');
+  const btnDeleteLocalFleet = $('btn-delete-local-fleet');
   const btnRefresh = $('btn-refresh');
   const singleVmName = $('single-vm-name');
   const singleVmStatus = $('single-vm-status');
   const singleScreenContainer = $('single-screen-container');
   const btnSingleRestart = $('btn-single-restart');
   const btnSinglePower = $('btn-single-power');
+  const btnSingleDelete = $('btn-single-delete');
   const btnSingleFullscreen = $('btn-single-fullscreen');
   const fleetGlobalStatus = $('fleet-global-status');
 
@@ -277,6 +280,7 @@ import RFB from '/novnc/core/rfb.js';
           <div class="screen-card-actions">
             <button type="button" class="btn-card-power">${isRunning ? 'Stop' : 'Start'}</button>
             <button type="button" class="btn-card-focus" title="Expand to individual screen">&#x26F6; Focus</button>
+            <button type="button" class="btn-card-delete danger" title="Delete this ChromeOS VM">Delete</button>
           </div>
         </div>
         <div class="screen-viewport" id="viewport-${esc(vm.id)}">
@@ -319,6 +323,28 @@ import RFB from '/novnc/core/rfb.js';
 
       btnCardPower.addEventListener('click', togglePower);
       btnOverlayStart.addEventListener('click', togglePower);
+
+      const btnCardDelete = card.querySelector('.btn-card-delete');
+      if (btnCardDelete) {
+        btnCardDelete.addEventListener('click', async e => {
+          e.stopPropagation();
+          const name = vm.friendlyName || vm.hostname;
+          if (!confirm(`Delete ${name}? (Only allowed for VMs with 'chromeos' in the name)`)) {
+            return;
+          }
+          btnCardDelete.disabled = true;
+          setGlobalStatus(`Deleting ${name}...`);
+          try {
+            await api('/api/admin/vms/fleet/delete-chromeos', { id: vm.id });
+            disconnectVm(vm.id);
+            setGlobalStatus(`${name} deleted.`);
+            await loadFleet();
+          } catch (err) {
+            setGlobalStatus(err.message, true);
+            btnCardDelete.disabled = false;
+          }
+        });
+      }
 
       gridView.appendChild(card);
 
@@ -391,6 +417,48 @@ import RFB from '/novnc/core/rfb.js';
     loadFleet();
   });
 
+  btnDeleteAllFleet.addEventListener('click', async () => {
+    if (!confirm('Are you sure you want to delete all ChromeOS fleet VMs? This will permanently delete only VMs that have "chromeos" in the name.')) {
+      return;
+    }
+    btnDeleteAllFleet.disabled = true;
+    setGlobalStatus('Deleting ChromeOS fleet VMs...');
+    try {
+      const res = await api('/api/admin/vms/fleet/delete-chromeos', { all: true });
+      setGlobalStatus(res.message || 'ChromeOS fleet deleted.');
+      for (const id of vmClients.keys()) {
+        disconnectVm(id);
+      }
+      setTimeout(loadFleet, 1500);
+    } catch (err) {
+      setGlobalStatus(err.message, true);
+    } finally {
+      btnDeleteAllFleet.disabled = false;
+    }
+  });
+
+  if (btnDeleteLocalFleet) {
+    btnDeleteLocalFleet.addEventListener('click', async () => {
+      if (!confirm('Delete ChromeOS fleet from mitch.pro database only? This skips Proxmox and assumes the VMs were manually deleted on the host.')) {
+        return;
+      }
+      btnDeleteLocalFleet.disabled = true;
+      setGlobalStatus('Removing ChromeOS fleet from database...');
+      try {
+        const res = await api('/api/admin/vms/fleet/delete-chromeos', { all: true, localOnly: true });
+        setGlobalStatus(res.message || 'Records removed from database.');
+        for (const id of vmClients.keys()) {
+          disconnectVm(id);
+        }
+        setTimeout(loadFleet, 1500);
+      } catch (err) {
+        setGlobalStatus(err.message, true);
+      } finally {
+        btnDeleteLocalFleet.disabled = false;
+      }
+    });
+  }
+
   // Single mode buttons
   btnSingleFullscreen.addEventListener('click', () => {
     if (!document.fullscreenElement) {
@@ -413,6 +481,25 @@ import RFB from '/novnc/core/rfb.js';
       alert(err.message);
     } finally {
       btnSinglePower.disabled = false;
+    }
+  });
+
+  btnSingleDelete.addEventListener('click', async () => {
+    if (!currentFocusedVmId) return;
+    const client = vmClients.get(currentFocusedVmId);
+    const name = client?.vm?.friendlyName || client?.vm?.hostname || 'this VM';
+    if (!confirm(`Are you sure you want to delete ${name}? (Only VMs with "chromeos" in the name can be deleted)`)) {
+      return;
+    }
+    btnSingleDelete.disabled = true;
+    try {
+      await api('/api/admin/vms/fleet/delete-chromeos', { id: currentFocusedVmId });
+      closeSingleView();
+      await loadFleet();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      btnSingleDelete.disabled = false;
     }
   });
 

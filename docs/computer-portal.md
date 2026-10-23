@@ -203,9 +203,11 @@ silently reset this back to `false`).
 
 To support automated batch testing and owner workflows, an owner-exclusive 24-machine ChromeOS fleet can be provisioned and controlled via `/admin/vms`:
 - **Hardware Specs**: 2 CPU cores, 4 GB RAM (4096 MB), 32 GB disk, `keep_alive = 1` (exempt from inactivity shutdown), owner-locked (`is_vm_owner_locked`).
+- **VMID Allocation**: VMIDs start strictly at 300 (avoiding any collision with VMIDs below 300), checking both Proxmox's live cluster guest registry and SQLite database to allocate contiguous available IDs.
 - **Provisioning Endpoint**: `POST /api/admin/vms/fleet/create-chromeos` provisions up to 24 machines named `chromeos-fleet-01` through `24`, cloned from `PROXMOX_CHROMEOS_TEMPLATE_VMID`. Strictly owner-only.
 - **Batch Power Endpoint**: `POST /api/admin/vms/fleet/power` accepts `action: "start" | "shutdown" | "restart" | "force-stop"`, executing power transitions across all 24 machines concurrently.
 - **Fleet List Endpoint**: `GET /api/admin/vms/fleet/chromeos` returns all 24 fleet records with real-time status from Proxmox.
+- **Safe Fleet Delete Endpoint**: `POST /api/admin/vms/fleet/delete-chromeos` deletes owner fleet machines. Strictly requires that any target machine has `"chromeos"` in its name (friendlyName or hostname), is owned by the owner, is NOT the template VMID, and is NOT in the protected provisioning pool `200..=210`. Supports `{ id }` for individual deletion, `{ all: true }` for batch fleet deletion, and `{ localOnly: true }` to remove records from mitch.pro database only without contacting Proxmox.
 - **Multi-Screen Controller (`/admin/vms/fleet/`)**:
   - Gated to `is_owner_email` at both the HTML route handler and API layer.
   - Responsive grid rendering live noVNC RFB streams of all 24 machines simultaneously.
