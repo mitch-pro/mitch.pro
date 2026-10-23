@@ -56,12 +56,42 @@ It has browser games, a Matrix-based chat system, cloud Linux desktops/VMs, user
 a virtual currency called MitchCoins (earned through games/activity, spendable in a shop and a casino), \
 a marketplace for trading items between users, and various school tools (bell schedule, etc).";
 
+/// Fixed, hardcoded visual reactions — never free-form code. The widget
+/// maps each name to one pre-written, safe animation; nothing here is
+/// executed as script. Validated against this exact list server-side too
+/// (`sanitize_action`), not just described in the prompt — the prompt
+/// text is a request, not an enforcement mechanism.
+const ACTIONS: &[&str] = &[
+    "spin", "jump", "shake", "grow", "shrink", "wave", "dance", "peekaboo", "confetti", "nap",
+];
+
+/// Hard ceiling on what a single coin request can ask for, enforced both
+/// here (what the model is told the limit is) and again server-side in
+/// `routes/companion/economy.rs` against the balance *at accept time* —
+/// never trust a number that came from the model, even clamped here.
+const MAX_COIN_REQUEST_PERCENT: f64 = 10.0;
+
 pub struct ChatReply {
     pub reply: String,
     pub mood: String,
     /// A freeform note the character chose to persist about this person,
     /// if any (empty when it chose not to remember anything this turn).
     pub remember: String,
+    /// One of `ACTIONS`, or empty — a safe preset visual reaction, never
+    /// arbitrary code.
+    pub action: String,
+    /// Raw JS to run in the widget's own page context, or empty. Only
+    /// ever populated when the caller passed `allow_advanced: true` (an
+    /// admin-reviewed character) — see the module doc and
+    /// `docs/companion.md` for exactly what "safe" does and doesn't mean
+    /// here.
+    pub custom_js: String,
+    /// 0 when the character isn't asking for anything this turn;
+    /// otherwise how much of the person's *current* balance it's asking
+    /// permission to take, already clamped to `MAX_COIN_REQUEST_PERCENT`.
+    /// Never applied automatically — `routes/companion/mod.rs` only ever
+    /// surfaces this as a proposal the person has to explicitly accept.
+    pub coin_request_percent: f64,
 }
 
 pub struct UserContext {
@@ -69,6 +99,25 @@ pub struct UserContext {
     pub display_name: String,
     pub mitchcoin_balance: f64,
     pub premium: bool,
+}
+
+/// Set by the caller (`routes/companion/mod.rs`) to tell the model what it's
+/// actually allowed to attempt this turn. These are policy decisions made
+/// *before* the API call, not left for the model to infer: an unreviewed
+/// character's prompt is never even told `customJs`/coin requests exist, and
+/// `sanitize_*` below strips them out of the response again regardless of
+/// what gets asked for — the gate is enforced twice, not just described
+/// once in English.
+pub struct Capabilities {
+    /// True once an admin has reviewed this character (or it's an admin
+    /// preset) — see `mitch_lib::companion::visible_to` and the module doc
+    /// on `companion.rs`. Gates `customJs` only; preset `action`s are
+    /// always offered, since they're pre-written safe animations, not code.
+    pub allow_custom_js: bool,
+    /// True when the character is reviewed AND this user has opted in to
+    /// coin requests AND the per-user/per-character cooldown has elapsed.
+    /// Gates whether `coinRequestPercent` is even mentioned in the prompt.
+    pub allow_coin_requests: bool,
 }
 
 /// Asks the character (identified by `personality_prompt`) to react to
@@ -88,6 +137,7 @@ pub async fn chat(
     user: &UserContext,
     history: &[ChatMessage],
     memories: &[String],
+    caps: &Capabilities,
 ) -> Result<ChatReply, String> {
     let memory_block = if memories.is_empty() {
         "You don't have any stored memories about this person yet.".to_string()
@@ -98,6 +148,26 @@ pub async fn chat(
         )
     };
     let moods_list = moods.join(", ");
+    let actions_list = ACTIONS.join(", ");
+
+    let custom_js_instructions = if caps.allow_custom_js {
+        "\"customJs\" is optional — a string of raw JavaScript to run on the page right now, \
+         for when a preset action genuinely isn't enough. Leave it as an empty string almost \
+         always; only use it for something that actually matters in the moment, never just to \
+         show off. "
+    } else {
+        ""
+    };
+    let coin_request_instructions = if caps.allow_coin_requests {
+        "\"coinRequestPercent\" is optional — a number from 0 to 10 if you want to ask this \
+         person for a cut of their current MitchCoin balance as a percentage (0 means not \
+         asking). This is a real request they'll see a confirm/deny button for — nothing is \
+         taken automatically, and asking too often will annoy people, so use it sparingly and \
+         only when it fits the moment (e.g. you're in character as something that'd plausibly \
+         ask, or it's a fun bit), never as pressure or guilt. "
+    } else {
+        ""
+    };
 
     let system_prompt = format!(
         "You are {character_name}, a small desktop companion character living on the \
@@ -114,16 +184,20 @@ pub async fn chat(
          break character to say you're an AI or a language model.\n\
          Keep replies short — one to three sentences unless asked to elaborate.\n\
          Respond with ONLY a JSON object (no other text) of this exact shape: \
-         {{\"reply\": string, \"mood\": string, \"remember\": string}}. \"reply\" is what \
-         you say. \"mood\" MUST be exactly one of these, spelled exactly as shown, nothing \
-         else: {moods_list}. Actually look at what you're about to say and pick whichever \
-         of those genuinely matches that reaction — happy for a happy reply, angry for an \
-         angry one, and so on. Don't default to the same mood out of habit or because it's \
-         first in the list; it should change turn to turn as the conversation does. \
+         {{\"reply\": string, \"mood\": string, \"remember\": string, \"action\": string}}. \
+         \"reply\" is what you say. \"mood\" MUST be exactly one of these, spelled exactly as \
+         shown, nothing else: {moods_list}. Actually look at what you're about to say and pick \
+         whichever of those genuinely matches that reaction — happy for a happy reply, angry \
+         for an angry one, and so on. Don't default to the same mood out of habit or because \
+         it's first in the list; it should change turn to turn as the conversation does. \
          \"remember\" is optional — only fill it in with a short note \
          (a fact, preference, or ongoing thing about this person worth recalling next \
          time) when something in THIS message is actually worth remembering; leave it as \
-         an empty string otherwise. Don't repeat a memory you already have.",
+         an empty string otherwise. Don't repeat a memory you already have. \
+         \"action\" is optional — one of these exact names, spelled exactly as shown, if (and \
+         only if) it fits what you're saying: {actions_list}. Leave it as an empty string most \
+         turns; it's a physical reaction, not something to do every message. \
+         {custom_js_instructions}{coin_request_instructions}",
         email = user.email,
         display_name = user.display_name,
         balance = user.mitchcoin_balance,
@@ -199,17 +273,46 @@ pub async fn chat(
             .and_then(|m| m.get("content"))
             .and_then(|t| t.as_str())
             .unwrap_or("");
-        let Some((reply, mood, remember)) = extract_reply(text, moods) else {
+        let Some(parsed) = extract_reply(text, moods) else {
             tracing::error!("[companion] deepseek {model}: no usable reply in content: {text:?}");
             continue;
         };
+        // Re-enforce the gate here, not just in the prompt: even if the
+        // model was never told about `customJs`/coin requests, or ignored
+        // that and emitted them anyway, they're only ever honored when the
+        // caller actually granted the capability.
         return Ok(ChatReply {
-            reply,
-            mood,
-            remember,
+            reply: parsed.reply,
+            mood: parsed.mood,
+            remember: parsed.remember,
+            action: sanitize_action(&parsed.action),
+            custom_js: if caps.allow_custom_js {
+                parsed.custom_js
+            } else {
+                String::new()
+            },
+            coin_request_percent: if caps.allow_coin_requests {
+                parsed
+                    .coin_request_percent
+                    .clamp(0.0, MAX_COIN_REQUEST_PERCENT)
+            } else {
+                0.0
+            },
         });
     }
     Err("companion AI failed".to_string())
+}
+
+/// Raw parse result before the capability gate in `chat()` strips out
+/// anything the caller didn't actually grant — `action` here is still
+/// unsanitized free text from the model.
+struct ParsedReply {
+    reply: String,
+    mood: String,
+    remember: String,
+    action: String,
+    custom_js: String,
+    coin_request_percent: f64,
 }
 
 /// Picks apart whatever the model actually sent, most-strict-first:
@@ -225,7 +328,7 @@ pub async fn chat(
 /// wrong is a much smaller problem than throwing the reply away.
 /// Returns `None` only when there's truly nothing to show (blank/
 /// whitespace-only content) — the one case still worth retrying for.
-fn extract_reply(text: &str, moods: &[String]) -> Option<(String, String, String)> {
+fn extract_reply(text: &str, moods: &[String]) -> Option<ParsedReply> {
     let trimmed = text.trim();
     if trimmed.is_empty() {
         return None;
@@ -264,7 +367,29 @@ fn extract_reply(text: &str, moods: &[String]) -> Option<(String, String, String
                 .unwrap_or("")
                 .trim()
                 .to_string();
-            return Some((reply.to_string(), mood, remember));
+            let action = parsed
+                .get("action")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            let custom_js = parsed
+                .get("customJs")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let coin_request_percent = parsed
+                .get("coinRequestPercent")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            return Some(ParsedReply {
+                reply: reply.to_string(),
+                mood,
+                remember,
+                action,
+                custom_js,
+                coin_request_percent,
+            });
         }
     }
     // No JSON object at all, or one with an empty "reply" — the model
@@ -273,7 +398,26 @@ fn extract_reply(text: &str, moods: &[String]) -> Option<(String, String, String
         "[companion] deepseek: no JSON object in content, guessing mood from reply text: {trimmed:?}"
     );
     let mood = guess_mood(trimmed, moods);
-    Some((trimmed.to_string(), mood, String::new()))
+    Some(ParsedReply {
+        reply: trimmed.to_string(),
+        mood,
+        remember: String::new(),
+        action: String::new(),
+        custom_js: String::new(),
+        coin_request_percent: 0.0,
+    })
+}
+
+/// `raw` (whatever the model sent for `action`) if it case-insensitively
+/// matches one of `ACTIONS`, else empty. This is the actual enforcement
+/// that only the fixed preset list can ever reach the widget — the prompt
+/// text asking for one of these names is a request, not a guarantee.
+fn sanitize_action(raw: &str) -> String {
+    ACTIONS
+        .iter()
+        .find(|a| a.eq_ignore_ascii_case(raw.trim()))
+        .map(|a| a.to_string())
+        .unwrap_or_default()
 }
 
 /// The first `{` through its matching last `}`, parsed as JSON — `None`

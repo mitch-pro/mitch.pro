@@ -42,6 +42,9 @@ pub async fn handle(
     if path == "/api/companion/characters/unlock" && *method == Method::POST {
         return Some(unlock(state, headers, body_bytes));
     }
+    if path == "/api/companion/coin-request/accept" && *method == Method::POST {
+        return Some(accept_coin_request(state, headers, body_bytes));
+    }
     None
 }
 
@@ -93,6 +96,9 @@ fn unlock(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Resp
     let Some(character) = mitch_lib::companion::get_character(&state.store, &character_id) else {
         return json_response(404, json!({ "error": "character not found" }));
     };
+    if !mitch_lib::companion::visible_to(&character, &email) {
+        return json_response(404, json!({ "error": "character not found" }));
+    }
     if mitch_lib::companion::has_unlocked(&state.store, &email, &character) {
         return json_response(200, json!({ "ok": true, "alreadyUnlocked": true }));
     }
@@ -130,4 +136,50 @@ fn unlock(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Resp
         }
     }
     json_response(200, json!({ "ok": true, "alreadyUnlocked": false }))
+}
+
+/// The only place a companion coin request ever actually moves coins.
+/// Nothing in `deepseek.rs`/`routes/companion/mod.rs` deducts anything —
+/// they only ever record that a percent was *offered*. This re-validates
+/// against the live balance right now (never a stale snapshot from when
+/// the offer was made) and against what `consume_coin_request` says was
+/// actually offered (never trusting a percent the client sends up itself),
+/// then applies a pure sink deduction — no creator payout, same reasoning
+/// as the no-payout-on-the-other-75%-of-an-unlock sink above.
+fn accept_coin_request(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Response {
+    let Some(email) = logged_in_email(state, headers) else {
+        return json_response(401, json!({ "error": "not logged in" }));
+    };
+    let Some(body) = parse_body_strict(body_bytes) else {
+        return json_response(400, json!({ "error": "bad json" }));
+    };
+    let character_id = str_or(body.get("characterId"), "");
+    let Some(character) = mitch_lib::companion::get_character(&state.store, &character_id) else {
+        return json_response(404, json!({ "error": "character not found" }));
+    };
+    let offered_percent =
+        mitch_lib::companion::consume_coin_request(&state.store, &email, &character_id);
+    if offered_percent <= 0.0 {
+        return json_response(
+            409,
+            json!({ "error": "no pending coin request from this character" }),
+        );
+    }
+    let percent = offered_percent.clamp(0.0, 10.0);
+    let balance = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &email);
+    let amount = balance * percent / 100.0;
+    if amount > 0.0 {
+        mitch_lib::coins::add_coins(
+            &state.store,
+            state.data_dir(),
+            &email,
+            -amount,
+            1.0,
+            "companion_coin_request",
+        );
+    }
+    json_response(
+        200,
+        json!({ "ok": true, "deducted": amount, "characterName": character.name }),
+    )
 }

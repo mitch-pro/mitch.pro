@@ -24,10 +24,27 @@
 //!   caps how much coin-recycling two colluding accounts could pull off
 //!   (every cycle is strictly loss-making, see `routes/companion/mod.rs`
 //!   for the walk-through).
-//! - Custom characters are visible/purchasable immediately (no pre-publish
-//!   review gate — that was an explicit choice), but `needs_review` flags
-//!   them for admins, who get notified and can pull up the existing
-//!   preset-authoring tool to inspect the prompt and delete it if needed.
+//! - Custom characters are NOT visible/usable by anyone but their own
+//!   creator (and admins) while `needs_review` is set — admins get
+//!   notified on creation and can pull up the existing preset-authoring
+//!   tool to inspect the prompt, mark it reviewed (making it visible to
+//!   everyone), or delete it. This gate is what makes it safe for
+//!   reviewed characters to carry real capability (custom JS execution,
+//!   coin requests — see `routes/companion/mod.rs` and `deepseek.rs`):
+//!   nobody but the creator is exposed to an unreviewed prompt's behavior.
+//! - Coin requests: a reviewed character may propose taking up to 10% of
+//!   the asker's *current* balance (`deepseek.rs::MAX_COIN_REQUEST_PERCENT`).
+//!   Opt-in only (`companion_user_settings.allow_coin_requests`, default
+//!   off), rate-limited per (email, character) by
+//!   `COIN_REQUEST_COOLDOWN_MILLIS`, and never applied automatically: the
+//!   offered percent is stashed in `companion_coin_requests` and only
+//!   turned into an actual deduction by the person explicitly hitting
+//!   accept, which re-validates against their live balance at that
+//!   moment (see `routes/companion/economy.rs`'s accept endpoint) rather
+//!   than trusting a stale snapshot from when the offer was made. Pure
+//!   sink, same reasoning as the unlock-fee sink above: paying a creator
+//!   out of this would turn "write a manipulative prompt" into a revenue
+//!   strategy.
 
 use crate::auth::normalize_email;
 use crate::crypto::random_bytes_hex;
@@ -52,6 +69,12 @@ pub struct Character {
 pub struct UserSettings {
     pub enabled: bool,
     pub active_character_id: String,
+    /// Opt-in, default off: whether this user wants characters to be able
+    /// to propose taking a cut of their MitchCoin balance at all. Even
+    /// when true, nothing is ever deducted without a separate explicit
+    /// accept — see `routes/companion/economy.rs`'s coin-request accept
+    /// endpoint and `COIN_REQUEST_COOLDOWN_MILLIS` below.
+    pub allow_coin_requests: bool,
 }
 
 fn moods_for(store: &DataStore, character_id: &str) -> Vec<String> {
@@ -128,6 +151,20 @@ pub fn list_characters(store: &DataStore) -> Vec<Character> {
     };
     rows.into_iter()
         .map(|row| row_to_character(store, row))
+        .collect()
+}
+
+/// `list_characters`, filtered down to what `viewer_email` is actually
+/// allowed to see: an unreviewed custom character (`needs_review`) is
+/// invisible to everyone except the person who created it — that's the
+/// actual enforcement of "models aren't released until admins review."
+/// Admin presets (`creator_email` empty) are never gated this way; only
+/// user-made characters ever carry `needs_review`.
+pub fn list_visible_characters(store: &DataStore, viewer_email: &str) -> Vec<Character> {
+    let norm = normalize_email(viewer_email);
+    list_characters(store)
+        .into_iter()
+        .filter(|c| !c.needs_review || c.creator_email == norm)
         .collect()
 }
 
@@ -315,24 +352,29 @@ pub fn get_user_settings(store: &DataStore, email: &str) -> UserSettings {
     let norm = normalize_email(email);
     let conn = store.conn();
     conn.query_row(
-        "SELECT enabled, active_character_id FROM companion_user_settings WHERE email = ?1",
+        "SELECT enabled, active_character_id, allow_coin_requests FROM companion_user_settings WHERE email = ?1",
         rusqlite::params![norm],
         |row| {
             Ok(UserSettings {
                 enabled: row.get::<_, i64>(0)? != 0,
                 active_character_id: row.get::<_, String>(1)?,
+                allow_coin_requests: row.get::<_, i64>(2)? != 0,
             })
         },
     )
     .unwrap_or(UserSettings {
         enabled: false,
         active_character_id: String::new(),
+        allow_coin_requests: false,
     })
 }
 
 pub fn set_user_settings(store: &DataStore, email: &str, enabled: bool, active_character_id: &str) {
     let norm = normalize_email(email);
     let now = now_millis();
+    // Preserves the existing allow_coin_requests value — this function is
+    // the enable/character-picker save, not the coin-requests toggle (see
+    // `set_allow_coin_requests`), so it must never silently reset it.
     let conn = store.conn();
     let _ = conn.execute(
         "INSERT INTO companion_user_settings (email, enabled, active_character_id, updated_at) \
@@ -341,6 +383,83 @@ pub fn set_user_settings(store: &DataStore, email: &str, enabled: bool, active_c
          active_character_id = excluded.active_character_id, updated_at = excluded.updated_at",
         rusqlite::params![norm, enabled as i64, active_character_id, now],
     );
+}
+
+pub fn set_allow_coin_requests(store: &DataStore, email: &str, allow: bool) {
+    let norm = normalize_email(email);
+    let now = now_millis();
+    let conn = store.conn();
+    let _ = conn.execute(
+        "INSERT INTO companion_user_settings (email, allow_coin_requests, updated_at) \
+         VALUES (?1, ?2, ?3) \
+         ON CONFLICT(email) DO UPDATE SET allow_coin_requests = excluded.allow_coin_requests, updated_at = excluded.updated_at",
+        rusqlite::params![norm, allow as i64, now],
+    );
+}
+
+/// Minimum time between one character asking this person for coins again
+/// — keeps "sparingly" (as instructed in the prompt) from being the only
+/// thing standing between a user and a character that asks every single
+/// turn. Prompt-following is not a security boundary; this is.
+pub const COIN_REQUEST_COOLDOWN_MILLIS: i64 = 6 * 60 * 60 * 1000;
+
+/// Whether enough time has passed since this (email, character) pair's
+/// last coin request for another one to be offered. True if none has ever
+/// been recorded.
+pub fn coin_request_cooldown_elapsed(store: &DataStore, email: &str, character_id: &str) -> bool {
+    let norm = normalize_email(email);
+    let conn = store.conn();
+    let last: i64 = conn
+        .query_row(
+            "SELECT asked_at FROM companion_coin_requests WHERE email = ?1 AND character_id = ?2",
+            rusqlite::params![norm, character_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    now_millis() - last >= COIN_REQUEST_COOLDOWN_MILLIS
+}
+
+/// Records that a character just proposed taking `percent` of this
+/// person's balance, starting the cooldown and remembering `percent` so
+/// `consume_coin_request` can later verify an accept isn't asking for more
+/// than what was actually offered — called when the proposal is first
+/// surfaced to the user (not only on accept), so a declined or ignored
+/// request still can't be immediately retried.
+pub fn record_coin_request(store: &DataStore, email: &str, character_id: &str, percent: f64) {
+    let norm = normalize_email(email);
+    let now = now_millis();
+    let conn = store.conn();
+    let _ = conn.execute(
+        "INSERT INTO companion_coin_requests (email, character_id, asked_at, percent) VALUES (?1, ?2, ?3, ?4) \
+         ON CONFLICT(email, character_id) DO UPDATE SET asked_at = excluded.asked_at, percent = excluded.percent",
+        rusqlite::params![norm, character_id, now, percent],
+    );
+}
+
+/// Atomically reads and clears the pending offer for (email, character):
+/// returns the percent that was actually offered (0 if there is none
+/// pending, including an already-consumed one), and zeroes it out in the
+/// same call so a second accept on the same offer can't double-charge.
+/// The caller still re-checks this percent against the *current* balance
+/// before touching coins — this only answers "was this actually offered,"
+/// not "is it still affordable."
+pub fn consume_coin_request(store: &DataStore, email: &str, character_id: &str) -> f64 {
+    let norm = normalize_email(email);
+    let conn = store.conn();
+    let percent: f64 = conn
+        .query_row(
+            "SELECT percent FROM companion_coin_requests WHERE email = ?1 AND character_id = ?2",
+            rusqlite::params![norm, character_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0.0);
+    if percent > 0.0 {
+        let _ = conn.execute(
+            "UPDATE companion_coin_requests SET percent = 0 WHERE email = ?1 AND character_id = ?2",
+            rusqlite::params![norm, character_id],
+        );
+    }
+    percent
 }
 
 /// One turn of chat history. `role` is `"user"` or `"model"`. `mood` is
@@ -483,6 +602,15 @@ pub fn extend_subscription(store: &DataStore, email: &str, extra_millis: i64) ->
         rusqlite::params![norm, new_expiry, now],
     );
     new_expiry
+}
+
+/// True if `email` is allowed to even know this character exists —
+/// everyone, once reviewed; only its own creator (or an admin, who should
+/// be checking this separately) before that. Gates discovery/unlock, not
+/// continued use by someone who already unlocked it before a re-edit
+/// pulled it back under review — see the module doc.
+pub fn visible_to(character: &Character, email: &str) -> bool {
+    !character.needs_review || character.creator_email == normalize_email(email)
 }
 
 /// True if this character needs no separate purchase: it's free, the

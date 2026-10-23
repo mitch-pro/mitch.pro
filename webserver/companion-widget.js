@@ -10,6 +10,20 @@
   var moods = ['idle'];
   var rafId = null;
 
+  // Fixed preset reactions — must match ACTIONS in
+  // rust/crates/mitch-server/src/routes/companion/deepseek.rs. Each one is
+  // a pre-written CSS animation (see companion-widget.css); there is no
+  // path from a character's `action` field to arbitrary code.
+  var ACTIONS = ['spin', 'jump', 'shake', 'grow', 'shrink', 'wave', 'dance', 'peekaboo', 'confetti', 'nap'];
+
+  // How hard a release has to be (px/frame, matching phys.vx/vy's units)
+  // before it counts as a "throw" worth reacting to, and how long to wait
+  // before the character can react to another one — otherwise a little
+  // nudge on every drag would spam the chat endpoint.
+  var THROW_SPEED_THRESHOLD = 28;
+  var THROW_COOLDOWN_MS = 8000;
+  var lastThrowReactionAt = 0;
+
   function api(url, opts) {
     opts = opts || {};
     var headers = Object.assign({ 'X-Mitch-Requested-With': '1' }, opts.headers || {});
@@ -71,6 +85,62 @@
     el.sprite.src = imageUrl(state.activeCharacterId, mood);
   }
 
+  function spawnConfetti(root) {
+    var colors = ['#ff5c5c', '#ffd166', '#06d6a0', '#4cc9f0', '#c77dff'];
+    for (var i = 0; i < 16; i++) {
+      var piece = document.createElement('div');
+      piece.className = 'companion-confetti-piece';
+      piece.style.background = colors[i % colors.length];
+      piece.style.setProperty('--cx', (Math.random() * 120 - 60) + 'px');
+      piece.style.setProperty('--cr', (Math.random() * 360) + 'deg');
+      piece.style.animationDelay = (Math.random() * 0.15) + 's';
+      root.appendChild(piece);
+      (function (p) { setTimeout(function () { p.remove(); }, 1200); })(piece);
+    }
+  }
+
+  // Dispatches one of the fixed `ACTIONS` names to its pre-written
+  // animation. Never touches anything but a CSS class (plus, for
+  // confetti, a handful of inert decorative divs) — this is the "safe
+  // preset" path, kept entirely separate from `runCustomJs`.
+  //
+  // Applied to el.sprite, NOT el.root: el.root's own `transform` is
+  // rewritten every animation frame by startPhysics() for drag/gravity
+  // positioning (translate(x,y)), so an animation targeting that same
+  // element's `transform` would fight it and the companion would
+  // visually snap to the position implied by the animation's transform
+  // alone (e.g. `translateY(-28px)` with no x/y, near the viewport's
+  // top-left) for as long as it runs. The sprite has no positioning
+  // transform of its own, so animating it there is conflict-free.
+  function playAction(name) {
+    if (!el.sprite || ACTIONS.indexOf(name) === -1) return;
+    var cls = 'action-' + name;
+    el.sprite.classList.remove.apply(el.sprite.classList, ACTIONS.map(function (a) { return 'action-' + a; }));
+    // Force a reflow so re-triggering the same action restarts its animation.
+    void el.sprite.offsetWidth;
+    el.sprite.classList.add(cls);
+    if (name === 'confetti') spawnConfetti(el.root);
+    el.sprite.addEventListener('animationend', function handler() {
+      el.sprite.classList.remove(cls);
+      el.sprite.removeEventListener('animationend', handler);
+    });
+  }
+
+  // Runs raw JS the server sent back. The server only ever populates this
+  // field at all when the active character has been admin-reviewed (see
+  // `deepseek.rs`'s `Capabilities` gate) — an unreviewed custom character
+  // never gets this far, including for its own creator testing it. Still
+  // wrapped in try/catch: a reviewed character's code should never be
+  // able to take down the rest of the page just because it threw.
+  function runCustomJs(code) {
+    if (!code) return;
+    try {
+      new Function(code)();
+    } catch (err) {
+      console.error('[companion] customJs threw:', err);
+    }
+  }
+
   function wireDrag(root) {
     var offsetX = 0, offsetY = 0, lastX = 0, lastY = 0, lastT = 0;
     root.addEventListener('pointerdown', function (e) {
@@ -100,9 +170,68 @@
       phys.dragging = false;
       root.classList.remove('dragging');
       try { root.releasePointerCapture(e.pointerId); } catch (err) { /* already released */ }
+
+      var speed = Math.sqrt(phys.vx * phys.vx + phys.vy * phys.vy);
+      var now = performance.now();
+      if (speed >= THROW_SPEED_THRESHOLD && now - lastThrowReactionAt >= THROW_COOLDOWN_MS) {
+        lastThrowReactionAt = now;
+        sendToCompanion('(you were just thrown/flung across the screen by the user)', { silent: true, showBubbleOnReply: true });
+      }
     }
     root.addEventListener('pointerup', end);
     root.addEventListener('pointercancel', end);
+  }
+
+  // Shared by the textarea's send button and the throw reaction — one
+  // path for "ask the character something and act on what comes back."
+  // `opts.silent` skips echoing the outgoing message anywhere (the throw
+  // reaction isn't something the user "said"); `opts.showBubbleOnReply`
+  // opens the bubble to show the reaction even if it was closed.
+  function sendToCompanion(message, opts) {
+    opts = opts || {};
+    return api('/api/companion/chat', { method: 'POST', body: JSON.stringify({ message: message, page: location.pathname }) })
+      .then(function (res) {
+        if (!res.ok) {
+          if (!opts.silent && el.replyEl) {
+            el.replyEl.textContent = res.data && res.data.error ? res.data.error : 'Something went wrong.';
+          }
+          return;
+        }
+        if (opts.showBubbleOnReply && el.bubble) el.bubble.hidden = false;
+        if (el.replyEl) el.replyEl.textContent = res.data.reply;
+        setMood(res.data.mood);
+        if (res.data.action) playAction(res.data.action);
+        if (res.data.customJs) runCustomJs(res.data.customJs);
+        if (res.data.coinRequestPercent > 0) showCoinRequest(res.data.coinRequestPercent);
+      });
+  }
+
+  // Shows the "this character wants N% of your coins" proposal with
+  // explicit Allow/Deny buttons under the reply — nothing is ever
+  // deducted until Allow is clicked, which calls the accept endpoint that
+  // re-validates against the live balance server-side.
+  function showCoinRequest(percent) {
+    if (!el.coinRequestEl) return;
+    el.coinRequestEl.innerHTML =
+      '<div>Asking for ' + Math.round(percent * 10) / 10 + '% of your MitchCoins.</div>' +
+      '<button type="button" class="companion-coin-allow">Allow</button>' +
+      '<button type="button" class="companion-coin-deny">Deny</button>';
+    el.coinRequestEl.hidden = false;
+    el.coinRequestEl.querySelector('.companion-coin-allow').addEventListener('click', function () {
+      el.coinRequestEl.innerHTML = '<div>...</div>';
+      api('/api/companion/coin-request/accept', {
+        method: 'POST',
+        body: JSON.stringify({ characterId: state.activeCharacterId }),
+      }).then(function (res) {
+        el.coinRequestEl.hidden = true;
+        if (res.ok && el.replyEl) {
+          el.replyEl.textContent += '\n(took ' + Math.round(res.data.deducted * 100) / 100 + ' coins)';
+        }
+      });
+    });
+    el.coinRequestEl.querySelector('.companion-coin-deny').addEventListener('click', function () {
+      el.coinRequestEl.hidden = true;
+    });
   }
 
   // The bubble is built once and toggled with `hidden`, never torn down —
@@ -114,11 +243,14 @@
     bubble.hidden = true;
     bubble.innerHTML =
       '<div class="companion-reply"></div>' +
+      '<div class="companion-coin-request" hidden></div>' +
       '<textarea rows="2" maxlength="500" placeholder="Say something..."></textarea>';
     root.appendChild(bubble);
     el.bubble = bubble;
     var textarea = bubble.querySelector('textarea');
     var replyEl = bubble.querySelector('.companion-reply');
+    el.replyEl = replyEl;
+    el.coinRequestEl = bubble.querySelector('.companion-coin-request');
 
     // Clicks/drags inside the bubble must not reach root's own click
     // (which toggles the bubble) or pointerdown (which starts a drag).
@@ -136,17 +268,11 @@
       if (!message) return;
       textarea.disabled = true;
       replyEl.textContent = '...';
-      api('/api/companion/chat', { method: 'POST', body: JSON.stringify({ message: message, page: location.pathname }) })
-        .then(function (res) {
-          textarea.disabled = false;
-          textarea.value = '';
-          if (!res.ok) {
-            replyEl.textContent = res.data && res.data.error ? res.data.error : 'Something went wrong.';
-            return;
-          }
-          replyEl.textContent = res.data.reply;
-          setMood(res.data.mood);
-        });
+      el.coinRequestEl.hidden = true;
+      sendToCompanion(message, {}).then(function () {
+        textarea.disabled = false;
+        textarea.value = '';
+      });
     }
 
     root.addEventListener('click', function () {

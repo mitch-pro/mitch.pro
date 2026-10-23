@@ -421,7 +421,15 @@ impl DataStore {
                         email TEXT PRIMARY KEY,
                         enabled INTEGER NOT NULL DEFAULT 0,
                         active_character_id TEXT NOT NULL DEFAULT '',
+                        allow_coin_requests INTEGER NOT NULL DEFAULT 0,
                         updated_at INTEGER NOT NULL
+                    );
+                    CREATE TABLE IF NOT EXISTS companion_coin_requests (
+                        email TEXT NOT NULL,
+                        character_id TEXT NOT NULL REFERENCES companion_characters(id) ON DELETE CASCADE,
+                        asked_at INTEGER NOT NULL,
+                        percent REAL NOT NULL DEFAULT 0,
+                        PRIMARY KEY (email, character_id)
                     );
                     CREATE TABLE IF NOT EXISTS companion_chat_messages (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -513,6 +521,18 @@ impl DataStore {
         if !has_vm_keep_alive {
             conn.execute(
                 "ALTER TABLE virtual_machines ADD COLUMN keep_alive INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
+        let has_companion_allow_coin_requests = conn
+            .prepare("PRAGMA table_info(companion_user_settings)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+            .iter()
+            .any(|name| name == "allow_coin_requests");
+        if !has_companion_allow_coin_requests {
+            conn.execute(
+                "ALTER TABLE companion_user_settings ADD COLUMN allow_coin_requests INTEGER NOT NULL DEFAULT 0",
                 [],
             )?;
         }

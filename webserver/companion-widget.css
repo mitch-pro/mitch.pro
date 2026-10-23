@@ -54,3 +54,100 @@
 .companion-bubble .companion-reply {
   white-space: pre-wrap;
 }
+
+.companion-bubble .companion-coin-request {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.companion-bubble .companion-coin-request button {
+  font: inherit;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: #1b1e24;
+  color: #e9ecf1;
+  cursor: pointer;
+  margin-top: 6px;
+  margin-right: 6px;
+}
+
+.companion-bubble .companion-coin-request button.companion-coin-allow {
+  background: #2d6a4f;
+  border-color: #2d6a4f;
+}
+
+/* Preset action animations — fixed, hardcoded reactions, never arbitrary
+   code. The widget picks one of these by name; see ACTIONS in
+   deepseek.rs, which this list must stay in sync with. */
+/* Target the sprite, not .companion-root: the root's own `transform` is
+   rewritten every frame by the drag/physics loop for positioning, so an
+   animation on that element would fight it instead of layering on top. */
+.companion-sprite.action-spin { animation: companion-spin 0.6s ease-in-out; }
+.companion-sprite.action-jump { animation: companion-jump 0.5s ease-out; }
+.companion-sprite.action-shake { animation: companion-shake 0.5s ease-in-out; }
+.companion-sprite.action-grow { animation: companion-grow 0.5s ease-in-out; }
+.companion-sprite.action-shrink { animation: companion-shrink 0.5s ease-in-out; }
+.companion-sprite.action-wave { animation: companion-wave 0.8s ease-in-out; }
+.companion-sprite.action-dance { animation: companion-dance 0.9s ease-in-out; }
+.companion-sprite.action-peekaboo { animation: companion-peekaboo 1s ease-in-out; }
+.companion-sprite.action-confetti { animation: companion-jump 0.5s ease-out; }
+.companion-sprite.action-nap { animation: companion-nap 1.2s ease-in-out; }
+
+@keyframes companion-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes companion-jump {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-28px); }
+}
+@keyframes companion-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-6px); }
+  80% { transform: translateX(6px); }
+}
+@keyframes companion-grow {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.35); }
+}
+@keyframes companion-shrink {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(0.65); }
+}
+@keyframes companion-wave {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-14deg); }
+  50% { transform: rotate(10deg); }
+  75% { transform: rotate(-8deg); }
+}
+@keyframes companion-dance {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-10px) rotate(-8deg); }
+  50% { transform: translateY(0) rotate(0deg); }
+  75% { transform: translateY(-10px) rotate(8deg); }
+}
+@keyframes companion-peekaboo {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  45% { transform: scale(0.1); opacity: 0; }
+  55% { transform: scale(0.1); opacity: 0; }
+}
+@keyframes companion-nap {
+  0%, 100% { transform: rotate(0deg); opacity: 1; }
+  50% { transform: rotate(8deg); opacity: 0.55; }
+}
+
+.companion-confetti-piece {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 6px;
+  height: 10px;
+  pointer-events: none;
+  animation: companion-confetti-fall 0.9s ease-in forwards;
+}
+
+@keyframes companion-confetti-fall {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  100% { transform: translate(var(--cx, 0px), 90px) rotate(var(--cr, 180deg)); opacity: 0; }
+}

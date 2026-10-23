@@ -1075,6 +1075,7 @@ pub fn rate_limit_for(endpoint: &str) -> (u32, u32) {
         "/api/companion/characters" => (60, 60),
         "/api/companion/subscribe" => (10, 60),
         "/api/companion/characters/unlock" => (20, 60),
+        "/api/companion/coin-request/accept" => (20, 60),
         "/api/companion/mine" => (20, 60),
         "/api/companion/mine/update" => (20, 60),
         "/api/companion/mine/delete" => (10, 60),

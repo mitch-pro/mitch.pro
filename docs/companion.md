@@ -118,6 +118,38 @@ subsystem — no `server.js` equivalent.
   physics library. It refuses to run inside an iframe
   (`window.top !== window.self`) so it can't double-render or misbehave
   inside embedded pages (the proxy, embedded games, etc).
+- **Preset actions.** The chat response can include an `action` field —
+  one of a fixed, hardcoded list (`ACTIONS` in `deepseek.rs`: spin, jump,
+  shake, grow, shrink, wave, dance, peekaboo, confetti, nap), each mapped
+  to a pre-written CSS animation in `companion-widget.css`/`.js`'s
+  `playAction`. Always offered to every character regardless of review
+  status — these are animations, not code, so there's nothing for the
+  review gate to protect against here.
+- **Custom JS execution.** The chat response can also include a
+  `customJs` field — raw JavaScript the widget runs via `new
+  Function(code)()`. Only ever populated server-side when the active
+  character is admin-reviewed (`!character.needs_review`, checked in
+  `deepseek::Capabilities` and re-enforced again when building
+  `ChatReply`, not just left to the prompt text to self-police) — see
+  "Moderation" below for why that's the actual safety boundary, not a
+  presets-only restriction.
+- **Coin requests.** A reviewed character can also propose taking up to
+  10% of the asker's *current* MitchCoin balance
+  (`coinRequestPercent`/`MAX_COIN_REQUEST_PERCENT` in `deepseek.rs`).
+  Opt-in per user (`companion_user_settings.allow_coin_requests`, default
+  off, toggled on `/companion/`), rate-limited to one offer per (email,
+  character) every `COIN_REQUEST_COOLDOWN_MILLIS` (6h), and never applied
+  automatically — the widget shows an explicit Allow/Deny prompt, and only
+  clicking Allow calls `POST /api/companion/coin-request/accept`, which
+  re-validates the offered percent against the *live* balance at that
+  moment. Pure sink: no creator payout, so a malicious prompt gains
+  nothing from asking.
+- **Throw reactions.** Releasing the character above a speed threshold
+  (`THROW_SPEED_THRESHOLD` in `companion-widget.js`, derived from the
+  existing drag physics' `vx`/`vy`) fires a synthetic, silent chat message
+  so the character reacts in-character — cooled down
+  (`THROW_COOLDOWN_MS`) so repeated small drags don't spam the DeepSeek
+  endpoint.
 
 ## Economy
 
@@ -164,14 +196,28 @@ creator-exemption above even applies) always come out strictly behind —
 every cycle burns 75% of whatever passes through it. Walked through and
 confirmed in session before this shipped, not just asserted.
 
-**Moderation, by explicit choice: no pre-publish gate.** A custom
-character is visible and purchasable the instant it's created —
-`needs_review` just flags it and fires an `admin_notice` to every
-admin/owner (`coins::add_admin_notification`, reusing the same mechanism
-other admin-facing notices already use) pointing at the existing
-`/admin/companion/` tool, where the prompt can be inspected and the
-character deleted if it's a problem. Editing a character's name/prompt/
-price re-flags `needs_review` — new content, worth another look.
+**Moderation: `needs_review` is now a hard pre-release gate, not just an
+after-the-fact notice.** This changed from the feature's first version
+(which deliberately shipped with no pre-publish gate — see git history if
+you need the old reasoning) once the feature grew real capability
+(custom JS execution, coin requests). A custom character still goes live
+immediately on creation, but while `needs_review` is set it's invisible
+and unusable to everyone except its own creator and admins —
+`mitch_lib::companion::visible_to`/`list_visible_characters`, enforced at
+every entry point that can reach a character
+(`GET /api/companion/characters`, `POST /api/companion/settings`,
+`POST /api/companion/characters/unlock`). An `admin_notice` still fires on
+creation (`coins::add_admin_notification`) pointing at `/admin/companion/`,
+where an admin inspects the prompt and either calls `mark-reviewed`
+(makes it visible to everyone) or deletes it. Editing a character's name/
+prompt/price re-flags `needs_review` — new content, worth another look,
+and it also means a previously-reviewed character briefly loses
+`customJs`/coin-request capability again until re-reviewed.
+
+This gate is the actual security boundary for `customJs`/coin requests,
+not a presets-only restriction: nobody but the creator is ever exposed to
+an unreviewed prompt's behavior, so once reviewed, the character is
+trusted the same way an admin-authored preset already is.
 
 ## Requires `DEEPSEEK_API_KEY`
 
@@ -192,7 +238,10 @@ shell or add it to the untracked `.env`.
   post-parse check in `deepseek.rs` accepts) for that character, so it
   can only ever reply with a mood it has a sprite for. `idle` is treated
   as the fallback display mood when nothing else has loaded yet.
-- `companion_user_settings` (email, enabled, active_character_id)
+- `companion_user_settings` (email, enabled, active_character_id,
+  allow_coin_requests) — `allow_coin_requests` defaults off; toggled
+  independently of `enabled`/`active_character_id` via
+  `set_allow_coin_requests`, so saving one never clobbers the other.
 - `companion_chat_messages` (email, character_id, role, content, mood,
   created_at) — rolling chat history, read back as the last 10 rows per
   (email, character_id); never trimmed automatically (cheap to keep: it's
@@ -208,6 +257,12 @@ shell or add it to the untracked `.env`.
   subscriber; see Economy above.
 - `companion_character_unlocks` (email, character_id, unlocked_at) — one
   row per paid unlock; `ON DELETE CASCADE` when the character is deleted.
+- `companion_coin_requests` (email, character_id, asked_at, percent) — at
+  most one row per (email, character): the most recent offer, used both
+  for the cooldown (`coin_request_cooldown_elapsed`) and to verify an
+  accept isn't claiming a percent that was never actually offered
+  (`consume_coin_request` reads `percent` then zeroes it in the same
+  call, so the same offer can't be accepted twice).
 
 Images live on disk at `data/companion_images/<character_id>/<mood>.<ext>`,
 served through `GET /api/companion/character-image?id=&mood=` (any
@@ -224,10 +279,19 @@ rendering, not just the owner).
   character. `GET` also returns `subscriptionActive`/
   `subscriptionExpiresAt`. `POST` with `enabled: true` requires an active
   subscription and an already-unlocked character, both `402` otherwise.
-- `POST /api/companion/chat` — `{message, page}` → `{reply, mood}`.
-  Derives the active character from the caller's own settings row
-  server-side (never trusts a client-supplied character id). Re-checks
-  subscription + unlock status every call, independent of `settings`.
+- `POST /api/companion/chat` — `{message, page}` → `{reply, mood, action,
+  customJs, coinRequestPercent}`. Derives the active character from the
+  caller's own settings row server-side (never trusts a client-supplied
+  character id). Re-checks subscription + unlock status every call,
+  independent of `settings`. `customJs`/`coinRequestPercent` are only
+  ever non-empty/non-zero when the active character is admin-reviewed
+  (and, for coin requests, the caller opted in and the cooldown has
+  elapsed) — see Scope and Moderation above.
+- `POST /api/companion/coin-request/accept` — `{characterId}` → the only
+  place a coin request ever actually deducts anything. Re-validates the
+  offered percent (via `consume_coin_request`) against the live balance
+  at the moment of accept, not a stale snapshot from when the offer was
+  shown.
 - `GET /api/companion/character-image?id=&mood=` — serves one sprite.
 - `POST /api/companion/subscribe` — `{plan: "week"|"month"}` → charges
   750/1500 coins, extends `companion_subscriptions`.
@@ -292,6 +356,17 @@ was the explicit ask, since every call costs a real DeepSeek API charge.
   `__default__` 100/min — cheap to add at the same time as the route, and
   `/api/companion/mine/delete` in particular should stay tighter than the
   others (it's destructive).
+- Preset action animations (`.action-*` classes) are applied to
+  `.companion-sprite` (the `<img>`), **never to `.companion-root`** — the
+  root's `transform` is rewritten every animation frame by the drag/
+  physics loop in `startPhysics()` for positioning (`translate(x,y)`), so
+  a CSS animation also targeting that element's `transform` would fight
+  it: whichever one currently wins the cascade controls the *entire*
+  transform, so the companion would visually snap away from wherever
+  physics put it (e.g. near the viewport's top-left during "jump", since
+  `translateY(-28px)` with no x/y replaces the position entirely) for as
+  long as the animation runs. The sprite carries no positioning transform
+  of its own, so animating it there layers cleanly on top instead.
 - `/admin/companion/` shipped *without* the `X-Admin-Passphrase` wiring
   every other admin tool needs — documented in `docs/admin-panel.md`, not
   invented there for this writeup — and nobody caught it until a real

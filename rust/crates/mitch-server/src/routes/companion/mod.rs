@@ -44,7 +44,10 @@ pub async fn handle(
     if path.starts_with("/api/companion/mine") {
         return mine::handle(state, method, path, headers, body_bytes).await;
     }
-    if path == "/api/companion/subscribe" || path == "/api/companion/characters/unlock" {
+    if path == "/api/companion/subscribe"
+        || path == "/api/companion/characters/unlock"
+        || path == "/api/companion/coin-request/accept"
+    {
         return economy::handle(state, method, path, headers, body_bytes).await;
     }
     if path == "/api/companion/characters" && *method == Method::GET {
@@ -106,7 +109,7 @@ fn list_characters(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let Some(email) = logged_in_email(state, headers) else {
         return json_response(401, json!({ "error": "not logged in" }));
     };
-    let chars = mitch_lib::companion::list_characters(&state.store);
+    let chars = mitch_lib::companion::list_visible_characters(&state.store, &email);
     let out: Vec<_> = chars
         .into_iter()
         .map(|c| {
@@ -137,6 +140,7 @@ fn get_settings(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         json!({
             "enabled": s.enabled,
             "activeCharacterId": s.active_character_id,
+            "allowCoinRequests": s.allow_coin_requests,
             "subscriptionActive": mitch_lib::companion::is_subscription_active(&state.store, &email),
             "subscriptionExpiresAt": subscription_expires_at,
         }),
@@ -166,12 +170,24 @@ fn set_settings(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -
         else {
             return json_response(400, json!({ "error": "unknown character" }));
         };
+        if !mitch_lib::companion::visible_to(&character, &email) {
+            return json_response(404, json!({ "error": "unknown character" }));
+        }
         if !mitch_lib::companion::has_unlocked(&state.store, &email, &character) {
             return json_response(402, json!({ "error": "character not unlocked" }));
         }
     }
     let character_id = if enabled { character_id } else { String::new() };
     mitch_lib::companion::set_user_settings(&state.store, &email, enabled, &character_id);
+    // Independent of the enabled/character fields above — a separate
+    // toggle the user can flip without touching which character is active.
+    if let Some(allow) = body.get("allowCoinRequests") {
+        mitch_lib::companion::set_allow_coin_requests(
+            &state.store,
+            &email,
+            mitch_lib::jsval::truthy(allow),
+        );
+    }
     json_response(200, json!({ "ok": true }))
 }
 
@@ -220,10 +236,11 @@ async fn chat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> 
         return json_response(503, json!({ "error": "companion AI is not configured" }));
     }
 
+    let balance = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &email);
     let user = deepseek::UserContext {
         email: email.clone(),
         display_name: display_name_for(state, &email),
-        mitchcoin_balance: mitch_lib::coins::get_coins(&state.store, state.data_dir(), &email),
+        mitchcoin_balance: balance,
         premium: auth::is_premium_email(&state.store, &email),
     };
     // Last 5 exchanges (10 messages) is enough for the character to "keep
@@ -231,6 +248,22 @@ async fn chat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> 
     let history =
         mitch_lib::companion::recent_chat_messages(&state.store, &email, &character.id, 10);
     let memories = mitch_lib::companion::recent_memories(&state.store, &email, &character.id);
+
+    let settings_full = mitch_lib::companion::get_user_settings(&state.store, &email);
+    // Both halves of "models aren't released until admins review": an
+    // unreviewed character (including its own creator testing it) is never
+    // even offered customJs/coin-request capability, not just hidden from
+    // other users after the fact.
+    let caps = deepseek::Capabilities {
+        allow_custom_js: !character.needs_review,
+        allow_coin_requests: !character.needs_review
+            && settings_full.allow_coin_requests
+            && mitch_lib::companion::coin_request_cooldown_elapsed(
+                &state.store,
+                &email,
+                &character.id,
+            ),
+    };
 
     match deepseek::chat(
         &api_key,
@@ -242,6 +275,7 @@ async fn chat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> 
         &user,
         &history,
         &memories,
+        &caps,
     )
     .await
     {
@@ -265,7 +299,27 @@ async fn chat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> 
             if !r.remember.is_empty() {
                 mitch_lib::companion::add_memory(&state.store, &email, &character.id, &r.remember);
             }
-            json_response(200, json!({ "reply": r.reply, "mood": r.mood }))
+            // Starts the cooldown the moment the offer is shown, not only
+            // on accept — otherwise a declined/ignored offer could be
+            // retried next message.
+            if r.coin_request_percent > 0.0 {
+                mitch_lib::companion::record_coin_request(
+                    &state.store,
+                    &email,
+                    &character.id,
+                    r.coin_request_percent,
+                );
+            }
+            json_response(
+                200,
+                json!({
+                    "reply": r.reply,
+                    "mood": r.mood,
+                    "action": r.action,
+                    "customJs": r.custom_js,
+                    "coinRequestPercent": r.coin_request_percent,
+                }),
+            )
         }
         Err(_) => json_response(502, json!({ "error": "companion AI failed, try again" })),
     }
