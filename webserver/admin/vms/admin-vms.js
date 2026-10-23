@@ -236,7 +236,7 @@
       overview = await api('/api/admin/vms/overview');
       $('service-state').className = `service-state ${overview.serviceAvailable ? 'online' : 'offline'}`;
       $('service-state').querySelector('span').textContent = overview.serviceAvailable ? 'Computer service online' : 'Computer service unavailable';
-      renderCapacity(); renderForms(); renderFleet(); renderAudit();
+      renderCapacity(); renderForms(); renderFleet(); renderAudit(); renderOwnerFleet();
     } catch (error) { $('service-state').className = 'service-state offline'; $('service-state').querySelector('span').textContent = error.message; }
     finally { loading = false; $('refresh-button').disabled = false; }
   }
@@ -451,6 +451,85 @@
     } catch (error) { $('resource-status').textContent = error.message; }
     finally { pending.delete(id); submit.disabled = false; await load(); if (!$('resource-dialog').open) focusResourceAction(); }
   });
+
+  function renderOwnerFleet() {
+    const panel = $('owner-fleet-panel');
+    if (!panel) return;
+    if (!overview || !overview.viewerIsOwner) {
+      panel.style.display = 'none';
+      return;
+    }
+    panel.style.display = 'block';
+
+    const computers = overview.computers || [];
+    const chromeOsFleet = computers.filter(c => (c.hostname && c.hostname.startsWith('chromeos-fleet-')) || (c.isChromeOs && c.name && c.name.startsWith('ChromeOS Fleet')));
+    const countBadge = $('owner-fleet-count');
+    if (countBadge) {
+      countBadge.textContent = `${chromeOsFleet.length} / 24 provisioned`;
+    }
+
+    const runningFleet = chromeOsFleet.filter(c => c.status === 'running');
+    const powerOffBtn = $('btn-poweroff-chromeos-fleet');
+    if (powerOffBtn) {
+      if (runningFleet.length > 0) {
+        powerOffBtn.style.display = 'inline-flex';
+        powerOffBtn.textContent = `Power off fleet (${runningFleet.length} running)`;
+      } else {
+        powerOffBtn.style.display = 'none';
+      }
+    }
+  }
+
+  const btnCreateFleet = $('btn-create-chromeos-fleet');
+  if (btnCreateFleet) {
+    btnCreateFleet.addEventListener('click', async () => {
+      btnCreateFleet.disabled = true;
+      status('owner-fleet-status', 'Provisioning 24 ChromeOS fleet VMs (2 cores, 4 GB RAM, 32 GB disk)...');
+      try {
+        const res = await api('/api/admin/vms/fleet/create-chromeos', {});
+        status('owner-fleet-status', res.message || '24 ChromeOS VMs created successfully!', 'success');
+        await load();
+      } catch (err) {
+        status('owner-fleet-status', err.message, 'error');
+      } finally {
+        btnCreateFleet.disabled = false;
+      }
+    });
+  }
+
+  const btnControlFleet = $('btn-control-chromeos-fleet');
+  if (btnControlFleet) {
+    btnControlFleet.addEventListener('click', async () => {
+      btnControlFleet.disabled = true;
+      status('owner-fleet-status', 'Turning on 24 ChromeOS VMs and opening controller...');
+      try {
+        await api('/api/admin/vms/fleet/power', { action: 'start' });
+        location.href = '/admin/vms/fleet/';
+      } catch (err) {
+        status('owner-fleet-status', err.message, 'error');
+        btnControlFleet.disabled = false;
+      }
+    });
+  }
+
+  const btnPoweroffFleet = $('btn-poweroff-chromeos-fleet');
+  if (btnPoweroffFleet) {
+    btnPoweroffFleet.addEventListener('click', async () => {
+      if (!confirm('Power off all running ChromeOS fleet VMs?')) return;
+      btnPoweroffFleet.disabled = true;
+      status('owner-fleet-status', 'Powering off fleet VMs...');
+      try {
+        await api('/api/admin/vms/fleet/power', { action: 'shutdown' });
+        status('owner-fleet-status', 'Fleet VMs powering down.', 'success');
+        await load();
+      } catch (err) {
+        status('owner-fleet-status', err.message, 'error');
+      } finally {
+        btnPoweroffFleet.disabled = false;
+      }
+    });
+  }
+
   load();
   const timer = setInterval(() => {
     const locked = $('passphrase-lock-box')?.style.display === 'block';

@@ -199,6 +199,20 @@ deliberately not folded into `upsert_virtual_machine` (which overwrites
 every other column on every ordinary create/recreate/reassign and would
 silently reset this back to `false`).
 
+### Owner 24-Machine ChromeOS Fleet & Controller
+
+To support automated batch testing and owner workflows, an owner-exclusive 24-machine ChromeOS fleet can be provisioned and controlled via `/admin/vms`:
+- **Hardware Specs**: 2 CPU cores, 4 GB RAM (4096 MB), 32 GB disk, `keep_alive = 1` (exempt from inactivity shutdown), owner-locked (`is_vm_owner_locked`).
+- **Provisioning Endpoint**: `POST /api/admin/vms/fleet/create-chromeos` provisions up to 24 machines named `chromeos-fleet-01` through `24`, cloned from `PROXMOX_CHROMEOS_TEMPLATE_VMID`. Strictly owner-only.
+- **Batch Power Endpoint**: `POST /api/admin/vms/fleet/power` accepts `action: "start" | "shutdown" | "restart" | "force-stop"`, executing power transitions across all 24 machines concurrently.
+- **Fleet List Endpoint**: `GET /api/admin/vms/fleet/chromeos` returns all 24 fleet records with real-time status from Proxmox.
+- **Multi-Screen Controller (`/admin/vms/fleet/`)**:
+  - Gated to `is_owner_email` at both the HTML route handler and API layer.
+  - Responsive grid rendering live noVNC RFB streams of all 24 machines simultaneously.
+  - Interactive single-machine zoom mode to inspect or interact with any individual machine, with an instant toggle back to the 24-screen grid.
+  - Integrated **Mouse Jiggler**: automatically injects micro pointer move events every 10 seconds across all connected sessions to prevent ChromeOS idle lock, sleep, or screensaver.
+  - Global "Turn On All" and "Power Off All" controls.
+
 ### Owner-only test-persona account
 
 `newaccount123@student.rjuhsd.us` (`mitch_lib::auth::OWNER_TEST_ACCOUNT_EMAIL`)

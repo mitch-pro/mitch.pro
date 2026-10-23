@@ -43,6 +43,31 @@
       <article><span>Running resources</span><strong id="running-vms-count">—</strong><small id="running-vms-sub">max 36 cores / 96 GB RAM</small></article>
     </section>
 
+    <!-- Owner ChromeOS Fleet Panel (Owner Only) -->
+    <section id="owner-fleet-panel" class="panel fleet-panel" style="display: none; border-color: rgba(56, 189, 248, 0.35); background: linear-gradient(180deg, rgba(56, 189, 248, 0.05) 0%, rgba(23, 27, 34, 0.98) 100%);">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow" style="color: #38bdf8;">Owner Fleet</p>
+          <h2 style="display: flex; align-items: center; gap: 8px;">
+            <span>ChromeOS Fleet (24 VMs)</span>
+            <span class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">Owner Only</span>
+          </h2>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span id="owner-fleet-count" class="badge">0 / 24 provisioned</span>
+        </div>
+      </div>
+      <p style="color: var(--muted); font-size: 0.85rem; margin-top: -10px; margin-bottom: 16px;">
+        Owner-only 24-machine fleet with 2 cores, 4 GB RAM, 32 GB drive, keep-alive active, and integrated mouse jiggler.
+      </p>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+        <button type="button" id="btn-create-chromeos-fleet" class="primary">Create 24 ChromeOS VMs</button>
+        <button type="button" id="btn-control-chromeos-fleet" class="primary">Turn on and control</button>
+        <button type="button" id="btn-poweroff-chromeos-fleet" class="danger" style="display: none;">Power off fleet</button>
+      </div>
+      <p class="form-status" id="owner-fleet-status" role="status" style="margin-top: 10px;"></p>
+    </section>
+
     <section class="panel fleet-panel">
       <div class="panel-head"><div><p class="eyebrow">Customers</p><h2>Assigned computers</h2></div><button id="refresh-button">Refresh</button></div>
       <div class="fleet-toolbar">

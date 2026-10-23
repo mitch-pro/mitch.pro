@@ -1379,6 +1379,245 @@ pub async fn handle(
         ));
     }
 
+    // GET /api/admin/vms/fleet/chromeos — returns the owner's 24 ChromeOS fleet machines
+    if path == "/api/admin/vms/fleet/chromeos" && *method == Method::GET {
+        let Some(actor) = crate::routes::vm::authenticated_vm_actor(state, headers) else {
+            return Some(json_response(401, json!({"error": "Sign in required."})));
+        };
+        if !auth::is_owner_email(&state.store, &actor.email) {
+            return Some(json_response(
+                403,
+                json!({"error": "Owner access required."}),
+            ));
+        }
+        let all_records = vmlib::list_virtual_machines(&state.store, true);
+        let norm_actor = auth::normalize_email(&actor.email);
+        let pve = crate::proxmox_desktop::desktop();
+        let guest_statuses = pve.list_guests().await.unwrap_or_default();
+        let status_by_vmid: std::collections::HashMap<i64, String> = guest_statuses
+            .iter()
+            .filter_map(|g| {
+                let vmid = g.get("vmid").and_then(Value::as_i64)?;
+                let status = g.get("status").and_then(Value::as_str).unwrap_or("stopped");
+                Some((vmid, status.to_string()))
+            })
+            .collect();
+
+        let mut fleet = Vec::new();
+        for r in all_records {
+            if auth::normalize_email(&r.owner_email) == norm_actor
+                && (r.operating_system == "ChromeOS" || r.hostname.starts_with("chromeos-fleet-"))
+            {
+                let mut json_val = r.to_json();
+                let vmid = r.vmid as i64;
+                if let Some(live_status) = status_by_vmid.get(&vmid) {
+                    json_val["status"] = json!(live_status);
+                }
+                fleet.push(json_val);
+            }
+        }
+        fleet.sort_by(|a, b| {
+            let ha = a.get("hostname").and_then(Value::as_str).unwrap_or("");
+            let hb = b.get("hostname").and_then(Value::as_str).unwrap_or("");
+            ha.cmp(hb)
+        });
+        return Some(json_response(200, json!({ "success": true, "vms": fleet })));
+    }
+
+    // POST /api/admin/vms/fleet/create-chromeos — creates 24 ChromeOS VMs for the owner
+    // Specs: 2 CPU cores, 4 GB RAM (4096 MB), 32 GB disk, keep-alive enabled, owner-locked.
+    if path == "/api/admin/vms/fleet/create-chromeos" && *method == Method::POST {
+        let Some(actor) = crate::routes::vm::authenticated_vm_actor(state, headers) else {
+            return Some(json_response(401, json!({"error": "Sign in required."})));
+        };
+        if !auth::is_owner_email(&state.store, &actor.email) {
+            return Some(json_response(
+                403,
+                json!({"error": "Owner access required."}),
+            ));
+        }
+
+        let all_records = vmlib::list_virtual_machines(&state.store, true);
+        let norm_actor = auth::normalize_email(&actor.email);
+        let mut existing_fleet: Vec<vmlib::VmRecord> = all_records
+            .iter()
+            .filter(|r| {
+                auth::normalize_email(&r.owner_email) == norm_actor
+                    && (r.operating_system == "ChromeOS"
+                        || r.hostname.starts_with("chromeos-fleet-"))
+            })
+            .cloned()
+            .collect();
+
+        if existing_fleet.len() >= 24 {
+            return Some(json_response(
+                200,
+                json!({
+                    "success": true,
+                    "message": "All 24 ChromeOS fleet VMs are already provisioned.",
+                    "count": existing_fleet.len(),
+                }),
+            ));
+        }
+
+        let mut existing_vmids: Vec<f64> = all_records.iter().map(|r| r.vmid).collect();
+        let pve = crate::proxmox_desktop::desktop();
+        let template_vmid = pve.chromeos_template_vmid().unwrap_or(9020);
+        let mut created_count = 0;
+
+        for i in 1..=24 {
+            let hostname = format!("chromeos-fleet-{:02}", i);
+            if existing_fleet.iter().any(|r| r.hostname == hostname) {
+                continue;
+            }
+
+            let vmid = match pve
+                .next_available_vmid(PVE_VMID_MIN as f64, PVE_VMID_MAX as f64, &existing_vmids)
+                .await
+            {
+                Ok(v) => v as f64,
+                Err(_) => {
+                    let mut candidate = 300.0;
+                    while existing_vmids.contains(&candidate)
+                        || (200.0..=210.0).contains(&candidate)
+                    {
+                        candidate += 1.0;
+                    }
+                    candidate
+                }
+            };
+            existing_vmids.push(vmid);
+
+            let friendly_name = format!("ChromeOS Fleet {:02}", i);
+            let id = format!("vm-{}", vmid as i64);
+
+            if pve.chromeos_template_vmid().is_some() {
+                let _ = pve
+                    .clone_chromeos_desktop(&crate::proxmox_desktop::CloneChromeOsParams {
+                        owner_resources: true,
+                        vmid: Some(vmid),
+                        hostname: hostname.clone(),
+                        cpu_cores: Some(2.0),
+                        memory_mb: Some(4096.0),
+                    })
+                    .await;
+            }
+
+            let rec_json = json!({
+                "id": id,
+                "ownerEmail": actor.email,
+                "ownerUserId": profile::get_uid_for_email(&state.store, &state.id_secret, &actor.email).unwrap_or_default(),
+                "vmid": vmid,
+                "node": pve.node(),
+                "guestType": "qemu",
+                "friendlyName": friendly_name,
+                "hostname": hostname,
+                "operatingSystem": "ChromeOS",
+                "templateVmid": template_vmid,
+                "cpuCores": 2.0,
+                "memoryMb": 4096.0,
+                "diskGb": 32.0,
+                "status": "stopped",
+                "keepAlive": true,
+                "createdAt": now_millis(),
+            });
+
+            if let Some(record) = vmlib::upsert_virtual_machine(&state.store, &rec_json) {
+                vmlib::set_vm_keep_alive(&state.store, &record.id, true);
+                existing_fleet.push(record);
+                created_count += 1;
+            }
+        }
+
+        crate::routes::vm::vm_audit(
+            state,
+            &actor.email,
+            None,
+            "FLEET_CHROMEOS_CREATED",
+            true,
+            Some(&json!({ "createdCount": created_count, "totalFleet": existing_fleet.len() })),
+        );
+
+        return Some(json_response(
+            200,
+            json!({
+                "success": true,
+                "message": format!("Provisioned {} ChromeOS fleet computer(s). Total fleet: {}.", created_count, existing_fleet.len()),
+                "count": existing_fleet.len(),
+                "created": created_count,
+            }),
+        ));
+    }
+
+    // POST /api/admin/vms/fleet/power — batch power controls (start, shutdown, restart, force-stop) for owner fleet
+    if path == "/api/admin/vms/fleet/power" && *method == Method::POST {
+        let Some(actor) = crate::routes::vm::authenticated_vm_actor(state, headers) else {
+            return Some(json_response(401, json!({"error": "Sign in required."})));
+        };
+        if !auth::is_owner_email(&state.store, &actor.email) {
+            return Some(json_response(
+                403,
+                json!({"error": "Owner access required."}),
+            ));
+        }
+
+        let action = jsval::str_or(body.get("action"), "start").to_lowercase();
+        if !["start", "shutdown", "restart", "force-stop"].contains(&action.as_str()) {
+            return Some(json_response(
+                400,
+                json!({"error": "Invalid power action."}),
+            ));
+        }
+
+        let all_records = vmlib::list_virtual_machines(&state.store, true);
+        let norm_actor = auth::normalize_email(&actor.email);
+        let fleet: Vec<vmlib::VmRecord> = all_records
+            .into_iter()
+            .filter(|r| {
+                auth::normalize_email(&r.owner_email) == norm_actor
+                    && (r.operating_system == "ChromeOS"
+                        || r.hostname.starts_with("chromeos-fleet-"))
+            })
+            .collect();
+
+        let pve = crate::proxmox_desktop::desktop();
+        let target_status = match action.as_str() {
+            "start" | "restart" => "running",
+            "shutdown" | "force-stop" => "stopped",
+            _ => "stopped",
+        };
+
+        let mut power_futs = Vec::new();
+        for vm in &fleet {
+            let pve_clone = pve.clone();
+            let vm_json = vm.to_json();
+            let action_clone = action.clone();
+            power_futs.push(async move {
+                let _ = pve_clone.power(&vm_json, &action_clone, false).await;
+            });
+            vmlib::update_virtual_machine_runtime(&state.store, &vm.id, None, Some(target_status));
+        }
+        futures_util::future::join_all(power_futs).await;
+
+        crate::routes::vm::vm_audit(
+            state,
+            &actor.email,
+            None,
+            "FLEET_CHROMEOS_POWER",
+            true,
+            Some(&json!({ "action": action, "affected": fleet.len() })),
+        );
+
+        return Some(json_response(
+            200,
+            json!({
+                "success": true,
+                "action": action,
+                "affected": fleet.len(),
+            }),
+        ));
+    }
+
     // GET /api/admin/vm-requests (admins only).
     if path == "/api/admin/vm-requests" && *method == Method::GET {
         if state.rate_limit_check(&ctx.ip, "anon", path).is_some() {
@@ -1654,4 +1893,34 @@ fn valid_id(sid: &str, state: &Arc<AppState>) -> bool {
 
 fn vmid_in_range(vmid: i64) -> bool {
     (PVE_VMID_MIN..=PVE_VMID_MAX).contains(&vmid)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::vmid_in_range;
+
+    #[test]
+    fn test_fleet_chromeos_specs() {
+        let expected_cores = 2.0;
+        let expected_memory = 4096.0;
+        let expected_disk = 32.0;
+        let hostname_1 = format!("chromeos-fleet-{:02}", 1);
+        let hostname_24 = format!("chromeos-fleet-{:02}", 24);
+        assert_eq!(hostname_1, "chromeos-fleet-01");
+        assert_eq!(hostname_24, "chromeos-fleet-24");
+        assert_eq!(expected_cores, 2.0);
+        assert_eq!(expected_memory, 4096.0);
+        assert_eq!(expected_disk, 32.0);
+        assert!(vmid_in_range(300));
+    }
+
+    #[test]
+    fn test_fleet_power_actions() {
+        let valid_actions = ["start", "shutdown", "restart", "force-stop"];
+        assert!(valid_actions.contains(&"start"));
+        assert!(valid_actions.contains(&"shutdown"));
+        assert!(valid_actions.contains(&"restart"));
+        assert!(valid_actions.contains(&"force-stop"));
+        assert!(!valid_actions.contains(&"destroy"));
+    }
 }

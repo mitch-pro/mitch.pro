@@ -1659,6 +1659,17 @@ pub async fn handle(
             Some(_) => {}
         }
     }
+    if is_html_request
+        && (html_base == "/admin/vms/fleet" || html_base.starts_with("/admin/vms/fleet/"))
+    {
+        match authenticated_vm_actor(&state, headers, node_env_test) {
+            None => return redirect("/enroll/?next=%2Fadmin%2Fvms%2Ffleet%2F", 302),
+            Some((_, email, _)) if !mitch_lib::auth::is_owner_email(&state.store, &email) => {
+                return err_resp(403, Some("Owner access required."), None);
+            }
+            Some(_) => {}
+        }
+    }
     if is_html_request && !is_open_html_page && !path.starts_with("/unsubscribe/") {
         let cookie_header = headers
             .get(axum::http::header::COOKIE)

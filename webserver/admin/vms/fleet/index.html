@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0d1015">
+  <title>ChromeOS Fleet Controller · mitch.pro</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/admin/vms/fleet/fleet.css?v=1">
+</head>
+<body>
+  <div class="fleet-shell">
+    <header class="fleet-header">
+      <div class="fleet-header-left">
+        <a href="/admin/vms/" class="back-link">&larr; Virtual machines</a>
+        <div class="fleet-title-row">
+          <h1>ChromeOS Fleet Controller</h1>
+          <span class="badge owner">Owner Only</span>
+        </div>
+      </div>
+      <div class="fleet-toolbar">
+        <div class="jiggler-pill active" id="jiggler-pill" title="Mouse Jiggler keeps ChromeOS awake by injecting micro-movements every 10s">
+          <span class="jiggler-dot" id="jiggler-dot"></span>
+          <span>Mouse Jiggler Active</span>
+        </div>
+        <button type="button" id="btn-toggle-jiggler">Pause Jiggler</button>
+        <button type="button" id="btn-power-on-all" class="primary">Turn On All</button>
+        <button type="button" id="btn-power-off-all" class="danger">Power Off All</button>
+        <button type="button" id="btn-refresh">Refresh</button>
+      </div>
+    </header>
+
+    <div class="status-bar">
+      <div class="summary-counts">
+        <span class="count-pill">Total: <strong id="count-total">24</strong></span>
+        <span class="count-pill">Running: <strong id="count-running">0</strong></span>
+        <span class="count-pill">Stopped: <strong id="count-stopped">0</strong></span>
+      </div>
+      <div id="fleet-global-status"></div>
+    </div>
+
+    <!-- 24-Machine Multi-Screen Grid -->
+    <main id="grid-view" class="screen-grid">
+      <div class="empty-state" style="grid-column: 1 / -1;">
+        <div class="spinner" style="margin: 0 auto 12px;"></div>
+        <p>Loading ChromeOS fleet machines…</p>
+      </div>
+    </main>
+
+    <!-- Individual Machine View -->
+    <section id="single-view" class="single-view">
+      <div class="single-view-toolbar">
+        <div class="single-view-title">
+          <button type="button" id="btn-back-to-grid">&larr; Back to all 24 screens</button>
+          <span id="single-vm-name">ChromeOS Fleet</span>
+          <span id="single-vm-status" class="badge">Running</span>
+        </div>
+        <div class="fleet-toolbar">
+          <button type="button" id="btn-single-restart">Restart</button>
+          <button type="button" id="btn-single-power" class="danger">Power Off</button>
+          <button type="button" id="btn-single-fullscreen">Fullscreen</button>
+        </div>
+      </div>
+      <div id="single-screen-container" class="single-screen-container">
+        <!-- RFB attaches here in single mode -->
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="/admin/vms/fleet/fleet.js?v=1"></script>
+</body>
+</html>
