@@ -638,6 +638,31 @@ fn resolve_mood(raw_mood: &str, reply: &str, moods: &[String]) -> String {
     guess_mood(reply, moods)
 }
 
+fn clean_custom_js(code: &str) -> String {
+    let mut str = strip_markdown_code_fence(code).trim().to_string();
+    if str.starts_with("function")
+        && str
+            .get(8..)
+            .is_some_and(|s| s.trim_start().starts_with('('))
+    {
+        str = format!("({str})()");
+    }
+    let opens = str.chars().filter(|&c| c == '{').count();
+    let mut closes = str.chars().filter(|&c| c == '}').count();
+    while closes > opens && str.ends_with('}') {
+        str.pop();
+        str = str.trim_end().to_string();
+        closes -= 1;
+    }
+    let open_parens = str.chars().filter(|&c| c == '(').count();
+    let mut close_parens = str.chars().filter(|&c| c == ')').count();
+    while open_parens > close_parens {
+        str.push(')');
+        close_parens += 1;
+    }
+    str
+}
+
 fn extract_value_to_parsed_reply(val: &Value, moods: &[String]) -> Option<ParsedReply> {
     let reply = val
         .get("reply")
@@ -700,7 +725,7 @@ fn extract_value_to_parsed_reply(val: &Value, moods: &[String]) -> Option<Parsed
         mood,
         remember,
         action,
-        custom_js,
+        custom_js: clean_custom_js(&custom_js),
         coin_request_percent,
     })
 }
@@ -787,7 +812,7 @@ fn extract_fields_resilient(text: &str, moods: &[String]) -> Option<ParsedReply>
         mood,
         remember,
         action,
-        custom_js,
+        custom_js: clean_custom_js(&custom_js),
         coin_request_percent,
     })
 }

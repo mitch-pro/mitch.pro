@@ -126,6 +126,42 @@
     });
   }
 
+  // Auto-repairs common LLM JavaScript syntax errors:
+  // - Strips markdown code blocks (```javascript ... ```)
+  // - Strips stray unbalanced trailing braces (fixes "Unexpected token '}'")
+  // - Closes unclosed parentheses (fixes "missing ) after argument list")
+  // - Wraps bare anonymous function statements (function() { ... }) as IIFEs
+  function autoRepairJs(code) {
+    if (typeof code !== 'string') return '';
+    var str = code.trim();
+    if (str.startsWith('```')) {
+      var nl = str.indexOf('\n');
+      if (nl !== -1) str = str.slice(nl + 1);
+      var end = str.lastIndexOf('```');
+      if (end !== -1) str = str.slice(0, end);
+      str = str.trim();
+    }
+    // If anonymous function expression, wrap as IIFE
+    if (/^function\s*\(/.test(str)) {
+      str = '(' + str + ')()';
+    }
+    // Strip trailing stray closing braces if unbalanced
+    var opens = (str.match(/{/g) || []).length;
+    var closes = (str.match(/}/g) || []).length;
+    while (closes > opens && str.endsWith('}')) {
+      str = str.slice(0, -1).trim();
+      closes--;
+    }
+    // Balance missing closing parentheses
+    var openParens = (str.match(/\(/g) || []).length;
+    var closeParens = (str.match(/\)/g) || []).length;
+    while (openParens > closeParens) {
+      str = str + ')';
+      closeParens++;
+    }
+    return str;
+  }
+
   // Runs raw JS the server sent back. The server only ever populates this
   // field at all when the active character has been admin-reviewed (see
   // `deepseek.rs`'s `Capabilities` gate) — an unreviewed custom character
@@ -134,9 +170,18 @@
   // able to take down the rest of the page just because it threw.
   function runCustomJs(code) {
     if (!code) return;
+    var repaired = autoRepairJs(code);
+    if (!repaired) return;
     try {
-      new Function(code)();
+      new Function(repaired)();
     } catch (err) {
+      if (err instanceof SyntaxError) {
+        try {
+          var stripped = repaired.replace(/[}\s;]+$/, '');
+          new Function(stripped)();
+          return;
+        } catch (_) {}
+      }
       console.error('[companion] customJs threw:', err);
     }
   }
