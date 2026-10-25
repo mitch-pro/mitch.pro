@@ -6,6 +6,10 @@ longer loaded by this page. The shared theme engine still saves the selected
 light/dark mode. The hub uses neutral surfaces and the selected campus's colors.
 No build or additional runtime dependency is needed.
 
+The "by" pill in the header links to the `alternate` domain from `data/site.json`
+(read through `/api/site-info`); the hero and live card carry no school-logo
+background art.
+
 `webserver/bell/schedule.js` holds the published bell times;
 `webserver/rjuhsd-assets/calendar.js` resolves district breaks, special schedules,
 and official calendar events. `app.js` continues to consume `/api/school-info`

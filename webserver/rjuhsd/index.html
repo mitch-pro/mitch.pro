@@ -203,12 +203,26 @@
       <button class="icon-button" id="theme-btn" type="button" aria-label="Switch color theme"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.5 1.5m11.2 11.2 1.5 1.5M2 12h2m16 0h2M4.9 19.1l1.5-1.5M17.6 6.4l1.5-1.5"/></svg></button>
     </div>
   </header>
-
+  <script>
+    // The link target comes from data/site.json (served at /api/site-info);
+    // the button points at the "alternate" domain.
+    fetch('/api/site-info', { credentials: 'same-origin', cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (info) {
+        if (!info) return;
+        var target = info.alternate;
+        if (!target) return;
+        var link = document.getElementById('powered-by-link');
+        var name = document.getElementById('powered-by-name');
+        link.href = target;
+        try { name.textContent = new URL(target).hostname; } catch (e) {}
+      })
+      .catch(function () {});
+  </script>
   <main id="main">
     <section class="hero" id="today">
-      <div class="hero-graphic" aria-hidden="true"><img src="/rjuhsd-assets/woodcreek.png" alt=""><i class="ring ring-one"></i><i class="ring ring-two"></i><i class="ring ring-three"></i></div>
       <div class="hero-content"><time class="hero-date-panel" id="hero-date" datetime="2026-09-01"><span class="hero-weekday" id="hero-weekday">TUESDAY</span><span class="hero-date-main"><strong id="hero-date-day">01</strong><span><b id="hero-date-month">September</b><small id="hero-date-year">2026</small></span></span></time><p class="hero-overline" id="hero-overline">WOODCREEK HIGH SCHOOL</p><h1><span id="school-heading">Woodcreek</span><br><em>bell schedule</em></h1><p class="hero-summary" id="hero-summary">Loading today’s schedule.</p><div class="hero-actions"><a class="primary-button" href="#schedule-panel">View schedule</a><button class="secondary-button" id="hero-change-lunch" type="button">Change lunch</button></div></div>
-      <article class="live-card" aria-label="Current period and countdown"><img class="live-wolf" src="/rjuhsd-assets/woodcreek.png" alt=""><div class="live-card-top"><span><i></i><b id="live-mode">LIVE</b></span><time id="live-clock">--:-- --</time></div><div class="live-card-body"><div class="period-badge" id="period-badge"></div><p id="current-eyebrow">CHECKING THE BELL</p><h2 id="current-period">Loading…</h2><span class="period-range" id="current-range">Woodcreek High School</span><div class="countdown-dial"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="dial-track" cx="60" cy="60" r="52"></circle><circle class="dial-value" id="countdown-ring" cx="60" cy="60" r="52"></circle></svg><div class="countdown-center"><div class="countdown" id="countdown" aria-live="off">--:--</div><p class="countdown-copy" id="countdown-copy">until the next bell</p></div></div><div class="countdown-details"><span><small>Ends at</small><strong id="countdown-end">Not set</strong></span><span><small>Complete</small><strong id="countdown-percent">0%</strong></span><span><small>Status</small><strong id="countdown-context">Loading</strong></span></div><div class="progress"><span id="live-progress"></span></div></div><div class="live-next"><span>Up next</span><strong id="next-period">Not set</strong><time id="next-time">Not set</time></div></article>
+      <article class="live-card" aria-label="Current period and countdown"><div class="live-card-top"><span><i></i><b id="live-mode">LIVE</b></span><time id="live-clock">--:-- --</time></div><div class="live-card-body"><div class="period-badge" id="period-badge"></div><p id="current-eyebrow">CHECKING THE BELL</p><h2 id="current-period">Loading…</h2><span class="period-range" id="current-range">Woodcreek High School</span><div class="countdown-dial"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="dial-track" cx="60" cy="60" r="52"></circle><circle class="dial-value" id="countdown-ring" cx="60" cy="60" r="52"></circle></svg><div class="countdown-center"><div class="countdown" id="countdown" aria-live="off">--:--</div><p class="countdown-copy" id="countdown-copy">until the next bell</p></div></div><div class="countdown-details"><span><small>Ends at</small><strong id="countdown-end">Not set</strong></span><span><small>Complete</small><strong id="countdown-percent">0%</strong></span><span><small>Status</small><strong id="countdown-context">Loading</strong></span></div><div class="progress"><span id="live-progress"></span></div></div><div class="live-next"><span>Up next</span><strong id="next-period">Not set</strong><time id="next-time">Not set</time></div></article>
     </section>
     <section class="snapshot" aria-label="Today at a glance"><article><span class="snapshot-icon wine" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg></span><div><small>FIRST BELL</small><strong id="snapshot-first">Not set</strong></div></article><article><span class="snapshot-icon amber" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20h16M7 20V4h10v16M10 8h4M10 12h4M10 16h4"/></svg></span><div><small>DISMISSAL</small><strong id="snapshot-last">Not set</strong></div></article><article><span class="snapshot-icon blue" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 17l5-5 4 3 7-9M15 6h5v5"/></svg></span><div><small>DAY PROGRESS</small><strong id="snapshot-progress">Not set</strong></div></article><article><span class="snapshot-icon green" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3v4M16 3v4M4 10h16M8 14h3M8 17h6"/></svg></span><div><small>SCHEDULE</small><strong id="snapshot-type">Loading</strong></div></article></section>
 
