@@ -28,6 +28,13 @@ Calendar date buttons filter the agenda, and Today restores upcoming events.
 The lunch dialog supports Escape, backdrop/close dismissal, focus trapping and
 restoring the invoking control. Lunch selections remain local to the device.
 Calendar fetch failures distinguish published weekly times from verified dates.
+School links use mitchdog.com directly. Link labels and time ranges use plain
+words instead of decorative arrows or dash punctuation.
+
+The install banner in `webserver/pwa-install.js` uses the school palette and
+brief installation copy. Supported browsers receive their native install prompt;
+iOS receives Share / Add to Home Screen instructions. Dismissing the instructions
+stays on the school page. The banner does not promise offline access or alerts.
 
 Run the focused browser regression suite from the repository root:
 
@@ -40,5 +47,5 @@ It requires the existing `@playwright/test` development dependency and Chromium.
 `PLAYWRIGHT_EXECUTABLE_PATH` can select the browser. The suite serves a disposable
 static fixture and mocks calendar/weather requests. It checks bells and exact
 boundaries, midnight rollover, manual previews, lunches, overrides, holidays,
-campus switching, keyboard interaction, and both themes at 320–1440 pixels.
+campus switching, keyboard interaction, native/manual installation, canonical links, and both themes at 320–1440 pixels.
 Screenshots go to `/tmp`; `RJUHSD_FULL_SCREENSHOTS=1` also captures full pages.

@@ -256,6 +256,52 @@ try {
     await context.close();
     cases += 2;
   }
+  {
+    const { page, context } = await fixture('2026-10-26T10:25:00', 'woodcreek', 390);
+    assert.equal(await page.locator('#powered-by-link').getAttribute('href'), 'https://mitchdog.com');
+    assert.equal(await page.locator('a[href*="mitch.pro"]').count(), 0, 'School links must use the canonical public domain');
+    assert.doesNotMatch(await page.locator('body').innerText(), /[—–↗→↓📲]/, 'School copy must use plain words without decorative redirect arrows');
+    await page.evaluate(() => {
+      window.installPrompts = 0;
+      const event = new Event('beforeinstallprompt', { cancelable: true });
+      event.prompt = () => { window.installPrompts++; };
+      event.userChoice = Promise.resolve({ outcome: 'dismissed' });
+      window.dispatchEvent(event);
+    });
+    await page.clock.runFor(2600);
+    const banner = page.locator('#mitchPwaBanner');
+    assert.equal(await banner.isVisible(), true);
+    assert.equal(await banner.locator('.mitch-pwa-copy span').innerText(), 'Add bell schedules to your home screen.');
+    assert.equal(await banner.locator('.mitch-pwa-ico').count(), 0);
+    for (const mode of ['dark', 'light']) {
+      await page.evaluate(value => window.__theme.apply(value), mode);
+      for (const width of [320, 390]) {
+        await page.setViewportSize({ width, height: 1000 });
+        const box = await banner.boundingBox();
+        assert(box && box.x >= 0 && box.x + box.width <= width, `Install banner must fit ${width}px ${mode}`);
+        assert.equal(await banner.evaluate(element => element.scrollWidth > element.clientWidth), false);
+      }
+      await page.screenshot({ path: `/tmp/rjuhsd-install-${mode}.png` });
+    }
+    await banner.locator('#mitchPwaInstall').click();
+    assert.equal(await page.evaluate(() => window.installPrompts), 1, 'Install must invoke the native browser prompt');
+    await page.clock.runFor(300);
+    assert.equal(await banner.count(), 0);
+    const previousUrl = page.url();
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, 'userAgent', { configurable: true, value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)' });
+      window.__promptPwaInstall();
+    });
+    assert.equal(await banner.locator('.mitch-pwa-copy span').innerText(), 'Tap Share, then Add to Home Screen.');
+    assert.equal(await banner.locator('#mitchPwaInstall').innerText(), 'Got it');
+    await banner.locator('#mitchPwaInstall').click();
+    await page.clock.runFor(300);
+    assert.equal(page.url(), previousUrl, 'Manual installation must stay on the school page');
+    assert.equal(await banner.count(), 0);
+    assert.equal(await page.evaluate(() => localStorage.getItem('mitch_pwa_install_dismissed')), '1');
+    await context.close();
+    cases += 4;
+  }
   assert.deepEqual(errors, [], 'Dashboard must not throw browser errors');
   console.log(`RJUHSD refresh: ${cases} bell, lunch, school, keyboard and responsive checks passed.`);
   console.log('Screenshots: /tmp/rjuhsd-refresh-{dark,light}-{1440,390}.png');
