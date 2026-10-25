@@ -213,8 +213,9 @@ function showNextPeriod(name,start){
  document.querySelector(".live-next > span").textContent="Up next";
  $("next-period").textContent=name;$("next-time").textContent=time(start);
 }
+// Bell times and the Pacific clock have whole-second precision; avoid fractional-minute rounding.
 function showCountdown(seconds,copy){
- const remaining=Math.max(0,Math.ceil(seconds));
+ const remaining=Math.max(0,Math.round(seconds));
  $("countdown").textContent=`${String(Math.floor(remaining/60)).padStart(2,"0")}:${String(remaining%60).padStart(2,"0")}`;
  $("countdown").setAttribute("aria-label",`${Math.floor(remaining/60)} minutes ${remaining%60} seconds ${copy}`);
  $("countdown-copy").textContent=copy;
@@ -255,7 +256,7 @@ function renderNowAdvanced(){
  $("snapshot-progress").textContent=`${Math.floor(dayPct)}% complete`;
  if(current){
   card.dataset.countdownState="active";
-  const seconds=(mins(current.end)-now)*60,percent=clampPercent((now-mins(current.start))/Math.max(1,mins(current.end)-mins(current.start))*100);
+  const seconds=mins(current.end)*60-p.minutes*60-p.seconds,percent=clampPercent((now-mins(current.start))/Math.max(1,mins(current.end)-mins(current.start))*100);
   const isLunch=/lunch/i.test(current.name),nextBlock=blocks[blocks.indexOf(current)+1];
   $("live-mode").textContent="Live";$("current-eyebrow").textContent=isLunch?"Lunch ends in":"Current period";
   $("current-period").textContent=current.name;$("current-range").textContent=`${time(current.start)} – ${time(current.end)}`;
@@ -267,7 +268,7 @@ function renderNowAdvanced(){
  if(next){
   const before=now<first,previous=[...blocks].reverse().find(block=>mins(block.end)<=now);
   const start=previous?mins(previous.end):first,span=Math.max(1,mins(next.start)-start);
-  const percent=before?0:clampPercent((now-start)/span*100),seconds=(mins(next.start)-now)*60;
+  const percent=before?0:clampPercent((now-start)/span*100),seconds=mins(next.start)*60-p.minutes*60-p.seconds;
   card.dataset.countdownState=before?"before":"passing";$("live-mode").textContent=before?"Before school":"Passing period";
   $("current-eyebrow").textContent=before?"First bell":"Next class";$("current-period").textContent=before?"School starts in":"Passing period";
   $("current-range").textContent=`${next.name} starts at ${time(next.start)}`;$("period-badge").textContent="→";

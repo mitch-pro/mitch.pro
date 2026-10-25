@@ -60,7 +60,8 @@ async function fixture(date, school = 'woodcreek', width = 1440, override = null
 }
 const text = (page, selector) => page.locator(selector).innerText();
 async function setTime(page, value) {
-  await page.clock.setSystemTime(pacific(value));
+  // Advance the interval once while ending at the requested whole second.
+  await page.clock.setSystemTime(new Date(pacific(value).getTime() - 1000));
   await page.clock.runFor(1000);
 }
 async function state(page, value) {
@@ -83,6 +84,7 @@ try {
     await state(page, 'passing');
     assert.equal(await page.locator('#timeline .active').count(), 0, 'Expired class must stop highlighting at its bell');
     assert.equal(await text(page, '#countdown-end'), '10:00 AM');
+    assert.equal(await text(page, '#countdown'), '07:59', 'Passing countdown must lose exactly one second after the bell');
     await setTime(page, '2026-10-26T10:00:00');
     await state(page, 'active');
     assert.equal(await text(page, '#current-period'), 'Period 2');
@@ -91,7 +93,10 @@ try {
     assert.equal(await text(page, '#next-time'), '11:22 AM');
     assert.match(await text(page, '#snapshot-progress'), /\d+%/);
     assert.equal(await page.locator('.countdown-dial').evaluate(element => getComputedStyle(element, '::after').content.replaceAll('"', '')), await text(page, '#countdown-percent'), 'The dial must display its actual progress percentage');
-    cases += 3;
+    await setTime(page, '2026-10-26T10:00:01');
+    assert.equal(await text(page, '#countdown'), '81:59', 'Whole-second class countdown must not round fractional minutes up');
+    assert.equal(await text(page, '#countdown-context'), '82 min left');
+    cases += 4;
 
     // Lunch changes alter the actual live schedule and remain campus-specific.
     await setTime(page, '2026-10-26T11:35:00');

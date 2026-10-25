@@ -154,7 +154,7 @@ main > * { min-width: 0; }
 .timeline-row::after { content: ''; position: absolute; width: 1px; top: 43px; bottom: -22px; left: 109px; z-index: 0; background: var(--line); }
 .timeline-row:last-child::after { display: none; }
 .timeline-row .time { text-align: right; font: 550 11px var(--sans); font-variant-numeric: tabular-nums; }
-.timeline-row .time small { font-size: 9px; color: var(--muted); }
+.timeline-row .time small { margin-left: 3px; font-size: 9px; color: var(--muted); }
 .timeline-dot { position: relative; z-index: 1; display: grid; place-items: center; width: 8px; height: 8px; justify-self: center; border: 2px solid #70717d; background: var(--card); border-radius: 50%; font-size: 9px; font-style: normal; }
 .period-name { font-size: 12px; font-weight: 550; }
 .period-duration { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; font-weight: 400; }
