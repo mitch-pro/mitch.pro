@@ -79,7 +79,7 @@ function applySchoolIdentity(){
 let lunch=saved("rjuhsd_lunch_"+school,"1")==="2"?"2":"1",data=buildData(),calendarCursor,calendarSelected=null;
 function pacific(){const p=Object.fromEntries(new Intl.DateTimeFormat("en-US",{timeZone:"America/Los_Angeles",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).formatToParts(new Date()).map(x=>[x.type,x.value]));return{date:`${p.year}-${p.month}-${p.day}`,minutes:(+p.hour%24)*60+(+p.minute),seconds:+p.second}}
 function mins(v){if(!v)return 0;const[h,m]=v.split(":").map(Number);return h*60+m}
-function time(v){if(!v)return"—";let[h,m]=v.split(":").map(Number),s=h>=12?"PM":"AM";h=h%12||12;return`${h}:${String(m).padStart(2,"0")} ${s}`}
+function time(v){if(!v)return"Not set";let[h,m]=v.split(":").map(Number),s=h>=12?"PM":"AM";h=h%12||12;return`${h}:${String(m).padStart(2,"0")} ${s}`}
 function schedule(){return blocksForDay(data.today)}
 function duration(a,b){const n=Math.max(0,mins(b)-mins(a));return`${Math.floor(n/60)}h ${n%60}m`}
 function toast(msg){const e=$("toast");e.textContent=msg;e.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove("show"),2200)}
@@ -114,7 +114,7 @@ document.addEventListener("keydown",event=>{
 });
 $("onboarding").addEventListener("click",event=>{if(event.target.classList.contains("onboarding-backdrop")||event.target.closest("#close-lunch"))closeLunch()});
 
-function renderIdentity(){const iso=data.now?.iso||pacific().date,d=new Date(`${iso}T12:00:00`),combined=!!data.today?.oneLunch;$("hero-date").dateTime=iso;$("hero-weekday").textContent=data.now?.weekdayName||d.toLocaleDateString("en-US",{weekday:"long"});$("hero-date-day").textContent=String(d.getDate()).padStart(2,"0");$("hero-date-month").textContent=d.toLocaleDateString("en-US",{month:"long"});$("hero-date-year").textContent=d.getFullYear();$("date-month").textContent=d.toLocaleDateString("en-US",{month:"short"}).toUpperCase();$("date-day").textContent=String(d.getDate()).padStart(2,"0");$("date-year").textContent=d.getFullYear();$("hero-summary").textContent=data.today?.blurb||data.today?.event||"Regular weekly schedule.";$("header-lunch").textContent=combined?"Combined lunch":lunch?`Lunch ${lunch}`:"Choose lunch";$("brief-lunch").textContent=combined?"COMBINED LUNCH":`LUNCH ${lunch||"—"}`;$("schedule-note").textContent=combined?"Today uses a combined lunch.":`Showing times for Lunch ${lunch||"—"}.`;$("snapshot-type").textContent=(data.today?.title||"Today").replace(" schedule","");}
+function renderIdentity(){const iso=data.now?.iso||pacific().date,d=new Date(`${iso}T12:00:00`),combined=!!data.today?.oneLunch;$("hero-date").dateTime=iso;$("hero-weekday").textContent=data.now?.weekdayName||d.toLocaleDateString("en-US",{weekday:"long"});$("hero-date-day").textContent=String(d.getDate()).padStart(2,"0");$("hero-date-month").textContent=d.toLocaleDateString("en-US",{month:"long"});$("hero-date-year").textContent=d.getFullYear();$("date-month").textContent=d.toLocaleDateString("en-US",{month:"short"}).toUpperCase();$("date-day").textContent=String(d.getDate()).padStart(2,"0");$("date-year").textContent=d.getFullYear();$("hero-summary").textContent=data.today?.blurb||data.today?.event||"Regular weekly schedule.";$("header-lunch").textContent=combined?"Combined lunch":lunch?`Lunch ${lunch}`:"Choose lunch";$("brief-lunch").textContent=combined?"COMBINED LUNCH":`LUNCH ${lunch||"Not set"}`;$("schedule-note").textContent=combined?"Today uses a combined lunch.":`Showing times for Lunch ${lunch||"Not set"}.`;$("snapshot-type").textContent=(data.today?.title||"Today").replace(" schedule","");}
 let timelineMinute="";
 function renderTimeline(){
  const blocks=schedule(),now=pacific(),live=now.date===data.now?.iso&&!data.today?.manual;
@@ -124,7 +124,7 @@ function renderTimeline(){
  $("timeline").setAttribute("aria-label",data.today?.manual?"Schedule preview":"Today's bell schedule");
  if(!data.today?.inSession||!blocks.length){
   $("timeline").innerHTML=`<div class="timeline-empty" role="listitem"><span class="timeline-empty-icon" aria-hidden="true">${data.today?.unavailable?"?":"✓"}</span><strong>${safe(data.today?.unavailable?"Schedule unavailable":data.today?.event||"No school today")}</strong><p>${safe(data.today?.unavailable?"Check the official school calendar for bell times.":nextSchoolDescription())}</p></div>`;
-  ["snapshot-first","snapshot-last","day-length","period-count","pack-placement"].forEach((id,i)=>$(id).textContent=i?"—":data.today?.unavailable?"Unverified":"No school");
+  ["snapshot-first","snapshot-last","day-length","period-count","pack-placement"].forEach((id,i)=>$(id).textContent=i?"Not set":data.today?.unavailable?"Unverified":"No school");
   return;
  }
  const nextIndex=blocks.findIndex(block=>mins(block.start)>minute);
@@ -140,7 +140,7 @@ function renderTimeline(){
  const advisory=blocks.find(block=>/Pack|Roar|Titan|Panther|Intervention/i.test(block.name));
  $("pack-placement").textContent=advisory?time(advisory.start):"None today";
 }
-function renderWeek(){const s=schedule(),fallback=[{weekdayName:data.now?.weekdayName||"Today",date:data.now?.iso,short:data.today?.title,isToday:true,inSession:data.today?.inSession,firstBell:s[0]?.start,lastBell:s.at(-1)?.end}],week=data.week?.length?data.week:fallback;$("week-grid").innerHTML=week.map(x=>{const d=x.date?new Date(`${x.date}T12:00:00`):null;return`<article class="day-card${x.isToday?" today":""}${!x.inSession?" off":""}"><div class="day-top"><span>${x.weekdayName}</span>${x.isToday?'<b class="today-pill">TODAY</b>':""}</div><span class="day-date">${d?d.toLocaleDateString("en-US",{month:"short",day:"numeric"}):""}</span><p>${safe(x.event||x.short||"Regular schedule")}</p><strong>${x.inSession?`${time(x.firstBell)} – ${time(x.lastBell)}`:x.unavailable?"Unverified":"No school"}</strong></article>`}).join("")}
+function renderWeek(){const s=schedule(),fallback=[{weekdayName:data.now?.weekdayName||"Today",date:data.now?.iso,short:data.today?.title,isToday:true,inSession:data.today?.inSession,firstBell:s[0]?.start,lastBell:s.at(-1)?.end}],week=data.week?.length?data.week:fallback;$("week-grid").innerHTML=week.map(x=>{const d=x.date?new Date(`${x.date}T12:00:00`):null;return`<article class="day-card${x.isToday?" today":""}${!x.inSession?" off":""}"><div class="day-top"><span>${x.weekdayName}</span>${x.isToday?'<b class="today-pill">TODAY</b>':""}</div><span class="day-date">${d?d.toLocaleDateString("en-US",{month:"short",day:"numeric"}):""}</span><p>${safe(x.event||x.short||"Regular schedule")}</p><strong>${x.inSession?`${time(x.firstBell)} to ${time(x.lastBell)}`:x.unavailable?"Unverified":"No school"}</strong></article>`}).join("")}
 function safe(value){return String(value??"").replace(/[&<>"']/g,x=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[x])}
 function eventData(){const official=(data.officialEvents||[]).map(x=>({...x,source:schoolName()})),officialDates=new Set(official.map(x=>x.date)),scheduleEvents=(data.upcoming||[]).filter(x=>!officialDates.has(x.date)).map(x=>({date:x.date,text:x.text,source:"Schedule"})),seen=new Set;return[...official,...scheduleEvents].filter(x=>x.date&&x.text&&!seen.has(`${x.date}|${x.text.toLowerCase()}`)&&seen.add(`${x.date}|${x.text.toLowerCase()}`)).sort((a,b)=>a.date.localeCompare(b.date))}
 function renderEvents(){
@@ -196,7 +196,7 @@ function setDial(percent,end,context,label="Ends at"){
  ring.closest(".countdown-dial").dataset.progress=`${Math.round(value)}%`;
  $("countdown-percent").textContent=`${Math.round(value)}%`;
  $("countdown-end").previousElementSibling.textContent=label;
- $("countdown-end").textContent=end||"—";$("countdown-context").textContent=context||"—";
+ $("countdown-end").textContent=end||"Not set";$("countdown-context").textContent=context||"Not set";
 }
 function nextSchoolDescription(){
  if(!data.nextSchool)return "Check the official calendar for the next school day.";
@@ -207,7 +207,7 @@ function showNextSchool(){
  document.querySelector(".live-next > span").textContent="Next school day";
  const next=data.nextSchool;
  $("next-period").textContent=next?new Date(next.date+"T12:00:00Z").toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric",timeZone:"UTC"}):"Check official calendar";
- $("next-time").textContent=next?time(next.firstBell):"—";
+ $("next-time").textContent=next?time(next.firstBell):"Not set";
 }
 function showNextPeriod(name,start){
  document.querySelector(".live-next > span").textContent="Up next";
@@ -236,19 +236,19 @@ function renderNowAdvanced(){
  if(data.today?.manual){
   card.dataset.countdownState="preview";$("live-mode").textContent="Preview";
   $("current-eyebrow").textContent="Schedule preview";$("current-period").textContent=data.today.title.replace(" schedule","");
-  $("current-range").textContent="Choose Automatic to return to today's bells";$("period-badge").textContent="↗";
-  $("countdown").textContent="—";$("countdown-copy").textContent="Manual schedule preview";
+  $("current-range").textContent="Choose Automatic to return to today's bells";$("period-badge").textContent="";
+  $("countdown").textContent="Not set";$("countdown-copy").textContent="Manual schedule preview";
   $("snapshot-progress").textContent="Preview";$("live-progress").style.width="0%";
-  setDial(0,"—","Preview");showNextSchool();return;
+  setDial(0,"Not set","Preview");showNextSchool();return;
  }
  if(!data.today?.inSession||p.date!==data.now?.iso||!blocks.length){
   card.dataset.countdownState="off";$("live-mode").textContent="Today";
   $("current-eyebrow").textContent=data.today?.unavailable?"Calendar check":"School is out";
   $("current-period").textContent=data.today?.unavailable?"Check school calendar":"No school today";
   $("current-range").textContent=data.today?.event||schoolName();$("period-badge").textContent=data.today?.unavailable?"?":"✓";
-  $("countdown").textContent="—";$("countdown-copy").textContent="No active countdown";
+  $("countdown").textContent="Not set";$("countdown-copy").textContent="No active countdown";
   $("snapshot-progress").textContent=data.today?.unavailable?"Unverified":"No school";$("live-progress").style.width="0%";
-  setDial(0,"—","No active class");showNextSchool();return;
+  setDial(0,"Not set","No active class");showNextSchool();return;
  }
  const now=p.minutes+p.seconds/60,current=blocks.find(block=>now>=mins(block.start)&&now<mins(block.end));
  const next=blocks.find(block=>mins(block.start)>now);
@@ -259,7 +259,7 @@ function renderNowAdvanced(){
   const seconds=mins(current.end)*60-p.minutes*60-p.seconds,percent=clampPercent((now-mins(current.start))/Math.max(1,mins(current.end)-mins(current.start))*100);
   const isLunch=/lunch/i.test(current.name),nextBlock=blocks[blocks.indexOf(current)+1];
   $("live-mode").textContent="Live";$("current-eyebrow").textContent=isLunch?"Lunch ends in":"Current period";
-  $("current-period").textContent=current.name;$("current-range").textContent=`${time(current.start)} – ${time(current.end)}`;
+  $("current-period").textContent=current.name;$("current-range").textContent=`${time(current.start)} to ${time(current.end)}`;
   $("period-badge").textContent=current.name.match(/\d+/)?.[0]||(isLunch?"L":"•");
   showCountdown(seconds,isLunch?"until lunch ends":"until the next bell");
   $("live-progress").style.width=`${percent}%`;setDial(percent,time(current.end),`${Math.ceil(seconds/60)} min left`);
@@ -271,7 +271,7 @@ function renderNowAdvanced(){
   const percent=before?0:clampPercent((now-start)/span*100),seconds=mins(next.start)*60-p.minutes*60-p.seconds;
   card.dataset.countdownState=before?"before":"passing";$("live-mode").textContent=before?"Before school":"Passing period";
   $("current-eyebrow").textContent=before?"First bell":"Next class";$("current-period").textContent=before?"School starts in":"Passing period";
-  $("current-range").textContent=`${next.name} starts at ${time(next.start)}`;$("period-badge").textContent="→";
+  $("current-range").textContent=`${next.name} starts at ${time(next.start)}`;$("period-badge").textContent="";
   showCountdown(seconds,before?"until the first bell":"until class begins");
   $("live-progress").style.width=`${percent}%`;setDial(percent,time(next.start),before?"Before school":"Passing period","Starts at");
   showNextPeriod(next.name,next.start);return;
@@ -282,7 +282,7 @@ function renderNowAdvanced(){
  $("countdown").textContent="DONE";$("countdown-copy").textContent="School day complete";
  $("live-progress").style.width="100%";setDial(100,time(blocks.at(-1).end),"School is out","Dismissed");showNextSchool();
 }
-function renderFinalsCountdown(){const el=$("finals-countdown-text");if(!el)return;const today=data.now?.iso||pacific().date,match=eventData().find(x=>x.date>=today&&/final|semester/i.test(x.text));if(!match){el.textContent="No finals or semester date published yet — check back closer to the end of the term.";return}const days=Math.round((new Date(`${match.date}T12:00:00`)-new Date(`${today}T12:00:00`))/86400000);el.textContent=days<=0?`${safe(match.text)} is today!`:`${days} day${days===1?"":"s"} until ${safe(match.text)} (${new Date(`${match.date}T12:00:00`).toLocaleDateString("en-US",{month:"short",day:"numeric"})}).`}
+function renderFinalsCountdown(){const el=$("finals-countdown-text");if(!el)return;const today=data.now?.iso||pacific().date,match=eventData().find(x=>x.date>=today&&/final|semester/i.test(x.text));if(!match){el.textContent="No finals or semester date has been posted.";return}const days=Math.round((new Date(`${match.date}T12:00:00`)-new Date(`${today}T12:00:00`))/86400000);el.textContent=days<=0?`${safe(match.text)} is today!`:`${days} day${days===1?"":"s"} until ${safe(match.text)} (${new Date(`${match.date}T12:00:00`).toLocaleDateString("en-US",{month:"short",day:"numeric"})}).`}
 /** Calendar checks confirm event availability, not a fresh verification of the bell-time document. */
 function renderSourceStatus(){
  if(data.today?.manual){$("source-status").textContent="Manual preview · Published bell times";return}
@@ -317,7 +317,7 @@ async function load(){
   if(version!==requestVersion)return;
   calendarState=r?.ok?"available":"unavailable";
   data=buildData();render();
- }catch{if(version===requestVersion){calendarVerified=false;calendarState="unavailable";renderSourceStatus();$("announcement-text").textContent="Calendar unavailable — showing published weekly times."}}
+ }catch{if(version===requestVersion){calendarVerified=false;calendarState="unavailable";renderSourceStatus();$("announcement-text").textContent="Calendar unavailable. Showing published weekly times."}}
 
 }
 $("school-select").innerHTML=Object.entries(SCHOOLS).map(([key,s])=>'<option value="'+key+'">'+s.name+'</option>').join("");$("school-select").value=school;

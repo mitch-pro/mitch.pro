@@ -1,6 +1,6 @@
-// pwa-install.js — PWA install promotion. Injected site-wide (except games).
+// PWA installation controls for the school hub.
 // Captures the browser's beforeinstallprompt and offers a dismissible banner;
-// on iOS (no beforeinstallprompt) explains the Share → Add to Home Screen flow.
+// Browsers without an install prompt receive platform-specific instructions.
 
 (function () {
   'use strict';
@@ -54,26 +54,41 @@
     if (document.getElementById('mitch-pwa-styles')) return;
     var s = document.createElement('style');
     s.id = 'mitch-pwa-styles';
-    s.textContent =
-      '#mitchPwaBanner{position:fixed;left:50%;bottom:18px;transform:translate(-50%,20px);opacity:0;' +
-      'z-index:99990;display:flex;align-items:center;gap:12px;width:min(440px,calc(100vw - 24px));' +
-      'padding:14px 16px;border-radius:16px;border:1px solid var(--t-bd,rgba(148,163,184,0.2));' +
-      'background:linear-gradient(180deg,var(--t-bg2,rgba(25,30,45,0.96)),var(--t-bg,rgba(15,18,28,0.98)));color:var(--t-fg,#e2e8f0);' +
-      'box-shadow:0 18px 48px rgba(0,0,0,0.5);font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif;' +
-      'transition:opacity .25s ease,transform .25s ease}' +
-      '#mitchPwaBanner.show{opacity:1;transform:translate(-50%,0)}' +
-      '#mitchPwaBanner .mitch-pwa-ico{font-size:26px;line-height:1}' +
-      '#mitchPwaBanner .mitch-pwa-copy{flex:1;min-width:0}' +
-      '#mitchPwaBanner .mitch-pwa-copy b{display:block;font-size:13px;font-weight:800;letter-spacing:.3px}' +
-      '#mitchPwaBanner .mitch-pwa-copy span{display:block;font-size:11.5px;color:var(--t-fg2,#94a3b8);margin-top:2px}' +
-      '#mitchPwaBanner button{cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;' +
-      'border-radius:9px;padding:8px 14px;border:1px solid var(--t-bd,rgba(148,163,184,0.18));' +
-      'background:rgba(148,163,184,0.08);color:var(--t-fg2,#cbd5e1)}' +
-      '#mitchPwaBanner #mitchPwaInstall{background:#fff;border-color:#fff;color:#500000;' +
-      'box-shadow:0 4px 12px rgba(0,0,0,0.35)}' +
-      '#mitchPwaBanner #mitchPwaInstall:hover{background:#f6e7e7}' +
-      '@media(max-width:560px){#mitchPwaBanner{bottom:86px;padding:12px;width:min(440px,calc(100vw - 16px))}}' +
-      '@media(max-width:850px) and (min-width:561px){#mitchPwaBanner{bottom:86px}}';
+    s.textContent = `
+      #mitchPwaBanner {
+        position: fixed; left: 50%; bottom: 18px; z-index: 99990;
+        display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
+        align-items: center; gap: 12px; width: min(440px, calc(100vw - 32px));
+        padding: 16px; border: 1px solid var(--line, #ffffff1a); border-radius: 14px;
+        background: var(--card, #1a1b20); color: var(--ink, #f4f4f6);
+        box-shadow: 0 8px 30px #0003; font-family: var(--sans, system-ui, sans-serif);
+        opacity: 0; transform: translate(-50%, 10px);
+        transition: opacity .2s, transform .2s;
+      }
+      #mitchPwaBanner.show { opacity: 1; transform: translate(-50%, 0); }
+      #mitchPwaBanner .mitch-pwa-copy { min-width: 0; }
+      #mitchPwaBanner .mitch-pwa-copy b { display: block; font-size: 13px; font-weight: 600; }
+      #mitchPwaBanner .mitch-pwa-copy span {
+        display: block; margin-top: 4px; font-size: 11px; line-height: 1.5;
+        color: var(--muted, #a0a1ac);
+      }
+      #mitchPwaBanner button {
+        min-height: 36px; padding: 8px 12px; border: 1px solid var(--line, #ffffff1a);
+        border-radius: 8px; background: var(--raised, #222329); color: var(--ink, #f4f4f6);
+        cursor: pointer; font: 500 11px var(--sans, system-ui, sans-serif); white-space: nowrap;
+      }
+      #mitchPwaBanner button:focus-visible { outline: 2px solid var(--wine, #d5a2ad); outline-offset: 3px; }
+      #mitchPwaBanner #mitchPwaInstall {
+        background: var(--wine, #d5a2ad); color: var(--paper, #111215); border-color: transparent;
+      }
+      @media (max-width: 560px) {
+        #mitchPwaBanner { bottom: calc(86px + env(safe-area-inset-bottom)); gap: 12px 8px; }
+        #mitchPwaBanner .mitch-pwa-copy { grid-column: 1 / -1; }
+        #mitchPwaLater { grid-column: 2; }
+      }
+      @media (max-width: 850px) and (min-width: 561px) { #mitchPwaBanner { bottom: 86px; } }
+      @media (prefers-reduced-motion: reduce) { #mitchPwaBanner { transition: none; } }
+    `;
     document.head.appendChild(s);
   }
 
@@ -84,38 +99,40 @@
     injectStyles();
 
     var copy = canAutoInstall
-      ? 'Add rjuhsd.school to your home screen — full screen, offline, and message alerts.'
-      : 'On iPhone: tap Share, then "Add to Home Screen" to install rjuhsd.school with alerts.';
+      ? 'Add bell schedules to your home screen.'
+      : isIos()
+        ? 'Tap Share, then Add to Home Screen.'
+        : 'Open your browser menu and choose Install app or Add to Home Screen.';
 
     var banner = document.createElement('div');
     banner.id = 'mitchPwaBanner';
-    banner.setAttribute('role', 'dialog');
+    banner.setAttribute('role', 'region');
     banner.setAttribute('aria-label', 'Install rjuhsd.school app');
     banner.innerHTML =
-      '<span class="mitch-pwa-ico" aria-hidden="true">📲</span>' +
-      '<span class="mitch-pwa-copy"><b>Install the app</b><span></span></span>' +
-      '<button id="mitchPwaLater" type="button">Later</button>' +
+      '<span class="mitch-pwa-copy"><b>Install rjuhsd.school</b><span></span></span>' +
+      '<button id="mitchPwaLater" type="button">Not now</button>' +
       '<button id="mitchPwaInstall" type="button">Install</button>';
     banner.querySelector('.mitch-pwa-copy span').textContent = copy;
+    if (!canAutoInstall) banner.querySelector('#mitchPwaInstall').textContent = 'Got it';
     document.body.appendChild(banner);
     requestAnimationFrame(function () { banner.classList.add('show'); });
 
     function close(remember) {
       if (remember) rememberDismissal();
       banner.classList.remove('show');
-      setTimeout(function () { if (banner.parentNode) banner.remove(); }, 260);
+      setTimeout(function () { if (banner.parentNode) banner.remove(); bannerShown = false; }, 260);
     }
 
     banner.querySelector('#mitchPwaLater').onclick = function () { close(true); };
     banner.querySelector('#mitchPwaInstall').onclick = function () {
       if (deferredPrompt) {
-        deferredPrompt.prompt();
-        deferredPrompt.userChoice.finally(function () { deferredPrompt = null; close(false); });
+        var prompt = deferredPrompt;
+        Promise.resolve(prompt.prompt()).then(function () { return prompt.userChoice; })
+          .catch(function () {})
+          .finally(function () { deferredPrompt = null; close(false); });
       } else {
-        // iOS / unsupported: send the user to the encrypt page where the
-        // install flow matters most, and remember they engaged with it.
+        // Manual installation stays on the school page while the visitor follows the browser instructions.
         close(true);
-        window.location.href = '/matrix/';
       }
     };
   }
