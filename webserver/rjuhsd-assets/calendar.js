@@ -11,12 +11,13 @@ const labels={regular:'Regular schedule',late:'Late start',pack3:'Late start · 
 function resolve(school,date,events=[],mode='auto',period0=false,override=null){
  const schoolData=g.RJUHSD_SCHOOL_DATA[school];
  if(!schoolData)throw Error('Unknown school');
- if(mode==='auto'&&override&&override.date===date&&(!override.school||override.school===school||school==='woodcreek')&&override.schedule){
+ // The original unscoped override belongs to Woodcreek; an explicit school never leaks to another campus.
+ if(mode==='auto'&&override&&override.date===date&&(override.school||'woodcreek')===school&&override.schedule){
   const l1=(override.schedule.lunch1||[]).filter(p=>period0||p.name!=='Period 0');
   const l2=(override.schedule.lunch2||l1).filter(p=>period0||p.name!=='Period 0');
   const name=override.name||'Special schedule';
   const evt=override.special_event||name;
-  return {date,type:'special',title:name,event:evt,blurb:override.special_event?`${name} · ${override.special_event}`:`${name} schedule active.`,inSession:l1.length>0,unavailable:false,manual:false,oneLunch:JSON.stringify(l1)===JSON.stringify(l2),lunch1:l1,lunch2:l2,source:'Special override'};
+  return {date,type:'special',title:name,event:evt,blurb:override.special_event?`${name} · ${override.special_event}`:`${name} schedule active.`,inSession:l1.length>0,unavailable:false,manual:false,oneLunch:l1.length>0&&JSON.stringify(l1)===JSON.stringify(l2),lunch1:l1,lunch2:l2,source:'Special override'};
  }
  const day=new Date(date+'T12:00:00Z').getUTCDay(),descriptions=events.filter(e=>e.date===date).map(e=>String(e.text||e.title||''));
  const closed=district.closures.find(([a,b])=>date>=a&&date<=b);
@@ -39,7 +40,7 @@ function resolve(school,date,events=[],mode='auto',period0=false,override=null){
  if(!pair&&!reason){unknown=true;notice='Schedule not published — check the official school announcement';}
  const blocks=l=>!reason&&!unknown?(pair[l]||[]).filter(p=>period0||p.name!=='Period 0'):[];
  const lunch1=blocks(1),lunch2=blocks(2),inSession=!reason&&!unknown&&!!lunch1.length;
- return {date,type,title:reason||labels[type]||'Schedule unavailable',event:reason||(unknown?notice:''),blurb:notice||(type==='exams'?'Exam block times; use your school announcement for period assignments.':reason||'Verified against the official bell schedule.'),inSession,unavailable:unknown,manual:mode!=='auto',oneLunch:JSON.stringify(lunch1)===JSON.stringify(lunch2),lunch1,lunch2,source:schoolData.source};
+ return {date,type,title:reason||labels[type]||'Schedule unavailable',event:reason||(unknown?notice:''),blurb:notice||(type==='exams'?'Exam block times; use your school announcement for period assignments.':reason||'Published weekly bell times.'),inSession,unavailable:unknown,manual:mode!=='auto',oneLunch:inSession&&lunch1.length>0&&JSON.stringify(lunch1)===JSON.stringify(lunch2),lunch1,lunch2,source:schoolData.source};
 }
 g.RJUHSD_CALENDAR={district,labels,resolve};
 })(window);

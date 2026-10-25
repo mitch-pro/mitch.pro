@@ -1,0 +1,44 @@
+# RJUHSD dashboard
+
+The public school hub is `webserver/rjuhsd/index.html`. Its school-owned layout is
+in `webserver/rjuhsd-assets/refresh.css`; the older school stylesheets are no
+longer loaded by this page. The shared theme engine still saves the selected
+light/dark mode. The hub uses neutral surfaces and the selected campus's colors.
+No build or additional runtime dependency is needed.
+
+`webserver/bell/schedule.js` holds the published bell times;
+`webserver/rjuhsd-assets/calendar.js` resolves district breaks, special schedules,
+and official calendar events. `app.js` continues to consume `/api/school-info`
+and `/api/bell/override`; this refresh does not change those API contracts or
+publish new bell times.
+
+One Pacific-time clock updates the countdown every second. Timeline rows refresh
+at minute boundaries and their active progress updates with the same clock.
+Before-school, passing-period, class, lunch, dismissal, no-school and manual
+preview states are separate. A manual preview never claims a live class.
+Next-school-day information searches the next 45 dates through the same resolver,
+including district breaks, and never invents a day outside its known calendar.
+Optional Period 0, combined lunch and each campus's saved lunch remain part of
+schedule resolution. Explicit overrides apply only to their target school; legacy
+unscoped overrides apply to Woodcreek. Empty no-school schedules never claim a
+combined lunch. Changing a school clears calendar/override state before
+loading that school's information; late responses cannot overwrite a new school.
+
+Calendar date buttons filter the agenda, and Today restores upcoming events.
+The lunch dialog supports Escape, backdrop/close dismissal, focus trapping and
+restoring the invoking control. Lunch selections remain local to the device.
+Calendar fetch failures distinguish published weekly times from verified dates.
+
+Run the focused browser regression suite from the repository root:
+
+```sh
+node tests/test_rjuhsd_refresh_browser.mjs
+```
+
+It requires the existing `@playwright/test` development dependency and Chromium.
+`PLAYWRIGHT_MODULE` can point to an externally installed ESM entry point and
+`PLAYWRIGHT_EXECUTABLE_PATH` can select the browser. The suite serves a disposable
+static fixture and mocks calendar/weather requests. It checks bells and exact
+boundaries, midnight rollover, manual previews, lunches, overrides, holidays,
+campus switching, keyboard interaction, and both themes at 320–1440 pixels.
+Screenshots go to `/tmp`; `RJUHSD_FULL_SCREENSHOTS=1` also captures full pages.
