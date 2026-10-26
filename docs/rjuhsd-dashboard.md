@@ -60,3 +60,5 @@ The page links only `theme-tokens.css`, not `app.css`: `app.css` carries global 
 Layout is flat: sections sit on the page background and are separated by hairlines, as on the main site. The live countdown keeps a panel, and the weather is a compact line in the hero's date row whose forecast opens as a popover (it used to be a fixed card below the footer).
 
 `html` and `body` set `background: var(--paper)` (the shared `--t-bg`) explicitly. Without it the page background was transparent and the browser painted its own canvas, which in dark mode is not the site's `#17191b`, so the school hub looked like a different site. The header and its pink-underline navigation follow the main site's top bar.
+
+The Countdowns section lists days until the district milestones in `calendar.js` (`district.milestones`: end of the 1st term, Dec 18, and the last day of school, May 27, from the board-approved 2026-27 calendar), plus any finals, semester or term dates a school posts on its own calendar. The district PDF does not publish individual finals dates, so none are invented. Update `milestones` each year with the new calendar.

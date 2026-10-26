@@ -324,7 +324,18 @@ async function loadSchoolLunch(){
  }catch{if(version!==foodMenuVersion||selected!==school)return;foodMenuState="unavailable"}
  renderSchoolLunch();
 }
-function renderFinalsCountdown(){const el=$("finals-countdown-text");if(!el)return;const today=data.now?.iso||pacific().date,match=eventData().find(x=>x.date>=today&&/final|semester/i.test(x.text));if(!match){el.textContent="No finals or semester date has been posted.";return}const days=Math.round((new Date(`${match.date}T12:00:00`)-new Date(`${today}T12:00:00`))/86400000);el.textContent=days<=0?`${safe(match.text)} is today!`:`${days} day${days===1?"":"s"} until ${safe(match.text)} (${new Date(`${match.date}T12:00:00`).toLocaleDateString("en-US",{month:"short",day:"numeric"})}).`}
+function renderFinalsCountdown(){
+ const el=$("finals-countdown-text");if(!el)return;
+ const today=data.now?.iso||pacific().date,day=d=>new Date(`${d}T12:00:00`),label=d=>day(d).toLocaleDateString("en-US",{month:"short",day:"numeric"});
+ // District milestones come from the official calendar; any finals or semester
+ // dates the school itself has posted are added when present.
+ const found=new Map();
+ for(const [date,text] of window.RJUHSD_CALENDAR.district.milestones)found.set(date+text,{date,text});
+ for(const x of eventData())if(/final|semester|term/i.test(x.text||""))found.set(x.date+x.text,{date:x.date,text:x.text});
+ const upcoming=[...found.values()].filter(x=>x.date>=today).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,4);
+ if(!upcoming.length){el.textContent="The school year has ended.";return}
+ el.innerHTML=upcoming.map(x=>{const days=Math.round((day(x.date)-day(today))/86400000);return `<li><strong>${days<=0?"Today":days+(days===1?" day":" days")}</strong><span>${safe(x.text)}</span><time datetime="${x.date}">${label(x.date)}</time></li>`}).join("")
+}
 /** Calendar checks confirm event availability, not a fresh verification of the bell-time document. */
 function renderSourceStatus(){
  if(data.today?.manual){$("source-status").textContent="Manual preview · Published bell times";return}

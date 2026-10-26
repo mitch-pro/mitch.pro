@@ -1,6 +1,6 @@
 (function(g){
 'use strict';
-const district={start:'2026-08-06',end:'2027-05-27',source:'https://www.rjuhsd.us/fs/resource-manager/view/677c1b31-c31f-45fe-9341-d52020756763',closures:[
+const district={start:'2026-08-06',end:'2027-05-27',milestones:[['2026-12-18','End of 1st term'],['2027-05-27','Last day of school']],source:'https://www.rjuhsd.us/fs/resource-manager/view/677c1b31-c31f-45fe-9341-d52020756763',closures:[
  ['2026-09-07','2026-09-07','Labor Day'],['2026-11-02','2026-11-02','Staff development. No school'],
  ['2026-11-11','2026-11-11','Veterans Day'],['2026-11-23','2026-11-27','Thanksgiving break'],
  ['2026-12-21','2027-01-01','Winter break'],['2027-01-04','2027-01-04','Teacher preparation. No school'],

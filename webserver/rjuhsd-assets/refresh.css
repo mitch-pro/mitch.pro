@@ -408,3 +408,9 @@ body.school-hub { background: var(--paper); color: var(--ink); }
 .site-header nav a::after { content: ''; position: absolute; left: 0; right: 0; bottom: 4px; height: 2px; border-radius: 2px; background: var(--wine); transform: scaleX(0); transition: transform var(--t-motion, .15s); }
 .site-header nav a:hover::after, .site-header nav a[aria-current="location"]::after { transform: scaleX(1); }
 .brand-copy strong { font-size: 14px; }
+.countdown-list { display: grid; margin: 0; padding: 0; list-style: none; }
+.countdown-list li { display: grid; grid-template-columns: 6.5em minmax(0, 1fr) auto; gap: 12px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.countdown-list li:last-child { border-bottom: 0; }
+.countdown-list strong { font: 650 18px var(--display); font-variant-numeric: tabular-nums; }
+.countdown-list time { color: var(--muted); font-size: 13px; }
+.finals-countdown-card { display: block; padding: 4px 0 0; border: 0; background: none; min-height: 0; }
