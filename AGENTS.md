@@ -1,5 +1,6 @@
 # Project instructions
 
+- Also read `~/AGENTS.md` if it exists. It holds the owner's personal, per-machine instructions and is not part of this repository.
 - Commit every completed change to mitchdog.com in this repository.
 - Use natural, concise interface copy. Prefer direct labels that describe the content or action.
 - Do not add marketing slogans, decorative eyebrow headings, motivational filler, or promotional helper text to ordinary site pages. Do not add copy merely to fill space.
