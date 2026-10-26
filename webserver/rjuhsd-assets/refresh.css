@@ -352,3 +352,47 @@ html, body { overflow-x: clip; }
 .progress span { background: var(--wine); }
 .countdown-dial::after { color: var(--muted); }
 .live-next strong, .live-next time { color: var(--ink); }
+
+/* Flat layout: sections sit on the page background and are separated by
+   hairlines, like the main site. Only the live countdown and the weather
+   popover keep a box. */
+.hero { padding: 28px 0 8px; border: 0; border-radius: 0; background: none; }
+.snapshot { overflow: visible; border: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); border-radius: 0; background: none; }
+.snapshot article { padding: 18px 20px; }
+.snapshot article:first-child { padding-left: 0; }
+.dashboard-section { padding: 32px 0 8px; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: none; }
+.tool-grid > a, .day-card, .finals-countdown-card, .district-school-card { background: none; border-radius: 8px; }
+.tool-grid > a:hover, .district-school-card:hover { background: var(--card); }
+.day-card.today, .district-school-card.current-school { background: var(--wine-soft); }
+.school-card-actions .primary-button { background: var(--card); }
+.live-card { background: var(--card); }
+.timeline-row.active { border-radius: 8px; }
+.skeleton { background: var(--card); }
+.footer-schools { border-bottom: 0; }
+
+/* Weather sits in the hero's date row; the forecast opens as a popover. */
+.hero-meta { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0 0 26px; }
+.hero-meta .hero-date-panel { margin: 0; }
+.weather-widget { position: static; width: auto; margin: 0; border: 0; border-radius: 0; background: none; overflow: visible; }
+.weather-summary { gap: 8px; width: auto; padding: 6px 0; color: var(--ink); }
+.weather-symbol { font-size: 18px; line-height: 1; }
+.weather-place { display: flex; align-items: baseline; gap: 6px; }
+.weather-place strong { display: inline; font-size: 13px; }
+.weather-place > span { display: inline; margin: 0; font-size: 13px; }
+.weather-temperature { margin: 0; font: 600 15px var(--display); }
+.weather-chevron { font-size: 12px; }
+.weather-details { position: absolute; z-index: 30; left: 0; top: calc(100% + 6px); width: min(360px, 100%); padding: 0 18px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); box-shadow: 0 8px 24px #0000001f; }
+.weather-now-details small { font-size: 11px; }
+.weather-now-details strong { font-size: 13px; }
+.weather-forecast span, .weather-forecast small, #weather-updated { font-size: 11px; }
+.weather-forecast strong { font-size: 12px; }
+@media (max-width: 700px) {
+  .hero-meta { margin-bottom: 18px; }
+  .weather-place strong { display: none; }
+  .weather-widget { margin-bottom: 0; width: auto; }
+  .snapshot article:first-child { padding-left: 15px; }
+  .dashboard-section { padding: 26px 0 6px; }
+}
+.district-school-card:not(.current-school), .day-card:not(.today) { border-color: transparent; border-top-color: var(--line); border-radius: 0; padding-inline: 4px; }
+.hero-meta .weather-summary { background: none; border: 0; }
+.hero-meta .weather-summary:hover { background: none; }

@@ -56,3 +56,5 @@ campus switching, keyboard interaction, native/manual installation, canonical li
 Screenshots go to `/tmp`; `RJUHSD_FULL_SCREENSHOTS=1` also captures full pages.
 
 The page links only `theme-tokens.css`, not `app.css`: `app.css` carries global element rules (for example `svg { max-width: 100% }`, which collapsed the theme button's icon to under 1px). The server injects `app.css` into any page that lacks it, so `refresh.css` must stay robust to those rules.
+
+Layout is flat: sections sit on the page background and are separated by hairlines, as on the main site. The live countdown keeps a panel, and the weather is a compact line in the hero's date row whose forecast opens as a popover (it used to be a fixed card below the footer).
