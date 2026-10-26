@@ -1,31 +1,21 @@
 /* The school dashboard owns its surfaces; theme.js still owns saved light/dark mode. */
 :root {
-  --sans: 'DM Sans', system-ui, -apple-system, sans-serif;
-  --display: 'Manrope', var(--sans);
-  --paper: #111215;
-  --card: #1a1b20;
-  --card-solid: #1a1b20;
-  --raised: #222329;
-  --ink: #f4f4f6;
-  --muted: #a0a1ac;
-  --line: #ffffff12;
-  --wine: color-mix(in srgb, var(--school-primary, #700018) 43%, #ffccd3);
-  --wine-soft: color-mix(in srgb, var(--school-primary, #700018) 20%, var(--card));
-  --hero: color-mix(in srgb, var(--school-primary, #700018) 35%, #17151c);
+  --sans: var(--t-font, 'DM Sans', system-ui, -apple-system, sans-serif);
+  --display: var(--sans);
+  --paper: var(--t-bg, #17191b);
+  --card: var(--t-bg2, #222527);
+  --card-solid: var(--card);
+  --raised: var(--t-bg3, #2b2f31);
+  --ink: var(--t-fg, #f4f5f1);
+  --muted: var(--t-fg2, #a6adaf);
+  --line: var(--t-bd, #363a3c);
+  --wine: var(--t-ac, #ff6f99);
+  --wine-soft: var(--t-gls, #332127);
+  --hero: var(--card);
+  --radius: var(--t-radius, 10px);
   color-scheme: dark;
 }
-html.theme-light {
-  --paper: #f3f4f6;
-  --card: #ffffff;
-  --card-solid: #ffffff;
-  --raised: #f4f5f7;
-  --ink: #21232b;
-  --muted: #6c6f7c;
-  --line: #1c233413;
-  --wine: color-mix(in srgb, var(--school-primary, #700018) 80%, #333);
-  --wine-soft: color-mix(in srgb, var(--school-primary, #700018) 7%, #fff);
-  color-scheme: light;
-}
+html.theme-light { color-scheme: light; }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; scroll-padding-top: 94px; }
 html:has(.school-hub)[data-bglayer]::before { background: var(--paper) !important; opacity: 1 !important; filter: none !important; transform: none !important; }
@@ -281,3 +271,49 @@ footer { width: min(1280px, calc(100% - 56px)); margin: 35px auto 0; padding-bot
   .powered-by-link { grid-column: 1; grid-row: 2; justify-self: start; margin: 0; padding: 4px 9px; font-size: 10px; }
   .header-actions { grid-column: 2; grid-row: 1 / 3; }
 }
+
+/* Site-theme alignment: flat surfaces, the shared accent, and small radii. */
+.site-header { background: var(--paper); backdrop-filter: none; }
+.hero { padding: 32px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); color: var(--ink); box-shadow: none; }
+.hero::after { display: none; }
+.hero-date-panel { border-color: var(--line); background: var(--raised); color: var(--muted); }
+.hero-weekday::after { color: var(--muted); }
+.hero h1 { letter-spacing: -1.5px; }
+.hero h1 em, .hero-summary { color: var(--muted); }
+.hero .primary-button { color: var(--t-ac-ink, #fff); background: var(--wine); border-color: var(--wine); }
+.hero .secondary-button { color: var(--ink); background: var(--raised); border-color: var(--line); }
+.primary-button { color: var(--t-ac-ink, #fff); }
+.primary-button:hover, .secondary-button:hover { transform: none; }
+.live-card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); box-shadow: none; backdrop-filter: none; }
+.live-card-top { border-bottom-color: var(--line); color: var(--muted); }
+.period-badge { background: var(--raised); border-color: var(--line); }
+#current-eyebrow, .period-range { color: var(--muted); }
+.dashboard-section, .snapshot, .district-school-card, .tool-grid > a, .day-card, .faq-item { border-radius: var(--radius); box-shadow: none; }
+.schedule-note:empty, #schedule-note:empty { display: none; }
+.powered-by-link { color: var(--t-ac-ink, #fff); background: var(--wine); border-color: var(--wine); }
+.powered-by-link:hover { filter: brightness(1.08); background: var(--wine); color: var(--t-ac-ink, #fff); }
+html, body { overflow-x: clip; }
+
+@media (max-width: 700px) {
+  .site-header { min-height: 0; padding: 10px 14px; gap: 8px; }
+  .brand { flex: 1 1 auto; min-width: 0; gap: 8px; }
+  .brand-copy { min-width: 0; }
+  .brand-copy strong { max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .brand-copy small { display: none; }
+  .powered-by-link { flex: 0 0 auto; margin: 0; padding: 6px 11px; font-size: 12px; }
+  .powered-by-link > span { display: none; }
+  .header-actions { flex: 0 0 auto; gap: 6px; }
+  .school-choice select { max-width: 96px; }
+  .hero { padding: 20px 16px; }
+  .hero h1 { font-size: 36px; letter-spacing: -1.2px; }
+}
+@media (max-width: 420px) {
+  .brand-copy { display: none; }
+  .school-choice select { max-width: 110px; }
+}
+.countdown-copy, .countdown-details small, .live-next > span { color: var(--muted); }
+.progress { background: var(--raised); }
+.live-next { background: var(--raised); border-top-color: var(--line); }
+.dial-value, .progress span { stroke: var(--wine); }
+.progress span { background: var(--wine); }
+.countdown-dial::after { color: var(--muted); }

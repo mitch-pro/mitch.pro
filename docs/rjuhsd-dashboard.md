@@ -2,11 +2,11 @@
 
 The public school hub is `webserver/rjuhsd/index.html`. Its school-owned layout is
 in `webserver/rjuhsd-assets/refresh.css`; the older school stylesheets are no
-longer loaded by this page. The shared theme engine still saves the selected
+longer loaded by this page. Colors come from the shared site theme tokens (`--t-*`, set by `theme.js`), so the page follows the site palette and accent. The shared theme engine still saves the selected
 light/dark mode. The hub uses neutral surfaces and the selected campus's colors.
 No build or additional runtime dependency is needed.
 
-The "by" pill in the header links to the `alternate` domain from `data/site.json`
+The "by" pill in the header links to the `primary` domain from `data/site.json`
 (read through `/api/site-info`); the hero and live card carry no school-logo
 background art.
 

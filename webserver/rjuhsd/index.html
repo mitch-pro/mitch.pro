@@ -23,7 +23,7 @@
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#111215">
   <script src="/theme.js?v=13" defer></script>
-  <link rel="stylesheet" href="/rjuhsd-assets/refresh.css?v=6">
+  <link rel="stylesheet" href="/rjuhsd-assets/refresh.css?v=7">
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {
@@ -196,7 +196,7 @@
   <div class="announcement-bar"><div class="announcement-inner"><span class="pulse-dot"></span><strong>RJUHSD.SCHOOL</strong><span id="announcement-text">Loading today’s campus schedule…</span><button id="pwa-install-btn" class="pwa-install-btn" type="button" style="display:none;" aria-label="Install App"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Install App</button><span class="announcement-time" id="header-clock">--:-- --</span></div></div>
   <header class="site-header">
     <a class="brand" href="/" aria-label="rjuhsd.school home"><span class="brand-logo"><img class="site-logo" src="/icon-192.png" alt="RJUHSD School Hub" width="35" height="35"></span><span class="brand-copy"><strong>Woodcreek High School</strong><small>woodcreek now</small></span></a>
-    <a class="powered-by-link" id="powered-by-link" href="https://mitchdog.com" target="_blank" rel="noopener"><span>by</span> <strong id="powered-by-name">mitchdog.com</strong></a>
+    <a class="powered-by-link" id="powered-by-link" href="https://mitch.pro" target="_blank" rel="noopener"><span>by</span> <strong id="powered-by-name">mitch.pro</strong></a>
     <nav aria-label="Primary navigation"><a href="#today">Today</a><a href="#schedule-panel">Schedule</a><a href="#school-lunch">Lunch</a><a href="#events">Calendar</a><a href="#schools">Schools</a><a href="#tools">Tools</a></nav>
     <div class="header-actions">
       <label class="school-choice">School<select id="school-select" aria-label="Choose school"></select></label>
@@ -205,12 +205,12 @@
   </header>
   <script>
     // The link target comes from data/site.json (served at /api/site-info);
-    // the button points at the "alternate" domain.
+    // the button points at the "primary" domain.
     fetch('/api/site-info', { credentials: 'same-origin', cache: 'no-store' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (info) {
         if (!info) return;
-        var target = info.alternate;
+        var target = info.primary;
         if (!target) return;
         var link = document.getElementById('powered-by-link');
         var name = document.getElementById('powered-by-name');
@@ -227,11 +227,11 @@
     <section class="snapshot" aria-label="Today at a glance"><article><span class="snapshot-icon wine" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg></span><div><small>FIRST BELL</small><strong id="snapshot-first">Not set</strong></div></article><article><span class="snapshot-icon amber" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20h16M7 20V4h10v16M10 8h4M10 12h4M10 16h4"/></svg></span><div><small>DISMISSAL</small><strong id="snapshot-last">Not set</strong></div></article><article><span class="snapshot-icon blue" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 17l5-5 4 3 7-9M15 6h5v5"/></svg></span><div><small>DAY PROGRESS</small><strong id="snapshot-progress">Not set</strong></div></article><article><span class="snapshot-icon green" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3v4M16 3v4M4 10h16M8 14h3M8 17h6"/></svg></span><div><small>SCHEDULE</small><strong id="snapshot-type">Loading</strong></div></article></section>
 
     <section class="dashboard-section schedule-zone" aria-labelledby="schedule-heading" id="schedule-panel">
-      <div class="section-title-row"><div><p class="section-label">BELL SCHEDULE</p><h2 id="schedule-heading">Today’s schedule</h2><p id="schedule-note">Times match your selected lunch.</p></div><div class="date-tile"><span id="date-month">SEP</span><strong id="date-day">01</strong><small id="date-year">2026</small></div></div>
+      <div class="section-title-row"><div><h2 id="schedule-heading">Today’s schedule</h2><p id="schedule-note"></p></div><div class="date-tile"><span id="date-month">SEP</span><strong id="date-day">01</strong><small id="date-year">2026</small></div></div>
       <div class="schedule-controls"><button class="lunch-status" id="change-lunch" type="button"><span>MY SCHEDULE</span><strong id="header-lunch">Choose lunch</strong></button><label>Schedule <select id="schedule-mode" aria-label="Schedule type"><option value="auto">Automatic</option></select></label><label id="period0-label" hidden><input id="include-period0" type="checkbox"> Include optional Period 0</label><span id="source-status" role="status">Checking the official calendar…</span></div><div class="schedule-grid"><div class="timeline" id="timeline"><div class="skeleton tall"></div></div><aside class="day-brief"><div class="brief-heading"><span>DAY INFORMATION</span><b id="brief-lunch">LUNCH</b></div><div class="brief-stat"><small>Time on campus</small><strong id="day-length">Not set</strong></div><div class="brief-stat"><small>Class periods</small><strong id="period-count">Not set</strong></div><div class="brief-stat"><small>Advisory / intervention</small><strong id="pack-placement">Not set</strong></div><div class="brief-message"><span>LUNCH SETTING</span><p id="brief-tip">Your lunch choice is saved on this device.</p></div><button id="brief-change-lunch" type="button">Change lunch</button></aside></div>
     </section>
 
-    <section class="dashboard-section tools-zone" id="tools"><div class="tools-heading"><div><p class="section-label">SCHOOL LINKS &amp; APPS</p><h2>Quick links</h2><p>School websites and tools.</p></div></div><div class="tool-grid">
+    <section class="dashboard-section tools-zone" id="tools"><div class="tools-heading"><div><h2>Quick links</h2></div></div><div class="tool-grid">
       <a href="#study-timer"><i class="tool-logo tool-logo-encrypt" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></i><span><strong>Study Timer</strong><small>Focus &amp; break timer</small></span></a>
       <a href="#finals-countdown"><i class="tool-logo tool-logo-public" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></i><span><strong>Finals Countdown</strong><small>Days until finals</small></span></a>
       <a href="/preferences/"><i class="tool-logo tool-logo-theme" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></i><span><strong>Appearance</strong><small>Theme and preferences</small></span></a>
@@ -245,14 +245,14 @@
       <div class="lunch-source"><a href="https://www.rjuhsdfoodservice.com/index.php?sid=0212112146052111&amp;page=menus" target="_blank" rel="noopener">RJUHSD Food Services</a><span id="lunch-updated"></span></div>
     </section>
 
-    <section class="dashboard-section week-zone" id="week"><div class="section-title-row compact"><div><p class="section-label">CALENDAR</p><h2>This week</h2></div><span class="timezone-chip">PACIFIC TIME</span></div><div class="week-grid" id="week-grid"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div></section>
+    <section class="dashboard-section week-zone" id="week"><div class="section-title-row compact"><div><h2>This week</h2></div><span class="timezone-chip">PACIFIC TIME</span></div><div class="week-grid" id="week-grid"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div></section>
 
-    <section class="dashboard-section events-zone" id="events"><div class="section-title-row compact"><div><p class="section-label">OFFICIAL CALENDAR</p><h2>Upcoming events</h2><p>School dates and upcoming events.</p></div><a class="outline-link" href="https://woodcreek.rjuhsd.us/calendar" target="_blank" rel="noopener">Full calendar</a></div><div class="woodcreek-calendar"><div class="calendar-main"><div class="calendar-toolbar"><div><small>WOODCREEK HIGH SCHOOL</small><h3 id="calendar-title">September 2026</h3></div><div class="calendar-nav"><button id="calendar-prev" type="button" aria-label="Previous month">Previous</button><button id="calendar-today" type="button">Today</button><button id="calendar-next" type="button" aria-label="Next month">Next</button></div></div><div class="calendar-weekdays" aria-hidden="true"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div><div class="calendar-days" id="calendar-days" aria-label="Month calendar"></div></div><aside class="calendar-agenda"><div class="agenda-heading"><span>UPCOMING AT WOODCREEK</span><b id="calendar-source"><i></i> OFFICIAL FEED</b></div><ol id="event-list"><li class="agenda-loading">Loading calendar…</li></ol><a href="https://woodcreek.rjuhsd.us/calendar" target="_blank" rel="noopener">View all school events</a></aside></div></section>
+    <section class="dashboard-section events-zone" id="events"><div class="section-title-row compact"><div><h2>Upcoming events</h2><p>School dates and upcoming events.</p></div><a class="outline-link" href="https://woodcreek.rjuhsd.us/calendar" target="_blank" rel="noopener">Full calendar</a></div><div class="woodcreek-calendar"><div class="calendar-main"><div class="calendar-toolbar"><div><small>WOODCREEK HIGH SCHOOL</small><h3 id="calendar-title">September 2026</h3></div><div class="calendar-nav"><button id="calendar-prev" type="button" aria-label="Previous month">Previous</button><button id="calendar-today" type="button">Today</button><button id="calendar-next" type="button" aria-label="Next month">Next</button></div></div><div class="calendar-weekdays" aria-hidden="true"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div><div class="calendar-days" id="calendar-days" aria-label="Month calendar"></div></div><aside class="calendar-agenda"><div class="agenda-heading"><span>UPCOMING AT WOODCREEK</span><b id="calendar-source"><i></i> OFFICIAL FEED</b></div><ol id="event-list"><li class="agenda-loading">Loading calendar…</li></ol><a href="https://woodcreek.rjuhsd.us/calendar" target="_blank" rel="noopener">View all school events</a></aside></div></section>
 
     <section class="campus-links" id="apps" aria-label="Community links"><a href="https://mitchdog.com/">mitchdog.com</a><a href="/preferences/">Preferences</a></section>
 
     <section class="dashboard-section tools-zone" id="study-timer">
-      <div class="section-title-row compact"><div><p class="section-label">FOCUS TOOL</p><h2>Study timer</h2><p>Set a focus session and take a break.</p></div></div>
+      <div class="section-title-row compact"><div><h2>Study timer</h2></div></div>
       <div class="study-timer-card">
         <div class="study-timer-display"><span class="study-timer-mode" id="study-timer-mode">FOCUS</span><strong class="study-timer-clock" id="study-timer-clock">25:00</strong></div>
         <div class="study-timer-controls">
@@ -267,7 +267,7 @@
     </section>
 
     <section class="dashboard-section tools-zone" id="finals-countdown">
-      <div class="section-title-row compact"><div><p class="section-label">CALENDAR</p><h2>Dates to remember</h2><p>Pulled from your school's published calendar.</p></div></div>
+      <div class="section-title-row compact"><div><h2>Dates to remember</h2></div></div>
       <div class="finals-countdown-card">
         <p id="finals-countdown-text">Checking the calendar…</p>
       </div>
@@ -276,7 +276,7 @@
     <section class="dashboard-section district-schools-zone" id="schools">
       <div class="section-title-row">
         <div>
-          <p class="section-label">ALL RJUHSD CAMPUSES</p>
+          
           <h2>Find your school</h2>
           <p>Bell schedules for all six RJUHSD high schools.</p>
         </div>
@@ -437,9 +437,9 @@
     <section class="dashboard-section faq-zone" id="faq">
       <div class="section-title-row compact">
         <div>
-          <p class="section-label">BELL SCHEDULE FAQ</p>
+          
           <h2>Schedule questions</h2>
-          <p>Answers to common questions about Roseville Joint Union High School District bell schedules.</p>
+          
         </div>
       </div>
       <div class="faq-list">
@@ -493,7 +493,7 @@
 
 <nav class="mobile-nav-dock" aria-label="Mobile navigation"><a class="dock-item" href="#today"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg>Today</a><a class="dock-item" href="#schedule-panel"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="17" rx="3"/><path d="M8 2v4M16 2v4M4 10h16M8 14h8M8 17h5"/></svg>Schedule</a><a class="dock-item" href="#school-lunch"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v6M3 3v4a3 3 0 0 0 6 0V3M6 10v11M17 3c-2 2-3 5-3 8h4M18 3v18"/></svg>Lunch</a><a class="dock-item" href="#tools"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>Tools</a></nav>
 
-  <div class="onboarding" id="onboarding" role="dialog" aria-modal="true" aria-labelledby="onboarding-title" hidden><div class="onboarding-backdrop"></div><div class="onboarding-card"><div class="onboarding-art" aria-hidden="true"><img src="/rjuhsd-assets/woodcreek.png" alt=""><i></i><b>BELL SCHEDULE</b></div><div class="onboarding-content"><button type="button" id="close-lunch" class="dialog-close" aria-label="Close lunch selection">×</button><p class="section-label">LUNCH SCHEDULE</p><h2 id="onboarding-title">Which lunch are you?</h2><p id="onboarding-description">Choose once and every bell, countdown, and timeline will match your actual school day. You can change this anytime.</p><div class="lunch-options"><button type="button" data-choose-lunch="1"><span class="choice-number">1</span><span><strong>Lunch 1</strong><small>I eat before Period 3</small></span></button><button type="button" data-choose-lunch="2"><span class="choice-number">2</span><span><strong>Lunch 2</strong><small>I eat after Period 3</small></span></button></div><small class="privacy-note">Saved only on this device. Your lunch choice is remembered for each school.</small></div></div></div>
+  <div class="onboarding" id="onboarding" role="dialog" aria-modal="true" aria-labelledby="onboarding-title" hidden><div class="onboarding-backdrop"></div><div class="onboarding-card"><div class="onboarding-art" aria-hidden="true"><img src="/rjuhsd-assets/woodcreek.png" alt=""><i></i><b>BELL SCHEDULE</b></div><div class="onboarding-content"><button type="button" id="close-lunch" class="dialog-close" aria-label="Close lunch selection">×</button><h2 id="onboarding-title">Which lunch are you?</h2><p id="onboarding-description">Choose once and every bell, countdown, and timeline will match your actual school day. You can change this anytime.</p><div class="lunch-options"><button type="button" data-choose-lunch="1"><span class="choice-number">1</span><span><strong>Lunch 1</strong><small>I eat before Period 3</small></span></button><button type="button" data-choose-lunch="2"><span class="choice-number">2</span><span><strong>Lunch 2</strong><small>I eat after Period 3</small></span></button></div><small class="privacy-note">Saved only on this device. Your lunch choice is remembered for each school.</small></div></div></div>
   <aside class="weather-widget" id="weather-widget"><button class="weather-summary" id="weather-toggle" type="button" aria-expanded="false" aria-controls="weather-details"><span class="weather-symbol" id="weather-symbol" aria-hidden="true">☀</span><span class="weather-place"><small>LIVE WEATHER</small><strong>Roseville</strong><span id="weather-condition">Loading forecast</span></span><strong class="weather-temperature" id="weather-temperature">--°</strong><span class="weather-chevron" aria-hidden="true">⌃</span></button><div class="weather-details" id="weather-details" hidden><div class="weather-now-details"><span><small>FEELS LIKE</small><strong id="weather-feels">--°</strong></span><span><small>WIND</small><strong id="weather-wind">-- mph</strong></span><span><small>TODAY</small><strong id="weather-range">--° / --°</strong></span></div><div class="weather-forecast" id="weather-forecast"></div><p id="weather-updated">Connecting to Roseville weather…</p></div></aside>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body></html>
