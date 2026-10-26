@@ -763,7 +763,7 @@
   </div>
 
   <nav class="prefs-jump-nav" aria-label="Preference sections">
-    <a href="#appearance">Appearance</a><a href="#account">Account</a><a href="#effects">Effects</a><a href="#privacy">Privacy</a><a href="#security">Security</a><a href="#homepage">Homepage</a><a href="#display">Display</a><a href="#sync">Sync</a><a href="#data">Data</a>
+    <a href="#appearance">Appearance</a><a href="#account">Account</a><a href="#privacy">Privacy</a><a href="#security">Security</a><a href="#homepage">Homepage</a><a href="#display">Display</a><a href="#sync">Sync</a><a href="#data">Data</a>
   </nav>
 
   <div class="pref-stack">
@@ -925,53 +925,6 @@
       <a class="soft-btn" href="/profile/">View public profile</a>
     </div>
     <div class="status-line" id="profileStatus">Loading profile...</div>
-  </section>
-
-  <section class="pref-section" id="effects">
-    <h2>Background effects</h2>
-    <p class="section-sub">Add some flair to your background.</p>
-    <div class="control-grid">
-      <div class="field">
-        <label>Snowfall</label>
-        <div class="toggle-row">
-          <label class="toggle-switch">
-            <input type="checkbox" id="vfxSnowToggle">
-            <span class="toggle-slider"></span>
-          </label>
-          <span class="toggle-desc">Soft falling snow overlay.</span>
-        </div>
-      </div>
-      <div class="field">
-        <label>Starfield</label>
-        <div class="toggle-row">
-          <label class="toggle-switch">
-            <input type="checkbox" id="vfxStarsToggle">
-            <span class="toggle-slider"></span>
-          </label>
-          <span class="toggle-desc">Twinkling stars in the background.</span>
-        </div>
-      </div>
-      <div class="field">
-        <label>Rain</label>
-        <div class="toggle-row">
-          <label class="toggle-switch">
-            <input type="checkbox" id="vfxRainToggle">
-            <span class="toggle-slider"></span>
-          </label>
-          <span class="toggle-desc">Calm rain streaks on the glass.</span>
-        </div>
-      </div>
-      <div class="field">
-        <label>Particles</label>
-        <div class="toggle-row">
-          <label class="toggle-switch">
-            <input type="checkbox" id="vfxParticlesToggle">
-            <span class="toggle-slider"></span>
-          </label>
-          <span class="toggle-desc">Floating ambient dust particles.</span>
-        </div>
-      </div>
-    </div>
   </section>
 
   <section class="pref-section" id="privacy">
@@ -1187,17 +1140,6 @@
   <p class="section-sub">Visual and layout tweaks.</p>
 
   <div class="field">
-    <label>Reduce Animations</label>
-    <div class="toggle-row">
-      <label class="toggle-switch">
-        <input type="checkbox" id="reduceAnimToggle">
-        <span class="toggle-slider"></span>
-      </label>
-      <span class="toggle-desc">Minimizes transitions and motion effects across the site.</span>
-    </div>
-  </div>
-
-  <div class="field">
     <label>Game Launch Mode</label>
     <div class="chip-row">
       <button class="chip active" data-launch="default" onclick="selectChip(this,'[data-launch]','activeLaunch')">Default</button>
@@ -1206,11 +1148,6 @@
     </div>
   </div>
 
-  <div class="field">
-    <label>Custom CSS</label>
-    <p class="field-sub">Inject your own styles. Be careful!</p>
-    <textarea id="customCSS" placeholder="body { background: red !important; }"></textarea>
-  </div>
   </section>
 
   <section class="pref-section" id="sync">
@@ -1477,14 +1414,13 @@ async function generateNewE2EKeys(email, newPassword) {
   }
 }
 
-var VFX_CONFIG_KEY      = '_prefVFX';
 var PRIVACY_CONFIG_KEY  = '_prefPrivacy';
 var HOME_CONFIG_KEY     = '_prefHomepage';
 var DISPLAY_CONFIG_KEY  = '_prefDisplay';
 var SYNC_CONFIG_KEY     = '_prefSync';
 var TOOLS_CONFIG_KEY    = '_prefTools';
-var PREF_BACKUP_KEYS    = [VFX_CONFIG_KEY, PRIVACY_CONFIG_KEY, HOME_CONFIG_KEY, DISPLAY_CONFIG_KEY, SYNC_CONFIG_KEY, TOOLS_CONFIG_KEY];
-var THEME_PREF_KEYS     = ['accent','density','radius','font','motion','material','vfxDefaults'];
+var PREF_BACKUP_KEYS    = [PRIVACY_CONFIG_KEY, HOME_CONFIG_KEY, DISPLAY_CONFIG_KEY, SYNC_CONFIG_KEY, TOOLS_CONFIG_KEY];
+var THEME_PREF_KEYS     = ['accent','density','radius','font','motion','material'];
 
 function load(key, def) {
   try { return Object.assign({}, def, JSON.parse(localStorage.getItem(key) || '{}')); }
@@ -1979,12 +1915,6 @@ function setupAppearanceControls() {
         materialSelect: 'material'
       };
       setThemePref(map[id], this.value);
-      if (id === 'motionSelect') {
-        var display = load(DISPLAY_CONFIG_KEY, { reduceAnimations: false, gameLaunch: 'default' });
-        display.reduceAnimations = this.value === 'off';
-        localStorage.setItem(DISPLAY_CONFIG_KEY, JSON.stringify(display));
-        document.getElementById('reduceAnimToggle').checked = display.reduceAnimations;
-      }
       applyAppearanceLive('Appearance updated.');
       saveAll();
     });
@@ -2011,7 +1941,7 @@ function setupAccordions() {
     // rjuhsd.school's preferences are appearance-only - every other section
     // (account, privacy, security, homepage, display, sync, data) needs a
     // real session and doesn't belong on an anonymous school site.
-    var SCHOOL_CATEGORIES = ['appearance', 'effects'];
+    var SCHOOL_CATEGORIES = ['appearance'];
     var allSections = Array.from(document.querySelectorAll('.pref-section'));
     var sections = allSections.filter(function(section) { return SCHOOL_CATEGORIES.indexOf(section.id) !== -1; });
     allSections.forEach(function(section) {
@@ -2107,12 +2037,6 @@ function selectChip(btn, selector, varName) {
 var _saveTimer = null;
 function saveAll() {
   try {
-    localStorage.setItem(VFX_CONFIG_KEY, JSON.stringify({
-      snow:      document.getElementById('vfxSnowToggle').checked,
-      stars:     document.getElementById('vfxStarsToggle').checked,
-      rain:      document.getElementById('vfxRainToggle').checked,
-      particles: document.getElementById('vfxParticlesToggle').checked,
-    }));
     localStorage.setItem(PRIVACY_CONFIG_KEY, JSON.stringify({
       hideOnline:   document.getElementById('privHideOnlineToggle').checked,
       hideLocation: !document.getElementById('privHideLocationToggle').checked,
@@ -2132,9 +2056,7 @@ function saveAll() {
       focusSearch: document.getElementById('homeSearchFocusToggle').checked
     })));
     localStorage.setItem(DISPLAY_CONFIG_KEY, JSON.stringify(Object.assign(load(DISPLAY_CONFIG_KEY, {}), {
-      reduceAnimations: document.getElementById('reduceAnimToggle').checked,
-      gameLaunch: activeLaunch,
-      customCSS: document.getElementById('customCSS').value.trim()
+      gameLaunch: activeLaunch
     })));
     localStorage.setItem(SYNC_CONFIG_KEY, JSON.stringify({
       enabled: document.getElementById('syncToggle').checked,
@@ -2144,7 +2066,7 @@ function saveAll() {
       quickAccess: document.getElementById('prefQuickAccess').checked,
       dailyBonus:  document.getElementById('prefDailyBonus').checked,
     }));
-    setThemePref('motion', document.getElementById('reduceAnimToggle').checked ? 'off' : document.getElementById('motionSelect').value);
+    setThemePref('motion', document.getElementById('motionSelect').value);
     if (window.__siteTheme) {
       window.__siteTheme.setMode(getCookieValue('theme', ''));
       window.__siteTheme.setAccent(getThemePref('accent', ''));
@@ -2156,11 +2078,6 @@ function saveAll() {
   if (window._mitchSync && window._mitchSync.save) {
     window._mitchSync.save();
   }
-}
-
-function debouncedSave() {
-  clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(saveAll, 400);
 }
 
 async function loadBlogAlerts() {
@@ -2359,12 +2276,6 @@ async function deleteAccount() {
   document.getElementById('passkeyAddBtn').onclick = enrollPasskey;
   if (!schoolPrefs) loadPasskeyList();
 
-  var vk = load(VFX_CONFIG_KEY, { snow: true, stars: true, rain: true, particles: true });
-  document.getElementById('vfxSnowToggle').checked      = !!vk.snow;
-  document.getElementById('vfxStarsToggle').checked     = !!vk.stars;
-  document.getElementById('vfxRainToggle').checked      = !!vk.rain;
-  document.getElementById('vfxParticlesToggle').checked = !!vk.particles;
-
   var pk = load(PRIVACY_CONFIG_KEY, { hideOnline: false, hideLocation: false, stealthDash: false, noHistory: false, newsletter: true, blockProfile: false });
   document.getElementById('privHideOnlineToggle').checked   = !!pk.hideOnline;
   document.getElementById('privHideLocationToggle').checked = pk.shareActivity === true && !pk.hideLocation;
@@ -2389,10 +2300,7 @@ async function deleteAccount() {
   document.getElementById('homeCompactToggle').checked = !!hc.compactHome;
   document.getElementById('homeSearchFocusToggle').checked = !!hc.focusSearch;
 
-  var dc = load(DISPLAY_CONFIG_KEY, { reduceAnimations: false, gameLaunch: 'default', customCSS: '' });
-  document.getElementById('reduceAnimToggle').checked = !!dc.reduceAnimations;
-  document.getElementById('customCSS').value = dc.customCSS || '';
-  if (dc.reduceAnimations) document.getElementById('motionSelect').value = 'off';
+  var dc = load(DISPLAY_CONFIG_KEY, { gameLaunch: 'default' });
   activeLaunch = dc.gameLaunch || 'default';
   var al = document.querySelector('[data-launch="' + activeLaunch + '"]');
   if (al) { document.querySelectorAll('[data-launch]').forEach(function(b){b.classList.remove('active');}); al.classList.add('active'); }
@@ -2417,22 +2325,12 @@ async function deleteAccount() {
     }).catch(function(){});
   }
 
-  ['vfxSnowToggle','vfxStarsToggle','vfxRainToggle','vfxParticlesToggle',
-   'privHideOnlineToggle','privHideLocationToggle','privStealthToggle','privNoHistoryToggle','privNewsletterToggle','privBlockProfileToggle',
+  ['privHideOnlineToggle','privHideLocationToggle','privStealthToggle','privNoHistoryToggle','privNewsletterToggle','privBlockProfileToggle',
    'syncToggle','homeQuickToggle','homeMembersToggle','homeRecentToggle','homeLogoToggle','homeCompactToggle','homeSearchFocusToggle',
    'prefCanvasLock','prefQuickAccess','prefDailyBonus'].forEach(function(id) {
     document.getElementById(id).addEventListener('change', saveAll);
   });
   document.getElementById('blogAlertsToggle').addEventListener('change', saveBlogAlerts);
-  document.getElementById('reduceAnimToggle').addEventListener('change', function() {
-    document.getElementById('motionSelect').value = this.checked ? 'off' : 'on';
-    setThemePref('motion', document.getElementById('motionSelect').value);
-    applyAppearanceLive(this.checked ? 'Animations reduced.' : 'Animations restored.');
-    saveAll();
-  });
-  ['customCSS'].forEach(function(id) {
-    document.getElementById(id).addEventListener('input', debouncedSave);
-  });
   document.getElementById('exportPrefsBtn').onclick = exportPreferences;
   document.getElementById('importPrefsBtn').onclick = function() { document.getElementById('importPrefsInput').click(); };
   document.getElementById('importPrefsInput').onchange = function() { importPreferencesFile(this.files && this.files[0]); };
