@@ -396,3 +396,15 @@ html, body { overflow-x: clip; }
 .district-school-card:not(.current-school), .day-card:not(.today) { border-color: transparent; border-top-color: var(--line); border-radius: 0; padding-inline: 4px; }
 .hero-meta .weather-summary { background: none; border: 0; }
 .hero-meta .weather-summary:hover { background: none; }
+
+/* Same canvas and header treatment as the main site. Without an explicit
+   background the browser paints its own canvas (not --t-bg) behind the page. */
+html { background: var(--paper); }
+body.school-hub { background: var(--paper); color: var(--ink); }
+.site-header { min-height: 56px; padding-block: 8px; }
+.site-header nav { gap: 22px; }
+.site-header nav a { position: relative; min-height: 40px; padding: 0 2px; border-radius: 0; background: none; font-size: 14px; color: var(--ink); }
+.site-header nav a:hover, .site-header nav a[aria-current="location"] { background: none; color: var(--ink); }
+.site-header nav a::after { content: ''; position: absolute; left: 0; right: 0; bottom: 4px; height: 2px; border-radius: 2px; background: var(--wine); transform: scaleX(0); transition: transform var(--t-motion, .15s); }
+.site-header nav a:hover::after, .site-header nav a[aria-current="location"]::after { transform: scaleX(1); }
+.brand-copy strong { font-size: 14px; }

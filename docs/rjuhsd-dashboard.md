@@ -58,3 +58,5 @@ Screenshots go to `/tmp`; `RJUHSD_FULL_SCREENSHOTS=1` also captures full pages.
 The page links only `theme-tokens.css`, not `app.css`: `app.css` carries global element rules (for example `svg { max-width: 100% }`, which collapsed the theme button's icon to under 1px). The server injects `app.css` into any page that lacks it, so `refresh.css` must stay robust to those rules.
 
 Layout is flat: sections sit on the page background and are separated by hairlines, as on the main site. The live countdown keeps a panel, and the weather is a compact line in the hero's date row whose forecast opens as a popover (it used to be a fixed card below the footer).
+
+`html` and `body` set `background: var(--paper)` (the shared `--t-bg`) explicitly. Without it the page background was transparent and the browser painted its own canvas, which in dark mode is not the site's `#17191b`, so the school hub looked like a different site. The header and its pink-underline navigation follow the main site's top bar.
