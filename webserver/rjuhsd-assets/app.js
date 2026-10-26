@@ -19,6 +19,8 @@ const schoolHost = /(^|\.)rjuhsd\.school$/.test(location.hostname);
 let school = (SCHOOLS[schoolPath] ? schoolPath : null) || new URLSearchParams(location.search).get("school") || saved("rjuhsd_school","woodcreek");
 if(!SCHOOLS[school]) school="woodcreek";
 let events=[],requestVersion=0,scheduleMode="auto",includePeriod0=false,calendarVerified=false,calendarState="checking",bellOverride=null;
+let foodMenu=null,foodMenuState="loading",foodMenuStale=false,foodMenuDate="",foodMenuVersion=0;
+const foodMenuPage="https://www.rjuhsdfoodservice.com/index.php?sid=0212112146052111&page=menus";
 function schoolName(){return SCHOOLS[school].name+" High School"}
 function official(){return "https://"+school+".rjuhsd.us"}
 function dayData(date){return window.RJUHSD_CALENDAR.resolve(school,date,events,date===pacific().date?scheduleMode:"auto",includePeriod0,bellOverride)}
@@ -226,7 +228,7 @@ function renderNowAdvanced(){
  const clock=new Intl.DateTimeFormat("en-US",{timeZone:"America/Los_Angeles",hour:"numeric",minute:"2-digit"}).format(new Date());
  $("live-clock").textContent=clock;$("header-clock").textContent=clock;
  // Update elapsed rows at each minute and exactly when a bell changes the active row.
- if(timelineMinute!==`${p.date}|${p.minutes}`)renderTimeline();
+ if(timelineMinute!==`${p.date}|${p.minutes}`){renderTimeline();renderSchoolLunch()}
  const activeRow=$("timeline").querySelector(".timeline-row.active");
  if(activeRow){
   const block=blocks.find(block=>p.minutes>=mins(block.start)&&p.minutes<mins(block.end));
@@ -282,6 +284,46 @@ function renderNowAdvanced(){
  $("countdown").textContent="DONE";$("countdown-copy").textContent="School day complete";
  $("live-progress").style.width="100%";setDial(100,time(blocks.at(-1).end),"School is out","Dismissed");showNextSchool();
 }
+function foodDateLabel(date){return new Date(date+"T12:00:00Z").toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric",timeZone:"UTC"})}
+function foodName(value){return String(value).replace(/[—–_]/g," ").replace(/\s*-\s*/g," ").replace(/\s+/g," ").trim()}
+function renderSchoolLunch(){
+ const today=pacific().date,actual=window.RJUHSD_CALENDAR.resolve(school,today,events,"auto",includePeriod0,bellOverride);
+ const blocks=blocksForDay(actual),finished=blocks.length&&pacific().minutes>=mins(blocks.at(-1).end);
+ const target=actual.inSession&&!finished?today:data.nextSchool?.date;
+ $("lunch-heading").textContent="School lunch";
+ $("lunch-date").textContent=target?(target===today?"Today, ":"Next school day, ")+foodDateLabel(target):"District high school menu";
+ $("lunch-meals").hidden=true;$("lunch-updated").textContent="";$("lunch-menu-link").href=foodMenuPage;
+ if(foodMenuState==="loading"){$("lunch-menu-status").textContent="Checking the district menu...";return}
+ if(foodMenuState!=="ready"||!foodMenu){$("lunch-menu-status").textContent="The menu is unavailable right now. You can open the district's full menu.";return}
+ try{const url=new URL(foodMenu.menu_url);if(url.protocol==="https:"&&url.hostname==="www.rjuhsdfoodservice.com")$("lunch-menu-link").href=url.href}catch{}
+ const exact=(foodMenu.days||[]).find(day=>day.date===target&&day.entrees?.length);
+ const meals=exact||foodMenu.published_options;
+ if(!meals?.entrees?.length){$("lunch-menu-status").textContent="No lunch options have been published.";return}
+ $("lunch-meals").hidden=false;
+ const month=/^\d{4}-\d{2}$/.test(foodMenu.published_month||"")?new Date(foodMenu.published_month+"-01T12:00:00Z").toLocaleDateString("en-US",{month:"long",year:"numeric",timeZone:"UTC"}):"";
+ $("lunch-options-heading").textContent=exact?"Main dishes":"Published lunch options";
+ $("lunch-published-month").textContent=exact?"Published for "+foodDateLabel(target):month;
+ $("lunch-menu-status").textContent=exact?(foodMenuStale?"Showing a saved copy of the district menu.":"From the district's published menu."):foodMenu.dates_checked===false?"The menu for this date could not be checked.":target?"The district has not posted a menu for "+foodDateLabel(target)+".":"No date-specific menu has been posted.";
+ $("lunch-entrees").innerHTML=meals.entrees.map(name=>"<li>"+safe(foodName(name))+"</li>").join("");
+ const sides=Array.isArray(meals.sides)?meals.sides:[];
+ $("lunch-sides-panel").hidden=!sides.length;
+ $("lunch-sides").innerHTML=sides.map(name=>"<li>"+safe(foodName(name))+"</li>").join("");
+ const fetched=new Date(foodMenu.generated_at);
+ if(!Number.isNaN(fetched.getTime()))$("lunch-updated").textContent=(foodMenuStale?"Saved ":"Checked ")+new Intl.DateTimeFormat("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZone:"America/Los_Angeles"}).format(fetched);
+}
+async function loadSchoolLunch(){
+ const version=++foodMenuVersion,selected=school,date=pacific().date;
+ foodMenuDate=date;foodMenu=null;foodMenuState="loading";renderSchoolLunch();
+ try{
+  const response=await fetch("/api/school-menu?school="+selected+"&date="+date,{cache:"no-store",signal:AbortSignal.timeout(22000)});
+  if(!response.ok)throw Error("menu unavailable");
+  const result=await response.json();
+  if(version!==foodMenuVersion||selected!==school||date!==pacific().date)return;
+  if(result.school!==selected||!result.menu||!Array.isArray(result.menu.days))throw Error("invalid menu");
+  foodMenu=result.menu;foodMenuStale=result.stale===true;foodMenuState="ready";
+ }catch{if(version!==foodMenuVersion||selected!==school)return;foodMenuState="unavailable"}
+ renderSchoolLunch();
+}
 function renderFinalsCountdown(){const el=$("finals-countdown-text");if(!el)return;const today=data.now?.iso||pacific().date,match=eventData().find(x=>x.date>=today&&/final|semester/i.test(x.text));if(!match){el.textContent="No finals or semester date has been posted.";return}const days=Math.round((new Date(`${match.date}T12:00:00`)-new Date(`${today}T12:00:00`))/86400000);el.textContent=days<=0?`${safe(match.text)} is today!`:`${days} day${days===1?"":"s"} until ${safe(match.text)} (${new Date(`${match.date}T12:00:00`).toLocaleDateString("en-US",{month:"short",day:"numeric"})}).`}
 /** Calendar checks confirm event availability, not a fresh verification of the bell-time document. */
 function renderSourceStatus(){
@@ -289,7 +331,7 @@ function renderSourceStatus(){
  if(data.today?.type==="special"){$("source-status").textContent=`Special schedule active · ${data.today.title}`;return}
  $("source-status").textContent=calendarState==="checking"?"Checking the official calendar · Published weekly times shown":calendarVerified?"Official calendar checked · Published bell times":calendarState==="available"?"Published weekly times · Check school announcements":"Calendar unavailable · Published weekly times";
 }
-function render(){renderIdentity();renderTimeline();renderWeek();renderEvents();renderNowAdvanced();renderFinalsCountdown();renderSourceStatus()}
+function render(){renderIdentity();renderTimeline();renderWeek();renderEvents();renderNowAdvanced();renderFinalsCountdown();renderSourceStatus();renderSchoolLunch();if(foodMenuDate&&foodMenuDate!==pacific().date)loadSchoolLunch()}
 async function load(){
  const version=++requestVersion,selected=school;
  calendarVerified=false;calendarState="checking";
@@ -327,6 +369,7 @@ function switchSchool(s){
  if($("school-select"))$("school-select").value=school;
  remember("rjuhsd_school",school);
  lunch=saved("rjuhsd_lunch_"+school,"1")==="2"?"2":"1";
+ foodMenu=null;foodMenuState="loading";foodMenuVersion++;
  events=[];bellOverride=null;calendarCursor=null;calendarSelected=null;scheduleMode="auto";includePeriod0=false;
  if($("include-period0"))$("include-period0").checked=false;
  applySchoolIdentity();
@@ -334,6 +377,7 @@ function switchSchool(s){
  render();
  load();
  loadWeather();
+ loadSchoolLunch();
  try{const url=new URL(location.href);url.search="";url.pathname=schoolHost?(school==="woodcreek"?"/":"/"+school+"/"):"/rjuhsd/";if(!schoolHost&&school!=="woodcreek")url.searchParams.set("school",school);history.replaceState(null,"",url)}catch{}
 }
 $("school-select").addEventListener("change",()=>switchSchool($("school-select").value));
@@ -341,7 +385,7 @@ document.addEventListener("click",e=>{const b=e.target.closest("[data-switch-sch
 $("schedule-mode").addEventListener("change",()=>{scheduleMode=$("schedule-mode").value;data=buildData();render()});
 $("include-period0").addEventListener("change",()=>{includePeriod0=$("include-period0").checked;data=buildData();render()});
 applySchoolIdentity();
-document.querySelectorAll("[data-choose-lunch]").forEach(b=>b.addEventListener("click",()=>chooseLunch(b.dataset.chooseLunch)));["change-lunch","hero-change-lunch","brief-change-lunch"].forEach(id=>$(id).addEventListener("click",openLunch));$("calendar-prev").addEventListener("click",()=>moveCalendar(-1));$("calendar-next").addEventListener("click",()=>moveCalendar(1));$("calendar-today").addEventListener("click",()=>{const d=new Date(`${data.now?.iso||pacific().date}T12:00:00`);calendarCursor={year:d.getFullYear(),month:d.getMonth()};calendarSelected=null;renderEvents()});$("weather-toggle").addEventListener("click",()=>{const open=$("weather-toggle").getAttribute("aria-expanded")!=="true";$("weather-toggle").setAttribute("aria-expanded",String(open));$("weather-details").hidden=!open;$("weather-widget").classList.toggle("expanded",open)});function syncRjuhsdTheme(){const isLight=document.documentElement.classList.contains("theme-light")||(window.__theme&&window.__theme.get()==="light");document.body.classList.toggle("dark",!isLight);const tc=document.querySelector('meta[name="theme-color"]');if(tc)tc.content=isLight?"#f3f4f6":"#111215";const b=$("theme-btn")||$("theme-toggle");if(b){const sun='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.5 1.5m11.2 11.2 1.5 1.5M2 12h2m16 0h2M4.9 19.1l1.5-1.5M17.6 6.4l1.5-1.5"/></svg>';const moon='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';b.innerHTML=isLight?moon:sun;b.setAttribute("title",isLight?"Switch to dark theme":"Switch to light theme");b.setAttribute("aria-label",isLight?"Switch to dark theme":"Switch to light theme")}}syncRjuhsdTheme();window.addEventListener("themechange",syncRjuhsdTheme);const tb=$("theme-btn")||$("theme-toggle");if(tb){tb.addEventListener("click",()=>{const isLight=document.documentElement.classList.contains("theme-light");const next=isLight?"dark":"light";document.cookie="theme="+encodeURIComponent(next)+";path=/;max-age=31536000";if(window.__theme&&typeof window.__theme.apply==="function"){window.__theme.apply(next)}else{document.documentElement.classList.toggle("theme-light",next==="light");document.body.classList.toggle("dark",next==="dark")}syncRjuhsdTheme()})}load();loadWeather();setInterval(renderNowAdvanced,1000);setInterval(load,120000);setInterval(loadWeather,600000);
+document.querySelectorAll("[data-choose-lunch]").forEach(b=>b.addEventListener("click",()=>chooseLunch(b.dataset.chooseLunch)));["change-lunch","hero-change-lunch","brief-change-lunch"].forEach(id=>$(id).addEventListener("click",openLunch));$("calendar-prev").addEventListener("click",()=>moveCalendar(-1));$("calendar-next").addEventListener("click",()=>moveCalendar(1));$("calendar-today").addEventListener("click",()=>{const d=new Date(`${data.now?.iso||pacific().date}T12:00:00`);calendarCursor={year:d.getFullYear(),month:d.getMonth()};calendarSelected=null;renderEvents()});$("weather-toggle").addEventListener("click",()=>{const open=$("weather-toggle").getAttribute("aria-expanded")!=="true";$("weather-toggle").setAttribute("aria-expanded",String(open));$("weather-details").hidden=!open;$("weather-widget").classList.toggle("expanded",open)});function syncRjuhsdTheme(){const isLight=document.documentElement.classList.contains("theme-light")||(window.__theme&&window.__theme.get()==="light");document.body.classList.toggle("dark",!isLight);const tc=document.querySelector('meta[name="theme-color"]');if(tc)tc.content=isLight?"#f3f4f6":"#111215";const b=$("theme-btn")||$("theme-toggle");if(b){const sun='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.5 1.5m11.2 11.2 1.5 1.5M2 12h2m16 0h2M4.9 19.1l1.5-1.5M17.6 6.4l1.5-1.5"/></svg>';const moon='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';b.innerHTML=isLight?moon:sun;b.setAttribute("title",isLight?"Switch to dark theme":"Switch to light theme");b.setAttribute("aria-label",isLight?"Switch to dark theme":"Switch to light theme")}}syncRjuhsdTheme();window.addEventListener("themechange",syncRjuhsdTheme);const tb=$("theme-btn")||$("theme-toggle");if(tb){tb.addEventListener("click",()=>{const isLight=document.documentElement.classList.contains("theme-light");const next=isLight?"dark":"light";document.cookie="theme="+encodeURIComponent(next)+";path=/;max-age=31536000";if(window.__theme&&typeof window.__theme.apply==="function"){window.__theme.apply(next)}else{document.documentElement.classList.toggle("theme-light",next==="light");document.body.classList.toggle("dark",next==="dark")}syncRjuhsdTheme()})}load();loadWeather();loadSchoolLunch();setInterval(loadSchoolLunch,1800000);setInterval(renderNowAdvanced,1000);setInterval(load,120000);setInterval(loadWeather,600000);
 
 // Both navigation bars reflect the section currently at the top of the viewport.
 (function(){

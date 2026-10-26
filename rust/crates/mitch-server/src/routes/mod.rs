@@ -34,6 +34,7 @@ pub mod misc;
 pub mod pickle;
 pub mod proxy;
 pub mod push;
+pub mod school_menu;
 pub mod service_auth;
 pub mod ssh_ws;
 pub mod staff_hub;

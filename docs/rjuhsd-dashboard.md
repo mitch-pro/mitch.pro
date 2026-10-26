@@ -13,7 +13,8 @@ background art.
 `webserver/bell/schedule.js` holds the published bell times;
 `webserver/rjuhsd-assets/calendar.js` resolves district breaks, special schedules,
 and official calendar events. `app.js` continues to consume `/api/school-info`
-and `/api/bell/override`; this refresh does not change those API contracts or
+and `/api/bell/override`. The lunch card also reads `/api/school-menu`; see
+[school lunch menus](school-lunch-menu.md). The dashboard does not
 publish new bell times.
 
 One Pacific-time clock updates the countdown every second. Timeline rows refresh

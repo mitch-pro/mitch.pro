@@ -580,6 +580,7 @@ pub const PUBLIC_API_PATHS: &[&str] = &[
     "/api/weather",
     "/api/school-calendar",
     "/api/school-info",
+    "/api/school-menu",
     "/api/bell/override",
     "/api/site-info",
     "/api/presence/count",
