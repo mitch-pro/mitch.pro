@@ -15,9 +15,9 @@
 .companion-form-panel textarea {
   width: 100%;
   box-sizing: border-box;
-  background: #1b1e24;
-  color: #e9ecf1;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--t-bg2, #1b1e24);
+  color: var(--t-fg, #e9ecf1);
+  border: 1px solid var(--t-bd, rgba(255, 255, 255, 0.15));
   border-radius: 6px;
   padding: 8px;
   margin-top: 4px;
@@ -37,7 +37,7 @@
 }
 
 .companion-card {
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--t-bd, rgba(255, 255, 255, 0.12));
   border-radius: 10px;
   padding: 16px;
   margin-bottom: 16px;
@@ -101,7 +101,7 @@
   height: 72px;
   object-fit: contain;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.04);
+  background: color-mix(in srgb, var(--t-fg, #fff) 5%, transparent);
   display: block;
   margin-bottom: 4px;
 }
@@ -126,4 +126,10 @@
 
 [data-error="true"] {
   color: #e8705f;
+}
+
+/* Light mode: near-black text on the dark accent fails contrast. */
+html.theme-light .companion-form-panel button,
+html.theme-light .companion-default-tag {
+  color: #fff;
 }

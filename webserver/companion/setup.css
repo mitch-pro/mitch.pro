@@ -35,12 +35,12 @@
 }
 
 .companion-setup-card {
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--t-bd, rgba(255, 255, 255, 0.12));
   border-radius: 10px;
   padding: 12px;
   cursor: pointer;
   text-align: center;
-  background: rgba(255, 255, 255, 0.02);
+  background: color-mix(in srgb, var(--t-fg, #fff) 5%, transparent);
 }
 
 .companion-setup-card.selected {
@@ -79,7 +79,7 @@
 }
 
 .companion-setup-section {
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--t-bd, rgba(255, 255, 255, 0.12));
   padding-top: 24px;
   margin-bottom: 32px;
 }
@@ -99,8 +99,8 @@
 .companion-subscription-buttons button {
   padding: 8px 14px;
   border-radius: 7px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--t-bd, rgba(255, 255, 255, 0.12));
+  background: color-mix(in srgb, var(--t-fg, #fff) 5%, transparent);
   color: inherit;
   cursor: pointer;
 }
@@ -136,9 +136,9 @@
 .companion-mine-card textarea {
   width: 100%;
   box-sizing: border-box;
-  background: #1b1e24;
+  background: var(--t-bg2, #1b1e24);
   color: inherit;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid var(--t-bd, rgba(255, 255, 255, 0.12));
   border-radius: 6px;
   padding: 8px;
   margin-top: 4px;
@@ -159,7 +159,7 @@
 }
 
 .companion-mine-card {
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--t-bd, rgba(255, 255, 255, 0.12));
   border-radius: 10px;
   padding: 14px;
   margin-bottom: 14px;
@@ -201,7 +201,7 @@
   height: 64px;
   object-fit: contain;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.04);
+  background: color-mix(in srgb, var(--t-fg, #fff) 5%, transparent);
   display: block;
   margin-bottom: 4px;
 }
@@ -217,4 +217,12 @@
 .companion-mine-image-form input[type="text"] {
   width: 140px;
   display: inline-block;
+}
+
+/* Light mode: the accent is dark enough that near-black text on it fails contrast. */
+html.theme-light #companion-setup-save,
+html.theme-light .companion-setup-card .companion-unlock-btn,
+html.theme-light #companion-create-form button,
+html.theme-light .companion-mine-card button {
+  color: #fff;
 }

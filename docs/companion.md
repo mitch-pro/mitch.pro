@@ -30,6 +30,11 @@ subsystem — no `server.js` equivalent.
   served from `matrix/index.html`) and every error page built by
   `errors.rs` (404, 403, 500, ...). Iframes and embedded game runtimes are
   still excluded (the widget returns early when `window.top !== window.self`).
+- Light/dark: the widget bubble, `/companion/` setup page and admin page
+  use the `--t-*` theme tokens, with the old dark values as `var()`
+  fallbacks for pages that don't load `app.css` (error pages, Matrix).
+  Text on the accent color switches to white under `html.theme-light`,
+  since near-black on the light accent fails contrast.
 - Admin-authored preset characters only: a name, a personality prompt, and
   one image per "mood." Authored at `/admin/companion/` (any admin/owner,
   gated by the existing global `/api/admin/*` auth).
