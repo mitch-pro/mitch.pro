@@ -72,6 +72,15 @@ pub async fn handle(
     if path == "/api/school-calendar" && *method == Method::GET {
         return Some(crate::routes::dayboard::school_calendar().await);
     }
+    if path == "/api/school-menu" && *method == Method::GET {
+        let params: std::collections::HashMap<_, _> =
+            url::form_urlencoded::parse(_search.trim_start_matches('?').as_bytes())
+                .into_owned()
+                .collect();
+        let school = params.get("school").map(String::as_str).unwrap_or("");
+        let date = params.get("date").map(String::as_str).unwrap_or("");
+        return Some(crate::routes::school_menu::school_menu(school, date).await);
+    }
     if path == "/api/school-info" && *method == Method::GET {
         let school_key = if let Some(query) = _search.strip_prefix('?') {
             url::form_urlencoded::parse(query.as_bytes())

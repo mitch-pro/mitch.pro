@@ -30,7 +30,7 @@ const errors = [];
 let cases = 0;
 
 function pacific(value) { return new Date(value + '-07:00'); }
-async function fixture(date, school = 'woodcreek', width = 1440, override = null) {
+async function fixture(date, school = 'woodcreek', width = 1440, override = null, menuResult = null) {
   const context = await browser.newContext({ viewport: { width, height: 1000 }, timezoneId: 'America/Los_Angeles', colorScheme: 'dark', reducedMotion: 'reduce', serviceWorkers: 'block' });
   await context.addInitScript(() => {
     for (const campus of ['woodcreek', 'roseville', 'granitebay', 'antelope', 'westpark', 'oakmont']) {
@@ -41,6 +41,18 @@ async function fixture(date, school = 'woodcreek', width = 1440, override = null
   await context.route('**/*', async route => {
     const url = new URL(route.request().url());
     const json = body => route.fulfill({ json: body });
+    if (url.pathname === '/api/school-menu') {
+      if (menuResult === 'unavailable') return route.fulfill({ status: 502, json: { error: 'menu unavailable' } });
+      return json({ school: url.searchParams.get('school'), stale: false, menu: menuResult || {
+        source: 'RJUHSD Food Services',
+        source_url: 'https://www.rjuhsdfoodservice.com/index.php?sid=0212112146052111&page=menus',
+        menu_url: 'https://www.rjuhsdfoodservice.com/webmenus2/#/view-no-design?id=public-test-menu',
+        dates_checked: true, published_month: '2026-08', generated_at: '2026-10-26T16:00:00Z',
+        published_options: { entrees: ['Published pizza', 'Published sandwich'], sides: ['Milk'] },
+        days: [{ date: '2026-10-26', entrees: ['Monday rice bowl', 'Monday pizza'], sides: ['Apple slices', 'Milk'] },
+          { date: '2026-10-27', entrees: ['Tuesday wrap'], sides: ['Oranges'] }]
+      } });
+    }
     if (url.pathname === '/api/school-info') return json({ calendar_verified: true, stale: false, events: [{ date: '2026-10-30', title: 'Campus event' }, { date: '2026-12-17', title: 'Final exams' }] });
     if (url.pathname === '/api/bell/override') return json({ override });
     if (url.pathname === '/api/site-info') return json({ primary: 'https://mitch.pro', alternate: 'https://mitchdog.com' });
@@ -231,6 +243,11 @@ try {
         const countdown = await page.locator('#countdown').boundingBox();
         assert(countdown && countdown.width > 30 && countdown.x >= 0 && countdown.x + countdown.width <= width, `Countdown must fit at ${width}px`);
         if ([1440, 390].includes(width)) await page.screenshot({ path: `/tmp/rjuhsd-refresh-${mode}-${width}.png`, fullPage: false });
+        if (process.env.RJUHSD_FULL_SCREENSHOTS && [1440, 390].includes(width)) {
+          await page.locator('#school-lunch').evaluate(element => element.scrollIntoView({ block: 'start', behavior: 'instant' }));
+          await page.screenshot({ path: `/tmp/rjuhsd-lunch-${mode}-${width}.png` });
+          await page.evaluate(() => scrollTo(0, 0));
+        }
         if (process.env.RJUHSD_FULL_SCREENSHOTS && mode === 'dark' && [1440, 390].includes(width)) await page.screenshot({ path: `/tmp/rjuhsd-refresh-full-${width}.png`, fullPage: true });
         if (process.env.RJUHSD_FULL_SCREENSHOTS && mode === 'dark' && width === 1440) {
           for (const [section, file] of [['#schedule-panel', 'schedule'], ['#events', 'calendar']]) {
@@ -301,6 +318,45 @@ try {
     assert.equal(await page.evaluate(() => localStorage.getItem('mitch_pwa_install_dismissed')), '1');
     await context.close();
     cases += 4;
+  }
+  {
+    const { page, context } = await fixture('2026-10-26T10:25:00');
+    await page.waitForFunction(() => document.getElementById('lunch-entrees').textContent.includes('Monday rice bowl'));
+    assert.equal(await text(page, '#lunch-options-heading'), 'Main dishes');
+    assert.match(await text(page, '#lunch-date'), /Today.*Monday, Oct 26/);
+    assert(!/Published pizza/.test(await text(page, '#lunch-entrees')), 'A current menu must use its exact date');
+    await setTime(page, '2026-10-26T15:20:00');
+    assert.match(await text(page, '#lunch-date'), /Next school day.*Tuesday, Oct 27/);
+    assert.equal(await text(page, '#lunch-entrees'), 'Tuesday wrap');
+    await page.locator('#school-select').selectOption('roseville');
+    await page.waitForFunction(() => document.getElementById('lunch-entrees').textContent.includes('Tuesday wrap'));
+    assert.equal(await page.locator('#lunch-menu-link').getAttribute('href'), 'https://www.rjuhsdfoodservice.com/webmenus2/#/view-no-design?id=public-test-menu');
+    await context.close(); cases += 2;
+  }
+  {
+    const oldMenu = { dates_checked: true, published_month: '2026-08', generated_at: '2026-10-26T16:00:00Z', days: [],
+      menu_url: 'javascript:alert(1)', published_options: { entrees: ['Published <img src=x onerror=alert(1)>'], sides: [] } };
+    const { page, context } = await fixture('2026-10-25T12:00:00', 'woodcreek', 390, null, oldMenu);
+    await page.waitForFunction(() => document.getElementById('lunch-options-heading').textContent === 'Published lunch options');
+    assert.match(await text(page, '#lunch-date'), /Next school day.*Monday, Oct 26/);
+    assert.match(await text(page, '#lunch-menu-status'), /has not posted a menu/);
+    assert.equal(await text(page, '#lunch-published-month'), 'August 2026');
+    assert.equal(await page.locator('#lunch-entrees img').count(), 0, 'Remote food names must remain text');
+    assert.match(await text(page, '#lunch-entrees'), /<img/);
+    assert.match(await page.locator('#lunch-menu-link').getAttribute('href'), /^https:\/\/www\.rjuhsdfoodservice\.com/);
+    oldMenu.dates_checked = false;
+    await page.reload();
+    await page.waitForFunction(() => document.getElementById('lunch-menu-status').textContent.includes('could not be checked'));
+    assert.equal(await page.locator('#lunch-meals').isVisible(), true, 'Published choices remain useful when the dated feed fails');
+    await context.close(); cases += 3;
+  }
+  {
+    const { page, context } = await fixture('2026-10-26T10:25:00', 'woodcreek', 320, null, 'unavailable');
+    await page.waitForFunction(() => document.getElementById('lunch-menu-status').textContent.includes('unavailable'));
+    assert.equal(await page.locator('#lunch-meals').isVisible(), false);
+    assert.equal(await page.locator('#lunch-menu-link').isVisible(), true);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await context.close(); cases++;
   }
   assert.deepEqual(errors, [], 'Dashboard must not throw browser errors');
   console.log(`RJUHSD refresh: ${cases} bell, lunch, school, keyboard and responsive checks passed.`);

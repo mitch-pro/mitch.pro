@@ -251,3 +251,33 @@ footer { width: min(1280px, calc(100% - 56px)); margin: 35px auto 0; padding-bot
 
 .period-badge:empty { display: none; }
 .calendar-toolbar { flex-wrap: wrap; }
+
+/* The food feed stays visibly dated when the district has not published today's menu. */
+.lunch-zone { grid-column: 1 / -1; }
+.lunch-menu-status { margin: -7px 0 22px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.lunch-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
+.lunch-list-heading h3 { margin: 0; font-size: 12px; font-weight: 550; }
+.lunch-list-heading > span { color: var(--muted); font-size: 10px; }
+.lunch-food-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; list-style: none; margin: 0; padding: 0; }
+.lunch-food-grid li { display: flex; align-items: center; min-width: 0; padding: 13px 15px; border: 1px solid var(--line); border-radius: 9px; background: var(--raised); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.lunch-sides { margin-top: 18px; color: var(--muted); font-size: 11px; }
+.lunch-sides summary { width: fit-content; cursor: pointer; }
+.lunch-sides ul { display: flex; flex-wrap: wrap; gap: 9px 23px; margin: 13px 0 0; padding-left: 16px; }
+.lunch-source { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; }
+.lunch-source a:hover { color: var(--ink); }
+@media (max-width: 950px) { .lunch-food-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .lunch-food-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }.lunch-food-grid li { padding: 11px; font-size: 11px; }.lunch-menu-status { font-size: 11px; }.lunch-list-heading { align-items: flex-start; }.lunch-list-heading > span { font-size: 9px; text-align: right; } }
+
+/* Keep the byline, campus picker and navigation readable as the header narrows. */
+@media (max-width: 1150px) {
+  html { scroll-padding-top: 150px; }
+  .site-header { flex-wrap: wrap; gap: 10px 16px; }
+  .site-header nav { order: 4; flex-basis: 100%; justify-content: center; margin-left: 0; }
+}
+@media (max-width: 700px) {
+  html { scroll-padding-top: 120px; }
+  .site-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; }
+  .brand { grid-column: 1; grid-row: 1; min-width: 0; }
+  .powered-by-link { grid-column: 1; grid-row: 2; justify-self: start; margin: 0; padding: 4px 9px; font-size: 10px; }
+  .header-actions { grid-column: 2; grid-row: 1 / 3; }
+}
