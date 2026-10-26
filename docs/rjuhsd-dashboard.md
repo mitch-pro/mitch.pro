@@ -2,7 +2,7 @@
 
 The public school hub is `webserver/rjuhsd/index.html`. Its school-owned layout is
 in `webserver/rjuhsd-assets/refresh.css`; the older school stylesheets are no
-longer loaded by this page. Colors come from the shared site theme (`/app.css` tokens plus `/site-theme.js`, the same files the main site uses), so the page follows the site's pink accent, any custom accent chosen in preferences, and the saved light/dark mode. The page no longer loads the legacy `theme.js` engine, and its theme button calls `window.__siteTheme.setMode`. The hub uses neutral surfaces and the selected campus's colors.
+longer loaded by this page. Colors come from the shared site theme (`/theme-tokens.css`, the palette split out of `app.css`, plus `/site-theme.js`), so the page follows the site's pink accent, any custom accent chosen in preferences, and the saved light/dark mode. The page no longer loads the legacy `theme.js` engine, and its theme button calls `window.__siteTheme.setMode`. The hub uses neutral surfaces and the selected campus's colors.
 No build or additional runtime dependency is needed.
 
 The "by" pill in the header links to the `primary` domain from `data/site.json`
@@ -54,3 +54,5 @@ static fixture and mocks calendar/weather requests. It checks bells and exact
 boundaries, midnight rollover, manual previews, lunches, overrides, holidays,
 campus switching, keyboard interaction, native/manual installation, canonical links, and both themes at 320–1440 pixels.
 Screenshots go to `/tmp`; `RJUHSD_FULL_SCREENSHOTS=1` also captures full pages.
+
+The page links only `theme-tokens.css`, not `app.css`: `app.css` carries global element rules (for example `svg { max-width: 100% }`, which collapsed the theme button's icon to under 1px). The server injects `app.css` into any page that lacks it, so `refresh.css` must stay robust to those rules.

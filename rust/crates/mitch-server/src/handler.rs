@@ -100,6 +100,7 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/mitchcoin.svg",
     "/notifications/panel.css",
     "/app.css",
+    "/theme-tokens.css",
     "/auth-liquid.css",
     "/encrypt-galaxy.css",
     "/vendor/simplewebauthn.browser.min.js",

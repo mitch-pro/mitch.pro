@@ -295,21 +295,55 @@ footer { width: min(1280px, calc(100% - 56px)); margin: 35px auto 0; padding-bot
 html, body { overflow-x: clip; }
 
 @media (max-width: 700px) {
-  .site-header { min-height: 0; padding: 10px 14px; gap: 8px; }
-  .brand { flex: 1 1 auto; min-width: 0; gap: 8px; }
+  .site-header { min-height: 0; padding: 10px 16px; }
   .brand-copy { min-width: 0; }
-  .brand-copy strong { max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .brand-copy small { display: none; }
-  .powered-by-link { flex: 0 0 auto; margin: 0; padding: 6px 11px; font-size: 12px; }
-  .powered-by-link > span { display: none; }
-  .header-actions { flex: 0 0 auto; gap: 6px; }
-  .school-choice select { max-width: 96px; }
+  .brand-copy strong { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .powered-by-link { padding: 5px 12px; font-size: 12px; }
+  .school-choice select { max-width: 120px; }
   .hero { padding: 20px 16px; }
   .hero h1 { font-size: 36px; letter-spacing: -1.2px; }
 }
-@media (max-width: 420px) {
-  .brand-copy { display: none; }
-  .school-choice select { max-width: 110px; }
+
+/* Legibility and surfaces. Text floor of 11-12px; nested panels use the page
+   background with a border instead of the greenish raised fill. */
+.icon-button svg { flex: none; min-width: 18px; max-width: none; }
+.snapshot small, .date-tile span, .day-card p, .day-card > strong, .timeline-row .time small, .period-meta small { font-size: 11px; letter-spacing: 0; }
+.snapshot strong { font-size: 17px; }
+.snapshot-icon { color: var(--muted); }
+.section-title-row p, .tools-heading p, .calendar-toolbar p { font-size: 13px; }
+.timeline-row .time { font-size: 13px; }
+.period-name { font-size: 14px; }
+.period-meta, .period-duration { font-size: 12px; }
+.day-card .day-top, .day-top { font-size: 13px; }
+.tool-grid strong { font-size: 13px; }
+.tool-grid small { font-size: 11px; }
+.school-periods-list li, .school-time-badge span, .school-mascot { font-size: 12px; }
+.school-time-badge strong { font-size: 14px; }
+.school-card-actions .primary-button { font-size: 12px; min-height: 38px; }
+.school-card-actions .outline-link { font-size: 11px; }
+.faq-item p { font-size: 14px; line-height: 1.7; }
+.faq-item summary { font-size: 14px; }
+.footer-schools, .footer-bottom { font-size: 12px; }
+.calendar-days > button { font-size: 13px; }
+.tool-grid > a, .day-card, .finals-countdown-card, .district-school-card { background: var(--paper); }
+.tool-grid > a:hover { transform: none; border-color: var(--wine); }
+.day-card.today { background: var(--wine-soft); }
+.district-school-card:hover { transform: none; }
+.outline-link, .live-next > span, .live-next strong, .live-next time { font-size: 12px; }
+.countdown-details small { font-size: 11px; }
+.countdown-details strong { font-size: 13px; }
+.live-card-top, .live-card-top time { font-size: 12px; }
+@media (max-width: 700px) {
+  .snapshot small, .day-card p, .day-card > strong, .timeline-row .time small { font-size: 11px; }
+  .snapshot strong { font-size: 15px; }
+  .timeline-row .time { font-size: 12px; }
+  .period-name { font-size: 13px; }
+  .period-meta, .period-duration { font-size: 11px; }
+  .tool-grid strong { font-size: 12px; }
+  .tool-grid small { font-size: 10.5px; }
+  .school-periods-list li { font-size: 12px; }
+  .school-card-actions .primary-button { font-size: 12px; }
+  .footer-schools, .footer-bottom { font-size: 11px; }
 }
 .countdown-copy, .countdown-details small, .live-next > span { color: var(--muted); }
 .progress { background: var(--raised); }
@@ -317,3 +351,4 @@ html, body { overflow-x: clip; }
 .dial-value, .progress span { stroke: var(--wine); }
 .progress span { background: var(--wine); }
 .countdown-dial::after { color: var(--muted); }
+.live-next strong, .live-next time { color: var(--ink); }

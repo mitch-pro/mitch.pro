@@ -7,6 +7,7 @@ const ASSETS = [
   '/icon-512.png',
   '/cookie-consent.js',
   '/app.css',
+  '/theme-tokens.css',
   '/home.css?v=12',
   '/popup.js',
   '/pwa-install.js',
