@@ -20,6 +20,7 @@ pub mod achievements;
 pub mod admin;
 pub mod auth;
 pub mod bans;
+pub mod bell_sync;
 pub mod blog;
 pub mod casino;
 pub mod chat;

@@ -71,6 +71,8 @@ pub fn spawn(state: std::sync::Arc<crate::state::AppState>) {
     crate::workers_site::spawn(state.clone());
     // Step 13 batch 4 — VM usage sampling, purge, prune, uptime enforcement, session cleanup.
     crate::workers_vm::spawn(state.clone());
+    // Pull current bell schedules from the district school sites.
+    crate::routes::bell_sync::spawn(state.clone());
 
     // Ensure all official Matrix rooms on startup and sync staff roles across all rooms.
     {

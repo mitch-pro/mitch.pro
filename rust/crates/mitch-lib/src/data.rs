@@ -295,6 +295,26 @@ impl DataStore {
                         norm_email TEXT NOT NULL,
                         created_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS bell_published_periods (
+                        school TEXT NOT NULL,
+                        table_pos INTEGER NOT NULL,
+                        group_label TEXT NOT NULL,
+                        table_label TEXT NOT NULL,
+                        seq INTEGER NOT NULL,
+                        name TEXT NOT NULL,
+                        start_min INTEGER NOT NULL,
+                        end_min INTEGER NOT NULL,
+                        PRIMARY KEY (school, table_pos, seq)
+                    );
+                    CREATE TABLE IF NOT EXISTS bell_sync_status (
+                        school TEXT PRIMARY KEY,
+                        source_url TEXT NOT NULL,
+                        checked_at INTEGER NOT NULL,
+                        fetched_at INTEGER NOT NULL DEFAULT 0,
+                        ok INTEGER NOT NULL DEFAULT 0,
+                        error TEXT NOT NULL DEFAULT '',
+                        content_hash TEXT NOT NULL DEFAULT ''
+                    );
                     CREATE TABLE IF NOT EXISTS invite_codes (
                         email TEXT PRIMARY KEY,
                         code TEXT NOT NULL,

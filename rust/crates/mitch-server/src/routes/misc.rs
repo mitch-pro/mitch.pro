@@ -92,6 +92,17 @@ pub async fn handle(
         };
         return Some(crate::routes::dayboard::school_info(&school_key).await);
     }
+    if path == "/api/bell/published" && *method == Method::GET {
+        let school_key = _search
+            .strip_prefix('?')
+            .and_then(|query| {
+                url::form_urlencoded::parse(query.as_bytes())
+                    .find(|(k, _)| k == "school")
+                    .map(|(_, v)| v.to_string())
+            })
+            .unwrap_or_default();
+        return Some(crate::routes::bell_sync::published(state, &school_key).await);
+    }
     if path == "/api/bell/override" && *method == Method::GET {
         let override_val = state
             .store
