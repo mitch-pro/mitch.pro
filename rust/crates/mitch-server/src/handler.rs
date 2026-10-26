@@ -1770,6 +1770,7 @@ pub async fn handle(
                             } else {
                                 content
                             };
+                        let content = crate::inject::inject_companion(&content);
                         return Response::builder()
                             .status(StatusCode::OK)
                             .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")

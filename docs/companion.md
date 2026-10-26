@@ -25,6 +25,11 @@ subsystem — no `server.js` equivalent.
   original ask. The thing to actually avoid touching carelessly is the
   shared pipeline's *other* injected scripts, not whether this one script
   is listed there.)
+- Pages that bypass the shared pipeline get the widget through
+  `inject::inject_companion`: the Matrix SPA fallback (`/matrix/*` routes
+  served from `matrix/index.html`) and every error page built by
+  `errors.rs` (404, 403, 500, ...). Iframes and embedded game runtimes are
+  still excluded (the widget returns early when `window.top !== window.self`).
 - Admin-authored preset characters only: a name, a personality prompt, and
   one image per "mood." Authored at `/admin/companion/` (any admin/owner,
   gated by the existing global `/api/admin/*` auth).

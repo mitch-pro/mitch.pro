@@ -29,6 +29,17 @@ pub fn inject_presence(html: &str, page: Option<&str>) -> String {
     }
 }
 
+/// Adds the companion widget to a page that bypasses the main injection
+/// pipeline (the Matrix SPA fallback, error pages). The widget renders nothing
+/// unless the viewer has enabled it, so this is safe on every page.
+pub fn inject_companion(html: &str) -> String {
+    if html.contains("/companion-widget.js") {
+        return html.to_string();
+    }
+    let block = "<script src=\"/companion-widget.js?v=1\" defer></script>\n<link rel=\"stylesheet\" href=\"/companion-widget.css\">\n</head>";
+    html.replacen("</head>", block, 1)
+}
+
 /// `injectSharedHead(html)`.
 pub fn inject_shared_head(html: &str) -> String {
     let mut html = html.to_string();

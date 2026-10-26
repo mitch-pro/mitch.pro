@@ -6,9 +6,10 @@ use axum::http::header;
 use axum::response::Response;
 
 fn error_page(code: u16, title: &str, detail_html: &str) -> String {
-    format!(
+    let html = format!(
         "<!DOCTYPE html><html><head><meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>{code} — {title}</title>\n<style>\nbody{{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;\nbackground:#0e0e14;color:#bababa;font-family:system-ui,sans-serif;padding:2rem;}}\n.box{{text-align:center;max-width:420px;}}\n.code{{font-size:5rem;font-weight:800;line-height:1;color:#2a2a38;margin-bottom:.5rem;}}\nh1{{font-size:1.3rem;font-weight:700;color:#e8e6e3;margin:0 0 .75rem;}}\np{{font-size:.9rem;line-height:1.6;color:#888;margin:0 0 1.5rem;}}\np a{{color:#7c6aed;text-decoration:none;}}p a:hover{{text-decoration:underline;}}\ncode{{background:#1a1a24;padding:2px 6px;border-radius:4px;font-size:.85em;color:#a0a0c0;}}\n</style></head><body>\n<div class=\"box\"><div class=\"code\">{code}</div>\n<h1>{title}</h1><p>{detail_html}</p></div>\n</body></html>"
-    )
+    );
+    crate::inject::inject_companion(&html)
 }
 
 pub fn html_esc(v: &str) -> String {
