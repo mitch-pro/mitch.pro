@@ -7,6 +7,14 @@
 - Do not add obvious, AI-sounding disclaimer text — restating that virtual currency isn't real money, that a game has a house edge, or other self-evident statements nobody asked for. If a fact is genuinely load-bearing (e.g. a legal/safety disclosure), say it once, in the one place it belongs, in plain language — not as a tacked-on closing paragraph repeated per page.
 - Keep layouts focused on the page's function. Preserve users' chosen profile photos and equipped cosmetics when displaying their identities.
 
+## Light and dark mode
+
+- Always consider both dark and light mode for any UI change. Use the theme tokens (`--t-bg`, `--t-bg2`, `--t-fg`, `--t-fg2`, `--t-bd`, `--t-ac` from `app.css`/`theme.js`) instead of hardcoded colors, and load `/app.css` and `/app-shell.js` on every page so those tokens exist. Where a fixed color is unavoidable (status colors, solid buttons), check it for contrast in both modes (`html.theme-light` marks light mode).
+
+## Local testing
+
+- Run the local testing server on port 8080 whenever possible (`PORT=8080`). If 8080 is taken, say so and use the next free port instead of stopping the other process.
+
 ## Production server access
 
 - Never SSH into the production server on your own initiative, for any reason — not to check logs, not to "quickly" fix something, not because a deploy looks stuck or failed. This applies every single time, with no exceptions, regardless of how routine or low-risk the action seems.
