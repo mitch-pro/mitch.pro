@@ -205,17 +205,19 @@
   </header>
   <script>
     // The link target comes from data/site.json (served at /api/site-info);
-    // the button points at the "primary" domain.
+    // the button is labelled with the "primary" domain but links to the
+    // "alternate" one (falling back to primary when none is set).
     fetch('/api/site-info', { credentials: 'same-origin', cache: 'no-store' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (info) {
         if (!info) return;
-        var target = info.primary;
+        var label = info.primary;
+        var target = info.alternate || label;
         if (!target) return;
         var link = document.getElementById('powered-by-link');
         var name = document.getElementById('powered-by-name');
         link.href = target;
-        try { name.textContent = new URL(target).hostname; } catch (e) {}
+        try { if (label) name.textContent = new URL(label).hostname; } catch (e) {}
       })
       .catch(function () {});
   </script>
