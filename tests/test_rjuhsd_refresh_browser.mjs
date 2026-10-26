@@ -55,6 +55,7 @@ async function fixture(date, school = 'woodcreek', width = 1440, override = null
     }
     if (url.pathname === '/api/school-info') return json({ calendar_verified: true, stale: false, events: [{ date: '2026-10-30', title: 'Campus event' }, { date: '2026-12-17', title: 'Final exams' }] });
     if (url.pathname === '/api/bell/override') return json({ override });
+    if (url.pathname === '/api/bell/published') return json({ tables: [] });
     if (url.pathname === '/api/site-info') return json({ primary: 'https://mitch.pro', alternate: 'https://mitchdog.com' });
     if (url.pathname.startsWith('/api/')) return json({});
     if (url.hostname === 'api.open-meteo.com') return json({ current: { temperature_2m: 72, apparent_temperature: 71, weather_code: 0, wind_speed_10m: 4 }, daily: { time: ['2026-10-26'], weather_code: [0], temperature_2m_max: [75], temperature_2m_min: [52] } });
@@ -236,7 +237,7 @@ try {
     for (const width of [1440, 820, 390, 320]) {
       await page.setViewportSize({ width, height: 1000 });
       for (const mode of ['dark', 'light']) {
-        await page.evaluate(mode => window.__theme.apply(mode), mode);
+        await page.evaluate(mode => window.__siteTheme.setMode(mode), mode);
         await page.evaluate(() => { document.activeElement?.blur(); scrollTo(0, 0); });
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
         assert.equal(overflow, false, `${mode} layout overflows at ${width}px`);
@@ -260,8 +261,9 @@ try {
       }
     }
     assert.equal(await page.locator('script[type="application/ld+json"]').count(), 1);
+    const themeBefore = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
     await page.locator('#theme-btn').click();
-    assert.equal(await page.evaluate(() => document.documentElement.classList.contains('theme-light')), false, 'The visible theme control must change themes');
+    assert.notEqual(await page.evaluate(() => document.documentElement.getAttribute('data-theme')), themeBefore, 'The visible theme control must change themes');
     await page.locator('#study-timer-toggle').click();
     await page.clock.runFor(2000);
     assert.equal(await text(page, '#study-timer-clock'), '24:58');
@@ -291,7 +293,7 @@ try {
     assert.equal(await banner.locator('.mitch-pwa-copy span').innerText(), 'Add bell schedules to your home screen.');
     assert.equal(await banner.locator('.mitch-pwa-ico').count(), 0);
     for (const mode of ['dark', 'light']) {
-      await page.evaluate(value => window.__theme.apply(value), mode);
+      await page.evaluate(value => window.__siteTheme.setMode(value), mode);
       for (const width of [320, 390]) {
         await page.setViewportSize({ width, height: 1000 });
         const box = await banner.boundingBox();

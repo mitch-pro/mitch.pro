@@ -2,8 +2,7 @@
 
 The public school hub is `webserver/rjuhsd/index.html`. Its school-owned layout is
 in `webserver/rjuhsd-assets/refresh.css`; the older school stylesheets are no
-longer loaded by this page. Colors come from the shared site theme tokens (`--t-*`, set by `theme.js`), so the page follows the site palette and accent. The shared theme engine still saves the selected
-light/dark mode. The hub uses neutral surfaces and the selected campus's colors.
+longer loaded by this page. Colors come from the shared site theme (`/app.css` tokens plus `/site-theme.js`, the same files the main site uses), so the page follows the site's pink accent, any custom accent chosen in preferences, and the saved light/dark mode. The page no longer loads the legacy `theme.js` engine, and its theme button calls `window.__siteTheme.setMode`. The hub uses neutral surfaces and the selected campus's colors.
 No build or additional runtime dependency is needed.
 
 The "by" pill in the header links to the `primary` domain from `data/site.json`
@@ -13,9 +12,10 @@ background art.
 `webserver/bell/schedule.js` holds the published bell times;
 `webserver/rjuhsd-assets/calendar.js` resolves district breaks, special schedules,
 and official calendar events. `app.js` continues to consume `/api/school-info`
-and `/api/bell/override`. The lunch card also reads `/api/school-menu`; see
-[school lunch menus](school-lunch-menu.md). The dashboard does not
-publish new bell times.
+and `/api/bell/override`, and overlays regular-day times scraped from each
+school's own site (`/api/bell/published`; see [live bell schedules](bell-sync.md)).
+The lunch card also reads `/api/school-menu`; see
+[school lunch menus](school-lunch-menu.md).
 
 One Pacific-time clock updates the countdown every second. Timeline rows refresh
 at minute boundaries and their active progress updates with the same clock.
