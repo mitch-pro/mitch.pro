@@ -3,10 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#0d1015">
+  <meta name="color-scheme" content="light dark">
   <title>ChromeOS Fleet Controller · mitch.pro</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="/admin/vms/fleet/fleet.css?v=1">
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/admin/vms/fleet/fleet.css?v=2">
+  <script src="/app-shell.js" defer></script>
 </head>
 <body>
   <div class="fleet-shell">
@@ -24,7 +26,7 @@
           <span>Mouse Jiggler Active</span>
         </div>
         <button type="button" id="btn-toggle-jiggler">Pause Jiggler</button>
-        <button type="button" id="btn-toggle-mirror" style="background: rgba(168, 85, 247, 0.2); border-color: #a855f7; color: #d8b4fe;">🪞 Mirror Controls: OFF</button>
+        <button type="button" id="btn-toggle-mirror" class="mirror-toggle">🪞 Mirror Controls: OFF</button>
         <button type="button" id="btn-power-on-all" class="primary">Turn On All</button>
         <button type="button" id="btn-power-off-all" class="danger">Power Off All</button>
         <button type="button" id="btn-force-stop-all" class="danger" title="Force stop all running fleet VMs">Force Stop All</button>
@@ -33,6 +35,20 @@
         <button type="button" id="btn-refresh">Refresh</button>
       </div>
     </header>
+
+    <div id="passphrase-lock-box" class="passphrase-lock">
+      <div class="passphrase-lock-row">
+        <div>
+          <h2 id="lock-box-headline">Passphrase Verification Required</h2>
+          <p id="lock-box-desc">Enter your admin passphrase to control the fleet.</p>
+        </div>
+        <form id="passphrase-form">
+          <input type="password" id="admin-passphrase-input" placeholder="Admin passphrase..." autocomplete="current-password" required>
+          <button type="submit" id="admin-passphrase-btn" class="primary">Unlock</button>
+        </form>
+      </div>
+      <p class="form-status" id="passphrase-status" role="status"></p>
+    </div>
 
     <div class="status-bar">
       <div class="summary-counts">
@@ -66,7 +82,7 @@
         </div>
       </div>
       <div class="broadcast-status-indicator" id="broadcast-indicator">
-        <span class="jiggler-dot" id="mirror-dot" style="background: #a855f7;"></span>
+        <span class="jiggler-dot" id="mirror-dot"></span>
         <span id="mirror-status-text">Mirroring is OFF</span>
       </div>
       <div class="coords-display-pill" id="coords-display-pill" title="Click anywhere on a VM screen to inspect coordinates">
@@ -95,7 +111,7 @@
           <div class="coords-display-pill" id="single-coords-display" title="Coordinates in focused VM (click to set Broadcast target)">
             <span>📍 Coords: <strong id="single-coords-text">X: --, Y: --</strong></span>
           </div>
-          <button type="button" id="btn-single-toggle-mirror" style="background: rgba(168, 85, 247, 0.2); border-color: #a855f7; color: #d8b4fe;">🪞 Mirror Controls: OFF</button>
+          <button type="button" id="btn-single-toggle-mirror" class="mirror-toggle">🪞 Mirror Controls: OFF</button>
           <button type="button" id="btn-single-restart">Restart</button>
           <button type="button" id="btn-single-power" class="danger">Power Off</button>
           <button type="button" id="btn-single-delete" class="danger">Delete</button>
@@ -109,6 +125,6 @@
     </section>
   </div>
 
-  <script type="module" src="/admin/vms/fleet/fleet.js?v=1"></script>
+  <script type="module" src="/admin/vms/fleet/fleet.js?v=2"></script>
 </body>
 </html>

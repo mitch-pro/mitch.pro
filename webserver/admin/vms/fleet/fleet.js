@@ -13,7 +13,85 @@ import RFB from '/novnc/core/rfb.js';
     return h;
   }
 
-  async function api(url, body) {
+  // Admin passphrase gate: same flow as /admin/vms. A 403 with
+  // invalid_passphrase / passphrase_not_configured shows the lock box and the
+  // request is retried once after the passphrase is verified server-side.
+  let passphraseResolvers = [];
+
+  function showPassphraseLockBox(isNewSetup = false) {
+    const box = $('passphrase-lock-box');
+    if (!box) return;
+    box.style.display = 'block';
+    $('lock-box-headline').textContent = isNewSetup ? 'Set Admin Passphrase' : 'Passphrase Verification Required';
+    $('lock-box-desc').textContent = isNewSetup
+      ? 'Create a secure passphrase to protect all administrative actions.'
+      : 'Enter your admin passphrase to control the fleet.';
+    $('admin-passphrase-input').placeholder = isNewSetup ? 'Choose secure passphrase...' : 'Admin passphrase...';
+    $('admin-passphrase-btn').textContent = isNewSetup ? 'Set Passphrase' : 'Unlock';
+    $('admin-passphrase-input').value = '';
+    $('admin-passphrase-input').focus();
+    $('passphrase-status').textContent = '';
+    $('passphrase-status').className = 'form-status';
+  }
+
+  function hidePassphraseLockBox() {
+    const box = $('passphrase-lock-box');
+    if (box) box.style.display = 'none';
+  }
+
+  function waitForPassphrase(isNewSetup = false) {
+    // Don't re-render (and clear the input) if another request already opened the prompt.
+    if (!passphraseResolvers.length) showPassphraseLockBox(isNewSetup);
+    return new Promise((resolve, reject) => {
+      passphraseResolvers.push({ resolve, reject });
+    });
+  }
+
+  function setPassphraseStatus(message, type = '') {
+    const el = $('passphrase-status');
+    el.textContent = message;
+    el.className = `form-status ${type}`;
+  }
+
+  $('passphrase-form')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const input = $('admin-passphrase-input');
+    const pass = input.value.trim();
+    if (!pass) return;
+    const btn = $('admin-passphrase-btn');
+    btn.disabled = true;
+    setPassphraseStatus('Verifying passphrase...');
+    try {
+      const verifyRes = await fetch('/api/admin/passphrase-status', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: getAdminHeaders({ 'X-Admin-Passphrase': pass }),
+        body: JSON.stringify({ passphrase: pass })
+      });
+      const d = await verifyRes.json().catch(() => ({}));
+      if (verifyRes.ok && d.ok) {
+        sessionStorage.setItem('admin_passphrase', pass);
+        setPassphraseStatus('Passphrase verified.', 'success');
+        setTimeout(() => {
+          hidePassphraseLockBox();
+          const queue = passphraseResolvers;
+          passphraseResolvers = [];
+          if (queue.length) queue.forEach(p => p.resolve(pass));
+          else loadFleet();
+        }, 300);
+      } else {
+        sessionStorage.removeItem('admin_passphrase');
+        setPassphraseStatus(d.error === 'passphrase_too_short' ? 'Passphrase must be at least 4 characters.' : 'Incorrect admin passphrase. Try again.', 'error');
+        input.select();
+      }
+    } catch (err) {
+      setPassphraseStatus(err.message || 'Verification failed.', 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  async function api(url, body, allowPrompt = true) {
     const res = await fetch(url, {
       credentials: 'same-origin',
       cache: 'no-store',
@@ -24,6 +102,15 @@ import RFB from '/novnc/core/rfb.js';
     if (res.status === 401) {
       location.href = '/enroll/?next=' + encodeURIComponent(location.pathname);
       throw new Error('Sign in required.');
+    }
+    if (res.status === 403 && (data.error === 'invalid_passphrase' || data.error === 'passphrase_not_configured')) {
+      if (allowPrompt) {
+        sessionStorage.removeItem('admin_passphrase');
+        // Concurrent requests (e.g. the staggered desktop-session queue) share one prompt.
+        await waitForPassphrase(data.error === 'passphrase_not_configured');
+        return api(url, body, false);
+      }
+      throw new Error('Admin passphrase verification required.');
     }
     if (!res.ok) {
       throw new Error(data.message || data.error || 'Server request failed.');
