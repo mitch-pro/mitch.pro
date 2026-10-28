@@ -544,6 +544,24 @@ impl DataStore {
                 [],
             )?;
         }
+        let has_vm_last_active = conn
+            .prepare("PRAGMA table_info(virtual_machines)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+            .iter()
+            .any(|name| name == "last_active_at");
+        if !has_vm_last_active {
+            conn.execute(
+                "ALTER TABLE virtual_machines ADD COLUMN last_active_at INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+            // Existing computers start their 30-day inactivity clock at
+            // migration time, so deploying this never deletes anything at once.
+            conn.execute(
+                "UPDATE virtual_machines SET last_active_at = CAST(strftime('%s','now') AS INTEGER) * 1000",
+                [],
+            )?;
+        }
         let has_companion_allow_coin_requests = conn
             .prepare("PRAGMA table_info(companion_user_settings)")?
             .query_map([], |row| row.get::<_, String>(1))?

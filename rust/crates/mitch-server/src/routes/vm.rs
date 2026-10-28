@@ -1276,6 +1276,42 @@ pub(crate) fn is_eligible_for_free_vm(state: &AppState, email: &str, is_admin: b
 }
 
 /// `getRunningNonAdminVmResources()` (server.js:27515-27573).
+/// Starts accepted by Proxmox that don't show as `running` yet, keyed by vmid:
+/// (cores, memory MB, accepted-at ms). Without these, a burst of start
+/// requests all read the same "currently running" total and every one of them
+/// passes the capacity check. Entries drop once the guest is seen running or
+/// after `PENDING_START_TTL_MS`.
+static PENDING_STARTS: std::sync::Mutex<Option<std::collections::HashMap<i64, (f64, f64, u64)>>> =
+    std::sync::Mutex::new(None);
+const PENDING_START_TTL_MS: u64 = 120_000;
+
+/// Reserves a VM's resources against the capacity cap until it is running.
+pub(crate) fn reserve_pending_start(vmid: f64, cores: f64, memory_mb: f64) {
+    if !vmid.is_finite() {
+        return;
+    }
+    PENDING_STARTS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get_or_insert_with(Default::default)
+        .insert(vmid as i64, (cores, memory_mb, now_ms() as u64));
+}
+
+/// Resources reserved by starts not yet visible as running; prunes entries
+/// that are expired or whose guest is already counted as running.
+fn pending_start_totals(running_vmids: &std::collections::HashSet<i64>) -> (f64, f64, f64) {
+    let now = now_ms() as u64;
+    let mut guard = PENDING_STARTS.lock().unwrap_or_else(|e| e.into_inner());
+    let map = guard.get_or_insert_with(Default::default);
+    map.retain(|vmid, (_, _, at)| {
+        now.saturating_sub(*at) < PENDING_START_TTL_MS && !running_vmids.contains(vmid)
+    });
+    map.values()
+        .fold((0.0, 0.0, 0.0), |(n, c, m), (cores, mem, _)| {
+            (n + 1.0, c + cores, m + mem)
+        })
+}
+
 pub(crate) async fn get_running_non_admin_vm_resources(state: &AppState) -> Value {
     if std::env::var("NODE_ENV").unwrap_or_default() == "test" {
         let mock = load_vm_json(state, "test_vm_mock.json", Value::Null);
@@ -1308,6 +1344,7 @@ pub(crate) async fn get_running_non_admin_vm_resources(state: &AppState) -> Valu
             let mut count = 0.0;
             let mut cores = 0.0;
             let mut memory_mb = 0.0;
+            let mut running_vmids = std::collections::HashSet::new();
             for guest in &guests {
                 let status = jsval::str_or(guest.get("status"), "");
                 if jsval::truthy(&guest["template"]) || (status != "running" && status != "paused")
@@ -1315,6 +1352,9 @@ pub(crate) async fn get_running_non_admin_vm_resources(state: &AppState) -> Valu
                     continue;
                 }
                 let vmid = guest.get("vmid").and_then(jsval::number);
+                if let Some(v) = vmid {
+                    running_vmids.insert(v as i64);
+                }
                 let record = vmid.and_then(|v| vmlib::get_virtual_machine_by_vmid(&state.store, v));
                 let record_json = record.as_ref().map(|r| r.to_json());
                 let mut owner_email = record_json
@@ -1369,7 +1409,8 @@ pub(crate) async fn get_running_non_admin_vm_resources(state: &AppState) -> Valu
                     VM_DEFAULT_MEMORY_MB,
                 );
             }
-            json!({ "count": count, "cores": cores, "memoryMb": memory_mb })
+            let (p_count, p_cores, p_mem) = pending_start_totals(&running_vmids);
+            json!({ "count": count + p_count, "cores": cores + p_cores, "memoryMb": memory_mb + p_mem })
         }
         Err(err) => {
             eprintln!(
@@ -4813,7 +4854,18 @@ pub(crate) async fn handle(
                         .get("memoryMb")
                         .and_then(jsval::number)
                         .unwrap_or(VM_DEFAULT_MEMORY_MB);
-                    let cap_check = can_accommodate_vm_resources(state, req_cores, req_mem).await;
+                    // Admin-owned computers aren't counted in the cap (see
+                    // get_running_non_admin_vm_resources), so they skip it.
+                    // Everyone else is held to it, including admins starting
+                    // someone else's computer: an admin must not be able to
+                    // power on every customer VM past the host's capacity.
+                    let counts_against_cap = record_owner.is_empty()
+                        || !mitch_lib::auth::is_admin_email(&state.store, &record_owner);
+                    let cap_check = if counts_against_cap {
+                        can_accommodate_vm_resources(state, req_cores, req_mem).await
+                    } else {
+                        json!({ "ok": true })
+                    };
                     if !cap_check.get("ok").map(jsval::truthy).unwrap_or(false) {
                         let vm_name = record
                             .get("friendlyName")
@@ -4830,15 +4882,13 @@ pub(crate) async fn handle(
                                 "memoryMb": cap_check.get("wouldMemoryMb"),
                             }),
                         );
-                        if !actor.is_admin {
-                            return Some(json_response(
-                                409,
-                                json!({
-                                    "error": format!("Server capacity reached: a maximum of {VM_MAX_CONCURRENT_RUNNING} computers can run at once. Please try again later."),
-                                    "code": "capacity_limit_reached",
-                                }),
-                            ));
-                        }
+                        return Some(json_response(
+                            409,
+                            json!({
+                                "error": format!("Server capacity reached: a maximum of {VM_MAX_CONCURRENT_RUNNING} computers can run at once. Please try again later."),
+                                "code": "capacity_limit_reached",
+                            }),
+                        ));
                     }
                 }
             }
@@ -4891,6 +4941,23 @@ pub(crate) async fn handle(
             {
                 Ok(task) => {
                     if action == "start" || action == "restart" {
+                        if actor.email.eq_ignore_ascii_case(&record_owner) {
+                            vmlib::touch_vm_last_active(&state.store, comp_id);
+                        }
+                        reserve_pending_start(
+                            record
+                                .get("vmid")
+                                .and_then(jsval::number)
+                                .unwrap_or(f64::NAN),
+                            record
+                                .get("cpuCores")
+                                .and_then(jsval::number)
+                                .unwrap_or(VM_DEFAULT_CPU_CORES),
+                            record
+                                .get("memoryMb")
+                                .and_then(jsval::number)
+                                .unwrap_or(VM_DEFAULT_MEMORY_MB),
+                        );
                         schedule_desktop_setup(state, &record, true);
                     }
                     clear_vm_lease(state, comp_id);
@@ -5119,6 +5186,9 @@ pub(crate) async fn handle(
                         );
                     }
 
+                    if actor.email.eq_ignore_ascii_case(&record_owner) {
+                        vmlib::touch_vm_last_active(&state.store, comp_id);
+                    }
                     vm_audit(
                         state,
                         &actor.email,

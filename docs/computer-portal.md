@@ -226,3 +226,9 @@ VM: only a real owner, or that account's own session, can touch it; no
 co-owner or other admin can, unlike every other VM on the site. It's also
 excluded from the leaderboard (`ranked_players`), the same way tester
 accounts are.
+
+## Start capacity cap and inactivity deletion
+
+**Capacity cap on starts.** Starting or restarting a stopped computer through `/api/vm/computers/<id>/power` is checked against the fleet cap (`VM_FLEET_MAX_CORES` / `VM_FLEET_MAX_MEMORY_MB`, via `can_accommodate_vm_resources`) and returns 409 `capacity_limit_reached` when it would exceed it. The cap applies to admins too, so one admin cannot power on every customer VM. Admin-owned computers are not counted in the cap and skip the check. Starts Proxmox has accepted but that are not yet `running` are reserved in memory (`reserve_pending_start`, 2-minute TTL, dropped once the guest shows as running), so a burst of requests cannot all read the same running total.
+
+**30-day inactivity deletion.** `virtual_machines.last_active_at` (ms) is set when the *owner* opens the desktop or starts the computer; admin actions on someone else's computer do not reset it. `delete_inactive_vms_worker` (`workers_vm.rs`, hourly, first run an hour after boot) deletes assigned computers whose `MAX(last_active_at, created_at)` is older than 30 days. It skips keep-alive computers, computers owned by owners/co-owners/admins, owner-locked accounts, any computer not confirmed `stopped` by Proxmox, and any with an open desktop socket. It destroys the guest first and keeps the record if Proxmox refuses. Each outcome is audited as `VM_DELETED_INACTIVE`. The migration that adds the column starts every existing computer's clock at deploy time.

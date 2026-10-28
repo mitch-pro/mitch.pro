@@ -67,6 +67,74 @@ pub(crate) async fn purge_expired_vms_worker(state: &AppState) {
     }
 }
 
+/// Days without use after which an assigned computer is deleted.
+const VM_INACTIVE_DELETE_DAYS: f64 = 30.0;
+
+/// Deletes assigned computers nobody has opened or started in 30 days
+/// (`virtual_machines.last_active_at`, falling back to `created_at`).
+///
+/// Never deletes: keep-alive computers (filtered in SQL), computers owned by
+/// an owner/co-owner/admin, owner-locked accounts, computers that are running
+/// or have an open desktop socket, or anything while Proxmox is unreachable
+/// (so a failed lookup can't be mistaken for "not running"). Deletion mirrors
+/// the admin delete route: destroy the guest first and keep the record if
+/// Proxmox refuses, then drop the record, credentials and connections.
+pub(crate) async fn delete_inactive_vms_worker(state: &AppState) {
+    let desktop = crate::proxmox_desktop::desktop();
+    if !desktop.configured() {
+        return;
+    }
+    let cutoff = now_ms() as f64 - VM_INACTIVE_DELETE_DAYS * 24.0 * 3600.0 * 1000.0;
+    for record in vmlib::list_inactive_vms(&state.store, cutoff) {
+        if mitch_lib::auth::is_admin_email(&state.store, &record.owner_email)
+            || mitch_lib::auth::is_vm_owner_locked(&state.store, &record.owner_email)
+        {
+            continue;
+        }
+        let rec_json = record.to_json();
+        // Only a confirmed "stopped" guest is deleted.
+        match desktop.get_status(&rec_json).await {
+            Ok(rt) if jsval::str_or(rt.get("state"), "") == "stopped" => {}
+            _ => continue,
+        }
+        let has_open_socket = state
+            .vm_desktop_sockets
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .any(|c| jsval::str_or(c.data.get("recordId"), "") == record.id);
+        if has_open_socket {
+            continue;
+        }
+        println!(
+            "[vm-inactive-delete] Deleting VM {} (VMID {}) owned by {}: unused for {}+ days",
+            record.id, record.vmid as i64, record.owner_email, VM_INACTIVE_DELETE_DAYS as i64
+        );
+        if let Err(e) = desktop.delete_guest(&rec_json, false).await {
+            crate::routes::vm::vm_audit(
+                state,
+                "system",
+                Some(&rec_json),
+                "VM_DELETED_INACTIVE",
+                false,
+                Some(&json!({ "error": e.code })),
+            );
+            continue;
+        }
+        vmlib::delete_virtual_machine(&state.store, &record.id);
+        crate::routes::admin::vm::remove_vm_desktop_credentials(state, &record.id);
+        crate::routes::vm::revoke_vm_desktop_connections(state, &record.id);
+        crate::routes::vm::vm_audit(
+            state,
+            "system",
+            Some(&rec_json),
+            "VM_DELETED_INACTIVE",
+            true,
+            Some(&json!({ "inactiveDays": VM_INACTIVE_DELETE_DAYS })),
+        );
+    }
+}
+
 /// `pruneInactiveFreeVmsWorker()` (server.js:28494-28511) — tears down ephemeral
 /// free VMs inactive for > 15m or alive for > 1h.
 pub(crate) async fn prune_inactive_free_vms_worker(state: &AppState) {
@@ -543,6 +611,20 @@ pub fn spawn(state: Arc<AppState>) {
             loop {
                 interval.tick().await;
                 purge_expired_vms_worker(&state).await;
+            }
+        });
+    }
+
+    // Inactive-computer deletion — hourly, first run an hour after boot so a
+    // deploy never deletes anything immediately.
+    {
+        let state = Arc::clone(&state);
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(3600));
+            interval.tick().await;
+            loop {
+                interval.tick().await;
+                delete_inactive_vms_worker(&state).await;
             }
         });
     }

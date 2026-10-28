@@ -308,6 +308,34 @@ pub fn set_vm_keep_alive(store: &DataStore, id: &str, enabled: bool) -> bool {
     result.map(|n| n > 0).unwrap_or(false)
 }
 
+/// Records that a person used this computer (opened its desktop or started
+/// it). Drives the 30-day inactivity deletion; see `list_inactive_vms`.
+pub fn touch_vm_last_active(store: &DataStore, id: &str) {
+    let conn = store.conn();
+    let _ = conn.execute(
+        "UPDATE virtual_machines SET last_active_at = ?1 WHERE id = ?2",
+        rusqlite::params![now_millis(), id],
+    );
+}
+
+/// Assigned computers with no recorded use since `cutoff_ms`. A computer that
+/// has never been used falls back to `created_at`, so a fresh one is not
+/// deleted before its owner has had 30 days to open it. Keep-alive computers
+/// are excluded.
+pub fn list_inactive_vms(store: &DataStore, cutoff_ms: f64) -> Vec<VmRecord> {
+    let conn = store.conn();
+    let Ok(mut stmt) = conn.prepare(
+        "SELECT * FROM virtual_machines
+         WHERE keep_alive = 0 AND status != 'unassigned'
+           AND MAX(last_active_at, created_at) < ?1",
+    ) else {
+        return Vec::new();
+    };
+    stmt.query_map([cutoff_ms], vm_row_to_record)
+        .map(|rows| rows.flatten().collect())
+        .unwrap_or_default()
+}
+
 /// `deleteVirtualMachine(id)` (data_store.js:306-311) — deletes by id OR by
 /// numeric vmid (`Number(id) || -1` when the id is not a number).
 pub fn delete_virtual_machine(store: &DataStore, id: &str) -> bool {
@@ -924,6 +952,24 @@ mod tests {
             "status": "assigned",
             "createdAt": 1_700_000_000_000.0,
         })
+    }
+
+    #[test]
+    fn inactive_listing_uses_last_active_and_skips_keep_alive() {
+        let (dir, store) = test_store();
+        upsert_virtual_machine(&store, &sample("old", 301.0)).unwrap();
+        upsert_virtual_machine(&store, &sample("recent", 302.0)).unwrap();
+        upsert_virtual_machine(&store, &sample("pinned", 303.0)).unwrap();
+        set_vm_keep_alive(&store, "pinned", true);
+        // All three were created long ago; only "recent" has been used since.
+        touch_vm_last_active(&store, "recent");
+        let cutoff = now_millis() as f64 - 30.0 * 24.0 * 3600.0 * 1000.0;
+        let ids: Vec<String> = list_inactive_vms(&store, cutoff)
+            .into_iter()
+            .map(|r| r.id)
+            .collect();
+        assert_eq!(ids, vec!["old".to_string()]);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
