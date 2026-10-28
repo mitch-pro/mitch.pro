@@ -1281,8 +1281,8 @@ pub(crate) fn is_eligible_for_free_vm(state: &AppState, email: &str, is_admin: b
 /// requests all read the same "currently running" total and every one of them
 /// passes the capacity check. Entries drop once the guest is seen running or
 /// after `PENDING_START_TTL_MS`.
-static PENDING_STARTS: std::sync::Mutex<Option<std::collections::HashMap<i64, (f64, f64, u64)>>> =
-    std::sync::Mutex::new(None);
+type PendingStarts = std::collections::HashMap<i64, (f64, f64, u64)>;
+static PENDING_STARTS: std::sync::Mutex<Option<PendingStarts>> = std::sync::Mutex::new(None);
 const PENDING_START_TTL_MS: u64 = 120_000;
 
 /// Reserves a VM's resources against the capacity cap until it is running.
