@@ -639,8 +639,11 @@ fn set_admin(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response {
     let target_raw = super::resolve_admin_target(state, &target_raw);
     let target = mitch_lib::auth::normalize_email(&target_raw);
     let active = body.get("active").and_then(|v| v.as_bool()) == Some(true);
-    if !active && mitch_lib::auth::is_owner_email(&state.store, &target) {
-        return json_response(403, json!({ "error": "Cannot delete or demote the owner" }));
+    if mitch_lib::auth::is_protected_owner_email(&state.store, &target) {
+        return json_response(
+            403,
+            json!({ "error": "Owner and co-owner roles are protected" }),
+        );
     }
     let admins_file = state.cfg.base_dir.join("data/admins.json");
     let mut doc = state.store.read_document(&admins_file, json!({}));
@@ -701,10 +704,10 @@ fn set_co_owner(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response
     }
     let target_raw = super::resolve_admin_target(state, &target_raw);
     let target = mitch_lib::auth::normalize_email(&target_raw);
-    if mitch_lib::auth::is_owner_email(&state.store, &target) {
+    if mitch_lib::auth::is_protected_owner_email(&state.store, &target) {
         return json_response(
             403,
-            json!({ "error": "Owner cannot be modified as a co-owner" }),
+            json!({ "error": "Owner and co-owner roles are protected" }),
         );
     }
     let active = body.get("active").and_then(|v| v.as_bool()) == Some(true);
@@ -2169,6 +2172,94 @@ mod tests {
             sid,
             ip: "192.0.2.1".into(),
         }
+    }
+
+    #[tokio::test]
+    async fn owner_access_mutations_are_rejected_without_touching_passphrases() {
+        use mitch_lib::auth::{normalize_email, PROTECTED_CO_OWNER_EMAIL};
+        let (state, dir) = ban_test_state();
+        let owner = ban_test_ctx(&state, "owner@example.com");
+        let co_owner = ban_test_ctx(&state, PROTECTED_CO_OWNER_EMAIL);
+        let headers = HeaderMap::new();
+        let before_roles = state
+            .store
+            .read_document(&dir.join("data/admins.json"), json!({}));
+        // Sentinel hashes verify byte-for-byte preservation; no real credentials.
+        let before_passphrases = json!({
+            "owner@example.com":{"hash":"unchanged-owner-fixture","updatedAt":1},
+            normalize_email(PROTECTED_CO_OWNER_EMAIL):{"hash":"unchanged-coowner-fixture","updatedAt":2}
+        });
+        state
+            .store
+            .write_document(&dir.join("data/admin_passphrase.json"), &before_passphrases)
+            .unwrap();
+        let fallback_only =
+            json!({"admin@mitch.pro":{"hash":mitch_lib::crypto::argon2_hash("fixture-fallback")}});
+        state
+            .store
+            .write_document(&dir.join("data/admin_passphrase.json"), &fallback_only)
+            .unwrap();
+        assert!(!mitch_lib::admin::verify_admin_passphrase_raw(
+            &state.store,
+            &state.id_secret,
+            &state.cfg.data_dir,
+            &co_owner.sid,
+            "fixture-fallback"
+        ));
+        assert!(mitch_lib::admin::verify_admin_passphrase_raw(
+            &state.store,
+            &state.id_secret,
+            &state.cfg.data_dir,
+            &owner.sid,
+            "fixture-fallback"
+        ));
+        state
+            .store
+            .write_document(&dir.join("data/admin_passphrase.json"), &before_passphrases)
+            .unwrap();
+        for target in ["owner@example.com", PROTECTED_CO_OWNER_EMAIL] {
+            for active in [false, true] {
+                let body = json!({"email":target,"active":active});
+                assert_eq!(set_admin(&state, &body, &owner).status(), 403);
+                assert_eq!(set_co_owner(&state, &body, &owner).status(), 403);
+            }
+            assert_eq!(
+                apply_account_ban(&state, target, "fixture", None, "owner@example.com")
+                    .unwrap_err()
+                    .0,
+                403
+            );
+            for actor in [&owner, &co_owner] {
+                let response = super::super::legacy::handle(
+                    &state,
+                    &Method::POST,
+                    "/api/admin/reset-other-passphrase",
+                    &headers,
+                    "",
+                    &json!({"targetEmail":target,"newPassphrase":"fixture-only"}),
+                    actor,
+                )
+                .await
+                .unwrap();
+                assert_eq!(response.status(), 403);
+            }
+            let response = super::super::accounts::handle(&state, &Method::POST,
+                "/api/admin/owner-accounts", &headers, "",
+                &json!({"action":"remove-registrations","emails":[target],"confirmation":"REMOVE 1 REGISTRATIONS"}), &owner).unwrap();
+            assert_eq!(response.status(), 403);
+        }
+        assert_eq!(
+            state
+                .store
+                .read_document(&dir.join("data/admins.json"), json!({})),
+            before_roles
+        );
+        assert_eq!(
+            mitch_lib::admin::load_admin_passphrase(&state.store, &state.cfg.data_dir),
+            before_passphrases
+        );
+        drop(state);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

@@ -236,6 +236,12 @@ pub async fn handle(
                 json!({ "error": "target_user_is_not_an_admin" }),
             ));
         }
+        if mitch_lib::auth::is_protected_owner_email(&state.store, target_email) {
+            return Some(json_response(
+                403,
+                json!({ "error": "Owner and co-owner passphrases can only be changed by their own account." }),
+            ));
+        }
         let target_norm = mitch_lib::auth::normalize_email(target_email);
         mitch_lib::admin::save_admin_passphrase_for_user(
             &state.store,

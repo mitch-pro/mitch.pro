@@ -530,20 +530,18 @@ pub(crate) fn vm_same_origin_request(headers: &HeaderMap) -> bool {
 /// canAccessVmRecord with the plain `isAdminEmail` option (no admin-grant
 /// requirement) and owner bypass.
 pub(crate) fn vm_record_allowed_for_actor(state: &AppState, record: &Value, actor: &Value) -> bool {
+    let record_owner = jsval::str_or(record.get("ownerEmail"), "");
+    let actor_email = jsval::str_or(actor.get("email"), "");
+    // Check the target before role bypasses: owners cannot enter one another's
+    // computers. The test persona retains its existing owner-only exception.
+    if !mitch_lib::auth::owner_vm_access_allowed(&state.store, &actor_email, &record_owner) {
+        return false;
+    }
     if actor.get("isOwner").map(jsval::truthy).unwrap_or(false) {
         return true;
     }
-    let record_owner = jsval::str_or(record.get("ownerEmail"), "");
-    let actor_email = jsval::str_or(actor.get("email"), "");
-
-    // If the VM belongs to a primary/root site owner, or to the owner's
-    // test-persona account, ONLY a real owner or that account's own
-    // session can access it. Co-owners and other admins CANNOT access
-    // it, unlike every other VM.
     if mitch_lib::auth::is_vm_owner_locked(&state.store, &record_owner) {
-        return !actor_email.is_empty()
-            && (actor_email.to_lowercase() == record_owner.to_lowercase()
-                || mitch_lib::auth::is_owner_email(&state.store, &actor_email));
+        return true;
     }
 
     if actor.get("isAdmin").map(jsval::truthy).unwrap_or(false) {
@@ -5316,6 +5314,26 @@ mod tests {
             &state,
             &owner_record,
             &json!({"email":"co-owner@example.com","isAdmin":true,"isOwner":false})
+        ));
+        let co_owner_record = json!({
+            "id":"coowner-fixture",
+            "ownerEmail":mitch_lib::auth::PROTECTED_CO_OWNER_EMAIL,
+            "status":"assigned",
+        });
+        assert!(!vm_record_allowed_for_actor(
+            &state,
+            &co_owner_record,
+            &json!({"email":"admin@mitch.pro","isAdmin":true,"isOwner":true})
+        ));
+        assert!(vm_record_allowed_for_actor(
+            &state,
+            &co_owner_record,
+            &json!({"email":mitch_lib::auth::PROTECTED_CO_OWNER_EMAIL,"isAdmin":true,"isOwner":false})
+        ));
+        assert!(!vm_record_allowed_for_actor(
+            &state,
+            &owner_record,
+            &json!({"email":mitch_lib::auth::PROTECTED_CO_OWNER_EMAIL,"isAdmin":true,"isOwner":true})
         ));
         // The owner's test-persona account gets the same lockout as a real
         // owner's own VM, even though its own email isn't itself an owner

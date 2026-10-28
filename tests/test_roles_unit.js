@@ -37,13 +37,8 @@ function siteAdminEmails(config) {
 }
 
 function canModifyRole(actorConfig, actorEmail, targetConfig, targetEmail) {
-  // Only primary owners can modify owner/co-owner roles or demote owners
-  const actorIsOwner = isOwnerEmail(actorConfig, actorEmail);
-  const targetIsOwner = isOwnerEmail(targetConfig, targetEmail);
-  if (targetIsOwner && !actorIsOwner) {
-    return false;
-  }
-  return actorIsOwner;
+  const protectedTarget = isOwnerEmail(targetConfig, targetEmail) || isCoOwnerEmail(targetConfig, targetEmail);
+  return isOwnerEmail(actorConfig, actorEmail) && !protectedTarget;
 }
 
 // 1. Dynamic role resolution with arbitrary, mock test identities
@@ -88,7 +83,7 @@ assert.equal(siteAdmins.includes(normalizeEmail(regularUser)), false);
 // Role hierarchy & mutation protection: Co-owners or admins cannot demote/delete owners
 assert.equal(canModifyRole(dynamicConfig, coOwner, dynamicConfig, owner), false, 'Co-owners cannot modify or delete owners');
 assert.equal(canModifyRole(dynamicConfig, admin, dynamicConfig, owner), false, 'Admins cannot modify or delete owners');
-assert.equal(canModifyRole(dynamicConfig, owner, dynamicConfig, coOwner), true, 'Owners can modify co-owners');
+assert.equal(canModifyRole(dynamicConfig, owner, dynamicConfig, coOwner), false, 'Owners cannot modify co-owners');
 assert.equal(canModifyRole(dynamicConfig, owner, dynamicConfig, admin), true, 'Owners can modify admins');
 
 console.log('Role unit tests passed (no hardcoded credentials required).');

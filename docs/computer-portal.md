@@ -219,10 +219,10 @@ To support automated batch testing and owner workflows, an owner-exclusive 24-ma
 
 `newaccount123@student.rjuhsd.us` (`mitch_lib::auth::OWNER_TEST_ACCOUNT_EMAIL`)
 is a real account the owner uses to test the student experience, not a
-real student. `is_vm_owner_locked` (the single shared check behind every
-"can an admin touch this VM" gate — desktop access, reassign, unassign,
-delete, resource edits) treats its VM exactly like a primary owner's own
-VM: only a real owner, or that account's own session, can touch it; no
-co-owner or other admin can, unlike every other VM on the site. It's also
+real student. `owner_vm_access_allowed` permits only a primary owner or that
+account's own session to access its VM; co-owners and other admins cannot.
+Primary owners' and co-owners' personal VMs are private to the specific owning
+account, including desktop credentials, reassignment, deletion, and resource
+edits. See `docs/admin-panel.md` for the shared target restrictions. It's also
 excluded from the leaderboard (`ranked_players`), the same way tester
 accounts are.
