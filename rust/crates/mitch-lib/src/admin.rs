@@ -101,8 +101,7 @@ pub fn save_admin_passphrase_for_user(
 }
 
 /// `verifyAdminPassphraseRaw(sid, passphrase)` — per-user hash with the
-/// admin@mitch.pro fallback for non-co-owners; argon2 PHC verify.
-/// Co-owners require their own entry. Returns false on any failure.
+/// admin@mitch.pro fallback; argon2 PHC verify. Returns false on any failure.
 pub fn verify_admin_passphrase_raw(
     store: &DataStore,
     id_secret: &[u8],
@@ -120,9 +119,7 @@ pub fn verify_admin_passphrase_raw(
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
-    // A co-owner must use their own passphrase, never a primary owner's
-    // legacy fallback. This does not rewrite any stored credential.
-    if hash.is_empty() && !crate::auth::is_co_owner_email(store, &norm) {
+    if hash.is_empty() {
         hash = data
             .get("admin@mitch.pro")
             .and_then(|e| e.get("hash"))

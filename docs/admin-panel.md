@@ -51,35 +51,6 @@ After building the Rust server, `node tests/test_admin_modernization.mjs` runs
 local API and responsive browser regressions with a fake HTTPS Proxmox service.
 It does not contact production or invoke delivery endpoints.
 
-## Protected owner access
-
-Primary owners keep their existing root role. Co-owners retain broad admin
-access without becoming primary owners. The designated co-owner in
-`auth::PROTECTED_CO_OWNER_EMAIL` is always included when resolving co-owner
-membership, including when the editable `admins.json` list is empty. Identity
-comparison uses the site's existing email normalization; this grants a role only
-to an authenticated account and does not create a login or bypass authentication.
-
-`auth::is_protected_owner_email` covers both roles. Administrative role changes,
-registration deletion, and resetting another account's admin passphrase reject
-protected targets before writing. Audit reversals use the same role mutation
-functions and cannot bypass this restriction. Existing passphrases are untouched;
-owners can still change their own passphrase through the authenticated flow.
-Co-owners require their own passphrase entry and cannot use the legacy primary
-owner fallback. Initial passphrase setup remains private runtime data and must never be embedded
-in source, documentation, fixtures, or deployment logs.
-
-`auth::owner_vm_access_allowed` checks the target before any owner/admin bypass.
-Each primary owner and co-owner can access their own private computer; another
-owner cannot enter it, reassign it, remove it, change its resources, or view or
-replace its desktop credentials. Ordinary user VMs keep existing staff access.
-The original owner's test persona retains its primary-owner-only exception.
-
-The policy in `AGENTS.md` also requires independent approval by both affected
-owners before future AI-assisted ownership changes. These application checks do
-not prevent a repository or host administrator from replacing the running code;
-this change does not configure GitHub branch protection or hosting account roles.
-
 ## Quiet deployment
 
 A push whose head commit includes `[quiet]` skips the AI push-summary notification

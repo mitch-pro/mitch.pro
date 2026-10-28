@@ -70,10 +70,6 @@ pub const DEV_TEST_EMAIL: &str = "admin@mitch.pro";
 /// add a bypass for this email anywhere, including in new admin
 /// endpoints that don't yet call it.
 pub const OWNER_TEST_ACCOUNT_EMAIL: &str = "newaccount123@student.rjuhsd.us";
-/// Co-owner explicitly designated by the site owners. This is a public role
-/// identity, never a credential. Keep membership independent of editable staff
-/// configuration so an administrator cannot remove this owner's access.
-pub const PROTECTED_CO_OWNER_EMAIL: &str = "tyler.thompson1@student.rjuhsd.us";
 pub const WHITELISTED_IPS: &[&str] = &["66.60.183.124"];
 
 /// `normalizeEmail(email)` — server.js:2054.
@@ -1316,11 +1312,15 @@ pub fn owner_member_emails(store: &DataStore) -> Vec<String> {
     load_admin_config(store).owners
 }
 
-/// Configured co-owners plus the protected, owner-designated co-owner.
+/// `coOwnerMemberEmails()` — loaded dynamically from data/admins.json["coOwners"].
 pub fn co_owner_member_emails(store: &DataStore) -> Vec<String> {
-    let mut emails = load_admin_config(store).co_owners;
-    emails.push(PROTECTED_CO_OWNER_EMAIL.to_string());
-    dedup_normalized(emails)
+    dedup_normalized(
+        load_admin_config(store)
+            .co_owners
+            .into_iter()
+            .filter(|e| !e.is_empty())
+            .collect(),
+    )
 }
 
 /// `moderatorEmails()` (6160) — `loadJson(MODERATORS_FILE, [])`, a bare array.
@@ -1378,37 +1378,19 @@ pub fn is_owner_email(store: &DataStore, email: &str) -> bool {
         .any(|o| normalize_email(o) == norm)
 }
 
-/// Owners and co-owners cannot be targeted by administrative credential,
-/// registration, or role changes, including changes by another owner.
-pub fn is_protected_owner_email(store: &DataStore, email: &str) -> bool {
-    is_owner_email(store, email) || is_co_owner_email(store, email)
-}
-
-/// Administrative VM access must preserve each owner's private computers.
-/// This is a target restriction, not an authorization grant: callers still
-/// require a valid session and the appropriate role. The original owner's
-/// test persona keeps its existing primary-owner-only exception.
-pub fn owner_vm_access_allowed(store: &DataStore, actor: &str, target: &str) -> bool {
-    let actor = normalize_email(actor);
-    let target = normalize_email(target);
-    if is_protected_owner_email(store, &target) {
-        return !actor.is_empty() && actor == target;
-    }
-    if target == OWNER_TEST_ACCOUNT_EMAIL {
-        return actor == target || is_owner_email(store, &actor);
-    }
-    true
-}
-
-/// Marks owner, co-owner, and owner-test VMs as private. Use
-/// [`owner_vm_access_allowed`] to check the actor without granting a blanket
-/// primary-owner bypass for another owner's computer.
+/// Whether a VM `owner_email` should be locked to "a real owner, or that
+/// exact account, only" — no co-owner or other admin bypass. True for a
+/// primary owner's own VM, and for [`OWNER_TEST_ACCOUNT_EMAIL`]'s (a real
+/// account, not a real student, that the owner uses to test the student
+/// experience — it isn't itself an owner email, so it needs this called
+/// out explicitly). Every admin-side "can an admin touch this VM" check
+/// should go through this, not a bare `is_owner_email` call, so a second
+/// reserved account never has to mean editing five call sites again.
 pub fn is_vm_owner_locked(store: &DataStore, owner_email: &str) -> bool {
     if owner_email.is_empty() {
         return false;
     }
-    is_protected_owner_email(store, owner_email)
-        || normalize_email(owner_email) == OWNER_TEST_ACCOUNT_EMAIL
+    is_owner_email(store, owner_email) || normalize_email(owner_email) == OWNER_TEST_ACCOUNT_EMAIL
 }
 
 /// `isAdminEmail(email)` (6246) — dev-test backdoor, then site-admin membership.
@@ -1655,97 +1637,6 @@ mod tests {
         assert!(!is_admin_email(&empty_store, "random@mitch.pro"));
         std::fs::remove_dir_all(base).ok();
         std::fs::remove_dir_all(empty_base).ok();
-    }
-
-    #[test]
-    fn designated_co_owner_survives_config_removal_without_root_privileges() {
-        let (base, store) = temp_store("protected-membership");
-        let email = normalize_email(PROTECTED_CO_OWNER_EMAIL);
-        for configured in [
-            json!({"owners":["root@example.com"],"coOwners":[]}),
-            json!({"owners":["root@example.com"],"coOwners":[email.clone(), email.to_uppercase()]}),
-        ] {
-            store
-                .write_document(&base.join("data/admins.json"), &configured)
-                .unwrap();
-            assert!(is_co_owner_email(&store, PROTECTED_CO_OWNER_EMAIL));
-            assert!(is_admin_email(&store, &email));
-            assert!(is_protected_owner_email(&store, &email));
-            assert!(!is_owner_email(&store, &email));
-            assert_eq!(
-                co_owner_member_emails(&store)
-                    .iter()
-                    .filter(|e| *e == &email)
-                    .count(),
-                1
-            );
-        }
-        std::fs::remove_dir_all(base).ok();
-    }
-
-    #[test]
-    fn private_owner_vms_reject_other_owners_in_both_directions() {
-        let (base, store) = temp_store("private-owner-vms");
-        store
-            .write_document(
-                &base.join("data/admins.json"),
-                &json!({
-                    "owners":["root@example.com", "other-root@example.com"],
-                    "coOwners":["co.owner@example.com"],
-                    "admins":["staff@example.com"],
-                }),
-            )
-            .unwrap();
-        for target in [
-            "root@example.com",
-            "other-root@example.com",
-            "co.owner@example.com",
-            PROTECTED_CO_OWNER_EMAIL,
-        ] {
-            assert!(is_vm_owner_locked(&store, target));
-            assert!(owner_vm_access_allowed(
-                &store,
-                &target.to_uppercase(),
-                target
-            ));
-            for actor in [
-                "root@example.com",
-                "other-root@example.com",
-                "co.owner@example.com",
-                PROTECTED_CO_OWNER_EMAIL,
-                "staff@example.com",
-                "student@example.com",
-                "",
-            ] {
-                if normalize_email(actor) != normalize_email(target) {
-                    assert!(
-                        !owner_vm_access_allowed(&store, actor, target),
-                        "{actor} must not access {target}"
-                    );
-                }
-            }
-        }
-        assert!(owner_vm_access_allowed(
-            &store,
-            "root@example.com",
-            OWNER_TEST_ACCOUNT_EMAIL
-        ));
-        assert!(owner_vm_access_allowed(
-            &store,
-            OWNER_TEST_ACCOUNT_EMAIL,
-            OWNER_TEST_ACCOUNT_EMAIL
-        ));
-        assert!(!owner_vm_access_allowed(
-            &store,
-            PROTECTED_CO_OWNER_EMAIL,
-            OWNER_TEST_ACCOUNT_EMAIL
-        ));
-        assert!(owner_vm_access_allowed(
-            &store,
-            "staff@example.com",
-            "student@example.com"
-        ));
-        std::fs::remove_dir_all(base).ok();
     }
 
     #[test]

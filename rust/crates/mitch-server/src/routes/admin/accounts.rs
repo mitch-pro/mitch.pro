@@ -50,7 +50,7 @@ pub fn directory(state: &AppState) -> Vec<Value> {
                 "email":email,
                 "username":username,
                 "displayName":display,
-                "protected":auth::is_protected_owner_email(&state.store,&email),
+                "protected":auth::is_owner_email(&state.store,&email),
                 "matrixUserId":matrix_ids.get(&email).cloned().unwrap_or_default(),
             })
         })
@@ -299,7 +299,7 @@ fn handle_owner_accounts(
     }
     if targets
         .iter()
-        .any(|email| email == &actor || auth::is_protected_owner_email(&state.store, email))
+        .any(|email| email == &actor || auth::is_owner_email(&state.store, email))
     {
         return json_response(
             403,

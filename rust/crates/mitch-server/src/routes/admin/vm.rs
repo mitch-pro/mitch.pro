@@ -307,10 +307,7 @@ pub async fn handle(
                     "keepAlive".into(),
                     record.get("keepAlive").cloned().unwrap_or(json!(false)),
                 );
-                if is_owner
-                    && auth::owner_vm_access_allowed(&state.store, &actor.email, &owner)
-                    && jsval::str_or(record.get("status"), "") != "unassigned"
-                {
+                if is_owner && jsval::str_or(record.get("status"), "") != "unassigned" {
                     let creds = owner_vm_desktop_credentials(state, &record_id);
                     if !creds.is_null() {
                         map.insert("desktopCredentials".into(), creds);
@@ -482,10 +479,10 @@ pub async fn handle(
 
         let record = vmlib::get_virtual_machine_by_vmid(&state.store, vmid);
         if let Some(ref rec) = record {
-            if !auth::owner_vm_access_allowed(&state.store, &actor.email, &rec.owner_email) {
+            if auth::is_vm_owner_locked(&state.store, &rec.owner_email) && !actor.is_owner {
                 return Some(json_response(
                     403,
-                    json!({ "error": "You cannot reassign another owner's computer." }),
+                    json!({ "error": "Co-owners and admins cannot reassign an owner's computer." }),
                 ));
             }
             if rec.status != "unassigned" && auth::normalize_email(&rec.owner_email) != owner_email
@@ -650,10 +647,10 @@ pub async fn handle(
                 json!({ "error": "Computer not found." }),
             ));
         };
-        if !auth::owner_vm_access_allowed(&state.store, &actor.email, &record.owner_email) {
+        if auth::is_vm_owner_locked(&state.store, &record.owner_email) && !actor.is_owner {
             return Some(json_response(
                 403,
-                json!({ "error": "You cannot unassign another owner's computer." }),
+                json!({ "error": "Co-owners and admins cannot unassign an owner's computer." }),
             ));
         }
 
@@ -1003,13 +1000,6 @@ pub async fn handle(
             ));
         }
 
-        if !auth::owner_vm_access_allowed(&state.store, &actor.email, &record.owner_email) {
-            return Some(json_response(
-                403,
-                json!({ "error": "You cannot change another owner's computer credentials." }),
-            ));
-        }
-
         let username = jsval::str_or(body.get("username"), "");
         let password = jsval::str_or(body.get("password"), "");
         let (login_username, login_password) = match crate::proxmox_desktop::desktop()
@@ -1109,10 +1099,10 @@ pub async fn handle(
 
         let rec_json = record.to_json();
         let record_owner = jsval::str_or(rec_json.get("ownerEmail"), "");
-        if !auth::owner_vm_access_allowed(&state.store, &actor.email, &record_owner) {
+        if auth::is_vm_owner_locked(&state.store, &record_owner) && !actor.is_owner {
             return Some(json_response(
                 403,
-                json!({ "error": "You cannot delete another owner's computer." }),
+                json!({ "error": "Co-owners and admins cannot delete an owner's computer." }),
             ));
         }
 
@@ -1208,10 +1198,10 @@ pub async fn handle(
         let Some(record) = vmlib::get_virtual_machine_by_id(&state.store, id) else {
             return Some(json_response(404, json!({"error":"Computer not found."})));
         };
-        if !auth::owner_vm_access_allowed(&state.store, &actor.email, &record.owner_email) {
+        if auth::is_vm_owner_locked(&state.store, &record.owner_email) && !actor.is_owner {
             return Some(json_response(
                 403,
-                json!({"error":"You cannot edit another owner's computer."}),
+                json!({"error":"Only an owner can edit an owner's computer."}),
             ));
         }
         let mut values = [None; 3];
@@ -1354,10 +1344,10 @@ pub async fn handle(
         let Some(record) = vmlib::get_virtual_machine_by_id(&state.store, id) else {
             return Some(json_response(404, json!({"error":"Computer not found."})));
         };
-        if !auth::owner_vm_access_allowed(&state.store, &actor.email, &record.owner_email) {
+        if auth::is_vm_owner_locked(&state.store, &record.owner_email) && !actor.is_owner {
             return Some(json_response(
                 403,
-                json!({"error":"You cannot edit another owner's computer."}),
+                json!({"error":"Only an owner can edit an owner's computer."}),
             ));
         }
         let chromeos_vmid = crate::proxmox_desktop::desktop()
