@@ -227,6 +227,105 @@ pub fn settle_bet(
     Ok((before, after))
 }
 
+/// Atomically deducts a bet upfront for multi-step casino games (Blackjack, Poker).
+/// Leaves balance untouched and returns `Err(InsufficientFunds)` if before < bet.
+pub fn escrow_bet(
+    store: &DataStore,
+    data_dir: &Path,
+    email: &str,
+    bet: f64,
+    reason: &str,
+) -> Result<f64, BetError> {
+    if email.is_empty() || !bet.is_finite() || bet <= 0.0 {
+        return Err(BetError::InvalidAmount);
+    }
+    let norm = normalize_email(email);
+
+    let (before, after) = {
+        let conn = store.conn();
+        if conn.execute_batch("BEGIN IMMEDIATE").is_err() {
+            return Err(BetError::InvalidAmount);
+        }
+        let before = conn
+            .query_row(
+                "SELECT balance FROM coins WHERE email = ?1",
+                rusqlite::params![norm],
+                |row| row.get::<_, f64>(0),
+            )
+            .unwrap_or(0.0);
+        if before < bet {
+            let _ = conn.execute_batch("ROLLBACK");
+            return Err(BetError::InsufficientFunds);
+        }
+        let after = js_round4(before - bet);
+        let _ = conn.execute(
+            "UPDATE coins SET balance = ?1, updated_at = ?2 WHERE email = ?3",
+            rusqlite::params![after, now_millis(), norm],
+        );
+        let _ = conn.execute_batch("COMMIT");
+        (before, after)
+    };
+
+    log_coin_change(data_dir, &norm, before, after, reason);
+    Ok(after)
+}
+
+/// Settles an already-escrowed bet. `payout` is gross payout:
+/// 0.0 on loss (bet was already deducted, balance unchanged),
+/// bet on push (refund),
+/// > bet on win.
+pub fn settle_escrowed_bet(
+    store: &DataStore,
+    data_dir: &Path,
+    email: &str,
+    bet: f64,
+    payout: f64,
+    reason: &str,
+) -> Result<f64, BetError> {
+    if email.is_empty() || !bet.is_finite() || bet <= 0.0 || !payout.is_finite() || payout < 0.0 {
+        return Err(BetError::InvalidAmount);
+    }
+    let norm = normalize_email(email);
+    let net = js_round4(payout - bet);
+
+    let (before, after) = {
+        let conn = store.conn();
+        if conn.execute_batch("BEGIN IMMEDIATE").is_err() {
+            return Err(BetError::InvalidAmount);
+        }
+        let before = conn
+            .query_row(
+                "SELECT balance FROM coins WHERE email = ?1",
+                rusqlite::params![norm],
+                |row| row.get::<_, f64>(0),
+            )
+            .unwrap_or(0.0);
+        let lifetime_before = conn
+            .query_row(
+                "SELECT lifetime_earned FROM coins WHERE email = ?1",
+                rusqlite::params![norm],
+                |row| row.get::<_, f64>(0),
+            )
+            .unwrap_or(0.0);
+        let after = js_round4(before + payout);
+        let lifetime_after = if net > 0.0 {
+            lifetime_before + net
+        } else {
+            lifetime_before
+        };
+        let _ = conn.execute(
+            "INSERT INTO coins (email, balance, lifetime_earned, updated_at) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(email) DO UPDATE SET balance = ?2, lifetime_earned = ?3, updated_at = ?4",
+            rusqlite::params![norm, after, lifetime_after, now_millis()],
+        );
+        let _ = conn.execute_batch("COMMIT");
+        (before, after)
+    };
+
+    log_coin_change(data_dir, &norm, before, after, reason);
+    Ok(after)
+}
+
 /// Sets a balance to an exact value — an admin correction, not an earn/spend
 /// event: unlike `add_coins`, this never applies the coin multiplier and
 /// never touches `lifetime_earned`. Returns the prior balance.
@@ -1160,6 +1259,55 @@ mod tests {
     fn read_coin_log_is_empty_when_no_log_file_exists() {
         let (base, data, _store) = temp_store("read-log-missing");
         assert_eq!(read_coin_log(&data, 10), Vec::<Value>::new());
+        std::fs::remove_dir_all(base).ok();
+    }
+
+    #[test]
+    fn test_escrow_bet_and_settle_escrowed_bet() {
+        let (base, data, store) = temp_store("escrow-bet");
+        let email = "bettor@mitch.pro";
+        set_coins(&store, &data, email, 100.0, "init");
+
+        // Escrow 40 coins: balance drops to 60
+        let after_escrow = escrow_bet(&store, &data, email, 40.0, "casino:blackjack:bet").unwrap();
+        assert_eq!(after_escrow, 60.0);
+        assert_eq!(get_coins(&store, &data, email), 60.0);
+
+        // Trying to escrow 70 coins fails with InsufficientFunds
+        let err = escrow_bet(&store, &data, email, 70.0, "casino:blackjack:bet");
+        assert_eq!(err, Err(BetError::InsufficientFunds));
+        assert_eq!(get_coins(&store, &data, email), 60.0);
+
+        // Settle losing round (payout 0.0): balance remains 60.0 (bet was already deducted)
+        let after_loss = settle_escrowed_bet(
+            &store,
+            &data,
+            email,
+            40.0,
+            0.0,
+            "casino:blackjack:dealer_wins",
+        )
+        .unwrap();
+        assert_eq!(after_loss, 60.0);
+        assert_eq!(get_coins(&store, &data, email), 60.0);
+
+        // Escrow 50 coins: balance drops to 10
+        let after_escrow2 = escrow_bet(&store, &data, email, 50.0, "casino:blackjack:bet").unwrap();
+        assert_eq!(after_escrow2, 10.0);
+
+        // Settle winning round (payout 100.0 on 50.0 bet): balance becomes 10 + 100 = 110.0
+        let after_win = settle_escrowed_bet(
+            &store,
+            &data,
+            email,
+            50.0,
+            100.0,
+            "casino:blackjack:player_wins",
+        )
+        .unwrap();
+        assert_eq!(after_win, 110.0);
+        assert_eq!(get_coins(&store, &data, email), 110.0);
+
         std::fs::remove_dir_all(base).ok();
     }
 }

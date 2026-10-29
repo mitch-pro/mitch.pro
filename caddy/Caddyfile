@@ -1,12 +1,12 @@
 :6800 {
-    # Resolve client IP: CF-Connecting-IP -> X-Mitch-Client-IP (from Nginx) -> X-Real-IP -> immediate peer
-    map {header.CF-Connecting-IP} {cf_ip} {
-        ""      {header.X-Mitch-Client-IP}
-        default {header.CF-Connecting-IP}
-    }
-    map {cf_ip} {real_ip} {
+    # Resolve client IP: X-Mitch-Client-IP (from trusted upstream Nginx) -> X-Real-IP -> immediate peer
+    map {header.X-Mitch-Client-IP} {nginx_ip} {
         ""      {header.X-Real-IP}
-        default {cf_ip}
+        default {header.X-Mitch-Client-IP}
+    }
+    map {nginx_ip} {real_ip} {
+        ""      {header.CF-Connecting-IP}
+        default {nginx_ip}
     }
     map {real_ip} {mitch_client_ip} {
         ""      {remote_host}

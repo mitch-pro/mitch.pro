@@ -158,19 +158,46 @@ pub(super) fn get_attachment(state: &Arc<AppState>, headers: &HeaderMap, search:
         })
         .collect();
     let encoded_name = encode_uri_component(&disp_name);
+    let raw_mime = jsval::str_or(att.get("mime"), "application/octet-stream");
+    let lowered_mime = raw_mime.to_ascii_lowercase();
+    let safe_inline = matches!(
+        lowered_mime.as_str(),
+        "image/jpeg"
+            | "image/png"
+            | "image/gif"
+            | "image/webp"
+            | "audio/mpeg"
+            | "audio/ogg"
+            | "audio/wav"
+            | "video/mp4"
+            | "video/webm"
+    );
+    let disposition_type = if !is_download && safe_inline {
+        "inline"
+    } else {
+        "attachment"
+    };
     let disposition = format!(
         "{}; filename=\"{}\"; filename*=UTF-8''{}",
-        if is_download { "attachment" } else { "inline" },
-        safe_name,
-        encoded_name
+        disposition_type, safe_name, encoded_name
     );
-    let mime = jsval::str_or(att.get("mime"), "application/octet-stream");
+    let effective_mime = if !safe_inline
+        && (lowered_mime.contains("html")
+            || lowered_mime.contains("xml")
+            || lowered_mime.contains("javascript")
+            || lowered_mime.contains("svg"))
+    {
+        "application/octet-stream"
+    } else {
+        &raw_mime
+    };
     // A junk `mime` (arbitrary ≤80-char upload input) can't form a header
     // value; JS would throw when building the Response. Degrade to octet-stream.
-    let mime_value = HeaderValue::from_str(&mime)
+    let mime_value = HeaderValue::from_str(effective_mime)
         .unwrap_or(HeaderValue::from_static("application/octet-stream"));
-    let disposition_value = HeaderValue::from_str(&disposition)
-        .unwrap_or(HeaderValue::from_static("inline; filename=\"attachment\""));
+    let disposition_value = HeaderValue::from_str(&disposition).unwrap_or(
+        HeaderValue::from_static("attachment; filename=\"attachment\""),
+    );
     axum::response::Response::builder()
         .status(200)
         .header("content-type", mime_value)
@@ -180,6 +207,7 @@ pub(super) fn get_attachment(state: &Arc<AppState>, headers: &HeaderMap, search:
             "private, no-cache, no-store, must-revalidate",
         )
         .header("x-content-type-options", "nosniff")
+        .header("content-security-policy", "sandbox; default-src 'none'")
         .body(Body::from(bytes))
         .unwrap_or_else(|_| json_response(500, json!({ "error": "attachment serve failed" })))
 }

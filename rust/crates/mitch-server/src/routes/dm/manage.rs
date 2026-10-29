@@ -12,7 +12,6 @@ use crate::state::AppState;
 use axum::http::HeaderMap;
 use axum::response::Response;
 use mitch_lib::auth;
-use mitch_lib::coins;
 use mitch_lib::dm::{self, DMS_MAIN, DMS_PICKLE};
 use mitch_lib::jsval::{self, truthy};
 use mitch_lib::profile::{default_username_for_email, normalize_username};
@@ -321,20 +320,6 @@ pub(super) async fn mark_read(
             .store
             .write_document(&data_file(state, store.dms), &Value::Array(pruned))
             .ok();
-    }
-    // Reading a DM pays the sender — the coin reward for the message that
-    // was just read.
-    if !from.is_empty() {
-        let r = dm::resolve_member_ref(&idx, &from);
-        let target = if r.is_empty() { from.clone() } else { r };
-        coins::add_coins(
-            &state.store,
-            &state.cfg.data_dir,
-            &target,
-            2.0,
-            state.coin_multiplier(),
-            "",
-        );
     }
     json_response(200, json!({ "success": true }))
 }

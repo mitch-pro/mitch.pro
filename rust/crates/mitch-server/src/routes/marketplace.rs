@@ -43,71 +43,112 @@ pub async fn handle(
 /// `autoFinalizeMarketplace` (server.js:3283-3328): sweeps pending listings older than 24 hours.
 pub fn auto_finalize_marketplace(state: &AppState) {
     let file = data_file(state, "marketplace.json");
-    let mut list = state.store.read_document(&file, json!([]));
-    let Some(arr) = list.as_array_mut() else {
-        return;
-    };
-    let mut modified = false;
     let now = mitch_lib::school::now_millis();
     let expiry_window = 24 * 3600 * 1000;
 
+    struct FinalizedPayout {
+        seller: String,
+        price: f64,
+        buyer: String,
+        item_id: String,
+        item_type: String,
+    }
+
+    let finalized_items = state
+        .store
+        .mutate_document(&file, json!([]), |doc| {
+            let mut payouts = Vec::new();
+            let Some(arr) = doc.as_array_mut() else {
+                return payouts;
+            };
+            for item in arr.iter_mut() {
+                let status = item.get("status").and_then(|v| v.as_str()).unwrap_or("");
+                let bought_at = item.get("bought_at").and_then(jsval::number).unwrap_or(0.0) as i64;
+                if status == "pending" && bought_at > 0 && (now - bought_at > expiry_window) {
+                    item["status"] = json!("finalized");
+                    item["finalized_at"] = json!(now);
+                    item["updated_at"] = json!(now);
+
+                    let price = item.get("price").and_then(jsval::number).unwrap_or(0.0);
+                    let seller = item
+                        .get("seller")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let item_type = item
+                        .get("type")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let item_id = item
+                        .get("itemId")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let buyer = item
+                        .get("buyer")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+
+                    payouts.push(FinalizedPayout {
+                        seller,
+                        price,
+                        buyer,
+                        item_id,
+                        item_type,
+                    });
+                }
+            }
+            payouts
+        })
+        .unwrap_or_default();
+
+    if finalized_items.is_empty() {
+        return;
+    }
+
     let catalog = shop::load_shop_catalog(&state.store, state.data_dir());
 
-    for item in arr.iter_mut() {
-        let status = item.get("status").and_then(|v| v.as_str()).unwrap_or("");
-        let bought_at = item.get("bought_at").and_then(jsval::number).unwrap_or(0.0) as i64;
-        if status == "pending" && bought_at > 0 && (now - bought_at > expiry_window) {
-            item["status"] = json!("finalized");
-            item["finalized_at"] = json!(now);
-            item["updated_at"] = json!(now);
-            modified = true;
+    for payout in finalized_items {
+        if !payout.seller.is_empty() {
+            coins::add_coins(
+                &state.store,
+                state.data_dir(),
+                &payout.seller,
+                payout.price,
+                1.0,
+                "marketplace_sale",
+            );
+        }
 
-            let price = item.get("price").and_then(jsval::number).unwrap_or(0.0);
-            let seller = item.get("seller").and_then(|v| v.as_str()).unwrap_or("");
-            if !seller.is_empty() {
-                coins::add_coins(
-                    &state.store,
-                    state.data_dir(),
-                    seller,
-                    price,
-                    1.0,
-                    "marketplace_sale",
-                );
-            }
-
-            let item_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
-            let item_id = item.get("itemId").and_then(|v| v.as_str()).unwrap_or("");
-            let buyer = item.get("buyer").and_then(|v| v.as_str()).unwrap_or("");
-            if item_type == "cosmetic" && !item_id.is_empty() && !buyer.is_empty() {
-                if let Some(shop_item) = catalog
-                    .iter()
-                    .find(|i| i.get("id").and_then(|v| v.as_str()) == Some(item_id))
-                {
-                    let cost_type = shop_item
-                        .get("costType")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("");
-                    if let Some((bucket, _)) = shop::shop_type_config(cost_type) {
-                        let buyer_norm = auth::normalize_email(buyer);
-                        let mut owned = shop::normalize_cosmetics(
-                            &shop::cosmetics_get(&state.store, &buyer_norm).unwrap_or(json!({})),
-                        );
-                        if let Some(bucket_arr) =
-                            owned.get_mut(bucket).and_then(|v| v.as_array_mut())
+        if payout.item_type == "cosmetic" && !payout.item_id.is_empty() && !payout.buyer.is_empty()
+        {
+            if let Some(shop_item) = catalog
+                .iter()
+                .find(|i| i.get("id").and_then(|v| v.as_str()) == Some(&payout.item_id))
+            {
+                let cost_type = shop_item
+                    .get("costType")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                if let Some((bucket, _)) = shop::shop_type_config(cost_type) {
+                    let buyer_norm = auth::normalize_email(&payout.buyer);
+                    let mut owned = shop::normalize_cosmetics(
+                        &shop::cosmetics_get(&state.store, &buyer_norm).unwrap_or(json!({})),
+                    );
+                    if let Some(bucket_arr) = owned.get_mut(bucket).and_then(|v| v.as_array_mut()) {
+                        if !bucket_arr
+                            .iter()
+                            .any(|v| v.as_str() == Some(&payout.item_id))
                         {
-                            if !bucket_arr.iter().any(|v| v.as_str() == Some(item_id)) {
-                                bucket_arr.push(json!(item_id));
-                            }
+                            bucket_arr.push(json!(payout.item_id));
                         }
-                        shop::cosmetics_set(&state.store, &buyer_norm, &owned);
                     }
+                    shop::cosmetics_set(&state.store, &buyer_norm, &owned);
                 }
             }
         }
-    }
-
-    if modified {
-        let _ = state.store.write_document(&file, &list);
     }
 }
 
@@ -598,146 +639,207 @@ fn marketplace_mediate(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &
     let action = body.get("action").and_then(|v| v.as_str()).unwrap_or("");
 
     let mp_file = data_file(state, "marketplace.json");
-    let mut listings = state.store.read_document(&mp_file, json!([]));
-    let Some(arr) = listings.as_array_mut() else {
-        return json_response(404, json!({ "error": "listing not found" }));
-    };
-    let Some(pos) = arr
-        .iter()
-        .position(|l| l.get("id").and_then(|v| v.as_str()) == Some(listing_id))
-    else {
-        return json_response(404, json!({ "error": "listing not found" }));
-    };
 
-    let listing = &mut arr[pos];
-    let status = listing.get("status").and_then(|v| v.as_str()).unwrap_or("");
-    if status != "pending" {
-        return json_response(
+    enum MediateDecision {
+        NotFound,
+        NotPending,
+        NotAuthorized,
+        InvalidAction,
+        Resolve {
+            seller: String,
+            buyer: String,
+            price: f64,
+            item_type: String,
+            item_id: String,
+        },
+        Undo {
+            seller: String,
+            buyer: String,
+            price: f64,
+            item_type: String,
+            item_id: String,
+        },
+    }
+
+    let decision = state
+        .store
+        .mutate_document(&mp_file, json!([]), |doc| {
+            let Some(arr) = doc.as_array_mut() else {
+                return MediateDecision::NotFound;
+            };
+            let Some(pos) = arr
+                .iter()
+                .position(|l| l.get("id").and_then(|v| v.as_str()) == Some(listing_id))
+            else {
+                return MediateDecision::NotFound;
+            };
+
+            let listing = &mut arr[pos];
+            let status = listing.get("status").and_then(|v| v.as_str()).unwrap_or("");
+            if status != "pending" {
+                return MediateDecision::NotPending;
+            }
+            let mediator = listing
+                .get("mediator")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if auth::normalize_email(mediator) != norm {
+                return MediateDecision::NotAuthorized;
+            }
+
+            let price = listing.get("price").and_then(jsval::number).unwrap_or(0.0);
+            let seller = listing
+                .get("seller")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let buyer = listing
+                .get("buyer")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let item_type = listing
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let item_id = listing
+                .get("itemId")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let now = mitch_lib::school::now_millis();
+
+            if action == "resolve" {
+                listing["status"] = json!("finalized");
+                listing["finalized_at"] = json!(now);
+                listing["updated_at"] = json!(now);
+                MediateDecision::Resolve {
+                    seller,
+                    buyer,
+                    price,
+                    item_type,
+                    item_id,
+                }
+            } else if action == "undo" {
+                listing["status"] = json!("undone");
+                listing["updated_at"] = json!(now);
+                MediateDecision::Undo {
+                    seller,
+                    buyer,
+                    price,
+                    item_type,
+                    item_id,
+                }
+            } else {
+                MediateDecision::InvalidAction
+            }
+        })
+        .unwrap_or(MediateDecision::NotFound);
+
+    match decision {
+        MediateDecision::NotFound => json_response(404, json!({ "error": "listing not found" })),
+        MediateDecision::NotPending => json_response(
             400,
             json!({ "error": "this listing is not pending mediation" }),
-        );
-    }
-    let mediator = listing
-        .get("mediator")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-    if auth::normalize_email(mediator) != norm {
-        return json_response(
+        ),
+        MediateDecision::NotAuthorized => json_response(
             403,
             json!({ "error": "you are not authorized as mediator for this trade" }),
-        );
-    }
-
-    let price = listing.get("price").and_then(jsval::number).unwrap_or(0.0);
-    let seller = listing
-        .get("seller")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let buyer = listing
-        .get("buyer")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let item_type = listing
-        .get("type")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let item_id = listing
-        .get("itemId")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let now = mitch_lib::school::now_millis();
-
-    if action == "resolve" {
-        listing["status"] = json!("finalized");
-        listing["finalized_at"] = json!(now);
-        listing["updated_at"] = json!(now);
-        let _ = state.store.write_document(&mp_file, &listings);
-
-        coins::add_coins(
-            &state.store,
-            state.data_dir(),
-            &seller,
+        ),
+        MediateDecision::InvalidAction => {
+            json_response(400, json!({ "error": "invalid mediation action" }))
+        }
+        MediateDecision::Resolve {
+            seller,
+            buyer,
             price,
-            1.0,
-            "marketplace_sale",
-        );
+            item_type,
+            item_id,
+        } => {
+            coins::add_coins(
+                &state.store,
+                state.data_dir(),
+                &seller,
+                price,
+                1.0,
+                "marketplace_sale",
+            );
 
-        if item_type == "cosmetic" && !item_id.is_empty() && !buyer.is_empty() {
-            let catalog = shop::load_shop_catalog(&state.store, state.data_dir());
-            if let Some(shop_item) = catalog
-                .iter()
-                .find(|i| i.get("id").and_then(|v| v.as_str()) == Some(&item_id))
-            {
-                let cost_type = shop_item
-                    .get("costType")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                if let Some((bucket, _)) = shop::shop_type_config(cost_type) {
-                    let buyer_norm = auth::normalize_email(&buyer);
-                    let mut owned = shop::normalize_cosmetics(
-                        &shop::cosmetics_get(&state.store, &buyer_norm).unwrap_or(json!({})),
-                    );
-                    if let Some(arr) = owned.get_mut(bucket).and_then(|v| v.as_array_mut()) {
-                        if !arr.iter().any(|v| v.as_str() == Some(&item_id)) {
-                            arr.push(json!(item_id));
+            if item_type == "cosmetic" && !item_id.is_empty() && !buyer.is_empty() {
+                let catalog = shop::load_shop_catalog(&state.store, state.data_dir());
+                if let Some(shop_item) = catalog
+                    .iter()
+                    .find(|i| i.get("id").and_then(|v| v.as_str()) == Some(&item_id))
+                {
+                    let cost_type = shop_item
+                        .get("costType")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    if let Some((bucket, _)) = shop::shop_type_config(cost_type) {
+                        let buyer_norm = auth::normalize_email(&buyer);
+                        let mut owned = shop::normalize_cosmetics(
+                            &shop::cosmetics_get(&state.store, &buyer_norm).unwrap_or(json!({})),
+                        );
+                        if let Some(arr) = owned.get_mut(bucket).and_then(|v| v.as_array_mut()) {
+                            if !arr.iter().any(|v| v.as_str() == Some(&item_id)) {
+                                arr.push(json!(item_id));
+                            }
                         }
+                        shop::cosmetics_set(&state.store, &buyer_norm, &owned);
                     }
-                    shop::cosmetics_set(&state.store, &buyer_norm, &owned);
                 }
             }
+            json_response(
+                200,
+                json!({ "ok": true, "message": "Transaction resolved and finalized!" }),
+            )
         }
-        json_response(
-            200,
-            json!({ "ok": true, "message": "Transaction resolved and finalized!" }),
-        )
-    } else if action == "undo" {
-        listing["status"] = json!("undone");
-        listing["updated_at"] = json!(now);
-        let _ = state.store.write_document(&mp_file, &listings);
-
-        coins::add_coins(
-            &state.store,
-            state.data_dir(),
-            &buyer,
+        MediateDecision::Undo {
+            seller,
+            buyer,
             price,
-            1.0,
-            "marketplace_refund",
-        );
+            item_type,
+            item_id,
+        } => {
+            coins::add_coins(
+                &state.store,
+                state.data_dir(),
+                &buyer,
+                price,
+                1.0,
+                "marketplace_refund",
+            );
 
-        if item_type == "cosmetic" && !item_id.is_empty() && !seller.is_empty() {
-            let catalog = shop::load_shop_catalog(&state.store, state.data_dir());
-            if let Some(shop_item) = catalog
-                .iter()
-                .find(|i| i.get("id").and_then(|v| v.as_str()) == Some(&item_id))
-            {
-                let cost_type = shop_item
-                    .get("costType")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                if let Some((bucket, _)) = shop::shop_type_config(cost_type) {
-                    let seller_norm = auth::normalize_email(&seller);
-                    let mut owned = shop::normalize_cosmetics(
-                        &shop::cosmetics_get(&state.store, &seller_norm).unwrap_or(json!({})),
-                    );
-                    if let Some(arr) = owned.get_mut(bucket).and_then(|v| v.as_array_mut()) {
-                        if !arr.iter().any(|v| v.as_str() == Some(&item_id)) {
-                            arr.push(json!(item_id));
+            if item_type == "cosmetic" && !item_id.is_empty() && !seller.is_empty() {
+                let catalog = shop::load_shop_catalog(&state.store, state.data_dir());
+                if let Some(shop_item) = catalog
+                    .iter()
+                    .find(|i| i.get("id").and_then(|v| v.as_str()) == Some(&item_id))
+                {
+                    let cost_type = shop_item
+                        .get("costType")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    if let Some((bucket, _)) = shop::shop_type_config(cost_type) {
+                        let seller_norm = auth::normalize_email(&seller);
+                        let mut owned = shop::normalize_cosmetics(
+                            &shop::cosmetics_get(&state.store, &seller_norm).unwrap_or(json!({})),
+                        );
+                        if let Some(arr) = owned.get_mut(bucket).and_then(|v| v.as_array_mut()) {
+                            if !arr.iter().any(|v| v.as_str() == Some(&item_id)) {
+                                arr.push(json!(item_id));
+                            }
                         }
+                        shop::cosmetics_set(&state.store, &seller_norm, &owned);
                     }
-                    shop::cosmetics_set(&state.store, &seller_norm, &owned);
                 }
             }
+            json_response(
+                200,
+                json!({ "ok": true, "message": "Transaction undone and refunded successfully!" }),
+            )
         }
-        json_response(
-            200,
-            json!({ "ok": true, "message": "Transaction undone and refunded successfully!" }),
-        )
-    } else {
-        json_response(400, json!({ "error": "invalid mediation action" }))
     }
 }
 

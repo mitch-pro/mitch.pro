@@ -152,6 +152,23 @@ fn settle(
     }
 }
 
+#[allow(clippy::result_large_err)]
+fn settle_escrowed(
+    state: &Arc<AppState>,
+    email: &str,
+    bet: f64,
+    payout: f64,
+    reason: &str,
+) -> Result<(bool, f64, f64), Response> {
+    match coins::settle_escrowed_bet(&state.store, state.data_dir(), email, bet, payout, reason) {
+        Ok(after) => Ok((payout > 0.0, payout, after)),
+        Err(BetError::InsufficientFunds) => {
+            Err(json_response(400, json!({ "error": "insufficient_funds" })))
+        }
+        Err(BetError::InvalidAmount) => Err(invalid_bet()),
+    }
+}
+
 fn status(state: &Arc<AppState>) -> Response {
     json_response(
         200,
@@ -335,16 +352,25 @@ fn blackjack_start(state: &Arc<AppState>, headers: &HeaderMap, body: &Value) -> 
     if games.contains_key(&norm) {
         return json_response(409, json!({ "error": "game_in_progress" }));
     }
-    // Courtesy check only — settle() re-checks atomically regardless.
-    if coins::get_coins(&state.store, state.data_dir(), &email) < bet {
-        return json_response(400, json!({ "error": "insufficient_funds" }));
-    }
 
     let (game, resolved) = casino::blackjack_start(bet);
     let player = game.player.clone();
     let dealer = game.dealer.clone();
     match resolved {
         None => {
+            let balance = match coins::escrow_bet(
+                &state.store,
+                state.data_dir(),
+                &email,
+                bet,
+                "casino:blackjack:bet",
+            ) {
+                Ok(b) => b,
+                Err(BetError::InsufficientFunds) => {
+                    return json_response(400, json!({ "error": "insufficient_funds" }));
+                }
+                Err(BetError::InvalidAmount) => return invalid_bet(),
+            };
             games.insert(norm, game);
             drop(games);
             json_response(
@@ -355,6 +381,7 @@ fn blackjack_start(state: &Arc<AppState>, headers: &HeaderMap, body: &Value) -> 
                     "dealerUpCard": card_json(&dealer[0]),
                     "value": casino::blackjack_hand_value(&player).0,
                     "bet": bet,
+                    "balance": balance,
                 }),
             )
         }
@@ -415,7 +442,7 @@ fn blackjack_hit(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             games.remove(&norm);
             drop(games);
             let reason = format!("casino:blackjack:{}", blackjack_outcome_label(outcome));
-            match settle(state, &email, bet, payout, &reason) {
+            match settle_escrowed(state, &email, bet, payout, &reason) {
                 Ok((_won, payout, balance)) => json_response(
                     200,
                     json!({
@@ -457,7 +484,7 @@ fn blackjack_stand(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     drop(games);
 
     let reason = format!("casino:blackjack:{}", blackjack_outcome_label(outcome));
-    match settle(state, &email, bet, payout, &reason) {
+    match settle_escrowed(state, &email, bet, payout, &reason) {
         Ok((_won, payout, balance)) => json_response(
             200,
             json!({
@@ -493,14 +520,28 @@ fn poker_start(state: &Arc<AppState>, headers: &HeaderMap, body: &Value) -> Resp
     if games.contains_key(&norm) {
         return json_response(409, json!({ "error": "game_in_progress" }));
     }
-    if coins::get_coins(&state.store, state.data_dir(), &email) < bet {
-        return json_response(400, json!({ "error": "insufficient_funds" }));
-    }
+
+    let balance = match coins::escrow_bet(
+        &state.store,
+        state.data_dir(),
+        &email,
+        bet,
+        "casino:poker:bet",
+    ) {
+        Ok(b) => b,
+        Err(BetError::InsufficientFunds) => {
+            return json_response(400, json!({ "error": "insufficient_funds" }));
+        }
+        Err(BetError::InvalidAmount) => return invalid_bet(),
+    };
 
     let game = casino::poker_deal(bet);
     let hand = game.hand;
     games.insert(norm, game);
-    json_response(200, json!({ "hand": cards_json(&hand), "bet": bet }))
+    json_response(
+        200,
+        json!({ "hand": cards_json(&hand), "bet": bet, "balance": balance }),
+    )
 }
 
 fn poker_draw(state: &Arc<AppState>, headers: &HeaderMap, body: &Value) -> Response {
@@ -534,7 +575,7 @@ fn poker_draw(state: &Arc<AppState>, headers: &HeaderMap, body: &Value) -> Respo
     drop(games);
 
     let reason = format!("casino:poker:{}", poker_rank_label(rank));
-    match settle(state, &email, bet, payout, &reason) {
+    match settle_escrowed(state, &email, bet, payout, &reason) {
         Ok((_won, payout, balance)) => json_response(
             200,
             json!({
