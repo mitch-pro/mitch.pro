@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>mitch.restaurant Menu</title>
+    <style>
+      :root {
+        --background-color: light-dark(rgb(246, 247, 243), rgb(23, 25, 27));
+        --font-color: light-dark(black, white);
+      }
+      :root:has(#theme-light:checked) {
+        color-scheme: light;
+      }
+      :root:has(#theme-dark:checked) {
+        color-scheme: dark;
+      }
+      h1 {
+        margin-bottom: 0px;
+        text-align: center;
+      }
+      h3 {
+        font-size: 10px;
+        text-align: center;
+      }
+      footer {
+        font-size: 9px;
+        text-align: center;
+      }
+      body {
+        background-color: var(--background-color);
+        color: var(--font-color);
+        font-family: system-ui, sans-serif;
+        transition: background-color 0.2s, color 0.2s;
+        width: 80%;
+        max-width: 400px;
+        margin: auto;
+      }
+      a {
+        color: var(--font-color);
+      }
+      .theme-switcher {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: auto;
+      }
+      .theme-switcher input[type="radio"] {
+        display: none;
+      }
+      .theme-switcher label {
+        padding: 6px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .theme-switcher label:has(input:checked) {
+        font-weight: 600;
+      }
+      .menu-item {
+        text-align: left;
+        margin-bottom: 0px;
+      }
+      .menu-price {
+        text-align: right;
+        margin-bottom: 0px
+      }
+      .menu-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+      }
+      .menu-description {
+        margin-top: 0px;
+        font-size: 10px;
+        margin: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>mitch.restaurant Menu</h1>
+      <div class="theme-switcher">
+        <label><input type="radio" name="theme" id="theme-auto" checked> Auto</label>
+        <label><input type="radio" name="theme" id="theme-light"> Light</label>
+        <label><input type="radio" name="theme" id="theme-dark"> Dark</label>
+      </div>
+      <h2>Starters & Small Plates</h2>
+      <div class="menu-header">
+        <p class="menu-item">Crispy Calamari</p>
+        <p class="menu-price">$16</p>
+      </div>
+      <p class="menu-description">Lightly battered squid rings flash-fried with sliced cherry peppers and fresh parsley, served with warm marinara and lemon-garlic aioli.</p>
+      <div class="menu-header">
+        <p class="menu-item">Artisanal Bruschetta Trio</p>
+        <p class="menu-price">$14</p>
+      </div>
+      <p class="menu-description">Grilled sourdough crostini topped with classic heirloom tomato and basil, whipped ricotta with wildflower honey, and roasted wild mushrooms with thyme.</p>
+      <div class="menu-header">
+        <p class="menu-item">Spinach & Artichoke Dip</p>
+        <p class="menu-price">$15</p>
+      </div>
+      <p class="menu-description">Creamy blend of baby spinach, marinated artichoke hearts, cream cheese, and melted parmesan, baked golden and served with warm pita bread and tortilla chips.</p>
+      <div class="menu-header">
+        <p class="menu-item">Pan-Seared Crab Cakes</p>
+        <p class="menu-price">$19</p>
+      </div>
+      <p class="menu-description">Two jumbo lump crab cakes seared crisp with minimal filler, served over a bed of microgreens with house-made Cajun remoulade and charred lemon.</p>
+      <div class="menu-header">
+        <p class="menu-item">French Onion Soup</p>
+        <p class="menu-price">$12</p>
+      </div>
+      <p class="menu-description">Sweet yellow onions slow-caramelized in a rich beef and sherry broth, topped with a toasted baguette slice and bubbling melted Gruyère cheese.</p>
+      <h2>Salads & Handhelds</h2>
+      <div class="menu-header">
+        <p class="menu-item">Classic Caesar Salad</p>
+        <p class="menu-price">$13</p>
+      </div>
+      <p class="menu-description">Crisp hearts of romaine tossed in house-made Caesar dressing with garlic-herb croutons, shaved Parmigiano-Reggiano, and cracked black pepper.</p>
+      <div class="menu-header">
+        <p class="menu-item">Harvest Cobb Salad</p>
+        <p class="menu-price">$17</p>
+      </div>
+      <p class="menu-description">Mixed greens topped with grilled herb chicken, crispy bacon, avocado, hard-boiled egg, cherry tomatoes, crumbled blue cheese, and Dijon vinaigrette.</p>
+      <div class="menu-header">
+        <p class="menu-item">The Mitch House Burger</p>
+        <p class="menu-price">$18</p>
+      </div>
+      <p class="menu-description">Half-pound prime Angus beef patty topped with aged cheddar, thick-cut applewood bacon, caramelized onions, lettuce, tomato, and house burger sauce on a toasted brioche bun. Served with fries.</p>
+      <div class="menu-header">
+        <p class="menu-item">Crispy Buttermilk Chicken Sandwich</p>
+        <p class="menu-price">$17</p>
+      </div>
+      <p class="menu-description">Crispy fried chicken breast, house-made dill pickles, shredded iceberg lettuce, and spicy honey-mustard mayo on a warm toasted potato bun. Served with fries.</p>
+      <div class="menu-header">
+        <p class="menu-item">Prime Rib French Dip</p>
+        <p class="menu-price">$21</p>
+      </div>
+      <p class="menu-description">Thinly sliced slow-roasted prime rib and melted provolone cheese piled onto a toasted French roll, served with warm rosemary au jus and creamy horseradish.</p>
+      <h2>Mains & Entrées</h2>
+      <div class="menu-header">
+        <p class="menu-item">12oz New York Strip</p>
+        <p class="menu-price"$42</p>
+      </div>
+      <p class="menu-description">Center-cut prime strip steak char-grilled to order and topped with garlic-herb butter, served with Yukon Gold mashed potatoes and grilled asparagus.</p>
+      <div class="menu-header">
+        <p class="menu-item">Pan-Seared Atlantic Salmon</p>
+        <p class="menu-price"$29</p>
+      </div>
+      <p class="menu-description">Crispy-skin salmon fillet glazed with lemon-dill butter, served over wild rice pilaf and sautéed seasonal vegetables.</p>
+
+      <div class="menu-header">
+        <p class="menu-item">Herb-Roasted Half Chicken</p>
+        <p class="menu-price"$26</p>
+      </div>
+      <p class="menu-description">Free-range half chicken rubbed with rosemary, thyme, and garlic, roasted until golden and served with fingerling potatoes and pan jus.</p>
+
+      <div class="menu-header">
+        <p class="menu-item">Rigatoni Bolognese</p>
+        <p class="menu-price"$23</p>
+      </div>
+      <p class="menu-description">Al dente bronze-die rigatoni tossed in a slow-simmered beef, pork, and San Marzano tomato ragù, finished with heavy cream and fresh basil.</p>
+
+      <div class="menu-header">
+        <p class="menu-item">Fettuccine Alfredo</p>
+        <p class="menu-price"$20</p>
+      </div>
+      <p class="menu-description">Fresh ribbon pasta tossed in a rich parmesan and roasted garlic cream sauce, topped with cracked black pepper and chopped parsley. (Add grilled chicken +$6, shrimp +$8).</p>
+
+      <div class="menu-header">
+        <p class="menu-item">Braised Beef Short Ribs</p>
+        <p class="menu-price"$34</p>
+      </div>
+      <p class="menu-description">Boneless beef short ribs slow-cooked in red wine and aromatics for six hours, served over creamy garlic mashed potatoes and roasted baby carrots.</p>
+
+      <h2>Sides</h2>
+
+      <div class="menu-header">
+        <p class="menu-item">Truffle Parmesan Fries</p>
+        <p class="menu-price"$10</p>
+      </div>
+      <p class="menu-description">Crispy shoestring fries tossed in white truffle oil, grated parmesan cheese, and fresh chopped herbs, served with roasted garlic aioli.</p>
+
+      <div class="menu-header">
+        <p class="menu-item">Baked Mac & Cheese</p>
+        <p class="menu-price"$12</p>
+      </div>
+      <p class="menu-description">Cavatappi pasta folded into a sharp cheddar, gruyère, and Monterey Jack cheese sauce, topped with toasted panko breadcrumbs and baked until bubbling.</p>
+
+      <h2>Desserts</h2>
+
+      <div class="menu-header">
+        <p class="menu-item">New York Style Cheesecake</p>
+        <p class="menu-price"$11</p>
+      </div>
+      <p class="menu-description">Rich, classic vanilla bean cheesecake on a buttery graham cracker crust, topped with macerated fresh strawberries and whipped cream.</p>
+
+      <div class="menu-header">
+        <p class="menu-item">Warm Chocolate Lava Cake</p>
+        <p class="menu-price"$12</p>
+      </div>
+      <p class="menu-description">Rich dark chocolate cake with a warm, molten fudge center, dusted with powdered sugar and served with a scoop of vanilla bean ice cream.</p>
+
+
+    </main>
+    <br><br><br>
+    <footer>
+      <p>Also available <a href="https://mitchdog.com/compsci-menu.html">here</a>, github commit <a href="https://github.com/mitch-pro/mitch.pro/commit/a27d4f805e40974c41e831ff7818509e93b8f4e3">here</a>.</p>
+      <p><a href="https://mitchdog.com">mitch.pro</a> - Menu items, descriptions, and prices are AI generated, HTML is not.</p>
+      <p>2014 Capitol Ave #100, Sacramento, CA 95811 <a href="tel:+12792265812">(279) 226-5812</a> - 24/7</p>
+    </footer>
+  </body>
+</html>
