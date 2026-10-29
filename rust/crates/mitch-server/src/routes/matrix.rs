@@ -2100,24 +2100,27 @@ pub async fn purge_banned_matrix_user_all_rooms(
                 // State events (membership, power levels) can't be redacted
                 // like messages, and an already-redacted event has nothing left.
                 // State events can't be redacted like messages, with one
-                // exception: the user's own m.room.member event, whose
-                // redaction strips the display name/avatar from the join notice.
-                let is_own_member_event = ev.get("type").and_then(Value::as_str)
+                // exception: m.room.member events about the user (their join,
+                // and the ban notice an admin's ban creates), whose redaction
+                // strips the name/reason shown in the timeline's
+                // "X joined" / "admin banned X" lines.
+                let is_target_member_event = ev.get("type").and_then(Value::as_str)
                     == Some("m.room.member")
                     && ev
                         .get("state_key")
                         .and_then(Value::as_str)
-                        .is_some_and(|k| k.eq_ignore_ascii_case(sender));
-                let is_state = ev.get("state_key").is_some() && !is_own_member_event;
+                        .is_some_and(|k| user_ids.iter().any(|u| u.eq_ignore_ascii_case(k)));
+                let is_state = ev.get("state_key").is_some() && !is_target_member_event;
                 let already_redacted = ev
                     .get("unsigned")
                     .and_then(|u| u.get("redacted_because"))
                     .is_some();
                 let event_id = ev.get("event_id").and_then(Value::as_str).unwrap_or("");
+                let sent_by_target = user_ids.iter().any(|u| u.eq_ignore_ascii_case(sender));
                 if is_state
                     || already_redacted
                     || event_id.is_empty()
-                    || !user_ids.iter().any(|u| u.eq_ignore_ascii_case(sender))
+                    || !(sent_by_target || is_target_member_event)
                 {
                     continue;
                 }
@@ -3228,7 +3231,7 @@ async fn api_sso_login(state: &AppState, headers: &HeaderMap, body_bytes: &[u8])
     let had_existing_mapping = existing_mapping.is_some();
     let assigned_user = existing_mapping.unwrap_or_else(|| {
         let u = mitch_lib::profile::normalize_username(username);
-        if u.len() < 2 {
+        if u.len() < 2 || mitch_lib::matrix::name_blocked(&u) {
             format!("user_{}", &uid[..std::cmp::min(6, uid.len())])
         } else {
             u

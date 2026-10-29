@@ -155,6 +155,42 @@ pub fn handle(
         ));
     }
 
+    // POST /api/admin/matrix/purge-user {target} — re-run the Matrix cleanup
+    // (room bans, message and join/ban-notice redaction) for an account that is
+    // already banned. `target` is an email or a Matrix ID like @name:mitch.pro.
+    // Moderators and up.
+    if path == "/api/admin/matrix/purge-user" && *method == Method::POST {
+        if !ctx.is_any_admin(state) {
+            return Some(forbidden());
+        }
+        let target = body["target"].as_str().unwrap_or("").trim().to_string();
+        if target.is_empty() {
+            return Some(json_response(400, json!({ "error": "target is required" })));
+        }
+        let resolved = super::resolve_admin_target(state, &target);
+        if mitch_lib::auth::is_admin_email(
+            &state.store,
+            &mitch_lib::auth::normalize_email(&resolved),
+        ) {
+            return Some(forbidden());
+        }
+        spawn_matrix_purge(
+            state.id_secret.clone(),
+            state.store.clone(),
+            state.cfg.data_dir.clone(),
+            resolved,
+            "Inappropriate content".to_string(),
+        );
+        mitch_lib::admin::log_admin_action(
+            &state.store,
+            &state.cfg.data_dir,
+            &ctx.email(state),
+            "matrix_purge_user",
+            json!({ "target": target }),
+        );
+        return Some(json_response(202, json!({ "ok": true, "started": true })));
+    }
+
     // POST /api/admin/moderators (admins only).
     if path == "/api/admin/moderators" && *method == Method::POST {
         if !ctx.is_admin(state) {

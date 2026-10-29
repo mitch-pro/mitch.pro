@@ -87,5 +87,10 @@ endpoints as a health check.
 - **Names.** Profile saves (username, display name, nickname) and Matrix display
   name changes are rejected when `mitch_lib::matrix::name_blocked` matches: any
   chat-blocked word, or a severe slur anywhere inside the name after folding case,
-  separators and common character swaps. The ban purge also redacts the banned
-  user's own join/membership events, which removes their name from the join notice.
+  separators and common character swaps. The ban purge also redacts every
+  `m.room.member` event about the banned user (their join and the "admin banned X"
+  notice), which removes their name and the ban reason from the timeline. A new
+  Matrix account never gets a blocked username as its localpart (it falls back to
+  `user_<id>`). `POST /api/admin/matrix/purge-user {target}` (moderator or higher;
+  `target` is an email or a Matrix ID) re-runs the purge for an account that is
+  already banned, without unbanning.
