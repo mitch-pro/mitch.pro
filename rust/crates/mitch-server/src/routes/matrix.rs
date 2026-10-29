@@ -1986,8 +1986,23 @@ pub async fn unban_matrix_user_all_rooms(
         }
     });
 
-    // Deduplicate all rooms (official rooms + rooms tracked in matrix_room_settings.json)
-    // so each room is processed at most once.
+    let unique_rooms = all_known_room_ids(secret, store, data_dir).await;
+
+    // Clean up any remaining room settings entries across all rooms first
+    unban_matrix_user_from_room(secret, store, data_dir, "all", &primary_target).await;
+
+    for room_id in &unique_rooms {
+        unban_matrix_user_from_room(secret, store, data_dir, room_id, &primary_target).await;
+    }
+}
+
+/// Every room the server moderates: the official rooms plus any room tracked in
+/// matrix_room_settings.json, deduplicated.
+async fn all_known_room_ids(
+    secret: &[u8],
+    store: &mitch_lib::data::DataStore,
+    data_dir: &std::path::Path,
+) -> Vec<String> {
     let mut unique_rooms: Vec<String> = Vec::new();
     for (alias, name, topic) in all_official_rooms(store, data_dir) {
         if let Ok(room_id) = ensure_official_room(secret, &alias, &name, &topic).await {
@@ -2005,12 +2020,121 @@ pub async fn unban_matrix_user_all_rooms(
             }
         }
     }
+    unique_rooms
+}
 
-    // Clean up any remaining room settings entries across all rooms first
-    unban_matrix_user_from_room(secret, store, data_dir, "all", &primary_target).await;
+/// Most pages of 100 events scanned per room when redacting a banned user's
+/// history, which bounds the work on very large rooms.
+const PURGE_MAX_PAGES_PER_ROOM: usize = 200;
 
-    for room_id in &unique_rooms {
-        unban_matrix_user_from_room(secret, store, data_dir, room_id, &primary_target).await;
+/// After an account ban: bans every Matrix identity of the account from all
+/// known rooms (which removes them from each member list) and redacts every
+/// message they sent there. Conduit has no bulk-redact, so each room's history
+/// is paged backwards and the user's events are redacted one by one with the
+/// system admin token. Only the official and tracked rooms are covered; a
+/// private room the server does not track is not reached. Failures are
+/// per-room/per-event and never abort the rest. Restoring the account lifts
+/// the room bans (`unban_matrix_user_all_rooms`); redactions are permanent.
+pub async fn purge_banned_matrix_user_all_rooms(
+    secret: &[u8],
+    store: &mitch_lib::data::DataStore,
+    data_dir: &std::path::Path,
+    target_identifier: &str,
+    reason: &str,
+) {
+    let mut user_ids =
+        resolve_all_matrix_user_ids_from_store(store, data_dir, secret, target_identifier);
+    if user_ids.is_empty() && target_identifier.starts_with('@') {
+        user_ids.push(target_identifier.to_string());
+    }
+    if user_ids.is_empty() {
+        return;
+    }
+    let Ok(admin_tok) = get_system_admin_matrix_token(secret).await else {
+        return;
+    };
+    let mut req_headers = HeaderMap::new();
+    req_headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+    if let Ok(hv) = HeaderValue::from_str(&format!("Bearer {admin_tok}")) {
+        req_headers.insert("Authorization", hv);
+    }
+    let enc = |v: &str| url::form_urlencoded::byte_serialize(v.as_bytes()).collect::<String>();
+
+    for room_id in all_known_room_ids(secret, store, data_dir).await {
+        let room = enc(&room_id);
+        for user_id in &user_ids {
+            let body = json!({ "user_id": user_id, "reason": reason });
+            let _ = call_conduit(
+                &format!("/_matrix/client/v3/rooms/{room}/ban"),
+                Method::POST,
+                Some(req_headers.clone()),
+                Some(Bytes::from(serde_json::to_vec(&body).unwrap_or_default())),
+            )
+            .await;
+        }
+
+        let mut from: Option<String> = None;
+        for _ in 0..PURGE_MAX_PAGES_PER_ROOM {
+            let mut path = format!("/_matrix/client/v3/rooms/{room}/messages?dir=b&limit=100");
+            if let Some(token) = &from {
+                path.push_str(&format!("&from={}", enc(token)));
+            }
+            let Ok((status, _, bytes)) =
+                call_conduit(&path, Method::GET, Some(req_headers.clone()), None).await
+            else {
+                break;
+            };
+            if !status.is_success() {
+                break;
+            }
+            let Ok(page) = serde_json::from_slice::<Value>(&bytes) else {
+                break;
+            };
+            let events = page
+                .get("chunk")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            for ev in &events {
+                let sender = ev.get("sender").and_then(Value::as_str).unwrap_or("");
+                // State events (membership, power levels) can't be redacted
+                // like messages, and an already-redacted event has nothing left.
+                let is_state = ev.get("state_key").is_some();
+                let already_redacted = ev
+                    .get("unsigned")
+                    .and_then(|u| u.get("redacted_because"))
+                    .is_some();
+                let event_id = ev.get("event_id").and_then(Value::as_str).unwrap_or("");
+                if is_state
+                    || already_redacted
+                    || event_id.is_empty()
+                    || !user_ids.iter().any(|u| u.eq_ignore_ascii_case(sender))
+                {
+                    continue;
+                }
+                let txn_id = format!(
+                    "mitch_purge_{}_{}",
+                    now_millis(),
+                    event_id.trim_start_matches('$')
+                );
+                let body = json!({ "reason": reason });
+                let _ = call_conduit(
+                    &format!(
+                        "/_matrix/client/v3/rooms/{room}/redact/{}/{}",
+                        enc(event_id),
+                        enc(&txn_id)
+                    ),
+                    Method::PUT,
+                    Some(req_headers.clone()),
+                    Some(Bytes::from(serde_json::to_vec(&body).unwrap_or_default())),
+                )
+                .await;
+            }
+            match page.get("end").and_then(Value::as_str) {
+                Some(next) if !events.is_empty() => from = Some(next.to_string()),
+                _ => break,
+            }
+        }
     }
 }
 

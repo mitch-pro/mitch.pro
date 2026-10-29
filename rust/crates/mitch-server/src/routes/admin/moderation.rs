@@ -28,6 +28,32 @@ fn spawn_staff_sync(
     }
 }
 
+/// Fire-and-forget Matrix cleanup for a freshly banned account: ban from all
+/// rooms (drops them from member lists) and redact their messages.
+fn spawn_matrix_purge(
+    secret: Vec<u8>,
+    store: Arc<mitch_lib::data::DataStore>,
+    data_dir: std::path::PathBuf,
+    matrix_user_id: String,
+    reason: String,
+) {
+    if std::env::var("NODE_ENV").unwrap_or_default() == "test" {
+        return;
+    }
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        handle.spawn(async move {
+            crate::routes::matrix::purge_banned_matrix_user_all_rooms(
+                &secret,
+                &store,
+                &data_dir,
+                &matrix_user_id,
+                &reason,
+            )
+            .await;
+        });
+    }
+}
+
 fn spawn_matrix_unban(
     secret: Vec<u8>,
     store: Arc<mitch_lib::data::DataStore>,
@@ -1308,6 +1334,13 @@ fn apply_account_ban(
     mitch_lib::bans::blacklist_insert_until(&state.store, &target, &reason, actor, expires_at)
         .map_err(|_| (500, "Could not save the account ban. Try again.".into()))?;
     crate::ws::disconnect_banned_user(state, &target, &reason);
+    spawn_matrix_purge(
+        state.id_secret.clone(),
+        state.store.clone(),
+        state.cfg.data_dir.clone(),
+        crate::routes::matrix::resolve_matrix_user_id_for_email(state, &target),
+        reason.clone(),
+    );
     crate::chat_cleanup::clear_relay(state, &target);
     let _ = mitch_lib::chat_cleanup::remove_files(&state.store);
     mitch_lib::coins::add_admin_notification(

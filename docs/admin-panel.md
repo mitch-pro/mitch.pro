@@ -36,7 +36,13 @@ re-show the lock screen on any `invalid_passphrase`/
 Account bans use `/admin/bans/`: searchable records, a visible reason, explicit
 duration, confirmation, expiry, restoration, and chat-cleanup status. Usernames
 and registered addresses resolve through the existing account directory. VM and
-BYO-OS restrictions are separate from account bans. New clients submit `banned`
+BYO-OS restrictions are separate from account bans. Banning an account also runs
+`purge_banned_matrix_user_all_rooms` in the background: every Matrix identity of
+the account is banned from the official and tracked rooms (removing it from member
+lists) and its messages there are redacted by paging each room's history with the
+system admin token (up to 200 pages of 100 events per room). Private rooms the
+server doesn't track are not reached, redactions are permanent, and restoring the
+account only lifts the room bans. New clients submit `banned`
 explicitly, making retries idempotent. Historical toggle requests remain accepted
 for old clients. Only full admins can change these restrictions, protected staff
 accounts cannot be targeted, and failed storage writes leave the live set intact.
