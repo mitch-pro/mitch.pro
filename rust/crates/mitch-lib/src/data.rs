@@ -220,6 +220,14 @@ impl DataStore {
                         message TEXT NOT NULL,
                         details TEXT DEFAULT ''
                     );
+                    CREATE TABLE IF NOT EXISTS matrix_outside_approvals (
+                        email TEXT PRIMARY KEY,
+                        status TEXT NOT NULL DEFAULT 'pending',
+                        requested_at INTEGER NOT NULL,
+                        decided_at INTEGER,
+                        decided_by TEXT NOT NULL DEFAULT ''
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_matrix_outside_approvals_status ON matrix_outside_approvals (status, requested_at);
                     CREATE TABLE IF NOT EXISTS virtual_machines (
                         id TEXT PRIMARY KEY,
                         owner_email TEXT NOT NULL,

@@ -70,3 +70,22 @@ locking, blue/green deployment and health checks still run. Quiet mode suppresse
 only deployment notifications; it does not change application email settings or
 send newsletter jobs. Never print deploy secrets or call production delivery
 endpoints as a health check.
+
+## Matrix: outside accounts and names
+
+- **Approval.** An *outside* account is any account whose normalized email isn't
+  `@student.rjuhsd.us` and that isn't staff. Until a moderator (or admin) approves
+  it, the Matrix gateway rejects its chat sends (messages, reactions, stickers)
+  with 403; the first blocked attempt queues it as `pending` in the
+  `matrix_outside_approvals` SQL table. `GET /api/admin/matrix/outside-accounts`
+  lists the pending queue and `POST` with `{email, approved}` approves or denies;
+  both require moderator or higher and the decision is written to the admin action
+  log. There is no admin-panel page for this yet.
+- **No DMs to students.** Outside accounts, approved or not, can't `createRoom`
+  with, or `invite`, a student account (the gateway resolves the target Matrix ID
+  to an email and checks the domain). Staff are exempt.
+- **Names.** Profile saves (username, display name, nickname) and Matrix display
+  name changes are rejected when `mitch_lib::matrix::name_blocked` matches: any
+  chat-blocked word, or a severe slur anywhere inside the name after folding case,
+  separators and common character swaps. The ban purge also redacts the banned
+  user's own join/membership events, which removes their name from the join notice.

@@ -302,6 +302,21 @@ fn post_profile(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -
         username
     };
 
+    let nickname_raw = body.get("nickname").and_then(|v| v.as_str()).unwrap_or("");
+    let display_name_raw = body
+        .get("displayName")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    if [req_username, nickname_raw, display_name_raw]
+        .iter()
+        .any(|name| mitch_lib::matrix::name_blocked(name))
+    {
+        return json_response(
+            400,
+            json!({ "error": "That name isn't allowed. Pick a different one." }),
+        );
+    }
+
     let pfp_raw = body.get("pfp").and_then(|v| v.as_str()).unwrap_or("");
     let bg_raw = body
         .get("background")

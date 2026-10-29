@@ -2099,7 +2099,16 @@ pub async fn purge_banned_matrix_user_all_rooms(
                 let sender = ev.get("sender").and_then(Value::as_str).unwrap_or("");
                 // State events (membership, power levels) can't be redacted
                 // like messages, and an already-redacted event has nothing left.
-                let is_state = ev.get("state_key").is_some();
+                // State events can't be redacted like messages, with one
+                // exception: the user's own m.room.member event, whose
+                // redaction strips the display name/avatar from the join notice.
+                let is_own_member_event = ev.get("type").and_then(Value::as_str)
+                    == Some("m.room.member")
+                    && ev
+                        .get("state_key")
+                        .and_then(Value::as_str)
+                        .is_some_and(|k| k.eq_ignore_ascii_case(sender));
+                let is_state = ev.get("state_key").is_some() && !is_own_member_event;
                 let already_redacted = ev
                     .get("unsigned")
                     .and_then(|u| u.get("redacted_because"))
@@ -7641,6 +7650,83 @@ pub async fn handle_matrix_gateway(
         }
     }
 
+    // Outside accounts can't start DMs with, or invite, student accounts.
+    static CREATE_ROOM_RE: OnceLock<regex::Regex> = OnceLock::new();
+    let create_room_re = CREATE_ROOM_RE.get_or_init(|| {
+        regex::Regex::new(r"^/_matrix/client/(?:v3|r0)/createRoom/?$")
+            .unwrap_or_else(|_| unreachable_regex())
+    });
+    static INVITE_RE: OnceLock<regex::Regex> = OnceLock::new();
+    let invite_re = INVITE_RE.get_or_init(|| {
+        regex::Regex::new(r"^/_matrix/client/(?:v3|r0)/rooms/[^/]+/invite/?$")
+            .unwrap_or_else(|_| unreachable_regex())
+    });
+    if method == Method::POST
+        && !body_bytes.is_empty()
+        && (create_room_re.is_match(path) || invite_re.is_match(path))
+    {
+        if let Ok(payload) = serde_json::from_slice::<Value>(body_bytes) {
+            let mut targets: Vec<String> = payload
+                .get("invite")
+                .and_then(Value::as_array)
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            if let Some(uid) = payload.get("user_id").and_then(Value::as_str) {
+                targets.push(uid.to_string());
+            }
+            if !targets.is_empty() {
+                let account = resolve_matrix_account(state, headers, Some(&payload)).await;
+                let is_staff = is_matrix_staff_member(state, headers, account.as_ref());
+                let requester_is_outside = account.as_ref().is_some_and(|a| {
+                    !a.norm_email.is_empty() && !mitch_lib::matrix::is_student_email(&a.norm_email)
+                });
+                if !is_staff
+                    && requester_is_outside
+                    && targets.iter().any(|t| {
+                        find_profile_email_by_matrix_user_id(state, t)
+                            .is_some_and(|e| mitch_lib::matrix::is_student_email(&e))
+                    })
+                {
+                    return Some(cors_json_response(
+                        403,
+                        json!({
+                            "errcode": "M_FORBIDDEN",
+                            "error": "You can't message student accounts directly."
+                        }),
+                    ));
+                }
+            }
+        }
+    }
+
+    // Reject display names containing blocked words before they reach the homeserver.
+    static DISPLAYNAME_PUT_RE: OnceLock<regex::Regex> = OnceLock::new();
+    let displayname_put_re = DISPLAYNAME_PUT_RE.get_or_init(|| {
+        regex::Regex::new(r"^/_matrix/client/(?:v3|r0)/profile/[^/]+/displayname/?$")
+            .unwrap_or_else(|_| unreachable_regex())
+    });
+    if method == Method::PUT && displayname_put_re.is_match(path) {
+        if let Ok(payload) = serde_json::from_slice::<Value>(body_bytes) {
+            if payload
+                .get("displayname")
+                .and_then(Value::as_str)
+                .is_some_and(mitch_lib::matrix::name_blocked)
+            {
+                return Some(cors_json_response(
+                    403,
+                    json!({
+                        "errcode": "M_FORBIDDEN",
+                        "error": "That name isn't allowed. Pick a different one."
+                    }),
+                ));
+            }
+        }
+    }
+
     // Enforce slowmode, room lockdown, and user mute on send
     static SEND_RE: OnceLock<regex::Regex> = OnceLock::new();
     let send_re = SEND_RE.get_or_init(|| {
@@ -7670,6 +7756,33 @@ pub async fn handle_matrix_gateway(
 
                 let is_staff = is_matrix_staff_member(state, headers, sender_account.as_ref());
                 if !is_staff {
+                    // Outside (non-student) accounts need a moderator's approval
+                    // before they can chat anywhere; the attempt queues them.
+                    if let Some(acc) = sender_account.as_ref() {
+                        if !acc.norm_email.is_empty()
+                            && !mitch_lib::matrix::is_student_email(&acc.norm_email)
+                        {
+                            let status = mitch_lib::matrix::outside_approval_status(
+                                &state.store,
+                                &acc.norm_email,
+                            );
+                            if status.as_deref() != Some("approved") {
+                                if status.is_none() {
+                                    mitch_lib::matrix::outside_approval_request(
+                                        &state.store,
+                                        &acc.norm_email,
+                                    );
+                                }
+                                return Some(cors_json_response(
+                                    403,
+                                    json!({
+                                        "errcode": "M_FORBIDDEN",
+                                        "error": "A moderator needs to approve your account before you can chat."
+                                    }),
+                                ));
+                            }
+                        }
+                    }
                     let room_settings = load_matrix_room_settings(state, &target_room_id);
                     if room_settings.get("roomMuted").and_then(|v| v.as_bool()) == Some(true) {
                         return Some(cors_json_response(

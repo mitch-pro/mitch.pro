@@ -105,6 +105,56 @@ pub fn handle(
             json!({ "bans": bans, "restrictions":restrictions, "supportsTimedBans":true,"supportsChatCleanup":true, "chatCleanup":mitch_lib::chat_cleanup::statuses(&state.store) }),
         ));
     }
+    // GET /api/admin/matrix/outside-accounts — outside (non-student) accounts
+    // waiting for permission to chat in Matrix. Moderators and up.
+    if path == "/api/admin/matrix/outside-accounts" && *method == Method::GET {
+        if !ctx.is_any_admin(state) {
+            return Some(forbidden());
+        }
+        return Some(json_response(
+            200,
+            json!({ "pending": mitch_lib::matrix::outside_approvals_pending(&state.store) }),
+        ));
+    }
+
+    // POST /api/admin/matrix/outside-accounts {email, approved} — approve or
+    // deny an outside account's Matrix chat access. Moderators and up.
+    if path == "/api/admin/matrix/outside-accounts" && *method == Method::POST {
+        if !ctx.is_any_admin(state) {
+            return Some(forbidden());
+        }
+        let email = mitch_lib::auth::normalize_email(body["email"].as_str().unwrap_or(""));
+        if !valid_email(&email) || mitch_lib::matrix::is_student_email(&email) {
+            return Some(json_response(
+                400,
+                json!({ "error": "an outside account email is required" }),
+            ));
+        }
+        let approved = body["approved"].as_bool().unwrap_or(false);
+        let actor = ctx.email(state);
+        if !mitch_lib::matrix::outside_approval_decide(&state.store, &email, approved, &actor) {
+            return Some(json_response(
+                500,
+                json!({ "error": "Could not save the decision." }),
+            ));
+        }
+        mitch_lib::admin::log_admin_action(
+            &state.store,
+            &state.cfg.data_dir,
+            &actor,
+            if approved {
+                "matrix_outside_approve"
+            } else {
+                "matrix_outside_deny"
+            },
+            json!({ "email": email }),
+        );
+        return Some(json_response(
+            200,
+            json!({ "ok": true, "email": email, "approved": approved }),
+        ));
+    }
+
     // POST /api/admin/moderators (admins only).
     if path == "/api/admin/moderators" && *method == Method::POST {
         if !ctx.is_admin(state) {

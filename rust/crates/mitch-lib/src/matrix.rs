@@ -139,9 +139,118 @@ pub const MATRIX_BLOCKED_TERMS: &[&str] = &[
     "pussy",
     "faggot",
     "nigger",
+    "niggers",
     "nigga",
+    "niggas",
+    "niggah",
+    "niggaz",
+    "nigguh",
+    "faggots",
     "retard",
+    "retards",
 ];
+
+/// Slurs rejected anywhere inside a name, not just as a whole word, so
+/// "mitch.<slur>" or "mitch<slur>" can't slip past the word-boundary chat filter.
+const NAME_BLOCKED_SUBSTRINGS: &[&str] = &["nigger", "nigga", "faggot", "retard"];
+
+/// True when a username, display name or nickname contains a blocked term:
+/// any chat-blocked word, or a severe slur as a substring after folding case,
+/// separators and common character swaps (1->i, 3->e, 0->o, 4->a, 5->s, @->a, $->s).
+pub fn name_blocked(text: &str) -> bool {
+    if text.trim().is_empty() {
+        return false;
+    }
+    if matrix_message_blocked(&serde_json::json!({ "body": text })) {
+        return true;
+    }
+    let folded: String = text
+        .to_lowercase()
+        .chars()
+        .map(|c| match c {
+            '1' | '!' | '|' => 'i',
+            '3' => 'e',
+            '0' => 'o',
+            '4' | '@' => 'a',
+            '5' | '$' => 's',
+            other => other,
+        })
+        .filter(|c| c.is_alphanumeric())
+        .collect();
+    NAME_BLOCKED_SUBSTRINGS.iter().any(|t| folded.contains(t))
+}
+
+/// Storage domain of student accounts (see `auth::normalize_email`).
+pub const STUDENT_EMAIL_DOMAIN: &str = "@student.rjuhsd.us";
+
+/// True for a normalized student address. Everything else (and not staff) is
+/// an "outside" account.
+pub fn is_student_email(norm_email: &str) -> bool {
+    norm_email.to_lowercase().ends_with(STUDENT_EMAIL_DOMAIN)
+}
+
+fn approvals_now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+/// Outside-account Matrix approval status: `Some("approved" | "pending" |
+/// "denied")`, or `None` if the account never asked.
+pub fn outside_approval_status(store: &crate::data::DataStore, norm_email: &str) -> Option<String> {
+    let conn = store.conn();
+    conn.query_row(
+        "SELECT status FROM matrix_outside_approvals WHERE email = ?1",
+        [norm_email],
+        |row| row.get::<_, String>(0),
+    )
+    .ok()
+}
+
+/// Records that an outside account tried to chat, so moderators can see it.
+/// Never downgrades an existing decision.
+pub fn outside_approval_request(store: &crate::data::DataStore, norm_email: &str) {
+    let conn = store.conn();
+    let _ = conn.execute(
+        "INSERT OR IGNORE INTO matrix_outside_approvals (email, status, requested_at) VALUES (?1, 'pending', ?2)",
+        rusqlite::params![norm_email, approvals_now_ms()],
+    );
+}
+
+/// A moderator's decision. Creates the row if the account hasn't asked yet.
+pub fn outside_approval_decide(
+    store: &crate::data::DataStore,
+    norm_email: &str,
+    approved: bool,
+    decided_by: &str,
+) -> bool {
+    let status = if approved { "approved" } else { "denied" };
+    let conn = store.conn();
+    conn.execute(
+        "INSERT INTO matrix_outside_approvals (email, status, requested_at, decided_at, decided_by)
+         VALUES (?1, ?2, ?3, ?3, ?4)
+         ON CONFLICT(email) DO UPDATE SET status = excluded.status,
+            decided_at = excluded.decided_at, decided_by = excluded.decided_by",
+        rusqlite::params![norm_email, status, approvals_now_ms(), decided_by],
+    )
+    .is_ok()
+}
+
+/// Accounts waiting for a decision, oldest first.
+pub fn outside_approvals_pending(store: &crate::data::DataStore) -> Vec<serde_json::Value> {
+    let conn = store.conn();
+    let Ok(mut stmt) = conn.prepare(
+        "SELECT email, requested_at FROM matrix_outside_approvals WHERE status = 'pending' ORDER BY requested_at",
+    ) else {
+        return Vec::new();
+    };
+    stmt.query_map([], |row| {
+        Ok(serde_json::json!({ "email": row.get::<_, String>(0)?, "requestedAt": row.get::<_, i64>(1)? }))
+    })
+    .map(|rows| rows.flatten().collect())
+    .unwrap_or_default()
+}
 
 /// Normalizes text for word matching: lowercase, non-alphanumeric converted to
 /// spaces, whitespace collapsed and trimmed.
@@ -269,6 +378,69 @@ pub fn matrix_message_blocked(content: &serde_json::Value) -> bool {
 
 #[cfg(test)]
 mod tests {
+
+    fn approvals_store() -> (std::path::PathBuf, crate::data::DataStore) {
+        let dir = std::env::temp_dir().join(format!(
+            "mitch-lib-matrix-approvals-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("data")).unwrap_or_default();
+        let store = crate::data::DataStore::open(&dir, &dir.join("data"))
+            .unwrap_or_else(|e| panic!("store: {e}"));
+        (dir, store)
+    }
+
+    #[test]
+    fn names_with_slurs_are_blocked_even_when_joined_to_other_text() {
+        assert!(name_blocked("mitch.nigger"));
+        assert!(name_blocked("MitchNigga"));
+        assert!(name_blocked("n1gg3r"));
+        assert!(name_blocked("some faggots"));
+        assert!(!name_blocked("Mitch"));
+        assert!(!name_blocked("Scunthorpe United"));
+        assert!(!name_blocked(""));
+    }
+
+    #[test]
+    fn chat_filter_catches_plural_slur_forms() {
+        assert!(matrix_message_blocked(
+            &serde_json::json!({ "body": "you niggers" })
+        ));
+        assert!(matrix_message_blocked(
+            &serde_json::json!({ "body": "retards" })
+        ));
+    }
+
+    #[test]
+    fn outside_approval_lifecycle() {
+        let (dir, store) = approvals_store();
+        let email = "someone@example.com";
+        assert_eq!(outside_approval_status(&store, email), None);
+        outside_approval_request(&store, email);
+        assert_eq!(
+            outside_approval_status(&store, email).as_deref(),
+            Some("pending")
+        );
+        assert_eq!(outside_approvals_pending(&store).len(), 1);
+        assert!(outside_approval_decide(&store, email, true, "mod@x"));
+        assert_eq!(
+            outside_approval_status(&store, email).as_deref(),
+            Some("approved")
+        );
+        // A later chat attempt must not undo a decision.
+        outside_approval_request(&store, email);
+        assert_eq!(
+            outside_approval_status(&store, email).as_deref(),
+            Some("approved")
+        );
+        assert!(outside_approvals_pending(&store).is_empty());
+        assert!(is_student_email("a@student.rjuhsd.us"));
+        assert!(!is_student_email("a@example.com"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
     use super::*;
     use serde_json::json;
 
