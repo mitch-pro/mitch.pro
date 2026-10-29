@@ -94,3 +94,11 @@ endpoints as a health check.
   `user_<id>`). `POST /api/admin/matrix/purge-user {target}` (moderator or higher;
   `target` is an email or a Matrix ID) re-runs the purge for an account that is
   already banned, without unbanning.
+- **Hidden membership lines.** Redaction can't remove a name that is the Matrix
+  user ID itself (IDs are permanent, so a redacted join line still renders the
+  ID). Instead the gateway drops `m.room.member` events showing a blocked name
+  (user ID localpart, display name, or previous display name) from every
+  successful GET response (`/sync`, `/messages`, `/members`, ...) via
+  `mitch_lib::matrix::strip_blocked_name_events`, so no client we serve shows
+  them. Responses that can't contain one aren't parsed. Clients that talk to the
+  homeserver directly, bypassing the gateway, are not covered.

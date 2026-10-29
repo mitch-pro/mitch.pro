@@ -8216,6 +8216,11 @@ pub async fn handle_matrix_gateway(
                 }
             }
 
+            let bytes = if method == Method::GET && status.is_success() {
+                crate::chat_cleanup::hide_blocked_name_events(bytes)
+            } else {
+                bytes
+            };
             let bytes = crate::chat_cleanup::filter_matrix_response(state, bytes);
             Some(proxy_response_with_cors(status, &upstream_headers, bytes))
         }

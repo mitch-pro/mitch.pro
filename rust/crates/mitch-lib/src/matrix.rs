@@ -180,6 +180,76 @@ pub fn name_blocked(text: &str) -> bool {
     NAME_BLOCKED_SUBSTRINGS.iter().any(|t| folded.contains(t))
 }
 
+/// Cheap pre-check for `strip_blocked_name_events`: true when the text might
+/// contain a blocked name (the same folding as `name_blocked`, applied to the
+/// whole body). A false positive only costs a JSON parse; it never changes output.
+pub fn text_may_contain_blocked_name(text: &str) -> bool {
+    let folded: String = text
+        .to_lowercase()
+        .chars()
+        .map(|c| match c {
+            '1' | '!' | '|' => 'i',
+            '3' => 'e',
+            '0' => 'o',
+            '4' | '@' => 'a',
+            '5' | '$' => 's',
+            other => other,
+        })
+        .filter(|c| c.is_alphanumeric())
+        .collect();
+    NAME_BLOCKED_SUBSTRINGS.iter().any(|t| folded.contains(t))
+}
+
+/// True for an `m.room.member` event that shows a blocked name: the user ID's
+/// localpart, the display name, or the previous display name (so "X changed
+/// their name from <blocked>" lines go too).
+fn member_event_shows_blocked_name(ev: &serde_json::Value) -> bool {
+    if ev.get("type").and_then(|v| v.as_str()) != Some("m.room.member") {
+        return false;
+    }
+    let localpart = ev
+        .get("state_key")
+        .and_then(|v| v.as_str())
+        .map(|k| k.trim_start_matches('@').split(':').next().unwrap_or(""))
+        .unwrap_or("");
+    let names = [
+        localpart,
+        ev.pointer("/content/displayname")
+            .and_then(|v| v.as_str())
+            .unwrap_or(""),
+        ev.pointer("/unsigned/prev_content/displayname")
+            .and_then(|v| v.as_str())
+            .unwrap_or(""),
+    ];
+    names.iter().any(|n| name_blocked(n))
+}
+
+/// Removes, from every event array in a Matrix response (sync timeline/state,
+/// /messages, /members, /context), the membership events that show a blocked
+/// name. Redaction can't hide these: a Matrix user ID is permanent, so a
+/// redacted join line still renders the ID. Returns true if anything was removed.
+pub fn strip_blocked_name_events(value: &mut serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::Array(items) => {
+            let before = items.len();
+            items.retain(|item| !member_event_shows_blocked_name(item));
+            let mut changed = items.len() != before;
+            for item in items.iter_mut() {
+                changed |= strip_blocked_name_events(item);
+            }
+            changed
+        }
+        serde_json::Value::Object(map) => {
+            let mut changed = false;
+            for v in map.values_mut() {
+                changed |= strip_blocked_name_events(v);
+            }
+            changed
+        }
+        _ => false,
+    }
+}
+
 /// Storage domain of student accounts (see `auth::normalize_email`).
 pub const STUDENT_EMAIL_DOMAIN: &str = "@student.rjuhsd.us";
 
@@ -378,6 +448,41 @@ pub fn matrix_message_blocked(content: &serde_json::Value) -> bool {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn strips_member_events_with_blocked_names_from_any_event_array() {
+        let mut v = serde_json::json!({
+            "rooms": { "join": { "!r:mitch.pro": {
+                "timeline": { "events": [
+                    { "type": "m.room.member", "state_key": "@mitch.nigger:mitch.pro",
+                      "content": { "membership": "join" } },
+                    { "type": "m.room.member", "state_key": "@fine:mitch.pro",
+                      "content": { "membership": "join", "displayname": "Sam" } },
+                    { "type": "m.room.member", "state_key": "@sam:mitch.pro",
+                      "content": { "membership": "join", "displayname": "Sam" },
+                      "unsigned": { "prev_content": { "displayname": "mitchnigger" } } },
+                    { "type": "m.room.message", "content": { "body": "hi" } }
+                ] },
+                "state": { "events": [
+                    { "type": "m.room.member", "state_key": "@x:mitch.pro",
+                      "content": { "membership": "ban", "displayname": "n1gger" } }
+                ] }
+            } } }
+        });
+        assert!(strip_blocked_name_events(&mut v));
+        let tl = &v["rooms"]["join"]["!r:mitch.pro"]["timeline"]["events"];
+        assert_eq!(tl.as_array().unwrap().len(), 2);
+        assert!(v["rooms"]["join"]["!r:mitch.pro"]["state"]["events"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+        // Already-clean responses are left alone.
+        assert!(!strip_blocked_name_events(&mut v));
+        assert!(text_may_contain_blocked_name(
+            "{\"state_key\":\"@mitch.n1gger:x\"}"
+        ));
+        assert!(!text_may_contain_blocked_name("{\"body\":\"hello\"}"));
+    }
 
     fn approvals_store() -> (std::path::PathBuf, crate::data::DataStore) {
         let dir = std::env::temp_dir().join(format!(

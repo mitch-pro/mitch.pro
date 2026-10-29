@@ -87,6 +87,25 @@ fn redact_tree(
     }
 }
 
+/// Hides membership events that show a blocked name from a Matrix read
+/// response (see `mitch_lib::matrix::strip_blocked_name_events`). Responses that
+/// can't contain one are returned untouched without being parsed.
+pub fn hide_blocked_name_events(bytes: Bytes) -> Bytes {
+    let Ok(text) = std::str::from_utf8(&bytes) else {
+        return bytes;
+    };
+    if !mitch_lib::matrix::text_may_contain_blocked_name(text) {
+        return bytes;
+    }
+    let Ok(mut value) = serde_json::from_slice::<Value>(&bytes) else {
+        return bytes;
+    };
+    if !mitch_lib::matrix::strip_blocked_name_events(&mut value) {
+        return bytes;
+    }
+    Bytes::from(serde_json::to_vec(&value).unwrap_or_else(|_| bytes.to_vec()))
+}
+
 pub fn filter_matrix_response(state: &AppState, bytes: Bytes) -> Bytes {
     let cutoffs = sender_cutoffs(state);
     if cutoffs.is_empty() {
