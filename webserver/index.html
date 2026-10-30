@@ -13,7 +13,7 @@
 <title>mitch.pro</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"></noscript>
 <link rel="stylesheet" href="/app.css">
-<link rel="stylesheet" href="/home.css?v=13">
+<link rel="stylesheet" href="/home.css?v=14">
 <script src="/app-shell.js" defer></script>
 <script src="/home-friends.js?v=5" defer></script>
 <script>
@@ -578,6 +578,8 @@ function applyHomepagePrefs() {
   if (memberRail) {
     var showRail = (homePref.showMemberRail !== false) && !privPref.stealthDash;
     memberRail.style.display = showRail ? '' : 'none';
+    var edgeTab = document.getElementById('people-edge-trigger');
+    if (edgeTab) edgeTab.style.display = showRail ? '' : 'none';
   }
 
   var quick = document.querySelector('.home-features');
@@ -2804,7 +2806,7 @@ if (document.readyState === 'loading') {
 
 
 <!-- ══════════════════ Members & friends rail ══════════════════ -->
-<button id="people-edge-trigger" aria-label="Open People panel" aria-controls="member-side-rail" type="button"></button>
+<button id="people-edge-trigger" aria-label="Open People panel" aria-controls="member-side-rail" title="People" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3"/><circle cx="16.5" cy="10" r="2.3"/><path d="M3.5 19c.5-3.3 2.2-5 5.5-5s5 1.7 5.5 5M14 15c3.5-.5 5.5.8 6 3.5"/></svg></button>
 <div id="member-side-rail" class="is-collapsed" aria-expanded="false">
   <div class="members-rail-head">
     <div class="members-rail-mark" aria-hidden="true"><span></span><span></span></div>
