@@ -895,13 +895,25 @@ async fn request_access(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: 
         );
     }
 
+    let target_email = mitch_lib::profile::canonical_delivery_email(
+        &state.store,
+        state.data_dir(),
+        &state.id_secret,
+        &norm_email,
+    );
+    let target_email = if target_email.is_empty() {
+        norm_email.clone()
+    } else {
+        target_email
+    };
+
     let otp = format!("{:06}", (rand::random::<u32>() % 900_000) + 100_000);
     let token = random_bytes_hex(24);
     mitch_lib::tokens::token_set(
         &state.store,
         &token,
         &json!({
-            "email": email,
+            "email": target_email,
             "norm_email": norm_email,
             "otp": otp,
             "created_at": (now_ms() as f64) / 1000.0,
@@ -911,8 +923,8 @@ async fn request_access(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: 
         }),
     );
 
-    let html = make_verification_code_html(state, "Password Reset", &otp, 30, &email);
-    send_email_bg(state, &email, "Your mitch.pro Reset Code", &html);
+    let html = make_verification_code_html(state, "Password Reset", &otp, 30, &target_email);
+    send_email_bg(state, &target_email, "Your mitch.pro Reset Code", &html);
 
     json_resp(200, json!({ "success": true }))
 }
@@ -961,23 +973,69 @@ async fn claim_token(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u
 
     // OTP fallback for 6-digit codes
     if entry.is_none() && token.len() == 6 && token.chars().all(|c| c.is_ascii_digit()) {
+        let req_email = body
+            .get("email")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
+        if req_email.is_empty() {
+            return json_resp(
+                400,
+                json!({ "success": false, "message": "Email is required to verify a 6-digit reset code." }),
+            );
+        }
+        let req_norm = auth::normalize_email(req_email);
         let tokens = mitch_lib::tokens::token_all(&state.store);
+        let mut matched_key: Option<String> = None;
+        let mut matched_entry: Option<serde_json::Value> = None;
         if let Some(obj) = tokens.as_object() {
             for (k, t) in obj {
                 let t_type = t.get("type").and_then(|v| v.as_str()).unwrap_or("");
-                let t_otp = t.get("otp").and_then(|v| v.as_str()).unwrap_or("");
+                let t_norm = t
+                    .get("norm_email")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| {
+                        let e = t.get("email").and_then(|v| v.as_str()).unwrap_or("");
+                        auth::normalize_email(e)
+                    });
                 let t_used = t.get("used").and_then(|v| v.as_bool()).unwrap_or(false);
                 let t_exp = t.get("expires").and_then(|v| v.as_i64()).unwrap_or(0);
                 if t_type == "reset"
-                    && t_otp == token
+                    && t_norm == req_norm
                     && !t_used
                     && (t_exp == 0 || now_ms() < t_exp)
                 {
-                    token_key = k.clone();
-                    entry = Some(t.clone());
+                    matched_key = Some(k.clone());
+                    matched_entry = Some(t.clone());
                     break;
                 }
             }
+        }
+        if let (Some(k), Some(mut t)) = (matched_key, matched_entry) {
+            let t_otp = t.get("otp").and_then(|v| v.as_str()).unwrap_or("");
+            let attempts = t.get("attempts").and_then(|v| v.as_u64()).unwrap_or(0);
+            if t_otp == token {
+                token_key = k;
+                entry = Some(t);
+            } else {
+                let new_attempts = attempts + 1;
+                if new_attempts >= 5 {
+                    mitch_lib::tokens::token_remove(&state.store, &k);
+                    return json_resp(
+                        400,
+                        json!({ "success": false, "message": "Too many failed attempts. Reset code expired." }),
+                    );
+                } else {
+                    if let Some(obj) = t.as_object_mut() {
+                        obj.insert("attempts".to_string(), json!(new_attempts));
+                    }
+                    mitch_lib::tokens::token_set(&state.store, &k, &t);
+                    return json_resp(400, json!({ "success": false, "message": "Invalid token" }));
+                }
+            }
+        } else {
+            return json_resp(400, json!({ "success": false, "message": "Invalid token" }));
         }
     }
 
@@ -2087,6 +2145,7 @@ mod tests {
 
         // Claim token with OTP
         let claim_req = json!({
+            "email": "charlie@student.rjuhsd.us",
             "token": otp,
             "password": "NewSecretPassword123!"
         });

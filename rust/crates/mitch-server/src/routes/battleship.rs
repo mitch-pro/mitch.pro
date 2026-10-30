@@ -697,36 +697,43 @@ fn fire(state: &Arc<AppState>, body: &Value, my_norm: &str) -> axum::response::R
         if !g.collusion_flag {
             // `g.bet || 0` — bet is never NaN (clamped at creation).
             let bet = if g.bet == 0.0 { 0.0 } else { g.bet };
-            let mut win_coins = 40.0 + bet * 2.0;
+            let total_shots = g.hit_log.len();
+            let has_played = g.status == "active" && total_shots >= 4;
+            let bonus = if has_played { 40.0 } else { 0.0 };
+            let mut win_coins = bonus + bet * 2.0;
             let friend = are_friends(state, &g.player1, &g.player2);
-            if friend {
+            if friend && bonus > 0.0 {
                 win_coins = (win_coins * 1.5).floor();
             }
             let premium = mitch_lib::auth::is_premium_email(&state.store, my_norm);
-            if premium {
+            if premium && bonus > 0.0 {
                 win_coins = (win_coins * 2.0).floor();
             }
-            mitch_lib::coins::add_coins(
-                &state.store,
-                &state.cfg.data_dir,
-                my_norm,
-                win_coins,
-                state.coin_multiplier(),
-                &format!(
-                    "battleship: win payout (bet={}, friend={}, premium={})",
-                    js_num_str(g.bet),
-                    friend,
-                    premium
-                ),
-            );
-            mitch_lib::achievements::update_stat(
-                &state.store,
-                &state.cfg.data_dir,
-                my_norm,
-                "battleship_wins",
-                1.0,
-                state.coin_multiplier(),
-            );
+            if win_coins > 0.0 {
+                mitch_lib::coins::add_coins(
+                    &state.store,
+                    &state.cfg.data_dir,
+                    my_norm,
+                    win_coins,
+                    state.coin_multiplier(),
+                    &format!(
+                        "battleship: win payout (bet={}, friend={}, premium={})",
+                        js_num_str(g.bet),
+                        friend,
+                        premium
+                    ),
+                );
+            }
+            if has_played {
+                mitch_lib::achievements::update_stat(
+                    &state.store,
+                    &state.cfg.data_dir,
+                    my_norm,
+                    "battleship_wins",
+                    1.0,
+                    state.coin_multiplier(),
+                );
+            }
         } else {
             g.result = Some(format!("{} wins (collusion detected — no payout)", my_norm));
         }

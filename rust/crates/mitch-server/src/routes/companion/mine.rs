@@ -222,9 +222,10 @@ fn delete(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Resp
     if let Err(resp) = owned_character(state, &email, &id) {
         return resp;
     }
-    let dir = images_dir(state, &id);
-    if dir.exists() {
-        let _ = std::fs::remove_dir_all(&dir);
+    if let Some(dir) = images_dir(state, &id) {
+        if dir.exists() {
+            let _ = std::fs::remove_dir_all(&dir);
+        }
     }
     mitch_lib::companion::delete_character(&state.store, &id);
     json_response(200, json!({ "ok": true }))
@@ -292,7 +293,9 @@ async fn upload_image(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[
             json!({ "error": "unsupported image type (png/jpg/webp/gif only)" }),
         );
     }
-    let dir = images_dir(state, &character_id);
+    let Some(dir) = images_dir(state, &character_id) else {
+        return json_response(400, json!({ "error": "invalid character id" }));
+    };
     if std::fs::create_dir_all(&dir).is_err() {
         return json_response(500, json!({ "error": "failed to store image" }));
     }
@@ -319,7 +322,9 @@ fn delete_image(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -
         return json_response(400, json!({ "error": "invalid mood name" }));
     };
     if let Some(file) = mitch_lib::companion::character_image_file(&state.store, &id, &mood) {
-        let _ = std::fs::remove_file(images_dir(state, &id).join(file));
+        if let Some(dir) = images_dir(state, &id) {
+            let _ = std::fs::remove_file(dir.join(file));
+        }
     }
     mitch_lib::companion::remove_character_image(&state.store, &id, &mood);
     json_response(200, json!({ "ok": true }))

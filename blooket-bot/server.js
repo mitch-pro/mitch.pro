@@ -57,7 +57,9 @@ wss.on('connection', (ws) => {
         });
       } else if (data.type === 'input') {
         if (child && !child.killed) {
-          child.stdin.write(data.text + '\n');
+          const rawText = String(data.text ?? '');
+          const safeText = rawText.trim().startsWith('{') ? ' ' + rawText : rawText;
+          child.stdin.write(safeText + '\n');
         }
       } else if (data.type === 'gui-cheat' || data.type === 'eval-js') {
         if (child && !child.killed) {

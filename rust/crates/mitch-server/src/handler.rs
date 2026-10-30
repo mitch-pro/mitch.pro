@@ -688,7 +688,7 @@ pub async fn handle(
         let id_key = if mitch_lib::auth::valid_id(val, &state.id_secret) {
             format!("id:{val}")
         } else {
-            "anon".to_string()
+            format!("anon:{ip}")
         };
         if let Some((code, message)) = state.rate_limit_check(&ip, &id_key, &path) {
             return json_resp(code, serde_json::json!({ "error": message }));
@@ -697,7 +697,7 @@ pub async fn handle(
 
     // LiveKit dispatch follows the global ban check. Guest call support
     // remains available; known banned identities cannot use these routes.
-    if path.starts_with("/livekit") {
+    if path == "/livekit" || path.starts_with("/livekit/") {
         if let Some(resp) = crate::routes::livekit::handle_http(
             &state, &method, &path, headers, &search, body_bytes,
         ) {

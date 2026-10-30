@@ -48,8 +48,19 @@ pub(super) fn sanitize_mood(raw: &str) -> Option<String> {
     }
 }
 
-pub(super) fn images_dir(state: &AppState, character_id: &str) -> std::path::PathBuf {
-    state.data_dir().join("companion_images").join(character_id)
+pub(super) fn is_valid_character_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 64
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+pub(super) fn images_dir(state: &AppState, character_id: &str) -> Option<std::path::PathBuf> {
+    if !is_valid_character_id(character_id) {
+        return None;
+    }
+    Some(state.data_dir().join("companion_images").join(character_id))
 }
 
 pub(super) fn multipart_boundary(ct: &str) -> Option<String> {
@@ -197,12 +208,13 @@ fn delete(state: &Arc<AppState>, body_bytes: &[u8]) -> Response {
         return json_response(400, json!({ "error": "bad json" }));
     };
     let id = str_or(body.get("id"), "");
-    if id.is_empty() {
-        return json_response(400, json!({ "error": "id required" }));
+    if !is_valid_character_id(&id) {
+        return json_response(400, json!({ "error": "invalid character id" }));
     }
-    let dir = images_dir(state, &id);
-    if dir.exists() {
-        let _ = std::fs::remove_dir_all(&dir);
+    if let Some(dir) = images_dir(state, &id) {
+        if dir.exists() {
+            let _ = std::fs::remove_dir_all(&dir);
+        }
     }
     if mitch_lib::companion::delete_character(&state.store, &id) {
         json_response(200, json!({ "ok": true }))
@@ -287,7 +299,9 @@ async fn upload_image(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[
         );
     }
 
-    let dir = images_dir(state, &character_id);
+    let Some(dir) = images_dir(state, &character_id) else {
+        return json_response(400, json!({ "error": "invalid character id" }));
+    };
     if std::fs::create_dir_all(&dir).is_err() {
         return json_response(500, json!({ "error": "failed to store image" }));
     }
@@ -304,11 +318,16 @@ fn delete_image(state: &Arc<AppState>, body_bytes: &[u8]) -> Response {
         return json_response(400, json!({ "error": "bad json" }));
     };
     let id = str_or(body.get("id"), "");
+    if !is_valid_character_id(&id) {
+        return json_response(400, json!({ "error": "invalid character id" }));
+    }
     let Some(mood) = sanitize_mood(&str_or(body.get("mood"), "")) else {
         return json_response(400, json!({ "error": "invalid mood name" }));
     };
     if let Some(file) = mitch_lib::companion::character_image_file(&state.store, &id, &mood) {
-        let _ = std::fs::remove_file(images_dir(state, &id).join(file));
+        if let Some(dir) = images_dir(state, &id) {
+            let _ = std::fs::remove_file(dir.join(file));
+        }
     }
     mitch_lib::companion::remove_character_image(&state.store, &id, &mood);
     json_response(200, json!({ "ok": true }))
@@ -335,8 +354,8 @@ pub(super) fn serve_image(
     let maybe_file = mitch_lib::companion::character_image_file(&state.store, id, &mood)
         .or_else(|| mitch_lib::companion::character_fallback_image_file(&state.store, id));
 
-    if let Some(file) = maybe_file {
-        let path = images_dir(state, id).join(&file);
+    if let (Some(file), Some(dir)) = (maybe_file, images_dir(state, id)) {
+        let path = dir.join(&file);
         if let Ok(bytes) = std::fs::read(&path) {
             let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
             let mime = match ext {

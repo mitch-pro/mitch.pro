@@ -52,6 +52,66 @@ pub fn daily_login_set(store: &DataStore, norm_email: &str, data: &Value) {
     );
 }
 
+/// Atomically checks and claims today's daily login streak in a single BEGIN IMMEDIATE transaction.
+/// Returns Ok((new_streak, new_freezes, freeze_consumed)) on success, or Err("Already claimed today") if already claimed.
+pub fn daily_login_try_claim(
+    store: &DataStore,
+    norm_email: &str,
+    today_str: &str,
+    yesterday_str: &str,
+    is_bypassing: bool,
+) -> Result<(i64, i64, bool), &'static str> {
+    let conn = store.conn();
+    if conn.execute_batch("BEGIN IMMEDIATE").is_err() {
+        return Err("Database busy");
+    }
+    let existing: Option<(String, i64, i64)> = conn
+        .query_row(
+            "SELECT last_claim_date, streak, streak_freezes FROM daily_logins WHERE email = ?1",
+            rusqlite::params![norm_email],
+            |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, i64>(2)?,
+                ))
+            },
+        )
+        .ok();
+
+    let (last_claim_date, mut streak, mut freezes) = existing.unwrap_or_default();
+    if last_claim_date == today_str && !is_bypassing {
+        let _ = conn.execute_batch("ROLLBACK");
+        return Err("Already claimed today");
+    }
+
+    let mut freeze_consumed = false;
+    if last_claim_date == yesterday_str {
+        streak += 1;
+    } else if last_claim_date.is_empty() {
+        streak = 1;
+    } else if freezes > 0 {
+        freezes -= 1;
+        streak += 1;
+        freeze_consumed = true;
+    } else {
+        streak = 1;
+    }
+
+    let now = now_millis();
+    let res = conn.execute(
+        "INSERT INTO daily_logins (email, last_claim_date, streak, streak_freezes, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(email) DO UPDATE SET last_claim_date = ?2, streak = ?3, streak_freezes = ?4, updated_at = ?5",
+        rusqlite::params![norm_email, today_str, streak, freezes, now],
+    );
+    if res.is_err() {
+        let _ = conn.execute_batch("ROLLBACK");
+        return Err("Database error");
+    }
+    let _ = conn.execute_batch("COMMIT");
+    Ok((streak, freezes, freeze_consumed))
+}
+
 pub fn rename_daily_login_email(store: &DataStore, old_norm: &str, new_norm: &str) {
     let conn = store.conn();
     let _ = conn.execute(

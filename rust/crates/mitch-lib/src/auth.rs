@@ -1245,8 +1245,13 @@ pub fn check_rate_limit(
             | "/api/woodcreek/auth/token"
             | "/api/woodcreek/auth/revoke"
     );
+    let effective_id_key = if id_key == "anon" {
+        format!("anon:{ip}")
+    } else {
+        id_key.to_string()
+    };
     if limiter.rate_limited(&format!("ip:{ip}"), endpoint)
-        || (!public_presence && limiter.rate_limited(id_key, endpoint))
+        || (!public_presence && limiter.rate_limited(&effective_id_key, endpoint))
     {
         return Some((429, "Too many requests, slow down"));
     }

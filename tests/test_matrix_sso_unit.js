@@ -618,6 +618,7 @@ try {
     method: 'POST',
     headers: {
       'Cookie': `studentId=${adminSid}`,
+      'X-Mitch-Requested-With': '1',
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({ userId: '@matrixtestuser:mitch.pro', powerLevel: 50 })
@@ -630,7 +631,7 @@ try {
   console.log('--- 11. Testing POST /api/matrix/moderation/kick, ban, redact ---');
   const resKick = await fetch(`${BASE_URL}/api/matrix/moderation/kick`, {
     method: 'POST',
-    headers: { 'Cookie': `studentId=${adminSid}`, 'Content-Type': 'application/json' },
+    headers: { 'Cookie': `studentId=${adminSid}`, 'X-Mitch-Requested-With': '1', 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId: '@test_spammer:mitch.pro', reason: 'Trolling' })
   });
   assert.equal(resKick.status, 200);
@@ -638,7 +639,7 @@ try {
 
   const resBan = await fetch(`${BASE_URL}/api/matrix/moderation/ban`, {
     method: 'POST',
-    headers: { 'Cookie': `studentId=${adminSid}`, 'Content-Type': 'application/json' },
+    headers: { 'Cookie': `studentId=${adminSid}`, 'X-Mitch-Requested-With': '1', 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId: '@test_spammer:mitch.pro', reason: 'Repeated offenses' })
   });
   assert.equal(resBan.status, 200);
@@ -646,7 +647,7 @@ try {
 
   const resRedact = await fetch(`${BASE_URL}/api/matrix/moderation/redact`, {
     method: 'POST',
-    headers: { 'Cookie': `studentId=${adminSid}`, 'Content-Type': 'application/json' },
+    headers: { 'Cookie': `studentId=${adminSid}`, 'X-Mitch-Requested-With': '1', 'Content-Type': 'application/json' },
     body: JSON.stringify({ eventId: '$bad_message_test_123', reason: 'Violation' })
   });
   assert.equal(resRedact.status, 200);
@@ -901,7 +902,7 @@ try {
   // Non-admin cannot set slowmode
   const resSlowForbidden = await fetch(`${BASE_URL}/api/matrix/moderation/slowmode`, {
     method: 'POST',
-    headers: { 'Cookie': `studentId=${testSid}`, 'Content-Type': 'application/json' },
+    headers: { 'Cookie': `studentId=${testSid}`, 'X-Mitch-Requested-With': '1', 'Content-Type': 'application/json' },
     body: JSON.stringify({ seconds: 5 })
   });
   assert.equal(resSlowForbidden.status, 403, 'Non-admin setting slowmode must return 403');
@@ -910,7 +911,7 @@ try {
   const slowTestRoom = '!slowmode_test_room:mitch.pro';
   const resSlowSet = await fetch(`${BASE_URL}/api/matrix/moderation/slowmode`, {
     method: 'POST',
-    headers: { 'Cookie': `studentId=${adminSid}`, 'Content-Type': 'application/json' },
+    headers: { 'Cookie': `studentId=${adminSid}`, 'X-Mitch-Requested-With': '1', 'Content-Type': 'application/json' },
     body: JSON.stringify({ roomId: slowTestRoom, seconds: 5 })
   });
   assert.equal(resSlowSet.status, 200, 'Admin setting slowmode must return 200');
@@ -948,7 +949,7 @@ try {
   // Admin disables slowmode (0 seconds)
   const resSlowReset = await fetch(`${BASE_URL}/api/matrix/moderation/slowmode`, {
     method: 'POST',
-    headers: { 'Cookie': `studentId=${adminSid}`, 'Content-Type': 'application/json' },
+    headers: { 'Cookie': `studentId=${adminSid}`, 'X-Mitch-Requested-With': '1', 'Content-Type': 'application/json' },
     body: JSON.stringify({ roomId: slowTestRoom, seconds: 0 })
   });
   assert.equal(resSlowReset.status, 200);
@@ -959,7 +960,7 @@ try {
   // Non-admin cannot mute
   const resMuteForbidden = await fetch(`${BASE_URL}/api/matrix/moderation/mute-user`, {
     method: 'POST',
-    headers: { 'Cookie': `studentId=${testSid}`, 'Content-Type': 'application/json' },
+    headers: { 'Cookie': `studentId=${testSid}`, 'X-Mitch-Requested-With': '1', 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId: '@matrixtestuser:mitch.pro', durationSeconds: 60 })
   });
   assert.equal(resMuteForbidden.status, 403, 'Non-admin muting user must return 403');
@@ -967,7 +968,7 @@ try {
   // Admin mutes user
   const resMute = await fetch(`${BASE_URL}/api/matrix/moderation/mute-user`, {
     method: 'POST',
-    headers: { 'Cookie': `studentId=${adminSid}`, 'Content-Type': 'application/json' },
+    headers: { 'Cookie': `studentId=${adminSid}`, 'X-Mitch-Requested-With': '1', 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId: '@matrixtestuser:mitch.pro', durationSeconds: 60, reason: 'Spamming test' })
   });
   assert.equal(resMute.status, 200, 'Admin muting user must return 200');
@@ -995,7 +996,7 @@ try {
   // Admin unmutes user
   const resUnmute = await fetch(`${BASE_URL}/api/matrix/moderation/unmute-user`, {
     method: 'POST',
-    headers: { 'Cookie': `studentId=${adminSid}`, 'Content-Type': 'application/json' },
+    headers: { 'Cookie': `studentId=${adminSid}`, 'X-Mitch-Requested-With': '1', 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId: '@matrixtestuser:mitch.pro' })
   });
   assert.equal(resUnmute.status, 200, 'Admin unmuting user must return 200');
@@ -1014,7 +1015,7 @@ try {
   // Non-admin cannot lock down room
   const resLockForbidden = await fetch(`${BASE_URL}/api/matrix/moderation/mute-room`, {
     method: 'POST',
-    headers: { 'Cookie': `studentId=${testSid}`, 'Content-Type': 'application/json' },
+    headers: { 'Cookie': `studentId=${testSid}`, 'X-Mitch-Requested-With': '1', 'Content-Type': 'application/json' },
     body: JSON.stringify({ muted: true })
   });
   assert.equal(resLockForbidden.status, 403, 'Non-admin locking room must return 403');
@@ -1022,7 +1023,7 @@ try {
   // Admin locks down room
   const resLock = await fetch(`${BASE_URL}/api/matrix/moderation/mute-room`, {
     method: 'POST',
-    headers: { 'Cookie': `studentId=${adminSid}`, 'Content-Type': 'application/json' },
+    headers: { 'Cookie': `studentId=${adminSid}`, 'X-Mitch-Requested-With': '1', 'Content-Type': 'application/json' },
     body: JSON.stringify({ muted: true })
   });
   assert.equal(resLock.status, 200);
@@ -1046,7 +1047,7 @@ try {
   // Admin unlocks room
   const resUnlock = await fetch(`${BASE_URL}/api/matrix/moderation/mute-room`, {
     method: 'POST',
-    headers: { 'Cookie': `studentId=${adminSid}`, 'Content-Type': 'application/json' },
+    headers: { 'Cookie': `studentId=${adminSid}`, 'X-Mitch-Requested-With': '1', 'Content-Type': 'application/json' },
     body: JSON.stringify({ muted: false })
   });
   assert.equal(resUnlock.status, 200);

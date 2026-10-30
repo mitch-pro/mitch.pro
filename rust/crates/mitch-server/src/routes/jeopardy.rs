@@ -1334,6 +1334,9 @@ fn evaluate_final_jeopardy(lobby: &mut JeopardyLobby) {
 fn end_jeopardy_game(state: &AppState, lobby: &mut JeopardyLobby) {
     lobby.status = "over".to_string();
     let top_score = lobby.scores.values().copied().fold(i64::MIN, i64::max);
+    if top_score <= 0 {
+        return;
+    }
     let winners: Vec<String> = lobby
         .scores
         .iter()

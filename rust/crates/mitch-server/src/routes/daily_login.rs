@@ -248,19 +248,6 @@ fn daily_login_claim(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     };
 
     let norm = auth::normalize_email(&email);
-    let mut data =
-        mitch_lib::daily_logins::daily_login_get(&state.store, &norm).unwrap_or(json!({}));
-
-    let last_claim_date = data
-        .get("lastClaimDate")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let mut streak = data.get("streak").and_then(|v| v.as_i64()).unwrap_or(0);
-    let mut freezes = data
-        .get("streakFreezes")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0);
 
     let today_str = chrono::Utc::now().format("%Y-%m-%d").to_string();
     let yesterday_str = (chrono::Utc::now() - chrono::Duration::days(1))
@@ -278,37 +265,16 @@ fn daily_login_claim(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         .unwrap_or(false);
     let is_bypassing = is_tester && bypass_cooldowns;
 
-    if last_claim_date == today_str && !is_bypassing {
-        return json_resp(400, json!({ "error": "Already claimed today" }));
-    }
-
-    let mut freeze_consumed = false;
-    if last_claim_date == yesterday_str {
-        streak += 1;
-    } else if last_claim_date.is_empty() {
-        streak = 1;
-    } else {
-        if freezes > 0 {
-            freezes -= 1;
-            streak += 1;
-            freeze_consumed = true;
-        } else {
-            streak = 1;
-        }
-    }
-
-    if let Some(obj) = data.as_object_mut() {
-        obj.insert("lastClaimDate".into(), json!(today_str));
-        obj.insert("streak".into(), json!(streak));
-        obj.insert("streakFreezes".into(), json!(freezes));
-    } else {
-        data = json!({
-            "lastClaimDate": today_str,
-            "streak": streak,
-            "streakFreezes": freezes,
-        });
-    }
-    mitch_lib::daily_logins::daily_login_set(&state.store, &norm, &data);
+    let (streak, freezes, freeze_consumed) = match mitch_lib::daily_logins::daily_login_try_claim(
+        &state.store,
+        &norm,
+        &today_str,
+        &yesterday_str,
+        is_bypassing,
+    ) {
+        Ok(res) => res,
+        Err(err) => return json_resp(400, json!({ "error": err })),
+    };
 
     let reward = get_daily_reward(streak);
 

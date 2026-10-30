@@ -158,6 +158,47 @@ pub enum BetError {
     InsufficientFunds,
 }
 
+/// Atomically debits `amount` coins from `email` if their current balance is sufficient.
+/// Executes inside one `BEGIN IMMEDIATE` transaction to prevent parallel spend races.
+pub fn spend_coins(
+    store: &DataStore,
+    data_dir: &Path,
+    email: &str,
+    amount: f64,
+    reason: &str,
+) -> Result<f64, BetError> {
+    if email.is_empty() {
+        return Err(BetError::InsufficientFunds);
+    }
+    if !amount.is_finite() || amount <= 0.0 {
+        return Err(BetError::InvalidAmount);
+    }
+    let norm = normalize_email(email);
+    let conn = store.conn();
+    if conn.execute_batch("BEGIN IMMEDIATE").is_err() {
+        return Err(BetError::InsufficientFunds);
+    }
+    let before = conn
+        .query_row(
+            "SELECT balance FROM coins WHERE email = ?1",
+            rusqlite::params![norm],
+            |row| row.get::<_, f64>(0),
+        )
+        .unwrap_or(0.0);
+    if before < amount {
+        let _ = conn.execute_batch("ROLLBACK");
+        return Err(BetError::InsufficientFunds);
+    }
+    let after = js_round4(before - amount);
+    let _ = conn.execute(
+        "UPDATE coins SET balance = ?1, updated_at = ?2 WHERE email = ?3",
+        rusqlite::params![after, now_millis(), norm],
+    );
+    let _ = conn.execute_batch("COMMIT");
+    log_coin_change(data_dir, &norm, before, after, reason);
+    Ok(after)
+}
+
 /// Atomically resolves one casino bet: debits `bet` and credits `payout`
 /// (pass `0.0` for a loss) against the same row, inside one `BEGIN
 /// IMMEDIATE` transaction — there is no window between "check the

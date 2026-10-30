@@ -2070,6 +2070,59 @@ impl ProxmoxDesktopService {
         scratch_dir: &std::path::Path,
     ) -> Result<(String, u64), ProxmoxServiceError> {
         self.assert_configured()?;
+
+        // Validate destination to prevent SSRF against loopback or internal infrastructure
+        let parsed_url = url::Url::parse(source_url)
+            .map_err(|_| ProxmoxServiceError::new("INVALID_URL", "Invalid URL.", 400))?;
+        if parsed_url.scheme() != "http" && parsed_url.scheme() != "https" {
+            return Err(ProxmoxServiceError::new(
+                "INVALID_SCHEME",
+                "Only HTTP and HTTPS links are supported.",
+                400,
+            ));
+        }
+        let host_str = parsed_url.host_str().ok_or_else(|| {
+            ProxmoxServiceError::new("INVALID_HOST", "URL must include a valid host.", 400)
+        })?;
+        let port = parsed_url.port_or_known_default().unwrap_or(80);
+        let resolved = tokio::net::lookup_host((host_str, port))
+            .await
+            .map_err(|_| {
+                ProxmoxServiceError::new("DNS_FAILED", "Could not resolve hostname.", 400)
+            })?;
+        let addrs: Vec<_> = resolved.collect();
+        let is_public_ip = |ip: &std::net::IpAddr| match ip {
+            std::net::IpAddr::V4(v4) => {
+                !v4.is_loopback()
+                    && !v4.is_private()
+                    && !v4.is_link_local()
+                    && !v4.is_broadcast()
+                    && !v4.is_unspecified()
+                    && !v4.is_documentation()
+            }
+            std::net::IpAddr::V6(v6) => {
+                !v6.is_loopback()
+                    && !v6.is_unspecified()
+                    && (v6.segments()[0] & 0xfe00) != 0xfc00
+                    && (v6.segments()[0] & 0xffc0) != 0xfe80
+            }
+        };
+        if addrs.is_empty() || addrs.iter().any(|sa| !is_public_ip(&sa.ip())) {
+            return Err(ProxmoxServiceError::new(
+                "FORBIDDEN_HOST",
+                "Target host is not permitted.",
+                400,
+            ));
+        }
+
+        let download_client = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(Duration::from_secs(3600))
+            .build()
+            .map_err(|_| {
+                ProxmoxServiceError::new("CLIENT_INIT_FAILED", "Failed to build HTTP client.", 500)
+            })?;
+
         let upload_url = if self.verify_tls && !self.tls_server_name.is_empty() {
             format!(
                 "https://{}:{}/api2/json/nodes/{}/storage/{}/upload",
@@ -2102,8 +2155,7 @@ impl ProxmoxDesktopService {
             // timeout here kills the source stream mid-relay, which then
             // surfaces as a failure on the *upload* POST, since that body
             // is this one.
-            let download = match self
-                .client
+            let download = match download_client
                 .get(source_url)
                 .timeout(Duration::from_secs(3600))
                 .send()

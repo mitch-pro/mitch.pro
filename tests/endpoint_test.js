@@ -858,7 +858,7 @@ async function runCrazyAuthVerification() {
           const resp = await fetchWithBypass(`${BASE_URL}/api/claim-token`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: otpCode, password: 'short' })
+            body: JSON.stringify({ email: testEmail, token: otpCode, password: 'short' })
           });
           const data = await resp.json();
           assert(resp.status === 400 && data.success === false, 'Claiming token with short password (<6 chars) should fail (400)');
@@ -871,7 +871,7 @@ async function runCrazyAuthVerification() {
           const resp = await fetchWithBypass(`${BASE_URL}/api/claim-token`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: otpCode, password: newPassword })
+            body: JSON.stringify({ email: testEmail, token: otpCode, password: newPassword })
           });
           const data = await resp.json();
           claimSuccess = resp.status === 200 && data.success === true;

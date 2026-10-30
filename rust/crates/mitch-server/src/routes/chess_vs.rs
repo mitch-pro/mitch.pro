@@ -289,13 +289,24 @@ fn heartbeat(state: &Arc<AppState>, my_email: &str) -> axum::response::Response 
 
 fn online(state: &Arc<AppState>) -> axum::response::Response {
     let now = now_millis();
+    let hidden_users: std::collections::HashSet<String> = state
+        .user_presence
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .iter()
+        .filter(|(_, r)| r.hide_online)
+        .map(|(k, _)| k.clone())
+        .collect();
+
     let online: Vec<String> = state
         .cv_online
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .iter()
-        .filter(|(_, t)| now - *t < 60_000)
-        .map(|(e, _)| e.clone())
+        .filter(|(e, t)| now - *t < 60_000 && !hidden_users.contains(e.as_str()))
+        .map(|(e, _)| {
+            mitch_lib::profile::display_email(&state.store, state.data_dir(), &state.id_secret, e)
+        })
         .collect();
     resp(200, &json!({ "online": online }))
 }

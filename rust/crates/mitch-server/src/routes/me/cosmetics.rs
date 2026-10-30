@@ -162,6 +162,22 @@ async fn shop_buy(
         if mitch_lib::shop::cosmetics_bucket_has(&owned, bucket, &item_id) {
             return json_response(400, json!({ "error": "You already own this item." }));
         }
+        if cost > 0 {
+            if mitch_lib::coins::spend_coins(
+                &state.store,
+                state.data_dir(),
+                &email,
+                cost as f64,
+                "shop_purchase",
+            )
+            .is_err()
+            {
+                return json_response(
+                    400,
+                    json!({ "error": format!("Insufficient coins. Need {cost}.") }),
+                );
+            }
+        }
         if let Some(arr) = owned.get_mut(bucket).and_then(|v| v.as_array_mut()) {
             arr.push(json!(item_id));
         }
@@ -185,6 +201,22 @@ async fn shop_buy(
                 json!({ "error": "You already unlocked this personality." }),
             );
         }
+        if cost > 0 {
+            if mitch_lib::coins::spend_coins(
+                &state.store,
+                state.data_dir(),
+                &email,
+                cost as f64,
+                "shop_purchase",
+            )
+            .is_err()
+            {
+                return json_response(
+                    400,
+                    json!({ "error": format!("Insufficient coins. Need {cost}.") }),
+                );
+            }
+        }
         mine.push(item_id.clone());
         if let Some(obj) = unlocked.as_object_mut() {
             obj.insert(norm.clone(), json!(mine));
@@ -205,21 +237,41 @@ async fn shop_buy(
                 json!({ "error": "You can only hold a maximum of 3 Streak Freezes." }),
             );
         }
+        if cost > 0 {
+            if mitch_lib::coins::spend_coins(
+                &state.store,
+                state.data_dir(),
+                &email,
+                cost as f64,
+                "shop_purchase",
+            )
+            .is_err()
+            {
+                return json_response(
+                    400,
+                    json!({ "error": format!("Insufficient coins. Need {cost}.") }),
+                );
+            }
+        }
         if let Some(obj) = entry.as_object_mut() {
             obj.insert("streakFreezes".to_string(), json!(freezes + 1));
         }
         mitch_lib::daily_logins::daily_login_set(&state.store, &norm, &entry);
-    }
-
-    if cost > 0 {
-        mitch_lib::coins::add_coins(
+    } else if cost > 0 {
+        if mitch_lib::coins::spend_coins(
             &state.store,
             state.data_dir(),
             &email,
-            -(cost as f64),
-            1.0,
+            cost as f64,
             "shop_purchase",
-        );
+        )
+        .is_err()
+        {
+            return json_response(
+                400,
+                json!({ "error": format!("Insufficient coins. Need {cost}.") }),
+            );
+        }
     }
     json_response(
         200,
@@ -283,14 +335,22 @@ async fn buy_premium(
         );
     }
 
-    mitch_lib::coins::add_coins(
-        &state.store,
-        state.data_dir(),
-        &email,
-        -(cost as f64),
-        1.0,
-        "premium_purchase",
-    );
+    if cost > 0 {
+        if mitch_lib::coins::spend_coins(
+            &state.store,
+            state.data_dir(),
+            &email,
+            cost as f64,
+            "premium_purchase",
+        )
+        .is_err()
+        {
+            return json_response(
+                400,
+                json!({ "error": format!("Insufficient coins. Need {cost}.") }),
+            );
+        }
+    }
     crate::routes::admin::economy::grant_premium_purchase(
         state,
         &email,
@@ -389,14 +449,22 @@ async fn gift_premium(
         );
     }
 
-    mitch_lib::coins::add_coins(
-        &state.store,
-        state.data_dir(),
-        &gifter_email,
-        -(cost as f64),
-        1.0,
-        "premium_gift",
-    );
+    if cost > 0 {
+        if mitch_lib::coins::spend_coins(
+            &state.store,
+            state.data_dir(),
+            &gifter_email,
+            cost as f64,
+            "premium_gift",
+        )
+        .is_err()
+        {
+            return json_response(
+                400,
+                json!({ "error": format!("Insufficient coins. Need {cost}.") }),
+            );
+        }
+    }
     crate::routes::admin::economy::mark_gifted_premium(state, &gifter_email);
     crate::routes::admin::economy::grant_premium_purchase(
         state,

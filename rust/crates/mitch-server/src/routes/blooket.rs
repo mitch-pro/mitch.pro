@@ -496,14 +496,21 @@ fn route_client_message(
         Value::Object(obj).to_string()
     };
     match msg_type {
-        "input" | "gui-cheat" => {
+        "input" => {
             if let Some(tx) = ms_tx {
-                let fields: &[&str] = if msg_type == "input" {
-                    &["text"]
-                } else {
-                    &["category", "name", "value"]
-                };
-                let _ = tx.send(MsCommand::Send(forward(fields)));
+                let text = payload.get("text").and_then(|v| v.as_str()).unwrap_or("");
+                if !is_admin && text.trim().starts_with('{') {
+                    tracing::warn!(
+                        "[blooket-bot-ws] Non-admin {email} attempted command injection via input: {text}"
+                    );
+                    return;
+                }
+                let _ = tx.send(MsCommand::Send(forward(&["text"])));
+            }
+        }
+        "gui-cheat" => {
+            if let Some(tx) = ms_tx {
+                let _ = tx.send(MsCommand::Send(forward(&["category", "name", "value"])));
             }
         }
         "eval-js" => {

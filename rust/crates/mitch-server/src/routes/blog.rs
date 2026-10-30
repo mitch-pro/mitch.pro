@@ -374,6 +374,14 @@ pub fn log_blog_deletion(state: &AppState, post: &Value, actor_email: &str) {
     );
 }
 
+fn escape_html(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
 /// `makeBlogNotificationHtml(email, post, link)` (server.js:1996).
 pub fn make_blog_notification_html(
     state: &AppState,
@@ -406,10 +414,19 @@ pub fn make_blog_notification_html(
       You can manage your notification settings in <a href="{}" style="color: #64748b; text-decoration: underline;">Preferences</a>.
     </p>
     "#,
-        title, author_name, excerpt, link, pref_url
+        escape_html(title),
+        escape_html(author_name),
+        escape_html(&excerpt),
+        escape_html(link),
+        escape_html(&pref_url)
     );
 
-    html_base_template(state, email, &format!("New blog post: {title}"), &content)
+    html_base_template(
+        state,
+        email,
+        &format!("New blog post: {}", escape_html(title)),
+        &content,
+    )
 }
 
 /// `notifyBlogSubscribers(post)` (server.js:6886).

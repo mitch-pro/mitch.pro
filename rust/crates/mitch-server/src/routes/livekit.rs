@@ -435,6 +435,13 @@ pub async fn handle_http_passthrough(
             false,
         );
     };
+    if (!suffix.is_empty() && !suffix.starts_with('/')) || suffix.contains('@') {
+        return json_with_cors(
+            StatusCode::BAD_REQUEST.as_u16(),
+            json!({ "error": "invalid path" }),
+            false,
+        );
+    }
     let query_part = if search.is_empty() {
         String::new()
     } else if search.starts_with('?') {

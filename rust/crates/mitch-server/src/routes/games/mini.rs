@@ -160,6 +160,12 @@ fn kodys_payout(
     };
 
     if coins > 0.0 {
+        if let Some(obj) = s.as_object_mut() {
+            obj.insert("dailyCount".into(), jsval::num_value(daily_count + 1.0));
+            obj.insert("lastTs".into(), json!(now));
+        }
+        mitch_lib::minigames::mini_session_set(&state.store, &norm, "typing", &s);
+
         if mitch_lib::auth::is_premium_email(&state.store, &email) {
             coins *= 2.0;
         }
@@ -209,11 +215,6 @@ fn kodys_payout(
             1.0,
             state.coin_multiplier(),
         );
-        if let Some(obj) = s.as_object_mut() {
-            obj.insert("dailyCount".into(), jsval::num_value(daily_count + 1.0));
-            obj.insert("lastTs".into(), json!(now));
-        }
-        mitch_lib::minigames::mini_session_set(&state.store, &norm, "typing", &s);
         tracing::info!(
             "[typing] {email} earned {coins} coins at {wpm} WPM{}",
             if friend_bonus_active {
@@ -349,6 +350,13 @@ fn piano_payout(
     let coins_awarded = (allowed_tiles * 0.02).floor();
 
     if coins_awarded > 0.0 {
+        let new_daily = daily_count + allowed_tiles;
+        if let Some(obj) = s.as_object_mut() {
+            obj.insert("dailyCount".into(), jsval::num_value(new_daily));
+            obj.insert("lastTs".into(), json!(now));
+        }
+        mitch_lib::minigames::mini_session_set(&state.store, &norm, "piano", &s);
+
         let mut final_coins = coins_awarded;
         if mitch_lib::auth::is_premium_email(&state.store, &email) {
             final_coins = coins_awarded * 2.0;
@@ -377,12 +385,6 @@ fn piano_payout(
             1.0,
             state.coin_multiplier(),
         );
-        let new_daily = daily_count + allowed_tiles;
-        if let Some(obj) = s.as_object_mut() {
-            obj.insert("dailyCount".into(), jsval::num_value(new_daily));
-            obj.insert("lastTs".into(), json!(now));
-        }
-        mitch_lib::minigames::mini_session_set(&state.store, &norm, "piano", &s);
         tracing::info!("[piano] {email} earned {final_coins} coins for score {score}");
         return json_resp(
             200,
@@ -524,6 +526,13 @@ fn piccolo_payout(
     }
 
     if allowed_coins > 0.0 {
+        let new_daily = daily_coins + allowed_coins;
+        if let Some(obj) = s.as_object_mut() {
+            obj.insert("dailyCoins".into(), jsval::num_value(new_daily));
+            obj.insert("lastTs".into(), json!(now));
+        }
+        mitch_lib::minigames::mini_session_set(&state.store, &norm, "piccolo", &s);
+
         let mut final_coins = allowed_coins;
         if mitch_lib::auth::is_premium_email(&state.store, &email) {
             final_coins = allowed_coins * 2.0;
@@ -552,12 +561,6 @@ fn piccolo_payout(
             1.0,
             state.coin_multiplier(),
         );
-        let new_daily = daily_coins + allowed_coins;
-        if let Some(obj) = s.as_object_mut() {
-            obj.insert("dailyCoins".into(), jsval::num_value(new_daily));
-            obj.insert("lastTs".into(), json!(now));
-        }
-        mitch_lib::minigames::mini_session_set(&state.store, &norm, "piccolo", &s);
         tracing::info!("[piccolo] {email} earned {final_coins} coins for score {score}");
         return json_resp(
             200,
@@ -724,6 +727,12 @@ fn logic_solve(
                 obj.remove("currentWordle");
             }
         } else if guess == target_today || guess == target_yesterday || guess == target_tomorrow {
+            if !first_today {
+                return json_resp(
+                    400,
+                    json!({"success": false, "error": "Daily Wordle already solved today"}),
+                );
+            }
             is_valid = true;
         }
         if !is_valid {

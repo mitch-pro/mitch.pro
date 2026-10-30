@@ -604,12 +604,21 @@ fn users(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         return json_response(401, json!({ "error": "auth required" }));
     }
     let now = now_millis();
+    let hidden_users: std::collections::HashSet<String> = state
+        .user_presence
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .iter()
+        .filter(|(_, r)| r.hide_online)
+        .map(|(k, _)| k.clone())
+        .collect();
+
     let users: Vec<Value> = state
         .e2e_users
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .iter()
-        .filter(|(_, u)| now - u.last_seen < 60_000)
+        .filter(|(n, u)| now - u.last_seen < 60_000 && !hidden_users.contains(n.as_str()))
         .map(|(n, u)| {
             json!({
                 "nickname": display_email(&state.store, state.data_dir(), &state.id_secret, n),

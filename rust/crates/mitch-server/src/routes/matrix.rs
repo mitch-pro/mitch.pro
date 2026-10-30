@@ -526,6 +526,9 @@ pub fn get_matrix_power_level_for_sid(state: &AppState, sid: &str) -> i64 {
 }
 
 fn conduit_candidate_hosts() -> Vec<String> {
+    if cfg!(test) {
+        return vec!["127.0.0.1".to_string()];
+    }
     let conduit_host = std::env::var("CONDUIT_HOST").unwrap_or_else(|_| {
         if std::env::var("DOCKER_ENV").unwrap_or_default() == "1"
             || std::path::Path::new("/.dockerenv").exists()
@@ -6440,13 +6443,13 @@ fn resolve_member_norm(state: &AppState, member_id: &str) -> String {
 async fn resolve_sender_info(
     state: &AppState,
     headers: &HeaderMap,
-    body_val: Option<&Value>,
+    _body_val: Option<&Value>,
 ) -> (String, String, String) {
     let mut sender_user_id = String::new();
     let mut sender_display_name = String::from("Someone");
     let mut sender_norm_email = String::new();
 
-    if let Some(acc) = resolve_matrix_account(state, headers, body_val).await {
+    if let Some(acc) = resolve_matrix_account(state, headers, None).await {
         sender_user_id = acc.user_id;
         sender_norm_email = acc.norm_email;
     }
@@ -7682,7 +7685,7 @@ pub async fn handle_matrix_gateway(
                 targets.push(uid.to_string());
             }
             if !targets.is_empty() {
-                let account = resolve_matrix_account(state, headers, Some(&payload)).await;
+                let account = resolve_matrix_account(state, headers, None).await;
                 let is_staff = is_matrix_staff_member(state, headers, account.as_ref());
                 let requester_is_outside = account.as_ref().is_some_and(|a| {
                     !a.norm_email.is_empty() && !mitch_lib::matrix::is_student_email(&a.norm_email)
@@ -7753,9 +7756,7 @@ pub async fn handle_matrix_gateway(
 
             if is_chat_send_event {
                 send_match_room_id = target_room_id.clone();
-                let parsed_payload: Option<Value> = serde_json::from_slice(body_bytes).ok();
-                let sender_account =
-                    resolve_matrix_account(state, headers, parsed_payload.as_ref()).await;
+                let sender_account = resolve_matrix_account(state, headers, None).await;
 
                 let is_staff = is_matrix_staff_member(state, headers, sender_account.as_ref());
                 if !is_staff {

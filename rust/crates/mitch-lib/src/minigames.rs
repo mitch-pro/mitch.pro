@@ -45,6 +45,45 @@ pub fn mini_session_set(store: &DataStore, norm_email: &str, game: &str, data: &
     );
 }
 
+/// Mutates a user's mini-game session inside a single BEGIN IMMEDIATE transaction.
+pub fn mini_session_mutate<F, R>(
+    store: &DataStore,
+    norm_email: &str,
+    game: &str,
+    f: F,
+) -> Result<R, rusqlite::Error>
+where
+    F: FnOnce(&mut Option<Value>) -> Result<R, rusqlite::Error>,
+{
+    let conn = store.conn();
+    conn.execute_batch("BEGIN IMMEDIATE")?;
+    let raw: Option<String> = conn
+        .query_row(
+            "SELECT data FROM mini_game_sessions WHERE email = ?1 AND game = ?2",
+            rusqlite::params![norm_email, game],
+            |r| r.get(0),
+        )
+        .ok();
+    let mut val = raw.and_then(|s| serde_json::from_str(&s).ok());
+    let res = match f(&mut val) {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            return Err(e);
+        }
+    };
+    if let Some(ref data) = val {
+        let data_str = serde_json::to_string(data).unwrap_or_else(|_| "{}".to_string());
+        conn.execute(
+            "INSERT INTO mini_game_sessions (email, game, data, updated_at) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(email, game) DO UPDATE SET data = ?3, updated_at = ?4",
+            rusqlite::params![norm_email, game, data_str, now_millis()],
+        )?;
+    }
+    conn.execute_batch("COMMIT")?;
+    Ok(res)
+}
+
 /// Moves every mini-game session row from one email to another (the old
 /// generic rename sweep never covered these four blobs at all — a gap
 /// this closes rather than carries forward).

@@ -173,11 +173,12 @@ async function submitClaim() {
   }
 
   try {
+    const emailParam = params.get('email') || '';
     const r = await fetch('/api/claim-token', {
       method: 'POST',
       credentials: 'include',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ token: code, password, recaptcha_token: captcha })
+      body: JSON.stringify({ token: code, email: emailParam, password, recaptcha_token: captcha })
     });
     const d = await r.json();
     if (d.success) {

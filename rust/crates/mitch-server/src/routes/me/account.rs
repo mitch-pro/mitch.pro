@@ -78,6 +78,10 @@ fn get_public_profile(state: &Arc<AppState>, headers: &HeaderMap, slug_raw: &str
         Some(&profile),
         viewer_email.as_deref(),
     );
+    let is_self = viewer_email
+        .as_deref()
+        .map(|v| auth::normalize_email(v) == norm)
+        .unwrap_or(false);
     if let Some(obj) = profile.as_object_mut() {
         obj.remove("totp_secret");
         obj.remove("totpSecret");
@@ -87,6 +91,13 @@ fn get_public_profile(state: &Arc<AppState>, headers: &HeaderMap, slug_raw: &str
         obj.remove("twofaEnabled");
         obj.remove("twofaType");
         obj.remove("twoFactorEnabled");
+        if !is_self {
+            obj.remove("gender");
+            obj.remove("gradYear");
+            obj.remove("grad_year");
+            obj.remove("referralSource");
+            obj.remove("referral_source");
+        }
         let pfp = obj.get("pfp").and_then(|v| v.as_str()).unwrap_or("");
         obj.insert(
             "pfp".into(),
