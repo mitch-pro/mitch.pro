@@ -4,6 +4,12 @@
   const message = document.getElementById('daily-message');
   const button = document.getElementById('daily-claim');
   const format = new Intl.NumberFormat(undefined, {maximumFractionDigits:2});
+  function formatNum(val) {
+    const num = Number(val || 0);
+    if (!Number.isFinite(num)) return '∞';
+    if (num >= 1e15) return num.toExponential(2).replace('e+', 'e');
+    return format.format(num);
+  }
   async function wallet() {
     try {
       const response = await fetch('/api/me/coins', {credentials:'same-origin',cache:'no-store'});
@@ -14,7 +20,7 @@
         const link = document.createElement('a'); link.href = '/enroll/?next=%2Fcoins%2F'; link.textContent = 'Sign in to MitchCoins'; status.append(' ',link); return;
       }
       if (!Number.isFinite(Number(data.coins))) throw new Error('Wallet unavailable');
-      balance.textContent = format.format(Number(data.coins)); status.textContent = 'MitchCoins available';
+      balance.textContent = formatNum(Number(data.coins)); status.textContent = 'MitchCoins available';
     } catch { balance.textContent = '—'; status.textContent = 'Couldn’t load your balance. Refresh to try again.'; }
   }
   async function daily() {

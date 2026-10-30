@@ -10,6 +10,14 @@
   let timer = null, debounce = null, controller = null, stopped = false;
   const originalFetch = window.fetch;
 
+  function formatCoins(val, compact) {
+    if (val === null) return status === 'guest' ? 'Sign in' : '—';
+    if (!Number.isFinite(val)) return '∞';
+    if (val >= 1e15) return val.toExponential(2).replace('e+', 'e');
+    if (compact && val >= 10000) return compactFormat.format(val);
+    return fullFormat.format(val);
+  }
+
   function render() {
     for (const widget of widgets) {
       const amount = widget.querySelector('.mitch-wallet-value');
@@ -22,8 +30,8 @@
         widget.setAttribute('aria-busy', 'false');
         continue;
       }
-      const exact = balance === null ? null : fullFormat.format(balance);
-      amount.textContent = exact === null ? (status === 'guest' ? 'Sign in' : '—') : (balance >= 10000 ? compactFormat.format(balance) : exact);
+      const exact = balance === null ? null : formatCoins(balance, false);
+      amount.textContent = balance === null ? (status === 'guest' ? 'Sign in' : '—') : formatCoins(balance, true);
       widget.dataset.state = status;
       widget.href = status === 'guest' ? '/enroll/' : '/coins/?v=2';
       widget.title = exact === null ? (status === 'guest' ? 'Sign in to view your MitchCoins' : 'MitchCoins balance unavailable') : exact + ' MitchCoins · Open wallet';
@@ -187,7 +195,7 @@
     window.addEventListener('pageshow', event => { if (event.persisted) resume(); });
   }
 
-  window.MitchCoins = { refresh: () => refresh(true), format: value => fullFormat.format(Number(value) || 0), icon };
+  window.MitchCoins = { refresh: () => refresh(true), format: value => formatCoins(Number(value) || 0, false), icon };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
   else init();
 })();

@@ -197,7 +197,11 @@
   }
 
   function formatCoins(value) {
-    return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+    const num = Number(value || 0);
+    if (!Number.isFinite(num)) return '∞';
+    if (num >= 1e15) return num.toExponential(2).replace('e+', 'e');
+    if (num >= 10000) return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(num);
+    return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
   }
 
   function updateRewardUi(data) {
