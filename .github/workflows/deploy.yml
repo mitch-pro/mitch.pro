@@ -1,22 +1,29 @@
 name: Deploy to Production
 
+# Production (master) deploys run only after the `rust-ci` workflow finishes
+# on that push and succeeded (workflow_run), so a red CI never reaches the
+# server. dev has no rust-ci run, so it still deploys straight from the push.
 on:
+  workflow_run:
+    workflows: [rust-ci]
+    types: [completed]
+    branches: [master]
   push:
     branches:
-      - master
       - dev
   workflow_dispatch:
 
 # One deploy at a time per branch: dev and production deploys don't block
 # each other, but two pushes to the same branch still run in order.
 concurrency:
-  group: deploy-${{ github.ref_name }}
+  group: deploy-${{ github.event.workflow_run.head_branch || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   test:
     name: Unit tests
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run'
     outputs:
       only_static: ${{ steps.diff_check.outputs.only_static }}
 
@@ -83,8 +90,12 @@ jobs:
   deploy:
     name: Build & Blue-Green Deploy
     runs-on: ubuntu-latest
-    needs: test
-    if: github.ref == 'refs/heads/master' && (github.actor == 'urashil' || github.actor == 'tylerthompson3725')
+    if: >-
+      github.event_name == 'workflow_run'
+      && github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.head_branch == 'master'
+      && (github.event.workflow_run.actor.login == 'urashil' || github.event.workflow_run.actor.login == 'tylerthompson3725')
 
     steps:
       - name: Trigger Remote Deployment
@@ -132,7 +143,7 @@ jobs:
     needs: test
     # The dev server (port 37222) has `dev` checked out; deploy.sh pulls the
     # checked-out branch, so this only deploys what is pushed to dev.
-    if: github.ref == 'refs/heads/dev' && (github.actor == 'urashil' || github.actor == 'tylerthompson3725')
+    if: github.event_name != 'workflow_run' && github.ref == 'refs/heads/dev' && (github.actor == 'urashil' || github.actor == 'tylerthompson3725')
 
     steps:
       - name: Trigger Remote Deployment (dev)
