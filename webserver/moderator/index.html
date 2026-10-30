@@ -68,6 +68,21 @@
     <section class="panel" id="panel">
       <div class="empty">Loading moderator tools...</div>
     </section>
+
+    <section class="panel" style="margin-top: 18px;" aria-labelledby="outside-accounts-title">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+        <h2 id="outside-accounts-title" style="margin: 0; font-size: 1.15rem; display: flex; align-items: center; gap: 8px;">
+          <span>💬</span> Matrix Outside Accounts
+        </h2>
+        <span class="staff-role-badge" id="outside-count" style="font-size: 0.78rem;">0 pending</span>
+      </div>
+      <p style="color: var(--t-fg2); font-size: 0.86rem; margin: 0 0 14px;">
+        Non-student accounts waiting for moderator permission to chat in Matrix.
+      </p>
+      <div id="outside-queue-list">
+        <div class="empty">Checking pending accounts…</div>
+      </div>
+    </section>
   </main>
   <script>
     function esc(v) {
@@ -115,7 +130,70 @@
       html += '</div>';
       document.getElementById('panel').innerHTML = html;
     }
-    loadPanel().catch(() => {
+
+    async function loadOutsideQueue() {
+      const listEl = document.getElementById('outside-queue-list');
+      const countEl = document.getElementById('outside-count');
+      try {
+        const resp = await fetch('/api/admin/matrix/outside-accounts', { credentials: 'include' });
+        if (!resp.ok) {
+          listEl.innerHTML = '<div class="empty">Unable to load outside accounts queue.</div>';
+          return;
+        }
+        const data = await resp.json();
+        const pending = data.pending || [];
+        countEl.textContent = `${pending.length} pending`;
+        if (pending.length === 0) {
+          listEl.innerHTML = '<div class="empty" style="color:var(--t-fg2);">No outside accounts currently waiting for approval.</div>';
+          return;
+        }
+        let html = '<div style="display:grid; gap:8px;">';
+        pending.forEach(item => {
+          const dateStr = item.requestedAt ? new Date(item.requestedAt).toLocaleString() : 'Unknown';
+          const safeEmail = esc(item.email);
+          html += `
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 14px; background:var(--t-bg3); border:1px solid var(--t-bd); border-radius:8px; flex-wrap:wrap;">
+              <div>
+                <strong style="color:var(--t-fg); font-size:0.92rem;">${safeEmail}</strong>
+                <div style="color:var(--t-fg2); font-size:0.78rem;">Requested: ${esc(dateStr)}</div>
+              </div>
+              <div style="display:flex; gap:8px;">
+                <button type="button" class="back" style="background:var(--t-ac); color:var(--t-ac-ink); border:none; cursor:pointer; font-weight:600;" onclick="decideOutside('${safeEmail}', true)">Approve</button>
+                <button type="button" class="back" style="cursor:pointer;" onclick="decideOutside('${safeEmail}', false)">Deny</button>
+              </div>
+            </div>
+          `;
+        });
+        html += '</div>';
+        listEl.innerHTML = html;
+      } catch (e) {
+        listEl.innerHTML = '<div class="empty">Error loading outside accounts.</div>';
+      }
+    }
+
+    async function decideOutside(email, approved) {
+      if (!confirm(`Are you sure you want to ${approved ? 'approve' : 'deny'} Matrix chat access for ${email}?`)) {
+        return;
+      }
+      try {
+        const resp = await fetch('/api/admin/matrix/outside-accounts', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, approved })
+        });
+        const data = await resp.json();
+        if (resp.ok && data.ok) {
+          loadOutsideQueue();
+        } else {
+          alert('Error: ' + (data.error || 'Failed to update approval.'));
+        }
+      } catch (e) {
+        alert('Network error while saving decision.');
+      }
+    }
+
+    loadPanel().then(loadOutsideQueue).catch(() => {
       document.getElementById('panel').innerHTML = '<div class="empty">Panel unavailable.</div>';
     });
   </script>

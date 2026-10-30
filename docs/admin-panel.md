@@ -80,7 +80,8 @@ endpoints as a health check.
   `matrix_outside_approvals` SQL table. `GET /api/admin/matrix/outside-accounts`
   lists the pending queue and `POST` with `{email, approved}` approves or denies;
   both require moderator or higher and the decision is written to the admin action
-  log. There is no admin-panel page for this yet.
+  log. Both `/admin/#approval-tools` and `/moderator/` provide one-click approval
+  and denial queues for moderators and administrators.
 - **No DMs to students.** Outside accounts, approved or not, can't `createRoom`
   with, or `invite`, a student account (the gateway resolves the target Matrix ID
   to an email and checks the domain). Staff are exempt.

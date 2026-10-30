@@ -7,6 +7,12 @@
 - Do not add obvious, AI-sounding disclaimer text — restating that virtual currency isn't real money, that a game has a house edge, or other self-evident statements nobody asked for. If a fact is genuinely load-bearing (e.g. a legal/safety disclosure), say it once, in the one place it belongs, in plain language — not as a tacked-on closing paragraph repeated per page.
 - Keep layouts focused on the page's function. Preserve users' chosen profile photos and equipped cosmetics when displaying their identities.
 
+## UI and frontend integration
+
+- Never implement backend, admin, or moderator endpoints without the corresponding frontend interface to call and display them.
+- If a feature introduces an API (such as an approval queue, moderation tool, or settings toggle), ship the UI controls in the same commit. Leaving an endpoint with "there is no UI page for this yet" is an incomplete task.
+- Follow the site's established design language for all pages: use the shared masthead/topbar (`app-shell.js` and `app.css`), consistent CSS theme tokens (`--t-bg`, `--t-bg2`, `--t-fg`, `--t-fg2`, `--t-bd`, `--t-ac`), `DM Sans` typography, and layout styles matching the homepage. Do not invent standalone, visually disjointed UI themes. See `docs/ui-design-standards.md`.
+
 ## Light and dark mode
 
 - Always consider both dark and light mode for any UI change. Use the theme tokens (`--t-bg`, `--t-bg2`, `--t-fg`, `--t-fg2`, `--t-bd`, `--t-ac` from `app.css`/`theme.js`) instead of hardcoded colors, and load `/app.css` and `/app-shell.js` on every page so those tokens exist. Where a fixed color is unavoidable (status colors, solid buttons), check it for contrast in both modes (`html.theme-light` marks light mode).

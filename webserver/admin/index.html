@@ -711,6 +711,16 @@
           <div id="my-requests" class="request-list"><div class="empty">Loading requests...</div></div>
         </div>
       </div>
+      <div class="approval-card" style="margin-top:20px; border-top:1px solid var(--t-bd); padding-top:18px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+          <h2 style="margin:0;">Matrix Outside Accounts Queue</h2>
+          <span class="tag" id="matrix-outside-count">0 pending</span>
+        </div>
+        <p style="color:var(--t-fg2); font-size:0.86rem; margin:0 0 12px;">Non-student accounts waiting for moderator or administrator approval to send messages in Matrix.</p>
+        <div id="matrix-outside-queue" class="request-list">
+          <div class="empty">Loading outside accounts queue...</div>
+        </div>
+      </div>
     </section>
 
     <section class="tool-group" id="people-tools">
@@ -2708,6 +2718,64 @@
         moderatorRequests = d.requests || [];
         renderModeratorRequests();
       } catch (e) {}
+      loadMatrixOutsideAccounts();
+    }
+
+    async function loadMatrixOutsideAccounts() {
+      const queueEl = document.getElementById('matrix-outside-queue');
+      const countEl = document.getElementById('matrix-outside-count');
+      if (!queueEl) return;
+      try {
+        const resp = await adminFetch('/api/admin/matrix/outside-accounts');
+        if (!resp.ok) {
+          queueEl.innerHTML = '<div class="empty">Unable to load outside accounts queue.</div>';
+          return;
+        }
+        const data = await resp.json();
+        const pending = data.pending || [];
+        if (countEl) countEl.textContent = `${pending.length} pending`;
+        if (pending.length === 0) {
+          queueEl.innerHTML = '<div class="empty">No outside accounts currently waiting for approval.</div>';
+          return;
+        }
+        queueEl.innerHTML = pending.map(item => {
+          const dateStr = item.requestedAt ? new Date(item.requestedAt).toLocaleString() : 'Unknown';
+          const safeEmail = esc(item.email);
+          return '<div class="request-item">' +
+            '<div class="request-head">' +
+              '<div><strong>' + safeEmail + '</strong><br><small>Requested ' + esc(dateStr) + '</small></div>' +
+              '<span class="pill warn">pending</span>' +
+            '</div>' +
+            '<div class="request-actions">' +
+              '<button class="mini ok" type="button" onclick=\'decideMatrixOutside(' + JSON.stringify(item.email) + ', true)\'>Approve</button>' +
+              '<button class="mini" type="button" onclick=\'decideMatrixOutside(' + JSON.stringify(item.email) + ', false)\'>Deny</button>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+      } catch (e) {
+        queueEl.innerHTML = '<div class="empty">Failed to load outside accounts.</div>';
+      }
+    }
+
+    async function decideMatrixOutside(email, approved) {
+      if (!confirm(`Are you sure you want to ${approved ? 'approve' : 'deny'} Matrix chat access for ${email}?`)) {
+        return;
+      }
+      try {
+        const resp = await adminFetch('/api/admin/matrix/outside-accounts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, approved })
+        });
+        const data = await resp.json();
+        if (resp.ok && data.ok) {
+          loadMatrixOutsideAccounts();
+        } else {
+          alert('Error: ' + (data.error || 'Failed to update approval.'));
+        }
+      } catch (e) {
+        alert('Network error while saving decision.');
+      }
     }
 
     async function resolveModeratorRequest(id, decision) {

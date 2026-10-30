@@ -4,70 +4,104 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Retro Console Emulator — mitch.pro</title>
-  <meta name="description" content="Play PS1, N64, GBA, SNES, Genesis, NES, Game Boy, and classic retro consoles directly in your browser.">
+  <meta name="description" content="Play PlayStation 1, N64, GBA, SNES, Genesis, NES, Game Boy, and classic retro consoles in your browser.">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="/app.css">
   <script src="/theme.js" defer></script>
   <script src="/app-shell.js" defer></script>
   <style>
-    .retro-shell {
-      max-width: 1040px;
+    :root {
+      --retro-maxw: 1120px;
+    }
+
+    body.app-shell {
+      background: var(--t-bg);
+      color: var(--t-fg);
+      font-family: var(--t-font, 'DM Sans', system-ui, sans-serif);
+      margin: 0;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .retro-container {
+      width: min(var(--retro-maxw), calc(100% - 32px));
       margin: 0 auto;
-      padding: 1.5rem 1rem 3rem;
+      padding: 24px 0 60px;
       display: flex;
       flex-direction: column;
-      gap: 1.5rem;
+      gap: 22px;
     }
 
-    .retro-header {
+    /* Hero header matching homepage hud-topbar */
+    .retro-hero {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: space-between;
       flex-wrap: wrap;
-      gap: 1rem;
-      padding-bottom: 1rem;
-      border-bottom: 1px solid var(--t-bd);
+      gap: 16px;
+      padding: 12px 0 6px;
     }
 
-    .retro-title-group h1 {
-      font-size: 1.6rem;
-      font-weight: 700;
-      margin: 0 0 0.25rem;
-      color: var(--t-fg);
-      display: flex;
+    .retro-hero-kicker {
+      display: inline-flex;
       align-items: center;
-      gap: 0.6rem;
-    }
-
-    .retro-title-group p {
-      margin: 0;
+      gap: 7px;
+      font-size: 13px;
+      font-weight: 500;
       color: var(--t-fg2);
-      font-size: 0.95rem;
+      margin-bottom: 6px;
     }
 
-    .retro-actions {
+    .retro-hero-kicker span {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--t-ac);
+    }
+
+    .retro-hero-title {
+      margin: 0 0 6px;
+      font-size: clamp(1.8rem, 3.5vw, 2.3rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: var(--t-fg);
+    }
+
+    .retro-hero-sub {
+      margin: 0;
+      max-width: 36rem;
+      font-size: 0.95rem;
+      color: var(--t-fg2);
+      line-height: 1.5;
+    }
+
+    .retro-hero-actions {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: 8px;
     }
 
     .retro-btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 0.4rem;
-      padding: 0.5rem 0.9rem;
-      font-size: 0.88rem;
-      font-weight: 600;
+      gap: 6px;
+      min-height: 38px;
+      padding: 8px 14px;
       border-radius: var(--t-radius-sm);
-      border: 1px solid var(--t-bd);
+      border: 1px solid var(--t-bda);
       background: var(--t-bg2);
       color: var(--t-fg);
+      font-family: inherit;
+      font-size: 0.88rem;
+      font-weight: 600;
       cursor: pointer;
       text-decoration: none;
-      transition: background var(--t-motion), border-color var(--t-motion), color var(--t-motion);
+      transition: border-color var(--t-motion), background-color var(--t-motion);
     }
 
     .retro-btn:hover {
+      border-color: var(--t-fg3);
       background: var(--t-bg3);
       color: var(--t-fg);
     }
@@ -75,126 +109,141 @@
     .retro-btn.primary {
       background: var(--t-ac);
       color: var(--t-ac-ink);
-      border-color: transparent;
+      border-color: var(--t-ac);
     }
 
     .retro-btn.primary:hover {
       background: var(--t-ac2);
+      border-color: var(--t-ac2);
     }
 
-    /* Console Tabs */
+    /* Console Pill Navigation matching homepage filter pills */
+    .console-nav-wrap {
+      overflow-x: auto;
+      scrollbar-width: thin;
+      padding-bottom: 4px;
+    }
+
     .console-nav {
       display: flex;
-      gap: 0.5rem;
-      overflow-x: auto;
-      padding-bottom: 0.5rem;
-      scrollbar-width: thin;
+      gap: 8px;
+      min-width: max-content;
     }
 
     .console-tab {
-      display: flex;
+      display: inline-flex;
       align-items: center;
-      gap: 0.5rem;
-      padding: 0.6rem 1rem;
-      border-radius: var(--t-radius);
+      gap: 8px;
+      padding: 7px 14px;
+      border-radius: 999px;
       border: 1px solid var(--t-bd);
       background: var(--t-bg2);
-      color: var(--t-fg);
-      font-size: 0.92rem;
+      color: var(--t-fg2);
+      font-family: inherit;
+      font-size: 0.88rem;
       font-weight: 600;
       cursor: pointer;
-      white-space: nowrap;
-      transition: background var(--t-motion), border-color var(--t-motion);
+      transition: all var(--t-motion);
     }
 
     .console-tab img {
-      width: 20px;
-      height: 20px;
+      width: 18px;
+      height: 18px;
     }
 
     .console-tab:hover {
+      color: var(--t-fg);
       background: var(--t-bg3);
+      border-color: var(--t-bda);
     }
 
     .console-tab.active {
-      border-color: var(--t-ac);
       background: var(--t-gls);
+      border-color: var(--t-ac);
       color: var(--t-ac);
     }
 
-    /* Active Console Details Card */
+    /* Active Console Main Card matching .home-feature / .panel */
     .console-card {
       background: var(--t-bg2);
       border: 1px solid var(--t-bd);
       border-radius: var(--t-radius);
-      padding: 1.25rem;
+      padding: clamp(18px, 2.5vw, 28px);
       display: flex;
       flex-direction: column;
-      gap: 1.25rem;
+      gap: 20px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
     }
 
-    .console-card-header {
+    .console-card-top {
       display: flex;
       align-items: center;
       justify-content: space-between;
       flex-wrap: wrap;
-      gap: 0.75rem;
+      gap: 12px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--t-bd);
     }
 
-    .console-info-main {
+    .console-identity {
       display: flex;
       align-items: center;
-      gap: 0.75rem;
+      gap: 14px;
     }
 
-    .console-icon-lg {
+    .console-identity img {
       width: 44px;
       height: 44px;
       padding: 8px;
       border-radius: var(--t-radius-sm);
       background: var(--t-bg3);
+      border: 1px solid var(--t-bd);
     }
 
-    .console-title-text h2 {
-      margin: 0;
-      font-size: 1.25rem;
+    .console-identity h2 {
+      margin: 0 0 2px;
+      font-size: 1.3rem;
       font-weight: 700;
+      letter-spacing: -0.02em;
     }
 
-    .console-title-text span {
-      font-size: 0.85rem;
+    .console-identity p {
+      margin: 0;
+      font-size: 0.88rem;
       color: var(--t-fg2);
     }
 
     .format-pills {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.35rem;
+      gap: 6px;
     }
 
     .format-pill {
-      font-size: 0.75rem;
+      font-size: 0.76rem;
+      font-family: ui-monospace, monospace;
       font-weight: 600;
-      font-family: monospace;
-      padding: 0.15rem 0.45rem;
-      border-radius: 4px;
+      padding: 3px 8px;
+      border-radius: 6px;
       background: var(--t-bg3);
+      border: 1px solid var(--t-bd);
       color: var(--t-fg2);
     }
 
-    /* Drop Zone */
+    /* ROM Drop Zone */
     .dropzone {
       border: 2px dashed var(--t-bda);
       border-radius: var(--t-radius);
-      padding: 2.25rem 1.5rem;
-      text-align: center;
       background: var(--t-bg);
+      padding: 36px 20px;
+      text-align: center;
       cursor: pointer;
-      transition: border-color var(--t-motion), background var(--t-motion);
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 0.6rem;
+      justify-content: center;
+      gap: 8px;
+      transition: all var(--t-motion);
     }
 
     .dropzone:hover, .dropzone.dragover {
@@ -203,13 +252,14 @@
     }
 
     .dropzone svg {
-      width: 38px;
-      height: 38px;
+      width: 36px;
+      height: 36px;
       stroke: var(--t-ac);
     }
 
     .dropzone strong {
       font-size: 1.05rem;
+      font-weight: 700;
       color: var(--t-fg);
     }
 
@@ -218,88 +268,97 @@
       color: var(--t-fg2);
     }
 
-    .dropzone-bios {
+    .bios-bar {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      font-size: 0.85rem;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: var(--t-radius-sm);
+      background: var(--t-bg);
+      border: 1px solid var(--t-bd);
+      font-size: 0.86rem;
       color: var(--t-fg2);
-      margin-top: 0.5rem;
+      flex-wrap: wrap;
     }
 
-    /* Sample Homebrew Games */
-    .samples-section h3 {
-      font-size: 1rem;
-      font-weight: 700;
-      margin: 0 0 0.75rem;
+    .bios-bar strong {
       color: var(--t-fg);
     }
 
-    .samples-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-      gap: 0.75rem;
+    /* Homebrew demos section */
+    .demos-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin: 0 0 12px;
+      letter-spacing: -0.02em;
     }
 
-    .sample-card {
+    .demos-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 12px;
+    }
+
+    .demo-card {
+      background: var(--t-bg);
       border: 1px solid var(--t-bd);
       border-radius: var(--t-radius-sm);
-      background: var(--t-bg);
-      padding: 0.85rem;
+      padding: 14px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      gap: 0.5rem;
+      gap: 12px;
       cursor: pointer;
       transition: border-color var(--t-motion), transform var(--t-motion);
     }
 
-    .sample-card:hover {
+    .demo-card:hover {
       border-color: var(--t-ac);
       transform: translateY(-2px);
     }
 
-    .sample-meta strong {
-      display: block;
+    .demo-card strong {
       font-size: 0.95rem;
+      font-weight: 700;
       color: var(--t-fg);
+      display: block;
     }
 
-    .sample-meta small {
+    .demo-card small {
       color: var(--t-fg2);
-      font-size: 0.8rem;
+      font-size: 0.82rem;
     }
 
-    /* Player Overlay Mode */
+    /* Player modal fullscreen overlay */
     .player-container {
       position: fixed;
-      top: 0;
-      left: 0;
+      inset: 0;
       width: 100vw;
       height: 100vh;
       background: #000;
-      z-index: 9999;
+      z-index: 99999;
       display: flex;
       flex-direction: column;
     }
 
     .player-header {
-      background: rgba(23, 25, 27, 0.95);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-      padding: 0.5rem 1rem;
+      background: color-mix(in srgb, var(--t-bg) 95%, transparent);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--t-bd);
+      padding: 8px 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 1rem;
-      color: #fff;
+      gap: 16px;
+      color: var(--t-fg);
     }
 
     .player-title {
-      font-weight: 700;
-      font-size: 0.95rem;
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: 12px;
+      font-size: 0.95rem;
+      font-weight: 700;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -309,11 +368,11 @@
       flex: 1;
       width: 100%;
       height: 100%;
-      border: none;
+      border: 0;
       background: #000;
     }
 
-    /* Controls Dialog */
+    /* Controls modal */
     .controls-dialog {
       border: 1px solid var(--t-bd);
       border-radius: var(--t-radius);
@@ -321,30 +380,30 @@
       color: var(--t-fg);
       max-width: 520px;
       width: 90%;
-      padding: 1.5rem;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+      padding: 22px;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
     }
 
     .controls-dialog::backdrop {
       background: rgba(0, 0, 0, 0.6);
-      backdrop-filter: blur(2px);
+      backdrop-filter: blur(3px);
     }
 
     .controls-dialog h3 {
-      margin-top: 0;
-      margin-bottom: 1rem;
-      font-size: 1.2rem;
+      margin: 0 0 14px;
+      font-size: 1.25rem;
+      font-weight: 700;
     }
 
     .controls-table {
       width: 100%;
       border-collapse: collapse;
       font-size: 0.88rem;
-      margin-bottom: 1.25rem;
+      margin-bottom: 18px;
     }
 
     .controls-table th, .controls-table td {
-      padding: 0.45rem 0.5rem;
+      padding: 8px 10px;
       border-bottom: 1px solid var(--t-bd);
       text-align: left;
     }
@@ -358,9 +417,9 @@
       background: var(--t-bg3);
       border: 1px solid var(--t-bd);
       border-radius: 4px;
-      padding: 0.15rem 0.4rem;
+      padding: 2px 6px;
       font-size: 0.8rem;
-      font-family: monospace;
+      font-family: ui-monospace, monospace;
     }
 
     [hidden] {
@@ -369,32 +428,32 @@
   </style>
 </head>
 <body class="app-shell">
-  <main class="retro-shell">
-    <header class="retro-header">
-      <div class="retro-title-group">
-        <h1>
-          <img src="/game-portal/icons/retro-console.svg" alt="" width="28" height="28">
-          Retro Console Emulator
-        </h1>
-        <p>PS1 and classic console emulation right in your browser.</p>
+  <main class="retro-container">
+    <header class="retro-hero">
+      <div>
+        <div class="retro-hero-kicker"><span></span> Classic console player</div>
+        <h1 class="retro-hero-title">Retro Console Emulator</h1>
+        <p class="retro-hero-sub">Play PlayStation 1, N64, GBA, SNES, NES, and classic retro consoles directly in your browser with controller support and local saves.</p>
       </div>
-      <div class="retro-actions">
+      <div class="retro-hero-actions">
         <button type="button" class="retro-btn" id="btn-controls">Controls</button>
         <a href="/game-portal/" class="retro-btn">All games</a>
       </div>
     </header>
 
     <!-- Console selector navigation -->
-    <nav class="console-nav" id="console-nav" aria-label="Consoles"></nav>
+    <div class="console-nav-wrap">
+      <nav class="console-nav" id="console-nav" aria-label="Console selection"></nav>
+    </div>
 
     <!-- Active console details card -->
     <section class="console-card" id="console-card">
-      <div class="console-card-header">
-        <div class="console-info-main">
-          <img class="console-icon-lg" id="console-icon" src="/game-portal/icons/retro-psx.svg" alt="">
-          <div class="console-title-text">
+      <div class="console-card-top">
+        <div class="console-identity">
+          <img id="console-icon" src="/game-portal/icons/retro-psx.svg" alt="">
+          <div>
             <h2 id="console-name">PlayStation (PS1)</h2>
-            <span id="console-desc">32-bit console supporting 3D graphics and CD audio</span>
+            <p id="console-desc">32-bit Sony console with 3D graphics, CD audio, and memory cards.</p>
           </div>
         </div>
         <div class="format-pills" id="console-formats"></div>
@@ -408,21 +467,22 @@
           <line x1="12" y1="3" x2="12" y2="15"></line>
         </svg>
         <strong>Drop ROM file here or click to browse</strong>
-        <span id="dropzone-hint">Supports .chd, .bin, .cue, .iso, .pbp</span>
+        <span id="dropzone-hint">Supports .chd, .bin, .cue, .iso, .pbp, .img</span>
         <input type="file" id="file-rom" style="display: none;">
       </div>
 
-      <div class="dropzone-bios" id="bios-panel" hidden>
-        <span>Custom BIOS (optional for PS1):</span>
-        <button type="button" class="retro-btn" id="btn-load-bios">Select BIOS (.bin)</button>
-        <span id="bios-status" style="font-size:0.8rem;">Using built-in HLE BIOS</span>
+      <!-- Optional BIOS selector for PS1 -->
+      <div class="bios-bar" id="bios-panel" hidden>
+        <strong>Custom BIOS (optional for PS1):</strong>
+        <button type="button" class="retro-btn" id="btn-load-bios" style="min-height:30px; padding:4px 10px; font-size:0.8rem;">Select BIOS (.bin)</button>
+        <span id="bios-status">Using built-in HLE BIOS</span>
         <input type="file" id="file-bios" style="display: none;" accept=".bin,.rom">
       </div>
 
       <!-- Samples Section -->
-      <div class="samples-section" id="samples-section">
-        <h3>Playable homebrew demos</h3>
-        <div class="samples-grid" id="samples-grid"></div>
+      <div id="samples-section">
+        <h3 class="demos-title">Playable homebrew demos</h3>
+        <div class="demos-grid" id="samples-grid"></div>
       </div>
     </section>
   </main>
@@ -434,7 +494,7 @@
         <button type="button" class="retro-btn" id="btn-eject">← Console Menu</button>
         <span id="player-game-name">Playing Game</span>
       </div>
-      <div class="retro-actions">
+      <div class="retro-hero-actions">
         <button type="button" class="retro-btn" id="btn-player-controls">Controls</button>
         <button type="button" class="retro-btn primary" id="btn-player-fullscreen">Fullscreen</button>
       </div>
@@ -475,7 +535,7 @@
           <td>Start / Select (Options / Share)</td>
         </tr>
         <tr>
-          <td>Quick Save / Load</td>
+          <td>Save &amp; Load States</td>
           <td>In Emulator Menu</td>
           <td>In Emulator Menu</td>
         </tr>
@@ -693,13 +753,13 @@
           samplesGrid.innerHTML = '';
           c.samples.forEach(s => {
             const card = document.createElement('div');
-            card.className = 'sample-card';
+            card.className = 'demo-card';
             card.innerHTML = `
-              <div class="sample-meta">
+              <div>
                 <strong>${s.title}</strong>
                 <small>${s.genre}</small>
               </div>
-              <button type="button" class="retro-btn primary" style="font-size:0.8rem;padding:0.35rem 0.6rem;">Play Demo</button>
+              <button type="button" class="retro-btn primary" style="font-size:0.8rem; min-height:30px; padding:4px 10px;">Play Demo</button>
             `;
             card.addEventListener('click', () => launchGame(s.url, s.title));
             samplesGrid.appendChild(card);
@@ -708,7 +768,6 @@
           samplesSection.hidden = true;
         }
 
-        // Update URL query without full reload
         const url = new URL(window.location);
         url.searchParams.set('console', c.id);
         window.history.replaceState({}, '', url);
