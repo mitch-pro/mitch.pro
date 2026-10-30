@@ -2822,6 +2822,7 @@ if (document.readyState === 'loading') {
     <h1 id="home-brand" class="hello-heading"><span id="greeting-text">hello</span><svg class="hello-writing" viewBox="0 0 240 96" aria-hidden="true"><path pathLength="1" d="M15 70 C22 58 47 18 40 12 C31 4 18 77 23 76 C29 57 44 46 47 56 C49 65 36 82 51 74 L63 64 C92 51 78 38 67 57 C51 84 80 85 96 65 C108 49 127 13 119 10 C107 5 86 75 99 78 C113 85 145 17 138 11 C125 1 109 76 124 78 C136 79 148 64 151 54 C160 35 178 48 169 67 C160 87 140 78 148 59 C154 45 169 43 174 55 C178 68 184 72 198 64"/></svg></h1>
     <p id="greeting-email" class="hello-email"></p>
     <span id="streak-badge" class="streak-badge" hidden>&#128293; <b id="streak-badge-count">0</b></span>
+    <a id="home-staff-pill" href="/staff/" class="home-staff-pill" hidden><span>&#9881;</span> Staff workspace &rarr;</a>
     </div>
     <div class="hello-emblem" aria-hidden="true">
       <div class="hello-logo-shadow"></div>
@@ -2866,6 +2867,10 @@ if (document.readyState === 'loading') {
     <a class="home-feature feature-blooket" href="/blooket-bot/">
       <h2>Blooket Bot</h2>
       <span class="feature-bottom">Open Blooket Bot</span>
+    </a>
+    <a class="home-feature feature-staff" id="home-staff-card" href="/staff/" hidden>
+      <h2>Staff</h2>
+      <span class="feature-bottom">Moderation and administration</span>
     </a>
   </section>
 
@@ -2926,13 +2931,20 @@ if (document.readyState === 'loading') {
 
 <iframe id="fullframe" src="about:blank" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-orientation-lock" allowfullscreen allow="fullscreen; autoplay; clipboard-read; clipboard-write; encrypted-media"></iframe>
 
-<div id="_agree_footer">By using mitch.pro you agree to the <a href="/use-agreement/" target="_blank">use agreement</a> and <a href="/privacy/" target="_blank">privacy policy</a>. See also <a href="/cookies/" target="_blank">cookies</a> and <a href="/copyright/" target="_blank">copyright</a>. mitch.pro is open source — <a href="https://github.com/mitch-pro/mitch.pro" target="_blank" rel="noopener">view the code yourself on GitHub</a> · <a href="https://discord.gg/nrBCnK7KM5" target="_blank" rel="noopener">Discord</a>.</div>
-<p id="_staff_footer_link" hidden style="text-align:center;margin:8px 0 0;font-size:.85rem"><a href="/staff/">Staff</a></p>
+<div id="_agree_footer"><span class="footer-agreement">By using mitch.pro you agree to the <a href="/use-agreement/" target="_blank">use agreement</a> and <a href="/privacy/" target="_blank">privacy policy</a>. </span><span class="footer-cookies">See also <a href="/cookies/" target="_blank">cookies</a> and <a href="/copyright/" target="_blank">copyright</a>. </span><span class="footer-oss">mitch.pro is open source — <a href="https://github.com/mitch-pro/mitch.pro" target="_blank" rel="noopener">view the code yourself on GitHub</a></span><span class="footer-discord"> · <a href="https://discord.gg/nrBCnK7KM5" target="_blank" rel="noopener">Discord</a></span></div>
+<p id="_staff_footer_link" hidden style="text-align:center;margin:12px 0 0;"><a href="/staff/" class="home-staff-pill" style="display:inline-flex;">Staff workspace &rarr;</a></p>
 <script>
   fetch('/api/staff-hub/status', { credentials: 'same-origin', cache: 'no-store' })
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (status) {
-      if (status && status.isStaff) document.getElementById('_staff_footer_link').hidden = false;
+      if (status && status.isStaff) {
+        var p = document.getElementById('_staff_footer_link');
+        if (p) p.hidden = false;
+        var pill = document.getElementById('home-staff-pill');
+        if (pill) pill.hidden = false;
+        var card = document.getElementById('home-staff-card');
+        if (card) card.hidden = false;
+      }
     })
     .catch(function () {});
 </script>

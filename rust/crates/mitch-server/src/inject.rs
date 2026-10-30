@@ -147,10 +147,10 @@ pub fn inject_credit(html: &str, school: bool) -> String {
     if html.contains("id=\"site-credit\"") {
         return html.to_string();
     }
-    let text = if school {
-        "Made by Tyler and Mitch."
+    let copy = if school {
+        "<span id=\"site-credit-copy\">Made by Tyler and Mitch.</span>".to_string()
     } else {
-        "Created by Mitch and Tyler"
+        r#"<span id="site-credit-copy"><span class="footer-agreement">By using mitch.pro you agree to the <a href="/use-agreement/" target="_blank">use agreement</a> and <a href="/privacy/" target="_blank">privacy policy</a>. </span><span class="footer-cookies">See also <a href="/cookies/" target="_blank">cookies</a> and <a href="/copyright/" target="_blank">copyright</a>. </span><span class="footer-oss">mitch.pro is open source — <a href="https://github.com/mitch-pro/mitch.pro" target="_blank" rel="noopener">view the code yourself on GitHub</a></span><span class="footer-discord"> · <a href="https://discord.gg/nrBCnK7KM5" target="_blank" rel="noopener">Discord</a></span></span>"#.to_string()
     };
     let band = format!(
         r#"<style>
@@ -158,16 +158,21 @@ pub fn inject_credit(html: &str, school: bool) -> String {
 #site-credit-space {{ clear:both; height:var(--site-credit-height); flex:0 0 var(--site-credit-height); grid-column:1 / -1; pointer-events:none; }}
 #site-credit {{ box-sizing:border-box; position:fixed; inset:auto 0 0; z-index:100000; width:100%; height:var(--site-credit-height); margin:0; padding:6px 16px calc(6px + env(safe-area-inset-bottom, 0px)); border-top:1px solid #8883; background:#88888818; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); color:inherit; text-align:center; font:400 11px/16px system-ui,sans-serif; pointer-events:none; }}
 #site-credit span {{ opacity:.7; }}
+#site-credit a {{ pointer-events:auto; color:inherit; text-decoration:underline; }}
+#site-credit a:hover {{ opacity:1; }}
 #site-credit {{ display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:8px; }}
-#site-credit-copy {{ grid-column:2; white-space:nowrap; }}
+#site-credit-copy {{ grid-column:2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center; }}
 #site-active {{ grid-column:3; justify-self:end; display:inline-flex; align-items:center; gap:5px; white-space:nowrap; font-variant-numeric:tabular-nums; }}
 #site-active[hidden] {{ display:none; }}
 #site-active::before {{ content:""; width:5px; height:5px; border-radius:50%; background:#78ad8b; flex:none; }}
+@media (max-width:1020px) {{ .footer-discord {{ display:none !important; }} }}
+@media (max-width:820px) {{ .footer-cookies {{ display:none !important; }} }}
+@media (max-width:580px) {{ .footer-agreement {{ display:none !important; }} }}
 @media (max-width:380px) {{ #site-credit {{ padding-inline:10px; gap:5px; font-size:10px; }} }}
 body #mobile-dock {{ bottom:calc(var(--site-credit-height) + 10px); }}
 body .mobile-nav-dock {{ bottom:var(--site-credit-height); padding-bottom:6px; }}
 @media print {{ #site-credit {{ position:static; height:auto; padding:6px 16px; }} #site-credit-space {{ display:none; }} }}
-</style><div id="site-credit-space" aria-hidden="true"></div><div id="site-credit"><span id="site-credit-copy">{text}</span><span id="site-active" hidden title="Members online now"></span></div><script src="/site-status.js" defer></script>"#
+</style><div id="site-credit-space" aria-hidden="true"></div><div id="site-credit">{copy}<span id="site-active" hidden title="Members online now"></span></div><script src="/site-status.js" defer></script>"#
     );
     match html.rfind("</body>") {
         Some(i) => format!("{}{}{}", &html[..i], band, &html[i..]),
@@ -196,11 +201,11 @@ mod tests {
     fn credits_are_idempotent_and_use_school_wording() {
         let html = "<html><body><main>Sign up</main></body></html>";
         let main = inject_credit(html, false);
-        assert!(main.contains("Created by Mitch and Tyler"));
+        assert!(main.contains("By using mitch.pro you agree"));
         assert_eq!(main, inject_credit(&main, false));
         let school = inject_credit(html, true);
         assert!(school.contains("Made by Tyler and Mitch."));
-        assert!(!school.contains("Created by"));
+        assert!(!school.contains("By using mitch.pro"));
         assert!(school.find("site-credit").unwrap() < school.find("</body>").unwrap());
     }
 
