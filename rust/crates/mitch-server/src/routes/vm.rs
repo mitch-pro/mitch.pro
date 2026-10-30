@@ -3822,14 +3822,22 @@ pub(crate) async fn handle(
 
         let target_label = jsval::str_or(target_tier.get("label"), "");
         if cost > 0.0 {
-            mitch_lib::coins::add_coins(
+            if let Err(e) = mitch_lib::coins::spend_coins(
                 &state.store,
                 state.data_dir(),
                 &actor.email,
-                -cost,
-                1.0,
+                cost,
                 &format!("vm-upgrade: {category} to {target_label}"),
-            );
+            ) {
+                return Some(json_response(
+                    402,
+                    json!({
+                        "error": format!("Insufficient Mitch Coins: {e}"),
+                        "code": "insufficient_coins",
+                        "required": cost,
+                    }),
+                ));
+            }
         }
 
         let new_upgrades =

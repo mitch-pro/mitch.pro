@@ -295,15 +295,16 @@ async fn chat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> 
                 let percent = r.coin_request_percent.clamp(0.0, 100.0);
                 let balance = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &email);
                 let amount = (balance * percent / 100.0).min(balance.max(0.0));
-                if amount > 0.0 {
-                    mitch_lib::coins::add_coins(
+                if amount > 0.0
+                    && mitch_lib::coins::spend_coins(
                         &state.store,
                         state.data_dir(),
                         &email,
-                        -amount,
-                        1.0,
+                        amount,
                         "companion_coin_take",
-                    );
+                    )
+                    .is_ok()
+                {
                     coins_taken = amount;
                 }
                 mitch_lib::companion::record_coin_request(

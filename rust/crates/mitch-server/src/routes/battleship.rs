@@ -374,12 +374,35 @@ fn respond(state: &Arc<AppState>, body: &Value, my_norm: &str) -> axum::response
         if mitch_lib::auth::normalize_email(&c.to) != my_norm {
             return resp(403, &json!({ "error": "not your challenge" }));
         }
-        if c.bet > 0.0 {
-            if mitch_lib::coins::get_coins(&state.store, &state.cfg.data_dir, my_norm) < c.bet {
+        if c.bet > 0.0 && accept {
+            if let Err(e) = mitch_lib::coins::spend_coins(
+                &state.store,
+                &state.cfg.data_dir,
+                my_norm,
+                c.bet,
+                "battleship: bet deduction on start",
+            ) {
                 challenges.shift_remove(&challenge_id);
-                return resp(400, &json!({ "error": "Insufficient coins" }));
+                return resp(400, &json!({ "error": format!("Insufficient coins: {e}") }));
             }
-            if mitch_lib::coins::get_coins(&state.store, &state.cfg.data_dir, &c.from) < c.bet {
+            if mitch_lib::coins::spend_coins(
+                &state.store,
+                &state.cfg.data_dir,
+                &c.from,
+                c.bet,
+                "battleship: bet deduction on start",
+            )
+            .is_err()
+            {
+                // Refund my_norm if challenger fails debit
+                mitch_lib::coins::add_coins(
+                    &state.store,
+                    &state.cfg.data_dir,
+                    my_norm,
+                    c.bet,
+                    1.0,
+                    "battleship: bet refund on failed challenge start",
+                );
                 challenges.shift_remove(&challenge_id);
                 return resp(
                     400,
@@ -387,24 +410,6 @@ fn respond(state: &Arc<AppState>, body: &Value, my_norm: &str) -> axum::response
                         "error":
                             "Challenger no longer has enough coins. Challenge cancelled."
                     }),
-                );
-            }
-            if accept {
-                mitch_lib::coins::add_coins(
-                    &state.store,
-                    &state.cfg.data_dir,
-                    my_norm,
-                    -c.bet,
-                    state.coin_multiplier(),
-                    "battleship: bet deduction on start",
-                );
-                mitch_lib::coins::add_coins(
-                    &state.store,
-                    &state.cfg.data_dir,
-                    &c.from,
-                    -c.bet,
-                    state.coin_multiplier(),
-                    "battleship: bet deduction on start",
                 );
             }
         }
@@ -1067,5 +1072,53 @@ mod tests {
         // A `(` in an email would throw in JS (RegExp compile) → the 500
         // path here.
         assert!(mask_result("x wins", "(bad", "b@x.rjuhsd.us").is_none());
+    }
+
+    #[test]
+    fn respond_insufficient_coins_rejects_and_does_not_debit() {
+        let dir = std::env::temp_dir().join(format!(
+            "mitch-bs-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Arc::new(mitch_lib::data::DataStore::open(&dir, &dir.join("data")).unwrap());
+        let mut cfg = crate::hosts::SiteConfig::load();
+        cfg.data_dir = dir.clone();
+        let state = Arc::new(AppState::new(cfg, store));
+
+        let challenge_id = "c1".to_string();
+        state.bs_challenges.lock().unwrap().insert(
+            challenge_id.clone(),
+            BsChallenge {
+                id: challenge_id.clone(),
+                from: "alice@student.rjuhsd.us".to_string(),
+                to: "bob@student.rjuhsd.us".to_string(),
+                bet: 100.0,
+                created_at: 1000,
+            },
+        );
+
+        // Bob has 0 coins, accept fails
+        let res = respond(
+            &state,
+            &json!({ "challengeId": challenge_id, "accept": true }),
+            "bob@student.rjuhsd.us",
+        );
+        assert_eq!(res.status(), axum::http::StatusCode::BAD_REQUEST);
+        assert_eq!(
+            mitch_lib::coins::get_coins(&state.store, &state.cfg.data_dir, "bob@student.rjuhsd.us"),
+            0.0
+        );
+        assert_eq!(
+            mitch_lib::coins::get_coins(
+                &state.store,
+                &state.cfg.data_dir,
+                "alice@student.rjuhsd.us"
+            ),
+            0.0
+        );
     }
 }

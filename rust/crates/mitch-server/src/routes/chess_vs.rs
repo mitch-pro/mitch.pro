@@ -514,14 +514,36 @@ fn respond(state: &Arc<AppState>, body: &Value, my_email: &str) -> axum::respons
     let bet = c.get("bet").and_then(jsval::number).unwrap_or(0.0);
     let is_corr_challenge = c_type_is_corr(&c);
     if accept && bet > 0.0 {
-        if mitch_lib::coins::get_coins(&state.store, &state.cfg.data_dir, my_email) < bet {
+        if let Err(e) = mitch_lib::coins::spend_coins(
+            &state.store,
+            &state.cfg.data_dir,
+            my_email,
+            bet,
+            "chess-vs: bet deduction on start",
+        ) {
             return resp(
                 400,
-                &json!({ "error": "You do not have enough coins to accept this bet" }),
+                &json!({ "error": format!("You do not have enough coins to accept this bet: {e}") }),
             );
         }
         let from = jsval::string_of(c.get("from"));
-        if mitch_lib::coins::get_coins(&state.store, &state.cfg.data_dir, &from) < bet {
+        if mitch_lib::coins::spend_coins(
+            &state.store,
+            &state.cfg.data_dir,
+            &from,
+            bet,
+            "chess-vs: bet deduction on start",
+        )
+        .is_err()
+        {
+            mitch_lib::coins::add_coins(
+                &state.store,
+                &state.cfg.data_dir,
+                my_email,
+                bet,
+                1.0,
+                "chess-vs: bet refund on failed challenge start",
+            );
             state
                 .cv_challenges
                 .lock()
@@ -532,22 +554,6 @@ fn respond(state: &Arc<AppState>, body: &Value, my_email: &str) -> axum::respons
                 &json!({ "error": "The challenger no longer has enough coins for this bet. Challenge cancelled." }),
             );
         }
-        mitch_lib::coins::add_coins(
-            &state.store,
-            &state.cfg.data_dir,
-            my_email,
-            -bet,
-            state.coin_multiplier(),
-            "chess-vs: bet deduction on start",
-        );
-        mitch_lib::coins::add_coins(
-            &state.store,
-            &state.cfg.data_dir,
-            &from,
-            -bet,
-            state.coin_multiplier(),
-            "chess-vs: bet deduction on start",
-        );
     }
 
     state
@@ -949,20 +955,18 @@ fn move_piece(state: &Arc<AppState>, body: &Value, my_email: &str) -> axum::resp
         // The boost runs BEFORE the move/fen validation — a boost with a
         // missing move still sinks the 500 coins and adds the 30 seconds.
         if jsval::truthy(body.get("boostClock").unwrap_or(&Value::Null)) {
-            if mitch_lib::coins::get_coins(&state.store, &state.cfg.data_dir, my_email) < 500.0 {
-                return resp(
-                    400,
-                    &json!({ "error": "Insufficient coins for clock boost" }),
-                );
-            }
-            mitch_lib::coins::add_coins(
+            if let Err(e) = mitch_lib::coins::spend_coins(
                 &state.store,
                 &state.cfg.data_dir,
                 my_email,
-                -500.0,
-                state.coin_multiplier(),
-                "",
-            );
+                500.0,
+                "chess-vs: clock boost",
+            ) {
+                return resp(
+                    400,
+                    &json!({ "error": format!("Insufficient coins for clock boost: {e}") }),
+                );
+            }
             let clock = clocks_get(g, my_color);
             // `g.clocks[myColor] += 30000` — NaN (undefined clock) drops the
             // key on the next stringify; remove it rather than writing null.

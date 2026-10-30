@@ -139,21 +139,15 @@ fn create(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Resp
         Err(resp) => return resp,
     };
 
-    let balance = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &email);
-    if balance < CREATION_FEE_COINS {
-        return json_response(
-            400,
-            json!({ "error": format!("insufficient coins. Need {CREATION_FEE_COINS}, have {:.2}.", balance) }),
-        );
-    }
-    mitch_lib::coins::add_coins(
+    if let Err(e) = mitch_lib::coins::spend_coins(
         &state.store,
         state.data_dir(),
         &email,
-        -CREATION_FEE_COINS,
-        1.0,
+        CREATION_FEE_COINS,
         "companion_create_character",
-    );
+    ) {
+        return json_response(400, json!({ "error": format!("insufficient coins: {e}") }));
+    }
     let id =
         mitch_lib::companion::create_custom_character(&state.store, &email, &name, &prompt, price);
     notify_admins_of_new_character(state, &email, &name, &id);

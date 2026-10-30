@@ -66,21 +66,15 @@ fn subscribe(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> R
         }
     };
 
-    let balance = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &email);
-    if balance < cost {
-        return json_response(
-            400,
-            json!({ "error": format!("insufficient coins. Need {cost}, have {:.2}.", balance) }),
-        );
-    }
-    mitch_lib::coins::add_coins(
+    if let Err(e) = mitch_lib::coins::spend_coins(
         &state.store,
         state.data_dir(),
         &email,
-        -cost,
-        1.0,
+        cost,
         "companion_subscribe",
-    );
+    ) {
+        return json_response(400, json!({ "error": format!("insufficient coins: {e}") }));
+    }
     let expires_at = mitch_lib::companion::extend_subscription(&state.store, &email, duration_ms);
     json_response(200, json!({ "ok": true, "expiresAt": expires_at }))
 }
@@ -104,21 +98,17 @@ fn unlock(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Resp
     }
 
     let price = character.price_coins;
-    let balance = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &email);
-    if balance < price {
-        return json_response(
-            400,
-            json!({ "error": format!("insufficient coins. Need {price}, have {:.2}.", balance) }),
-        );
+    if price > 0.0 {
+        if let Err(e) = mitch_lib::coins::spend_coins(
+            &state.store,
+            state.data_dir(),
+            &email,
+            price,
+            "companion_unlock_character",
+        ) {
+            return json_response(400, json!({ "error": format!("insufficient coins: {e}") }));
+        }
     }
-    mitch_lib::coins::add_coins(
-        &state.store,
-        state.data_dir(),
-        &email,
-        -price,
-        1.0,
-        "companion_unlock_character",
-    );
     mitch_lib::companion::unlock_character(&state.store, &email, &character_id);
     // User-made characters pay their creator a cut; admin presets have no
     // creator_email, so there's nobody to pay — the full price is a sink.
@@ -169,12 +159,11 @@ fn accept_coin_request(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &
     let balance = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &email);
     let amount = balance * percent / 100.0;
     if amount > 0.0 {
-        mitch_lib::coins::add_coins(
+        let _ = mitch_lib::coins::spend_coins(
             &state.store,
             state.data_dir(),
             &email,
-            -amount,
-            1.0,
+            amount,
             "companion_coin_request",
         );
     }
@@ -182,4 +171,53 @@ fn accept_coin_request(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &
         200,
         json!({ "ok": true, "deducted": amount, "characterName": character.name }),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::StatusCode;
+
+    #[test]
+    fn subscribe_insufficient_coins_returns_error() {
+        let dir = std::env::temp_dir().join(format!(
+            "mitch-companion-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Arc::new(mitch_lib::data::DataStore::open(&dir, &dir.join("data")).unwrap());
+        let mut cfg = crate::hosts::SiteConfig::load();
+        cfg.data_dir = dir.clone();
+        let state = Arc::new(AppState::new(cfg, store));
+
+        let sess = auth::create_auth_session(
+            &state.store,
+            &state.id_secret,
+            "test@mitch.pro",
+            "test@mitch.pro",
+            "",
+            "",
+            false,
+        );
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            axum::http::header::COOKIE,
+            axum::http::HeaderValue::from_str(&format!(
+                "mitch_session={}; studentId={}",
+                sess.token, sess.sid
+            ))
+            .unwrap(),
+        );
+
+        let body = serde_json::to_vec(&json!({ "plan": "week" })).unwrap();
+        let res = subscribe(&state, &headers, &body);
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            mitch_lib::coins::get_coins(&state.store, state.data_dir(), "test@mitch.pro"),
+            0.0
+        );
+    }
 }

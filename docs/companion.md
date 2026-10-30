@@ -162,14 +162,12 @@ subsystem — no `server.js` equivalent.
 
 ## Economy
 
-Every coin movement here matches the `get_coins` → check → `add_coins`
-pattern already used by `routes/marketplace.rs` and `routes/casino.rs` —
-no new mechanism invented. Read-then-write, not a single atomic
-transaction, so there's technically a TOCTOU window on rapid concurrent
-double-clicks — accepted here on purpose because the rest of the site's
-economy already accepts the same window; it is not an infinite-money bug,
-it's a "maybe get one extra purchase through" window bounded by whatever
-that one purchase costs.
+Every coin debit here uses atomic check-and-debit transactions
+(`mitch_lib::coins::spend_coins`), preventing concurrent double-spends
+or negative balances across subscriptions, character unlocks, and custom
+character creation fees. Creation, unlock, and subscription operations
+atomically verify balance and deduct coins in a single `BEGIN IMMEDIATE`
+transaction before granting access or saving records.
 
 **Subscription — using the companion at all.** 750 coins/week or 1500/
 month (`POST /api/companion/subscribe`, `{plan: "week"|"month"}`). Stored

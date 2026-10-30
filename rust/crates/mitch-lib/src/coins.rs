@@ -158,6 +158,17 @@ pub enum BetError {
     InsufficientFunds,
 }
 
+impl std::fmt::Display for BetError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BetError::InvalidAmount => write!(f, "invalid amount"),
+            BetError::InsufficientFunds => write!(f, "insufficient funds"),
+        }
+    }
+}
+
+impl std::error::Error for BetError {}
+
 /// Atomically debits `amount` coins from `email` if their current balance is sufficient.
 /// Executes inside one `BEGIN IMMEDIATE` transaction to prevent parallel spend races.
 pub fn spend_coins(

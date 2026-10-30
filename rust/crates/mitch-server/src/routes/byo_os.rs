@@ -660,14 +660,24 @@ pub(crate) async fn handle(
             }
         }
 
-        mitch_lib::coins::add_coins(
+        if let Err(e) = mitch_lib::coins::spend_coins(
             &state.store,
             state.data_dir(),
             &actor.email,
-            -BYO_OS_COST_COINS,
-            1.0,
+            BYO_OS_COST_COINS,
             "byo_os_iso_upload",
-        );
+        ) {
+            let _ = crate::proxmox_desktop::desktop()
+                .delete_iso(&proxmox_filename)
+                .await;
+            return Some(json_response(
+                402,
+                json!({
+                    "error": format!("Insufficient Mitch Coins: {e}"),
+                    "code": "insufficient_coins",
+                }),
+            ));
+        }
 
         let entry = json!({
             "filename": filename,
@@ -813,14 +823,24 @@ pub(crate) async fn handle(
             }
         }
 
-        mitch_lib::coins::add_coins(
+        if let Err(e) = mitch_lib::coins::spend_coins(
             &state.store,
             state.data_dir(),
             &actor.email,
-            -total_cost,
-            1.0,
+            total_cost,
             "byo_os_iso_upload",
-        );
+        ) {
+            let _ = crate::proxmox_desktop::desktop()
+                .delete_iso(&proxmox_filename)
+                .await;
+            return Some(json_response(
+                402,
+                json!({
+                    "error": format!("Insufficient Mitch Coins: {e}"),
+                    "code": "insufficient_coins",
+                }),
+            ));
+        }
 
         let entry = json!({
             "filename": display_filename,
@@ -1203,14 +1223,19 @@ pub(crate) async fn handle(
             preset.map(|p| p.name).unwrap_or("")
         };
 
-        // Checked up front, before anything (including the user's existing
+        // Checked and debited up front, before anything (including the user's existing
         // computer) is touched — failing late here would mean deleting a
         // working computer only to then refuse the replacement.
-        let balance = mitch_lib::coins::get_coins(&state.store, state.data_dir(), &actor.email);
-        if balance < PRESET_ISO_COST_COINS {
+        if let Err(e) = mitch_lib::coins::spend_coins(
+            &state.store,
+            state.data_dir(),
+            &actor.email,
+            PRESET_ISO_COST_COINS,
+            &format!("byo-os preset: {}", preset_name),
+        ) {
             return Some(json_response(
                 400,
-                json!({ "error": format!("Need {} coins, have {:.2}.", PRESET_ISO_COST_COINS, balance) }),
+                json!({ "error": format!("Insufficient coins: {e}") }),
             ));
         }
 
@@ -1297,6 +1322,14 @@ pub(crate) async fn handle(
             {
                 Ok(v) => v as f64,
                 Err(e) => {
+                    mitch_lib::coins::add_coins(
+                        &state.store,
+                        state.data_dir(),
+                        &actor.email,
+                        PRESET_ISO_COST_COINS,
+                        1.0,
+                        "byo-os preset refund",
+                    );
                     state
                         .vm_power_requests
                         .lock()
@@ -1350,6 +1383,14 @@ pub(crate) async fn handle(
             excluded_vmids.push(candidate_vmid);
         }
         let Some(pending_record) = pending_record else {
+            mitch_lib::coins::add_coins(
+                &state.store,
+                state.data_dir(),
+                &actor.email,
+                PRESET_ISO_COST_COINS,
+                1.0,
+                "byo-os preset refund",
+            );
             state
                 .vm_power_requests
                 .lock()
@@ -1393,14 +1434,6 @@ pub(crate) async fn handle(
 
         match result {
             Ok(created) => {
-                mitch_lib::coins::add_coins(
-                    &state.store,
-                    state.data_dir(),
-                    &actor.email,
-                    -PRESET_ISO_COST_COINS,
-                    state.coin_multiplier(),
-                    &format!("byo-os preset: {}", preset_name),
-                );
                 let mut merged = pending_record.clone();
                 if let Some(obj) = merged.as_object_mut() {
                     if let Some(created_obj) = created.as_object() {
@@ -1427,6 +1460,14 @@ pub(crate) async fn handle(
                 ));
             }
             Err(err) => {
+                mitch_lib::coins::add_coins(
+                    &state.store,
+                    state.data_dir(),
+                    &actor.email,
+                    PRESET_ISO_COST_COINS,
+                    1.0,
+                    "byo-os preset refund",
+                );
                 let rec_id = jsval::str_or(pending_record.get("id"), "");
                 if !rec_id.is_empty() {
                     vmlib::update_virtual_machine_runtime(

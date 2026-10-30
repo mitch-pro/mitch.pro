@@ -1040,7 +1040,11 @@ pub async fn pirate_voyage_proxy(
     headers: &HeaderMap,
     body_bytes: &[u8],
 ) -> Option<Response> {
-    if !path.starts_with("/proxy/pirate-voyage") && !path.starts_with("/pirate-voyage") {
+    if !path.starts_with("/proxy/pirate-voyage/")
+        && path != "/proxy/pirate-voyage"
+        && !path.starts_with("/pirate-voyage/")
+        && path != "/pirate-voyage"
+    {
         return None;
     }
 
@@ -1078,7 +1082,13 @@ pub async fn pirate_voyage_proxy(
     } else {
         path
     };
+    if !sub_path.is_empty() && !sub_path.starts_with('/') {
+        return None;
+    }
     let sub_path = if sub_path.is_empty() { "/" } else { sub_path };
+    if sub_path.starts_with("//") || sub_path.contains('@') {
+        return Some(crate::errors::err_resp(400, Some("bad request"), None));
+    }
 
     let target_url = format!("https://cinejoy.to{sub_path}{search}");
 
@@ -1335,6 +1345,65 @@ mod tests {
             axum::http::HeaderValue::from_static("https://mitch.pro/games"),
         );
         assert!(pirate_voyage_app_redirect("/_app/chunk.js", "", &norm_headers).is_none());
+    }
+
+    #[tokio::test]
+    async fn test_pirate_voyage_path_injection_blocked() {
+        let dir = std::env::temp_dir().join(format!(
+            "mitch-proxy-test-pv-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Arc::new(mitch_lib::data::DataStore::open(&dir, &dir).unwrap());
+        let cfg = crate::hosts::SiteConfig::load();
+        let state = Arc::new(AppState::new(cfg, store));
+
+        let sess = mitch_lib::auth::create_auth_session(
+            &state.store,
+            &state.id_secret,
+            "admin@mitch.pro",
+            "admin@mitch.pro",
+            "",
+            "",
+            true,
+        );
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            axum::http::header::COOKIE,
+            axum::http::HeaderValue::from_str(&format!(
+                "mitch_session={}; studentId={}",
+                sess.token, sess.sid
+            ))
+            .unwrap(),
+        );
+
+        // Target with authority injection
+        let resp = pirate_voyage_proxy(
+            &state,
+            &axum::http::Method::GET,
+            "/proxy/pirate-voyage@evil.com",
+            "",
+            &headers,
+            &[],
+        )
+        .await;
+        // Non-slash subpath returns None (does not match route)
+        assert!(resp.is_none());
+
+        let resp2 = pirate_voyage_proxy(
+            &state,
+            &axum::http::Method::GET,
+            "/proxy/pirate-voyage/@evil.com",
+            "",
+            &headers,
+            &[],
+        )
+        .await;
+        assert!(resp2.is_some());
+        assert_eq!(resp2.unwrap().status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]
