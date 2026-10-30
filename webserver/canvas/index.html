@@ -1850,7 +1850,7 @@ async function loadBans() {
       div.innerHTML = `
         <div class="ban-id">${htmlEscape(painter)}</div>
         <div class="ban-reason">${htmlEscape(info.reason || '')} ${info.ts ? '&middot; ' + htmlEscape(new Date(info.ts).toLocaleDateString()) : ''}</div>
-        <button class="adm-btn green ban-unban" data-p="${painter}">unban</button>
+        <button class="adm-btn green ban-unban" data-p="${htmlEscape(painter)}">unban</button>
       `;
       div.querySelector('.ban-unban').onclick = async () => {
         const r = await fetch('/api/canvas/admin-unban', {

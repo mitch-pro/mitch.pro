@@ -84,6 +84,54 @@
   const REACTIONS=['🥒','😂','🔥','💀','💚','📌'];
   let founder=false,myNorm='',posts=[],loaded=false;
   const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  function safeUrl(value, image) {
+    const raw = String(value || '').trim();
+    if (/^https?:\/\//i.test(raw)) return raw;
+    if (!image && (/^\//.test(raw) || /^mailto:[^@\s]+@[^@\s]+\.[^@\s]+$/i.test(raw))) return raw;
+    return '';
+  }
+  function sanitizeClientHtml(html) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = String(html || '');
+    const allowed = new Set(['p','br','strong','b','em','i','u','s','a','h2','h3','ul','ol','li','blockquote','pre','code','img','hr','span','div']);
+    const alias = { div: 'p', b: 'strong', i: 'em' };
+    function clean(node) {
+      if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.textContent || '');
+      if (node.nodeType !== Node.ELEMENT_NODE) return document.createDocumentFragment();
+      const raw = node.tagName.toLowerCase();
+      if (!allowed.has(raw)) {
+        const frag = document.createDocumentFragment();
+        Array.from(node.childNodes).forEach(child => frag.appendChild(clean(child)));
+        return frag;
+      }
+      const tag = alias[raw] || raw;
+      if (tag === 'br' || tag === 'hr') return document.createElement(tag);
+      if (tag === 'img') {
+        const src = safeUrl(node.getAttribute('src'), true);
+        if (!src) return document.createDocumentFragment();
+        const img = document.createElement('img');
+        img.src = src;
+        img.alt = String(node.getAttribute('alt') || '').slice(0, 140);
+        return img;
+      }
+      const el = document.createElement(tag);
+      if (tag === 'a') {
+        const href = safeUrl(node.getAttribute('href'), false);
+        if (href) {
+          el.href = href;
+          el.target = '_blank';
+          el.rel = 'noopener noreferrer';
+        }
+      }
+      Array.from(node.childNodes).forEach(child => el.appendChild(clean(child)));
+      return el;
+    }
+    const frag = document.createDocumentFragment();
+    Array.from(tpl.content.childNodes).forEach(child => frag.appendChild(clean(child)));
+    const out = document.createElement('div');
+    out.appendChild(frag);
+    return out.innerHTML;
+  }
   function toast(text){const el=document.getElementById('bullToast');el.textContent=text;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),3200)}
   function rel(ts){const s=Math.max(1,Math.round((Date.now()-(ts||0))/1000));if(s<60)return s+'s ago';const m=Math.round(s/60);if(m<60)return m+'m ago';const h=Math.round(m/60);if(h<24)return h+'h ago';return new Date(ts||0).toLocaleDateString([],{month:'short',day:'numeric'})}
   function reactionsHtml(p){
@@ -95,7 +143,7 @@
   }
   function postHtml(p){
     const tools=(founder||p.mine)?`<span class="post-tools"><button type="button" data-del="${esc(p.id)}" class="danger">Delete</button></span>`:'';
-    return `<article class="post${p.pinned?' pinned':''}" data-id="${esc(p.id)}">${p.pinned?'<span class="post-pin">📌 Pinned</span>':''}<h3>${esc(p.title)}</h3><div class="meta"><span class="author-chip">👑 ${esc(p.author)}</span><span>${rel(p.ts)}</span>${p.updatedAt>p.ts?'<span>· edited</span>':''}</div><div class="body">${p.html}</div><div class="foot">${reactionsHtml(p)}${tools}</div></article>`;
+    return `<article class="post${p.pinned?' pinned':''}" data-id="${esc(p.id)}">${p.pinned?'<span class="post-pin">📌 Pinned</span>':''}<h3>${esc(p.title)}</h3><div class="meta"><span class="author-chip">👑 ${esc(p.author)}</span><span>${rel(p.ts)}</span>${p.updatedAt>p.ts?'<span>· edited</span>':''}</div><div class="body">${sanitizeClientHtml(p.html)}</div><div class="foot">${reactionsHtml(p)}${tools}</div></article>`;
   }
   function renderAll(){
     if(!posts.length){list.innerHTML='<div class="empty-posts"><div><span>🫙</span>The Bulletin is empty. The co-founders are still fermenting their first post.</div></div>';return}

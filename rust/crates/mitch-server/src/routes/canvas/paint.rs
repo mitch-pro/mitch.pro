@@ -152,6 +152,15 @@ pub fn pixel_post(state: &Arc<AppState>, headers: &HeaderMap, body: &Value) -> R
     if !jsval::truthy(&color) || !jsval::truthy(&painter) {
         return json_response(400, json!({ "error": "missing fields" }));
     }
+    let painter_clean: String = jsval::string(&painter)
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(64)
+        .collect();
+    if painter_clean.is_empty() {
+        return json_response(400, json!({ "error": "invalid painter" }));
+    }
+    let painter = json!(painter_clean);
     let color_str = jsval::string(&color);
     if !valid_color(&color_str) {
         return json_response(400, json!({ "error": "invalid color" }));

@@ -463,7 +463,7 @@ pub fn handle(
             json!({
                 "url": new_url,
                 "ip": ctx.ip,
-                "userAgent": headers.get("user-agent").and_then(|v| v.to_str().ok()).unwrap_or("unknown"),
+                "userAgent": user_agent(headers),
                 "role": role,
             }),
         );
@@ -498,7 +498,7 @@ pub fn handle(
             json!({
                 "href": href,
                 "ip": ctx.ip,
-                "userAgent": headers.get("user-agent").and_then(|v| v.to_str().ok()).unwrap_or("unknown"),
+                "userAgent": user_agent(headers),
                 "role": role,
             }),
         );
@@ -1277,11 +1277,16 @@ fn now_millis() -> i64 {
 }
 
 fn user_agent(headers: &HeaderMap) -> String {
-    headers
+    let raw = headers
         .get("user-agent")
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("unknown")
-        .to_string()
+        .unwrap_or("unknown");
+    let sanitized: String = raw.chars().filter(|c| !c.is_control()).take(200).collect();
+    if sanitized.is_empty() {
+        "unknown".to_string()
+    } else {
+        sanitized
+    }
 }
 
 fn valid_email(email: &str) -> bool {
@@ -2530,5 +2535,17 @@ mod tests {
 
         let admins_after = mitch_lib::auth::admin_member_emails(&state.store);
         assert!(!admins_after.contains(&"newadmin@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_user_agent_sanitization() {
+        let mut headers = axum::http::HeaderMap::new();
+        let long_ua = "a".repeat(300);
+        headers.insert(
+            "user-agent",
+            axum::http::HeaderValue::from_str(&long_ua).unwrap(),
+        );
+        let sanitized = user_agent(&headers);
+        assert_eq!(sanitized.len(), 200);
     }
 }

@@ -1261,7 +1261,14 @@ function sameUser(a, b) {
 function e2eStorageKey(name) {
   return `_e2e_${name}_v3:${encodeURIComponent(normEmail(myEmail))}`;
 }
-function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 function fmtTime(ts) { return new Date(ts || Date.now()).toLocaleTimeString('en-US', { hour12:true, hour:'2-digit', minute:'2-digit' }); }
 function fmtDay(ts) { return new Date(ts || Date.now()).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }); }
 function atBottom(el) { return el.scrollHeight - el.scrollTop - el.clientHeight < 60; }

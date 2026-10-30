@@ -118,6 +118,26 @@ pub fn sanitize_blog_html(input: &str, fallback_text: &str) -> String {
     }
     html = block_tag_re.replace_all(&html, "").into_owned();
 
+    // Escape unclosed '<' that has no closing '>' after it (e.g. unterminated trailing tags).
+    // This prevents unterminated trailing tags like `<img src=x onerror=alert(1) ` from absorbing
+    // following markup when injected into templates.
+    let last_gt = html.rfind('>');
+    let unclosed_lt = match last_gt {
+        Some(gt) => html[gt + 1..].find('<').map(|idx| gt + 1 + idx),
+        None => html.find('<'),
+    };
+    if let Some(pos) = unclosed_lt {
+        let mut fixed = html[..pos].to_string();
+        for ch in html[pos..].chars() {
+            if ch == '<' {
+                fixed.push_str("&lt;");
+            } else {
+                fixed.push(ch);
+            }
+        }
+        html = fixed;
+    }
+
     static HREF_RE: OnceLock<Regex> = OnceLock::new();
     static SRC_RE: OnceLock<Regex> = OnceLock::new();
     static ALT_RE: OnceLock<Regex> = OnceLock::new();
@@ -421,6 +441,11 @@ mod tests {
         // empty input falls back to text
         assert_eq!(sanitize_blog_html("", "a\n\nb"), "<p>a</p><p>b</p>");
         assert_eq!(sanitize_blog_html("", ""), "");
+        // unterminated trailing tag is neutralized by escaping dangling '<'
+        assert_eq!(
+            sanitize_blog_html("<p>x</p><img src=x onerror=alert(1) ", ""),
+            "<p>x</p>&lt;img src=x onerror=alert(1) "
+        );
     }
 
     #[test]
