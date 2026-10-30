@@ -123,16 +123,30 @@ pub fn handle(
         if !ctx.is_any_admin(state) {
             return Some(forbidden());
         }
-        let email = mitch_lib::auth::normalize_email(body["email"].as_str().unwrap_or(""));
-        if !valid_email(&email) || mitch_lib::matrix::is_student_email(&email) {
+        let raw_target = body["email"]
+            .as_str()
+            .or_else(|| body["identifier"].as_str())
+            .unwrap_or("")
+            .trim();
+        let target = if raw_target.starts_with('@') && raw_target.contains(':') {
+            raw_target.to_ascii_lowercase()
+        } else {
+            mitch_lib::auth::normalize_email(raw_target)
+        };
+        let is_valid_matrix_id =
+            target.starts_with('@') && target.contains(':') && target.len() > 3;
+        let is_valid_ext_email =
+            valid_email(&target) && !mitch_lib::matrix::is_student_email(&target);
+
+        if !is_valid_matrix_id && !is_valid_ext_email {
             return Some(json_response(
                 400,
-                json!({ "error": "an outside account email is required" }),
+                json!({ "error": "an outside account email or Matrix user ID is required" }),
             ));
         }
         let approved = body["approved"].as_bool().unwrap_or(false);
         let actor = ctx.email(state);
-        if !mitch_lib::matrix::outside_approval_decide(&state.store, &email, approved, &actor) {
+        if !mitch_lib::matrix::outside_approval_decide(&state.store, &target, approved, &actor) {
             return Some(json_response(
                 500,
                 json!({ "error": "Could not save the decision." }),
@@ -147,11 +161,11 @@ pub fn handle(
             } else {
                 "matrix_outside_deny"
             },
-            json!({ "email": email }),
+            json!({ "email": target }),
         );
         return Some(json_response(
             200,
-            json!({ "ok": true, "email": email, "approved": approved }),
+            json!({ "ok": true, "email": target, "approved": approved }),
         ));
     }
 

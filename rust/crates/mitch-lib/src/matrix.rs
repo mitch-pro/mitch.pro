@@ -542,6 +542,29 @@ mod tests {
             Some("approved")
         );
         assert!(outside_approvals_pending(&store).is_empty());
+
+        // Supports Matrix user IDs directly
+        let matrix_user = "@maliciousactor:mitch.pro";
+        assert_eq!(outside_approval_status(&store, matrix_user), None);
+        outside_approval_request(&store, matrix_user);
+        assert_eq!(
+            outside_approval_status(&store, matrix_user).as_deref(),
+            Some("pending")
+        );
+        let pending = outside_approvals_pending(&store);
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0]["email"], matrix_user);
+        assert!(outside_approval_decide(
+            &store,
+            matrix_user,
+            true,
+            "admin@mitch.pro"
+        ));
+        assert_eq!(
+            outside_approval_status(&store, matrix_user).as_deref(),
+            Some("approved")
+        );
+
         assert!(is_student_email("a@student.rjuhsd.us"));
         assert!(!is_student_email("a@example.com"));
         let _ = std::fs::remove_dir_all(dir);

@@ -2580,17 +2580,28 @@ pub fn is_matrix_staff_member(
     headers: &HeaderMap,
     account: Option<&MatrixAccount>,
 ) -> bool {
-    let cookies = crate::routes::me::cookies_of(state, headers);
-    let sid = cookies
-        .get("studentId")
-        .filter(|s| !s.is_empty())
-        .or_else(|| cookies.get("id"))
-        .unwrap_or("");
-    if !sid.is_empty()
-        && mitch_lib::auth::is_any_admin_id(&state.store, &state.id_secret, sid, false)
-    {
-        return true;
+    let has_bearer = headers
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.to_ascii_lowercase().starts_with("bearer "))
+        .unwrap_or(false);
+
+    // If request uses a Bearer token, the identity is strictly the bearer account.
+    // Ambient cookies from the browser must not confer staff privileges onto a different account.
+    if !has_bearer {
+        let cookies = crate::routes::me::cookies_of(state, headers);
+        let sid = cookies
+            .get("studentId")
+            .filter(|s| !s.is_empty())
+            .or_else(|| cookies.get("id"))
+            .unwrap_or("");
+        if !sid.is_empty()
+            && mitch_lib::auth::is_any_admin_id(&state.store, &state.id_secret, sid, false)
+        {
+            return true;
+        }
     }
+
     if let Some(acc) = account {
         if !acc.uid.is_empty()
             && mitch_lib::auth::is_any_admin_id(&state.store, &state.id_secret, &acc.uid, false)
@@ -2605,6 +2616,45 @@ pub fn is_matrix_staff_member(
         }
     }
     false
+}
+
+pub async fn resolve_matrix_outside_id(
+    headers: &HeaderMap,
+    account: Option<&MatrixAccount>,
+) -> Option<String> {
+    if let Some(acc) = account {
+        if !acc.norm_email.is_empty() {
+            return Some(acc.norm_email.clone());
+        }
+        if !acc.user_id.is_empty() {
+            return Some(acc.user_id.clone());
+        }
+    }
+    if let Some(auth_hdr) = headers.get("authorization").and_then(|v| v.to_str().ok()) {
+        if auth_hdr.to_ascii_lowercase().starts_with("bearer ") {
+            let tok = auth_hdr[7..].trim();
+            let mut who_headers = HeaderMap::new();
+            if let Ok(hv) = HeaderValue::from_str(&format!("Bearer {tok}")) {
+                who_headers.insert("Authorization", hv);
+            }
+            if let Ok((status, _, bytes)) = call_conduit(
+                "/_matrix/client/v3/account/whoami",
+                Method::GET,
+                Some(who_headers),
+                None,
+            )
+            .await
+            {
+                if status.is_success() {
+                    let who_data: Value = serde_json::from_slice(&bytes).unwrap_or(json!({}));
+                    if let Some(uid) = who_data.get("user_id").and_then(|v| v.as_str()) {
+                        return Some(uid.to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
 }
 
 pub fn email_for_user_id(state: &AppState, user_id: &str) -> Option<String> {
@@ -7656,7 +7706,8 @@ pub async fn handle_matrix_gateway(
         }
     }
 
-    // Outside accounts can't start DMs with, or invite, student accounts.
+    // Outside accounts can't create rooms or invite users without moderator approval,
+    // and can never message student accounts directly.
     static CREATE_ROOM_RE: OnceLock<regex::Regex> = OnceLock::new();
     let create_room_re = CREATE_ROOM_RE.get_or_init(|| {
         regex::Regex::new(r"^/_matrix/client/(?:v3|r0)/createRoom/?$")
@@ -7667,41 +7718,112 @@ pub async fn handle_matrix_gateway(
         regex::Regex::new(r"^/_matrix/client/(?:v3|r0)/rooms/[^/]+/invite/?$")
             .unwrap_or_else(|_| unreachable_regex())
     });
-    if method == Method::POST
-        && !body_bytes.is_empty()
-        && (create_room_re.is_match(path) || invite_re.is_match(path))
-    {
-        if let Ok(payload) = serde_json::from_slice::<Value>(body_bytes) {
-            let mut targets: Vec<String> = payload
-                .get("invite")
-                .and_then(Value::as_array)
-                .map(|a| {
-                    a.iter()
-                        .filter_map(|v| v.as_str().map(String::from))
-                        .collect()
-                })
-                .unwrap_or_default();
-            if let Some(uid) = payload.get("user_id").and_then(Value::as_str) {
-                targets.push(uid.to_string());
-            }
-            if !targets.is_empty() {
-                let account = resolve_matrix_account(state, headers, None).await;
-                let is_staff = is_matrix_staff_member(state, headers, account.as_ref());
-                let requester_is_outside = account.as_ref().is_some_and(|a| {
-                    !a.norm_email.is_empty() && !mitch_lib::matrix::is_student_email(&a.norm_email)
-                });
-                if !is_staff
-                    && requester_is_outside
-                    && targets.iter().any(|t| {
-                        find_profile_email_by_matrix_user_id(state, t)
-                            .is_some_and(|e| mitch_lib::matrix::is_student_email(&e))
-                    })
-                {
+    if method == Method::POST && (create_room_re.is_match(path) || invite_re.is_match(path)) {
+        let account = resolve_matrix_account(state, headers, None).await;
+        let is_staff = is_matrix_staff_member(state, headers, account.as_ref());
+        let is_student = account
+            .as_ref()
+            .map(|a| !a.norm_email.is_empty() && mitch_lib::matrix::is_student_email(&a.norm_email))
+            .unwrap_or(false);
+
+        if !is_staff && !is_student {
+            let outside_id = if let Some(a) = account.as_ref() {
+                if !a.norm_email.is_empty() {
+                    a.norm_email.clone()
+                } else {
+                    a.user_id.clone()
+                }
+            } else {
+                resolve_matrix_outside_id(headers, None)
+                    .await
+                    .unwrap_or_default()
+            };
+            if !outside_id.is_empty() {
+                let status = mitch_lib::matrix::outside_approval_status(&state.store, &outside_id);
+                if status.as_deref() != Some("approved") {
+                    if status.is_none() {
+                        mitch_lib::matrix::outside_approval_request(&state.store, &outside_id);
+                    }
                     return Some(cors_json_response(
                         403,
                         json!({
                             "errcode": "M_FORBIDDEN",
-                            "error": "You can't message student accounts directly."
+                            "error": "A moderator needs to approve your account before you can start conversations or invite users."
+                        }),
+                    ));
+                }
+            }
+        }
+
+        if !body_bytes.is_empty() {
+            if let Ok(payload) = serde_json::from_slice::<Value>(body_bytes) {
+                let mut targets: Vec<String> = payload
+                    .get("invite")
+                    .and_then(Value::as_array)
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|v| v.as_str().map(String::from))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if let Some(uid) = payload.get("user_id").and_then(Value::as_str) {
+                    targets.push(uid.to_string());
+                }
+                if !targets.is_empty() && !is_staff && !is_student {
+                    if targets.iter().any(|t| {
+                        find_profile_email_by_matrix_user_id(state, t)
+                            .is_some_and(|e| mitch_lib::matrix::is_student_email(&e))
+                    }) {
+                        return Some(cors_json_response(
+                            403,
+                            json!({
+                                "errcode": "M_FORBIDDEN",
+                                "error": "You can't message student accounts directly."
+                            }),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    // Outside accounts cannot join rooms before moderator approval
+    static JOIN_RE: OnceLock<regex::Regex> = OnceLock::new();
+    let join_re = JOIN_RE.get_or_init(|| {
+        regex::Regex::new(r"^/_matrix/client/(?:v3|r0)/(?:rooms/[^/]+/join|join/[^/]+)/?$")
+            .unwrap_or_else(|_| unreachable_regex())
+    });
+    if method == Method::POST && join_re.is_match(path) {
+        let account = resolve_matrix_account(state, headers, None).await;
+        let is_staff = is_matrix_staff_member(state, headers, account.as_ref());
+        let is_student = account
+            .as_ref()
+            .map(|a| !a.norm_email.is_empty() && mitch_lib::matrix::is_student_email(&a.norm_email))
+            .unwrap_or(false);
+
+        if !is_staff && !is_student {
+            let outside_id = if let Some(a) = account.as_ref() {
+                if !a.norm_email.is_empty() {
+                    a.norm_email.clone()
+                } else {
+                    a.user_id.clone()
+                }
+            } else {
+                resolve_matrix_outside_id(headers, None)
+                    .await
+                    .unwrap_or_default()
+            };
+            if !outside_id.is_empty() {
+                let status = mitch_lib::matrix::outside_approval_status(&state.store, &outside_id);
+                if status.as_deref() != Some("approved") {
+                    if status.is_none() {
+                        mitch_lib::matrix::outside_approval_request(&state.store, &outside_id);
+                    }
+                    return Some(cors_json_response(
+                        403,
+                        json!({
+                            "errcode": "M_FORBIDDEN",
+                            "error": "A moderator needs to approve your account before you can join rooms."
                         }),
                     ));
                 }
@@ -7759,22 +7881,39 @@ pub async fn handle_matrix_gateway(
                 let sender_account = resolve_matrix_account(state, headers, None).await;
 
                 let is_staff = is_matrix_staff_member(state, headers, sender_account.as_ref());
+                let is_student = sender_account
+                    .as_ref()
+                    .map(|a| {
+                        !a.norm_email.is_empty()
+                            && mitch_lib::matrix::is_student_email(&a.norm_email)
+                    })
+                    .unwrap_or(false);
+
                 if !is_staff {
                     // Outside (non-student) accounts need a moderator's approval
                     // before they can chat anywhere; the attempt queues them.
-                    if let Some(acc) = sender_account.as_ref() {
-                        if !acc.norm_email.is_empty()
-                            && !mitch_lib::matrix::is_student_email(&acc.norm_email)
-                        {
+                    if !is_student {
+                        let outside_id = if let Some(acc) = sender_account.as_ref() {
+                            if !acc.norm_email.is_empty() {
+                                acc.norm_email.clone()
+                            } else {
+                                acc.user_id.clone()
+                            }
+                        } else {
+                            resolve_matrix_outside_id(headers, None)
+                                .await
+                                .unwrap_or_default()
+                        };
+                        if !outside_id.is_empty() {
                             let status = mitch_lib::matrix::outside_approval_status(
                                 &state.store,
-                                &acc.norm_email,
+                                &outside_id,
                             );
                             if status.as_deref() != Some("approved") {
                                 if status.is_none() {
                                     mitch_lib::matrix::outside_approval_request(
                                         &state.store,
-                                        &acc.norm_email,
+                                        &outside_id,
                                     );
                                 }
                                 return Some(cors_json_response(
@@ -7977,6 +8116,30 @@ pub async fn handle_matrix_gateway(
                         let mut map = token_to_account_map()
                             .lock()
                             .unwrap_or_else(|e| e.into_inner());
+                        let is_student = !norm_email.is_empty()
+                            && mitch_lib::matrix::is_student_email(&norm_email);
+                        let is_staff = !norm_email.is_empty()
+                            && (mitch_lib::auth::is_admin_email(&state.store, &norm_email)
+                                || mitch_lib::auth::is_moderator_email(&state.store, &norm_email));
+                        if !is_student && !is_staff {
+                            let outside_id = if !norm_email.is_empty() {
+                                norm_email.as_str()
+                            } else {
+                                user_id
+                            };
+                            if !outside_id.is_empty()
+                                && mitch_lib::matrix::outside_approval_status(
+                                    &state.store,
+                                    outside_id,
+                                )
+                                .is_none()
+                            {
+                                mitch_lib::matrix::outside_approval_request(
+                                    &state.store,
+                                    outside_id,
+                                );
+                            }
+                        }
                         map.insert(
                             token.to_string(),
                             MatrixAccount {
