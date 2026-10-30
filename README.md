@@ -24,7 +24,7 @@ The project started as a Bun/Node server and has since been fully ported to Rust
 
 ```text
 mitch.pro/
-├── rust/                    # The actual server — an Axum/Tokio Cargo workspace
+├── rust/                    # The server — an Axum/Tokio Cargo workspace
 │   ├── crates/
 │   │   ├── mitch-server/    # Main HTTP/WebSocket server: routing, auth, static serving
 │   │   ├── mitch-lib/       # Shared domain logic (ported 1:1 from the original JS)
