@@ -7444,6 +7444,43 @@ pub async fn audit_matrix_client_moderation_action(
 }
 
 /// Gateway dispatcher for Matrix paths: `/_matrix/*`, `/.well-known/matrix/*`, `/matrix/config.json`.
+/// Gate for non-student, non-staff Matrix accounts. Returns `Some(403)` unless
+/// the sender is staff, a student, or an outside account a moderator approved.
+/// An unapproved account is queued in `matrix_outside_approvals`. Fails closed:
+/// if the sender can't be identified at all, the action is refused too, so a
+/// failed `whoami` lookup can never skip the approval check.
+async fn outside_account_gate(
+    state: &AppState,
+    headers: &HeaderMap,
+    account: Option<&MatrixAccount>,
+    message: &str,
+) -> Option<Response> {
+    if is_matrix_staff_member(state, headers, account) {
+        return None;
+    }
+    if account.is_some_and(|a| {
+        !a.norm_email.is_empty() && mitch_lib::matrix::is_student_email(&a.norm_email)
+    }) {
+        return None;
+    }
+    let outside_id = resolve_matrix_outside_id(headers, account)
+        .await
+        .unwrap_or_default();
+    if !outside_id.is_empty() {
+        let status = mitch_lib::matrix::outside_approval_status(&state.store, &outside_id);
+        if status.as_deref() == Some("approved") {
+            return None;
+        }
+        if status.is_none() {
+            mitch_lib::matrix::outside_approval_request(&state.store, &outside_id);
+        }
+    }
+    Some(cors_json_response(
+        403,
+        json!({ "errcode": "M_FORBIDDEN", "error": message }),
+    ))
+}
+
 pub async fn handle_matrix_gateway(
     state: &Arc<AppState>,
     method: &Method,
@@ -7726,33 +7763,15 @@ pub async fn handle_matrix_gateway(
             .map(|a| !a.norm_email.is_empty() && mitch_lib::matrix::is_student_email(&a.norm_email))
             .unwrap_or(false);
 
-        if !is_staff && !is_student {
-            let outside_id = if let Some(a) = account.as_ref() {
-                if !a.norm_email.is_empty() {
-                    a.norm_email.clone()
-                } else {
-                    a.user_id.clone()
-                }
-            } else {
-                resolve_matrix_outside_id(headers, None)
-                    .await
-                    .unwrap_or_default()
-            };
-            if !outside_id.is_empty() {
-                let status = mitch_lib::matrix::outside_approval_status(&state.store, &outside_id);
-                if status.as_deref() != Some("approved") {
-                    if status.is_none() {
-                        mitch_lib::matrix::outside_approval_request(&state.store, &outside_id);
-                    }
-                    return Some(cors_json_response(
-                        403,
-                        json!({
-                            "errcode": "M_FORBIDDEN",
-                            "error": "A moderator needs to approve your account before you can start conversations or invite users."
-                        }),
-                    ));
-                }
-            }
+        if let Some(resp) = outside_account_gate(
+            state,
+            headers,
+            account.as_ref(),
+            "A moderator needs to approve your account before you can start conversations or invite users.",
+        )
+        .await
+        {
+            return Some(resp);
         }
 
         if !body_bytes.is_empty() {
@@ -7769,19 +7788,21 @@ pub async fn handle_matrix_gateway(
                 if let Some(uid) = payload.get("user_id").and_then(Value::as_str) {
                     targets.push(uid.to_string());
                 }
-                if !targets.is_empty() && !is_staff && !is_student {
-                    if targets.iter().any(|t| {
+                if !targets.is_empty()
+                    && !is_staff
+                    && !is_student
+                    && targets.iter().any(|t| {
                         find_profile_email_by_matrix_user_id(state, t)
                             .is_some_and(|e| mitch_lib::matrix::is_student_email(&e))
-                    }) {
-                        return Some(cors_json_response(
-                            403,
-                            json!({
-                                "errcode": "M_FORBIDDEN",
-                                "error": "You can't message student accounts directly."
-                            }),
-                        ));
-                    }
+                    })
+                {
+                    return Some(cors_json_response(
+                        403,
+                        json!({
+                            "errcode": "M_FORBIDDEN",
+                            "error": "You can't message student accounts directly."
+                        }),
+                    ));
                 }
             }
         }
@@ -7795,39 +7816,15 @@ pub async fn handle_matrix_gateway(
     });
     if method == Method::POST && join_re.is_match(path) {
         let account = resolve_matrix_account(state, headers, None).await;
-        let is_staff = is_matrix_staff_member(state, headers, account.as_ref());
-        let is_student = account
-            .as_ref()
-            .map(|a| !a.norm_email.is_empty() && mitch_lib::matrix::is_student_email(&a.norm_email))
-            .unwrap_or(false);
-
-        if !is_staff && !is_student {
-            let outside_id = if let Some(a) = account.as_ref() {
-                if !a.norm_email.is_empty() {
-                    a.norm_email.clone()
-                } else {
-                    a.user_id.clone()
-                }
-            } else {
-                resolve_matrix_outside_id(headers, None)
-                    .await
-                    .unwrap_or_default()
-            };
-            if !outside_id.is_empty() {
-                let status = mitch_lib::matrix::outside_approval_status(&state.store, &outside_id);
-                if status.as_deref() != Some("approved") {
-                    if status.is_none() {
-                        mitch_lib::matrix::outside_approval_request(&state.store, &outside_id);
-                    }
-                    return Some(cors_json_response(
-                        403,
-                        json!({
-                            "errcode": "M_FORBIDDEN",
-                            "error": "A moderator needs to approve your account before you can join rooms."
-                        }),
-                    ));
-                }
-            }
+        if let Some(resp) = outside_account_gate(
+            state,
+            headers,
+            account.as_ref(),
+            "A moderator needs to approve your account before you can join rooms.",
+        )
+        .await
+        {
+            return Some(resp);
         }
     }
 
@@ -7893,37 +7890,15 @@ pub async fn handle_matrix_gateway(
                     // Outside (non-student) accounts need a moderator's approval
                     // before they can chat anywhere; the attempt queues them.
                     if !is_student {
-                        let outside_id = if let Some(acc) = sender_account.as_ref() {
-                            if !acc.norm_email.is_empty() {
-                                acc.norm_email.clone()
-                            } else {
-                                acc.user_id.clone()
-                            }
-                        } else {
-                            resolve_matrix_outside_id(headers, None)
-                                .await
-                                .unwrap_or_default()
-                        };
-                        if !outside_id.is_empty() {
-                            let status = mitch_lib::matrix::outside_approval_status(
-                                &state.store,
-                                &outside_id,
-                            );
-                            if status.as_deref() != Some("approved") {
-                                if status.is_none() {
-                                    mitch_lib::matrix::outside_approval_request(
-                                        &state.store,
-                                        &outside_id,
-                                    );
-                                }
-                                return Some(cors_json_response(
-                                    403,
-                                    json!({
-                                        "errcode": "M_FORBIDDEN",
-                                        "error": "A moderator needs to approve your account before you can chat."
-                                    }),
-                                ));
-                            }
+                        if let Some(resp) = outside_account_gate(
+                            state,
+                            headers,
+                            sender_account.as_ref(),
+                            "A moderator needs to approve your account before you can chat.",
+                        )
+                        .await
+                        {
+                            return Some(resp);
                         }
                     }
                     let room_settings = load_matrix_room_settings(state, &target_room_id);
