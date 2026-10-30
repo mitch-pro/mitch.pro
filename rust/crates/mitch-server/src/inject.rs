@@ -165,6 +165,7 @@ pub fn inject_credit(html: &str, school: bool) -> String {
 #site-active {{ grid-column:3; justify-self:end; display:inline-flex; align-items:center; gap:5px; white-space:nowrap; font-variant-numeric:tabular-nums; }}
 #site-active[hidden] {{ display:none; }}
 #site-active::before {{ content:""; width:5px; height:5px; border-radius:50%; background:#78ad8b; flex:none; }}
+@media (max-width:1100px) {{ #site-credit {{ grid-template-columns:minmax(0,1fr) auto; }} #site-credit-copy {{ grid-column:1; }} #site-active {{ grid-column:2; }} }}
 @media (max-width:1020px) {{ .footer-discord {{ display:none !important; }} }}
 @media (max-width:820px) {{ .footer-cookies {{ display:none !important; }} }}
 @media (max-width:580px) {{ .footer-agreement {{ display:none !important; }} }}
