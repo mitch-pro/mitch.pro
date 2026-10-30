@@ -477,29 +477,23 @@ function showPopup(src) {
   }, 0);
 }
 
+// Same launch method as /ab/: a blank window written with a full-page iframe.
+// Keep the closing tags escaped; the server's HTML transform rewrites literal
+// body/html end tags inside scripts.
 function openAboutBlank(target) {
   if (!target) return;
   var abs;
   try { abs = new URL(String(target).trim(), location.href).href; } catch (e) { abs = String(target).trim(); }
-  var w = window.open('about:blank', '_blank');
+  var w = window.open('', '_blank', 'width=1000,height=700');
   if (!w) {
     window.location.href = abs;
     return;
   }
-  try {
-    var d = w.document;
-    d.open();
-    d.write('<!doctype html><html><head><meta charset="utf-8"><title>New Tab</title><style>html,body{margin:0;height:100%;overflow:hidden;background:#000}iframe{border:0;width:100%;height:100%;display:block}<\/style><\/head><body><\/body><\/html>');
-    d.close();
-    var frame = d.createElement('iframe');
-    frame.src = abs;
-    frame.setAttribute('allowfullscreen', '');
-    frame.setAttribute('allow', 'fullscreen; autoplay; clipboard-read; clipboard-write; encrypted-media');
-    d.body.appendChild(frame);
-  } catch (e) {
-    w.close();
-    window.location.href = abs;
-  }
+  var safe = abs.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  var html = '<!doctype html>\n<html>\n<head>\n  <title>New Tab<\/title>\n  <link rel="icon" type="image/svg" href="https://www.google.com/chrome/static/images/chrome-logo_112px.svg">\n  <meta charset="utf-8">\n  <style>\n    html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#000}\n    iframe{border:0;width:100%;height:100%;display:block}\n  <\/style>\n<\/head>\n<body><iframe src="' + safe + '" allowfullscreen allow="fullscreen; autoplay; clipboard-read; clipboard-write; encrypted-media"><\/iframe><\/body>\n<\/html>';
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
 }
 
 // With the toggle on, every link on the page opens in an about:blank tab, not
