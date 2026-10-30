@@ -7,8 +7,7 @@ Each signed-in account has one JSON blob on disk at
 capped at 1 GiB of serialized JSON. The background sync (`webserver/sync.js`)
 writes the browser's localStorage there as `_snapshot` (+ `_snapshot_ts`) every
 5 minutes and on page close, and offers a restore when the server copy is newer.
-Some games (chess-bot) and `/export/` (slot 2: `_snapshot2`) write other
-top-level keys into the same blob.
+Some games (chess-bot) write other top-level keys into the same blob.
 
 ## What is never synced
 

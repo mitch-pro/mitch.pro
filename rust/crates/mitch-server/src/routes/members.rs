@@ -10,7 +10,7 @@
 //! Deliberate deviation from server.js: its `/api/userdata` branch checks the
 //! path only, so a GET fell into the write path and returned `{ok:true}`
 //! (the real GET branch at server.js:19048 was unreachable). Every client —
-//! MitchSync restore (`sync.js`), `/export/`, `/saves/`, chess-bot — expects a
+//! MitchSync restore (`sync.js`), `/saves/`, chess-bot — expects a
 //! GET to return the stored blob plus `_quota`, so GET does that here and never
 //! writes. DELETE (`userdata_delete`) backs the `/saves/` manager.
 
