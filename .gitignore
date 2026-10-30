@@ -2,10 +2,7 @@
 .env
 .env.*
 !.env.example
-admin.key
 app-pass
-id_secret.key
-github_deploy_key*
 newsletter_people_password.txt
 .current_public_ip
 .antigravitycli/
