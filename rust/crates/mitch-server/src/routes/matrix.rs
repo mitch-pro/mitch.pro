@@ -915,6 +915,88 @@ pub async fn link_room_to_official_space(secret: &[u8], room_id: &str) {
     }
 }
 
+/// True when the account may be in the official rooms: staff, a student, or an
+/// outside account a moderator approved. Used by paths that talk to the
+/// homeserver directly and so skip `outside_account_gate`.
+pub fn outside_account_cleared(
+    state: &AppState,
+    uid: &str,
+    norm_email: &str,
+    user_id: &str,
+) -> bool {
+    if !norm_email.is_empty()
+        && (mitch_lib::matrix::is_student_email(norm_email)
+            || mitch_lib::auth::is_admin_email(&state.store, norm_email)
+            || mitch_lib::auth::is_moderator_email(&state.store, norm_email))
+    {
+        return true;
+    }
+    if !uid.is_empty()
+        && mitch_lib::auth::is_any_admin_id(&state.store, &state.id_secret, uid, false)
+    {
+        return true;
+    }
+    [norm_email, user_id].iter().any(|id| {
+        !id.is_empty()
+            && mitch_lib::matrix::outside_approval_status(&state.store, id).as_deref()
+                == Some("approved")
+    })
+}
+
+/// Joins a just-approved outside account to the official rooms by logging in as
+/// it. `target` is a normalized email or a Matrix ID.
+pub async fn join_approved_outside_account(state: &AppState, target: &str) {
+    let norm = if target.starts_with('@') {
+        match find_profile_email_by_matrix_user_id(state, target) {
+            Some(e) => e,
+            None => return,
+        }
+    } else {
+        target.to_string()
+    };
+    let Some(username) = matrix_username_for_email(state, &norm).await else {
+        return; // never logged into Matrix; the SSO login will join them
+    };
+    let password = get_matrix_password_for_email(&norm, &state.id_secret);
+    let mut headers = HeaderMap::new();
+    headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+    let body = json!({
+        "type": "m.login.password",
+        "identifier": { "type": "m.id.user", "user": username },
+        "password": password,
+        "initial_device_display_name": "Mitch.pro Approval Join"
+    });
+    let Ok((status, _, bytes)) = call_conduit(
+        "/_matrix/client/v3/login",
+        Method::POST,
+        Some(headers),
+        Some(Bytes::from(serde_json::to_vec(&body).unwrap_or_default())),
+    )
+    .await
+    else {
+        return;
+    };
+    if !status.is_success() {
+        return;
+    }
+    let data: Value = serde_json::from_slice(&bytes).unwrap_or(json!({}));
+    let (Some(tok), Some(uid)) = (
+        data.get("access_token").and_then(Value::as_str),
+        data.get("user_id").and_then(Value::as_str),
+    ) else {
+        return;
+    };
+    sync_matrix_user_to_official_rooms(
+        &state.id_secret,
+        &state.store,
+        state.data_dir(),
+        uid,
+        tok,
+        0,
+    )
+    .await;
+}
+
 pub async fn sync_matrix_user_to_official_rooms(
     secret: &[u8],
     store: &mitch_lib::data::DataStore,
@@ -2372,7 +2454,18 @@ pub async fn sync_profile_to_matrix(
 
     // 1. Sync display name
     if let Some(dn) = display_name {
-        let name_val = if dn.is_empty() { matrix_username } else { dn };
+        // This write goes straight to the homeserver, past the gateway's name
+        // filter, so apply it here.
+        let name_val = if dn.is_empty() || mitch_lib::matrix::name_blocked(dn) {
+            matrix_username
+        } else {
+            dn
+        };
+        let name_val = if mitch_lib::matrix::name_blocked(name_val) {
+            "user"
+        } else {
+            name_val
+        };
         let name_val = &name_val[..name_val.len().min(40)];
         let body = json!({ "displayname": name_val });
         let _ = call_conduit(
@@ -3415,12 +3508,19 @@ async fn api_sso_login(state: &AppState, headers: &HeaderMap, body_bytes: &[u8])
         "member"
     };
 
+    // Outside accounts only get put in the official rooms once a moderator has
+    // approved them; otherwise their join (and name) would show to students.
+    let join_token = if outside_account_cleared(state, uid, &norm, user_id) {
+        access_token
+    } else {
+        ""
+    };
     sync_matrix_user_to_official_rooms(
         &state.id_secret,
         &state.store,
         state.data_dir(),
         user_id,
-        access_token,
+        join_token,
         target_power_level,
     )
     .await;

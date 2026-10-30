@@ -82,6 +82,12 @@ endpoints as a health check.
   both require moderator or higher and the decision is written to the admin action
   log. Both `/admin/#approval-tools` and `/moderator/` provide one-click approval
   and denial queues for moderators and administrators.
+  The same gate (`outside_account_gate`) covers joins, `createRoom` and invites and
+  fails closed if the sender can't be identified. Matrix SSO login joins accounts
+  to the official rooms server-side (bypassing the gateway), so it skips the join
+  for uncleared outside accounts (`outside_account_cleared`); approval then joins
+  them (`join_approved_outside_account`). Profile sync also applies `name_blocked`
+  before writing a display name, since that write skips the gateway filter.
 - **No DMs to students.** Outside accounts, approved or not, can't `createRoom`
   with, or `invite`, a student account (the gateway resolves the target Matrix ID
   to an email and checks the domain). Staff are exempt.

@@ -163,6 +163,13 @@ pub fn handle(
             },
             json!({ "email": target }),
         );
+        if approved {
+            let state = state.clone();
+            let target = target.clone();
+            tokio::spawn(async move {
+                crate::routes::matrix::join_approved_outside_account(&state, &target).await;
+            });
+        }
         return Some(json_response(
             200,
             json!({ "ok": true, "email": target, "approved": approved }),
