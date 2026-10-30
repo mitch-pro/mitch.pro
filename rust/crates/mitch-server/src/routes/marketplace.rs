@@ -222,6 +222,13 @@ async fn marketplace_list(
     let Some(email) = auth::email_from_sid(&state.store, &state.id_secret, &sid) else {
         return json_response(401, json!({ "error": "email not found" }));
     };
+    // Sandbox tester coins aren't real, so they can't pay (or be paid by) real accounts.
+    if mitch_lib::tester::is_sandboxed(&state.store, &email) {
+        return json_response(
+            403,
+            json!({ "error": "Tester accounts can't use the marketplace." }),
+        );
+    }
     let ip = get_real_ip(headers, None);
     let token = body
         .get("recaptcha_token")
@@ -368,6 +375,13 @@ async fn marketplace_buy(
     let Some(email) = auth::email_from_sid(&state.store, &state.id_secret, &sid) else {
         return json_response(401, json!({ "error": "email not found" }));
     };
+    // Sandbox tester coins aren't real, so they can't pay (or be paid by) real accounts.
+    if mitch_lib::tester::is_sandboxed(&state.store, &email) {
+        return json_response(
+            403,
+            json!({ "error": "Tester accounts can't use the marketplace." }),
+        );
+    }
     let ip = get_real_ip(headers, None);
     let token = body
         .get("recaptcha_token")

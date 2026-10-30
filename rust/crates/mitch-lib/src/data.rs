@@ -359,6 +359,15 @@ impl DataStore {
                         updated_at INTEGER NOT NULL,
                         PRIMARY KEY (email, store)
                     );
+                    CREATE TABLE IF NOT EXISTS tester_settings (
+                        email TEXT PRIMARY KEY,
+                        premium INTEGER NOT NULL DEFAULT 1,
+                        unlimited_coins INTEGER NOT NULL DEFAULT 1,
+                        custom_coins REAL NOT NULL DEFAULT 0,
+                        unlock_all_cosmetics INTEGER NOT NULL DEFAULT 0,
+                        bypass_cooldowns INTEGER NOT NULL DEFAULT 0,
+                        updated_at INTEGER NOT NULL DEFAULT 0
+                    );
                     CREATE TABLE IF NOT EXISTS daily_logins (
                         email TEXT PRIMARY KEY,
                         last_claim_date TEXT NOT NULL DEFAULT '',

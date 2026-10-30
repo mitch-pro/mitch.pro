@@ -395,7 +395,15 @@
       .hero-banner { flex-direction: column; align-items: flex-start; }
       .links-grid { grid-template-columns: 1fr; }
     }
-  </style>
+      /* Headings and accents set per theme: the page keeps its own dark
+       backdrop in both modes, so theme tokens alone give unreadable text. */
+    .tester-page h1, .tester-page h2, .brand-title { color: #fff; }
+    html.theme-light .tester-page h1, html.theme-light .tester-page h2, html.theme-light .brand-title { color: #1e1035; }
+    html.theme-light body.tester-page .tester-pill-badge { color: #7e22ce !important; border-color: rgba(126, 34, 206, 0.4); }
+    html.theme-light body.tester-page .brand-eyebrow,
+    html.theme-light body.tester-page .stat-chip small { color: #6d28d9 !important; }
+    html.theme-light body.tester-page #stat-coins { color: #be185d !important; }
+</style>
   <link rel="stylesheet" href="/tester/tester-workbench.css?v=2">
 </head>
 <body class="tester-page">

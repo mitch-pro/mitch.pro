@@ -306,6 +306,14 @@ fn challenge(state: &Arc<AppState>, body: &Value, my_norm: &str) -> axum::respon
         let n = if n.is_nan() { 0.0 } else { n };
         n.floor().max(0.0)
     };
+    // Wagers move coins between players; a sandbox tester's coins aren't real,
+    // so losing on purpose to a real account would mint coins for it.
+    if bet > 0.0 && mitch_lib::tester::is_sandboxed(&state.store, my_norm) {
+        return resp(
+            400,
+            &json!({ "error": "Tester accounts can't place or accept wagers." }),
+        );
+    }
     if bet > 0.0 && mitch_lib::coins::get_coins(&state.store, &state.cfg.data_dir, my_norm) < bet {
         return resp(400, &json!({ "error": "Insufficient coins for bet" }));
     }
@@ -373,6 +381,16 @@ fn respond(state: &Arc<AppState>, body: &Value, my_norm: &str) -> axum::response
         };
         if mitch_lib::auth::normalize_email(&c.to) != my_norm {
             return resp(403, &json!({ "error": "not your challenge" }));
+        }
+        if c.bet > 0.0
+            && accept
+            && (mitch_lib::tester::is_sandboxed(&state.store, my_norm)
+                || mitch_lib::tester::is_sandboxed(&state.store, &c.from))
+        {
+            return resp(
+                400,
+                &json!({ "error": "Tester accounts can't place or accept wagers." }),
+            );
         }
         if c.bet > 0.0 && accept {
             if let Err(e) = mitch_lib::coins::spend_coins(

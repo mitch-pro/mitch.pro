@@ -379,6 +379,12 @@ async fn gift_premium(
     let Some(gifter_email) = auth::email_from_sid(&state.store, &state.id_secret, &sid) else {
         return json_response(401, json!({ "error": "email not found" }));
     };
+    if mitch_lib::tester::is_sandboxed(&state.store, &gifter_email) {
+        return json_response(
+            403,
+            json!({ "error": "Tester accounts can't gift Premium." }),
+        );
+    }
 
     let ip = crate::handler::get_real_ip(headers, None);
     let token = body

@@ -52,6 +52,7 @@ pub mod service_auth;
 pub mod shop;
 pub mod sso;
 pub mod state;
+pub mod tester;
 pub mod tokens;
 pub mod totp;
 pub mod user_stats;

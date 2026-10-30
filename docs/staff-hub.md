@@ -10,12 +10,10 @@ subsystem, no `server.js` equivalent.
 `GET /api/staff-hub/status` returns `{isAdmin, isModerator, isTester,
 isStaff}` for the caller. Deliberately not added to `/api/me` (a
 `server.js`-parity-tracked response shape not worth risking for this) and
-deliberately not relying on `/api/tester/status` — that endpoint is
-referenced by `webserver/tester/index.html` but was never actually
-implemented anywhere in this server; a pre-existing gap, not something
-this change takes on fixing. `/staff/` still links to `/tester/`
-(it's a real, existing staff page) even though that page's own backend is
-currently broken.
+deliberately not relying on `/api/tester/status`, which is the tester hub's
+own API and only admits accounts on the explicit tester list (see
+[tester-hub.md](tester-hub.md)). Admins see the `/staff/` link to `/tester/` but get
+the "tester role required" notice there unless they are on that list.
 
 ## Gating
 

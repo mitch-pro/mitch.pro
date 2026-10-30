@@ -743,6 +743,13 @@ fn set_tester(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response {
         &state.cfg.base_dir.join("data/testers.json"),
         &json!(testers),
     );
+    // Adding a tester starts their sandbox; removing one returns them to their
+    // real balance and premium state.
+    if active {
+        mitch_lib::tester::ensure(&state.store, &target);
+    } else {
+        mitch_lib::tester::remove(&state.store, &target);
+    }
     mitch_lib::admin::log_admin_action(
         &state.store,
         &state.cfg.data_dir,

@@ -411,6 +411,12 @@ fn challenge(state: &Arc<AppState>, body: &Value, my_email: &str) -> axum::respo
     let tc = build_tc(body, is_corr);
     let p = js_parse_int(body.get("bet").unwrap_or(&Value::Null));
     let bet = if p.is_nan() { 0.0 } else { p.max(0.0) };
+    if bet > 0.0 && mitch_lib::tester::is_sandboxed(&state.store, my_email) {
+        return resp(
+            400,
+            &json!({ "error": "Tester accounts can't place or accept wagers." }),
+        );
+    }
     if bet > 0.0 && mitch_lib::coins::get_coins(&state.store, &state.cfg.data_dir, my_email) < bet {
         return resp(
             400,
@@ -513,6 +519,16 @@ fn respond(state: &Arc<AppState>, body: &Value, my_email: &str) -> axum::respons
 
     let bet = c.get("bet").and_then(jsval::number).unwrap_or(0.0);
     let is_corr_challenge = c_type_is_corr(&c);
+    if accept
+        && bet > 0.0
+        && (mitch_lib::tester::is_sandboxed(&state.store, my_email)
+            || mitch_lib::tester::is_sandboxed(&state.store, &jsval::string_of(c.get("from"))))
+    {
+        return resp(
+            400,
+            &json!({ "error": "Tester accounts can't place or accept wagers." }),
+        );
+    }
     if accept && bet > 0.0 {
         if let Err(e) = mitch_lib::coins::spend_coins(
             &state.store,

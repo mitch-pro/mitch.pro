@@ -493,6 +493,27 @@ pub fn normalize_cosmetics(entry: &Value) -> Value {
 /// from non-admins.
 pub fn sanitize_cosmetics_for_email(store: &DataStore, email: &str, entry: &Value) -> Value {
     let mut user_cosm = normalize_cosmetics(entry);
+    // Sandbox testers with "unlock all" own every purchasable cosmetic, so
+    // they can equip anything. Admin-only items stay admin-only.
+    if crate::tester::settings(store, email).is_some_and(|t| t.unlock_all_cosmetics) {
+        if let Some(obj) = user_cosm.as_object_mut() {
+            for item in default_shop_catalog_vec() {
+                let admin_only = item.get("adminOnly").and_then(|v| v.as_bool()) == Some(true);
+                let cost_type = item.get("costType").and_then(|v| v.as_str()).unwrap_or("");
+                let id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                if admin_only || id.is_empty() {
+                    continue;
+                }
+                if let Some((bucket, _)) = shop_type_config(cost_type) {
+                    if let Some(list) = obj.get_mut(bucket).and_then(|v| v.as_array_mut()) {
+                        if !list.iter().any(|v| v.as_str() == Some(id)) {
+                            list.push(json!(id));
+                        }
+                    }
+                }
+            }
+        }
+    }
     if !auth::is_admin_email(store, email) {
         if let Some(obj) = user_cosm.as_object_mut() {
             if let Some(colors) = obj.get_mut("colors").and_then(|v| v.as_array_mut()) {

@@ -144,7 +144,11 @@ fn get_public_profile(state: &Arc<AppState>, headers: &HeaderMap, slug_raw: &str
         map.insert("isAdmin".into(), json!(is_admin));
         map.insert("isModerator".into(), json!(is_moderator));
         map.insert("isTester".into(), json!(is_tester));
-        map.insert("unlimitedCoins".into(), json!(false));
+        map.insert(
+            "unlimitedCoins".into(),
+            json!(mitch_lib::tester::settings(&state.store, &actual_email)
+                .is_some_and(|t| t.unlimited_coins)),
+        );
         map.insert("coins".into(), json!(coins));
         map.insert("stats".into(), stats);
         map.insert("achievements".into(), achievements);
@@ -251,7 +255,11 @@ fn get_profile(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         map.insert("isAdmin".into(), json!(is_admin));
         map.insert("isModerator".into(), json!(is_moderator));
         map.insert("isTester".into(), json!(is_tester));
-        map.insert("unlimitedCoins".into(), json!(false));
+        map.insert(
+            "unlimitedCoins".into(),
+            json!(mitch_lib::tester::settings(&state.store, &email)
+                .is_some_and(|t| t.unlimited_coins)),
+        );
         map.insert("coins".into(), json!(coins));
         map.insert("stats".into(), stats);
         map.insert("achievements".into(), achievements);

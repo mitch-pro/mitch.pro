@@ -5,9 +5,8 @@
 //!
 //! Deliberately its own tiny endpoint rather than adding fields to
 //! `/api/me` (a `server.js`-parity-tracked response shape) or depending on
-//! `/api/tester/status` (referenced by `webserver/tester/index.html` but
-//! not actually implemented anywhere in this server yet — a pre-existing
-//! gap, not something this change takes on fixing).
+//! `/api/tester/status` (the tester hub's own API, in `routes/tester.rs`,
+//! which only admits explicitly listed testers rather than every staff role).
 
 use crate::routes::me::{cookies_of, json_response, me_uid};
 use crate::state::AppState;

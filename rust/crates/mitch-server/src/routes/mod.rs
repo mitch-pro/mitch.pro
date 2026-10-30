@@ -40,6 +40,7 @@ pub mod service_auth;
 pub mod ssh_ws;
 pub mod staff_hub;
 pub mod team;
+pub mod tester;
 pub mod tor;
 pub mod vm;
 pub mod webauthn;

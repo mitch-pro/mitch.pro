@@ -1393,6 +1393,12 @@ pub async fn handle(
                 return resp;
             }
         }
+        // Beta tester hub API.
+        if let Some(resp) =
+            crate::routes::tester::handle(&state, &method, &path, headers, body_bytes).await
+        {
+            return resp;
+        }
         // staff hub status — new subsystem, no server.js equivalent.
         if let Some(resp) = crate::routes::staff_hub::handle(&state, &method, &path, headers).await
         {

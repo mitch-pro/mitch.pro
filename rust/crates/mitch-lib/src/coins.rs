@@ -58,6 +58,10 @@ pub fn get_coins(store: &DataStore, _data_dir: &Path, email: &str) -> f64 {
     if email.is_empty() {
         return 0.0;
     }
+    // Sandbox testers see their sandbox balance, never the real `coins` row.
+    if let Some(sandbox) = crate::tester::balance(store, email) {
+        return sandbox;
+    }
     let norm = normalize_email(email);
     let conn = store.conn();
     conn.query_row(
@@ -105,6 +109,10 @@ pub fn add_coins(
     } else {
         amount
     };
+    // Sandbox testers' earnings/spending only move their sandbox balance.
+    if crate::tester::apply_delta(store, &norm, adjusted, 0.0).is_some() {
+        return;
+    }
 
     // One row, one transaction: BEGIN IMMEDIATE takes the write lock
     // up front (same pattern reserve_virtual_machine uses), so a
@@ -185,6 +193,11 @@ pub fn spend_coins(
         return Err(BetError::InvalidAmount);
     }
     let norm = normalize_email(email);
+    match crate::tester::apply_delta(store, &norm, -amount, amount) {
+        Some(Ok((_, after))) => return Ok(after),
+        Some(Err(())) => return Err(BetError::InsufficientFunds),
+        None => {}
+    }
     let conn = store.conn();
     if conn.execute_batch("BEGIN IMMEDIATE").is_err() {
         return Err(BetError::InsufficientFunds);
@@ -236,6 +249,11 @@ pub fn settle_bet(
     }
     let norm = normalize_email(email);
     let net = js_round4(payout - bet);
+    match crate::tester::apply_delta(store, &norm, net, bet) {
+        Some(Ok(pair)) => return Ok(pair),
+        Some(Err(())) => return Err(BetError::InsufficientFunds),
+        None => {}
+    }
 
     let (before, after) = {
         let conn = store.conn();
@@ -292,6 +310,11 @@ pub fn escrow_bet(
         return Err(BetError::InvalidAmount);
     }
     let norm = normalize_email(email);
+    match crate::tester::apply_delta(store, &norm, -bet, bet) {
+        Some(Ok((_, after))) => return Ok(after),
+        Some(Err(())) => return Err(BetError::InsufficientFunds),
+        None => {}
+    }
 
     let (before, after) = {
         let conn = store.conn();
@@ -339,6 +362,12 @@ pub fn settle_escrowed_bet(
     }
     let norm = normalize_email(email);
     let net = js_round4(payout - bet);
+    // The stake was already taken by `escrow_bet`, so only the payout comes back.
+    if let Some(res) = crate::tester::apply_delta(store, &norm, payout, 0.0) {
+        return res
+            .map(|(_, after)| after)
+            .map_err(|_| BetError::InvalidAmount);
+    }
 
     let (before, after) = {
         let conn = store.conn();

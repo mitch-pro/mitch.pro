@@ -1548,6 +1548,10 @@ pub fn is_premium_email(store: &DataStore, email: &str) -> bool {
     if email.is_empty() {
         return false;
     }
+    // Sandbox testers decide their own premium state from the tester hub.
+    if let Some(sandbox) = crate::tester::settings(store, email) {
+        return sandbox.premium;
+    }
     if is_admin_email(store, email) || is_moderator_email(store, email) {
         return true;
     }

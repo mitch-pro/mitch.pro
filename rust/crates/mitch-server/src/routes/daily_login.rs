@@ -254,16 +254,9 @@ fn daily_login_claim(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         .format("%Y-%m-%d")
         .to_string();
 
-    let is_tester = auth::is_tester_email(&state.store, &email);
-    let overrides = state
-        .store
-        .read_document(&state.data_dir().join("tester_overrides.json"), json!({}));
-    let bypass_cooldowns = overrides
-        .get(norm.as_str())
-        .and_then(|v| v.get("bypassCooldowns"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-    let is_bypassing = is_tester && bypass_cooldowns;
+    // The tester hub's "bypass daily claim cooldown" (sandbox testers only).
+    let is_bypassing =
+        mitch_lib::tester::settings(&state.store, &norm).is_some_and(|t| t.bypass_cooldowns);
 
     let (streak, freezes, freeze_consumed) = match mitch_lib::daily_logins::daily_login_try_claim(
         &state.store,
