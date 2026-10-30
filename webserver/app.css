@@ -159,6 +159,9 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--t-font); font-weight: 700; line-heig
 @media (max-width: 820px) {
   #_agree_footer .footer-cookies, #site-credit-copy .footer-cookies { display: none !important; }
 }
+@media (max-width: 480px) {
+  .app-footer, #_agree_footer { white-space: normal; box-sizing: border-box; max-width: 100%; }
+}
 @media (max-width: 580px) {
   #_agree_footer .footer-agreement, #site-credit-copy .footer-agreement { display: none !important; }
 }
