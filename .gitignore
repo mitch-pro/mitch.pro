@@ -16,6 +16,7 @@ security_best_practices_report.md
 caddy/Caddyfile
 # Local State & Databases (mapped via Docker volumes)
 data/*
+!data/games
 !data/sites
 !data/site.json
 !data/game_categories.json

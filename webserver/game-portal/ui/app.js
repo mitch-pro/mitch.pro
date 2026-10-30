@@ -381,7 +381,7 @@
 
   async function loadCatalog() {
     try {
-      const response = await fetch('/game-portal/games.json');
+      const response = await fetch('/game-portal/games.json?v=2', { cache: 'no-cache' });
       if (!response.ok) throw new Error('Could not load the game catalog');
       const catalog = await response.json();
       let id = 0;

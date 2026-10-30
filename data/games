@@ -1,0 +1,9 @@
+url /games/retro/ Retro Console Emulator
+url /games/retro/?console=psx PlayStation (PS1) Emulator
+url /games/retro/?console=n64 Nintendo 64 Emulator
+url /games/retro/?console=gba Game Boy Advance Emulator
+url /games/retro/?console=snes Super Nintendo (SNES) Emulator
+url /games/retro/?console=nes NES (Nintendo) Emulator
+url /games/retro/?console=gb Game Boy / Color Emulator
+url /games/retro/?console=segaMD Sega Genesis Emulator
+url /games/retro/?console=atari2600 Atari 2600 Emulator

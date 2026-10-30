@@ -4,7 +4,7 @@
   // dates and the selection method are documented in docs/game-discovery.md.
   const titles = [
     'Run 3', 'Snow Rider 3D', 'Retro Bowl', 'Subway Surfers', 'Drift Boss',
-    'Moto X3M', 'Stickman Hook', 'Eggy Car', 'Tiny Fishing',
+    'Moto X3M', 'Retro Console Emulator', 'Stickman Hook', 'Eggy Car', 'Tiny Fishing',
     'Fireboy and Watergirl 1', 'Cookie Clicker', 'Monkey Mart', 'OvO',
     'Drive Mad', 'Drift Hunters', 'Paper.io 2', 'Temple Run 2',
     "Papa's Pizzeria", "Papa's Freezeria", 'Bloxorz', 'Snake', '2048',
