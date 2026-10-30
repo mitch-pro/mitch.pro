@@ -1,0 +1,822 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Retro Console Emulator — mitch.pro</title>
+  <meta name="description" content="Play PS1, N64, GBA, SNES, Genesis, NES, Game Boy, and classic retro consoles directly in your browser.">
+  <link rel="stylesheet" href="/app.css">
+  <script src="/theme.js" defer></script>
+  <script src="/app-shell.js" defer></script>
+  <style>
+    .retro-shell {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 1.5rem 1rem 3rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .retro-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--t-bd);
+    }
+
+    .retro-title-group h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin: 0 0 0.25rem;
+      color: var(--t-fg);
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .retro-title-group p {
+      margin: 0;
+      color: var(--t-fg2);
+      font-size: 0.95rem;
+    }
+
+    .retro-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .retro-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      padding: 0.5rem 0.9rem;
+      font-size: 0.88rem;
+      font-weight: 600;
+      border-radius: var(--t-radius-sm);
+      border: 1px solid var(--t-bd);
+      background: var(--t-bg2);
+      color: var(--t-fg);
+      cursor: pointer;
+      text-decoration: none;
+      transition: background var(--t-motion), border-color var(--t-motion), color var(--t-motion);
+    }
+
+    .retro-btn:hover {
+      background: var(--t-bg3);
+      color: var(--t-fg);
+    }
+
+    .retro-btn.primary {
+      background: var(--t-ac);
+      color: var(--t-ac-ink);
+      border-color: transparent;
+    }
+
+    .retro-btn.primary:hover {
+      background: var(--t-ac2);
+    }
+
+    /* Console Tabs */
+    .console-nav {
+      display: flex;
+      gap: 0.5rem;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+      scrollbar-width: thin;
+    }
+
+    .console-tab {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.6rem 1rem;
+      border-radius: var(--t-radius);
+      border: 1px solid var(--t-bd);
+      background: var(--t-bg2);
+      color: var(--t-fg);
+      font-size: 0.92rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background var(--t-motion), border-color var(--t-motion);
+    }
+
+    .console-tab img {
+      width: 20px;
+      height: 20px;
+    }
+
+    .console-tab:hover {
+      background: var(--t-bg3);
+    }
+
+    .console-tab.active {
+      border-color: var(--t-ac);
+      background: var(--t-gls);
+      color: var(--t-ac);
+    }
+
+    /* Active Console Details Card */
+    .console-card {
+      background: var(--t-bg2);
+      border: 1px solid var(--t-bd);
+      border-radius: var(--t-radius);
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .console-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+
+    .console-info-main {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .console-icon-lg {
+      width: 44px;
+      height: 44px;
+      padding: 8px;
+      border-radius: var(--t-radius-sm);
+      background: var(--t-bg3);
+    }
+
+    .console-title-text h2 {
+      margin: 0;
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    .console-title-text span {
+      font-size: 0.85rem;
+      color: var(--t-fg2);
+    }
+
+    .format-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+    }
+
+    .format-pill {
+      font-size: 0.75rem;
+      font-weight: 600;
+      font-family: monospace;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      background: var(--t-bg3);
+      color: var(--t-fg2);
+    }
+
+    /* Drop Zone */
+    .dropzone {
+      border: 2px dashed var(--t-bda);
+      border-radius: var(--t-radius);
+      padding: 2.25rem 1.5rem;
+      text-align: center;
+      background: var(--t-bg);
+      cursor: pointer;
+      transition: border-color var(--t-motion), background var(--t-motion);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--t-ac);
+      background: var(--t-gls);
+    }
+
+    .dropzone svg {
+      width: 38px;
+      height: 38px;
+      stroke: var(--t-ac);
+    }
+
+    .dropzone strong {
+      font-size: 1.05rem;
+      color: var(--t-fg);
+    }
+
+    .dropzone span {
+      font-size: 0.85rem;
+      color: var(--t-fg2);
+    }
+
+    .dropzone-bios {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+      color: var(--t-fg2);
+      margin-top: 0.5rem;
+    }
+
+    /* Sample Homebrew Games */
+    .samples-section h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin: 0 0 0.75rem;
+      color: var(--t-fg);
+    }
+
+    .samples-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .sample-card {
+      border: 1px solid var(--t-bd);
+      border-radius: var(--t-radius-sm);
+      background: var(--t-bg);
+      padding: 0.85rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 0.5rem;
+      cursor: pointer;
+      transition: border-color var(--t-motion), transform var(--t-motion);
+    }
+
+    .sample-card:hover {
+      border-color: var(--t-ac);
+      transform: translateY(-2px);
+    }
+
+    .sample-meta strong {
+      display: block;
+      font-size: 0.95rem;
+      color: var(--t-fg);
+    }
+
+    .sample-meta small {
+      color: var(--t-fg2);
+      font-size: 0.8rem;
+    }
+
+    /* Player Overlay Mode */
+    .player-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: #000;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .player-header {
+      background: rgba(23, 25, 27, 0.95);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 0.5rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      color: #fff;
+    }
+
+    .player-title {
+      font-weight: 700;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .player-frame {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: #000;
+    }
+
+    /* Controls Dialog */
+    .controls-dialog {
+      border: 1px solid var(--t-bd);
+      border-radius: var(--t-radius);
+      background: var(--t-bg2);
+      color: var(--t-fg);
+      max-width: 520px;
+      width: 90%;
+      padding: 1.5rem;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    }
+
+    .controls-dialog::backdrop {
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(2px);
+    }
+
+    .controls-dialog h3 {
+      margin-top: 0;
+      margin-bottom: 1rem;
+      font-size: 1.2rem;
+    }
+
+    .controls-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .controls-table th, .controls-table td {
+      padding: 0.45rem 0.5rem;
+      border-bottom: 1px solid var(--t-bd);
+      text-align: left;
+    }
+
+    .controls-table th {
+      color: var(--t-fg2);
+      font-weight: 600;
+    }
+
+    .controls-table kbd {
+      background: var(--t-bg3);
+      border: 1px solid var(--t-bd);
+      border-radius: 4px;
+      padding: 0.15rem 0.4rem;
+      font-size: 0.8rem;
+      font-family: monospace;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+  </style>
+</head>
+<body class="app-shell">
+  <main class="retro-shell">
+    <header class="retro-header">
+      <div class="retro-title-group">
+        <h1>
+          <img src="/game-portal/icons/retro-console.svg" alt="" width="28" height="28">
+          Retro Console Emulator
+        </h1>
+        <p>PS1 and classic console emulation right in your browser.</p>
+      </div>
+      <div class="retro-actions">
+        <button type="button" class="retro-btn" id="btn-controls">Controls</button>
+        <a href="/game-portal/" class="retro-btn">All games</a>
+      </div>
+    </header>
+
+    <!-- Console selector navigation -->
+    <nav class="console-nav" id="console-nav" aria-label="Consoles"></nav>
+
+    <!-- Active console details card -->
+    <section class="console-card" id="console-card">
+      <div class="console-card-header">
+        <div class="console-info-main">
+          <img class="console-icon-lg" id="console-icon" src="/game-portal/icons/retro-psx.svg" alt="">
+          <div class="console-title-text">
+            <h2 id="console-name">PlayStation (PS1)</h2>
+            <span id="console-desc">32-bit console supporting 3D graphics and CD audio</span>
+          </div>
+        </div>
+        <div class="format-pills" id="console-formats"></div>
+      </div>
+
+      <!-- File drop zone -->
+      <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="Drop ROM file or click to browse">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="17 8 12 3 7 8"></polyline>
+          <line x1="12" y1="3" x2="12" y2="15"></line>
+        </svg>
+        <strong>Drop ROM file here or click to browse</strong>
+        <span id="dropzone-hint">Supports .chd, .bin, .cue, .iso, .pbp</span>
+        <input type="file" id="file-rom" style="display: none;">
+      </div>
+
+      <div class="dropzone-bios" id="bios-panel" hidden>
+        <span>Custom BIOS (optional for PS1):</span>
+        <button type="button" class="retro-btn" id="btn-load-bios">Select BIOS (.bin)</button>
+        <span id="bios-status" style="font-size:0.8rem;">Using built-in HLE BIOS</span>
+        <input type="file" id="file-bios" style="display: none;" accept=".bin,.rom">
+      </div>
+
+      <!-- Samples Section -->
+      <div class="samples-section" id="samples-section">
+        <h3>Playable homebrew demos</h3>
+        <div class="samples-grid" id="samples-grid"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Player Overlay -->
+  <section class="player-container" id="player-container" hidden>
+    <header class="player-header">
+      <div class="player-title">
+        <button type="button" class="retro-btn" id="btn-eject">← Console Menu</button>
+        <span id="player-game-name">Playing Game</span>
+      </div>
+      <div class="retro-actions">
+        <button type="button" class="retro-btn" id="btn-player-controls">Controls</button>
+        <button type="button" class="retro-btn primary" id="btn-player-fullscreen">Fullscreen</button>
+      </div>
+    </header>
+    <iframe class="player-frame" id="player-frame" allow="fullscreen; autoplay; gamepad" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups allow-modals allow-downloads"></iframe>
+  </section>
+
+  <!-- Controls dialog -->
+  <dialog class="controls-dialog" id="controls-dialog">
+    <h3>Emulator Controls</h3>
+    <table class="controls-table">
+      <thead>
+        <tr>
+          <th>Action</th>
+          <th>Keyboard</th>
+          <th>Gamepad</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>D-Pad / Movement</td>
+          <td><kbd>Arrow Keys</kbd></td>
+          <td>D-Pad / Left Stick</td>
+        </tr>
+        <tr>
+          <td>Action Buttons (A / B / X / Y)</td>
+          <td><kbd>Z</kbd> / <kbd>X</kbd> / <kbd>A</kbd> / <kbd>S</kbd></td>
+          <td>A / B / X / Y (Cross / Circle / Square / Triangle)</td>
+        </tr>
+        <tr>
+          <td>Shoulder (L / R)</td>
+          <td><kbd>Q</kbd> / <kbd>E</kbd></td>
+          <td>L1 / R1 (Triggers: L2 / R2)</td>
+        </tr>
+        <tr>
+          <td>Start / Select</td>
+          <td><kbd>Enter</kbd> / <kbd>Shift</kbd></td>
+          <td>Start / Select (Options / Share)</td>
+        </tr>
+        <tr>
+          <td>Quick Save / Load</td>
+          <td>In Emulator Menu</td>
+          <td>In Emulator Menu</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="text-align: right;">
+      <button type="button" class="retro-btn primary" id="btn-close-controls">Close</button>
+    </div>
+  </dialog>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const CONSOLES = [
+        {
+          id: 'psx',
+          name: 'PlayStation (PS1)',
+          shortName: 'PS1',
+          icon: '/game-portal/icons/retro-psx.svg',
+          desc: '32-bit Sony console with 3D graphics, CD audio, and memory cards.',
+          formats: ['.chd', '.bin', '.cue', '.iso', '.pbp', '.img'],
+          hasBios: true,
+          samples: []
+        },
+        {
+          id: 'n64',
+          name: 'Nintendo 64',
+          shortName: 'N64',
+          icon: '/game-portal/icons/retro-n64.svg',
+          desc: '64-bit 3D gaming with analog control support.',
+          formats: ['.z64', '.n64', '.v64', '.zip'],
+          hasBios: false,
+          samples: []
+        },
+        {
+          id: 'gba',
+          name: 'Game Boy Advance',
+          shortName: 'GBA',
+          icon: '/game-portal/icons/retro-gba.svg',
+          desc: '32-bit handheld system with rich 2D color graphics.',
+          formats: ['.gba', '.bin', '.zip'],
+          hasBios: false,
+          samples: [
+            {
+              title: 'Anguna: Warriors of Virtue',
+              genre: 'Action Adventure',
+              url: 'https://cdn.jsdelivr.net/gh/retrobrews/gba-games@master/anguna.gba'
+            },
+            {
+              title: 'Airball GBA',
+              genre: 'Isometric Puzzle',
+              url: 'https://cdn.jsdelivr.net/gh/retrobrews/gba-games@master/airball.gba'
+            }
+          ]
+        },
+        {
+          id: 'snes',
+          name: 'Super Nintendo (SNES)',
+          shortName: 'SNES',
+          icon: '/game-portal/icons/retro-snes.svg',
+          desc: '16-bit Nintendo console featuring Mode 7 and multi-channel sound.',
+          formats: ['.smc', '.sfc', '.fig', '.zip'],
+          hasBios: false,
+          samples: [
+            {
+              title: 'Astrohawk',
+              genre: 'Space Shooter',
+              url: 'https://cdn.jsdelivr.net/gh/retrobrews/snes-games@master/astrohawk.smc'
+            },
+            {
+              title: 'Jet Pilot Rising',
+              genre: 'Flight Arcade',
+              url: 'https://cdn.jsdelivr.net/gh/retrobrews/snes-games@master/jetpilotrising.sfc'
+            }
+          ]
+        },
+        {
+          id: 'nes',
+          name: 'Nintendo Entertainment System (NES)',
+          shortName: 'NES',
+          icon: '/game-portal/icons/retro-nes.svg',
+          desc: '8-bit home console that popularized classic retro platformers.',
+          formats: ['.nes', '.zip'],
+          hasBios: false,
+          samples: [
+            {
+              title: 'Ambushed',
+              genre: 'Action Arcade',
+              url: 'https://cdn.jsdelivr.net/gh/retrobrews/nes-games@master/ambushed.nes'
+            },
+            {
+              title: 'Babel Blox',
+              genre: 'Puzzle',
+              url: 'https://cdn.jsdelivr.net/gh/retrobrews/nes-games@master/babelblox.nes'
+            }
+          ]
+        },
+        {
+          id: 'gb',
+          name: 'Game Boy / Game Boy Color',
+          shortName: 'Game Boy',
+          icon: '/game-portal/icons/retro-gb.svg',
+          desc: 'Classic 8-bit monochromatic and color handhelds.',
+          formats: ['.gb', '.gbc', '.zip'],
+          hasBios: false,
+          samples: [
+            {
+              title: 'Brickster',
+              genre: 'Arcade Breaker',
+              url: 'https://cdn.jsdelivr.net/gh/retrobrews/gbc-games@master/brickster.gbc'
+            },
+            {
+              title: 'Geometrix',
+              genre: 'Puzzle',
+              url: 'https://cdn.jsdelivr.net/gh/retrobrews/gbc-games@master/geometrix.gbc'
+            }
+          ]
+        },
+        {
+          id: 'segaMD',
+          name: 'Sega Genesis / Mega Drive',
+          shortName: 'Genesis',
+          icon: '/game-portal/icons/retro-genesis.svg',
+          desc: '16-bit Sega console known for fast-paced arcade action.',
+          formats: ['.md', '.bin', '.gen', '.smd', '.zip'],
+          hasBios: false,
+          samples: [
+            {
+              title: 'Bomb on Basic City',
+              genre: 'Arcade Action',
+              url: 'https://cdn.jsdelivr.net/gh/retrobrews/md-games@master/bombonbasiccity.bin'
+            },
+            {
+              title: 'Barbarian',
+              genre: 'Combat Platformer',
+              url: 'https://cdn.jsdelivr.net/gh/retrobrews/md-games@master/barbarian.bin'
+            }
+          ]
+        },
+        {
+          id: 'atari2600',
+          name: 'Atari 2600',
+          shortName: 'Atari 2600',
+          icon: '/game-portal/icons/retro-atari.svg',
+          desc: 'Pioneering home console from the late 1970s.',
+          formats: ['.a26', '.bin', '.zip'],
+          hasBios: false,
+          samples: [
+            {
+              title: 'Anguna 2600',
+              genre: 'Adventure',
+              url: 'https://cdn.jsdelivr.net/gh/retrobrews/atari2600-games@master/anguna.bin'
+            },
+            {
+              title: 'Fishy',
+              genre: 'Arcade',
+              url: 'https://cdn.jsdelivr.net/gh/retrobrews/atari2600-games@master/fishy.bin'
+            }
+          ]
+        }
+      ];
+
+      let currentConsole = CONSOLES[0];
+      let activeBlobUrl = null;
+      let customBiosBlobUrl = null;
+
+      const nav = document.getElementById('console-nav');
+      const dropzone = document.getElementById('dropzone');
+      const fileRom = document.getElementById('file-rom');
+      const fileBios = document.getElementById('file-bios');
+      const biosPanel = document.getElementById('bios-panel');
+      const biosStatus = document.getElementById('bios-status');
+      const samplesGrid = document.getElementById('samples-grid');
+      const samplesSection = document.getElementById('samples-section');
+      const playerContainer = document.getElementById('player-container');
+      const playerFrame = document.getElementById('player-frame');
+      const playerGameName = document.getElementById('player-game-name');
+      const controlsDialog = document.getElementById('controls-dialog');
+
+      function parseQueryConsole() {
+        const params = new URLSearchParams(window.location.search);
+        const req = (params.get('console') || '').toLowerCase();
+        if (!req) return CONSOLES[0];
+        return CONSOLES.find(c => c.id.toLowerCase() === req || c.shortName.toLowerCase() === req) || CONSOLES[0];
+      }
+
+      function renderNav() {
+        nav.innerHTML = '';
+        CONSOLES.forEach(c => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'console-tab' + (c.id === currentConsole.id ? ' active' : '');
+          btn.innerHTML = `<img src="${c.icon}" alt=""><span>${c.shortName}</span>`;
+          btn.addEventListener('click', () => selectConsole(c));
+          nav.appendChild(btn);
+        });
+      }
+
+      function selectConsole(c) {
+        currentConsole = c;
+        renderNav();
+        document.getElementById('console-name').textContent = c.name;
+        document.getElementById('console-desc').textContent = c.desc;
+        document.getElementById('console-icon').src = c.icon;
+        document.getElementById('dropzone-hint').textContent = `Supports ${c.formats.join(', ')}`;
+
+        const formatsContainer = document.getElementById('console-formats');
+        formatsContainer.innerHTML = c.formats.map(fmt => `<span class="format-pill">${fmt}</span>`).join('');
+
+        biosPanel.hidden = !c.hasBios;
+
+        if (c.samples.length > 0) {
+          samplesSection.hidden = false;
+          samplesGrid.innerHTML = '';
+          c.samples.forEach(s => {
+            const card = document.createElement('div');
+            card.className = 'sample-card';
+            card.innerHTML = `
+              <div class="sample-meta">
+                <strong>${s.title}</strong>
+                <small>${s.genre}</small>
+              </div>
+              <button type="button" class="retro-btn primary" style="font-size:0.8rem;padding:0.35rem 0.6rem;">Play Demo</button>
+            `;
+            card.addEventListener('click', () => launchGame(s.url, s.title));
+            samplesGrid.appendChild(card);
+          });
+        } else {
+          samplesSection.hidden = true;
+        }
+
+        // Update URL query without full reload
+        const url = new URL(window.location);
+        url.searchParams.set('console', c.id);
+        window.history.replaceState({}, '', url);
+      }
+
+      function launchGame(url, name) {
+        if (activeBlobUrl && activeBlobUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(activeBlobUrl);
+          activeBlobUrl = null;
+        }
+
+        playerGameName.textContent = `${name} (${currentConsole.shortName})`;
+        playerContainer.hidden = false;
+        document.body.style.overflow = 'hidden';
+
+        const hash = new URLSearchParams();
+        hash.set('core', currentConsole.id);
+        hash.set('url', url);
+        hash.set('name', name);
+        if (customBiosBlobUrl && currentConsole.hasBios) {
+          hash.set('bios', customBiosBlobUrl);
+        }
+
+        playerFrame.src = `/games/retro/player.html#${hash.toString()}`;
+      }
+
+      function handleFile(file) {
+        if (!file) return;
+        if (activeBlobUrl) {
+          URL.revokeObjectURL(activeBlobUrl);
+        }
+        activeBlobUrl = URL.createObjectURL(file);
+        launchGame(activeBlobUrl, file.name);
+      }
+
+      function ejectGame() {
+        playerContainer.hidden = true;
+        playerFrame.src = 'about:blank';
+        document.body.style.overflow = '';
+        if (activeBlobUrl) {
+          URL.revokeObjectURL(activeBlobUrl);
+          activeBlobUrl = null;
+        }
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
+
+      // Dropzone and file picking
+      dropzone.addEventListener('click', () => fileRom.click());
+      dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+      });
+      dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+      dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) {
+          handleFile(e.dataTransfer.files[0]);
+        }
+      });
+      fileRom.addEventListener('change', () => {
+        if (fileRom.files.length > 0) {
+          handleFile(fileRom.files[0]);
+        }
+      });
+
+      // BIOS handling
+      document.getElementById('btn-load-bios').addEventListener('click', () => fileBios.click());
+      fileBios.addEventListener('change', () => {
+        if (fileBios.files.length > 0) {
+          const biosFile = fileBios.files[0];
+          if (customBiosBlobUrl) URL.revokeObjectURL(customBiosBlobUrl);
+          customBiosBlobUrl = URL.createObjectURL(biosFile);
+          biosStatus.textContent = `Loaded BIOS: ${biosFile.name}`;
+          biosStatus.style.color = 'var(--t-ac)';
+        }
+      });
+
+      // Player toolbar actions
+      document.getElementById('btn-eject').addEventListener('click', ejectGame);
+      document.getElementById('btn-player-fullscreen').addEventListener('click', () => {
+        if (playerFrame.requestFullscreen) {
+          playerFrame.requestFullscreen();
+        }
+      });
+
+      // Controls modal
+      const openControls = () => controlsDialog.showModal();
+      const closeControls = () => controlsDialog.close();
+      document.getElementById('btn-controls').addEventListener('click', openControls);
+      document.getElementById('btn-player-controls').addEventListener('click', openControls);
+      document.getElementById('btn-close-controls').addEventListener('click', closeControls);
+      controlsDialog.addEventListener('click', (e) => {
+        if (e.target === controlsDialog) closeControls();
+      });
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !playerContainer.hidden) {
+          ejectGame();
+        }
+      });
+
+      // Init
+      currentConsole = parseQueryConsole();
+      selectConsole(currentConsole);
+    })();
+  </script>
+</body>
+</html>

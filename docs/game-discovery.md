@@ -40,6 +40,19 @@ entries or saved games. No new play tracking, analytics, account storage, or
 server-side popularity counters are introduced. Existing reward authorization,
 heartbeat spacing, caps, and wallet accounting remain unchanged.
 
+## Retro console emulation
+
+`/games/retro/` provides an in-browser WebAssembly console player powered by
+EmulatorJS for PlayStation 1 (PS1), Nintendo 64 (N64), Game Boy Advance (GBA),
+Super Nintendo (SNES), Nintendo Entertainment System (NES), Game Boy / Game Boy
+Color (GB/GBC), Sega Genesis / Mega Drive (MD), Sega Master System / Game Gear,
+and Atari 2600.
+
+The player supports drag-and-drop loading of user-provided ROM files and saves state
+locally in IndexedDB. Legal public-domain and open-source homebrew demo games are
+provided for instant play. Direct console links (e.g. `/games/retro/?console=psx`)
+are cataloged in `/game-portal/games.json` under the Retro genre.
+
 ## Navigation and verification
 
 Embedded games retain the player with separate **Back to games** and **Home**
