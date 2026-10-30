@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Saves — mitch.pro</title>
+<link rel="stylesheet" href="/app.css">
+<script src="/api.js"></script>
+<script src="/app-shell.js" defer></script>
+<style>
+  .saves-shell { width: min(60rem, 100%); max-width: 60rem; }
+  .page-head h1 { margin: 0; font-size: clamp(1.85rem, 4vw, 2.4rem); font-weight: 800; letter-spacing: -0.035em; }
+  .page-sub { margin: 0.5rem 0 0; color: var(--t-fg2); font-size: 0.9rem; line-height: 1.55; }
+
+  .panel { margin-top: 1.1rem; padding: 1.1rem 1.2rem; background: var(--t-bg2); border: 1px solid var(--t-bd); border-radius: var(--t-radius); }
+  .panel h2 { margin: 0 0 0.7rem; font-size: 0.95rem; font-weight: 700; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 0.7rem; }
+  .stat { padding: 0.7rem 0.8rem; background: var(--t-bg3); border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm); min-width: 0; }
+  .stat small { display: block; color: var(--t-fg3); font-size: 0.72rem; margin-bottom: 0.2rem; }
+  .stat b { display: block; font-size: 0.95rem; font-weight: 700; overflow-wrap: anywhere; }
+  .stat a { color: var(--t-ac); }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.9rem; }
+  .btn { appearance: none; display: inline-flex; align-items: center; justify-content: center; min-height: 2.2rem; padding: 0.4rem 0.9rem; border-radius: var(--t-radius-sm); border: 1px solid var(--t-bd); background: var(--t-bg3); color: var(--t-fg); font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+  .btn:hover:not(:disabled) { border-color: var(--t-bda, var(--t-ac)); }
+  .btn:disabled { opacity: 0.45; cursor: default; }
+  .btn-primary { background: var(--t-ac); border-color: var(--t-ac); color: var(--t-ac-ink, #fff); }
+  .btn-danger { color: var(--t-rd, #e5534b); }
+  .btn-sm { min-height: 1.9rem; padding: 0.2rem 0.65rem; font-size: 0.78rem; }
+
+  #status { display: none; margin-top: 1.1rem; padding: 0.65rem 0.9rem; border-radius: var(--t-radius-sm); border: 1px solid var(--t-bd); background: var(--t-bg2); font-size: 0.86rem; }
+  #status.show { display: block; }
+  #status.ok { border-color: var(--t-gr, #3fb950); }
+  #status.err { border-color: var(--t-rd, #e5534b); }
+
+  .toolbar { display: flex; gap: 0.6rem; align-items: center; margin-bottom: 0.7rem; }
+  .toolbar input { flex: 1; min-width: 0; padding: 0.5rem 0.7rem; background: var(--t-bg3); color: var(--t-fg); border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm); font: inherit; font-size: 0.86rem; }
+
+  .group-title { margin: 1rem 0 0.35rem; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t-fg2); }
+  .rows { border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm); overflow: hidden; }
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0.8rem; align-items: center; padding: 0.6rem 0.8rem; border-top: 1px solid var(--t-bd); }
+  .row:first-child { border-top: 0; }
+  .row-name { min-width: 0; }
+  .row-name b { display: block; font-size: 0.88rem; font-weight: 600; }
+  .row-name code { display: block; background: none; border: 0; padding: 0; border-radius: 0; color: var(--t-fg3); font-size: 0.72rem; overflow-wrap: anywhere; }
+  .row-size { color: var(--t-fg2); font-size: 0.78rem; white-space: nowrap; }
+  .row-btns { display: flex; flex-wrap: wrap; gap: 0.35rem; justify-content: flex-end; }
+  .badge { display: inline-block; margin-left: 0.4rem; padding: 0.05rem 0.45rem; border: 1px solid var(--t-bd); border-radius: 999px; color: var(--t-fg2); font-size: 0.68rem; font-weight: 600; vertical-align: middle; }
+  .badge.synced { color: var(--t-gr, #3fb950); }
+  .badge.differs { color: var(--t-ac); }
+  .empty { padding: 1.1rem; color: var(--t-fg2); font-size: 0.86rem; text-align: center; }
+
+  @media (max-width: 640px) {
+    .row { grid-template-columns: 1fr; gap: 0.4rem; }
+    .row-btns { justify-content: flex-start; }
+  }
+</style>
+</head>
+<body class="app-shell">
+<main class="app-main saves-shell">
+  <header class="page-head">
+    <h1>Saves</h1>
+    <p class="page-sub">Settings and game progress synced to your account. Compare this browser with the server copy, restore, or delete entries.</p>
+  </header>
+
+  <div id="status" role="status" aria-live="polite"></div>
+
+  <section class="panel" id="signin-panel" hidden>
+    <h2>Sign in required</h2>
+    <p class="page-sub">Saves are stored on your account. <a id="signin-link" href="/enroll/">Sign in</a> to manage them.</p>
+  </section>
+
+  <div id="main" hidden>
+    <section class="panel">
+      <h2>Sync</h2>
+      <div class="stats">
+        <div class="stat"><small>Last synced</small><b id="st-last">—</b></div>
+        <div class="stat"><small>Auto-sync</small><b id="st-auto">—</b></div>
+        <div class="stat"><small>On server</small><b id="st-server">—</b></div>
+        <div class="stat"><small>This browser</small><b id="st-local">—</b></div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" id="btn-sync" type="button">Sync now</button>
+        <button class="btn" id="btn-restore-all" type="button">Restore everything from server</button>
+        <button class="btn" id="btn-download" type="button">Download backup</button>
+        <button class="btn" id="btn-import" type="button">Import backup</button>
+        <input id="import-file" type="file" accept="application/json,.json" hidden>
+        <button class="btn btn-danger" id="btn-delete-all" type="button">Delete server saves</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Saved data</h2>
+      <div class="toolbar"><input id="filter" type="search" placeholder="Filter by name" aria-label="Filter saved data" autocomplete="off"></div>
+      <div id="list"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  // Same exclusions as sync.js so this page and the background sync agree on
+  // what a "snapshot" of this browser is.
+  var SYNC_TS_KEY = '_sync_ts';
+  var RESTORED_KEY = '_just_restored';
+  var QUOTA = 1073741824;
+  // Top-level server keys that belong to the sync mechanism, not to a save.
+  var INTERNAL = { _snapshot: 1, _snapshot_ts: 1, _snapshot2: 1, _snapshot2_ts: 1, _updated: 1, _quota: 1 };
+
+  var LABELS = {
+    chess_elo: 'Chess rating',
+    _prefAI: 'AI preferences',
+    _prefHomepage: 'Homepage preferences',
+    _prefSync: 'Sync preferences',
+    _prefDisplay: 'Display preferences',
+    _prefTools: 'Tools preferences',
+    _prefVFX: 'Visual effects preferences',
+    _prefPrivacy: 'Privacy preferences',
+    _prefVisits: 'Page visit counts',
+    _prefRecent: 'Recent pages'
+  };
+
+  var server = null;       // full /api/userdata blob, null until loaded
+  var serverSnap = {};     // server._snapshot
+  var local = {};          // this browser's snapshot
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function status(msg, kind) {
+    var el = $('status');
+    el.textContent = msg;
+    el.className = 'show' + (kind ? ' ' + kind : '');
+  }
+
+  function bytes(n) {
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return (n / 1024).toFixed(n < 10240 ? 1 : 0) + ' KB';
+    if (n < 1073741824) return (n / 1048576).toFixed(1) + ' MB';
+    return (n / 1073741824).toFixed(1) + ' GB';
+  }
+  function size(v) { try { return JSON.stringify(v === undefined ? null : v).length; } catch (e) { return 0; } }
+  function same(a, b) { try { return JSON.stringify(a) === JSON.stringify(b); } catch (e) { return false; } }
+
+  function localSnap() {
+    var obj = {};
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k === SYNC_TS_KEY || k === RESTORED_KEY || k.indexOf('_panic') === 0 || k.indexOf('_cloak') === 0) continue;
+      var raw = localStorage.getItem(k);
+      try { obj[k] = JSON.parse(raw); } catch (e) { obj[k] = raw; }
+    }
+    return obj;
+  }
+
+  function writeLocal(snap) {
+    if (window.__theme && window.__theme.preparePreferenceSnapshot) snap = window.__theme.preparePreferenceSnapshot(snap);
+    var n = 0;
+    Object.keys(snap).forEach(function (k) {
+      var v = snap[k];
+      try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); n++; } catch (e) {}
+    });
+    return n;
+  }
+
+  function autoSyncOn() {
+    try { return JSON.parse(localStorage.getItem('_prefSync') || '{}').enabled !== false; } catch (e) { return true; }
+  }
+
+  async function api(method, body) {
+    var opts = { method: method, credentials: 'include', headers: { 'Content-Type': 'application/json' } };
+    if (body !== undefined) opts.body = JSON.stringify(body);
+    return fetch('/api/userdata', opts);
+  }
+
+  async function load() {
+    var r;
+    try { r = await api('GET'); } catch (e) { status('Could not reach the server.', 'err'); return false; }
+    if (r.status === 401) {
+      $('signin-panel').hidden = false;
+      $('main').hidden = true;
+      $('signin-link').href = '/enroll/?next=' + encodeURIComponent('/saves/');
+      return false;
+    }
+    if (!r.ok) { status('Could not load saves (' + r.status + ').', 'err'); return false; }
+    server = await r.json();
+    serverSnap = (server && typeof server._snapshot === 'object' && server._snapshot) || {};
+    local = localSnap();
+    $('signin-panel').hidden = true;
+    $('main').hidden = false;
+    render();
+    return true;
+  }
+
+  // Replace the server-side snapshot and mark this browser as up to date so
+  // sync.js doesn't then offer to restore what we just pushed.
+  async function pushSnapshot(snap) {
+    var ts = Date.now();
+    var r = await api('POST', { _snapshot: snap, _snapshot_ts: ts });
+    if (r.status === 413) throw new Error('Server storage limit reached.');
+    if (!r.ok) throw new Error('Server returned ' + r.status + '.');
+    localStorage.setItem(SYNC_TS_KEY, String(ts));
+  }
+
+  function groupOf(key) { return key.indexOf('_pref') === 0 ? 'Settings' : 'Game data'; }
+  function labelOf(key) { return LABELS[key] || key.replace(/^_pref/, '').replace(/[_-]+/g, ' ').replace(/^./, function (c) { return c.toUpperCase(); }); }
+
+  function render() {
+    var total = (server && server._quota && server._quota.used) || size(server);
+    var ts = server && server._snapshot_ts;
+    $('st-last').textContent = ts ? new Date(ts).toLocaleString() : 'Never';
+    $('st-auto').innerHTML = '';
+    var autoText = document.createTextNode(autoSyncOn() ? 'On ' : 'Off ');
+    var link = document.createElement('a');
+    link.href = '/preferences/#sync';
+    link.textContent = '(change)';
+    $('st-auto').appendChild(autoText);
+    $('st-auto').appendChild(link);
+    $('st-server').textContent = bytes(total) + ' of ' + bytes((server && server._quota && server._quota.limit) || QUOTA);
+    $('st-local').textContent = Object.keys(local).length + ' items';
+
+    var q = $('filter').value.trim().toLowerCase();
+    var keys = {};
+    Object.keys(serverSnap).forEach(function (k) { keys[k] = 1; });
+    Object.keys(local).forEach(function (k) { keys[k] = 1; });
+
+    var entries = Object.keys(keys).sort().map(function (k) {
+      var inS = Object.prototype.hasOwnProperty.call(serverSnap, k);
+      var inL = Object.prototype.hasOwnProperty.call(local, k);
+      var state = inS && inL ? (same(serverSnap[k], local[k]) ? 'synced' : 'differs') : (inS ? 'server' : 'local');
+      return { key: k, inS: inS, inL: inL, state: state, group: groupOf(k) };
+    });
+    // Entries stored at the top level of the server blob outside the snapshot
+    // (e.g. a game that saves directly) have no local counterpart.
+    Object.keys(server || {}).forEach(function (k) {
+      if (INTERNAL[k]) return;
+      entries.push({ key: k, inS: true, inL: false, state: 'server', group: 'Other server data', top: true });
+    });
+
+    entries = entries.filter(function (e) { return !q || e.key.toLowerCase().indexOf(q) >= 0 || labelOf(e.key).toLowerCase().indexOf(q) >= 0; });
+
+    var list = $('list');
+    list.innerHTML = '';
+    if (!entries.length) {
+      var empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent = q ? 'Nothing matches that filter.' : 'No saved data yet.';
+      list.appendChild(empty);
+      return;
+    }
+    ['Settings', 'Game data', 'Other server data'].forEach(function (g) {
+      var items = entries.filter(function (e) { return e.group === g; });
+      if (!items.length) return;
+      var title = document.createElement('div');
+      title.className = 'group-title';
+      title.textContent = g;
+      list.appendChild(title);
+      var rows = document.createElement('div');
+      rows.className = 'rows';
+      items.forEach(function (e) { rows.appendChild(rowFor(e)); });
+      list.appendChild(rows);
+    });
+  }
+
+  var BADGES = { synced: 'Synced', differs: 'Differs', server: 'Server only', local: 'This browser only' };
+
+  function rowFor(e) {
+    var row = document.createElement('div');
+    row.className = 'row';
+    var name = document.createElement('div');
+    name.className = 'row-name';
+    var b = document.createElement('b');
+    b.textContent = e.top ? e.key : labelOf(e.key);
+    var badge = document.createElement('span');
+    badge.className = 'badge ' + e.state;
+    badge.textContent = BADGES[e.state];
+    b.appendChild(badge);
+    var code = document.createElement('code');
+    code.textContent = e.key;
+    name.appendChild(b);
+    if (!e.top) name.appendChild(code);
+    var sz = document.createElement('div');
+    sz.className = 'row-size';
+    var serverValue = e.top ? server[e.key] : serverSnap[e.key];
+    sz.textContent = bytes(size(e.inS ? serverValue : local[e.key]));
+    var btns = document.createElement('div');
+    btns.className = 'row-btns';
+
+    function add(label, fn, cls) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-sm' + (cls ? ' ' + cls : '');
+      btn.textContent = label;
+      btn.addEventListener('click', function () { guard(btn, fn); });
+      btns.appendChild(btn);
+    }
+    if (e.inL && e.state !== 'synced' && !e.top) add('Upload', function () { return uploadKey(e.key); });
+    if (e.inS && e.state !== 'synced' && !e.top) add('Restore', function () { return restoreKey(e.key); });
+    add('Download', function () { download((e.key.replace(/[^\w.-]+/g, '_') || 'save') + '.json', e.inS ? serverValue : local[e.key]); });
+    if (e.inS) add('Delete from server', function () { return deleteKey(e); }, 'btn-danger');
+
+    row.appendChild(name);
+    row.appendChild(sz);
+    row.appendChild(btns);
+    return row;
+  }
+
+  async function guard(btn, fn) {
+    btn.disabled = true;
+    try { await fn(); } catch (err) { status(err && err.message ? err.message : 'That failed.', 'err'); }
+    finally { btn.disabled = false; }
+  }
+
+  async function uploadKey(key) {
+    var next = Object.assign({}, serverSnap);
+    next[key] = local[key];
+    await pushSnapshot(next);
+    await load();
+    status('Uploaded ' + labelOf(key) + ' to the server.', 'ok');
+  }
+
+  function restoreKey(key) {
+    var snap = {};
+    snap[key] = serverSnap[key];
+    writeLocal(snap);
+    local = localSnap();
+    render();
+    status('Restored ' + labelOf(key) + ' to this browser. Reload to apply settings.', 'ok');
+  }
+
+  async function deleteKey(e) {
+    if (!confirm('Delete "' + (e.top ? e.key : labelOf(e.key)) + '" from the server? This browser keeps its copy.')) return;
+    if (e.top) {
+      var r = await api('DELETE', { keys: [e.key] });
+      if (!r.ok) throw new Error('Server returned ' + r.status + '.');
+    } else {
+      var next = Object.assign({}, serverSnap);
+      delete next[e.key];
+      await pushSnapshot(next);
+    }
+    await load();
+    status('Deleted from the server.', 'ok');
+  }
+
+  function download(name, data) {
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  }
+
+  $('filter').addEventListener('input', render);
+
+  $('btn-sync').addEventListener('click', function () {
+    guard($('btn-sync'), async function () {
+      await pushSnapshot(localSnap());
+      await load();
+      status('Synced this browser to the server.', 'ok');
+    });
+  });
+
+  $('btn-restore-all').addEventListener('click', function () {
+    guard($('btn-restore-all'), async function () {
+      var n = Object.keys(serverSnap).length;
+      if (!n) { status('There is nothing on the server to restore.', 'err'); return; }
+      if (!confirm('Replace ' + n + ' items in this browser with the server copy?')) return;
+      writeLocal(serverSnap);
+      if (server._snapshot_ts) localStorage.setItem(SYNC_TS_KEY, String(server._snapshot_ts));
+      local = localSnap();
+      render();
+      status('Restored ' + n + ' items. Reload to apply settings.', 'ok');
+    });
+  });
+
+  $('btn-download').addEventListener('click', function () {
+    download('mitchpro-saves-' + new Date().toISOString().slice(0, 10) + '.json', { _snapshot: serverSnap, _snapshot_ts: server && server._snapshot_ts || 0 });
+  });
+
+  $('btn-import').addEventListener('click', function () { $('import-file').click(); });
+  $('import-file').addEventListener('change', function () {
+    var file = this.files && this.files[0];
+    this.value = '';
+    if (!file) return;
+    file.text().then(function (text) {
+      var data = JSON.parse(text);
+      var snap = data && typeof data._snapshot === 'object' && data._snapshot ? data._snapshot : data;
+      if (!snap || typeof snap !== 'object' || Array.isArray(snap)) throw new Error('That file is not a saves backup.');
+      var n = Object.keys(snap).length;
+      if (!confirm('Import ' + n + ' items into this browser? Matching entries are overwritten.')) return;
+      writeLocal(snap);
+      local = localSnap();
+      render();
+      status('Imported ' + n + ' items into this browser. Use Sync now to save them to the server.', 'ok');
+    }).catch(function (err) { status(err instanceof SyntaxError ? 'That file is not valid JSON.' : err.message, 'err'); });
+  });
+
+  $('btn-delete-all').addEventListener('click', function () {
+    guard($('btn-delete-all'), async function () {
+      if (!confirm('Delete all saves stored on the server? This browser keeps its data, and the next sync will upload it again unless auto-sync is off.')) return;
+      var r = await api('DELETE', { all: true });
+      if (!r.ok) throw new Error('Server returned ' + r.status + '.');
+      await load();
+      status('Deleted all server saves.', 'ok');
+    });
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>

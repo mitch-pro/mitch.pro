@@ -7,9 +7,12 @@
 //! - `/api/userdata` — server.js:17262-17317: per-sid JSON blob storage under
 //!   `USERDATA_DIR` with a 1 GiB quota and newsletter-unsub syncing.
 //!
-//! JS quirk preserved: the `/api/userdata` branch checks the path only, so
-//! every method (GET included) lands in it; the later GET-specific branch at
-//! server.js:19048 is unreachable dead code.
+//! Deliberate deviation from server.js: its `/api/userdata` branch checks the
+//! path only, so a GET fell into the write path and returned `{ok:true}`
+//! (the real GET branch at server.js:19048 was unreachable). Every client —
+//! MitchSync restore (`sync.js`), `/export/`, `/saves/`, chess-bot — expects a
+//! GET to return the stored blob plus `_quota`, so GET does that here and never
+//! writes. DELETE (`userdata_delete`) backs the `/saves/` manager.
 
 use super::friends::encode_uri_component;
 use super::me::{
@@ -38,7 +41,7 @@ pub async fn handle(
 ) -> Option<Response> {
     match (method.as_str(), path) {
         // The JS branches check the path only — every method lands here.
-        (_, "/api/userdata") => Some(userdata(state, headers, body_bytes)),
+        (_, "/api/userdata") => Some(userdata(state, method, headers, body_bytes)),
         (_, "/api/members") => Some(members(state, headers)),
         (_, "/api/premium-members") => Some(premium_members(state, headers)),
         (_, "/api/admin-members") => Some(admin_members(state, headers)),
@@ -670,11 +673,22 @@ pub(crate) fn userdata_path(id_val: &str) -> Option<std::path::PathBuf> {
 
 /// `/api/userdata` (server.js:17262-17317) — the path-only branch, so GETs
 /// (empty body → `{}`) land here too and persist `_updated`.
-fn userdata(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Response {
+fn userdata(
+    state: &Arc<AppState>,
+    method: &Method,
+    headers: &HeaderMap,
+    body_bytes: &[u8],
+) -> Response {
     let cookies = cookies_of(state, headers);
     let uid = me_uid(&cookies);
     if !auth::valid_id(&uid, &state.id_secret) {
         return json_response(401, json!({ "error": "Not authenticated" }));
+    }
+    if *method == Method::DELETE {
+        return userdata_delete(&uid, body_bytes);
+    }
+    if *method == Method::GET {
+        return userdata_get(&uid);
     }
     let Some(body) = parse_body_strict(body_bytes) else {
         return json_response(400, json!({ "error": "Bad JSON" }));
@@ -696,6 +710,10 @@ fn userdata(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Re
         // Object.assign(existing, body) — existing keys keep their position.
         if let Some(body_map) = body.as_object() {
             for (k, v) in body_map {
+                // `_quota` is computed on GET; never persist a client echo of it.
+                if k == "_quota" {
+                    continue;
+                }
                 map.insert(k.clone(), v.clone());
             }
         }
@@ -730,6 +748,68 @@ fn userdata(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Re
     }
     let _ = std::fs::write(&fpath, new_json.as_bytes());
     json_response(200, json!({ "ok": true }))
+}
+
+/// `GET /api/userdata` — the caller's stored blob with a `_quota` summary
+/// (`used` bytes of serialized JSON, `limit`). A missing file is an empty blob.
+fn userdata_get(uid: &str) -> Response {
+    let Some(fpath) = userdata_path(uid) else {
+        return json_response(503, json!({ "error": "Storage unavailable" }));
+    };
+    let mut blob: Value = std::fs::read_to_string(&fpath)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .filter(Value::is_object)
+        .unwrap_or_else(|| json!({}));
+    let used = serde_json::to_string(&blob).map(|s| s.len()).unwrap_or(0);
+    if let Some(map) = blob.as_object_mut() {
+        map.insert(
+            "_quota".into(),
+            json!({ "used": used, "limit": USERDATA_QUOTA }),
+        );
+    }
+    json_response(200, blob)
+}
+
+/// `DELETE /api/userdata` — the save manager's delete. Body `{"all": true}`
+/// removes the whole stored blob; `{"keys": [...]}` removes those top-level
+/// keys (internal `_updated` is never removable). Only ever touches the
+/// caller's own file, which is derived from their session id.
+fn userdata_delete(uid: &str, body_bytes: &[u8]) -> Response {
+    let Some(body) = parse_body_strict(body_bytes) else {
+        return json_response(400, json!({ "error": "Bad JSON" }));
+    };
+    let Some(fpath) = userdata_path(uid) else {
+        return json_response(503, json!({ "error": "Storage unavailable" }));
+    };
+    if body.get("all").and_then(Value::as_bool) == Some(true) {
+        let _ = std::fs::remove_file(&fpath);
+        return json_response(200, json!({ "ok": true, "removed": "all" }));
+    }
+    let Some(keys) = body.get("keys").and_then(Value::as_array) else {
+        return json_response(
+            400,
+            json!({ "error": "Expected {\"all\":true} or {\"keys\":[...]}" }),
+        );
+    };
+    let mut existing: Value = std::fs::read_to_string(&fpath)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| json!({}));
+    let mut removed = 0;
+    if let Some(map) = existing.as_object_mut() {
+        for key in keys.iter().filter_map(Value::as_str) {
+            if key != "_updated" && map.remove(key).is_some() {
+                removed += 1;
+            }
+        }
+        map.insert(
+            "_updated".into(),
+            json!(mitch_lib::school::now_millis() as f64 / 1000.0),
+        );
+        let _ = std::fs::write(&fpath, serde_json::to_string(&existing).unwrap_or_default());
+    }
+    json_response(200, json!({ "ok": true, "removed": removed }))
 }
 
 fn sync_privacy_prefs(state: &Arc<AppState>, uid: &str, body: &Value, existing: &Value) {
