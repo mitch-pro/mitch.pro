@@ -7,7 +7,9 @@
 //! - Cache-Control classes: code (html/htm/js/css or text types) →
 //!   `no-cache, no-store, must-revalidate` + Pragma + Expires 0; media exts →
 //!   `public, max-age=31536000, immutable`; else `public, max-age=2592000`.
-//! - COOP/COEP/CORP only for `/`, `/index.html`, `/webvm`, `/webvm/*`.
+//! - COOP/COEP/CORP only for `/webvm`, `/webvm/*` (not the homepage: windows it opens with
+//!   `window.open` inherit COEP and could not frame ordinary pages, which broke the
+//!   about:blank launcher).
 #![allow(clippy::expect_used)] // infallible static responses
 
 use std::collections::HashMap;
@@ -454,11 +456,7 @@ pub fn redirect(target: &str, status: u16) -> Response {
 }
 
 fn apply_common_headers(headers: &mut Vec<(HeaderName, String)>, url_path: &str) {
-    if url_path == "/"
-        || url_path == "/index.html"
-        || url_path.starts_with("/webvm/")
-        || url_path == "/webvm"
-    {
+    if url_path.starts_with("/webvm/") || url_path == "/webvm" {
         if let Ok(n) = HeaderName::from_lowercase(b"cross-origin-opener-policy") {
             headers.push((n, "same-origin".to_string()));
         }

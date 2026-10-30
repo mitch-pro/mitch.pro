@@ -506,6 +506,8 @@ document.addEventListener('click', function(e) {
   var raw = a.getAttribute('href') || '';
   if (!raw || raw.charAt(0) === '#' || /^(javascript|mailto|tel):/i.test(raw)) return;
   e.preventDefault();
+  // Stop here so a link's own onclick (launchSite) doesn't open a second window.
+  e.stopPropagation();
   openAboutBlank(raw);
 }, true);
 
@@ -2134,7 +2136,9 @@ function initHudTerminal() {
           setConsoleTimeout(function() { appendLine('Virtual memory mapping complete: 512MB RAM allocated.', 'sys-cmd'); }, 400);
           setConsoleTimeout(function() {
             appendLine('Launching client-side Linux Virtual Machine (WebVM)...', 'sys-success');
-            launchConsoleIframe('/webvm/', '>_ WEBVM: BROWSER LINUX');
+            // WebVM needs cross-origin isolation, which the homepage no longer
+            // has, so it runs as its own page rather than in an iframe here.
+            window.location.href = '/webvm/';
           }, 700);
           break;
         case 'neofetch':

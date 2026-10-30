@@ -40,9 +40,10 @@
         -Server
     }
 
-    # Cross-Origin Isolation for WebVM iframe nesting support
+    # Cross-Origin Isolation for WebVM only. Not `/`: a window the homepage opens
+    # inherits COEP and then can't frame normal pages (about:blank launcher).
     @coop_paths {
-        path / /webvm/*
+        path /webvm/*
     }
     header @coop_paths {
         Cross-Origin-Opener-Policy "same-origin"
