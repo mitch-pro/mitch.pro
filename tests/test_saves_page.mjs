@@ -46,7 +46,7 @@ try {
   p.on('pageerror', e => errors.push(e.message));
   p.on('dialog', d => d.accept());
   await p.goto(base + '/saves/');
-  await p.evaluate(() => { localStorage.setItem('chess_elo', JSON.stringify({ elo: 1234, wins: 3 })); localStorage.setItem('_prefDisplay', JSON.stringify({ gameLaunch: 'tab' })); });
+  await p.evaluate(() => { localStorage.setItem('chess_elo', JSON.stringify({ elo: 1234, wins: 3 })); localStorage.setItem('_prefDisplay', JSON.stringify({ gameLaunch: 'tab' })); localStorage.setItem('cinny_access_token', 'secret-token'); localStorage.setItem('_e2e_private_jwk', '{"d":"secret"}'); });
   await p.reload();
   await p.locator('#main').waitFor({ state: 'visible' });
   assert.match(await p.locator('#st-last').innerText(), /Never/);
@@ -59,6 +59,16 @@ try {
   const afterSync = await p.evaluate(async () => (await (await fetch('/api/userdata', { credentials: 'include' })).json()));
   assert.equal(afterSync._snapshot.chess_elo.elo, 1234);
   assert.ok(afterSync._snapshot_ts > 0);
+  // Matrix login and E2E keys never reach the server, even if a client posts them.
+  assert.equal('cinny_access_token' in afterSync._snapshot, false);
+  assert.equal('_e2e_private_jwk' in afterSync._snapshot, false);
+  await p.evaluate(() => fetch('/api/userdata', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ _snapshot: { chess_elo: { elo: 1234, wins: 3 }, cinny_access_token: 'x', _e2e_key_history_v2: 'y' }, e2e_thing: 1 }) }));
+  const posted = await p.evaluate(async () => (await (await fetch('/api/userdata', { credentials: 'include' })).json()));
+  assert.deepEqual(Object.keys(posted._snapshot), ['chess_elo']);
+  assert.equal('e2e_thing' in posted, false);
+  // The page neither lists them nor touches the local copy.
+  assert.equal(await p.locator('.row', { hasText: 'cinny_access_token' }).count(), 0);
+  assert.equal(await p.evaluate(() => localStorage.getItem('cinny_access_token')), 'secret-token');
   assert.equal(await p.locator('.badge.local').count(), 0);
   assert.ok(await p.locator('.badge.synced').count() >= 2);
 

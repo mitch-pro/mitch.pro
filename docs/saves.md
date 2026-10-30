@@ -10,6 +10,19 @@ writes the browser's localStorage there as `_snapshot` (+ `_snapshot_ts`) every
 Some games (chess-bot) and `/export/` (slot 2: `_snapshot2`) write other
 top-level keys into the same blob.
 
+## What is never synced
+
+Matrix login and encryption keys are excluded everywhere: `cinny_*` (the Matrix
+access token, device and user ids), `mx_*`, anything containing `matrix`, the
+site's own E2E key material (`_e2e_private_jwk*`, `_e2e_key_history_v2`), anything
+containing `e2e`, `passphrase`, `access_token` or `private_key`, and
+`admin_passphrase`. Three layers enforce it, kept in step:
+
+- `webserver/sync.js` and `/saves/` never put them in a snapshot and never write
+  them back on restore or import.
+- `routes/members.rs::is_sensitive_sync_key` strips them from every POST and GET,
+  and rewrites a stored blob that an older client already filled with them.
+
 ## `/api/userdata`
 
 Authenticated by session cookie; every call only touches the caller's own file.

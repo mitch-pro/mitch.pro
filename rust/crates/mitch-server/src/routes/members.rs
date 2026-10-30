@@ -706,6 +706,8 @@ fn userdata(
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_else(|| json!({}));
+    let mut body = body;
+    strip_sensitive_snapshot_keys(&mut body);
     if let Value::Object(map) = &mut existing {
         // Object.assign(existing, body) — existing keys keep their position.
         if let Some(body_map) = body.as_object() {
@@ -750,6 +752,49 @@ fn userdata(
     json_response(200, json!({ "ok": true }))
 }
 
+/// Storage keys that must never be synced to (or served from) the server copy:
+/// Matrix login (`cinny_access_token`, device and user ids, push state), the
+/// site's own end-to-end key material (`_e2e_private_jwk*`, key history) and
+/// the admin passphrase. Syncing these would put the keys that decrypt a
+/// person's messages, or a live chat session token, in the saves blob.
+/// Keep in step with `isSensitiveKey` in `webserver/sync.js` and `/saves/`.
+pub(crate) fn is_sensitive_sync_key(key: &str) -> bool {
+    let k = key.to_ascii_lowercase();
+    k.starts_with("cinny_")
+        || k.starts_with("mx_")
+        || k.contains("matrix")
+        || k.contains("e2e")
+        || k.contains("passphrase")
+        || k.contains("access_token")
+        || k.contains("privatekey")
+        || k.contains("private_key")
+}
+
+/// Removes sensitive keys from a snapshot object (and the other snapshot slot);
+/// returns whether anything was removed.
+fn strip_sensitive_snapshot_keys(blob: &mut Value) -> bool {
+    let mut changed = false;
+    if let Some(map) = blob.as_object_mut() {
+        for slot in ["_snapshot", "_snapshot2"] {
+            if let Some(snap) = map.get_mut(slot).and_then(Value::as_object_mut) {
+                let before = snap.len();
+                snap.retain(|k, _| !is_sensitive_sync_key(k));
+                changed |= snap.len() != before;
+            }
+        }
+        let top: Vec<String> = map
+            .keys()
+            .filter(|k| !k.starts_with('_') && is_sensitive_sync_key(k))
+            .cloned()
+            .collect();
+        for k in top {
+            map.remove(&k);
+            changed = true;
+        }
+    }
+    changed
+}
+
 /// `GET /api/userdata` — the caller's stored blob with a `_quota` summary
 /// (`used` bytes of serialized JSON, `limit`). A missing file is an empty blob.
 fn userdata_get(uid: &str) -> Response {
@@ -761,6 +806,10 @@ fn userdata_get(uid: &str) -> Response {
         .and_then(|s| serde_json::from_str(&s).ok())
         .filter(Value::is_object)
         .unwrap_or_else(|| json!({}));
+    // Scrub anything sensitive an older client already uploaded.
+    if strip_sensitive_snapshot_keys(&mut blob) {
+        let _ = std::fs::write(&fpath, serde_json::to_string(&blob).unwrap_or_default());
+    }
     let used = serde_json::to_string(&blob).map(|s| s.len()).unwrap_or(0);
     if let Some(map) = blob.as_object_mut() {
         map.insert(
@@ -1230,5 +1279,42 @@ mod tests {
 
         drop(state);
         std::fs::remove_dir_all(&base).ok();
+    }
+}
+
+#[cfg(test)]
+mod sync_key_tests {
+    use super::*;
+
+    #[test]
+    fn matrix_and_e2e_keys_are_never_synced() {
+        for k in [
+            "cinny_access_token",
+            "cinny_user_id",
+            "cinny_device_id",
+            "cinny_hs_base_url",
+            "mitch_matrix_last_prune",
+            "matrix-auth-store",
+            "_e2e_private_jwk",
+            "_e2e_private_jwk_v3:a%40b",
+            "_e2e_key_history_v2",
+            "admin_passphrase",
+        ] {
+            assert!(is_sensitive_sync_key(k), "{k} must be excluded");
+        }
+        for k in ["chess_elo", "_prefDisplay", "_prefPrivacy", "theme"] {
+            assert!(!is_sensitive_sync_key(k), "{k} should sync");
+        }
+        let mut blob = json!({
+            "_snapshot": { "chess_elo": 1, "cinny_access_token": "t", "_e2e_private_jwk": "k" },
+            "_snapshot2": { "cinny_user_id": "@a:b", "x": 2 },
+            "e2e_thing": 1, "chess": { "elo": 3 }
+        });
+        assert!(strip_sensitive_snapshot_keys(&mut blob));
+        assert_eq!(
+            blob,
+            json!({ "_snapshot": { "chess_elo": 1 }, "_snapshot2": { "x": 2 }, "chess": { "elo": 3 } })
+        );
+        assert!(!strip_sensitive_snapshot_keys(&mut blob));
     }
 }

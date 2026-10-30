@@ -61,7 +61,7 @@
 <main class="app-main saves-shell">
   <header class="page-head">
     <h1>Saves</h1>
-    <p class="page-sub">Settings and game progress synced to your account. Compare this browser with the server copy, restore, or delete entries.</p>
+    <p class="page-sub">Settings and game progress synced to your account. Compare this browser with the server copy, restore, or delete entries. Matrix chat sessions and encryption keys are never synced.</p>
   </header>
 
   <div id="status" role="status" aria-live="polite"></div>
@@ -110,6 +110,15 @@
   // Top-level server keys that belong to the sync mechanism, not to a save.
   var INTERNAL = { _snapshot: 1, _snapshot_ts: 1, _snapshot2: 1, _snapshot2_ts: 1, _updated: 1, _quota: 1 };
 
+  // Matrix login/keys and E2E key material are never synced or restored.
+  // Mirrors is_sensitive_sync_key in routes/members.rs and sync.js.
+  function isSensitiveKey(key) {
+    var k = String(key).toLowerCase();
+    return k.indexOf('cinny_') === 0 || k.indexOf('mx_') === 0 || k.indexOf('matrix') !== -1 ||
+      k.indexOf('e2e') !== -1 || k.indexOf('passphrase') !== -1 || k.indexOf('access_token') !== -1 ||
+      k.indexOf('privatekey') !== -1 || k.indexOf('private_key') !== -1;
+  }
+
   var LABELS = {
     chess_elo: 'Chess rating',
     _prefAI: 'AI preferences',
@@ -148,7 +157,7 @@
     var obj = {};
     for (var i = 0; i < localStorage.length; i++) {
       var k = localStorage.key(i);
-      if (k === SYNC_TS_KEY || k === RESTORED_KEY || k.indexOf('_panic') === 0 || k.indexOf('_cloak') === 0) continue;
+      if (k === SYNC_TS_KEY || k === RESTORED_KEY || k.indexOf('_panic') === 0 || k.indexOf('_cloak') === 0 || isSensitiveKey(k)) continue;
       var raw = localStorage.getItem(k);
       try { obj[k] = JSON.parse(raw); } catch (e) { obj[k] = raw; }
     }
@@ -159,6 +168,7 @@
     if (window.__theme && window.__theme.preparePreferenceSnapshot) snap = window.__theme.preparePreferenceSnapshot(snap);
     var n = 0;
     Object.keys(snap).forEach(function (k) {
+      if (isSensitiveKey(k)) return;
       var v = snap[k];
       try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); n++; } catch (e) {}
     });
@@ -223,7 +233,7 @@
 
     var q = $('filter').value.trim().toLowerCase();
     var keys = {};
-    Object.keys(serverSnap).forEach(function (k) { keys[k] = 1; });
+    Object.keys(serverSnap).forEach(function (k) { if (!isSensitiveKey(k)) keys[k] = 1; });
     Object.keys(local).forEach(function (k) { keys[k] = 1; });
 
     var entries = Object.keys(keys).sort().map(function (k) {
@@ -235,7 +245,7 @@
     // Entries stored at the top level of the server blob outside the snapshot
     // (e.g. a game that saves directly) have no local counterpart.
     Object.keys(server || {}).forEach(function (k) {
-      if (INTERNAL[k]) return;
+      if (INTERNAL[k] || isSensitiveKey(k)) return;
       entries.push({ key: k, inS: true, inL: false, state: 'server', group: 'Other server data', top: true });
     });
 

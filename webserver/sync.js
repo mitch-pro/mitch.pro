@@ -8,11 +8,21 @@
   // Preference keys to sync
   var PREF_KEYS = ['_prefAI', '_prefHomepage', '_prefSync', '_prefDisplay', '_prefTools', '_prefVFX', '_prefPrivacy'];
 
+  // Never sync Matrix login/keys or the site's E2E key material: they would
+  // put a live chat token and the keys that decrypt messages in the server
+  // copy. Mirrors is_sensitive_sync_key in routes/members.rs and /saves/.
+  function isSensitiveKey(key) {
+    var k = String(key).toLowerCase();
+    return k.indexOf('cinny_') === 0 || k.indexOf('mx_') === 0 || k.indexOf('matrix') !== -1 ||
+      k.indexOf('e2e') !== -1 || k.indexOf('passphrase') !== -1 || k.indexOf('access_token') !== -1 ||
+      k.indexOf('privatekey') !== -1 || k.indexOf('private_key') !== -1;
+  }
+
   function getSnap() {
     var obj = {};
     for (var i = 0; i < localStorage.length; i++) {
       var k = localStorage.key(i);
-      if (k === SYNC_TS_KEY || k === RESTORED_KEY || k.startsWith('_panic') || k.startsWith('_cloak')) continue;
+      if (k === SYNC_TS_KEY || k === RESTORED_KEY || k.startsWith('_panic') || k.startsWith('_cloak') || isSensitiveKey(k)) continue;
       
       var raw = localStorage.getItem(k);
       try { obj[k] = JSON.parse(raw); }
@@ -24,7 +34,7 @@
   function applySnap(snap) {
     if (window.__theme && window.__theme.preparePreferenceSnapshot) snap = window.__theme.preparePreferenceSnapshot(snap);
     for (var k in snap) {
-      if (!snap.hasOwnProperty(k)) continue;
+      if (!snap.hasOwnProperty(k) || isSensitiveKey(k)) continue;
       try {
         var v = snap[k];
         localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v));
