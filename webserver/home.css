@@ -561,6 +561,7 @@ body.home ::-webkit-scrollbar-track { background: transparent; }
   .hello-heading { grid-column:1; grid-row:1; }
   .home-hello .hello-email { grid-column:1/-1; grid-row:2; margin:0; }
   .home-hello .streak-badge { grid-column:1/-1; grid-row:3; justify-self:start; }
+  .home-hello .hello-tools { grid-column:1/-1; grid-row:4; }
   .hello-emblem { --logo-size:76px; --logo-travel:10px; height:142px; grid-column:2; grid-row:1; }
   .hello-logo-prism { top:18px; }
   .hello-logo-wordmark { font-size:17px; bottom:7px; }
@@ -640,3 +641,7 @@ body.members-rail-open .home-main {padding-left:0;max-width:var(--mh-maxw)}
 
 .home-directory .category-group{border:0;border-bottom:1px solid var(--t-bd);border-radius:0;background:none;box-shadow:none;padding:0 0 22px;margin:0 0 24px}
 .home-controls{grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr))}
+
+.hello-tools { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:10px; }
+.hello-tools .home-staff-pill { margin-top:0; }
+.ab-toggle { display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border:1px solid var(--t-bd); border-radius:999px; background:var(--t-bg2); color:var(--t-fg2); font-size:.82rem; font-weight:600; cursor:pointer; user-select:none; }

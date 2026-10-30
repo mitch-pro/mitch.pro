@@ -75,8 +75,17 @@ function showBannedPopup(reason) {
 }
 
 
+function aboutBlankOn() {
+  var t = document.getElementById('abToggle');
+  return !!(t && t.checked);
+}
+
 function launchSite(type, href) {
   href = href || '/';
+  if (aboutBlankOn()) {
+    openAboutBlank(href);
+    return;
+  }
   try {
     var siteUrl = new URL(href, location.href);
     if (siteUrl.hostname === 'woodcreek.site') {
@@ -97,10 +106,6 @@ function launchSite(type, href) {
   try { displayPrefs = JSON.parse(localStorage.getItem('_prefDisplay') || '{}'); } catch(e) {}
   if (displayPrefs.gameLaunch === 'tab') {
     openInNewTab(href);
-    return;
-  }
-  if (document.getElementById('abToggle') && document.getElementById('abToggle').checked) {
-    openAboutBlank(href);
     return;
   }
   if (displayPrefs.gameLaunch === 'iframe' && type !== 'popup' && type !== 'tab' && type !== 'newtab') {
@@ -474,23 +479,41 @@ function showPopup(src) {
 
 function openAboutBlank(target) {
   if (!target) return;
-  target = String(target).trim();
-  if (!/^https?:\/\//i.test(target) && !target.startsWith('/') && !target.startsWith('about:')) target = 'https://' + target;
-  var w = window.open('', '_blank', 'width=10000000,height=10000000');
+  var abs;
+  try { abs = new URL(String(target).trim(), location.href).href; } catch (e) { abs = String(target).trim(); }
+  var w = window.open('about:blank', '_blank');
   if (!w) {
-    window.location.href = target;
+    window.location.href = abs;
     return;
   }
-  var html = '<!doctype html><html><head><title>New Tab</title><meta charset="utf-8"><style>html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#000}iframe{border:0;width:100%;height:100%;display:block}<\/style><\/head><body><\/body><\/html>';
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
-  var frame = w.document.createElement('iframe');
-  frame.src = target;
-  frame.setAttribute('allowfullscreen', '');
-  frame.setAttribute('allow', 'fullscreen; autoplay; clipboard-read; clipboard-write; encrypted-media');
-  w.document.body.appendChild(frame);
+  try {
+    var d = w.document;
+    d.open();
+    d.write('<!doctype html><html><head><meta charset="utf-8"><title>New Tab</title><style>html,body{margin:0;height:100%;overflow:hidden;background:#000}iframe{border:0;width:100%;height:100%;display:block}<\/style><\/head><body><\/body><\/html>');
+    d.close();
+    var frame = d.createElement('iframe');
+    frame.src = abs;
+    frame.setAttribute('allowfullscreen', '');
+    frame.setAttribute('allow', 'fullscreen; autoplay; clipboard-read; clipboard-write; encrypted-media');
+    d.body.appendChild(frame);
+  } catch (e) {
+    w.close();
+    window.location.href = abs;
+  }
 }
+
+// With the toggle on, every link on the page opens in an about:blank tab, not
+// just the ones that go through launchSite().
+document.addEventListener('click', function(e) {
+  if (!aboutBlankOn() || e.defaultPrevented) return;
+  if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button > 0) return;
+  var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+  if (!a || a.closest('#fullframe')) return;
+  var raw = a.getAttribute('href') || '';
+  if (!raw || raw.charAt(0) === '#' || /^(javascript|mailto|tel):/i.test(raw)) return;
+  e.preventDefault();
+  openAboutBlank(raw);
+}, true);
 
 async function showIframe(src, escape) {
   var id = new URLSearchParams(document.cookie.replaceAll('; ', '&')).get('id');
@@ -2822,7 +2845,10 @@ if (document.readyState === 'loading') {
     <h1 id="home-brand" class="hello-heading"><span id="greeting-text">hello</span><svg class="hello-writing" viewBox="0 0 240 96" aria-hidden="true"><path pathLength="1" d="M15 70 C22 58 47 18 40 12 C31 4 18 77 23 76 C29 57 44 46 47 56 C49 65 36 82 51 74 L63 64 C92 51 78 38 67 57 C51 84 80 85 96 65 C108 49 127 13 119 10 C107 5 86 75 99 78 C113 85 145 17 138 11 C125 1 109 76 124 78 C136 79 148 64 151 54 C160 35 178 48 169 67 C160 87 140 78 148 59 C154 45 169 43 174 55 C178 68 184 72 198 64"/></svg></h1>
     <p id="greeting-email" class="hello-email"></p>
     <span id="streak-badge" class="streak-badge" hidden>&#128293; <b id="streak-badge-count">0</b></span>
+    <div class="hello-tools">
     <a id="home-staff-pill" href="/staff/" class="home-staff-pill" hidden><span>&#9881;</span> Staff workspace &rarr;</a>
+    <label id="abToggleBar" class="ab-toggle" title="Open links in an about:blank tab"><span>Private window</span><span class="toggle-switch"><input type="checkbox" id="abToggle" aria-label="Open links in an about:blank tab"><span class="toggle-slider"></span></span></label>
+    </div>
     </div>
     <div class="hello-emblem" aria-hidden="true">
       <div class="hello-logo-shadow"></div>
@@ -2897,7 +2923,6 @@ if (document.readyState === 'loading') {
   </section>
   <section class="home-controls" aria-label="Your settings">
     <a id="vm-status-chip" class="home-control-card" href="/vms/" hidden><div><h2>Your computer</h2><p>Open your desktop or manage its resources.</p></div><span class="control-status"><span class="status-dot" id="vm-status-dot"></span><span id="vm-status-text">Computer</span></span></a>
-    <div id="abToggleBar" class="home-control-card"><div><h2>Private window</h2><p>Open games in an about:blank tab.</p></div><label class="toggle-switch"><input type="checkbox" id="abToggle" aria-label="Open games in an about:blank tab"><span class="toggle-slider"></span></label></div>
     <a id="preferences-card" class="home-control-card" href="/preferences/"><div><h2>Preferences</h2><p>Appearance, privacy, and your account.</p></div><span class="control-status">Edit settings</span></a>
   </section>
 

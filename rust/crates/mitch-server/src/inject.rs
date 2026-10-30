@@ -150,7 +150,7 @@ pub fn inject_credit(html: &str, school: bool) -> String {
     let copy = if school {
         "<span id=\"site-credit-copy\">Made by Tyler and Mitch.</span>".to_string()
     } else {
-        r#"<span id="site-credit-copy"><span class="footer-agreement">By using mitch.pro you agree to the <a href="/use-agreement/" target="_blank">use agreement</a> and <a href="/privacy/" target="_blank">privacy policy</a>. </span><span class="footer-cookies">See also <a href="/cookies/" target="_blank">cookies</a> and <a href="/copyright/" target="_blank">copyright</a>. </span><span class="footer-oss">mitch.pro is open source — <a href="https://github.com/mitch-pro/mitch.pro" target="_blank" rel="noopener">view the code yourself on GitHub</a></span><span class="footer-discord"> · <a href="https://discord.gg/nrBCnK7KM5" target="_blank" rel="noopener">Discord</a></span></span>"#.to_string()
+        r#"<span id="site-credit-copy"><span class="footer-agreement">By using mitch.pro you agree to the <a href="/use-agreement/" target="_blank">use agreement</a> and <a href="/privacy/" target="_blank">privacy policy</a>. </span><span class="footer-cookies">See also <a href="/cookies/" target="_blank">cookies</a> and <a href="/copyright/" target="_blank">copyright</a>. </span><span class="footer-oss"><span class="footer-oss-lead">mitch.pro is open source — </span><a href="https://github.com/mitch-pro/mitch.pro" target="_blank" rel="noopener">view the code yourself on GitHub</a></span><span class="footer-discord"> · <a href="https://discord.gg/nrBCnK7KM5" target="_blank" rel="noopener">Discord</a></span></span>"#.to_string()
     };
     let band = format!(
         r#"<style>
@@ -169,6 +169,7 @@ pub fn inject_credit(html: &str, school: bool) -> String {
 @media (max-width:1020px) {{ .footer-discord {{ display:none !important; }} }}
 @media (max-width:820px) {{ .footer-cookies {{ display:none !important; }} }}
 @media (max-width:580px) {{ .footer-agreement {{ display:none !important; }} }}
+@media (max-width:480px) {{ .footer-oss-lead {{ display:none !important; }} }}
 @media (max-width:380px) {{ #site-credit {{ padding-inline:10px; gap:5px; font-size:10px; }} }}
 body #mobile-dock {{ bottom:calc(var(--site-credit-height) + 10px); }}
 body .mobile-nav-dock {{ bottom:var(--site-credit-height); padding-bottom:6px; }}

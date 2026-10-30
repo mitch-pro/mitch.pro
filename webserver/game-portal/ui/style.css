@@ -113,7 +113,7 @@ h1 { font-size: clamp(30px, 3vw, 40px); font-weight: 650; letter-spacing: -.035e
 .load-more { display: block; margin: 26px auto 0; }
 .load-more:hover, .empty-state button:hover { border-color: var(--accent); }
 .footer { border-top: 1px solid var(--line); padding: 22px clamp(20px, 3vw, 44px); display: flex; justify-content: space-between; gap: 20px; color: var(--muted); font-size: 11px; line-height: 1.7; }
-.player { position: fixed; inset: 0; z-index: 50; background: var(--bg); display: flex; flex-direction: column; }
+.player { position: fixed; inset: 0 0 var(--site-credit-height, 0px) 0; z-index: 50; background: var(--bg); display: flex; flex-direction: column; }
 .player-bar { min-height: 64px; flex: none; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 16px; padding: 10px 18px; background: var(--sidebar); }
 .player-bar button, .player-bar a { color: var(--text); background: transparent; border: 0; padding: 10px 0; font-size: 12px; white-space: nowrap; }
 .player-bar button:hover, .player-bar a:hover { color: var(--accent); }
