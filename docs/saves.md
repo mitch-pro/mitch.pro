@@ -7,6 +7,10 @@ Each signed-in account has one JSON blob on disk at
 capped at 1 GiB of serialized JSON. The background sync (`webserver/sync.js`)
 writes the browser's localStorage there as `_snapshot` (+ `_snapshot_ts`) every
 5 minutes and on page close, and offers a restore when the server copy is newer.
+The blob has two save slots: the **auto slot** (`_snapshot`/`_snapshot_ts`, owned by
+`sync.js`) and the **manual slot** (`_snapshot2`/`_snapshot2_ts`), which is written
+only by the Save button on `/saves/` and is never touched by background sync or
+"Sync now". Both are scrubbed of sensitive keys.
 Some games (chess-bot) write other top-level keys into the same blob.
 
 ## What is never synced
@@ -38,7 +42,9 @@ data; this is a deliberate deviation from the JS server.
 
 ## `/saves/` (save manager)
 
-Lists the union of the server snapshot and this browser's localStorage, grouped
+Has an Auto slot panel (sync status, sync now, restore everything, backup download/import,
+delete all) and a Manual slot panel (save this browser, restore, download, delete).
+Below them, lists the union of the server snapshot and this browser's localStorage, grouped
 into Settings (`_pref*`), Game data and top-level server-only entries, each with
 a Synced / Differs / Server only / This browser only badge. Actions: sync now,
 restore all, per-entry upload / restore / download / delete-from-server,

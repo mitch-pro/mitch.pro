@@ -73,9 +73,9 @@
 
   <div id="main" hidden>
     <section class="panel">
-      <h2>Sync</h2>
+      <h2>Auto slot</h2>
       <div class="stats">
-        <div class="stat"><small>Last synced</small><b id="st-last">—</b></div>
+        <div class="stat"><small>Last auto-sync</small><b id="st-last">—</b></div>
         <div class="stat"><small>Auto-sync</small><b id="st-auto">—</b></div>
         <div class="stat"><small>On server</small><b id="st-server">—</b></div>
         <div class="stat"><small>This browser</small><b id="st-local">—</b></div>
@@ -87,6 +87,21 @@
         <button class="btn" id="btn-import" type="button">Import backup</button>
         <input id="import-file" type="file" accept="application/json,.json" hidden>
         <button class="btn btn-danger" id="btn-delete-all" type="button">Delete server saves</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Manual slot</h2>
+      <div class="stats">
+        <div class="stat"><small>Saved</small><b id="m-ts">Empty</b></div>
+        <div class="stat"><small>Items</small><b id="m-items">—</b></div>
+        <div class="stat"><small>Size</small><b id="m-size">—</b></div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" id="btn-m-save" type="button">Save this browser to manual slot</button>
+        <button class="btn" id="btn-m-restore" type="button">Restore manual slot</button>
+        <button class="btn" id="btn-m-download" type="button">Download</button>
+        <button class="btn btn-danger" id="btn-m-delete" type="button">Delete manual slot</button>
       </div>
     </section>
 
@@ -133,7 +148,8 @@
   };
 
   var server = null;       // full /api/userdata blob, null until loaded
-  var serverSnap = {};     // server._snapshot
+  var serverSnap = {};     // server._snapshot (auto slot, written by sync.js)
+  var manualSnap = {};     // server._snapshot2 (manual slot, only written from this page)
   var local = {};          // this browser's snapshot
 
   var $ = function (id) { return document.getElementById(id); };
@@ -202,6 +218,7 @@
     }
     server = await r.json();
     serverSnap = (server && typeof server._snapshot === 'object' && server._snapshot) || {};
+    manualSnap = (server && typeof server._snapshot2 === 'object' && server._snapshot2) || {};
     local = localSnap();
     $('signin-panel').hidden = true;
     $('main').hidden = false;
@@ -234,6 +251,12 @@
     $('st-auto').appendChild(autoText);
     $('st-auto').appendChild(link);
     $('st-server').textContent = bytes(total) + ' of ' + bytes((server && server._quota && server._quota.limit) || QUOTA);
+    var mts = server && server._snapshot2_ts;
+    var mn = Object.keys(manualSnap).length;
+    $('m-ts').textContent = mn && mts ? new Date(mts).toLocaleString() : 'Empty';
+    $('m-items').textContent = mn ? String(mn) : '—';
+    $('m-size').textContent = mn ? bytes(size(manualSnap)) : '—';
+    $('btn-m-restore').disabled = $('btn-m-download').disabled = $('btn-m-delete').disabled = !mn;
     $('st-local').textContent = Object.keys(local).length + ' items';
 
     var q = $('filter').value.trim().toLowerCase();
@@ -395,6 +418,44 @@
 
   $('btn-download').addEventListener('click', function () {
     download('mitchpro-saves-' + new Date().toISOString().slice(0, 10) + '.json', { _snapshot: serverSnap, _snapshot_ts: server && server._snapshot_ts || 0 });
+  });
+
+  // The manual slot is only ever written here; sync.js never touches it.
+  $('btn-m-save').addEventListener('click', function () {
+    guard($('btn-m-save'), async function () {
+      if (Object.keys(manualSnap).length && !confirm('Replace the manual slot with this browser\'s current data?')) return;
+      var r = await api('POST', { _snapshot2: localSnap(), _snapshot2_ts: Date.now() });
+      if (r.status === 413) throw new Error('Server storage limit reached.');
+      if (!r.ok) throw new Error('Server returned ' + r.status + '.');
+      await load();
+      status('Saved this browser to the manual slot.', 'ok');
+    });
+  });
+
+  $('btn-m-restore').addEventListener('click', function () {
+    guard($('btn-m-restore'), async function () {
+      var n = Object.keys(manualSnap).length;
+      if (!n) return;
+      if (!confirm('Replace ' + n + ' items in this browser with the manual slot?')) return;
+      writeLocal(manualSnap);
+      local = localSnap();
+      render();
+      status('Restored ' + n + ' items from the manual slot. Reload to apply settings.', 'ok');
+    });
+  });
+
+  $('btn-m-download').addEventListener('click', function () {
+    download('mitchpro-manual-save-' + new Date().toISOString().slice(0, 10) + '.json', { _snapshot: manualSnap, _snapshot_ts: server && server._snapshot2_ts || 0 });
+  });
+
+  $('btn-m-delete').addEventListener('click', function () {
+    guard($('btn-m-delete'), async function () {
+      if (!confirm('Delete the manual slot from the server?')) return;
+      var r = await api('DELETE', { keys: ['_snapshot2', '_snapshot2_ts'] });
+      if (!r.ok) throw new Error('Server returned ' + r.status + '.');
+      await load();
+      status('Deleted the manual slot.', 'ok');
+    });
   });
 
   $('btn-import').addEventListener('click', function () { $('import-file').click(); });

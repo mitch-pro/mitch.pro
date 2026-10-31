@@ -96,6 +96,35 @@ try {
   await p.waitForFunction(() => document.getElementById('status').textContent.includes('Deleted'));
   assert.equal(await p.evaluate(async () => 'game_slot' in (await (await fetch('/api/userdata', { credentials: 'include' })).json())), false);
 
+  // Manual slot: separate from the auto slot, never touched by Sync now, sensitive keys stripped.
+  assert.match(await p.locator('#m-ts').innerText(), /Empty/);
+  assert.equal(await p.locator('#btn-m-restore').isDisabled(), true);
+  await p.locator('#btn-m-save').click();
+  await p.waitForFunction(() => document.getElementById('status').textContent.includes('manual slot'));
+  const man = await p.evaluate(async () => (await (await fetch('/api/userdata', { credentials: 'include' })).json()));
+  assert.equal(man._snapshot2.chess_elo.elo, 1234);
+  assert.ok(man._snapshot2_ts > 0);
+  assert.equal('cinny_access_token' in man._snapshot2, false);
+  assert.equal('_snapshot2' in man && Object.keys(man._snapshot2).some(k => k.startsWith('_sync')), false);
+  await p.evaluate(() => localStorage.setItem('chess_elo', JSON.stringify({ elo: 5 })));
+  await p.reload();
+  await p.locator('#main').waitFor({ state: 'visible' });
+  await p.locator('#btn-sync').click();
+  await p.locator('#status.ok').waitFor();
+  const both = await p.evaluate(async () => (await (await fetch('/api/userdata', { credentials: 'include' })).json()));
+  assert.equal(both._snapshot.chess_elo.elo, 5);
+  assert.equal(both._snapshot2.chess_elo.elo, 1234, 'auto sync leaves the manual slot alone');
+  assert.equal('_snapshot2' in both, true);
+  assert.equal(await p.locator('.row', { hasText: '_snapshot2' }).count(), 0, 'slots are not listed as saved data');
+  await p.locator('#btn-m-restore').click();
+  await p.waitForFunction(() => document.getElementById('status').textContent.includes('Restored'));
+  assert.equal(JSON.parse(await p.evaluate(() => localStorage.getItem('chess_elo'))).elo, 1234);
+  await p.locator('#btn-m-delete').click();
+  await p.waitForFunction(() => document.getElementById('status').textContent.includes('Deleted the manual'));
+  const noMan = await p.evaluate(async () => (await (await fetch('/api/userdata', { credentials: 'include' })).json()));
+  assert.equal('_snapshot2' in noMan, false);
+  assert.equal(noMan._snapshot.chess_elo.elo, 5, 'auto slot survives manual delete');
+
   await p.locator('#btn-sync').click();
   await p.locator('#status.ok').waitFor();
   await p.locator('#btn-delete-all').click();
@@ -107,7 +136,7 @@ try {
   await p.setViewportSize({ width: 390, height: 800 });
   assert.equal(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'overflow at 390');
   assert.deepEqual(errors, []);
-  console.log('PASS: saves page sign-in gate, sync, differs/restore, per-entry delete, top-level delete, delete all, mobile layout.');
+  console.log('PASS: saves page sign-in gate, sync, differs/restore, per-entry delete, top-level delete, delete all, manual slot, mobile layout.');
 } finally {
   await browser?.close();
   server.kill();
