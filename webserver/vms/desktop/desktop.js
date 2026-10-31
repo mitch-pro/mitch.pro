@@ -297,9 +297,12 @@ async function connect() {
     session.credentials = null;
     rfb = client;
     trackGuestCursor(client);
-    // Troubleshooting switch: `&keys=keysym` makes noVNC send plain keysyms instead
-    // of key codes (QEMU extended key events), to tell which one a VNC server mishandles.
-    if (query.get('keys') === 'keysym') {
+    // The owner container's TigerVNC (Xvnc) drops Ctrl when noVNC sends key codes
+    // (QEMU extended key events), though it handles plain keysyms like a native
+    // viewer does. Other computers use Proxmox's QEMU VNC and keep key codes.
+    // `&keys=keysym` / `&keys=code` force either mode for troubleshooting.
+    const keyMode = query.get('keys') || (ownerMode ? 'keysym' : 'code');
+    if (keyMode === 'keysym') {
       Object.defineProperty(client, '_qemuExtKeyEventSupported', { get: () => false, set: () => {} });
     }
     client.scaleViewport = true; client.resizeSession = true; client.clipViewport = false;
