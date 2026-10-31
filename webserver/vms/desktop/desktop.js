@@ -308,12 +308,23 @@ async function connect() {
     // `&debug=keys` shows the last key events this page sends, to tell a browser
     // or OS that swallows Ctrl apart from a server that drops it.
     if (query.get('debug') === 'keys') {
+      // `raw` is what the browser delivered to the page, `sent` is what this page
+      // forwarded to the VNC server.
       const log = [];
+      const note = text => {
+        log.push(text);
+        if (log.length > 10) log.shift();
+        $('desktop-notice').textContent = log.join(' | ');
+      };
+      if (!window.__keyDebugRaw) {
+        window.__keyDebugRaw = true;
+        for (const type of ['keydown', 'keyup']) {
+          document.addEventListener(type, e => note(`raw ${type === 'keydown' ? 'down' : 'up'} ${e.code} ctrl=${e.ctrlKey ? 1 : 0}`), true);
+        }
+      }
       const original = client.sendKey.bind(client);
       client.sendKey = (keysym, code, down) => {
-        log.push(`${down === false ? 'up' : 'down'} ${code || '?'} 0x${(keysym || 0).toString(16)}`);
-        if (log.length > 8) log.shift();
-        $('desktop-notice').textContent = log.join(' | ');
+        note(`sent ${down === false ? 'up' : 'down'} ${code || '?'} 0x${(keysym || 0).toString(16)}`);
         return original(keysym, code, down);
       };
     }
