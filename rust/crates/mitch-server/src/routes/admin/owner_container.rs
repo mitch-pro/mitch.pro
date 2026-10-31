@@ -282,6 +282,12 @@ pub(crate) async fn bridge_vnc_tcp(
         }
     };
     let _ = tcp.set_nodelay(true);
+    // Probe an idle connection every 15s so a firewall/NAT between the
+    // webserver and the container can't silently expire it after a few minutes.
+    let keepalive = socket2::TcpKeepalive::new()
+        .with_time(std::time::Duration::from_secs(30))
+        .with_interval(std::time::Duration::from_secs(15));
+    let _ = socket2::SockRef::from(&tcp).set_tcp_keepalive(&keepalive);
     let (mut tcp_read, mut tcp_write) = tcp.into_split();
     let mut buf = vec![0u8; 16 * 1024];
     let mut auth_check = tokio::time::interval(std::time::Duration::from_secs(1));
@@ -307,9 +313,16 @@ pub(crate) async fn bridge_vnc_tcp(
             read = tcp_read.read(&mut buf) => {
                 match read {
                     Ok(0) | Err(_) => {
+                        // The reason goes only to the owner's browser (it is
+                        // not logged): it says which side ended the session.
+                        let reason = match &read {
+                            Err(e) if e.kind() == std::io::ErrorKind::TimedOut => "VNC server connection timed out",
+                            Err(_) => "VNC server connection was reset",
+                            _ => "VNC server closed the connection",
+                        };
                         let _ = client_sink.send(Message::Close(Some(CloseFrame {
                             code: 1012,
-                            reason: "Desktop connection ended".into(),
+                            reason: reason.into(),
                         }))).await;
                         break;
                     }

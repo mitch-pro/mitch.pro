@@ -1674,6 +1674,7 @@ dependencies = [
  "rustls-pki-types",
  "serde",
  "serde_json",
+ "socket2",
  "tokio",
  "tokio-tungstenite",
  "tokio-util",

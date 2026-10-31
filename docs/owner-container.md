@@ -66,3 +66,13 @@ session only, with no database record.
 The code compiles and the unit tests pass, but it was written without a Proxmox
 host to test against. Check status, power and the console once the container
 exists.
+
+## Dropped connections
+
+The TCP link to the container's VNC server uses TCP keepalive (probe after 30s
+idle, every 15s) so an idle-connection timeout in a firewall or NAT between the
+webserver and the container can't silently kill the desktop. When the link
+ends, the close reason shown to the owner says why ("VNC server closed the
+connection", "... was reset", "... timed out"). It is not logged anywhere
+admins or developers can read. If Xvnc itself ends sessions, its log
+(`~/.vnc/<host>:<display>.log` in the container) says why.
