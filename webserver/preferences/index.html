@@ -1165,6 +1165,17 @@
     </div>
   </div>
 
+  <div class="field">
+    <label>Restore notice</label>
+    <div class="toggle-row">
+      <label class="toggle-switch">
+        <input type="checkbox" id="syncNoticeToggle" checked>
+        <span class="toggle-slider"></span>
+      </label>
+      <span class="toggle-desc">Tell me when a newer save exists on my account. Saves are never restored automatically.</span>
+    </div>
+  </div>
+
   <p class="section-sub"><a href="/saves/">Manage saves</a></p>
 
   <div id="specialToolsSection" style="display:none">
@@ -2062,6 +2073,7 @@ function saveAll() {
     })));
     localStorage.setItem(SYNC_CONFIG_KEY, JSON.stringify({
       enabled: document.getElementById('syncToggle').checked,
+      restoreNotice: document.getElementById('syncNoticeToggle').checked,
     }));
     localStorage.setItem(TOOLS_CONFIG_KEY, JSON.stringify({
       canvasLock:  document.getElementById('prefCanvasLock').checked,
@@ -2310,6 +2322,7 @@ async function deleteAccount() {
 
   var sc = load(SYNC_CONFIG_KEY, { enabled: true });
   document.getElementById('syncToggle').checked = sc.enabled !== false;
+  document.getElementById('syncNoticeToggle').checked = sc.restoreNotice !== false;
 
   var tc = load(TOOLS_CONFIG_KEY, { canvasLock: false, quickAccess: false, dailyBonus: false });
   document.getElementById('prefCanvasLock').checked = !!tc.canvasLock;
@@ -2328,7 +2341,7 @@ async function deleteAccount() {
   }
 
   ['privHideOnlineToggle','privHideLocationToggle','privStealthToggle','privNoHistoryToggle','privNewsletterToggle','privBlockProfileToggle',
-   'syncToggle','homeQuickToggle','homeMembersToggle','homeRecentToggle','homeLogoToggle','homeCompactToggle','homeSearchFocusToggle',
+   'syncToggle','syncNoticeToggle','homeQuickToggle','homeMembersToggle','homeRecentToggle','homeLogoToggle','homeCompactToggle','homeSearchFocusToggle',
    'prefCanvasLock','prefQuickAccess','prefDailyBonus'].forEach(function(id) {
     document.getElementById(id).addEventListener('change', saveAll);
   });

@@ -42,9 +42,16 @@
     }
   }
 
+  // True while a newer server copy is waiting on the user's answer; background
+  // saves pause so an older device can't overwrite it before they choose.
+  var pendingRestore = false;
+
+  function prefSync() {
+    try { return JSON.parse(localStorage.getItem('_prefSync') || '{}') || {}; } catch (e) { return {}; }
+  }
+
   function save() {
-    var prefSync = JSON.parse(localStorage.getItem('_prefSync') || '{}');
-    if (prefSync.enabled === false) return;
+    if (pendingRestore || prefSync().enabled === false) return;
 
     var snap = getSnap();
     var ts   = Date.now();
@@ -66,8 +73,7 @@
   }
 
   function saveBeacon() {
-    var prefSync = JSON.parse(localStorage.getItem('_prefSync') || '{}');
-    if (prefSync.enabled === false) return;
+    if (pendingRestore || prefSync().enabled === false) return;
 
     var snap = getSnap();
     var ts   = Date.now();
@@ -86,7 +92,7 @@
 
   var _restoreChecked = false;
   function checkRestore() {
-    if (_restoreChecked) return;
+    if (_restoreChecked || pendingRestore || prefSync().enabled === false || prefSync().restoreNotice === false) return;
     _restoreChecked = true;
 
     fetch('/api/userdata', { credentials: 'include' })
@@ -99,80 +105,68 @@
         var localTs  = parseInt(localStorage.getItem(SYNC_TS_KEY) || '0', 10);
         var serverTs = data._snapshot_ts;
         if (serverTs > localTs + 10000) {
+          pendingRestore = true;
           showRestorePrompt(data._snapshot, serverTs);
         }
       })
       .catch(function () {});
   }
 
+  // Sync never restores on its own. This corner notice only says a newer save
+  // exists; restoring is the user's call (phone and computer saves can differ).
   function showRestorePrompt(snap, serverTs) {
-    var lines = [];
-    try {
-      var chess = typeof snap.chess_elo === 'string'
-        ? JSON.parse(snap.chess_elo) : snap.chess_elo;
-      if (chess && chess.elo) {
-        lines.push('Chess ELO: ' + chess.elo +
-          ' (' + (chess.wins||0) + 'W/' + (chess.losses||0) + 'L/' + (chess.draws||0) + 'D)');
-      }
-    } catch (e) {}
-    var detail = lines.length ? lines.join(' • ') : 'Saved progress found on MitchSync.';
-
     var savedDate = new Date(serverTs).toLocaleString('en-US', {
-      month: 'short', day: 'numeric',
-      hour: 'numeric', minute: '2-digit', hour12: true,
+      month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true,
     });
-
-    var style = document.createElement('style');
-    style.textContent = '@keyframes _sfadein{from{opacity:0}to{opacity:1}}';
-    document.head.appendChild(style);
-
-    // Colors ride the --t-* theme tokens (set by theme.js) with dark fallbacks,
-    // so this dialog follows the light theme like the rest of the site.
-    var overlay = document.createElement('div');
-    overlay.id = '_sync_restored_overlay';
-    overlay.innerHTML =
-      '<div style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:999998;' +
-        'display:flex;align-items:center;justify-content:center;' +
-        'font-family:system-ui,sans-serif;animation:_sfadein .25s ease;">' +
-        '<div style="background:var(--t-bg2,#1e1e1e);border:1px solid var(--t-bd,#444);border-radius:18px;' +
-          'padding:2rem 2.5rem;max-width:400px;width:90%;text-align:center;' +
-          'color:var(--t-fg,#e8e6e3);' +
-          'box-shadow:0 20px 60px rgba(0,0,0,.6);">' +
-          '<div style="font-size:2rem;margin-bottom:.5rem;">☁</div>' +
-          '<div style="font-size:1.15rem;font-weight:700;color:var(--t-fg,#e8e6e3);margin-bottom:.4rem;">' +
-            'Restore from MitchSync?' +
-          '</div>' +
-          '<div style="font-size:.8rem;color:var(--t-fg2,#888);margin-bottom:.35rem;">Saved ' + savedDate + '</div>' +
-          '<div style="font-size:.82rem;color:var(--t-fg2,#aaa);margin-bottom:1.6rem;">' + detail + '</div>' +
-          '<div style="font-size:.75rem;color:var(--t-fg2,#666);margin-bottom:1.2rem;">' +
-            'If you choose No, the MitchSync save will be overwritten with your current data.' +
-          '</div>' +
-          '<div style="display:flex;gap:10px;justify-content:center;">' +
-            '<button id="_sync_no" style="flex:1;padding:.6rem 1rem;background:var(--t-bg3,#333);color:var(--t-fg2,#aaa);' +
-              'border:1px solid var(--t-bd,#555);border-radius:9px;font-size:.88rem;font-weight:600;cursor:pointer;">' +
-              'No, keep current' +
-            '</button>' +
-            '<button id="_sync_yes" style="flex:1;padding:.6rem 1rem;background:var(--t-gr,#81b64c);color:#fff;' +
-              'border:none;border-radius:9px;font-size:.88rem;font-weight:700;cursor:pointer;">' +
-              'Yes, restore' +
-            '</button>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
-
-    document.body.appendChild(overlay);
-
-    document.getElementById('_sync_yes').addEventListener('click', function () {
+    var box = document.createElement('div');
+    box.id = '_sync_restore_notice';
+    box.setAttribute('role', 'status');
+    box.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:999998;max-width:340px;width:calc(100% - 32px);' +
+      'box-sizing:border-box;padding:14px 16px;background:var(--t-bg2,#1e1e1e);color:var(--t-fg,#e8e6e3);' +
+      'border:1px solid var(--t-bd,#444);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.35);' +
+      'font:14px/1.4 "DM Sans",system-ui,sans-serif;';
+    var title = document.createElement('div');
+    title.style.cssText = 'font-weight:700;margin-bottom:2px;';
+    title.textContent = 'A newer save is on your account';
+    var sub = document.createElement('div');
+    sub.style.cssText = 'font-size:12px;color:var(--t-fg2,#999);margin-bottom:10px;';
+    sub.textContent = 'Saved ' + savedDate + '. Auto-sync is paused until you choose.';
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
+    var btnCss = 'padding:6px 10px;border-radius:8px;border:1px solid var(--t-bd,#555);background:var(--t-bg3,#333);' +
+      'color:var(--t-fg,#e8e6e3);font:inherit;font-size:13px;font-weight:600;cursor:pointer;';
+    function btn(label, fn, primary) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      b.style.cssText = btnCss + (primary ? 'background:var(--t-ac,#4f8cff);border-color:var(--t-ac,#4f8cff);color:var(--t-ac-ink,#fff);' : '');
+      b.addEventListener('click', fn);
+      row.appendChild(b);
+    }
+    function close() { pendingRestore = false; box.remove(); }
+    btn('Restore', function () {
       applySnap(snap);
       localStorage.setItem(SYNC_TS_KEY, serverTs);
-      overlay.remove();
+      close();
       location.reload();
-    });
-
-    document.getElementById('_sync_no').addEventListener('click', function () {
-      overlay.remove();
+    }, true);
+    btn('Keep this device', function () { close(); save(); });
+    btn("Don't show again", function () {
+      var p = prefSync();
+      p.restoreNotice = false;
+      localStorage.setItem('_prefSync', JSON.stringify(p));
+      close();
       save();
     });
+    box.appendChild(title);
+    box.appendChild(sub);
+    box.appendChild(row);
+    var a = document.createElement('a');
+    a.href = '/saves/';
+    a.textContent = 'Manage saves';
+    a.style.cssText = 'display:inline-block;margin-top:8px;font-size:12px;color:var(--t-ac,#4f8cff);';
+    box.appendChild(a);
+    document.body.appendChild(box);
   }
 
   // Init

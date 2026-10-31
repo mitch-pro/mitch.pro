@@ -132,11 +132,28 @@ try {
   const wiped = await p.evaluate(async () => (await (await fetch('/api/userdata', { credentials: 'include' })).json()));
   assert.equal(wiped._snapshot, undefined);
 
+  // Newer server copy: sync only notifies (never restores) and pauses saving until answered.
+  await p.evaluate(() => fetch('/api/userdata', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ _snapshot: { chess_elo: { elo: 4321 } }, _snapshot_ts: Date.now() + 60000 }) }));
+  await p.evaluate(() => { localStorage.setItem('chess_elo', JSON.stringify({ elo: 7 })); localStorage.setItem('_sync_ts', '0'); });
+  await p.goto(base + '/preferences/');
+  await p.locator('#_sync_restore_notice').waitFor({ timeout: 8000 });
+  assert.equal(JSON.parse(await p.evaluate(() => localStorage.getItem('chess_elo'))).elo, 7, 'not auto-restored');
+  await p.evaluate(() => window._mitchSync.save());
+  const held = await p.evaluate(async () => (await (await fetch('/api/userdata', { credentials: 'include' })).json()));
+  assert.equal(held._snapshot.chess_elo.elo, 4321, 'sync paused while the notice is open');
+  await p.getByRole('button', { name: "Don't show again" }).click();
+  assert.equal(JSON.parse(await p.evaluate(() => localStorage.getItem('_prefSync'))).restoreNotice, false);
+  await p.waitForFunction(async () => (await (await fetch('/api/userdata', { credentials: 'include' })).json())._snapshot.chess_elo.elo === 7);
+  await p.evaluate(() => localStorage.setItem('_sync_ts', '0'));
+  await p.reload();
+  await p.waitForTimeout(3000);
+  assert.equal(await p.locator('#_sync_restore_notice').count(), 0, 'no notice once turned off');
+
   // Narrow viewport: no horizontal overflow.
   await p.setViewportSize({ width: 390, height: 800 });
   assert.equal(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'overflow at 390');
   assert.deepEqual(errors, []);
-  console.log('PASS: saves page sign-in gate, sync, differs/restore, per-entry delete, top-level delete, delete all, manual slot, mobile layout.');
+  console.log('PASS: saves page sign-in gate, sync, differs/restore, per-entry delete, top-level delete, delete all, manual slot, restore notice, mobile layout.');
 } finally {
   await browser?.close();
   server.kill();

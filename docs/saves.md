@@ -6,7 +6,10 @@ Each signed-in account has one JSON blob on disk at
 `<data dir>/userdata/<sha256(session id)[0..32]>/data.json` (the data dir is the `./data` mount; set `USERDATA_DIR` to put it elsewhere),
 capped at 1 GiB of serialized JSON. The background sync (`webserver/sync.js`)
 writes the browser's localStorage there as `_snapshot` (+ `_snapshot_ts`) every
-5 minutes and on page close, and offers a restore when the server copy is newer.
+5 minutes and on page close. It never restores on its own: when the server copy is newer
+it shows a corner notice (Restore / Keep this device / Don't show again) and pauses saving
+until one is chosen, so an older device can't overwrite it first. "Don't show again" and the
+Preferences → Sync "Restore notice" toggle set `_prefSync.restoreNotice = false`.
 The blob has two save slots: the **auto slot** (`_snapshot`/`_snapshot_ts`, owned by
 `sync.js`) and the **manual slot** (`_snapshot2`/`_snapshot2_ts`), which is written
 only by the Save button on `/saves/` and is never touched by background sync or
