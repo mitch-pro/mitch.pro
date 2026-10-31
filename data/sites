@@ -24,7 +24,6 @@ url /ab/ About:Blank Launcher
 url / Home
 // url /dh/ Diffie-Hellman Key Exchange
 // url /html-test/ Live HTML Editor
-url /proxy/pirate-voyage/ Pirate Voyage
 // iframe https://www.opensubtitles.org/en/search Subtitle Downloader
 // iframe https://google.com/search?igu=1 Google Search
 // admin iframe shell/ Shell

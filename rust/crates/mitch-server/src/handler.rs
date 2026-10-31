@@ -787,20 +787,6 @@ pub async fn handle(
         return resp;
     }
 
-    // SvelteKit _app/ redirect to pirate voyage (server.js:10949-10955)
-    if let Some(resp) = crate::routes::proxy::pirate_voyage_app_redirect(&path, &search, headers) {
-        return resp;
-    }
-
-    // Pirate Voyage proxy (server.js:10956-11112)
-    if let Some(resp) = crate::routes::proxy::pirate_voyage_proxy(
-        &state, &method, &path, &search, headers, body_bytes,
-    )
-    .await
-    {
-        return resp;
-    }
-
     // 3c. Admin gate — server.js:7945-7973, which sits BEFORE the captcha
     // proxy, the maintenance gate, the banned check, and password enforcement.
     // Every /api/admin/* path except passphrase-status requires a valid sid,
