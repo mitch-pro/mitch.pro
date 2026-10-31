@@ -1342,7 +1342,7 @@ fn make_unread_messages_html(
     total: &str,
     sender_names: &str,
 ) -> String {
-    let chat_url = format!("{}/encrypt.html", site_url(state, email));
+    let chat_url = format!("{}/matrix/", site_url(state, email));
     let plural = if total != "1" { "s" } else { "" };
     let content = format!(
         "\n    <h2 style=\"margin: 0 0 16px; font-size: 20px; font-weight: 700; color: #a855f7; text-align: center;\">💬 Unread Messages</h2>\n    <div style=\"background-color: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.25); border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px;\">\n      <p style=\"margin: 0 0 12px; font-size: 16px; font-weight: 700; color: #f4f4f5;\">You have new mail in your inbox!</p>\n      <p style=\"margin: 0; color: #cbd5e1;\">You have <strong>{} unread message{}</strong> waiting for you from <strong>{}</strong>.</p>\n    </div>\n    <div style=\"text-align: center; margin-bottom: 8px;\">\n      <a href=\"{}\" style=\"display: inline-block; background: linear-gradient(135deg, #a855f7, #6366f1); color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 10px; font-weight: 700; box-shadow: 0 10px 20px rgba(168, 85, 247, 0.3);\">Open Chat Room</a>\n    </div>\n  ",

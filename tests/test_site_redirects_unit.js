@@ -12,7 +12,7 @@ for (const host of ['mitch.pro', 'rjuhsd.school', 'woodcreek.rjuhsd.school']) {
     }
   }
 }
-for (const path of ['/', '/bell/schedule.js?v=5', '/api/bell/override', '/rjuhsd-assets/app.js', '/bellringer/', '/encrypt/']) {
+for (const path of ['/', '/bell/schedule.js?v=5', '/api/bell/override', '/rjuhsd-assets/app.js', '/bellringer/', '/matrix/']) {
   assert.equal(bellScheduleRedirect(new URL('https://mitch.pro' + path)), null, `${path} must remain available`);
 }
 assert.equal(bellScheduleRedirect(new URL('https://mitch.pro/bell/'), 'POST'), null);

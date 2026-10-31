@@ -241,7 +241,7 @@ pub async fn content(
             );
         }
     }
-    if !html.contains("/assistant.js") && !rel.starts_with("encrypt/") {
+    if !html.contains("/assistant.js") {
         if let Some(idx) = html.rfind("</body>") {
             html = format!(
                 "{}<script src=\"/assistant.js\" defer></script>{}",
@@ -409,10 +409,7 @@ pub async fn ping(
             "Chess".to_string()
         } else if page_lower.contains("/canvas/") {
             "Canvas".to_string()
-        } else if page_lower.contains("/encrypt.html")
-            || page_lower.contains("/encrypt/")
-            || page_lower.contains("/matrix/")
-        {
+        } else if page_lower.contains("/matrix/") {
             "Chat".to_string()
         } else if page_lower.contains("/games/") {
             match regex::Regex::new(r"/games/([^/]+)").ok().and_then(|re| {

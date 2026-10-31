@@ -82,7 +82,8 @@ function aboutBlankOn() {
 
 function launchSite(type, href) {
   href = href || '/';
-  if (aboutBlankOn()) {
+  var abToggle = typeof document !== 'undefined' && document.getElementById('abToggle');
+  if (abToggle && abToggle.checked) {
     openAboutBlank(href);
     return;
   }

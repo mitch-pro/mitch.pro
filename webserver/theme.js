@@ -883,8 +883,6 @@
   injectThemeToggle();
 
   function addWatermark() {
-    if (location.pathname.endsWith('/encrypt.html')) return;
-    if (location.pathname.startsWith('/encrypt')) return;
     // rjuhsd.school is a clean school-branded hub — no mitch watermark or Discord button there.
     if (location.hostname === 'rjuhsd.school' || location.hostname.endsWith('.rjuhsd.school')) return;
     if (location.pathname.startsWith('/rjuhsd')) return;
@@ -1166,7 +1164,7 @@
       { h:'/', i:'🏠', t:'Home' },
       { h:'/games/', i:'🎮', t:'Games' },
       { h:'/preferences/#account', i:'👤', t:'Account' },
-      { h:'/encrypt.html', i:'💬', t:'Chat' },
+      { h:'/matrix/', i:'💬', t:'Chat' },
       { h:'/canvas/', i:'🎨', t:'Canvas' },
       { h:'/shop/', i:'🛒', t:'Market' },
       { h:'/inventory/', i:'🎒', t:'Inventory' },

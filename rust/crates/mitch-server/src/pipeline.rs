@@ -141,12 +141,6 @@ pub fn inject_page(
     if !is_embedded && !raw.contains("/app-shell.js") {
         inject_str.push_str("<script src=\"/app-shell.js?v=2\" defer></script>\n");
     }
-    if !is_embedded
-        && (path == "/encrypt" || path == "/encrypt/" || path == "/encrypt/index.html")
-        && !raw.contains("/encrypt-galaxy.css")
-    {
-        inject_str.push_str("<link rel=\"stylesheet\" href=\"/encrypt-galaxy.css\">\n");
-    }
     if !is_embedded {
         if !raw.contains("fonts.googleapis.com") {
             inject_str.push_str("<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n");
@@ -239,13 +233,7 @@ pub fn inject_page(
     let req_host_full = request_host(headers);
     let req_host_name = req_host_full.split(':').next().unwrap_or("");
     let is_rjuhsd = is_host(req_host_name, "rjuhsd.school");
-    let is_encrypt_app_page =
-        path == "/encrypt" || path == "/encrypt/" || path == "/encrypt/index.html";
-    if !is_onboarding
-        && !is_embedded
-        && !raw.contains("_agree_footer")
-        && !(is_encrypt_app_page && !is_rjuhsd)
-    {
+    if !is_onboarding && !is_embedded && !raw.contains("_agree_footer") {
         let agree = "<footer id=\"_agree_footer\" class=\"app-footer\">By using mitch.pro you agree to the <a href=\"/use-agreement/\">use agreement</a> and <a href=\"/privacy/\">privacy policy</a>.</footer>";
         match raw.rfind("</body>") {
             Some(i) => raw = format!("{}{}{}", &raw[..i], agree, &raw[i..]),

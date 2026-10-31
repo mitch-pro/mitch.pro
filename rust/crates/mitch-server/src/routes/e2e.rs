@@ -43,6 +43,13 @@ pub(crate) async fn handle(
     body_bytes: &[u8],
     search: &str,
 ) -> Option<Response> {
+    // Retired on the main site (see routes/dm/mod.rs); Pickle Club only.
+    if path.starts_with("/api/e2e/") && !crate::hosts::is_pickle_host(headers) {
+        return Some(json_response(
+            410,
+            json!({ "error": "Encrypted chat has been retired. Use Matrix chat." }),
+        ));
+    }
     match path {
         "/api/e2e/get-key" => {
             if *method == Method::GET {

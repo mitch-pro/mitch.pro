@@ -83,7 +83,7 @@ pub(crate) async fn handle(
         if store.pickle {
             format!("https://sexypickleclub.com/cellar/{p}")
         } else {
-            format!("/encrypt/{p}")
+            "/matrix/".to_string()
         }
     };
     // declaredChatBytes — `Number(Content-Length || 0)`; a garbage header is

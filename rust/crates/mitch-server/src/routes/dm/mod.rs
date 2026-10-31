@@ -19,7 +19,7 @@ pub(crate) use attachment::clean_expired;
 pub(crate) use notif::notif_allowed;
 mod send;
 
-use crate::routes::me::cookies_of;
+use crate::routes::me::{cookies_of, json_response};
 use crate::state::AppState;
 use axum::http::{HeaderMap, Method};
 use axum::response::Response;
@@ -38,6 +38,15 @@ pub(crate) async fn handle(
     body_bytes: &[u8],
     search: &str,
 ) -> Option<Response> {
+    // The main-site encrypted chat was retired in favour of Matrix. This API
+    // (and /api/e2e) now only serves the Sexy Pickle Club Cellar; its stored
+    // messages are left in place.
+    if path.starts_with("/api/dm/") && !crate::hosts::is_pickle_host(headers) {
+        return Some(json_response(
+            410,
+            json!({ "error": "Encrypted chat has been retired. Use Matrix chat." }),
+        ));
+    }
     if path == "/api/dm/send" {
         return send::handle(state, headers, body_bytes).await;
     }

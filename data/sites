@@ -10,7 +10,6 @@ url /apply/ Join the Team
 url /preferences/#account Account & Profile Settings
 url /notifications/ Notification Settings
 url /leaderboard/ Leaderboard
-url /premium-chat/ The Sanctum (Premium Chat)
 url /games/ Games
 url https://discord.gg/P5vZgTydXw Join Discord Server
 // url /additions/ Add a Page
@@ -36,7 +35,6 @@ url /games/lillians-logic/ Lillian's Logic
 url /games/richards-riches/ Richard's Riches
 url /games/pennys-piano-keys/ Penny's Piano Keys
 url /games/sebastians-piccolo/ Sebastian's Piccolo Symphony
-url /public-chat/ Public Chat
 url /marketplace/ Marketplace
 url /bell/ Woodcreek Bell Schedule
 url /games/battleship/ Battleship (Multiplayer)

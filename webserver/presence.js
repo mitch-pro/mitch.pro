@@ -10,7 +10,7 @@
   const frames = new Map();
   const watched = new WeakSet();
   const labels = {
-    matrix: 'In Matrix chat', encrypt: 'Using secure chat', 'public-chat': 'In public chat',
+    matrix: 'In Matrix chat',
     members: 'Viewing people', friends: 'Viewing friends', profile: 'Viewing a profile',
     shop: 'Browsing the shop', marketplace: 'Browsing the market', inventory: 'Viewing inventory',
     coins: 'Viewing MitchCoins', leaderboard: 'Viewing the leaderboard',

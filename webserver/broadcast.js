@@ -20,8 +20,6 @@
       var explicit = String(window.currentPlayingActivity || '').trim();
       var activity = explicit;
       if (/^\/matrix(?:\/|$)/.test(path)) activity = 'Chatting in Matrix';
-      else if (/^\/encrypt(?:\/|$)/.test(path)) activity = 'Using secure chat';
-      else if (/^\/public-chat(?:\/|$)/.test(path)) activity = 'In public chat';
       else if (/^\/vms\/desktop(?:\/|$)/.test(path)) activity = 'Using VM desktop';
       else if (/^\/vms(?:\/|$)/.test(path)) activity = 'Managing a VM';
       else if (/^\/(?:game-portal|games|chess)(?:\/|$)/.test(path) && !activity) activity = 'Playing games';
@@ -393,7 +391,7 @@
     toast.className = 'sw-message-toast';
     toast.innerHTML = '<span class="sw-message-toast-icon" aria-hidden="true"><img src="/icon-192.png" alt=""></span>' +
       '<span class="sw-message-toast-copy"><b>' + escText(title) + '</b><span>New encrypted message</span></span>' +
-      '<a href="' + escText(message.kind === 'group' ? '/encrypt/?group=' + encodeURIComponent(message.groupId || '') : '/encrypt/?to=' + encodeURIComponent(message.from || '')) + '">Open</a>';
+      '<a href="/matrix/">Open</a>';
     stack.prepend(toast);
     while (stack.children.length > 3) stack.lastElementChild.remove();
     setTimeout(function() { if (toast.parentNode) toast.remove(); }, 9000);
@@ -665,29 +663,6 @@
     
     injectNotifCSS();
     injectNotifHTML();
-
-    // On encrypt page: move topbar into the sidebar-top bar to avoid covering chat tools
-    if (window.location.pathname.startsWith('/encrypt')) {
-      function relocateToSidebar() {
-        var sidebarTop = document.getElementById('sidebar-top');
-        var topbar = document.getElementById('site-topbar');
-        if (sidebarTop && topbar) {
-          topbar.style.cssText = 'position:relative;top:auto;right:auto;z-index:100;display:inline-flex;align-items:center;gap:6px;';
-          sidebarTop.appendChild(topbar);
-          // Keep the notification panel fixed so it opens without clipping
-          var panel = document.getElementById('sw-notif-panel');
-          if (panel) {
-            panel.style.position = 'fixed';
-            panel.style.top = '50px';
-            panel.style.left = '8px';
-            panel.style.right = 'auto';
-          }
-        }
-      }
-      // sidebar-top may not exist yet if app hasn't rendered; try now and after short delay
-      relocateToSidebar();
-      setTimeout(relocateToSidebar, 500);
-    }
 
     var btn = document.getElementById('sw-notif-btn');
     var panel = document.getElementById('sw-notif-panel');

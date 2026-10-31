@@ -36,7 +36,7 @@
   var NAV_MITCH = [
     { href: '/', label: 'Home', icon: '⌂', match: function (p) { return p === '/' || p === '/index.html'; } },
     { href: '/vms/', label: 'VM Lab', badge: 'Free', icon: '▣', match: function (p) { return p.indexOf('/vms') === 0; } },
-    { href: '/matrix/', label: 'Chat', icon: '◉', match: function (p) { return p.indexOf('/matrix') === 0 || p.indexOf('/encrypt') === 0 || p.indexOf('/public-chat') === 0; } },
+    { href: '/matrix/', label: 'Chat', icon: '◉', match: function (p) { return p.indexOf('/matrix') === 0; } },
     { href: '/game-portal/', label: 'Games', icon: '◆', match: function (p) { return p.indexOf('/games') === 0 || p.indexOf('/game-portal') === 0; } },
     { href: '/blooket-bot/', label: 'Blooket Bot', match: function (p) { return p.indexOf('/blooket-bot') === 0; } },
     { href: '/members/', label: 'People', icon: '●', match: function (p) { return p.indexOf('/members') === 0 || p.indexOf('/friends') === 0 || p.indexOf('/profile') === 0; } },
@@ -102,7 +102,7 @@
       link.href = item[0];
       link.innerHTML = icon(item[2]) + '<span>' + item[1] + '</span>';
       var path = currentPath();
-      if (path === item[0].replace(/\/$/, '') || (item[0] === '/' && path === '/') || (item[2] === 'games' && /^\/(games|game-portal|msn-games)/.test(path)) || (item[2] === 'chat' && /^\/(matrix|encrypt|public-chat)/.test(path))) link.setAttribute('aria-current', 'page');
+      if (path === item[0].replace(/\/$/, '') || (item[0] === '/' && path === '/') || (item[2] === 'games' && /^\/(games|game-portal|msn-games)/.test(path)) || (item[2] === 'chat' && /^\/matrix/.test(path))) link.setAttribute('aria-current', 'page');
       dock.appendChild(link);
     });
     var more = document.createElement('button');
@@ -117,7 +117,7 @@
     menu.setAttribute('aria-labelledby', 'mobile-menu-title');
     menu.innerHTML = '<header><h2 id="mobile-menu-title">mitch.pro</h2><button type="button" aria-label="Close menu">×</button></header><nav aria-label="All sections"></nav>';
     var links = menu.querySelector('nav');
-    [['/blooket-bot/', 'Blooket Bot'], ['/profile/', 'My profile'], ['/preferences/', 'Customizer'], ['/friends/', 'Friends'], ['/coins/?v=2', 'MitchCoins'], ['/shop/', 'Shop'], ['/casino/', 'Casino'], ['/marketplace/', 'Marketplace'], ['/inventory/', 'Inventory'], ['/leaderboard/', 'Leaderboard'], ['https://rjuhsd.school/', 'Bell schedule'], ['/public-chat/', 'Public chat'], ['/canvas/', 'Canvas'], ['/vms/', 'VM Lab'], ['/notifications/', 'Notifications'], ['/blog/', 'Blog'], ['/invite/', 'Invite friends'], ['/feedback/', 'Feedback'], ['/faq/', 'Help']].forEach(function (item) {
+    [['/blooket-bot/', 'Blooket Bot'], ['/profile/', 'My profile'], ['/preferences/', 'Customizer'], ['/friends/', 'Friends'], ['/coins/?v=2', 'MitchCoins'], ['/shop/', 'Shop'], ['/casino/', 'Casino'], ['/marketplace/', 'Marketplace'], ['/inventory/', 'Inventory'], ['/leaderboard/', 'Leaderboard'], ['https://rjuhsd.school/', 'Bell schedule'], ['/canvas/', 'Canvas'], ['/vms/', 'VM Lab'], ['/notifications/', 'Notifications'], ['/blog/', 'Blog'], ['/invite/', 'Invite friends'], ['/feedback/', 'Feedback'], ['/faq/', 'Help']].forEach(function (item) {
       var link = document.createElement('a'); link.href = item[0]; link.textContent = item[1]; links.appendChild(link);
     });
     more.addEventListener('click', function () { menu.showModal(); more.setAttribute('aria-expanded', 'true'); });

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
-for (const file of ['webserver/encrypt/index.html', 'webserver/sexypickleclub/cellar/index.html']) {
+for (const file of ['webserver/sexypickleclub/cellar/index.html']) {
   const source = readFileSync(file, 'utf8');
   const context = vm.createContext({ Date });
   vm.runInContext(source.split('\n').find(line => line.startsWith('function fmtTime(ts)')), context);
@@ -26,7 +26,7 @@ assert.equal(schoolContext.time('00:05'), '12:05 AM');
 assert.equal(schoolContext.time('12:05'), '12:05 PM');
 assert.equal(schoolContext.time('23:05'), '11:05 PM');
 assert(!readFileSync('webserver/preferences/index.html', 'utf8').includes('data-clock="24"'));
-for (const file of ['webserver/public-chat/index.html', 'webserver/team/index.html', 'webserver/admin/index.html']) {
+for (const file of ['webserver/team/index.html', 'webserver/admin/index.html']) {
   const lines = readFileSync(file, 'utf8').split('\n').filter(line => line.includes('toLocaleTimeString'));
   assert(lines.every(line => /hour12\s*:\s*true/.test(line)), file + ' must explicitly use AM/PM');
 }

@@ -1427,6 +1427,16 @@ pub async fn handle(
         return err_resp(405, None, None);
     }
 
+    // Retired chat pages now live in Matrix.
+    if !is_pickle_host(headers)
+        && matches!(
+            path.trim_end_matches('/'),
+            "/encrypt" | "/encrypt.html" | "/encrypt/index.html" | "/public-chat" | "/premium-chat"
+        )
+    {
+        return redirect("/matrix/", 302);
+    }
+
     if public_help_base == "/faq" && !is_rjuhsd_host(headers) && !is_pickle_host(headers) {
         return redirect("/#help", 302);
     }

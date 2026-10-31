@@ -1001,10 +1001,6 @@ pub fn rate_limit_for(endpoint: &str) -> (u32, u32) {
         "/api/woodcreek/auth/authorize"
         | "/api/woodcreek/auth/token"
         | "/api/woodcreek/auth/revoke" => (120, 60),
-        "/api/premium-chat/history" => (60, 60),
-        "/api/premium-chat/send" => (3, 10),
-        "/api/public-chat/history" => (60, 60),
-        "/api/public-chat/send" => (3, 10),
         "/api/pickle-chat/history" => (60, 60),
         "/api/pickle-chat/send" => (3, 10),
         "/api/pickle-chat/react" => (30, 10),

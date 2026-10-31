@@ -41,7 +41,6 @@ body.school-hub { background: transparent !important; }
 .site-header nav a[href="#events"],
 .site-header nav a[href="#faq"],
 .site-header nav a[href="#tools"],
-.site-header nav a[href="/public-chat/"] { display: none; }
 .header-actions { gap: 7px; }
 .header-signin-btn {
   display: inline-flex;
@@ -111,7 +110,7 @@ main#main { display: flex; flex-direction: column; gap: 0; }
 .hero h1 em { font-family: var(--sans); font-style: normal; font-weight: 500; opacity: .76; }
 .hero-summary { margin: 0; font-size: 14px; }
 .hero-actions { justify-content: flex-start; }
-.hero-actions .hero-chat-btn,.hero-actions a[href="/public-chat/"] { display: none !important; }
+.hero-actions .hero-chat-btn { display: none !important; }
 .hero-actions .primary-button,.hero-actions .secondary-button {
   min-height: 42px;
   border-radius: 11px;

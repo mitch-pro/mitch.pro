@@ -13,7 +13,6 @@ assert.match(worker, /requestUrl\.pathname\.startsWith\('\/_matrix\/'\)/,
 const registrationFiles = [
   'webserver/app-shell.js',
   'webserver/broadcast.js',
-  'webserver/encrypt/index.html',
   'webserver/index.html',
   'webserver/main.js',
   'webserver/matrix/index.html',

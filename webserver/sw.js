@@ -144,15 +144,14 @@ const isThemeJs = requestUrl.pathname === '/theme.js';
 });
 
 // Push notification listeners
-// True when a window client on the active chat surface (/encrypt/ or /matrix/) is actually
+// True when a window client on the active chat surface (/matrix/) is actually
 // on screen right now — in that case the page shows its own in-app view and a system
 // notification would be redundant (and annoying mid-conversation).
 async function isUserInActiveChat(targetUrl) {
   try {
     const target = new URL(notificationTargetUrl(targetUrl), self.location.origin);
-    if (!/^\/(matrix|encrypt)(?:\/|$)/.test(target.pathname)) return false;
+    if (!/^\/matrix(?:\/|$)/.test(target.pathname)) return false;
     function conversationKey(url) {
-      if (url.pathname.startsWith('/encrypt')) return 'encrypt:' + (url.searchParams.get('group') ? 'group:' + url.searchParams.get('group') : 'dm:' + (url.searchParams.get('to') || '').toLowerCase());
       const roomPath = url.pathname.match(/^\/matrix\/(?:home|direct)\/([^/]+)/);
       if (roomPath) return 'matrix:' + roomPath[1];
       const room = url.hash.match(/^#\/room\/([^/]+)/);

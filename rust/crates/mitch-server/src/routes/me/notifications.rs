@@ -353,7 +353,7 @@ fn me_notifications(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             entry.2 = text.chars().take(120).collect();
         }
     }
-    for (from, (count, latest_ts, latest_text, latest_id)) in &dm_by_sender {
+    for (from, (count, latest_ts, latest_text, _latest_id)) in &dm_by_sender {
         let display = mitch_lib::profile::display_email(
             &state.store,
             state.data_dir(),
@@ -369,7 +369,7 @@ fn me_notifications(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             "body": format!("From {}", display),
             "detail": if latest_text.is_empty() { String::new() } else { format!("Latest: {}", latest_text) },
             "ts": latest_ts,
-            "url": format!("/encrypt/?to={}&message={}", urlencoding_encode(from),urlencoding_encode(latest_id)),
+            "url": "/matrix/",
         }));
     }
 
@@ -430,7 +430,7 @@ fn me_notifications(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             entry.3 = jsval::str_or(m.get("clientId").or_else(|| m.get("id")), "");
         }
     }
-    for (group_id, (count, latest_ts, name, latest_id)) in &group_by_id {
+    for (group_id, (count, latest_ts, name, _latest_id)) in &group_by_id {
         notices.push(json!({
             "type": "group_dm",
             "id": format!("group:{}", group_id),
@@ -439,7 +439,7 @@ fn me_notifications(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             "body": "Encrypted group chat",
             "detail": "Open Secure Chat to read the conversation.",
             "ts": latest_ts,
-            "url": format!("/encrypt/?group={}&message={}", urlencoding_encode(group_id),urlencoding_encode(latest_id)),
+            "url": "/matrix/",
         }));
     }
 

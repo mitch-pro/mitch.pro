@@ -9,8 +9,6 @@
 
   var SID = getCook('studentId') || getCook('id');
   if (!SID) return;
-  // Don't show on encrypt page (full-screen chat UI)
-  if (window.location.pathname.startsWith('/encrypt')) return;
 
   var _aiPref = {};
   try { _aiPref = JSON.parse(localStorage.getItem('_prefAI') || '{}'); } catch(e) {}

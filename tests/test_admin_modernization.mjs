@@ -140,11 +140,11 @@ try{
   doc('dms.json',[firstMessage]);
   let inbox=await(await contexts.member.request.get(base+'/api/me/notifications')).json();
   let notice=inbox.notifications.find(n=>n.type==='dm');
-  assert(notice.url.includes('message=notice-one'));assert.equal(notice.fromKey,emails.admin);
+  assert.equal(notice.url,'/matrix/');assert.equal(notice.fromKey,emails.admin);
   doc('dms.json',[firstMessage,{...firstMessage,id:'notice-two',ts:now,read:false}]);
   assert.equal((await post('member','/api/me/notifications/read',{dmFroms:[notice.fromKey],beforeTs:notice.ts})).status(),200);
   inbox=await(await contexts.member.request.get(base+'/api/me/notifications')).json();
-  assert(inbox.notifications.find(n=>n.type==='dm').url.includes('message=notice-two'));
+  assert.equal(inbox.notifications.find(n=>n.type==='dm').url,'/matrix/');
   assert.equal((await contexts.member.request.get(base+'/api/me/notifications/read')).status(),405);
   assert.equal((await post('admin','/api/admin/vm-ban',{email:emails.member,banned:true})).status(),200);
   assert.equal((await post('admin','/api/admin/vm-ban',{email:emails.member,banned:true})).status(),200);
