@@ -194,7 +194,12 @@
       $('signin-link').href = '/enroll/?next=' + encodeURIComponent('/saves/');
       return false;
     }
-    if (!r.ok) { status('Could not load saves (' + r.status + ').', 'err'); return false; }
+    if (!r.ok) {
+      var detail = '';
+      try { detail = (await r.json()).error || ''; } catch (e) {}
+      status('Could not load saves (' + r.status + (detail ? ': ' + detail : '') + ').', 'err');
+      return false;
+    }
     server = await r.json();
     serverSnap = (server && typeof server._snapshot === 'object' && server._snapshot) || {};
     local = localSnap();

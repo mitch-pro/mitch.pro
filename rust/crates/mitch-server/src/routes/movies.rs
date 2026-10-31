@@ -1,52 +1,53 @@
-//! `/proxy/movies/` — the Movies page: a fixed-origin proxy for `www.movy.sx`.
+//! `/proxy/movies/` — the Movies page: a fixed-origin proxy for `https://cno.to`.
 //!
-//! Everything upstream (the site itself, its browser-side APIs) is
-//! fetched by this server, not by the visitor's browser, and every one of those
+//! Everything upstream (the site itself, its API, its HLS streams) is fetched
+//! by this server, not by the visitor's browser, and every one of those
 //! requests leaves through one VPN network interface (see [`egress_interface`]).
+//! The requests are made with the `curl` binary (in the production image), not
+//! an in-process HTTP client: Cloudflare turns away reqwest's TLS handshake on
+//! the site's stream endpoints (403) but accepts curl's, and curl can pin the
+//! connection to a network interface. Requests always carry a fixed desktop
+//! Chrome User-Agent (the stream endpoints also 403 `node`/headless ones).
 //! If that interface isn't present the proxy answers 503 instead of quietly
 //! falling back to the server's normal connection ("fail closed").
 //!
 //! What is proxied, and what is not:
-//! - `/proxy/movies/<path>`: GET/HEAD to `https://www.movy.sx/<path>`.
-//! - `/proxy/movies/__api/<host>/<path>`: GET/HEAD/POST to one of the browser-side
-//!   API hosts in [`API_HOSTS`] (an allowlist; this is never an open proxy). The
-//!   injected `movies.js` points the app's calls to them here.
-//! - Video segments load straight from the player's CDNs in the visitor's
-//!   browser. Their hosts are only known at playback time, so they are not part
-//!   of the allowlist and don't use the VPN interface.
+//! - `/proxy/movies/<path>` goes to `https://cno.to/<path>`: GET/HEAD anywhere,
+//!   POST under `/api/` (the site's playback pass and watch-state calls).
+//! - `/proxy/movies/__api/<host>/<path>` goes to one host in [`API_HOSTS`] (an
+//!   allowlist; this is never an open proxy), used for the stream mirror
+//!   (`v.cno.to`) and the intro-skip API.
+//! - Poster art (TMDB) and the player's segment CDNs are loaded by the visitor's
+//!   browser directly; the CDN hosts rotate and aren't known ahead of time.
 //!
-//! No Mitch cookies or Authorization headers are ever forwarded upstream, and
-//! upstream cookies, CSP and frame headers are dropped. DNS lookups use the
-//! container's normal resolver; only the connections are bound to the interface.
+//! Cookies: the site hands out a pass cookie (`__Host-sv`) that later stream
+//! requests need. Upstream cookies are stored in the browser under a `mv_`
+//! prefix scoped to this mount, and only cookies carrying that prefix are ever
+//! sent upstream (prefix stripped). Mitch's own cookies and Authorization
+//! headers never leave the server. Upstream CSP and frame headers are dropped.
+//! DNS lookups use the container's normal resolver; only connections are bound.
 //!
-//! The site is a Next.js app built for the root of its own origin. HTML is
-//! rewritten to live under `/proxy/movies/` and the compiled router helpers are
-//! patched to use that prefix as their base path. If movy.sx ships a new build
-//! the patterns in [`rewrite_js`] are the first thing to check. Details and the
-//! eth1 requirements are in `docs/movies.md`.
+//! cno.to is a Vite/React single-page app built for the root of its origin.
+//! HTML is rewritten to live under `/proxy/movies/` and its React Router is
+//! given that mount as `basename` (see [`rewrite_js`]). Details and the eth1
+//! requirements are in `docs/movies.md`.
 
 #![allow(clippy::expect_used)] // the regexes below are static and known-valid
 
 use crate::state::AppState;
 use axum::http::{HeaderMap, Method, StatusCode};
 use axum::response::Response;
-use serde_json::{json, Value};
 use std::sync::Arc;
 
 const MOUNT: &str = "/proxy/movies";
 const LEGACY_MOUNT: &str = "/proxy/rivestream";
 const API_MOUNT: &str = "/proxy/movies/__api/";
-const SITE_HOST: &str = "www.movy.sx";
-const SITE_ORIGIN: &str = "https://www.movy.sx";
-/// The hosts the movy.sx app calls from the browser. Anything else is refused.
-const API_HOSTS: &[&str] = &[
-    "backend.movy.sx",
-    "db.wecollege.net",
-    "api.wecollege.net",
-    "trailers.wecollege.net",
-    // Country lookup the site makes on load.
-    "ipwho.is",
-];
+const SITE_HOST: &str = "cno.to";
+const SITE_ORIGIN: &str = "https://cno.to";
+/// Other hosts the cno.to app calls from the browser. Anything else is refused.
+const API_HOSTS: &[&str] = &["v.cno.to", "api.theintrodb.org"];
+/// Upstream cookies live in the browser under this prefix (see module docs).
+const COOKIE_PREFIX: &str = "mv_";
 const DEFAULT_INTERFACE: &str = "eth1";
 const MAX_REQUEST_BODY: usize = 256 * 1024;
 const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
@@ -69,22 +70,6 @@ fn egress_interface() -> String {
         .unwrap_or_else(|| DEFAULT_INTERFACE.to_string())
 }
 
-/// API hosts the visitor's browser should call itself instead of going through
-/// the proxy: `MOVIES_DIRECT_API_HOSTS`, comma separated, default none. A host
-/// that Cloudflare refuses to serve to the server can be listed here so that
-/// feature keeps working, at the cost of that call not using the VPN interface.
-fn direct_api_hosts() -> Vec<&'static str> {
-    let raw = std::env::var("MOVIES_DIRECT_API_HOSTS").unwrap_or_default();
-    API_HOSTS
-        .iter()
-        .copied()
-        .filter(|host| {
-            raw.split(',')
-                .any(|item| item.trim().eq_ignore_ascii_case(host))
-        })
-        .collect()
-}
-
 /// Linux interface names: at most 15 bytes, no slashes or spaces.
 fn valid_interface_name(name: &str) -> bool {
     !name.is_empty()
@@ -98,43 +83,240 @@ fn interface_exists(name: &str) -> bool {
     valid_interface_name(name) && std::path::Path::new("/sys/class/net").join(name).exists()
 }
 
+/// Interface names present in this container, for the log line that explains a 503.
+fn available_interfaces() -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir("/sys/class/net")
+        .map(|dir| {
+            dir.flatten()
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .collect()
+        })
+        .unwrap_or_default();
+    names.sort();
+    names
+}
+
+/// Why a request couldn't be started.
 enum EgressError {
     /// The configured interface isn't there (or the name is invalid).
     Unavailable,
-    /// Anything else went wrong building the client.
-    Build,
 }
 
-fn egress_client(redirects: reqwest::redirect::Policy) -> Result<reqwest::Client, EgressError> {
+/// The interface to bind to, or `Unavailable` (fail closed) if it's missing.
+fn egress_ready() -> Result<String, EgressError> {
     let interface = egress_interface();
-    if !interface_exists(&interface) {
-        return Err(EgressError::Unavailable);
+    if interface_exists(&interface) {
+        return Ok(interface);
     }
-    let builder = reqwest::Client::builder()
-        .redirect(redirects)
-        .timeout(std::time::Duration::from_secs(20));
-    build_bound(builder, &interface)
-}
-
-/// SO_BINDTODEVICE pins every connection to the interface. It's the only way to
-/// guarantee the VPN path, so on platforms without it we refuse to run.
-#[cfg(any(target_os = "linux", target_os = "android"))]
-fn build_bound(
-    builder: reqwest::ClientBuilder,
-    interface: &str,
-) -> Result<reqwest::Client, EgressError> {
-    builder
-        .interface(interface)
-        .build()
-        .map_err(|_| EgressError::Build)
-}
-
-#[cfg(not(any(target_os = "linux", target_os = "android")))]
-fn build_bound(
-    _builder: reqwest::ClientBuilder,
-    _interface: &str,
-) -> Result<reqwest::Client, EgressError> {
+    // Say why, once per request, so a missing eth1 is obvious in the logs.
+    eprintln!(
+        "[movies] egress interface {interface:?} not found in this container (present: {}); refusing to go out the normal connection",
+        available_interfaces().join(", ")
+    );
     Err(EgressError::Unavailable)
+}
+
+// ── curl ────────────────────────────────────────────────────────────────────
+
+/// A header value that can't break out of its line.
+fn header_value_ok(value: &str) -> bool {
+    !value.contains(['\r', '\n', '\0'])
+}
+
+/// The curl command line for one upstream request. Redirects are not followed
+/// (the handler maps them), `--globoff` stops `{}`/`[]` in paths being treated
+/// as ranges, and `--proto =https` refuses anything but HTTPS.
+fn curl_args(
+    interface: &str,
+    method: &Method,
+    url: &str,
+    headers: &[(String, String)],
+    has_body: bool,
+) -> Vec<String> {
+    let mut args: Vec<String> = [
+        "--silent",
+        "--show-error",
+        "--globoff",
+        "--include",
+        "--http2",
+        "--proto",
+        "=https",
+        "--connect-timeout",
+        "10",
+        // Give up on a stalled transfer (under 1 byte/s for 30s), but let a
+        // healthy video segment take as long as it needs.
+        "--speed-limit",
+        "1",
+        "--speed-time",
+        "30",
+        "--interface",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
+    args.push(interface.to_string());
+    if *method == Method::HEAD {
+        args.push("--head".into());
+    } else if *method == Method::POST {
+        args.push("--request".into());
+        args.push("POST".into());
+        if has_body {
+            args.push("--data-binary".into());
+            args.push("@-".into());
+        }
+    }
+    for (name, value) in headers {
+        if header_value_ok(name) && header_value_ok(value) && !name.contains(':') {
+            args.push("--header".into());
+            args.push(format!("{name}: {value}"));
+        }
+    }
+    args.push("--url".into());
+    args.push(url.to_string());
+    args
+}
+
+struct UpstreamHead {
+    status: u16,
+    /// Header names are lowercased; repeated headers (Set-Cookie) repeat.
+    headers: Vec<(String, String)>,
+}
+
+impl UpstreamHead {
+    fn get(&self, name: &str) -> Option<&str> {
+        self.headers
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+/// Parses one header block as printed by `curl --include` (`HTTP/2 200` or
+/// `HTTP/1.1 200 OK`, then `name: value` lines).
+fn parse_head(block: &str) -> Option<UpstreamHead> {
+    let mut lines = block.lines();
+    let status = lines
+        .next()?
+        .split_whitespace()
+        .nth(1)?
+        .parse::<u16>()
+        .ok()?;
+    let headers = lines
+        .filter_map(|line| line.split_once(':'))
+        .map(|(n, v)| (n.trim().to_ascii_lowercase(), v.trim().to_string()))
+        .collect();
+    Some(UpstreamHead { status, headers })
+}
+
+type BodyReader = tokio::io::BufReader<tokio::process::ChildStdout>;
+
+struct Upstream {
+    head: UpstreamHead,
+    reader: BodyReader,
+    child: tokio::process::Child,
+}
+
+impl Upstream {
+    /// The whole body (for the pages that get rewritten).
+    async fn text(mut self) -> String {
+        use tokio::io::AsyncReadExt;
+        let mut bytes = Vec::new();
+        let _ = self.reader.read_to_end(&mut bytes).await;
+        let _ = self.child.wait().await;
+        String::from_utf8_lossy(&bytes).into_owned()
+    }
+
+    /// The body as it arrives, for images, playlists and video segments. The
+    /// stream owns the curl process, so it is killed (`kill_on_drop`) if the
+    /// visitor goes away before the download finishes.
+    fn into_stream(self) -> axum::body::Body {
+        use tokio::io::AsyncReadExt;
+        let Upstream { reader, child, .. } = self;
+        let stream =
+            futures_util::stream::unfold((reader, child), |(mut reader, child)| async move {
+                let mut buf = vec![0u8; 64 * 1024];
+                match reader.read(&mut buf).await {
+                    Ok(0) | Err(_) => None,
+                    Ok(n) => {
+                        buf.truncate(n);
+                        Some((
+                            Ok::<_, std::io::Error>(axum::body::Bytes::from(buf)),
+                            (reader, child),
+                        ))
+                    }
+                }
+            });
+        axum::body::Body::from_stream(stream)
+    }
+}
+
+async fn curl_fetch(
+    interface: &str,
+    method: &Method,
+    url: &str,
+    headers: &[(String, String)],
+    body: &[u8],
+) -> Result<Upstream, String> {
+    use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt};
+    let has_body = *method == Method::POST;
+    let mut command = tokio::process::Command::new("curl");
+    command
+        .args(curl_args(interface, method, url, headers, has_body))
+        .stdin(if has_body {
+            std::process::Stdio::piped()
+        } else {
+            std::process::Stdio::null()
+        })
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true);
+    let mut child = command
+        .spawn()
+        .map_err(|e| format!("could not start curl: {e}"))?;
+    if has_body {
+        if let Some(mut stdin) = child.stdin.take() {
+            let payload = body.to_vec();
+            tokio::spawn(async move {
+                let _ = stdin.write_all(&payload).await;
+            });
+        }
+    }
+    let stdout = child.stdout.take().ok_or("curl gave no output")?;
+    let mut reader = tokio::io::BufReader::new(stdout);
+
+    // Read header blocks until a final (non-1xx) status.
+    loop {
+        let mut block = String::new();
+        loop {
+            let mut line = Vec::new();
+            let n = reader
+                .read_until(b'\n', &mut line)
+                .await
+                .map_err(|e| e.to_string())?;
+            if n == 0 {
+                let mut err = String::new();
+                if let Some(stderr) = child.stderr.take() {
+                    let mut raw = Vec::new();
+                    let _ = stderr.take(400).read_to_end(&mut raw).await;
+                    err = String::from_utf8_lossy(&raw).trim().to_string();
+                }
+                return Err(format!("curl ended before sending headers: {err}"));
+            }
+            let text = String::from_utf8_lossy(&line).into_owned();
+            if text.trim_end_matches(['\r', '\n']).is_empty() {
+                break;
+            }
+            block.push_str(&text);
+        }
+        let head = parse_head(&block).ok_or("unreadable response headers")?;
+        if head.status >= 200 {
+            return Ok(Upstream {
+                head,
+                reader,
+                child,
+            });
+        }
+    }
 }
 
 // ── target resolution ───────────────────────────────────────────────────────
@@ -145,6 +327,8 @@ struct Target {
     /// Host the response should be attributed to (for the redirect policy).
     host: &'static str,
     is_api: bool,
+    /// Path on the upstream host, used to decide if POST is allowed.
+    upstream_path: String,
 }
 
 fn resolve_target(path: &str, search: &str) -> Option<Target> {
@@ -166,6 +350,7 @@ fn resolve_target(path: &str, search: &str) -> Option<Target> {
             url: format!("https://{host}/{tail}{query}"),
             host,
             is_api: true,
+            upstream_path: format!("/{tail}"),
         });
     }
     let site_path = if rest.is_empty() { "/" } else { rest };
@@ -173,7 +358,56 @@ fn resolve_target(path: &str, search: &str) -> Option<Target> {
         url: format!("{SITE_ORIGIN}{site_path}{query}"),
         host: SITE_HOST,
         is_api: false,
+        upstream_path: site_path.to_string(),
     })
+}
+
+/// GET/HEAD anywhere; POST only to an `/api/` path on the site, or to a
+/// listed API host.
+fn method_allowed(method: &Method, target: &Target) -> bool {
+    match *method {
+        Method::GET | Method::HEAD => true,
+        Method::POST => target.is_api || target.upstream_path.starts_with("/api/"),
+        _ => false,
+    }
+}
+
+// ── cookies ─────────────────────────────────────────────────────────────────
+
+/// Turns an upstream `Set-Cookie` into one scoped to this mount under
+/// [`COOKIE_PREFIX`]. The name keeps its original form after the prefix, so a
+/// `__Host-` cookie (which can't have a non-root path) becomes an ordinary one.
+fn rewrite_set_cookie(value: &str) -> Option<String> {
+    let mut parts = value.split(';').map(str::trim);
+    let (name, val) = parts.next()?.split_once('=')?;
+    if name.is_empty() {
+        return None;
+    }
+    let mut out = format!("{COOKIE_PREFIX}{name}={val}; Path={MOUNT}; SameSite=Lax");
+    for attr in parts {
+        let lower = attr.to_ascii_lowercase();
+        if lower.starts_with("max-age=") || lower.starts_with("expires=") {
+            out.push_str("; ");
+            out.push_str(attr);
+        } else if lower == "httponly" {
+            out.push_str("; HttpOnly");
+        } else if lower == "secure" {
+            out.push_str("; Secure");
+        }
+    }
+    Some(out)
+}
+
+/// The cookies to send upstream: only the ones this proxy stored, prefix removed.
+fn upstream_cookie_header(browser_cookies: &str) -> Option<String> {
+    let kept: Vec<String> = browser_cookies
+        .split(';')
+        .map(str::trim)
+        .filter_map(|pair| pair.strip_prefix(COOKIE_PREFIX))
+        .filter(|pair| pair.contains('='))
+        .map(str::to_string)
+        .collect();
+    (!kept.is_empty()).then(|| kept.join("; "))
 }
 
 // ── handler ─────────────────────────────────────────────────────────────────
@@ -208,12 +442,7 @@ pub async fn handle(
             "That page isn't available.",
         ));
     };
-    let allowed = if target.is_api {
-        matches!(*method, Method::GET | Method::HEAD | Method::POST)
-    } else {
-        matches!(*method, Method::GET | Method::HEAD)
-    };
-    if !allowed {
+    if !method_allowed(method, &target) {
         return Some(crate::errors::err_resp(
             405,
             Some("method not allowed"),
@@ -224,76 +453,80 @@ pub async fn handle(
         return Some(crate::errors::err_resp(413, None, None));
     }
 
-    // Only follow redirects that stay on the host we asked for.
-    let host = target.host;
-    let policy = reqwest::redirect::Policy::custom(move |attempt| {
-        if attempt.previous().len() < 10
-            && attempt.url().scheme() == "https"
-            && attempt.url().host_str() == Some(host)
-        {
-            attempt.follow()
-        } else {
-            attempt.stop()
-        }
-    });
-    let client = match egress_client(policy) {
-        Ok(client) => client,
+    let interface = match egress_ready() {
+        Ok(interface) => interface,
         Err(EgressError::Unavailable) => {
             return Some(text_response(
                 StatusCode::SERVICE_UNAVAILABLE,
                 "Movies are unavailable right now.",
             ))
         }
-        Err(EgressError::Build) => return Some(upstream_error()),
     };
 
-    let upstream_method = match *method {
-        Method::HEAD => reqwest::Method::HEAD,
-        Method::POST => reqwest::Method::POST,
-        _ => reqwest::Method::GET,
-    };
-    let mut request = client.request(upstream_method, &target.url);
+    let mut upstream_headers: Vec<(String, String)> = Vec::new();
     for (name, value) in headers.iter() {
         let n = name.as_str().to_ascii_lowercase();
-        let forward = matches!(
-            n.as_str(),
-            "accept" | "accept-language" | "range" | "user-agent"
-        ) || (target.is_api && n == "content-type");
+        // The visitor's own User-Agent is deliberately not forwarded: the site's
+        // Cloudflare rules reject unusual ones (node, headless browsers), and
+        // there's no reason to hand a visitor's browser details upstream.
+        let forward = matches!(n.as_str(), "accept" | "accept-language" | "range")
+            || (*method == Method::POST && n == "content-type");
         if forward {
             if let Ok(v) = value.to_str() {
-                request = request.header(name.as_str(), v);
+                upstream_headers.push((n, v.to_string()));
             }
         }
     }
-    if !headers.contains_key(axum::http::header::USER_AGENT) {
-        request = request.header("user-agent", USER_AGENT);
+    upstream_headers.push(("user-agent".into(), USER_AGENT.into()));
+    upstream_headers.push(("referer".into(), format!("{SITE_ORIGIN}/")));
+    if *method == Method::POST {
+        upstream_headers.push(("origin".into(), SITE_ORIGIN.into()));
     }
-    request = request.header("referer", format!("{SITE_ORIGIN}/"));
-    if target.is_api {
-        request = request.header("origin", SITE_ORIGIN);
-        if *method == Method::POST {
-            request = request.body(body.to_vec());
+    // Upstream cookies are only meaningful for the site itself.
+    if !target.is_api {
+        let cookie = headers
+            .get(axum::http::header::COOKIE)
+            .and_then(|v| v.to_str().ok())
+            .and_then(upstream_cookie_header);
+        if let Some(cookie) = cookie {
+            upstream_headers.push(("cookie".into(), cookie));
         }
     }
 
-    let upstream = match request.send().await {
+    let upstream = match curl_fetch(&interface, method, &target.url, &upstream_headers, body).await
+    {
         Ok(upstream) => upstream,
         Err(err) => {
             // Which host failed and why (never the full URL or any visitor data).
-            eprintln!("[movies] request to {} failed: {err:?}", target.host);
+            eprintln!("[movies] request to {} failed: {err}", target.host);
             return Some(upstream_error());
         }
     };
-    let status =
-        StatusCode::from_u16(upstream.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
-    let final_path = upstream.url().path().to_string();
+    let status = StatusCode::from_u16(upstream.head.status).unwrap_or(StatusCode::BAD_GATEWAY);
+    if status == StatusCode::FORBIDDEN {
+        // Cloudflare turns away clients it doesn't like; the blocking ray id is
+        // what a bug report needs.
+        eprintln!(
+            "[movies] {} answered 403 (cf-ray {})",
+            target.host,
+            upstream.head.get("cf-ray").unwrap_or("-")
+        );
+    }
     let mut builder = Response::builder().status(status);
 
-    let mut content_type = String::new();
-    for (name, value) in upstream.headers().iter() {
-        let n = name.as_str().to_ascii_lowercase();
+    let content_type = upstream
+        .head
+        .get("content-type")
+        .map(str::to_ascii_lowercase)
+        .unwrap_or_default();
+    let is_html = content_type.contains("text/html");
+    let is_text =
+        is_html || content_type.contains("text/css") || content_type.contains("javascript");
+    let rewritten = is_text && *method != Method::HEAD;
+
+    for (name, value) in &upstream.head.headers {
         let drop = matches!(
-            n.as_str(),
+            name.as_str(),
             "set-cookie"
                 | "content-security-policy"
                 | "content-security-policy-report-only"
@@ -301,7 +534,6 @@ pub async fn handle(
                 | "cross-origin-opener-policy"
                 | "cross-origin-embedder-policy"
                 | "content-encoding"
-                | "content-length"
                 | "transfer-encoding"
                 | "connection"
                 | "keep-alive"
@@ -312,33 +544,34 @@ pub async fn handle(
                 | "report-to"
                 | "nel"
                 | "location"
-        );
-        if drop {
-            continue;
+        ) || (name == "content-length" && rewritten);
+        if !drop {
+            builder = builder.header(name.as_str(), value.as_str());
         }
-        if n == "content-type" {
-            if let Ok(ct) = value.to_str() {
-                content_type = ct.to_ascii_lowercase();
+    }
+    if !target.is_api {
+        for (name, value) in &upstream.head.headers {
+            if name == "set-cookie" {
+                if let Some(cookie) = rewrite_set_cookie(value) {
+                    builder = builder.header("set-cookie", cookie);
+                }
             }
         }
-        builder = builder.header(name.as_str(), value);
     }
     if status.is_redirection() {
-        // A redirect that stayed on the site maps back into the mount; one that
-        // left it is not forwarded.
+        // A redirect within the host maps back into the mount; one to another
+        // HTTPS host (an image CDN, say) is passed on for the browser to follow.
         if let Some(location) = upstream
-            .headers()
+            .head
             .get("location")
-            .and_then(|v| v.to_str().ok())
             .and_then(|l| mount_location(l, &target.url))
         {
             builder = builder.header("location", location);
         }
     }
-    let is_html = content_type.contains("text/html");
     builder = builder.header(
         "cache-control",
-        if is_html || target.is_api {
+        if is_html || target.is_api || *method == Method::POST {
             "private, no-store"
         } else {
             "public, max-age=3600"
@@ -347,29 +580,32 @@ pub async fn handle(
     if is_html {
         builder = builder.header(
             "content-security-policy",
-            "default-src 'self' https: blob: data:; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https:; object-src 'none'; worker-src 'none'; frame-ancestors 'self'",
+            "default-src 'self' https: blob: data:; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https:; object-src 'none'; worker-src 'self' blob:; frame-ancestors 'self'",
         );
     }
 
-    let is_text =
-        is_html || content_type.contains("text/css") || content_type.contains("javascript");
-    if *method == Method::HEAD || !is_text || target.is_api {
-        let bytes = if *method == Method::HEAD {
-            Vec::new()
-        } else {
-            upstream.bytes().await.unwrap_or_default().to_vec()
-        };
+    if *method == Method::HEAD {
         return Some(
             builder
-                .body(axum::body::Body::from(bytes))
+                .body(axum::body::Body::empty())
+                .unwrap_or_else(|_| crate::errors::err_resp(500, None, None)),
+        );
+    }
+    if !rewritten {
+        // Images, video segments, playlists and API JSON: pass the bytes through
+        // as they arrive instead of holding a whole segment in memory.
+        return Some(
+            builder
+                .body(upstream.into_stream())
                 .unwrap_or_else(|_| crate::errors::err_resp(500, None, None)),
         );
     }
 
-    let mut content = upstream.text().await.unwrap_or_default();
+    let mut content = upstream.text().await;
     content = rewrite_text(&content, is_html, content_type.contains("javascript"));
     if is_html {
-        content = ensure_base(&content, &final_path);
+        let page_path = target.upstream_path.split('?').next().unwrap_or("/");
+        content = ensure_base(&content, page_path);
         if crate::presence::authenticated_email(state, headers).is_some() {
             content = crate::inject::inject_presence(&content, None);
         }
@@ -388,14 +624,23 @@ fn upstream_error() -> Response {
     )
 }
 
-/// Map an upstream `Location` back into the mount, or `None` if it left the site.
+/// Map an upstream `Location`: back into the mount if it stays on the same
+/// host, unchanged if it goes to another HTTPS host, `None` otherwise.
 fn mount_location(location: &str, request_url: &str) -> Option<String> {
     let base = url::Url::parse(request_url).ok()?;
     let resolved = base.join(location).ok()?;
-    if resolved.host_str() != Some(SITE_HOST) || resolved.scheme() != "https" {
+    if resolved.scheme() != "https" {
         return None;
     }
-    let mut out = format!("{MOUNT}{}", resolved.path());
+    if resolved.host_str() != base.host_str() {
+        return Some(resolved.to_string());
+    }
+    let prefix = if base.host_str() == Some(SITE_HOST) {
+        MOUNT.to_string()
+    } else {
+        format!("{MOUNT}/__api/{}", base.host_str()?)
+    };
+    let mut out = format!("{prefix}{}", resolved.path());
     if let Some(q) = resolved.query() {
         out.push('?');
         out.push_str(q);
@@ -469,87 +714,39 @@ fn rewrite_srcset(html: &str) -> String {
 }
 
 fn rewrite_html(html: &str) -> String {
-    let html = rewrite_srcset(html);
-    static DATA_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
-    let data_re = DATA_RE.get_or_init(|| {
+    let mut html = rewrite_srcset(html);
+    // Cloudflare's edge injects a bot-detection loader that fetches from
+    // /cdn-cgi/ on the page's own origin; it has no purpose here.
+    static CF_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let cf_re = CF_RE.get_or_init(|| {
         regex::Regex::new(
-            r#"(?s)(<script\b[^>]*\bid=["']__NEXT_DATA__["'][^>]*>)(.*?)(</script\s*>)"#,
+            r"(?s)<script>\(function\(\)\{function c\(\)\{var b=a\.contentDocument.*?</script>",
         )
         .expect("static regex")
     });
-    let html = data_re.replace(&html, |caps: &regex::Captures<'_>| {
-        let Ok(mut data) = serde_json::from_str::<Value>(&caps[2]) else {
-            return caps[0].to_string();
-        };
-        let Some(object) = data.as_object_mut() else {
-            return caps[0].to_string();
-        };
-        // Next loads its chunks relative to assetPrefix.
-        object.insert("assetPrefix".to_string(), json!(MOUNT));
-        format!(
-            "{}{}{}",
-            &caps[1],
-            data.to_string().replace('<', "\\u003c"),
-            &caps[3]
-        )
-    });
+    html = cf_re.replace_all(&html, "").into_owned();
     let runtime = include_str!("movies.js");
-    let direct = serde_json::to_string(&direct_api_hosts()).unwrap_or_else(|_| "[]".into());
     html.replacen(
         "<head>",
-        &format!(
-            r#"<head><base href="{MOUNT}/"><script>window.MOVIES_DIRECT_HOSTS={direct};{runtime}</script>"#
-        ),
+        &format!(r#"<head><base href="{MOUNT}/"><script>{runtime}</script>"#),
         1,
     )
 }
 
-/// Next's compiled build assumes it owns `/`. Give its router the mount as a
-/// base path while internal page names (such as `/watch`) stay unchanged.
+/// cno.to's React Router is created without a `basename`, so under the mount it
+/// would see `/proxy/movies/...` as an unknown route. React Router's
+/// `createBrowserRouter(routes, opts)` forwards `opts.basename`; default it to
+/// the mount.
 fn rewrite_js(js: &str) -> String {
-    let mut js = js.replace("this.basePath=\"\"", &format!("this.basePath=\"{MOUNT}\""));
-    // addBasePath / hasBasePath: addPathPrefix(path,"") and pathHasPrefix(path,"")
-    static ADD_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
-    let add_re = ADD_RE.get_or_init(|| {
-        regex::Regex::new(r#"(\b(?:addPathPrefix|pathHasPrefix)\)\([\w$]+,\s*)"""#)
-            .expect("static regex")
+    static ROUTER_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let router_re = ROUTER_RE.get_or_init(|| {
+        regex::Regex::new(r"\{basename:([\w$]+)\?\.basename,getContext:").expect("static regex")
     });
-    js = add_re
-        .replace_all(&js, |caps: &regex::Captures<'_>| {
-            format!(r#"{}"{MOUNT}""#, &caps[1])
-        })
-        .into_owned();
-    // Turbopack's runtime names each chunk by stripping a hard-coded "/_next/"
-    // from its <script src>. The chunks load from under the mount, so tell the
-    // runtime that is where they live; otherwise no chunk ever matches what the
-    // runtime is waiting for and the app silently never starts.
-    static RUNTIME_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
-    let runtime_re = RUNTIME_RE.get_or_init(|| {
-        regex::Regex::new(
-            r#"(Array\.isArray\(globalThis\.TURBOPACK\)\)return;var [\w$]+,[\w$]+=)"/_next/""#,
-        )
-        .expect("static regex")
-    });
-    js = runtime_re
-        .replace_all(&js, |caps: &regex::Captures<'_>| {
-            format!(r#"{}"{MOUNT}/_next/""#, &caps[1])
-        })
-        .into_owned();
-    // removeBasePath is an identity function with the export defined a little
-    // further on: `function a(e){return e}...Object.defineProperty(r,"removeBasePath"`.
-    static REMOVE_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
-    let remove_re = REMOVE_RE.get_or_init(|| {
-        regex::Regex::new(r#"function ([\w$]+)\(([\w$]+)\)\{return ([\w$]+)\}([^;{}]*?Object\.defineProperty\([\w$]+,"__esModule",\{value:!0\}\),Object\.defineProperty\([\w$]+,"removeBasePath"|Object\.defineProperty\([^;]+?"removeBasePath")"#)
-            .expect("static regex")
-    });
-    remove_re
-        .replace_all(&js, |caps: &regex::Captures<'_>| {
-            let name = &caps[1];
-            let arg = &caps[2];
+    router_re
+        .replace_all(js, |caps: &regex::Captures<'_>| {
             format!(
-                r#"function {name}({arg}){{return {arg}==="{MOUNT}"?"/":{arg}.startsWith("{MOUNT}/")?{arg}.slice({}):{arg}}}{}"#,
-                MOUNT.len(),
-                &caps[4]
+                r#"{{basename:{}?.basename??"{MOUNT}",getContext:"#,
+                &caps[1]
             )
         })
         .into_owned()
@@ -583,39 +780,40 @@ mod tests {
     #[test]
     fn paths_resolve_to_the_site_or_an_allowlisted_api() {
         let t = resolve_target("/proxy/movies/", "").unwrap();
-        assert_eq!(t.url, "https://www.movy.sx/");
+        assert_eq!(t.url, "https://cno.to/");
         assert!(!t.is_api);
-        let t = resolve_target("/proxy/movies/watch/movie/1", "?a=1").unwrap();
-        assert_eq!(t.url, "https://www.movy.sx/watch/movie/1?a=1");
-        let t = resolve_target("/proxy/movies/__api/db.wecollege.net/3/configuration", "").unwrap();
-        assert_eq!(t.url, "https://db.wecollege.net/3/configuration");
+        let t = resolve_target("/proxy/movies/movie/1-toy-story", "?a=1").unwrap();
+        assert_eq!(t.url, "https://cno.to/movie/1-toy-story?a=1");
+        let t = resolve_target("/proxy/movies/__api/v.cno.to/hls/x.m3u8", "").unwrap();
+        assert_eq!(t.url, "https://v.cno.to/hls/x.m3u8");
         assert!(t.is_api);
-        let t = resolve_target("/proxy/movies/__api/backend.movy.sx/v1/x", "?q=2").unwrap();
-        assert_eq!(t.url, "https://backend.movy.sx/v1/x?q=2");
-    }
-
-    #[test]
-    fn direct_api_hosts_come_from_the_env_and_only_from_the_allowlist() {
-        std::env::set_var(
-            "MOVIES_DIRECT_API_HOSTS",
-            " api.wecollege.net , evil.example,TRAILERS.wecollege.net",
-        );
-        let hosts = direct_api_hosts();
-        std::env::remove_var("MOVIES_DIRECT_API_HOSTS");
-        assert_eq!(hosts, vec!["api.wecollege.net", "trailers.wecollege.net"]);
-        assert!(direct_api_hosts().is_empty());
+        let t = resolve_target("/proxy/movies/__api/api.theintrodb.org/v3/media", "?q=2").unwrap();
+        assert_eq!(t.url, "https://api.theintrodb.org/v3/media?q=2");
     }
 
     #[test]
     fn unlisted_hosts_and_traversal_are_refused() {
         assert!(resolve_target("/proxy/movies/__api/evil.example/x", "").is_none());
-        assert!(
-            resolve_target("/proxy/movies/__api/db.wecollege.net.evil.example/x", "").is_none()
-        );
+        assert!(resolve_target("/proxy/movies/__api/v.cno.to.evil.example/x", "").is_none());
         assert!(resolve_target("/proxy/movies/__api/", "").is_none());
         assert!(resolve_target("/proxy/movies/../etc/passwd", "").is_none());
         assert!(resolve_target("/proxy/movies/a\\b", "").is_none());
         assert!(resolve_target("/other/path", "").is_none());
+    }
+
+    #[test]
+    fn methods_are_limited() {
+        let page = resolve_target("/proxy/movies/movie/1", "").unwrap();
+        let api = resolve_target("/proxy/movies/api/p", "").unwrap();
+        let host = resolve_target("/proxy/movies/__api/api.theintrodb.org/v3/x", "").unwrap();
+        assert!(method_allowed(&Method::GET, &page));
+        assert!(method_allowed(&Method::HEAD, &page));
+        assert!(!method_allowed(&Method::POST, &page));
+        assert!(method_allowed(&Method::POST, &api));
+        assert!(method_allowed(&Method::POST, &host));
+        for m in [Method::PUT, Method::DELETE, Method::PATCH] {
+            assert!(!method_allowed(&m, &api));
+        }
     }
 
     #[test]
@@ -647,69 +845,155 @@ mod tests {
     #[test]
     fn missing_interface_fails_closed() {
         std::env::set_var("MOVIES_EGRESS_INTERFACE", "definitely-not-a-nic0");
-        let client = egress_client(reqwest::redirect::Policy::none());
+        let ready = egress_ready();
         std::env::remove_var("MOVIES_EGRESS_INTERFACE");
-        assert!(matches!(client, Err(EgressError::Unavailable)));
+        assert!(matches!(ready, Err(EgressError::Unavailable)));
+    }
+
+    #[test]
+    fn curl_is_pinned_to_the_interface_and_locked_down() {
+        let args = curl_args(
+            "eth1",
+            &Method::GET,
+            "https://cno.to/api/s/1?x={y}",
+            &[
+                ("accept".into(), "*/*".into()),
+                ("cookie".into(), "sv=1".into()),
+            ],
+            false,
+        );
+        let joined = args.join(" ");
+        assert!(joined.contains("--interface eth1"));
+        assert!(joined.contains("--proto =https"));
+        assert!(joined.contains("--http2") && joined.contains("--globoff"));
+        assert!(
+            joined.contains("--header accept: */*") && joined.contains("--header cookie: sv=1")
+        );
+        assert!(args.ends_with(&["--url".into(), "https://cno.to/api/s/1?x={y}".into()]));
+        // Never follows redirects or reads config/header files.
+        assert!(!args
+            .iter()
+            .any(|a| a == "--location" || a == "-L" || a == "--config" || a == "-K"));
+        assert!(!args.contains(&"--data-binary".to_string()));
+        let post = curl_args("eth1", &Method::POST, "https://cno.to/api/p", &[], true);
+        assert!(post.join(" ").contains("--request POST --data-binary @-"));
+        assert!(
+            curl_args("eth1", &Method::HEAD, "https://cno.to/", &[], false)
+                .contains(&"--head".to_string())
+        );
+    }
+
+    #[test]
+    fn header_values_cannot_inject_extra_headers() {
+        assert!(header_value_ok("text/html"));
+        assert!(!header_value_ok("a\r\nX-Evil: 1"));
+        assert!(!header_value_ok("a\nb"));
+        let args = curl_args(
+            "eth1",
+            &Method::GET,
+            "https://cno.to/",
+            &[
+                ("accept".into(), "ok\r\nX-Evil: 1".into()),
+                ("bad:name".into(), "v".into()),
+            ],
+            false,
+        );
+        assert!(!args
+            .iter()
+            .any(|a| a.contains("X-Evil") || a.contains("bad:name")));
+    }
+
+    #[test]
+    fn response_headers_are_parsed_for_http2_and_http1() {
+        let h2 = parse_head("HTTP/2 200 \r\ncontent-type: application/json\r\nSet-Cookie: a=1\r\nset-cookie: b=2\r\n").unwrap();
+        assert_eq!(h2.status, 200);
+        assert_eq!(h2.get("content-type"), Some("application/json"));
+        assert_eq!(
+            h2.headers.iter().filter(|(n, _)| n == "set-cookie").count(),
+            2
+        );
+        let h1 = parse_head("HTTP/1.1 302 Found\r\nLocation: /x\r\n").unwrap();
+        assert_eq!((h1.status, h1.get("location")), (302, Some("/x")));
+        assert!(parse_head("garbage").is_none());
+        assert!(parse_head("").is_none());
     }
 
     #[test]
     fn redirects_map_back_into_the_mount() {
-        let base = "https://www.movy.sx/old";
+        let base = "https://cno.to/old";
         assert_eq!(
             mount_location("/new?x=1", base).as_deref(),
             Some("/proxy/movies/new?x=1")
         );
         assert_eq!(
-            mount_location("https://www.movy.sx/a/b", base).as_deref(),
+            mount_location("https://cno.to/a/b", base).as_deref(),
             Some("/proxy/movies/a/b")
         );
-        assert!(mount_location("https://evil.example/x", base).is_none());
+        // Another HTTPS host (an image CDN) is for the browser to follow itself.
+        assert_eq!(
+            mount_location("https://i.ytimg.com/vi/x.jpg", base).as_deref(),
+            Some("https://i.ytimg.com/vi/x.jpg")
+        );
+        assert!(mount_location("http://cno.to/x", base).is_none());
+        assert!(mount_location("javascript:alert(1)", base).is_none());
+        assert_eq!(
+            mount_location("/y", "https://v.cno.to/hls/x").as_deref(),
+            Some("/proxy/movies/__api/v.cno.to/y")
+        );
     }
 
     #[test]
-    fn html_gets_prefix_base_runtime_and_asset_prefix() {
-        let html = r#"<html><head><link rel="stylesheet" href="/_next/static/a.css"><link rel="preload" as="image" imageSrcSet="/img/a.webp 480w, https://www.movy.sx/img/b.webp 960w"></head><body><img src="/img/x.jpg"><a href="https://www.movy.sx/watch">w</a><script id="__NEXT_DATA__" type="application/json">{"page":"/","buildId":"b"}</script></body></html>"#;
+    fn upstream_cookies_are_namespaced_both_ways() {
+        let set = rewrite_set_cookie(
+            "__Host-sv=abc.def; Max-Age=21600; Path=/; Expires=Sat, 31 Oct 2026 19:37:03 GMT; HttpOnly; Secure; SameSite=Strict; Domain=cno.to",
+        )
+        .unwrap();
+        assert!(set.starts_with("mv___Host-sv=abc.def; Path=/proxy/movies; SameSite=Lax"));
+        assert!(
+            set.contains("Max-Age=21600") && set.contains("HttpOnly") && set.contains("Secure")
+        );
+        assert!(!set.contains("Domain") && !set.contains("Strict"));
+        assert!(rewrite_set_cookie("=oops").is_none());
+        assert!(rewrite_set_cookie("novalue").is_none());
+        // Only proxy-made cookies go upstream; Mitch's own never do.
+        let sent = upstream_cookie_header(
+            "mitch_session=SECRET; studentId=abc; mv___Host-sv=abc.def; theme=dark; mv_x=1",
+        )
+        .unwrap();
+        assert_eq!(sent, "__Host-sv=abc.def; x=1");
+        assert!(!sent.contains("SECRET") && !sent.contains("studentId"));
+        assert!(upstream_cookie_header("mitch_session=SECRET; studentId=abc").is_none());
+    }
+
+    #[test]
+    fn html_gets_prefix_base_runtime_and_no_cloudflare_loader() {
+        let html = r#"<html><head><link rel="stylesheet" href="/assets/a.css"><link rel="preload" as="image" imageSrcSet="/img/a.webp 480w, https://cno.to/img/b.webp 960w"></head><body><img src="/img/x.jpg"><a href="https://cno.to/movie/1">m</a><script type="module" src="/assets/index-1.js"></script><script>(function(){function c(){var b=a.contentDocument||x;}c()})();</script></body></html>"#;
         let out = rewrite_text(html, true, false);
         assert!(out.contains(r#"<base href="/proxy/movies/">"#));
-        assert!(out.contains(r#"href="/proxy/movies/_next/static/a.css""#));
+        assert!(out.contains(r#"href="/proxy/movies/assets/a.css""#));
         assert!(out.contains(r#"src="/proxy/movies/img/x.jpg""#));
+        assert!(out.contains(r#"src="/proxy/movies/assets/index-1.js""#));
         assert!(out.contains(
             r#"imageSrcSet="/proxy/movies/img/a.webp 480w, /proxy/movies/img/b.webp 960w""#
         ));
-        assert!(out.contains(r#"href="/proxy/movies/watch""#));
+        assert!(out.contains(r#"href="/proxy/movies/movie/1""#));
         assert!(out.contains("const prefix = '/proxy/movies'"));
-        let data = out
-            .split(r#"type="application/json">"#)
-            .nth(1)
-            .and_then(|s| s.split("</script>").next())
-            .unwrap();
-        let data: Value = serde_json::from_str(data).unwrap();
-        assert_eq!(data["assetPrefix"], "/proxy/movies");
-        assert_eq!(data["page"], "/");
+        assert!(
+            !out.contains("contentDocument"),
+            "Cloudflare loader should be stripped"
+        );
+        assert!(
+            !out.contains("/proxy/movies/proxy/movies"),
+            "no double prefix"
+        );
     }
 
     #[test]
-    fn router_base_path_helpers_are_patched() {
-        let add =
-            r#"function i(e,t){return(0,a.normalizePathTrailingSlash)((0,n.addPathPrefix)(e,""))}"#;
-        assert!(rewrite_js(add).contains(r#"addPathPrefix)(e,"/proxy/movies")"#));
-        let has = r#"(0,n.pathHasPrefix)(e,"")"#;
-        assert!(rewrite_js(has).contains(r#"pathHasPrefix)(e,"/proxy/movies")"#));
-        assert!(rewrite_js(r#"if(this.basePath="",this.sub=c)"#)
-            .contains(r#"this.basePath="/proxy/movies""#));
-        // movy.sx build: identity removeBasePath with other statements before the export.
-        let remove = r#"function a(e){return e}e.i(50461),Object.defineProperty(r,"__esModule",{value:!0}),Object.defineProperty(r,"removeBasePath",{enumerable:!0,get:function(){return a}})"#;
-        let out = rewrite_js(remove);
-        assert!(out.contains(
-            r#"return e==="/proxy/movies"?"/":e.startsWith("/proxy/movies/")?e.slice(13):e"#
-        ));
-        assert!(out.contains(r#""removeBasePath",{enumerable"#));
-        // Turbopack runtime chunk base.
-        let runtime = r#"(()=>{let e;if(!Array.isArray(globalThis.TURBOPACK))return;var t,r="/_next/",n=1})()"#;
-        assert!(rewrite_js(runtime).contains(r#"var t,r="/proxy/movies/_next/",n=1"#));
-        // Older Rivestream-style shape still works.
-        let old =
-            r#"function a(e){return e}Object.defineProperty(r,"removeBasePath",{enumerable:!0})"#;
-        assert!(rewrite_js(old).contains("e.slice(13)"));
+    fn react_router_gets_the_mount_as_its_default_basename() {
+        let js = r#"function $a(e,t){return Kn({basename:t?.basename,getContext:t?.getContext,future:t?.future,history:at({window:t?.window})}).initialize()}"#;
+        let out = rewrite_js(js);
+        assert!(out.contains(r#"{basename:t?.basename??"/proxy/movies",getContext:t?.getContext"#));
+        // Unrelated code is untouched.
+        assert_eq!(rewrite_js("let a=1;"), "let a=1;");
     }
 }

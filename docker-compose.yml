@@ -60,7 +60,6 @@ services:
       - ./logs:/app/logs
       - ./webserver:/app/webserver
       - ./webvm:/app/webvm
-      - /opt/userdata:/opt/userdata
       # Mount the host .env so PVE_SSH_KEY_PATH (and friends) actually
       # reach the container. .env is in .dockerignore so it never gets
       # baked into the image, and without this mount the server starts
@@ -133,9 +132,8 @@ services:
       - PROXMOX_VM_BRIDGE
       - HIDE_VM_FEATURES
       # Movies proxy: the container interface that routes through the VPN
-      # (default eth1) and any API hosts the browser should call directly.
+      # (default eth1).
       - MOVIES_EGRESS_INTERFACE
-      - MOVIES_DIRECT_API_HOSTS
 
   # Production Slot B: Green Webserver
   webserver-green:
@@ -163,7 +161,6 @@ services:
       - ./logs:/app/logs
       - ./webserver:/app/webserver
       - ./webvm:/app/webvm
-      - /opt/userdata:/opt/userdata
       - ./.env:/app/.env:ro
     environment:
       - MITCH_BASE=/app
@@ -229,9 +226,8 @@ services:
       - PROXMOX_VM_BRIDGE
       - HIDE_VM_FEATURES
       # Movies proxy: the container interface that routes through the VPN
-      # (default eth1) and any API hosts the browser should call directly.
+      # (default eth1).
       - MOVIES_EGRESS_INTERFACE
-      - MOVIES_DIRECT_API_HOSTS
 
   # Rust mail pipeline (plan Step 2 of the Rust rewrite, on the rust branch).
   # Replaces the mail/*.js nodemailer CLIs + imap_watcher; the JS scripts

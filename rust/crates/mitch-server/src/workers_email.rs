@@ -292,13 +292,13 @@ fn enrolled_users(state: &AppState) -> Vec<String> {
 
 /// `userdataForEmail(email)` (server.js:4832-4844) — names table lookup
 /// (first uid whose name matches case-insensitively) → that user's
-/// `/opt/userdata/<sha256(uid)[..32]>/data.json`. Missing file or bad JSON
+/// `<data dir>/userdata/<sha256(uid)[..32]>/data.json`. Missing file or bad JSON
 /// → `{}` (the JS catch).
 fn userdata_for_email(state: &AppState, email: &str) -> Value {
     let Some(uid) = mitch_lib::auth::names_find_sid_by_email_ci(&state.store, email) else {
         return json!({});
     };
-    let Some(fpath) = crate::routes::members::userdata_path(&uid) else {
+    let Some(fpath) = crate::routes::members::userdata_path(&state.cfg.data_dir, &uid) else {
         return json!({});
     };
     if !fpath.exists() {

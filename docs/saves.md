@@ -3,7 +3,7 @@
 ## What is stored
 
 Each signed-in account has one JSON blob on disk at
-`$USERDATA_DIR/<sha256(session id)[0..32]>/data.json` (default `/opt/userdata`),
+`<data dir>/userdata/<sha256(session id)[0..32]>/data.json` (the data dir is the `./data` mount; set `USERDATA_DIR` to put it elsewhere),
 capped at 1 GiB of serialized JSON. The background sync (`webserver/sync.js`)
 writes the browser's localStorage there as `_snapshot` (+ `_snapshot_ts`) every
 5 minutes and on page close, and offers a restore when the server copy is newer.

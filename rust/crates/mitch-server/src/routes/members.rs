@@ -5,7 +5,7 @@
 //! - `/api/admin-members`, `/api/moderator-members`, `/api/owner-members` —
 //!   server.js:19281-19400: the public role rosters.
 //! - `/api/userdata` — server.js:17262-17317: per-sid JSON blob storage under
-//!   `USERDATA_DIR` with a 1 GiB quota and newsletter-unsub syncing.
+//!   `<data dir>/userdata` (override: `USERDATA_DIR`) with a 1 GiB quota and newsletter-unsub syncing.
 //!
 //! Deliberate deviation from server.js: its `/api/userdata` branch checks the
 //! path only, so a GET fell into the write path and returned `{ok:true}`
@@ -27,8 +27,6 @@ use std::sync::Arc;
 
 /// `TEST_ACCOUNT_EMAIL` (server.js:438).
 const TEST_ACCOUNT_EMAIL: &str = "tingtongsuperman@linux.com";
-/// `USERDATA_DIR` (server.js:427).
-const USERDATA_DIR: &str = "/opt/userdata";
 /// `QUOTA` (server.js:17315) — 1 GiB of serialized JSON.
 const USERDATA_QUOTA: usize = 1_073_741_824;
 
@@ -660,13 +658,19 @@ fn premium_members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
 // ── /api/userdata ────────────────────────────────────────────────────────────
 
 /// `userdataPath(idVal)` (server.js:2755-2761) — sha256(id)[0..32] dir under
-/// `USERDATA_DIR` (default `/opt/userdata`); an unavailable directory returns 503.
-pub(crate) fn userdata_path(id_val: &str) -> Option<std::path::PathBuf> {
+/// `<data dir>/userdata` (the data dir is already a writable mount, unlike the
+/// old `/opt/userdata`). `USERDATA_DIR` overrides the root. A directory that
+/// can't be created returns 503.
+pub(crate) fn userdata_path(
+    data_dir: &std::path::Path,
+    id_val: &str,
+) -> Option<std::path::PathBuf> {
     let hex = crypto::sha256_hex(id_val.as_bytes());
     let root = std::env::var_os("USERDATA_DIR")
         .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| USERDATA_DIR.into());
-    let dir = std::path::Path::new(&root).join(&hex[..32]);
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| data_dir.join("userdata"));
+    let dir = root.join(&hex[..32]);
     std::fs::create_dir_all(&dir).ok()?;
     Some(dir.join("data.json"))
 }
@@ -685,10 +689,10 @@ fn userdata(
         return json_response(401, json!({ "error": "Not authenticated" }));
     }
     if *method == Method::DELETE {
-        return userdata_delete(&uid, body_bytes);
+        return userdata_delete(&state.cfg.data_dir, &uid, body_bytes);
     }
     if *method == Method::GET {
-        return userdata_get(&uid);
+        return userdata_get(&state.cfg.data_dir, &uid);
     }
     let Some(body) = parse_body_strict(body_bytes) else {
         return json_response(400, json!({ "error": "Bad JSON" }));
@@ -699,7 +703,7 @@ fn userdata(
     if !is_js_object || body.is_array() {
         return json_response(400, json!({ "error": "Expected object" }));
     }
-    let Some(fpath) = userdata_path(&uid) else {
+    let Some(fpath) = userdata_path(&state.cfg.data_dir, &uid) else {
         return json_response(503, json!({ "error": "Storage unavailable" }));
     };
     let mut existing: Value = std::fs::read_to_string(&fpath)
@@ -797,8 +801,8 @@ fn strip_sensitive_snapshot_keys(blob: &mut Value) -> bool {
 
 /// `GET /api/userdata` — the caller's stored blob with a `_quota` summary
 /// (`used` bytes of serialized JSON, `limit`). A missing file is an empty blob.
-fn userdata_get(uid: &str) -> Response {
-    let Some(fpath) = userdata_path(uid) else {
+fn userdata_get(data_dir: &std::path::Path, uid: &str) -> Response {
+    let Some(fpath) = userdata_path(data_dir, uid) else {
         return json_response(503, json!({ "error": "Storage unavailable" }));
     };
     let mut blob: Value = std::fs::read_to_string(&fpath)
@@ -824,11 +828,11 @@ fn userdata_get(uid: &str) -> Response {
 /// removes the whole stored blob; `{"keys": [...]}` removes those top-level
 /// keys (internal `_updated` is never removable). Only ever touches the
 /// caller's own file, which is derived from their session id.
-fn userdata_delete(uid: &str, body_bytes: &[u8]) -> Response {
+fn userdata_delete(data_dir: &std::path::Path, uid: &str, body_bytes: &[u8]) -> Response {
     let Some(body) = parse_body_strict(body_bytes) else {
         return json_response(400, json!({ "error": "Bad JSON" }));
     };
-    let Some(fpath) = userdata_path(uid) else {
+    let Some(fpath) = userdata_path(data_dir, uid) else {
         return json_response(503, json!({ "error": "Storage unavailable" }));
     };
     if body.get("all").and_then(Value::as_bool) == Some(true) {
@@ -1279,6 +1283,31 @@ mod tests {
 
         drop(state);
         std::fs::remove_dir_all(&base).ok();
+    }
+}
+
+#[cfg(test)]
+mod userdata_path_tests {
+    use super::*;
+
+    #[test]
+    fn default_storage_is_inside_the_data_dir_and_created_on_demand() {
+        let data = std::env::temp_dir().join(format!("userdata-path-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&data);
+        std::fs::create_dir_all(&data).unwrap();
+        // The override is only set by browser fixtures; unit tests run without it.
+        assert!(std::env::var_os("USERDATA_DIR").is_none());
+        let path = userdata_path(&data, "someone").unwrap();
+        assert!(path.starts_with(data.join("userdata")));
+        assert_eq!(path.file_name().unwrap(), "data.json");
+        assert!(path.parent().unwrap().is_dir());
+        // Same id, same place; different id, different directory.
+        assert_eq!(userdata_path(&data, "someone").unwrap(), path);
+        assert_ne!(
+            userdata_path(&data, "other").unwrap().parent(),
+            path.parent()
+        );
+        let _ = std::fs::remove_dir_all(&data);
     }
 }
 

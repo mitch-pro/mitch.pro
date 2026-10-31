@@ -1,14 +1,13 @@
-// Runs first inside every proxied movy.sx page (injected by routes/movies.rs).
-// The site was built to live at the root of its own origin and talks to three
-// API hosts straight from the browser. This script keeps all of that inside the
-// /proxy/movies mount, so every request goes through Mitch (and out the VPN
-// interface) instead of leaving the visitor's browser directly.
+// Runs first inside every proxied cno.to page (injected by routes/movies.rs).
+// The site was built to live at the root of its own origin, so its fetches use
+// root-relative URLs and it also calls a couple of other hosts. This script keeps
+// all of that inside the /proxy/movies mount, so those requests go through Mitch
+// (and out the VPN interface) instead of leaving the visitor's browser directly.
 (() => {
   const prefix = '/proxy/movies';
-  const siteOrigin = 'https://www.movy.sx';
-  const apiHosts = ['backend.movy.sx', 'db.wecollege.net', 'api.wecollege.net', 'trailers.wecollege.net', 'ipwho.is'];
-  // Hosts the server asked us to leave alone (MOVIES_DIRECT_API_HOSTS).
-  const directHosts = new Set(window.MOVIES_DIRECT_HOSTS || []);
+  const siteOrigin = 'https://cno.to';
+  // Other hosts the app calls (also on the server-side allowlist in movies.rs).
+  const apiHosts = ['v.cno.to', 'api.theintrodb.org'];
   // Mitch's own scripts (presence) live at the real root and must not be moved.
   const mitchOwned = [/^\/presence\.js$/, /^\/api\/presence\//];
 
@@ -21,7 +20,7 @@
     if (url.origin === siteOrigin) {
       return prefix + url.pathname + url.search + url.hash;
     }
-    if (url.protocol === 'https:' && apiHosts.includes(url.hostname) && !directHosts.has(url.hostname)) {
+    if (url.protocol === 'https:' && apiHosts.includes(url.hostname)) {
       return prefix + '/__api/' + url.hostname + url.pathname + url.search + url.hash;
     }
     if (url.origin === location.origin) {
