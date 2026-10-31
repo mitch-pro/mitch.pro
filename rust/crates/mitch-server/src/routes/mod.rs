@@ -31,6 +31,7 @@ pub mod matrix;
 pub mod me;
 pub mod members;
 pub mod misc;
+pub mod movies;
 pub mod pickle;
 pub mod proxy;
 pub mod push;

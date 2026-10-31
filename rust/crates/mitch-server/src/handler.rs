@@ -780,6 +780,16 @@ pub async fn handle(
         return resp;
     }
 
+    // Movies: the VPN-pinned movy.sx proxy.
+    if crate::routes::movies::is_path(&path) {
+        if let Some(resp) =
+            crate::routes::movies::handle(&state, &method, &path, &search, headers, body_bytes)
+                .await
+        {
+            return resp;
+        }
+    }
+
     // Fixed-origin game proxy (server.js:10878-10947)
     if let Some(resp) =
         crate::routes::proxy::game_proxy(&state, &method, &path, &search, headers).await

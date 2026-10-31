@@ -97,7 +97,7 @@ fn fallback_activity(page: &str) -> String {
         "members" => "Viewing people".into(),
         "friends" => "Viewing friends".into(),
         "vms" => "Using Cloud Linux".into(),
-        "proxy" if page.starts_with("/proxy/rivestream") => "Browsing movies".into(),
+        "proxy" if page.starts_with("/proxy/movies") => "Browsing movies".into(),
         _ => format!("Viewing {}", root.replace('-', " ")),
     }
 }

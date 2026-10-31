@@ -27,7 +27,7 @@
   function describe(page, title) {
     const root = page.split('/').filter(Boolean)[0] || '';
     if (!root || root === 'index.html') return 'On the homepage';
-    if (page.startsWith('/proxy/rivestream')) return page.includes('/watch') ? 'Viewing a movie' : 'Browsing movies';
+    if (page.startsWith('/proxy/movies')) return page.includes('/watch') ? 'Viewing a movie' : 'Browsing movies';
     if (page.startsWith('/vms/desktop')) return 'Using a VM desktop';
     if (page.startsWith('/matrix/public/element-call/')) return 'In a Matrix call';
     if (root === 'game-portal' || /^\/games\/(?:index.html)?$/.test(page)) return 'Browsing games';
