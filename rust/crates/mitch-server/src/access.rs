@@ -222,7 +222,6 @@ mod tests {
                 "/verify-open.json",
                 "/unsubscribe/token",
                 "/ws",
-                "/ssh/ws",
             ] {
                 for method in [Method::GET, Method::POST, Method::HEAD] {
                     let response = crate::handler::handle(

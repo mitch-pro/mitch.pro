@@ -14,13 +14,9 @@
     "start:wrapper": "bun server.js",
     "test": "cargo test --manifest-path rust/Cargo.toml --workspace",
     "test:unit": "cargo test --manifest-path rust/Cargo.toml --workspace",
-    "test:unit:legacy": "bun tests/test_community_refresh.js && bun tests/test_owner_accounts_route.js && bun tests/test_owner_admin_vm_nav_unit.js && bun tests/test_daily_login_unit.js && bun tests/test_roles_unit.js && bun tests/test_background_defaults_unit.js && bun tests/test_site_redirects_unit.js && bun tests/test_auth_handoff_unit.js && bun tests/test_mitch_coins_unit.js && bun tests/test_social_economy_ui_unit.js && node tests/test_shop_catalog.js && bun tests/test_game_portal_unit.js && bun tests/test_service_worker_unit.js && bun tests/test_time_format_unit.js && bun tests/test_profile_updates_unit.js && bun tests/test_staff_design_unit.js && bun tests/test_vm_portal_unit.js && bun tests/test_dm_e2e_fixes_unit.js && bun tests/test_matrix_sso_unit.js && bun tests/test_static_cache_refresh_unit.js && bun tests/test_background_previews_unit.js && bun tests/test_tester_features.js",
-    "test:js": "bun run test:unit:legacy && bun run test:integration",
-    "test:integration": "bun tests/test_runner.js",
-    "test:integration:auth": "bun tests/test_auth_session_integration.js",
     "test:admin:browser": "node tests/test_admin_modernization.mjs",
-    "test:integration:daily-login": "bun tests/test_daily_login.js",
-    "test:blooket": "node tests/test_blooket_answers.mjs && node tests/test_blooket_connection.mjs && node tests/test_blooket_controller.mjs && node tests/test_blooket_runtime.mjs && node tests/test_blooket_service.mjs"
+    "test:blooket": "node tests/test_blooket_answers.mjs && node tests/test_blooket_connection.mjs && node tests/test_blooket_controller.mjs && node tests/test_blooket_runtime.mjs && node tests/test_blooket_service.mjs",
+    "test:service-worker": "node tests/test_service_worker_unit.js"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^14.0.0",

@@ -61,7 +61,6 @@ Files and the non-test modules that read or write them. Grouped by what they hol
 | `signup_codes.json` | `accounts.rs`, `auth.rs` |
 | `last_known_ips.json` | `handler.rs`, `moderation.rs`, `matrix.rs` |
 | `admin_passphrase.json` | `admin.rs` |
-| `admin_ssh_keys.json` | `legacy.rs`, `ssh_ws.rs` |
 | `pending_security_actions.json` | `email.rs` |
 
 ### Email and newsletter

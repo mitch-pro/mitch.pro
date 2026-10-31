@@ -1058,7 +1058,7 @@ pub async fn handle(
     }
 
     // 4b3. WS bridge upgrades — server.js:11725-12000, the upgrade block
-    // after the password gate: /livekit/rtc (11725), /ssh/ws (11738), the
+    // after the password gate: /livekit/rtc (11725), the
     // /vnc/ws 410 (11792), and /api/blooket-bot/ws (11797). A matching path
     // without an upgrade header falls through, exactly like the JS.
     let is_upgrade = headers
@@ -1077,14 +1077,6 @@ pub async fn handle(
         {
             return resp;
         }
-    } else if is_upgrade && path == "/ssh/ws" {
-        if let Some(resp) =
-            crate::routes::ssh_ws::handle_ws_upgrade(&state, &path, headers, ws_upgrade)
-        {
-            return resp;
-        }
-        // The JS falls through on an upgrade failure — reach the static/404
-        // handling below.
     } else if is_upgrade && path == "/vnc/ws" {
         // server.js:11792-11794 — the legacy noVNC bridge is gone.
         return crate::routes::me::json_response(

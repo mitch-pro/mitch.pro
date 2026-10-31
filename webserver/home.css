@@ -215,8 +215,6 @@ body.home ::-webkit-scrollbar-track { background: transparent; }
 .hud-system-status > div { display: flex; align-items: baseline; gap: 0.5rem; }
 #greeting-clock { font-family: var(--mh-mono); font-variant-numeric: tabular-nums; font-size: 0.82rem; color: var(--mh-ink-soft); }
 #home-games-day { letter-spacing: 0.05em; }
-.hud-terminal-toggle-btn { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.74rem; padding: 0.3rem 0.65rem; border-radius: 999px; color: var(--mh-ink-soft); }
-.hud-terminal-toggle-btn span::before { content: ">_"; font-family: var(--mh-mono); font-size: 0.68rem; margin-right: 0.3rem; opacity: 0.7; }
 .status-user-view { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mh-ink-faint); white-space: nowrap; }
 
 /* --------------------------------------------------------------------------
@@ -436,27 +434,11 @@ body.home ::-webkit-scrollbar-track { background: transparent; }
    Console overlay
    -------------------------------------------------------------------------- */
 
-#hud-terminal-overlay {
   position: fixed; inset: 0; z-index: 200; display: none; flex-direction: column;
   width: min(700px, calc(100vw - 2rem)); height: min(480px, calc(100vh - 2rem)); margin: auto;
   background: var(--mh-ink); color: var(--mh-bg); border-radius: var(--mh-radius); overflow: hidden;
   box-shadow: 0 24px 64px rgba(20, 16, 24, 0.28);
 }
-#hud-terminal-overlay.visible { display: flex; }
-#hud-terminal-overlay.expanded { width: calc(100vw - 2rem); height: calc(100vh - 2rem); }
-.terminal-header { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.85rem; border-bottom: 1px solid rgba(255,255,255,0.12); flex-shrink: 0; }
-.terminal-title { font-family: var(--mh-mono); font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em; color: rgba(255,255,255,0.6); text-transform: uppercase; }
-#close-terminal-btn { width: 22px; height: 22px; padding: 0; font-size: 0.8rem; line-height: 1; display: grid; place-items: center; background: none; border: 1px solid rgba(255,255,255,0.2); color: rgba(255,255,255,0.7); }
-#close-terminal-btn:hover { color: #f87171; border-color: #f87171; background: none; }
-.terminal-body { flex: 1; overflow-y: auto; padding: 0.75rem; font-family: var(--mh-mono); font-size: 0.76rem; line-height: 1.55; }
-.terminal-line { color: rgba(255,255,255,0.65); white-space: pre-wrap; word-break: break-word; }
-.terminal-line.sys-warn { color: #fbbf24; }
-.terminal-line.sys-err, .terminal-line.err { color: #f87171; }
-.terminal-line.sys-ok { color: #4ade80; }
-.terminal-input-line { display: flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.75rem; border-top: 1px solid rgba(255,255,255,0.12); flex-shrink: 0; }
-.terminal-prompt { color: var(--mh-accent); font-family: var(--mh-mono); font-size: 0.78rem; }
-#terminal-input { flex: 1; background: none; border: none; color: var(--mh-bg); font-family: var(--mh-mono); font-size: 0.78rem; padding: 0.2rem 0; }
-#terminal-input:focus { border: none; outline: none; }
 
 /* --------------------------------------------------------------------------
    Floating chrome

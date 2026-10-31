@@ -27,7 +27,7 @@ form_urlencoded = "1"
 # is built on).
 multer = "3"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
-# WS-client bridges: /ssh/ws → the gateway, /livekit/rtc → the SFU, and the
+# WS-client bridges: /livekit/rtc → the SFU and the
 # blooket-bot microservice pipe (server.js uses Bun's WebSocket client).
 tokio-tungstenite = { version = "0.29", features = ["rustls-tls-webpki-roots"] }
 rustls = { version = "0.23", default-features = false, features = ["ring"] }

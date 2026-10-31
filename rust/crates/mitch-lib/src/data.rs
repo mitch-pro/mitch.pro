@@ -637,6 +637,14 @@ impl DataStore {
         store.backfill_revoked_ids_from_json();
         store.backfill_friends_from_json();
         store.backfill_newsletter_unsub_from_json();
+        // The web SSH terminal is gone; drop the admin private keys it stored.
+        {
+            let conn = store.conn.lock().unwrap_or_else(|e| e.into_inner());
+            let _ = conn.execute(
+                "DELETE FROM json_documents WHERE path LIKE '%admin_ssh_keys.json'",
+                [],
+            );
+        }
         Ok(store)
     }
 

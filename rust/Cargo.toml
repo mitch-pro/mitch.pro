@@ -3,7 +3,6 @@ resolver = "2"
 members = [
     "crates/mitch-lib",
     "crates/mitch-server",
-    "crates/mitch-ssh-gateway",
     "crates/mitch-mail",
 ]
 

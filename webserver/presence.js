@@ -43,7 +43,7 @@
   }
   function selectedFrame() {
     return [...document.querySelectorAll('iframe')].find(frame => usable(frame) &&
-      (document.activeElement === frame || frame.matches('#fullframe, #hud-terminal-iframe, .mitch-iab-frame, #player-frame')));
+      (document.activeElement === frame || frame.matches('#fullframe, .mitch-iab-frame, #player-frame')));
   }
   function isLocationHidden() {
     try {
@@ -86,7 +86,7 @@
     if (!frame) return;
     const previous = frames.get(source);
     if (packet.ended) frames.delete(source); else frames.set(source, packet);
-    if (usable(frame) && (document.activeElement === frame || frame.matches('#fullframe, #hud-terminal-iframe, .mitch-iab-frame, #player-frame'))) {
+    if (usable(frame) && (document.activeElement === frame || frame.matches('#fullframe, .mitch-iab-frame, #player-frame'))) {
       if (previous?.interaction !== packet.interaction) interaction++;
       soon();
     }

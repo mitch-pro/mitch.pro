@@ -761,7 +761,7 @@
   lightStyle.id = 'theme-light-overrides';
   lightStyle.textContent =
     '.theme-light .glass-card,.theme-light .card,' +
-    '.theme-light .hud-topbar,.theme-light .hud-hero-card,.theme-light .category-group,.theme-light .hud-widget-card,.theme-light .hud-nudge-card,.theme-light #hud-terminal-overlay{' +
+    '.theme-light .hud-topbar,.theme-light .hud-hero-card,.theme-light .category-group,.theme-light .hud-widget-card,.theme-light .hud-nudge-card{' +
       'background:rgba(255,255,255,0.72)!important;backdrop-filter:blur(24px) saturate(180%)!important;-webkit-backdrop-filter:blur(24px) saturate(180%)!important;' +
       'border:1px solid rgba(0,0,0,0.08)!important;box-shadow:0 12px 32px rgba(0,0,0,0.04),inset 0 1px 0 rgba(255,255,255,0.8)!important;color:#0f1123!important;}' +
     '.theme-light #sw-notif-btn{background:rgba(255,255,255,0.75)!important;border:1px solid rgba(0,0,0,0.14)!important;color:var(--t-ac)!important;}' +
@@ -815,8 +815,6 @@
     '.theme-light .hud-search-area #home-search{color:#0f1123!important;}' +
     '.theme-light .progress-bar-bg{background:rgba(0,0,0,0.05)!important;}' +
     '.theme-light .status-pill{background:rgba(34,197,94,0.1)!important;border:1px solid rgba(34,197,94,0.2)!important;}' +
-    '.theme-light .hud-terminal-toggle-btn{background:rgba(0,0,0,0.03)!important;border:1px solid rgba(0,0,0,0.08)!important;color:#0f1123!important;}' +
-    '.theme-light .hud-terminal-toggle-btn:hover{background:rgba(0,0,0,0.06)!important;border-color:var(--t-ac)!important;}' +
     // Neon-gold name colors are unreadable on the light background — swap to
     // a dark amber and drop the glow so usernames stay legible.
     '.theme-light .name.gold_glow,.theme-light .entry-name.gold_glow,.theme-light .display-name.gold_glow,.theme-light .author.gold_glow{color:#b45309!important;text-shadow:none!important;}' +

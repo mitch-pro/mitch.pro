@@ -1,14 +1,9 @@
 //! `/api/vm/*` + Proxmox (plan Step 13).
 //!
-//! Batch 2 carries the slice the `/ssh/ws` bridge needs for non-admin
-//! authorization (server.js:25786-25927): the PVE configuration, the VMID
-//! range gate, the VM type resolution, the per-user status/IP resolution and
-//! the `activeFreeVms` registry read. The provisioning endpoints
-//! (`initializeWebVm`/`terminateUserVm`/`getExistingVmids`/the free-VM
-//! pruner) land with batch 3's `/api/vm/*` group over this same slice.
+//! The PVE configuration, the VMID range gate, the VM type resolution, the
+//! per-user status/IP resolution and the `activeFreeVms` registry read, plus the
+//! provisioning endpoints over them.
 
-// The slice is intentionally unwired until batch 3 — the /ssh/ws module (this
-// batch) calls into it once written; the rest stays dead until then.
 #![allow(dead_code)]
 
 use crate::state::AppState;

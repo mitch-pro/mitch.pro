@@ -55,11 +55,6 @@ try {
  const gamePage=await student.newPage();await gamePage.goto(base+'/games/kodys-keyboard/index.html');
  assert(await gamePage.locator('script[src^="/ban-guard.js"]').count());
  await targetPage.evaluate(()=>new Promise((resolve,reject)=>{
-  const socket=new WebSocket(location.origin.replace(/^http/,'ws')+'/ssh/ws');
-  socket.onopen=resolve;socket.onerror=()=>reject(new Error('Fixture terminal socket failed'));
-  socket.onclose=event=>{window.__terminalBanClosed=event.code===1008;};window.__fixtureTerminal=socket;
- }));
- await targetPage.evaluate(()=>new Promise((resolve,reject)=>{
   const socket=new WebSocket(location.origin.replace(/^http/,'ws')+'/ws');
   socket.onopen=()=>resolve(true);socket.onerror=()=>reject(new Error('Fixture WebSocket failed'));
   socket.onmessage=event=>{try{if(JSON.parse(event.data).type==='account_banned')window.__banNotice=true;}catch{}};
@@ -85,7 +80,7 @@ try {
  await page.waitForFunction(()=>document.getElementById('ban-status').textContent.startsWith('Banned '));
  await page.locator('.ban-entry').waitFor();assert((await page.locator('.ban-entry').innerText()).includes(reason));
  assert.equal(await page.locator('.ban-entry img').count(),0);assert.equal(await page.evaluate(()=>window.__injected),undefined);
- await targetPage.waitForFunction(()=>window.__banClosed&&window.__banNotice&&window.__terminalBanClosed);
+ await targetPage.waitForFunction(()=>window.__banClosed&&window.__banNotice);
  await gamePage.waitForURL(base+'/');await gamePage.locator('#ban-title').waitFor();
  for(const path of ['/','/enroll/','/api/madlibs/random','/api/pass','/matrix/config.json','/_matrix/client/v3/sync','/livekit/get_token','/proxy/luma/test.html','/verify-open.json','/games/kodys-keyboard/index.html','/swiftonion.onion']){
   const response=await student.request.get(base+path);assert.equal(response.status(),403,'Banned access to '+path);
@@ -163,5 +158,5 @@ try {
  assert(await page.locator('.staff-panel-switcher a[href="/admin/bans/"]').isVisible());
  assert.equal(await page.locator('#ban-email').count(),0,'The main panel should link to the dedicated ban page.');
  assert.deepEqual(errors,[]);
- console.log('PASS: separate admin button, role/passphrase gates, real session cookies, ban/unban, live game and terminal disconnects, global route checks, login-cookie removal protection, guest access, shared-network access, safe mixed-version rollout, required duration/reason, confirmation/cancel, Roblox-style notice, working appeal form, automatic expiry, alias restore, staff protection, and responsive themes.');
+ console.log('PASS: separate admin button, role/passphrase gates, real session cookies, ban/unban, live game disconnects, global route checks, login-cookie removal protection, guest access, shared-network access, safe mixed-version rollout, required duration/reason, confirmation/cancel, Roblox-style notice, working appeal form, automatic expiry, alias restore, staff protection, and responsive themes.');
 }finally{await browser.close();}

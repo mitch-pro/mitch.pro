@@ -78,7 +78,6 @@ Before deploying:
 ```sh
 bun install --frozen-lockfile
 bun run test:unit
-bun run test:integration
 node --check server.js
 node --check lib/proxmox_desktop.js
 node --check lib/vm_security.js

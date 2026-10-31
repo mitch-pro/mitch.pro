@@ -1,44 +1,40 @@
 # Tests
 
-Local integration + unit tests for mitch.pro.
-
 The primary suite is the Rust workspace's own `cargo test` (`rust/crates/*/src/**/*.rs`,
-inline `#[cfg(test)] mod tests` blocks) — that's what CI runs before every deploy.
-The JS files in this directory predate the Rust port; some still cover behavior the
-Rust side doesn't have an equivalent test for yet (`bun run test:unit:legacy` in
-`package.json`), and a few read ported-over JS modules directly as test oracles.
+inline `#[cfg(test)] mod tests` blocks). The older JS unit and integration tests that
+read the removed `server.js` have been deleted.
 
-## Layout
+## Browser and script tests here
 
-| File | Purpose | Needs server? |
-|---|---|---|
-| `setup_session.js` | Generate valid SIDs, inject test admin + user into `data/names.json`, write a known admin passphrase, password hashes, and invite code. Idempotent. | No |
-| `test_daily_login_unit.js` | Pure-math tests for daily-login reward tiers and streak-freeze state machine. | No |
-| `test_daily_login.js` | Streak-freeze end-to-end (signup → verify → buy freeze → claim). | Yes |
-| `endpoint_test.js` | Master integration suite. | Yes |
-| `test_runner.js` | Backs up `data/`, injects credentials, starts the server, runs the suite, restores `data/`. | Yes |
+These run a real local `mitch-server` (build it first with `cargo build`) and use
+fixture accounts in a throwaway data directory. They never touch production.
 
-The integration tests (`test_runner.js` and `test_daily_login.js`) back up the live
-`data/` directory into `data_backup_test/` at the repo root and restore it after the
-run. The restore runs even on Ctrl-C and SIGTERM.
+| File | Covers |
+|---|---|
+| `test_admin_modernization.mjs` | Admin panel, VM resource editor, bans, friends, notifications |
+| `test_presence_browser.mjs` | Presence, friends API, privacy toggles |
+| `test_admin_email_browser.mjs` | Newsletter editor and delivery |
+| `test_leaderboard_ui.mjs` | Leaderboard UI |
+| `test_notifications.mjs` | Service-worker notification handling |
+| `test_service_worker_unit.js` | Service worker bypass and version consistency (the only `.js` test) |
+| `test_saves_page.mjs` | `/saves/` manager and the Matrix/E2E key exclusion |
+| `test_tester_hub.mjs` | `/api/tester/*` and the tester sandbox rules |
+| `test_blooket_*.mjs` | Blooket bot (`npm run test:blooket`) |
+| `test_site_ui_browser.mjs`, `test_site_refresh_browser.mjs`, `test_site_bans_browser.mjs`, `test_game_discovery_browser.mjs`, `test_matrix_*` | Other site-level browser checks |
 
 ## Running
 
 ```sh
 cargo test --manifest-path rust/Cargo.toml --workspace   # primary suite, no server needed
-bun run test:unit                                          # alias for the above
-bun run test:unit:legacy                                   # the older JS unit tests
-bun run test:integration                                   # full JS integration suite (backs up data/)
-bun run test:integration:daily-login                        # streak-freeze focused
-bun test                                                    # everything
+npx playwright install chromium                           # once, for the browser tests
+cargo build --manifest-path rust/Cargo.toml               # the browser tests spawn rust/target/debug/mitch-server
+node tests/test_saves_page.mjs                            # etc.
 ```
-
-The integration tests assume the server is reachable on `BASE_URL`
-(default `http://localhost:6800`). Override with `BASE_URL=https://… bun run test:integration`
-to run against a deployed instance.
 
 ## CI
 
-GitHub Actions runs `bun run test:unit` (the Rust suite) on every push to `master`
-before the deploy job. The JS integration tests are not run in CI because they
-require a clean `data/` and a running server; run them locally before merging.
+`rust-ci.yml` runs fmt, clippy and `cargo test --workspace`, then these browser
+tests: `test_leaderboard_ui.mjs`, `test_service_worker_unit.js`,
+`test_notifications.mjs`, `test_admin_modernization.mjs`,
+`test_presence_browser.mjs` and `test_admin_email_browser.mjs`. The deploy waits for
+that workflow to pass.

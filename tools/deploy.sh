@@ -264,15 +264,17 @@ main() {
 
     send_notification "Rebuilding and starting webserver-$INACTIVE_SLOT (Port $INACTIVE_PORT)..." "Deploy Started" "default"
 
-    # 3. Build and boot the inactive slot container, SSH gateway, conduit,
-    # LiveKit SFU, mail-rs, tor-browser, and the Litestream ramdisk-sync
-    # sidecar. sql-sync is listed explicitly (not just left to start
+    # 3. Build and boot the inactive slot container, conduit, LiveKit SFU,
+    # mail-rs, tor-browser, and the Litestream ramdisk-sync sidecar.
+    # --remove-orphans also clears containers for services that are no longer
+    # in the compose file (the retired ssh-gateway ones).
+    # sql-sync is listed explicitly (not just left to start
     # transitively via webserver's depends_on) so `--build` actually picks
     # up changes to sql-sync/Dockerfile or entrypoint.sh - `up --build`
     # only rebuilds services named on the command line, not dependencies
     # that get auto-started because something else depends on them.
-    echo "[deploy] Rebuilding and starting webserver-$INACTIVE_SLOT, ssh-gateway, conduit, livekit, mail-rs, tor-browser, and sql-sync..."
-    run_docker_compose --progress=plain up -d --build "webserver-$INACTIVE_SLOT" ssh-gateway conduit livekit mail-rs tor-browser sql-sync
+    echo "[deploy] Rebuilding and starting webserver-$INACTIVE_SLOT, conduit, livekit, mail-rs, tor-browser, and sql-sync..."
+    run_docker_compose --progress=plain up -d --build --remove-orphans "webserver-$INACTIVE_SLOT" conduit livekit mail-rs tor-browser sql-sync
 
     # Conduit does not hot-reload conduit.toml (federation/trusted-server config
     # changes need a process restart to take effect), which is why this used to

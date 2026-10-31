@@ -10,7 +10,7 @@ This is the public security note for the open-source tree. Detailed exploit writ
 - **CSRF:** Mutating `/api/*` requires same-origin `Origin`/`Referer` and `X-Mitch-Requested-With: 1` (see `webserver/api.js`).
 - **Client IP:** Caddy sets `X-Mitch-Client-IP` from Cloudflare connecting IP or the peer address; client-supplied copies are stripped.
 - **Proxies:** Arbitrary-site `/prox/` and ultra/bare stacks are removed. Fixed game host reverse proxies (e.g. `/proxy/gamemonetize/`) remain.
-- **Admin SSH:** Connections go through the isolated `ssh-gateway` container.
+- **Admin SSH:** The web SSH terminal and its `ssh-gateway` container are removed.
 - **Admin simulation:** Removed.
 - **Webhooks:** `/api/sms-reply` requires `SMS_WEBHOOK_SECRET`.
 - **Headers:** Caddy sets `nosniff`, framing controls, referrer policy, and a pragmatic CSP (inline scripts still used by many pages).

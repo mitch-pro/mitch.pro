@@ -204,9 +204,10 @@ echo "[deploy] Starting Blue-Green deployment swap..."
 
 send_notification "Rebuilding and starting webserver-$INACTIVE_SLOT (Port $INACTIVE_PORT)..." "Deploy Started" "default"
 
-# 3. Build and boot the inactive slot container, SSH gateway, conduit, LiveKit SFU, and mail-rs
-echo "[deploy] Rebuilding and starting webserver-$INACTIVE_SLOT, ssh-gateway, conduit, livekit, and mail-rs..."
-run_docker_compose --progress=plain up -d --build "webserver-$INACTIVE_SLOT" ssh-gateway conduit livekit mail-rs
+# 3. Build and boot the inactive slot container, conduit, LiveKit SFU, and mail-rs
+#    (--remove-orphans also clears containers for services no longer in the compose file)
+echo "[deploy] Rebuilding and starting webserver-$INACTIVE_SLOT, conduit, livekit, and mail-rs..."
+run_docker_compose --progress=plain up -d --build --remove-orphans "webserver-$INACTIVE_SLOT" conduit livekit mail-rs
 run_docker_compose restart conduit 2>/dev/null || true
 
 # 4. Poll the inactive container's health check until it is fully ready

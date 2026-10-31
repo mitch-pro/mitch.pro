@@ -28,8 +28,7 @@ mitch.pro/
 │   ├── crates/
 │   │   ├── mitch-server/    # Main HTTP/WebSocket server: routing, auth, static serving
 │   │   ├── mitch-lib/       # Shared domain logic (ported 1:1 from the original JS)
-│   │   ├── mitch-mail/      # Outbound/inbound mail pipeline
-│   │   └── mitch-ssh-gateway/ # Isolated SSH gateway for admin container access
+│   │   └── mitch-mail/      # Outbound/inbound mail pipeline
 │   └── Dockerfile
 ├── webserver/                # Static assets, page templates, and client-side JS/CSS
 ├── data/                      # SQLite database + version-controlled JSON configs
@@ -91,7 +90,6 @@ Key environment variables:
 | `NODE_ENV` | Runtime environment (`production` or `development`) | `development` |
 | `SESSION_COOKIE_SECURE` | Enforce `Secure` attribute on session cookies | `0` (`1` in production) |
 | `SMS_WEBHOOK_SECRET` | Authentication secret for inbound SMS webhook | None |
-| `SSH_GATEWAY_URL` | WebSocket URI for the SSH gateway | `ws://ssh-gateway:6820` |
 | `ENABLE_ADMIN_KEY_HEADER` | Break-glass admin bypass header (keep disabled) | `0` |
 | `NTFY_TOPIC` / `NTFY_USER` / `NTFY_PASS` | Optional [ntfy](https://ntfy.sh) push notification credentials | None |
 
@@ -102,11 +100,9 @@ Key environment variables:
 ```bash
 cargo test --manifest-path rust/Cargo.toml --workspace   # Rust unit tests (primary suite)
 bun run test:unit                                         # Same, via the npm script alias
-bun run test:integration                                  # Full JS integration suite (needs a running server)
-bun test                                                   # Everything
 ```
 
-See [tests/README.md](tests/README.md) for the full breakdown, including the legacy JS unit tests kept around for coverage the Rust port hasn't fully absorbed yet.
+See [tests/README.md](tests/README.md) for the browser tests that run against a local server.
 
 ---
 

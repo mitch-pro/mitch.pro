@@ -104,7 +104,6 @@ services:
       - GOOGLE_ANALYTICS_ID
       - RECAPTCHA_SITE_KEY
       - BLOOKET_BOT_HOST=blooket-bot
-      - SSH_GATEWAY_URL=ws://ssh-gateway:6820
       - CONDUIT_HOST=conduit
       - LIVEKIT_HOST=livekit
       - LIVEKIT_PORT=7880
@@ -204,7 +203,6 @@ services:
       - GOOGLE_ANALYTICS_ID
       - RECAPTCHA_SITE_KEY
       - BLOOKET_BOT_HOST=blooket-bot
-      - SSH_GATEWAY_URL=ws://ssh-gateway:6820
       - CONDUIT_HOST=conduit
       - LIVEKIT_HOST=livekit
       - LIVEKIT_PORT=7880
@@ -234,16 +232,6 @@ services:
       - PROXMOX_VM_STORAGE
       - PROXMOX_VM_BRIDGE
       - HIDE_VM_FEATURES
-
-  # SSH Gateway sidecar (internal only — admin SSH via WebSocket)
-  ssh-gateway:
-    build: ./ssh-gateway
-    container_name: mitch-ssh-gateway
-    restart: unless-stopped
-    expose:
-      - "6820"
-    environment:
-      - PORT=6820
 
   # Rust mail pipeline (plan Step 2 of the Rust rewrite, on the rust branch).
   # Replaces the mail/*.js nodemailer CLIs + imap_watcher; the JS scripts
@@ -286,21 +274,6 @@ services:
       - GMAIL_USER
       - GMAIL_PASS_ALT
       - GMAIL_PASS
-
-  # Rust ssh-gateway (plan Step 3 of the Rust rewrite). Runs in parallel with
-  # the JS gateway; cutover is a one-line change of the webserver's
-  # SSH_GATEWAY_URL. Protocol is identical (tests/ssh_gateway_test.js).
-  ssh-gateway-rs:
-    build:
-      context: ./rust
-      dockerfile: Dockerfile
-    container_name: mitch-ssh-gateway-rs
-    restart: unless-stopped
-    expose:
-      - "6821"
-    environment:
-      - MITCH_SERVICE=mitch-ssh-gateway
-      - PORT=6821
 
   # Node.js + Xvfb Stream Proxy (Port 8081)
   proxy:
