@@ -305,6 +305,18 @@ async function connect() {
     if (keyMode === 'keysym') {
       Object.defineProperty(client, '_qemuExtKeyEventSupported', { get: () => false, set: () => {} });
     }
+    // `&debug=keys` shows the last key events this page sends, to tell a browser
+    // or OS that swallows Ctrl apart from a server that drops it.
+    if (query.get('debug') === 'keys') {
+      const log = [];
+      const original = client.sendKey.bind(client);
+      client.sendKey = (keysym, code, down) => {
+        log.push(`${down === false ? 'up' : 'down'} ${code || '?'} 0x${(keysym || 0).toString(16)}`);
+        if (log.length > 8) log.shift();
+        $('desktop-notice').textContent = log.join(' | ');
+        return original(keysym, code, down);
+      };
+    }
     client.scaleViewport = true; client.resizeSession = true; client.clipViewport = false;
     client.showDotCursor = true; client.background = '#050607'; client.qualityLevel = 7; client.compressionLevel = 2;
     client.addEventListener('connect', () => {
