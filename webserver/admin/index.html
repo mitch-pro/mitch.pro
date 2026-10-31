@@ -657,12 +657,12 @@
       <div class="section-head"><h2>Site operations</h2><span class="tag">Owner access</span></div>
       <div class="actions-panel" id="owner-operations"></div>
       <section class="action-card" id="coowner-role-card" hidden style="border-color:#38bdf8;background:rgba(14,165,233,.12);margin-bottom:18px;">
-        <h2>Co-Owner Access</h2>
-        <p>Co-owners have elevated administrative privileges across the site, but remain subordinate to the primary Owner. Co-owners cannot add, remove, or modify the Owner, and only the Owner can delete co-owners or admins.</p>
+        <h2>Developer Access</h2>
+        <p>Developers have elevated administrative privileges across the site, but remain subordinate to the primary Owner. Developers cannot add, remove, or modify the Owner, and only the Owner can delete developers or admins.</p>
         <div id="coowner-role-list" style="font-size:.78rem;margin-bottom:10px;"></div>
         <form onsubmit="addCoOwner(event)" style="display:flex;gap:7px;flex-wrap:wrap;">
           <input id="coowner-role-email" type="email" placeholder="existing-user@email.com" required style="flex:1;min-width:220px">
-          <button type="submit" style="width:auto;background:#0284c7;color:#fff;border-color:#0284c7;">Grant Co-Owner</button>
+          <button type="submit" style="width:auto;background:#0284c7;color:#fff;border-color:#0284c7;">Grant Developer</button>
         </form>
         <div id="coowner-role-status" class="form-status" role="status"></div>
       </section>
@@ -1744,13 +1744,13 @@
       try {
         const r = await fetch('/api/admin/co-owners', { credentials: 'include', cache: 'no-store', headers: getAdminHeaders() });
         const d = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(d.error || 'Could not load co-owners.');
+        if (!r.ok) throw new Error(d.error || 'Could not load developers.');
         list.innerHTML = (d.coOwners || []).map(email => `
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;padding:7px 9px;border:1px solid rgba(56,189,248,.3);border-radius:8px;">
             <span>${esc(email)}</span>
-            <button type="button" data-danger onclick='removeCoOwner(${JSON.stringify(email)})' style="padding:4px 8px;font-size:11px;width:auto;">Remove Co-Owner</button>
+            <button type="button" data-danger onclick='removeCoOwner(${JSON.stringify(email)})' style="padding:4px 8px;font-size:11px;width:auto;">Remove Developer</button>
           </div>
-        `).join('') || '<div class="muted">No co-owners configured.</div>';
+        `).join('') || '<div class="muted">No developers configured.</div>';
       } catch (err) {
         setStatus('coowner-role-status', err.message, 'err');
       }
@@ -1760,22 +1760,22 @@
       event.preventDefault();
       const input = document.getElementById('coowner-role-email');
       const email = input.value.trim();
-      if (!email || !(await customConfirm('Grant Co-Owner access', `${email} will receive co-owner administrative access across the website. Continue?`))) return;
+      if (!email || !(await customConfirm('Grant Developer access', `${email} will receive developer administrative access across the website. Continue?`))) return;
       setStatus('coowner-role-status', 'Granting access...', '');
       try {
         await postAdmin('/api/admin/co-owners', { email, active: true });
         input.value = '';
-        setStatus('coowner-role-status', 'Co-Owner access granted immediately.', 'ok');
+        setStatus('coowner-role-status', 'Developer access granted immediately.', 'ok');
         await loadCoOwners();
       } catch (err) { setStatus('coowner-role-status', err.message, 'err'); }
     }
 
     async function removeCoOwner(email) {
-      if (!(await customConfirm('Remove Co-Owner access', `Remove co-owner access from ${email}?`))) return;
+      if (!(await customConfirm('Remove Developer access', `Remove developer access from ${email}?`))) return;
       setStatus('coowner-role-status', 'Removing access...', '');
       try {
         await postAdmin('/api/admin/co-owners', { email, active: false });
-        setStatus('coowner-role-status', 'Co-Owner access removed.', 'ok');
+        setStatus('coowner-role-status', 'Developer access removed.', 'ok');
         await loadCoOwners();
       } catch (err) { setStatus('coowner-role-status', err.message, 'err'); }
     }
@@ -1792,9 +1792,9 @@
         case 'remove_admin':
           return `This will RESTORE admin access for ${d.target || '(unknown)'}.\n\nCurrent state:  not admin\nAfter revert:   admin`;
         case 'add_co_owner':
-          return `This will REMOVE co-owner access from ${d.target || '(unknown)'}.\n\nCurrent state:  co-owner\nAfter revert:   not co-owner`;
+          return `This will REMOVE developer access from ${d.target || '(unknown)'}.\n\nCurrent state:  developer\nAfter revert:   not developer`;
         case 'remove_co_owner':
-          return `This will RESTORE co-owner access for ${d.target || '(unknown)'}.\n\nCurrent state:  not co-owner\nAfter revert:   co-owner`;
+          return `This will RESTORE developer access for ${d.target || '(unknown)'}.\n\nCurrent state:  not developer\nAfter revert:   developer`;
         case 'add_moderator':
           return `This will REMOVE moderator access from ${d.target || '(unknown)'}.\n\nCurrent state:  moderator\nAfter revert:   not moderator`;
         case 'remove_moderator':
@@ -3703,12 +3703,12 @@
       }
       if (location.hash === '#owner-tools' && !currentUser.isOwner) activateToolGroup('approval-tools');
       const eyebrow = document.querySelector('.staff-eyebrow');
-      if (eyebrow && currentUser.isCoOwner) eyebrow.textContent = 'mitch.pro / co-owner systems';
+      if (eyebrow && currentUser.isCoOwner) eyebrow.textContent = 'mitch.pro / developer systems';
       document.body.classList.toggle('moderator-mode', !!(currentUser.isModerator && !currentUser.isAdmin));
       document.getElementById('role-note').textContent = currentUser.isOwner
-        ? 'Owner mode: full unrestricted root control of site, accounts, co-owners, and administrators.'
+        ? 'Owner mode: full unrestricted root control of site, accounts, developers, and administrators.'
         : currentUser.isCoOwner
-        ? 'Co-owner mode: elevated administrative access is active. Modifying admins and co-owners requires primary Owner access.'
+        ? 'Developer mode: elevated administrative access is active. Modifying admins and developers requires primary Owner access.'
         : currentUser.isAdmin
         ? 'Admin mode: changes apply immediately and every privileged action is logged.'
         : (currentUser.isModerator
@@ -3759,7 +3759,7 @@
       await loadModeratorRequests();
       document.getElementById('access-status').textContent = currentUser.isOwner
         ? 'Owner verified'
-        : (currentUser.isCoOwner ? 'Co-owner verified' : (currentUser.isAdmin ? 'Admin verified' : 'Moderator review mode'));
+        : (currentUser.isCoOwner ? 'Developer verified' : (currentUser.isAdmin ? 'Admin verified' : 'Moderator review mode'));
       renderCards();
       populateAuditFilters();
       applyFilter();

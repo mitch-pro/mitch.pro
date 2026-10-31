@@ -267,7 +267,7 @@
       $('upgrade-notice-copy').textContent = owner
         ? (upgradeData.isOwner
             ? 'Owners can enter custom resources without spending coins. Shut down your computer first. Available hardware and storage still depend on the host; disks can grow, but cannot shrink.'
-            : 'Co-owners can enter custom resources up to 8 CPU cores, 16 GB memory, and 128 GB storage without spending coins. Shut down your computer first. Disks can grow, but cannot shrink.')
+            : 'Developers can enter custom resources up to 8 CPU cores, 16 GB memory, and 128 GB storage without spending coins. Shut down your computer first. Disks can grow, but cannot shrink.')
         : 'Optional upgrades use earned MitchCoins. Hardware upgrades stay with your account.';
       renderUpgradeTab();
     } catch (err) {
@@ -282,7 +282,7 @@
     if (!container || !upgradeData) return;
     const cat = activeUpgradeTab;
     if (upgradeData.ownerCustomization) {
-      if (cat === 'session') { container.innerHTML = '<p class="owner-resource-note">Owner and co-owner computers have unlimited session time.</p>'; return; }
+      if (cat === 'session') { container.innerHTML = '<p class="owner-resource-note">Owner and developer computers have unlimited session time.</p>'; return; }
       const isOwner = upgradeData.isOwner === true;
       const values = upgradeData.current || {};
       const maxVals = isOwner ? {} : { cpu: 8, ram: 16, disk: 128 };

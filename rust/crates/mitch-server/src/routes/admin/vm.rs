@@ -482,7 +482,7 @@ pub async fn handle(
             if auth::is_vm_owner_locked(&state.store, &rec.owner_email) && !actor.is_owner {
                 return Some(json_response(
                     403,
-                    json!({ "error": "Co-owners and admins cannot reassign an owner's computer." }),
+                    json!({ "error": "Developers and admins cannot reassign an owner's computer." }),
                 ));
             }
             if rec.status != "unassigned" && auth::normalize_email(&rec.owner_email) != owner_email
@@ -650,7 +650,7 @@ pub async fn handle(
         if auth::is_vm_owner_locked(&state.store, &record.owner_email) && !actor.is_owner {
             return Some(json_response(
                 403,
-                json!({ "error": "Co-owners and admins cannot unassign an owner's computer." }),
+                json!({ "error": "Developers and admins cannot unassign an owner's computer." }),
             ));
         }
 
@@ -1102,7 +1102,7 @@ pub async fn handle(
         if auth::is_vm_owner_locked(&state.store, &record_owner) && !actor.is_owner {
             return Some(json_response(
                 403,
-                json!({ "error": "Co-owners and admins cannot delete an owner's computer." }),
+                json!({ "error": "Developers and admins cannot delete an owner's computer." }),
             ));
         }
 

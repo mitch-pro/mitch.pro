@@ -376,7 +376,7 @@
 
     function roleClass(role) {
       const value = String(role || '').toLowerCase();
-      if (value.includes('owner')) return 'owner';
+      if (value.includes('owner') || value.includes('developer')) return 'owner';
       if (value.includes('admin')) return 'admin';
       if (value.includes('moderator')) return 'moderator';
       if (value.includes('premium')) return 'premium';
@@ -432,8 +432,8 @@
         const roleText = String(member.role || '').toLowerCase();
         if (role === 'online') return member.online;
         if (role === 'friends') return member.friendStatus === 'friends';
-        if (role === 'premium') return roleText.includes('premium') || roleText.includes('owner') || roleText.includes('admin');
-        if (role === 'staff') return roleText.includes('owner') || roleText.includes('admin') || roleText.includes('moderator');
+        if (role === 'premium') return roleText.includes('premium') || roleText.includes('owner') || roleText.includes('developer') || roleText.includes('admin');
+        if (role === 'staff') return roleText.includes('owner') || roleText.includes('developer') || roleText.includes('admin') || roleText.includes('moderator');
         return true;
       });
       list.sort((a, b) => {

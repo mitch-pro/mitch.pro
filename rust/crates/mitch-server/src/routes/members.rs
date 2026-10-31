@@ -347,7 +347,7 @@ fn member_req_between(req: &Value, from_norm: &str, to_norm: &str) -> bool {
 pub(crate) fn member_role(state: &Arc<AppState>, email: &str) -> &'static str {
     let norm = auth::normalize_email(email);
     if auth::is_co_owner_email(&state.store, email) {
-        "co-owner/developer"
+        "developer"
     } else if auth::owner_member_emails(&state.store)
         .iter()
         .any(|o| auth::normalize_email(o) == norm)
@@ -588,7 +588,7 @@ fn owner_members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
                 "displayName": jsval::or(processed.get("displayName"), json!("mitch")),
                 "email": processed.get("email").cloned().unwrap_or(Value::Null),
                 "role": if auth::is_co_owner_email(&state.store, email) {
-                    "co-owner/developer"
+                    "developer"
                 } else {
                     "owner/developer"
                 },

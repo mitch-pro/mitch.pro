@@ -836,7 +836,7 @@ fn me_root(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     ));
 
     let role = if is_co_owner {
-        "co-owner"
+        "developer"
     } else if is_owner {
         "owner"
     } else if is_admin {

@@ -844,7 +844,7 @@ fn set_co_owner(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response
     if mitch_lib::auth::is_owner_email(&state.store, &target) {
         return json_response(
             403,
-            json!({ "error": "Owner cannot be modified as a co-owner" }),
+            json!({ "error": "Owner cannot be modified as a developer" }),
         );
     }
     let active = body.get("active").and_then(|v| v.as_bool()) == Some(true);
@@ -1016,9 +1016,9 @@ fn revert_admin_action(
             } else {
                 let resp = set_co_owner(state, &json!({ "email": target, "active": false }), ctx);
                 if resp.status().is_success() {
-                    Ok(format!("Removed co-owner {}", target))
+                    Ok(format!("Removed developer {}", target))
                 } else {
-                    Err("Failed to remove co-owner".into())
+                    Err("Failed to remove developer".into())
                 }
             }
         }
@@ -1032,9 +1032,9 @@ fn revert_admin_action(
             } else {
                 let resp = set_co_owner(state, &json!({ "email": target, "active": true }), ctx);
                 if resp.status().is_success() {
-                    Ok(format!("Restored co-owner {}", target))
+                    Ok(format!("Restored developer {}", target))
                 } else {
-                    Err("Failed to restore co-owner".into())
+                    Err("Failed to restore developer".into())
                 }
             }
         }
