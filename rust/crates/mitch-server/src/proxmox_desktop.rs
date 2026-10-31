@@ -780,8 +780,19 @@ impl ProxmoxDesktopService {
         Ok(payload.get("data").cloned().unwrap_or(Value::Null))
     }
 
-    /// `listGuests()` (lib/proxmox_desktop.js:160-169).
+    /// `listGuests()` (lib/proxmox_desktop.js:160-169), minus the owner's
+    /// private container so no admin page, allocator or worker ever sees it.
+    /// Only the owner-container routes use [`Self::list_guests_all`].
     pub async fn list_guests(&self) -> Result<Vec<Value>, ProxmoxServiceError> {
+        let mut guests = self.list_guests_all().await?;
+        guests.retain(|g| {
+            jsval::number(&g["vmid"]).map(|n| n as i64) != Some(mitch_lib::vm::OWNER_CONTAINER_VMID)
+        });
+        Ok(guests)
+    }
+
+    /// Every guest on the cluster, including the owner's private container.
+    pub async fn list_guests_all(&self) -> Result<Vec<Value>, ProxmoxServiceError> {
         let rows = self
             .request(
                 "GET",
@@ -1191,8 +1202,20 @@ impl ProxmoxDesktopService {
 
     /// `createConsole(record)` (lib/proxmox_desktop.js:315-334).
     pub async fn create_console(&self, record: &Value) -> Result<Value, ProxmoxServiceError> {
+        self.create_console_for(record, false).await
+    }
+
+    /// `allow_lxc` is only set for the owner's container, whose console is the
+    /// container's text login shown through the same noVNC bridge; ordinary
+    /// computers keep requiring a graphical qemu desktop.
+    pub async fn create_console_for(
+        &self,
+        record: &Value,
+        allow_lxc: bool,
+    ) -> Result<Value, ProxmoxServiceError> {
         let vmid = self.assert_vmid(jsval::number(&record["vmid"]))?;
-        if Self::guest_type_of(record) != "qemu" {
+        let guest_type = Self::guest_type_of(record);
+        if guest_type != "qemu" && !(allow_lxc && guest_type == "lxc") {
             return Err(ProxmoxServiceError::new(
                 "NO_GRAPHICAL_DESKTOP",
                 "This computer does not have a graphical desktop.",
@@ -1212,8 +1235,9 @@ impl ProxmoxDesktopService {
             .request(
                 "POST",
                 &format!(
-                    "/nodes/{}/qemu/{}/vncproxy",
+                    "/nodes/{}/{}/{}/vncproxy",
                     encode_uri_component(&node),
+                    guest_type,
                     vmid
                 ),
                 Some(&json!({ "websocket": 1 })),
@@ -1234,9 +1258,10 @@ impl ProxmoxDesktopService {
             ));
         }
         let ws_url = format!(
-            "{}/api2/json/nodes/{}/qemu/{}/vncwebsocket?port={}&vncticket={}",
+            "{}/api2/json/nodes/{}/{}/{}/vncwebsocket?port={}&vncticket={}",
             self.ws_base(),
             encode_uri_component(&node),
+            guest_type,
             vmid,
             jsval::num_value(port),
             encode_uri_component(&ticket)
@@ -1450,6 +1475,9 @@ impl ProxmoxDesktopService {
                 used.insert(*raw as i64);
             }
         }
+        // `list_guests` hides the owner's container, so reserve its id here or
+        // the allocator would hand it to a new computer.
+        used.insert(mitch_lib::vm::OWNER_CONTAINER_VMID);
         // JS `for (let vmid = Number(min); vmid <= Number(max); vmid++)` — a
         // NaN bound means the loop body never runs and the caller sees
         // NO_CAPACITY.

@@ -1550,6 +1550,17 @@ pub async fn handle(
             Some(_) => {}
         }
     }
+    // The owner's private container page 404s for everyone but the owner so
+    // its existence isn't revealed to admins or developers.
+    if is_html_request
+        && (html_base == "/admin/vms/owner-container"
+            || html_base.starts_with("/admin/vms/owner-container/"))
+    {
+        match authenticated_vm_actor(&state, headers, node_env_test) {
+            Some((_, email, _)) if mitch_lib::auth::is_owner_email(&state.store, &email) => {}
+            _ => return err_resp(404, Some("Not found"), None),
+        }
+    }
     if is_html_request && !is_open_html_page && !path.starts_with("/unsubscribe/") {
         let cookie_header = headers
             .get(axum::http::header::COOKIE)

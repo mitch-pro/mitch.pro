@@ -1684,6 +1684,19 @@ pub(crate) fn vm_desktop_socket_authorized(state: &AppState, data: &Value) -> bo
     } else if !node_env_test {
         return false;
     }
+    if data
+        .get("ownerContainer")
+        .map(jsval::truthy)
+        .unwrap_or(false)
+    {
+        // No database record: re-check that the session still belongs to an
+        // owner and still points at the owner container.
+        return mitch_lib::auth::is_owner_email(
+            &state.store,
+            &jsval::str_or(data.get("actorEmail"), ""),
+        ) && data.get("vmid").and_then(jsval::number)
+            == Some(mitch_lib::vm::OWNER_CONTAINER_VMID as f64);
+    }
     let record =
         vmlib::get_virtual_machine_by_id(&state.store, &jsval::str_or(data.get("recordId"), ""));
     let Some(record) = record else {
@@ -2478,6 +2491,23 @@ pub fn handle_desktop_ws_upgrade(
         ));
     }
 
+    // The owner's private container has no `virtual_machines` row: its
+    // sessions are minted only by `admin/owner_container.rs` for the owner, and
+    // are accepted here only for that same owner.
+    let owner_container = session
+        .get("ownerContainer")
+        .map(jsval::truthy)
+        .unwrap_or(false);
+    if owner_container
+        && !(actor.is_owner
+            && jsval::str_or(session.get("actorEmail"), "").eq_ignore_ascii_case(&actor.email))
+    {
+        return Some(json_response(
+            401,
+            json!({ "error": "Desktop connection expired." }),
+        ));
+    }
+
     let record_id = jsval::str_or(session.get("recordId"), "");
     let record_opt = vmlib::get_virtual_machine_by_id(&state.store, &record_id);
     let record_json = record_opt.as_ref().map(|r| r.to_json());
@@ -2490,15 +2520,19 @@ pub fn handle_desktop_ws_upgrade(
             ));
         }
     }
-    let (ok, status, _code) = validate_desktop_session(
-        Some(&session),
-        Some(&actor_json),
-        record_json.as_ref(),
-        now_ms() as f64,
-        |email| mitch_lib::auth::is_admin_email(&state.store, email),
-        false,
-        None,
-    );
+    let (ok, status, _code) = if owner_container {
+        (true, 200, "")
+    } else {
+        validate_desktop_session(
+            Some(&session),
+            Some(&actor_json),
+            record_json.as_ref(),
+            now_ms() as f64,
+            |email| mitch_lib::auth::is_admin_email(&state.store, email),
+            false,
+            None,
+        )
+    };
     if !ok {
         let err_msg = if status == 401 {
             "Desktop connection expired."
@@ -2529,6 +2563,7 @@ pub fn handle_desktop_ws_upgrade(
 
     let ws_data = json!({
         "isProxmoxVnc": true,
+        "ownerContainer": owner_container,
         "recordId": record_id,
         "actorEmail": actor.email,
         "sid": actor.sid,

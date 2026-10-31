@@ -1,0 +1,20 @@
+/* Surface colors come from the site theme tokens (app.css/theme.js); fallbacks
+   are the dark values and html.theme-light marks light mode. */
+.oc-shell { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; color: var(--t-fg, #f1f3f5); font-family: 'DM Sans', system-ui, sans-serif; }
+.oc-header { display: flex; align-items: baseline; gap: 16px; margin-bottom: 16px; }
+.oc-header h1 { margin: 0; font-size: 1.5rem; }
+.oc-back { color: var(--t-fg2, #9ca3ae); text-decoration: none; font-size: .9rem; }
+.oc-message { min-height: 1.2em; color: var(--t-fg2, #9ca3ae); }
+.oc-message.err { color: #b42318; }
+html:not(.theme-light) .oc-message.err { color: #fca5a5; }
+.oc-card { background: var(--t-bg2, #171b22); border: 1px solid var(--t-bd, rgba(255,255,255,.11)); border-radius: 10px; padding: 16px; }
+.oc-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin: 0 0 16px; }
+.oc-stats dt { font-size: .75rem; color: var(--t-fg2, #9ca3ae); }
+.oc-stats dd { margin: 2px 0 0; font-weight: 600; }
+.oc-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.oc-actions button { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--t-bd, rgba(255,255,255,.11)); background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.oc-actions button:disabled { opacity: .5; cursor: default; }
+.oc-actions .oc-primary { background: var(--t-ac, #38bdf8); border-color: var(--t-ac, #38bdf8); color: #0b1120; }
+.oc-actions .oc-danger { color: #b42318; border-color: rgba(180, 35, 24, .45); }
+html:not(.theme-light) .oc-actions .oc-danger { color: #fca5a5; border-color: rgba(239, 68, 68, .4); }
+.oc-screen { margin-top: 16px; height: 70vh; background: #000; border-radius: 10px; overflow: hidden; }

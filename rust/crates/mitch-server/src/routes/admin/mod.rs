@@ -29,6 +29,7 @@ pub mod email;
 pub mod legacy;
 pub mod moderation;
 pub mod newsletters;
+pub mod owner_container;
 pub mod vm;
 
 pub type Resp = Option<Response>;
@@ -244,6 +245,11 @@ pub async fn handle(
 
     // ── Economy/coins/premium ──
     if let Some(resp) = economy::handle(state, method, path, headers, body, &ctx) {
+        return Some(resp);
+    }
+
+    // ── Owner-only container (404s for everyone but the owner) ──
+    if let Some(resp) = owner_container::handle(state, method, path, headers, body).await {
         return Some(resp);
     }
 

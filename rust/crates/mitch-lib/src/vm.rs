@@ -11,6 +11,13 @@ use crate::data::DataStore;
 use serde_json::{json, Map, Value};
 
 /// A virtual machine record — the JS object shape returned by
+/// Proxmox container reserved for the owner. It is created by hand in Proxmox
+/// and is invisible to every other account: it is filtered out of
+/// `list_guests`, kept out of the VM id allocator, and only reachable through
+/// the owner-only `/api/admin/owner-container` routes. See
+/// `docs/owner-container.md`.
+pub const OWNER_CONTAINER_VMID: i64 = 500;
+
 /// `vmRowToRecord` (data_store.js:205-225). Serde keeps field order for
 /// response bodies.
 #[derive(Debug, Clone, PartialEq)]
