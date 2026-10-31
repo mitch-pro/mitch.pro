@@ -6,6 +6,7 @@
 <title>Saves — mitch.pro</title>
 <link rel="stylesheet" href="/app.css">
 <script src="/api.js"></script>
+<script src="/idb-sync.js"></script>
 <script src="/app-shell.js" defer></script>
 <style>
   .saves-shell { width: min(60rem, 100%); max-width: 60rem; }
@@ -123,7 +124,8 @@
   var RESTORED_KEY = '_just_restored';
   var QUOTA = 1073741824;
   // Top-level server keys that belong to the sync mechanism, not to a save.
-  var INTERNAL = { _snapshot: 1, _snapshot_ts: 1, _snapshot2: 1, _snapshot2_ts: 1, _updated: 1, _quota: 1 };
+  var INTERNAL = { _snapshot: 1, _snapshot_ts: 1, _snapshot2: 1, _snapshot2_ts: 1, _idb: 1, _idb_ts: 1, _idb2: 1, _idb2_ts: 1, _updated: 1, _quota: 1 };
+  var IDB_HASH_KEY = '_sync_idb_hash';
 
   // Matrix login/keys and E2E key material are never synced or restored.
   // Mirrors is_sensitive_sync_key in routes/members.rs and sync.js.
@@ -151,6 +153,9 @@
   var serverSnap = {};     // server._snapshot (auto slot, written by sync.js)
   var manualSnap = {};     // server._snapshot2 (manual slot, only written from this page)
   var local = {};          // this browser's snapshot
+  var serverIdb = {};      // server._idb: IndexedDB databases (game saves) in the auto slot
+  var manualIdb = {};      // server._idb2: same, manual slot
+  var localIdb = {};       // this browser's IndexedDB databases
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -173,7 +178,7 @@
     var obj = {};
     for (var i = 0; i < localStorage.length; i++) {
       var k = localStorage.key(i);
-      if (k === SYNC_TS_KEY || k === RESTORED_KEY || k.indexOf('_panic') === 0 || k.indexOf('_cloak') === 0 || isSensitiveKey(k)) continue;
+      if (k === SYNC_TS_KEY || k === RESTORED_KEY || k === IDB_HASH_KEY || k.indexOf('_panic') === 0 || k.indexOf('_cloak') === 0 || isSensitiveKey(k)) continue;
       var raw = localStorage.getItem(k);
       try { obj[k] = JSON.parse(raw); } catch (e) { obj[k] = raw; }
     }
@@ -201,6 +206,28 @@
     return fetch('/api/userdata', opts);
   }
 
+  var IDB = window.MitchIDB;
+  async function refreshLocalIdb() {
+    try { localIdb = IDB && IDB.supported ? await IDB.dump() : {}; } catch (e) { localIdb = {}; }
+  }
+  // Writes databases into this browser; returns a status suffix describing any failures.
+  async function restoreIdb(dbs, only) {
+    if (!IDB || !IDB.supported || !Object.keys(dbs || {}).length) return '';
+    var res = await IDB.restore(dbs, only);
+    await refreshLocalIdb();
+    return res.failed.length ? ' Could not restore ' + res.failed.map(function (f) { return f.name + ' (' + f.error + ')'; }).join(', ') + '.' : '';
+  }
+  // Upload this browser's databases, merged per database over the server copy.
+  async function pushIdb(names) {
+    var merged = Object.assign({}, serverIdb);
+    Object.keys(localIdb).forEach(function (n) { if (!names || names.indexOf(n) >= 0) merged[n] = localIdb[n]; });
+    if (!Object.keys(merged).length) return;
+    var r = await api('POST', { _idb: merged, _idb_ts: Date.now() });
+    if (r.status === 413) throw new Error('Server storage limit reached.');
+    if (!r.ok) throw new Error('Server returned ' + r.status + '.');
+    if (IDB) localStorage.setItem(IDB_HASH_KEY, IDB.hash(localIdb));
+  }
+
   async function load() {
     var r;
     try { r = await api('GET'); } catch (e) { status('Could not reach the server.', 'err'); return false; }
@@ -219,7 +246,10 @@
     server = await r.json();
     serverSnap = (server && typeof server._snapshot === 'object' && server._snapshot) || {};
     manualSnap = (server && typeof server._snapshot2 === 'object' && server._snapshot2) || {};
+    serverIdb = (server && typeof server._idb === 'object' && server._idb) || {};
+    manualIdb = (server && typeof server._idb2 === 'object' && server._idb2) || {};
     local = localSnap();
+    await refreshLocalIdb();
     $('signin-panel').hidden = true;
     $('main').hidden = false;
     render();
@@ -252,12 +282,12 @@
     $('st-auto').appendChild(link);
     $('st-server').textContent = bytes(total) + ' of ' + bytes((server && server._quota && server._quota.limit) || QUOTA);
     var mts = server && server._snapshot2_ts;
-    var mn = Object.keys(manualSnap).length;
+    var mn = Object.keys(manualSnap).length + Object.keys(manualIdb).length;
     $('m-ts').textContent = mn && mts ? new Date(mts).toLocaleString() : 'Empty';
     $('m-items').textContent = mn ? String(mn) : '—';
-    $('m-size').textContent = mn ? bytes(size(manualSnap)) : '—';
+    $('m-size').textContent = mn ? bytes(size(manualSnap) + size(manualIdb)) : '—';
     $('btn-m-restore').disabled = $('btn-m-download').disabled = $('btn-m-delete').disabled = !mn;
-    $('st-local').textContent = Object.keys(local).length + ' items';
+    $('st-local').textContent = (Object.keys(local).length + Object.keys(localIdb).length) + ' items';
 
     var q = $('filter').value.trim().toLowerCase();
     var keys = {};
@@ -269,6 +299,16 @@
       var inL = Object.prototype.hasOwnProperty.call(local, k);
       var state = inS && inL ? (same(serverSnap[k], local[k]) ? 'synced' : 'differs') : (inS ? 'server' : 'local');
       return { key: k, inS: inS, inL: inL, state: state, group: groupOf(k) };
+    });
+    // Game databases (IndexedDB), e.g. Drive Mad's progress.
+    var idbNames = {};
+    Object.keys(serverIdb).forEach(function (n) { idbNames[n] = 1; });
+    Object.keys(localIdb).forEach(function (n) { idbNames[n] = 1; });
+    Object.keys(idbNames).forEach(function (n) {
+      var inS = Object.prototype.hasOwnProperty.call(serverIdb, n);
+      var inL = Object.prototype.hasOwnProperty.call(localIdb, n);
+      var state = inS && inL ? (same(serverIdb[n], localIdb[n]) ? 'synced' : 'differs') : (inS ? 'server' : 'local');
+      entries.push({ key: n, inS: inS, inL: inL, state: state, group: 'Game databases', idb: true });
     });
     // Entries stored at the top level of the server blob outside the snapshot
     // (e.g. a game that saves directly) have no local counterpart.
@@ -288,7 +328,7 @@
       list.appendChild(empty);
       return;
     }
-    ['Settings', 'Game data', 'Other server data'].forEach(function (g) {
+    ['Settings', 'Game data', 'Game databases', 'Other server data'].forEach(function (g) {
       var items = entries.filter(function (e) { return e.group === g; });
       if (!items.length) return;
       var title = document.createElement('div');
@@ -310,7 +350,7 @@
     var name = document.createElement('div');
     name.className = 'row-name';
     var b = document.createElement('b');
-    b.textContent = e.top ? e.key : labelOf(e.key);
+    b.textContent = e.top || e.idb ? e.key : labelOf(e.key);
     var badge = document.createElement('span');
     badge.className = 'badge ' + e.state;
     badge.textContent = BADGES[e.state];
@@ -318,11 +358,12 @@
     var code = document.createElement('code');
     code.textContent = e.key;
     name.appendChild(b);
-    if (!e.top) name.appendChild(code);
+    if (!e.top && !e.idb) name.appendChild(code);
     var sz = document.createElement('div');
     sz.className = 'row-size';
-    var serverValue = e.top ? server[e.key] : serverSnap[e.key];
-    sz.textContent = bytes(size(e.inS ? serverValue : local[e.key]));
+    var serverValue = e.top ? server[e.key] : (e.idb ? serverIdb[e.key] : serverSnap[e.key]);
+    var localValue = e.idb ? localIdb[e.key] : local[e.key];
+    sz.textContent = bytes(size(e.inS ? serverValue : localValue));
     var btns = document.createElement('div');
     btns.className = 'row-btns';
 
@@ -334,9 +375,9 @@
       btn.addEventListener('click', function () { guard(btn, fn); });
       btns.appendChild(btn);
     }
-    if (e.inL && e.state !== 'synced' && !e.top) add('Upload', function () { return uploadKey(e.key); });
-    if (e.inS && e.state !== 'synced' && !e.top) add('Restore', function () { return restoreKey(e.key); });
-    add('Download', function () { download((e.key.replace(/[^\w.-]+/g, '_') || 'save') + '.json', e.inS ? serverValue : local[e.key]); });
+    if (e.inL && e.state !== 'synced' && !e.top) add('Upload', function () { return e.idb ? uploadDb(e.key) : uploadKey(e.key); });
+    if (e.inS && e.state !== 'synced' && !e.top) add('Restore', function () { return e.idb ? restoreDb(e.key) : restoreKey(e.key); });
+    add('Download', function () { download((e.key.replace(/[^\w.-]+/g, '_') || 'save') + '.json', e.inS ? serverValue : localValue); });
     if (e.inS) add('Delete from server', function () { return deleteKey(e); }, 'btn-danger');
 
     row.appendChild(name);
@@ -349,6 +390,18 @@
     btn.disabled = true;
     try { await fn(); } catch (err) { status(err && err.message ? err.message : 'That failed.', 'err'); }
     finally { btn.disabled = false; }
+  }
+
+  async function uploadDb(name) {
+    await pushIdb([name]);
+    await load();
+    status('Uploaded ' + name + ' to the server.', 'ok');
+  }
+
+  async function restoreDb(name) {
+    var extra = await restoreIdb(serverIdb, [name]);
+    render();
+    status('Restored ' + name + ' to this browser.' + extra, extra ? 'err' : 'ok');
   }
 
   async function uploadKey(key) {
@@ -369,8 +422,13 @@
   }
 
   async function deleteKey(e) {
-    if (!confirm('Delete "' + (e.top ? e.key : labelOf(e.key)) + '" from the server? This browser keeps its copy.')) return;
-    if (e.top) {
+    if (!confirm('Delete "' + (e.top || e.idb ? e.key : labelOf(e.key)) + '" from the server? This browser keeps its copy.')) return;
+    if (e.idb) {
+      var rest = Object.assign({}, serverIdb);
+      delete rest[e.key];
+      var ri = Object.keys(rest).length ? await api('POST', { _idb: rest, _idb_ts: Date.now() }) : await api('DELETE', { keys: ['_idb', '_idb_ts'] });
+      if (!ri.ok) throw new Error('Server returned ' + ri.status + '.');
+    } else if (e.top) {
       var r = await api('DELETE', { keys: [e.key] });
       if (!r.ok) throw new Error('Server returned ' + r.status + '.');
     } else {
@@ -398,6 +456,7 @@
   $('btn-sync').addEventListener('click', function () {
     guard($('btn-sync'), async function () {
       await pushSnapshot(localSnap());
+      await pushIdb();
       await load();
       status('Synced this browser to the server.', 'ok');
     });
@@ -405,26 +464,28 @@
 
   $('btn-restore-all').addEventListener('click', function () {
     guard($('btn-restore-all'), async function () {
-      var n = Object.keys(serverSnap).length;
+      var n = Object.keys(serverSnap).length + Object.keys(serverIdb).length;
       if (!n) { status('There is nothing on the server to restore.', 'err'); return; }
       if (!confirm('Replace ' + n + ' items in this browser with the server copy?')) return;
       writeLocal(serverSnap);
       if (server._snapshot_ts) localStorage.setItem(SYNC_TS_KEY, String(server._snapshot_ts));
+      var extra = await restoreIdb(serverIdb);
       local = localSnap();
       render();
-      status('Restored ' + n + ' items. Reload to apply settings.', 'ok');
+      status('Restored ' + n + ' items. Reload to apply settings.' + extra, extra ? 'err' : 'ok');
     });
   });
 
   $('btn-download').addEventListener('click', function () {
-    download('mitchpro-saves-' + new Date().toISOString().slice(0, 10) + '.json', { _snapshot: serverSnap, _snapshot_ts: server && server._snapshot_ts || 0 });
+    download('mitchpro-saves-' + new Date().toISOString().slice(0, 10) + '.json', { _snapshot: serverSnap, _idb: serverIdb, _snapshot_ts: server && server._snapshot_ts || 0 });
   });
 
   // The manual slot is only ever written here; sync.js never touches it.
   $('btn-m-save').addEventListener('click', function () {
     guard($('btn-m-save'), async function () {
-      if (Object.keys(manualSnap).length && !confirm('Replace the manual slot with this browser\'s current data?')) return;
-      var r = await api('POST', { _snapshot2: localSnap(), _snapshot2_ts: Date.now() });
+      if (Object.keys(manualSnap).length + Object.keys(manualIdb).length && !confirm('Replace the manual slot with this browser\'s current data?')) return;
+      await refreshLocalIdb();
+      var r = await api('POST', { _snapshot2: localSnap(), _idb2: localIdb, _snapshot2_ts: Date.now() });
       if (r.status === 413) throw new Error('Server storage limit reached.');
       if (!r.ok) throw new Error('Server returned ' + r.status + '.');
       await load();
@@ -434,24 +495,25 @@
 
   $('btn-m-restore').addEventListener('click', function () {
     guard($('btn-m-restore'), async function () {
-      var n = Object.keys(manualSnap).length;
+      var n = Object.keys(manualSnap).length + Object.keys(manualIdb).length;
       if (!n) return;
       if (!confirm('Replace ' + n + ' items in this browser with the manual slot?')) return;
       writeLocal(manualSnap);
+      var extra = await restoreIdb(manualIdb);
       local = localSnap();
       render();
-      status('Restored ' + n + ' items from the manual slot. Reload to apply settings.', 'ok');
+      status('Restored ' + n + ' items from the manual slot. Reload to apply settings.' + extra, extra ? 'err' : 'ok');
     });
   });
 
   $('btn-m-download').addEventListener('click', function () {
-    download('mitchpro-manual-save-' + new Date().toISOString().slice(0, 10) + '.json', { _snapshot: manualSnap, _snapshot_ts: server && server._snapshot2_ts || 0 });
+    download('mitchpro-manual-save-' + new Date().toISOString().slice(0, 10) + '.json', { _snapshot: manualSnap, _idb: manualIdb, _snapshot_ts: server && server._snapshot2_ts || 0 });
   });
 
   $('btn-m-delete').addEventListener('click', function () {
     guard($('btn-m-delete'), async function () {
       if (!confirm('Delete the manual slot from the server?')) return;
-      var r = await api('DELETE', { keys: ['_snapshot2', '_snapshot2_ts'] });
+      var r = await api('DELETE', { keys: ['_snapshot2', '_snapshot2_ts', '_idb2'] });
       if (!r.ok) throw new Error('Server returned ' + r.status + '.');
       await load();
       status('Deleted the manual slot.', 'ok');
@@ -468,11 +530,15 @@
       var snap = data && typeof data._snapshot === 'object' && data._snapshot ? data._snapshot : data;
       if (!snap || typeof snap !== 'object' || Array.isArray(snap)) throw new Error('That file is not a saves backup.');
       var n = Object.keys(snap).length;
+      var dbs = data && typeof data._idb === 'object' && data._idb ? data._idb : null;
+      if (dbs) n += Object.keys(dbs).length;
       if (!confirm('Import ' + n + ' items into this browser? Matching entries are overwritten.')) return;
       writeLocal(snap);
-      local = localSnap();
-      render();
-      status('Imported ' + n + ' items into this browser. Use Sync now to save them to the server.', 'ok');
+      return (dbs ? restoreIdb(dbs) : Promise.resolve('')).then(function (extra) {
+        local = localSnap();
+        render();
+        status('Imported ' + n + ' items into this browser. Use Sync now to save them to the server.' + extra, extra ? 'err' : 'ok');
+      });
     }).catch(function (err) { status(err instanceof SyntaxError ? 'That file is not valid JSON.' : err.message, 'err'); });
   });
 

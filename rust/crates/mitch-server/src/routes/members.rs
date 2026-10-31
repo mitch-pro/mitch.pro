@@ -774,7 +774,16 @@ pub(crate) fn is_sensitive_sync_key(key: &str) -> bool {
         || k.contains("private_key")
 }
 
-/// Removes sensitive keys from a snapshot object (and the other snapshot slot);
+/// IndexedDB database names that are never synced: everything
+/// `is_sensitive_sync_key` covers, plus Cinny/Matrix crypto stores. Keep in
+/// step with `isSensitiveName` in `webserver/idb-sync.js`.
+pub(crate) fn is_sensitive_idb_name(name: &str) -> bool {
+    let k = name.to_ascii_lowercase();
+    is_sensitive_sync_key(&k) || k.contains("cinny") || k.contains("olm") || k.contains("crypto")
+}
+
+/// Removes sensitive keys from the snapshot slots (`_snapshot`/`_snapshot2`
+/// hold localStorage; `_idb`/`_idb2` hold IndexedDB databases keyed by name);
 /// returns whether anything was removed.
 fn strip_sensitive_snapshot_keys(blob: &mut Value) -> bool {
     let mut changed = false;
@@ -784,6 +793,13 @@ fn strip_sensitive_snapshot_keys(blob: &mut Value) -> bool {
                 let before = snap.len();
                 snap.retain(|k, _| !is_sensitive_sync_key(k));
                 changed |= snap.len() != before;
+            }
+        }
+        for slot in ["_idb", "_idb2"] {
+            if let Some(dbs) = map.get_mut(slot).and_then(Value::as_object_mut) {
+                let before = dbs.len();
+                dbs.retain(|k, _| !is_sensitive_idb_name(k));
+                changed |= dbs.len() != before;
             }
         }
         let top: Vec<String> = map
@@ -1337,12 +1353,14 @@ mod sync_key_tests {
         let mut blob = json!({
             "_snapshot": { "chess_elo": 1, "cinny_access_token": "t", "_e2e_private_jwk": "k" },
             "_snapshot2": { "cinny_user_id": "@a:b", "x": 2 },
+            "_idb": { "/sandbox": { "version": 21 }, "matrix-js-sdk:crypto": {}, "cinny-store": {} },
+            "_idb2": { "olm_store": {}, "game": {} },
             "e2e_thing": 1, "chess": { "elo": 3 }
         });
         assert!(strip_sensitive_snapshot_keys(&mut blob));
         assert_eq!(
             blob,
-            json!({ "_snapshot": { "chess_elo": 1 }, "_snapshot2": { "x": 2 }, "chess": { "elo": 3 } })
+            json!({ "_snapshot": { "chess_elo": 1 }, "_snapshot2": { "x": 2 }, "_idb": { "/sandbox": { "version": 21 } }, "_idb2": { "game": {} }, "chess": { "elo": 3 } })
         );
         assert!(!strip_sensitive_snapshot_keys(&mut blob));
     }

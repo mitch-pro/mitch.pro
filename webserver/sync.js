@@ -4,6 +4,7 @@
   var SYNC_TS_KEY  = '_sync_ts';
   var INTERVAL_MS  = 5 * 60 * 1000;
   var RESTORED_KEY = '_just_restored';
+  var IDB_HASH_KEY = '_sync_idb_hash';   // hash of the last IndexedDB upload; device-local
 
   // Preference keys to sync
   var PREF_KEYS = ['_prefAI', '_prefHomepage', '_prefSync', '_prefDisplay', '_prefTools', '_prefVFX', '_prefPrivacy'];
@@ -22,7 +23,7 @@
     var obj = {};
     for (var i = 0; i < localStorage.length; i++) {
       var k = localStorage.key(i);
-      if (k === SYNC_TS_KEY || k === RESTORED_KEY || k.startsWith('_panic') || k.startsWith('_cloak') || isSensitiveKey(k)) continue;
+      if (k === SYNC_TS_KEY || k === RESTORED_KEY || k === IDB_HASH_KEY || k.startsWith('_panic') || k.startsWith('_cloak') || isSensitiveKey(k)) continue;
       
       var raw = localStorage.getItem(k);
       try { obj[k] = JSON.parse(raw); }
@@ -50,6 +51,46 @@
     try { return JSON.parse(localStorage.getItem('_prefSync') || '{}') || {}; } catch (e) { return {}; }
   }
 
+  // IndexedDB (where many games keep their progress) lives in /idb-sync.js,
+  // loaded on first use.
+  var idbLoader = null;
+  function loadIdb() {
+    if (window.MitchIDB) return Promise.resolve(window.MitchIDB);
+    if (!idbLoader) idbLoader = new Promise(function (resolve) {
+      var el = document.createElement('script');
+      el.src = '/idb-sync.js';
+      el.onload = function () { resolve(window.MitchIDB || null); };
+      el.onerror = function () { resolve(null); };
+      document.head.appendChild(el);
+    });
+    return idbLoader;
+  }
+
+  // Uploads this browser's IndexedDB databases when they changed since the last
+  // upload. Merged per database over the server copy, so a device that has only
+  // played one game doesn't erase the others; never uploads an empty set.
+  function saveIdb() {
+    if (pendingRestore || prefSync().enabled === false) return Promise.resolve();
+    return loadIdb().then(function (I) {
+      if (!I || !I.supported) return;
+      return I.dump().then(function (dbs) {
+        if (!Object.keys(dbs).length) return;
+        var h = I.hash(dbs);
+        if (h === localStorage.getItem(IDB_HASH_KEY)) return;
+        return fetch('/api/userdata', { credentials: 'include' })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (server) {
+            if (!server) return;
+            var merged = Object.assign({}, server._idb || {}, dbs);
+            return fetch('/api/userdata', {
+              method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ _idb: merged, _idb_ts: Date.now() }),
+            }).then(function (r) { if (r.ok) localStorage.setItem(IDB_HASH_KEY, h); });
+          });
+      });
+    }).catch(function () {});
+  }
+
   function save() {
     if (pendingRestore || prefSync().enabled === false) return;
 
@@ -70,6 +111,7 @@
         r.text().catch(function(){});
       }
     }).catch(function () {});
+    saveIdb();
   }
 
   function saveBeacon() {
@@ -106,7 +148,7 @@
         var serverTs = data._snapshot_ts;
         if (serverTs > localTs + 10000) {
           pendingRestore = true;
-          showRestorePrompt(data._snapshot, serverTs);
+          showRestorePrompt(data._snapshot, serverTs, data._idb);
         }
       })
       .catch(function () {});
@@ -114,7 +156,7 @@
 
   // Sync never restores on its own. This corner notice only says a newer save
   // exists; restoring is the user's call (phone and computer saves can differ).
-  function showRestorePrompt(snap, serverTs) {
+  function showRestorePrompt(snap, serverTs, idb) {
     var savedDate = new Date(serverTs).toLocaleString('en-US', {
       month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true,
     });
@@ -147,8 +189,9 @@
     btn('Restore', function () {
       applySnap(snap);
       localStorage.setItem(SYNC_TS_KEY, serverTs);
-      close();
-      location.reload();
+      var done = function () { close(); location.reload(); };
+      if (!idb || !Object.keys(idb).length) return done();
+      loadIdb().then(function (I) { return I && I.restore(idb); }).then(done, done);
     }, true);
     btn('Keep this device', function () { close(); save(); });
     btn("Don't show again", function () {
@@ -172,7 +215,11 @@
   // Init
   setTimeout(checkRestore, 2000);
   setInterval(save, INTERVAL_MS);
+  // Game progress is written while playing on pages that don't run sync.js, so
+  // pick up changes shortly after any sync page opens and when it's hidden.
+  setTimeout(saveIdb, 8000);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') saveIdb(); });
   window.addEventListener('beforeunload', saveBeacon);
 
-  window._mitchSync = { save: save, check: checkRestore };
+  window._mitchSync = { save: save, saveIdb: saveIdb, check: checkRestore };
 })();

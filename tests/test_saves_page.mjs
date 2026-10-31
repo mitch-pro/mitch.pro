@@ -132,6 +132,39 @@ try {
   const wiped = await p.evaluate(async () => (await (await fetch('/api/userdata', { credentials: 'include' })).json()));
   assert.equal(wiped._snapshot, undefined);
 
+  // Game progress in IndexedDB (Emscripten IDBFS layout: out-of-line keys, an index, Date + Uint8Array values).
+  const mkDb = (name) => p.evaluate((name) => new Promise((res, rej) => {
+    const r = indexedDB.open(name, 21);
+    r.onupgradeneeded = () => { const st = r.result.createObjectStore('FILE_DATA'); st.createIndex('timestamp', 'timestamp'); };
+    r.onsuccess = () => { const db = r.result; const tx = db.transaction('FILE_DATA', 'readwrite'); tx.objectStore('FILE_DATA').put({ timestamp: new Date(1700000000000), mode: 33206, contents: new Uint8Array([1, 2, 3, 250]) }, '/sandbox/level.sav'); tx.oncomplete = () => { db.close(); res(); }; };
+    r.onerror = () => rej(r.error);
+  }), name);
+  const readDb = () => p.evaluate(() => new Promise((res) => {
+    const r = indexedDB.open('/sandbox');
+    r.onsuccess = () => { const db = r.result; if (!db.objectStoreNames.contains('FILE_DATA')) { db.close(); return res(null); } const g = db.transaction('FILE_DATA').objectStore('FILE_DATA').get('/sandbox/level.sav'); g.onsuccess = () => { db.close(); const v = g.result; res(v && { ts: v.timestamp.getTime(), mode: v.mode, bytes: Array.from(v.contents), v: db.version }); }; };
+  }));
+  await mkDb('/sandbox');
+  await mkDb('matrix-js-sdk:crypto');
+  await p.reload();
+  await p.locator('#main').waitFor({ state: 'visible' });
+  assert.ok(await p.locator('.row', { hasText: '/sandbox' }).count() >= 1, 'game database listed');
+  assert.equal(await p.locator('.row', { hasText: 'matrix-js-sdk' }).count(), 0, 'sensitive database not listed');
+  await p.locator('#btn-m-save').click();
+  await p.waitForFunction(() => document.getElementById('status').textContent.includes('manual slot'));
+  const withIdb = await p.evaluate(async () => (await (await fetch('/api/userdata', { credentials: 'include' })).json()));
+  assert.deepEqual(Object.keys(withIdb._idb2), ['/sandbox'], 'only the game db reaches the manual slot');
+  // Lose it locally (a different device), then restore from the manual slot.
+  await p.evaluate(() => new Promise((res) => { const r = indexedDB.deleteDatabase('/sandbox'); r.onsuccess = res; r.onblocked = res; }));
+  assert.equal((await p.evaluate(() => indexedDB.databases())).some(d => d.name === '/sandbox'), false);
+  await p.reload();
+  await p.locator('#main').waitFor({ state: 'visible' });
+  await p.locator('#btn-m-restore').click();
+  await p.waitForFunction(() => document.getElementById('status').textContent.includes('Restored'));
+  assert.deepEqual(await readDb(), { ts: 1700000000000, mode: 33206, bytes: [1, 2, 3, 250], v: 21 });
+  await p.locator('#btn-m-delete').click();
+  await p.waitForFunction(() => document.getElementById('status').textContent.includes('Deleted the manual'));
+  assert.equal(await p.evaluate(async () => '_idb2' in (await (await fetch('/api/userdata', { credentials: 'include' })).json())), false);
+
   // Newer server copy: sync only notifies (never restores) and pauses saving until answered.
   await p.evaluate(() => fetch('/api/userdata', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ _snapshot: { chess_elo: { elo: 4321 } }, _snapshot_ts: Date.now() + 60000 }) }));
   await p.evaluate(() => { localStorage.setItem('chess_elo', JSON.stringify({ elo: 7 })); localStorage.setItem('_sync_ts', '0'); });
@@ -144,6 +177,9 @@ try {
   await p.getByRole('button', { name: "Don't show again" }).click();
   assert.equal(JSON.parse(await p.evaluate(() => localStorage.getItem('_prefSync'))).restoreNotice, false);
   await p.waitForFunction(async () => (await (await fetch('/api/userdata', { credentials: 'include' })).json())._snapshot.chess_elo.elo === 7);
+  await p.evaluate(() => window._mitchSync.saveIdb());
+  const autoIdb = await p.evaluate(async () => (await (await fetch('/api/userdata', { credentials: 'include' })).json())._idb);
+  assert.deepEqual(Object.keys(autoIdb), ['/sandbox'], 'auto-sync uploads game databases, not Matrix ones');
   await p.evaluate(() => localStorage.setItem('_sync_ts', '0'));
   await p.reload();
   await p.waitForTimeout(3000);
@@ -153,7 +189,7 @@ try {
   await p.setViewportSize({ width: 390, height: 800 });
   assert.equal(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'overflow at 390');
   assert.deepEqual(errors, []);
-  console.log('PASS: saves page sign-in gate, sync, differs/restore, per-entry delete, top-level delete, delete all, manual slot, restore notice, mobile layout.');
+  console.log('PASS: saves page sign-in gate, sync, differs/restore, per-entry delete, top-level delete, delete all, manual slot, IndexedDB game saves, restore notice, mobile layout.');
 } finally {
   await browser?.close();
   server.kill();

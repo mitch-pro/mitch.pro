@@ -16,9 +16,32 @@ only by the Save button on `/saves/` and is never touched by background sync or
 "Sync now". Both are scrubbed of sensitive keys.
 Some games (chess-bot) write other top-level keys into the same blob.
 
+## Game progress in IndexedDB
+
+Many games (Emscripten/Unity builds such as Drive Mad, which mounts IDBFS at
+`/sandbox`) keep progress in IndexedDB, not localStorage. `webserver/idb-sync.js`
+(`window.MitchIDB`) dumps every IndexedDB database of the origin to JSON
+(`dump`), writes them back (`restore`) and hashes them (`hash`). Values are
+tagged JSON (`{"$t":"bytes"|"date"|...}`); a database holding Blobs/Files or
+over 150 MB is left out whole rather than restored partially. Restoring a
+database with a matching schema replaces its records in place; otherwise it is
+deleted and recreated at the snapshot's own version (games open with a fixed
+version and fail on a higher one). An open game in another tab can block this;
+the error says so.
+
+Stored beside the localStorage snapshots as top-level `_idb`/`_idb_ts` (auto)
+and `_idb2` (manual), keyed by database name. Auto-sync (`sync.js`) uploads them
+only when the dump changed since the last upload (`_sync_idb_hash`, device-local,
+never synced), merged per database over the server copy so a device that only
+played one game doesn't erase the others, and never uploads an empty set. It
+checks 8 seconds after a sync page opens and when the tab is hidden, since games
+write while the player is on pages that don't run `sync.js`. All games on the
+origin share one IndexedDB namespace, so two games using the same database name
+(e.g. `/sandbox`) overwrite each other; that predates sync.
+
 ## What is never synced
 
-Matrix login and encryption keys are excluded everywhere: `cinny_*` (the Matrix
+Matrix login and encryption keys are excluded everywhere (IndexedDB database names are checked with `is_sensitive_idb_name` / `isSensitiveName`, which also drop `cinny`, `olm` and `crypto` stores): `cinny_*` (the Matrix
 access token, device and user ids), `mx_*`, anything containing `matrix`, the
 site's own E2E key material (`_e2e_private_jwk*`, `_e2e_key_history_v2`), anything
 containing `e2e`, `passphrase`, `access_token` or `private_key`, and
