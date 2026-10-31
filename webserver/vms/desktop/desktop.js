@@ -296,6 +296,7 @@ async function connect() {
     const client = new RFB(screen, url.href, { shared: true, credentials: session.credentials });
     session.credentials = null;
     rfb = client;
+    trackGuestCursor(client);
     client.scaleViewport = true; client.resizeSession = true; client.clipViewport = false;
     client.showDotCursor = true; client.background = '#050607'; client.qualityLevel = 7; client.compressionLevel = 2;
     client.addEventListener('connect', () => {
@@ -377,6 +378,41 @@ function hideLocalCursor() {
   localCursor?.classList.remove('is-active');
   screen.classList.remove('hide-native-cursor');
 }
+// The guest's own cursor shape (sent by the VNC server) is normally handed to
+// the browser as a CSS cursor, which browsers hide in fullscreen. Intercept it
+// and draw it in the page instead, so it follows the guest (text beam, resize
+// arrows, ...) and stays visible. With no shape (empty or never sent) the
+// default arrow from the stylesheet is used.
+function trackGuestCursor(client) {
+  const cursor = client._cursor;
+  if (!cursor || typeof cursor.change !== 'function' || !localCursor) return;
+  const original = cursor.change.bind(cursor);
+  cursor.change = (rgba, hotX, hotY, w, h) => {
+    original(rgba, hotX, hotY, w, h);
+    if (!w || !h) { setGuestCursorImage(null); return; }
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(rgba), w, h), 0, 0);
+      setGuestCursorImage({ url: canvas.toDataURL(), hotX, hotY, w, h });
+    } catch { setGuestCursorImage(null); }
+  };
+}
+function setGuestCursorImage(shape) {
+  if (!localCursor) return;
+  const style = localCursor.style;
+  if (!shape) {
+    style.width = style.height = style.margin = style.backgroundImage = style.backgroundSize = '';
+    return;
+  }
+  style.width = `${shape.w}px`; style.height = `${shape.h}px`;
+  style.margin = `${-shape.hotY}px 0 0 ${-shape.hotX}px`;
+  style.backgroundImage = `url("${shape.url}")`; style.backgroundSize = '100% 100%';
+}
+// Fullscreen always uses the page-drawn cursor: that is where browsers hide the
+// real one, so the Browser Cursor off switch only applies to the windowed view.
+const useLocalCursor = () => localCursorEnabled || Boolean(document.fullscreenElement);
+document.addEventListener('fullscreenchange', () => { if (!useLocalCursor()) hideLocalCursor(); });
 applyCursorToggleUi();
 // Capture phase, not bubble (the default): noVNC's RFB attaches its own
 // mousemove handler directly to the canvas it creates inside #screen,
@@ -388,7 +424,7 @@ applyCursorToggleUi();
 // own bubble-phase handler executes at all, so it isn't affected by
 // that stopPropagation() call.
 screen.addEventListener('mousemove', event => {
-  if (!localCursorEnabled || !connected || !localCursor) return;
+  if (!useLocalCursor() || !connected || !localCursor) return;
   const rect = frame.getBoundingClientRect();
   localCursor.style.left = `${event.clientX - rect.left}px`;
   localCursor.style.top = `${event.clientY - rect.top}px`;
