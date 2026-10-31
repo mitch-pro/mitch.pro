@@ -297,6 +297,11 @@ async function connect() {
     session.credentials = null;
     rfb = client;
     trackGuestCursor(client);
+    // Troubleshooting switch: `&keys=keysym` makes noVNC send plain keysyms instead
+    // of key codes (QEMU extended key events), to tell which one a VNC server mishandles.
+    if (query.get('keys') === 'keysym') {
+      Object.defineProperty(client, '_qemuExtKeyEventSupported', { get: () => false, set: () => {} });
+    }
     client.scaleViewport = true; client.resizeSession = true; client.clipViewport = false;
     client.showDotCursor = true; client.background = '#050607'; client.qualityLevel = 7; client.compressionLevel = 2;
     client.addEventListener('connect', () => {
