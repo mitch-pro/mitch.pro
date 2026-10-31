@@ -14,7 +14,7 @@
 //!   verification, `--raw` supported.
 //!
 //! Header contract (verified against nodemailer 8.x): List-Unsubscribe /
-//! List-Unsubscribe-Post on all senders (token hardcoded to mitch.pro host);
+//! List-Unsubscribe-Post on all senders (token URL uses the site.json primary);
 //! In-Reply-To + References when `in_reply_to` is set (except gmail -a).
 
 use crate::config::{env_trim, MailConfig};
@@ -91,14 +91,15 @@ fn strip_trailing_slash(s: &str) -> &str {
 }
 
 /// `data/site.json` read with plain fs (it is a PRESERVED_DATA_FILE), with the
-/// per-sender fallback defaults from the scripts. Returns (PRIMARY, ALT).
-fn site_urls(cfg: &MailConfig, sender: Sender) -> (String, String) {
+/// per-sender fallback defaults from the scripts. Returns (PRIMARY, ALT, NAME).
+fn site_urls(cfg: &MailConfig, sender: Sender) -> (String, String, String) {
     let fallback_alt = match sender {
         Sender::Gmail => "https://mitchdog.com",
         Sender::Noreply | Sender::Support => "https://mitch.88chan.me",
     };
     let mut primary = "https://mitch.pro".to_string();
     let mut alt = fallback_alt.to_string();
+    let mut name: Option<String> = None;
     if let Ok(raw) = std::fs::read_to_string(cfg.data_dir.join("site.json")) {
         if let Ok(site) = serde_json::from_str::<serde_json::Value>(&raw) {
             if let Some(p) = site.get("primary").and_then(|v| v.as_str()) {
@@ -107,9 +108,15 @@ fn site_urls(cfg: &MailConfig, sender: Sender) -> (String, String) {
             if let Some(a) = site.get("alternate").and_then(|v| v.as_str()) {
                 alt = strip_trailing_slash(a).to_string();
             }
+            name = site
+                .get("name")
+                .and_then(|v| v.as_str())
+                .filter(|n| !n.trim().is_empty())
+                .map(|n| n.trim().to_string());
         }
     }
-    (primary, alt)
+    let name = name.unwrap_or_else(|| crate::template::host_label(&primary).to_string());
+    (primary, alt, name)
 }
 
 /// Reads or creates the recipient's unsubscribe token through the data store
@@ -217,7 +224,7 @@ pub fn prepare(store: &DataStore, cfg: &MailConfig, req: &SendRequest) -> Result
     if req.alt && sender != Sender::Gmail {
         return Err("-a is only valid for the gmail sender".to_string());
     }
-    let (primary, alt_url) = site_urls(cfg, sender);
+    let (primary, alt_url, site_name) = site_urls(cfg, sender);
     let token = unsubscribe_token(store, cfg, &req.to)?;
     let smtp = smtp_params(sender, req.alt)?;
 
@@ -263,7 +270,7 @@ pub fn prepare(store: &DataStore, cfg: &MailConfig, req: &SendRequest) -> Result
             let name = if req.alt {
                 user.clone()
             } else {
-                "mitch.pro".to_string()
+                site_name.clone()
             };
             let subject = if req.alt {
                 format!("{}{}", req.subject, zwsp_run())
@@ -273,11 +280,11 @@ pub fn prepare(store: &DataStore, cfg: &MailConfig, req: &SendRequest) -> Result
             (format!("{name} <{user}>"), subject)
         }
         Sender::Noreply => (
-            "mitch.pro <noreply@mitch.pro>".to_string(),
+            format!("{site_name} <noreply@mitch.pro>"),
             req.subject.clone(),
         ),
         Sender::Support => (
-            "mitch.pro Support <support@mitch.pro>".to_string(),
+            format!("{site_name} Support <support@mitch.pro>"),
             req.subject.clone(),
         ),
     };
@@ -290,7 +297,7 @@ pub fn prepare(store: &DataStore, cfg: &MailConfig, req: &SendRequest) -> Result
     }
     headers.push((
         "List-Unsubscribe".to_string(),
-        format!("<https://mitch.pro/unsubscribe/{token}>, <mailto:support@mitch.pro?subject=unsubscribe>"),
+        format!("<{primary}/unsubscribe/{token}>, <mailto:support@mitch.pro?subject=unsubscribe>"),
     ));
     headers.push((
         "List-Unsubscribe-Post".to_string(),
@@ -451,7 +458,9 @@ mod tests {
             .unwrap();
         assert_eq!(
             lu.1,
-            format!("<https://mitch.pro/unsubscribe/{token}>, <mailto:support@mitch.pro?subject=unsubscribe>")
+            format!(
+                "<https://mitch.pro/unsubscribe/{token}>, <mailto:support@mitch.pro?subject=unsubscribe>"
+            )
         );
         drop(store);
         std::fs::remove_dir_all(&cfg.base_dir).ok();

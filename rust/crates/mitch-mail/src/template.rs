@@ -39,6 +39,13 @@ fn escape_html(text: &str) -> String {
 
 /// Paragraph conversion: escape, split on blank lines, join `<br>` inside
 /// each paragraph. Order matches the JS exactly (escape happens first).
+/// Display label for a site URL: the host without scheme or trailing slash.
+/// Branding follows `data/site.json`, so nothing here hardcodes a domain.
+pub fn host_label(url: &str) -> &str {
+    let rest = url.split_once("://").map_or(url, |(_, r)| r);
+    rest.trim_end_matches('/')
+}
+
 fn footer_html(
     unsubscribe_url: Option<&str>,
     primary: &str,
@@ -50,8 +57,9 @@ fn footer_html(
     } else {
         ""
     };
+    let (primary_label, alt_label) = (host_label(primary), host_label(alt));
     let delivered = format!(
-        "          Delivered by <a href=\"{alt}\" style=\"color: #64748b; text-decoration: underline; font-weight: 600;\">mitchdog.com</a> | <a href=\"{primary}\" style=\"color: #64748b; text-decoration: underline;\">mitch.pro</a>"
+        "          Delivered by <a href=\"{alt}\" style=\"color: #64748b; text-decoration: underline; font-weight: 600;\">{alt_label}</a> | <a href=\"{primary}\" style=\"color: #64748b; text-decoration: underline;\">{primary_label}</a>"
     );
     if let Some(unsub) = unsubscribe_url {
         format!(
@@ -79,6 +87,7 @@ pub fn format_html_email(
     }
 
     let paragraphs = paragraphs_html(text_body);
+    let (primary_label, alt_label) = (host_label(primary), host_label(alt));
     let footer = footer_html(
         unsubscribe_url,
         primary,
@@ -87,7 +96,7 @@ pub fn format_html_email(
     );
 
     format!(
-        "<!DOCTYPE html>\n<html lang=\"en\" style=\"background:#06060c;\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <meta name=\"color-scheme\" content=\"light dark\">\n  <meta name=\"supported-color-schemes\" content=\"light dark\">\n  <style> :root {{ color-scheme: light dark; supported-color-schemes: light dark; }} </style>\n  <title>{subject}</title>\n</head>\n<body style=\"margin: 0; padding: 0; background-color: #06060c; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #f8fafc; -webkit-font-smoothing: antialiased;\">\n  <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" bgcolor=\"#06060c\" style=\"background-color: #06060c; border-collapse: collapse;\">\n    <tr>\n      <td align=\"center\" bgcolor=\"#06060c\" style=\"background-color: #06060c; padding: 40px 20px;\">\n        <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"max-width: 580px; background-color: #0f172a; border-radius: 16px; overflow: hidden; border: 1px solid #0f172a; box-shadow: 0 20px 40px rgba(0,0,0,0.5);\">\n          <tr>\n            <td height=\"6\" style=\"background: linear-gradient(to right, #a855f7, #38bdf8);\"></td>\n          </tr>\n          <tr>\n            <td style=\"padding: 32px 32px 16px;\">\n              <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\">\n                <tr>\n                  <td style=\"vertical-align: middle;\">\n                    <img src=\"https://mitchdog.com/favicon.ico\" width=\"24\" height=\"24\" style=\"vertical-align: middle; margin-right: 10px; border-radius: 4px;\" alt=\"mitch.pro\">\n                    <span style=\"font-size: 24px; font-weight: 800; color: #ffffff; vertical-align: middle; letter-spacing: -0.02em;\">mitch.pro</span>\n                    <span style=\"font-size: 24px; font-weight: 300; color: #64748b; vertical-align: middle; margin: 0 8px;\">/</span>\n                    <span style=\"font-size: 24px; font-weight: 800; color: #38bdf8; vertical-align: middle; letter-spacing: -0.02em;\">mitchdog.com</span>\n                  </td>\n                </tr>\n              </table>\n            </td>\n          </tr>\n          <tr>\n            <td style=\"padding: 0 32px 32px; font-size: 15px; color: #cbd5e1; line-height: 1.6;\">\n              {paragraphs}\n              {footer}\n            </td>\n          </tr>\n        </table>\n      </td>\n    </tr>\n  </table>\n</body>\n</html>"
+        "<!DOCTYPE html>\n<html lang=\"en\" style=\"background:#06060c;\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <meta name=\"color-scheme\" content=\"light dark\">\n  <meta name=\"supported-color-schemes\" content=\"light dark\">\n  <style> :root {{ color-scheme: light dark; supported-color-schemes: light dark; }} </style>\n  <title>{subject}</title>\n</head>\n<body style=\"margin: 0; padding: 0; background-color: #06060c; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #f8fafc; -webkit-font-smoothing: antialiased;\">\n  <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" bgcolor=\"#06060c\" style=\"background-color: #06060c; border-collapse: collapse;\">\n    <tr>\n      <td align=\"center\" bgcolor=\"#06060c\" style=\"background-color: #06060c; padding: 40px 20px;\">\n        <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"max-width: 580px; background-color: #0f172a; border-radius: 16px; overflow: hidden; border: 1px solid #0f172a; box-shadow: 0 20px 40px rgba(0,0,0,0.5);\">\n          <tr>\n            <td height=\"6\" style=\"background: linear-gradient(to right, #a855f7, #38bdf8);\"></td>\n          </tr>\n          <tr>\n            <td style=\"padding: 32px 32px 16px;\">\n              <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\">\n                <tr>\n                  <td style=\"vertical-align: middle;\">\n                    <img src=\"{alt}/favicon.ico\" width=\"24\" height=\"24\" style=\"vertical-align: middle; margin-right: 10px; border-radius: 4px;\" alt=\"{primary_label}\">\n                    <span style=\"font-size: 24px; font-weight: 800; color: #ffffff; vertical-align: middle; letter-spacing: -0.02em;\">{primary_label}</span>\n                    <span style=\"font-size: 24px; font-weight: 300; color: #64748b; vertical-align: middle; margin: 0 8px;\">/</span>\n                    <span style=\"font-size: 24px; font-weight: 800; color: #38bdf8; vertical-align: middle; letter-spacing: -0.02em;\">{alt_label}</span>\n                  </td>\n                </tr>\n              </table>\n            </td>\n          </tr>\n          <tr>\n            <td style=\"padding: 0 32px 32px; font-size: 15px; color: #cbd5e1; line-height: 1.6;\">\n              {paragraphs}\n              {footer}\n            </td>\n          </tr>\n        </table>\n      </td>\n    </tr>\n  </table>\n</body>\n</html>"
     )
 }
 
