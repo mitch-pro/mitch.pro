@@ -1,8 +1,0 @@
-{
-  "name": "blooket-bot-microservice",
-  "version": "1.0.0",
-  "main": "server.js",
-  "dependencies": {
-    "ws": "^8.17.0"
-  }
-}

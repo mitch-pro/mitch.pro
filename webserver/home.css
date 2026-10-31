@@ -240,9 +240,6 @@ body.home ::-webkit-scrollbar-track { background: transparent; }
 }
 .home-feature:hover { border-color: var(--mh-ink-faint); transform: translateY(-1px); }
 .home-feature:focus-visible { outline: 2px solid var(--mh-accent); outline-offset: 2px; }
-.home-feature.feature-blooket {
-  grid-column: 1 / -1;
-}
 .feature-eyebrow { font-family: var(--mh-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: var(--mh-ink-faint); }
 .home-feature h2 { margin: 0; font-family: var(--mh-font); font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; font-size: clamp(1.15rem, 1.6vw, 1.4rem); color: var(--mh-ink); }
 .feature-bottom { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.78rem; font-weight: 500; color: var(--mh-ink-soft); }

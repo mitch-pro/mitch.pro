@@ -15,7 +15,6 @@
     "test": "cargo test --manifest-path rust/Cargo.toml --workspace",
     "test:unit": "cargo test --manifest-path rust/Cargo.toml --workspace",
     "test:admin:browser": "node tests/test_admin_modernization.mjs",
-    "test:blooket": "node tests/test_blooket_answers.mjs && node tests/test_blooket_connection.mjs && node tests/test_blooket_controller.mjs && node tests/test_blooket_runtime.mjs && node tests/test_blooket_service.mjs",
     "test:service-worker": "node tests/test_service_worker_unit.js"
   },
   "dependencies": {

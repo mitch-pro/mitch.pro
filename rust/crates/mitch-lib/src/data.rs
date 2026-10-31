@@ -644,6 +644,11 @@ impl DataStore {
                 "DELETE FROM json_documents WHERE path LIKE '%admin_ssh_keys.json'",
                 [],
             );
+            // Likewise for the retired Woodcreek login handoff and Blooket bot.
+            let _ = conn.execute(
+                "DELETE FROM json_documents WHERE path LIKE 'woodcreek-auth/%' OR path LIKE '%blooket_bot_failures.json'",
+                [],
+            );
         }
         Ok(store)
     }

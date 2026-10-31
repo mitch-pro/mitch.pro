@@ -11,7 +11,7 @@ try {
  await context.addInitScript(() => { try { if (location.hostname === '127.0.0.1') localStorage.setItem('_mitch_cookie_consent','accepted'); } catch {} });
  await context.route('**/*', route => new URL(route.request().url()).origin === base ? route.continue() : route.abort());
  const dirs = await readdir('webserver', {withFileTypes:true});
- const excluded = new Set(['games','novnc','matrix','sexypickleclub','ttygames','unsubscribe','bell','blooket-bot','redirect','prox','msn-games']);
+ const excluded = new Set(['games','novnc','matrix','sexypickleclub','ttygames','unsubscribe','bell','redirect','prox','msn-games']);
  const routes = ['/', '/index-sales.html', '/maintenance.html', '/faq/', '/games/'];
  for(const dir of dirs.filter(d => d.isDirectory() && !excluded.has(d.name))) {
   try { if ((await readdir('webserver/'+dir.name)).includes('index.html')) routes.push('/'+dir.name+'/'); }catch{}

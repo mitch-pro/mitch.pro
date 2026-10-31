@@ -259,14 +259,7 @@ fn parse_query(search: &str) -> std::collections::HashMap<String, String> {
 
 /// `GET /api/admin/docker-logs` — `docker compose logs` on the repo root.
 fn docker_logs(search: &str) -> Response {
-    const SERVICES: &[&str] = &[
-        "all",
-        "reverse-proxy",
-        "webserver-blue",
-        "webserver-green",
-        "proxy",
-        "ipserver",
-    ];
+    const SERVICES: &[&str] = &["all", "reverse-proxy", "webserver-blue", "webserver-green"];
     let params = parse_query(search);
     let service = params
         .get("service")

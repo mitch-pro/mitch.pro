@@ -48,8 +48,6 @@ services:
         condition: service_started
       mail-rs:
         condition: service_started
-      tor-browser:
-        condition: service_started
       sql-sync:
         condition: service_healthy
     ports:
@@ -73,7 +71,6 @@ services:
       - MITCH_SERVICE=mitch-server
       - MITCH_DB_PATH=${MITCH_DB_PATH:-/app/data/mitchpro.db}
       - PORT=6800
-      - TOR_SERVICE_URL=http://tor-browser:6840
       - PIA_USER
       - PIA_PASS
       - PIA_USERNAME
@@ -103,7 +100,6 @@ services:
       - SECRET_KEY
       - GOOGLE_ANALYTICS_ID
       - RECAPTCHA_SITE_KEY
-      - BLOOKET_BOT_HOST=blooket-bot
       - CONDUIT_HOST=conduit
       - LIVEKIT_HOST=livekit
       - LIVEKIT_PORT=7880
@@ -151,8 +147,6 @@ services:
         condition: service_started
       mail-rs:
         condition: service_started
-      tor-browser:
-        condition: service_started
       sql-sync:
         condition: service_healthy
     ports:
@@ -172,7 +166,6 @@ services:
       - MITCH_SERVICE=mitch-server
       - MITCH_DB_PATH=${MITCH_DB_PATH:-/app/data/mitchpro.db}
       - PORT=6800
-      - TOR_SERVICE_URL=http://tor-browser:6840
       - PIA_USER
       - PIA_PASS
       - PIA_USERNAME
@@ -202,7 +195,6 @@ services:
       - SECRET_KEY
       - GOOGLE_ANALYTICS_ID
       - RECAPTCHA_SITE_KEY
-      - BLOOKET_BOT_HOST=blooket-bot
       - CONDUIT_HOST=conduit
       - LIVEKIT_HOST=livekit
       - LIVEKIT_PORT=7880
@@ -275,60 +267,6 @@ services:
       - GMAIL_PASS_ALT
       - GMAIL_PASS
 
-  # Node.js + Xvfb Stream Proxy (Port 8081)
-  proxy:
-    build:
-      context: ./proxy
-      dockerfile: Dockerfile.proxy
-    container_name: mitch-stream-proxy
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:8081:8081"
-    volumes:
-      - ./logs:/app/logs
-
-  # Python 3 IP Server
-  ipserver:
-    image: python:3.10-alpine
-    container_name: mitch-ipserver
-    restart: unless-stopped
-    volumes:
-      - ./tools:/app/tools
-      - ./logs:/app/logs
-      - ./data:/root/tailscale/chatroom/data
-      - /home/mitch/server/fullchain.pem:/root/tailscale/fullchain.pem:ro
-      - /home/mitch/server/privkey.pem:/root/tailscale/privkey.pem:ro
-    command: python3 /app/tools/ipserver.py
-
-  # Blooket Bot Headless Browser Automation Service
-  blooket-bot:
-    build:
-      context: ./blooket-bot
-      dockerfile: Dockerfile
-    container_name: mitch-blooket-bot
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:8082:8082"
-    volumes:
-      - ./blooket-bot/join_blooket.py:/app/join_blooket.py
-      - ./blooket-bot/cheats:/app/cheats
-      - ./blooket-bot/bookmarks_7_26_26.html:/app/bookmarks_7_26_26.html
-      - ./blooket-bot/server.js:/app/server.js
-      - ./blooket-bot/cheat-blooket-gui.bookmarklet.js:/app/cheat-blooket-gui.bookmarklet.js
-    environment:
-      - PYTHONUNBUFFERED=1
-      - FLARESOLVERR_URL=http://flaresolverr:8191/v1
-
-  # FlareSolverr Service for Bypassing Cloudflare
-  flaresolverr:
-    image: ghcr.io/flaresolverr/flaresolverr:latest
-    container_name: mitch-flaresolverr
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:8191:8191"
-    environment:
-      - LOG_LEVEL=info
-
   # Matrix Conduit Homeserver (Ultra-lightweight Rust backend)
   conduit:
     image: matrixconduit/matrix-conduit:latest
@@ -382,23 +320,6 @@ services:
       - "127.0.0.1:7880:7880"
       - "7881:7881"
       - "7882:7882/udp"
-
-  # Dedicated Tor Browser & Onion Gateway Service
-  tor-browser:
-    build:
-      context: ./tor-service
-      dockerfile: Dockerfile
-    container_name: mitch-tor-browser
-    restart: unless-stopped
-    cap_add:
-      - NET_ADMIN
-    ports:
-      - "127.0.0.1:6840:6840"
-    volumes:
-      - ./data/tor_users:/var/lib/tor_users
-    environment:
-      - TOR_INTERFACE=${TOR_INTERFACE:-eth1}
-      - PORT=6840
 
 volumes:
   # Shared, tmpfs-backed named volume holding only mitchpro.db - created

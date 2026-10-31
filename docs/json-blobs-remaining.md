@@ -131,7 +131,6 @@ Files and the non-test modules that read or write them. Grouped by what they hol
 | `global_game_stats.json` | `mod.rs`, `misc.rs`, `proxy.rs` |
 | `heatmap.json` | `admin.rs`, `misc.rs` |
 | `chess_vs.json` | `chess_vs.rs`, `state.rs` |
-| `blooket_bot_failures.json` | `blooket.rs` |
 | `search_intent.json` | `dashboard.rs` |
 | `madlibs.json` | `madlibs.rs` |
 | `jeopardy_kids_clean.json` | `jeopardy.rs` |

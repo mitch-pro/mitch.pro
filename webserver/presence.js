@@ -17,7 +17,7 @@
     preferences: 'Changing preferences', notifications: 'Viewing notifications',
     vms: 'Managing Cloud Linux', bell: 'Viewing the bell schedule', rjuhsd: 'Viewing school schedules',
     admin: 'Using admin tools', moderator: 'Using moderator tools', tester: 'Using tester tools',
-    'blooket-bot': 'Using Blooket tools', tabs: "Using Tyler's Tabs", canvas: 'Drawing on the canvas',
+    tabs: "Using Tyler's Tabs", canvas: 'Drawing on the canvas',
     team: 'Viewing the team', feedback: 'Viewing feedback', blog: 'Reading the blog',
     enroll: 'Viewing account access', 'index-sales.html': 'Viewing the site introduction'
   };

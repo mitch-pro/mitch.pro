@@ -60,7 +60,7 @@ It does not contact production or invoke delivery endpoints.
 ## Quiet deployment
 
 A push whose head commit includes `[quiet]` skips the AI push-summary notification
-workflow. The normal production workflow waits for the complete Rust/browser/Blooket CI
+workflow. The normal production workflow waits for the complete Rust/browser CI
 workflow for the same revision to succeed before it can deploy. It uses a commit-pinned copy of
 `tools/deploy.sh` with `MITCH_DEPLOY_QUIET=1` as the deployment account for that rollout.
 The account must already have Docker access; the quiet path never invokes an

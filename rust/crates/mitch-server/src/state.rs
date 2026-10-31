@@ -152,15 +152,6 @@ pub struct AppState {
     /// Step 13 batch 3 provisioning endpoints; read by the SSH/VNC
     /// authorization slice (`getVmConnectionIpForEmail`).
     pub active_free_vms: std::sync::Mutex<std::collections::HashMap<String, serde_json::Value>>,
-    /// `blooketQueue` (server.js:1263) — FIFO of connected-but-queued
-    /// blooket-bot clients, in connect order.
-    pub blooket_queue: std::sync::Mutex<Vec<crate::routes::blooket::BlooketQueued>>,
-    /// `blooketActive` (server.js:1264) — normalized email → active bot
-    /// session, in admission order (the JS Map preserves it).
-    pub blooket_active:
-        std::sync::Mutex<indexmap::IndexMap<String, crate::routes::blooket::BlooketActive>>,
-    /// `blooketPinLocks` (server.js:1265) — game PIN → locking admin email.
-    pub blooket_pin_locks: std::sync::Mutex<indexmap::IndexMap<String, String>>,
 
     /// `vmDesktopSessions` (server.js:27083) — one-time desktop-console
     /// tickets keyed by the random session id. Each record is the JS session
@@ -387,9 +378,6 @@ impl AppState {
             cv_chats: std::sync::Mutex::new(indexmap::IndexMap::new()),
             matrix_user_last_seen: std::sync::Mutex::new(std::collections::HashMap::new()),
             active_free_vms: std::sync::Mutex::new(std::collections::HashMap::new()),
-            blooket_queue: std::sync::Mutex::new(Vec::new()),
-            blooket_active: std::sync::Mutex::new(indexmap::IndexMap::new()),
-            blooket_pin_locks: std::sync::Mutex::new(indexmap::IndexMap::new()),
             desktop_setup: std::sync::Mutex::new(std::collections::HashMap::new()),
             vm_desktop_sessions: std::sync::Mutex::new(std::collections::HashMap::new()),
             vm_desktop_sockets: std::sync::Mutex::new(std::collections::HashMap::new()),
@@ -573,10 +561,6 @@ pub const PUBLIC_API_PATHS: &[&str] = &[
     "/api/sso/bridge",
     "/api/sso/bridge/handoff",
     "/api/sso/exchange",
-    "/api/woodcreek/auth/authorize",
-    "/api/woodcreek/auth/token",
-    "/api/woodcreek/auth/session",
-    "/api/woodcreek/auth/revoke",
     "/api/weather",
     "/api/school-calendar",
     "/api/school-info",
@@ -599,17 +583,12 @@ pub const PUBLIC_API_PATHS: &[&str] = &[
     "/api/matrix/gifs/proxy",
     "/api/matrix/stickers/packs",
     "/api/push/vapid-key",
-    "/api/tor/status",
-    "/api/tor/newnym",
 ];
 
 /// `CSRF_EXEMPT_PATHS` (server.js:5705-5728) — verbatim. Team POSTs are NOT
 /// exempt (they require X-Mitch-Requested-With like every other /api/ POST).
 pub const CSRF_EXEMPT_PATHS: &[&str] = &[
     "/api/sso/exchange",
-    "/api/woodcreek/auth/token",
-    "/api/woodcreek/auth/session",
-    "/api/woodcreek/auth/revoke",
     "/api/sso/bridge/handoff",
     "/api/dm/attachment/upload",
     "/api/games",

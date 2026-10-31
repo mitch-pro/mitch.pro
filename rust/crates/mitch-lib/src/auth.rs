@@ -996,11 +996,6 @@ pub fn rate_limit_for(endpoint: &str) -> (u32, u32) {
         "/api/profile/report" => (5, 300),
         "/api/admin/profile-reports/resolve" => (20, 60),
         "/api/presence/heartbeat" => (240, 60),
-        "/api/blooket-fleet/control" => (600, 60),
-        "/api/woodcreek/auth/session" => (6000, 60),
-        "/api/woodcreek/auth/authorize"
-        | "/api/woodcreek/auth/token"
-        | "/api/woodcreek/auth/revoke" => (120, 60),
         "/api/pickle-chat/history" => (60, 60),
         "/api/pickle-chat/send" => (3, 10),
         "/api/pickle-chat/react" => (30, 10),
@@ -1232,15 +1227,7 @@ pub fn check_rate_limit(
         return None;
     }
     // Public presence polling must not share one anonymous bucket across all visitors.
-    let public_presence = matches!(
-        endpoint,
-        "/api/presence/count"
-            | "/api/access/status"
-            | "/api/woodcreek/auth/authorize"
-            | "/api/woodcreek/auth/session"
-            | "/api/woodcreek/auth/token"
-            | "/api/woodcreek/auth/revoke"
-    );
+    let public_presence = matches!(endpoint, "/api/presence/count" | "/api/access/status");
     let effective_id_key = if id_key == "anon" {
         format!("anon:{ip}")
     } else {

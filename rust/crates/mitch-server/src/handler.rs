@@ -1,5 +1,5 @@
 //! The request flow — port of `handleRequest`'s GET path (server.js), in the
-//! exact order: bell/blooket redirects → CSRF → /api/bg → rate limit →
+//! exact order: bell redirects → CSRF → /api/bg → rate limit →
 //! /swift → ban/maintenance gates → page block (manifests, site hubs, site
 //! page roots, redirects, HTML gates, injection pipeline, public assets) →
 //! serveStatic. Non-GET falls to 405.
@@ -53,8 +53,6 @@ pub const HTML_OPEN: &[&str] = &[
     "/msn-games/index",
     "/matrix",
     "/matrix/index",
-    "/tor",
-    "/tor/index",
     "/index-sales",
     "/index-sales/index",
     "/rjuhsd",
@@ -459,27 +457,6 @@ fn bell_schedule_redirect(path: &str, method: &Method, search: &str) -> Option<R
     None
 }
 
-/// lib/site_redirects.js blooketBotRedirect — GET/HEAD only.
-fn blooket_bot_redirect(path: &str, method: &Method, search: &str) -> Option<Response> {
-    if path == "/blooket-bot/" || (method != Method::GET && method != Method::HEAD) {
-        return None;
-    }
-    static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
-    let re = RE.get_or_init(|| {
-        regex::Regex::new(r"(?i)^/blooket-bot(?:\.html?|/(?:index(?:\.html?)?/?)?)?$")
-            .expect("static regex")
-    });
-    if re.is_match(path) {
-        let q = if search.is_empty() {
-            String::new()
-        } else {
-            format!("?{search}")
-        };
-        return Some(redirect(&format!("/blooket-bot/{q}"), 302));
-    }
-    None
-}
-
 /// `getRealIp(req)` — precedence: public socket peer -> CF-Connecting-IP ->
 /// True-Client-IP -> X-Mitch-Client-IP -> first public XFF -> X-Real-IP ->
 /// X-Client-IP -> RFC 7239 Forwarded -> private fallbacks -> 127.0.0.1.
@@ -645,11 +622,8 @@ pub async fn handle(
         return response;
     }
 
-    // 1. Bell/blooket redirects.
+    // 1. Bell redirects.
     if let Some(resp) = bell_schedule_redirect(&path, &method, &search) {
-        return resp;
-    }
-    if let Some(resp) = blooket_bot_redirect(&path, &method, &search) {
         return resp;
     }
 
@@ -673,8 +647,7 @@ pub async fn handle(
     // harness hits unlisted paths which get the __default__ [100, 60] per
     // ip+anon bucket; sequential runs stay under it. Includes the anti-bot
     // timing check (server.js:5992-5999) with the same exempt suffixes
-    // (/state, /inbox, /heartbeat, /groups, /dm/send, /canvas/,
-    // /blooket-bot/status).
+    // (/state, /inbox, /heartbeat, /groups, /dm/send, /canvas/).
     if path.starts_with("/api/") && method != Method::OPTIONS && !node_env_test {
         let ip = get_real_ip(headers, None);
         // getIdKey (server.js:5915-5920): studentId || id from the
@@ -795,58 +768,6 @@ pub async fn handle(
     // Mad Libs CORS-friendly API (cross-origin friendly for Pyodide, curl, etc.)
     if path == "/api/madlibs" || path.starts_with("/api/madlibs/") {
         return crate::routes::madlibs::handle(&state, &method, &path, &search);
-    }
-
-    // Direct .onion URL or /tor/<url> navigation
-    if path.contains(".onion") {
-        let clean = path.trim_start_matches('/');
-        let target_url = if let Some(stripped) = clean.strip_prefix("tor/") {
-            stripped.to_string()
-        } else {
-            clean.to_string()
-        };
-        let target_url =
-            if !target_url.starts_with("http://") && !target_url.starts_with("https://") {
-                format!("http://{target_url}")
-            } else {
-                target_url
-            };
-        let target_url = if search.is_empty() {
-            target_url
-        } else if search.starts_with('?') {
-            format!("{target_url}{search}")
-        } else {
-            format!("{target_url}?{search}")
-        };
-        let encoded: String = form_urlencoded::byte_serialize(target_url.as_bytes()).collect();
-        return redirect(&format!("/tor/?url={encoded}"), 302);
-    }
-
-    if path.starts_with("/tor/")
-        && path != "/tor/"
-        && path != "/tor/index.html"
-        && path != "/tor/view"
-        && path != "/tor/view/"
-        && path != "/tor/resource"
-        && path != "/tor/resource/"
-    {
-        let sub = path.trim_start_matches("/tor/").trim_start_matches('/');
-        if !sub.is_empty() {
-            let target_url = if !sub.starts_with("http://") && !sub.starts_with("https://") {
-                format!("http://{sub}")
-            } else {
-                sub.to_string()
-            };
-            let target_url = if search.is_empty() {
-                target_url
-            } else if search.starts_with('?') {
-                format!("{target_url}{search}")
-            } else {
-                format!("{target_url}?{search}")
-            };
-            let encoded: String = form_urlencoded::byte_serialize(target_url.as_bytes()).collect();
-            return redirect(&format!("/tor/?url={encoded}"), 302);
-        }
     }
 
     // Open general proxy removed -> game proxy redirects & 410 gone (server.js:10777-10791)
@@ -997,7 +918,6 @@ pub async fn handle(
         || clean_path == "/livekit"
         || clean_path.starts_with("/livekit/")
         || clean_path.starts_with("/game-portal")
-        || crate::routes::woodcreek::is_path(&path)
         || clean_path.starts_with("/msn-games")
         || clean_path == "/rjuhsd"
         || clean_path.starts_with("/rjuhsd/")
@@ -1028,19 +948,6 @@ pub async fn handle(
         return redirect("/enroll/", 302);
     }
 
-    if crate::routes::service_auth::is_path(&path) {
-        return crate::routes::service_auth::handle(
-            &state, &method, &path, &search, headers, body_bytes,
-        );
-    }
-
-    if crate::routes::woodcreek::is_path(&path) {
-        return crate::routes::woodcreek::handle(
-            &state, &method, &path, &search, headers, body_bytes, ws_upgrade,
-        )
-        .await;
-    }
-
     // 4b2. /ws global broadcast upgrade — server.js:11711-11723. The password
     // gate exempts /ws, so this arm's own origin + sid ladder is the gate,
     // exactly like the JS. GET /ws without an upgrade header falls through
@@ -1059,7 +966,7 @@ pub async fn handle(
 
     // 4b3. WS bridge upgrades — server.js:11725-12000, the upgrade block
     // after the password gate: /livekit/rtc (11725), the
-    // /vnc/ws 410 (11792), and /api/blooket-bot/ws (11797). A matching path
+    // and /vnc/ws 410 (11792). A matching path
     // without an upgrade header falls through, exactly like the JS.
     let is_upgrade = headers
         .get("upgrade")
@@ -1083,14 +990,6 @@ pub async fn handle(
             410,
             serde_json::json!({ "error": "This desktop connection method is no longer available." }),
         );
-    } else if is_upgrade && path == "/api/blooket-bot/ws" {
-        if let Some(resp) =
-            crate::routes::blooket::handle_ws_upgrade(&state, &path, &search, headers, ws_upgrade)
-        {
-            return resp;
-        }
-        // The JS falls through on an upgrade failure — reach the /api/ 404
-        // below rather than the static pages.
     } else if is_upgrade && path == "/api/vm/desktop/ws" {
         if let Some(resp) =
             crate::routes::vm::handle_desktop_ws_upgrade(&state, headers, &search, ws_upgrade)
@@ -1105,15 +1004,6 @@ pub async fn handle(
         if path.starts_with("/api/vm/") {
             if let Some(resp) =
                 crate::routes::vm::handle(&state, &method, &path, headers, body_bytes, &search)
-                    .await
-            {
-                return resp;
-            }
-        }
-        // Blooket-bot premium endpoints (server.js:11834-11992).
-        if path.starts_with("/api/blooket-bot/") {
-            if let Some(resp) =
-                crate::routes::blooket::handle(&state, &method, &path, headers, body_bytes, &search)
                     .await
             {
                 return resp;
@@ -1135,21 +1025,6 @@ pub async fn handle(
                 &state, &method, &path, headers, &search, body_bytes,
             )
             .await
-            {
-                return resp;
-            }
-        }
-        // Tor Browser & Onion Gateway API, View, and Resource
-        if path == "/api/tor"
-            || path.starts_with("/api/tor/")
-            || path == "/tor/view"
-            || path == "/tor/view/"
-            || path == "/tor/resource"
-            || path == "/tor/resource/"
-        {
-            if let Some(resp) =
-                crate::routes::tor::handle(&state, &method, &path, headers, body_bytes, &search)
-                    .await
             {
                 return resp;
             }
@@ -1928,8 +1803,6 @@ pub async fn handle(
         && !PUBLIC_ASSETS.contains(&path.as_str())
         && !is_piece_svg
         && !path.starts_with("/matrix/")
-        && !path.starts_with("/tor/")
-        && path != "/tor"
         && !path.starts_with("/unsubscribe/")
         && !path.starts_with("/images/")
         && !path.starts_with("/backgrounds/")

@@ -19,7 +19,6 @@ fixture accounts in a throwaway data directory. They never touch production.
 | `test_service_worker_unit.js` | Service worker bypass and version consistency (the only `.js` test) |
 | `test_saves_page.mjs` | `/saves/` manager and the Matrix/E2E key exclusion |
 | `test_tester_hub.mjs` | `/api/tester/*` and the tester sandbox rules |
-| `test_blooket_*.mjs` | Blooket bot (`npm run test:blooket`) |
 | `test_site_ui_browser.mjs`, `test_site_refresh_browser.mjs`, `test_site_bans_browser.mjs`, `test_game_discovery_browser.mjs`, `test_matrix_*` | Other site-level browser checks |
 
 ## Running

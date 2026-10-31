@@ -48,7 +48,6 @@ pub mod profiles;
 pub mod push_subs;
 pub mod revoked;
 pub mod school;
-pub mod service_auth;
 pub mod shop;
 pub mod sso;
 pub mod state;
