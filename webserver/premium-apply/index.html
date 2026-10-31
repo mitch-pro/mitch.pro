@@ -33,26 +33,6 @@
     overflow-x: hidden;
   }
 
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background:
-      radial-gradient(ellipse 55% 35% at 50% 0%, rgba(245,158,11,0.06) 0%, transparent 60%),
-      radial-gradient(ellipse 40% 30% at 80% 80%, rgba(167,139,250,0.04) 0%, transparent 55%);
-    pointer-events: none;
-  }
-
-  body::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
-    background-size: 48px 48px;
-    pointer-events: none;
-  }
 
   .wrap {
     width: 100%;

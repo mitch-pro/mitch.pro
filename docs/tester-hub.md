@@ -19,6 +19,11 @@ created when an admin adds the account, or on first hub visit, and deleted when
 they are removed from the list, which restores their real balance and real
 premium state.
 
+The wallet "Tester" badge (`/api/me/coins` -> `isTester`, mounted by
+`mitch-coins.js`) only shows for accounts on the list, so it never links an admin to a
+hub they can't use. The hub itself uses the shared site shell and theme tokens
+(`/app.css`, `/app-shell.js`), like the other pages.
+
 ## API (all require a session on the tester list)
 
 | Endpoint | Body | Effect |

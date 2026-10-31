@@ -9,12 +9,12 @@
 <script src="/api.js"></script>
 <style>
   body {
-    font-family: 'Outfit', sans-serif;
+    font-family: var(--t-font, 'DM Sans', system-ui, sans-serif);
   }
   input[type=text]:focus, textarea:focus {
-    border-color: rgba(96,165,250,.42) !important;
-    background: rgba(255,255,255,.04) !important;
-    box-shadow: 0 0 0 3px rgba(96,165,250,0.15);
+    border-color: color-mix(in srgb, var(--t-ac) 42%, transparent) !important;
+    background: var(--t-bg2) !important;
+    box-shadow: none;
   }
   .input-group {
     text-align: left;
@@ -22,7 +22,7 @@
   }
   .input-label {
     display: block;
-    color: rgba(200,200,220,0.6);
+    color: var(--t-fg2);
     font-size: .68rem;
     font-weight: 800;
     letter-spacing: .08em;
@@ -37,7 +37,7 @@
     border-radius: 10px;
     background: rgba(0,0,0,.3);
     border: 1px solid rgba(255,255,255,.08);
-    color: #fff;
+    color: var(--t-fg);
     font-weight: 600;
     padding: 12px 14px;
     outline: none;
@@ -52,7 +52,7 @@
   }
   .subdomain-suffix {
     padding: 0 14px;
-    background: rgba(255,255,255,0.05);
+    background: var(--t-bg3);
     border: 1px solid rgba(255,255,255,.08);
     border-left: none;
     height: 48px;
@@ -60,7 +60,7 @@
     display: flex;
     align-items: center;
     border-radius: 0 10px 10px 0;
-    color: rgba(200,200,220,0.6);
+    color: var(--t-fg2);
     font-weight: 600;
     font-size: 0.95rem;
   }

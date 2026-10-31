@@ -4,133 +4,24 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Maintenance — mitch.pro</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app.css">
 <style>
-  :root {
-    --bg: #060608;
-    --bg-card: rgba(255, 255, 255, 0.03);
-    --fg: #e2e2e4;
-    --fg-dim: rgba(200, 200, 220, 0.60);
-    --ac-gr: linear-gradient(135deg, #22d3ee, #60a5fa, #facc15);
-    --bd: 1px solid rgba(255, 255, 255, 0.08);
-    --cyan: #22d3ee;
-  }
-
-  * {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-  }
-
-  body {
-    font-family: 'Outfit', sans-serif;
-    background: var(--bg);
-    color: var(--fg);
-    line-height: 1.6;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    position: relative;
-    padding: 24px;
-  }
-
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background:
-      radial-gradient(circle at 15% 15%, rgba(34, 211, 238, 0.08) 0%, transparent 45%),
-      radial-gradient(circle at 85% 85%, rgba(167, 139, 250, 0.08) 0%, transparent 45%),
-      linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
-    background-size: auto, auto, 48px 48px, 48px 48px;
-    pointer-events: none;
-    z-index: -2;
-  }
-
-  .glass-card {
-    background:
-      linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
-      var(--bg-card);
-    border: var(--bd);
-    border-radius: 24px;
-    padding: clamp(32px, 8vw, 64px);
-    max-width: 540px;
-    width: 100%;
-    text-align: center;
-    box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    position: relative;
-    z-index: 1;
-  }
-
-  h1 {
-    font-family: 'Syne', sans-serif;
-    font-size: clamp(1.5rem, 4.5vw, 2.2rem);
-    font-weight: 800;
-    margin-bottom: 1rem;
-    background: var(--ac-gr);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    line-height: 1.1;
-    letter-spacing: -0.01em;
-    text-transform: uppercase;
-    overflow-wrap: anywhere;
-  }
-
-  p {
-    color: var(--fg-dim);
-    font-size: 1.05rem;
-    margin-bottom: 2rem;
-  }
-
-  .spinner {
-    width: 40px;
-    height: 40px;
-    border: 3px solid rgba(255,255,255,0.1);
-    border-top-color: var(--cyan);
-    border-radius: 50%;
-    margin: 0 auto 24px;
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-
-  .status-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 14px;
-    background: rgba(34, 211, 238, 0.1);
-    border: 1px solid rgba(34, 211, 238, 0.2);
-    border-radius: 999px;
-    color: var(--cyan);
-    font-weight: 800;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
+  .maintenance-card { width: min(28rem, 100%); margin: 18vh auto 0; padding: 1.6rem 1.5rem; background: var(--t-bg2); border: 1px solid var(--t-bd); border-radius: var(--t-radius); text-align: center; }
+  .maintenance-card h1 { margin: 0 0 0.5rem; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; }
+  .maintenance-card p { margin: 0; color: var(--t-fg2); font-size: 0.95rem; line-height: 1.55; }
+  .spinner { width: 1.8rem; height: 1.8rem; margin: 0 auto 1rem; border: 3px solid var(--t-bd); border-top-color: var(--t-ac); border-radius: 50%; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
 </style>
 </head>
-<body>
-  <div class="glass-card">
-    <div class="spinner"></div>
-    <h1>Under Maintenance</h1>
-    <p>mitch.pro is currently upgrading or restarting. We'll be back online in just a moment.</p>
-    <div class="status-badge">
-      <span style="width: 6px; height: 6px; background: var(--cyan); border-radius: 50%; display: inline-block;"></span>
-      System Optimizing
+<body class="app-shell">
+  <main class="app-main">
+    <div class="maintenance-card">
+      <div class="spinner" aria-hidden="true"></div>
+      <h1>Down for maintenance</h1>
+      <p>mitch.pro is restarting or being updated. It should be back in a moment.</p>
     </div>
-  </div>
+  </main>
 <script src="/cookie-consent.js" defer></script>
 </body>
 </html>

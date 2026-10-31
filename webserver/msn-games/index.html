@@ -2,20 +2,24 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#090614">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="refresh" content="0;url=https://www.msn.com/en-us/play">
-  <title>Opening MSN Play&hellip;</title>
+  <title>Opening MSN Play — mitch.pro</title>
+  <link rel="stylesheet" href="/app.css">
   <style>
-    *{box-sizing:border-box}body{min-height:100vh;margin:0;display:grid;place-items:center;background:#070511 url('/home-burning-cherry.webp') center/cover;color:#fff;font-family:system-ui,sans-serif}main{width:min(420px,calc(100% - 32px));padding:32px;border:1px solid rgba(255,255,255,.18);border-radius:26px;background:rgba(10,7,30,.72);text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.45);backdrop-filter:blur(24px)}.logo{width:58px;height:58px;margin:0 auto 20px;display:grid;grid-template-columns:1fr 1fr;gap:4px}.logo i:nth-child(1){background:#f35325}.logo i:nth-child(2){background:#81bc06}.logo i:nth-child(3){background:#05a6f0}.logo i:nth-child(4){background:#ffba08}h1{margin:0 0 10px;font-size:25px}p{margin:0;color:#bdb4c8;line-height:1.5}a{min-height:46px;margin-top:22px;display:inline-flex;align-items:center;padding:0 18px;border:1px solid rgba(255,255,255,.17);border-radius:14px;background:linear-gradient(120deg,#7555ed,#e34f9d);color:#fff;text-decoration:none;font-weight:700}
+    .redirect-card { width: min(26rem, 100%); margin: 18vh auto 0; padding: 1.4rem 1.5rem; background: var(--t-bg2); border: 1px solid var(--t-bd); border-radius: var(--t-radius); text-align: center; }
+    .redirect-card h1 { margin: 0 0 0.4rem; font-size: 1.25rem; font-weight: 700; }
+    .redirect-card p { margin: 0 0 1rem; color: var(--t-fg2); font-size: 0.9rem; }
+    .redirect-card a { color: var(--t-ac); font-weight: 600; }
   </style>
 </head>
-<body>
-  <main>
-    <span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-    <h1>Opening MSN Play</h1>
-    <p>Loading the complete game interface in this browser tab&hellip;</p>
-    <a href="https://www.msn.com/en-us/play">Continue to MSN Play</a>
+<body class="app-shell">
+  <main class="app-main">
+    <div class="redirect-card">
+      <h1>Opening MSN Play</h1>
+      <p>Loading the game interface in this tab.</p>
+      <a href="https://www.msn.com/en-us/play">Continue to MSN Play</a>
+    </div>
   </main>
   <script>location.replace('https://www.msn.com/en-us/play');</script>
 </body>

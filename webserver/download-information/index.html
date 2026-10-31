@@ -20,36 +20,36 @@
       align-items: center;
       gap: 10px;
       background: var(--ac);
-      color: #fff;
+      color: var(--t-fg);
       padding: 14px 28px;
       border-radius: 12px;
       font-weight: 800;
       text-decoration: none;
       margin-top: 24px;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
-      box-shadow: 0 4px 15px var(--gl);
+      box-shadow: none;
     }
     .dl-btn:hover {
       transform: translateY(-2px);
-      box-shadow: 0 6px 20px var(--gl);
-      color: #fff;
+      box-shadow: none;
+      color: var(--t-fg);
     }
     .file-meta {
       margin-top: 32px;
       font-size: 0.85rem;
       color: var(--fg-dim);
-      background: rgba(255, 255, 255, 0.03);
+      background: var(--t-bg2);
       padding: 15px;
       border-radius: 8px;
       text-align: left;
     }
-    .file-meta b { color: #fff; }
+    .file-meta b { color: var(--t-fg); }
     .loader {
       display: none;
       width: 24px;
       height: 24px;
       border: 3px solid rgba(255,255,255,0.2);
-      border-top-color: #fff;
+      border-top-color: var(--t-fg);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }

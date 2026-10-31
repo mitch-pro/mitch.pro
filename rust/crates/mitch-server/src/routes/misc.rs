@@ -745,7 +745,8 @@ fn me_coins(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             // Sandbox testers with an unlimited balance render as "∞" client-side.
             "unlimitedCoins": mitch_lib::tester::settings(&state.store, &email)
                 .is_some_and(|t| t.unlimited_coins),
-            "isTester": mitch_lib::auth::is_tester_email(&state.store, &email),
+            // Only listed testers can open the hub, so only they get the wallet badge.
+            "isTester": mitch_lib::tester::is_listed(&state.store, &email),
             "achievements": achievements,
             "stats": stats,
         }),

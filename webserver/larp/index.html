@@ -10,21 +10,19 @@
   <link rel="stylesheet" href="/open.css">
   <style>
     :root {
-      --glow-purple: rgba(167, 139, 250, 0.15);
-      --glow-cyan: rgba(34, 211, 238, 0.15);
-      --bg-dark: #09090b;
-      --card-bg: rgba(255, 255, 255, 0.02);
-      --card-border: rgba(255, 255, 255, 0.08);
-      --text-main: #f4f4f5;
-      --text-muted: #a1a1aa;
+      --glow-purple: transparent;
+      --glow-cyan: transparent;
+      --bg-dark: var(--t-bg);
+      --card-bg: var(--t-bg2);
+      --card-border: var(--t-bd);
+      --text-main: var(--t-fg);
+      --text-muted: var(--t-fg2);
     }
 
     body {
-      font-family: 'Outfit', sans-serif;
+      font-family: var(--t-font, 'DM Sans', system-ui, sans-serif);
       background-color: var(--bg-dark);
-      background-image: 
-        radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.07) 0px, transparent 50%),
-        radial-gradient(at 100% 100%, rgba(34, 211, 238, 0.05) 0px, transparent 50%);
+      
       color: var(--text-main);
       min-height: 100vh;
       display: flex;
@@ -34,9 +32,8 @@
     }
 
     .topbar {
-      backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--card-border);
-      background: rgba(9, 9, 11, 0.8);
+      background: var(--t-bg2);
       z-index: 100;
     }
 
@@ -57,9 +54,9 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      background: rgba(167, 139, 250, 0.1);
-      border: 1px solid rgba(167, 139, 250, 0.25);
-      color: #c4b5fd;
+      background: color-mix(in srgb, var(--t-ac) 10%, transparent);
+      border: 1px solid color-mix(in srgb, var(--t-ac) 25%, transparent);
+      color: var(--t-ac);
       padding: 6px 14px;
       border-radius: 100px;
       font-size: 0.8rem;
@@ -70,15 +67,12 @@
     }
 
     .hero-section h1 {
-      font-family: 'Syne', sans-serif;
+      font-family: var(--t-font, 'DM Sans', system-ui, sans-serif);
       font-weight: 800;
       font-size: clamp(2.5rem, 5vw, 4rem);
       line-height: 1.1;
       margin-bottom: 16px;
-      background: linear-gradient(135deg, #fff 30%, #a78bfa 70%, #22d3ee 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
+      color: var(--t-fg);    }
 
     .hero-section p {
       color: var(--text-muted);
@@ -102,19 +96,19 @@
       padding-left: 52px;
       font-size: 1rem;
       font-family: inherit;
-      color: #fff;
-      background: rgba(255, 255, 255, 0.03);
+      color: var(--t-fg);
+      background: var(--t-bg2);
       border: 1px solid var(--card-border);
       border-radius: 14px;
       outline: none;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+      box-shadow: none;
     }
 
     .search-input:focus {
-      border-color: rgba(167, 139, 250, 0.5);
-      background: rgba(255, 255, 255, 0.05);
-      box-shadow: 0 0 25px var(--glow-purple);
+      border-color: color-mix(in srgb, var(--t-ac) 50%, transparent);
+      background: var(--t-bg3);
+      box-shadow: none;
     }
 
     .search-icon {
@@ -128,7 +122,7 @@
     }
 
     .search-input:focus + .search-icon {
-      stroke: #a78bfa;
+      stroke: var(--t-ac);
     }
 
     /* Grid Layout */
@@ -148,7 +142,6 @@
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      backdrop-filter: blur(16px);
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       cursor: pointer;
       text-decoration: none;
@@ -163,15 +156,15 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: linear-gradient(135deg, rgba(167, 139, 250, 0.05) 0%, transparent 100%);
+      background: linear-gradient(135deg, color-mix(in srgb, var(--t-ac) 5%, transparent) 0%, transparent 100%);
       opacity: 0;
       transition: opacity 0.3s;
     }
 
     .lib-card:hover {
       transform: translateY(-5px);
-      border-color: rgba(167, 139, 250, 0.3);
-      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4), 0 0 20px var(--glow-purple);
+      border-color: color-mix(in srgb, var(--t-ac) 30%, transparent);
+      box-shadow: none;
     }
 
     .lib-card:hover::before {
@@ -203,15 +196,15 @@
     }
 
     .tag-ruleset {
-      background: rgba(34, 211, 238, 0.1);
-      color: #22d3ee;
-      border: 1px solid rgba(34, 211, 238, 0.2);
+      background: color-mix(in srgb, var(--t-ac) 10%, transparent);
+      color: var(--t-ac);
+      border: 1px solid color-mix(in srgb, var(--t-ac) 20%, transparent);
     }
 
     .tag-guide {
-      background: rgba(167, 139, 250, 0.1);
-      color: #c4b5fd;
-      border: 1px solid rgba(167, 139, 250, 0.2);
+      background: color-mix(in srgb, var(--t-ac) 10%, transparent);
+      color: var(--t-ac);
+      border: 1px solid color-mix(in srgb, var(--t-ac) 20%, transparent);
     }
 
     .card-icon {
@@ -220,7 +213,7 @@
     }
 
     .lib-card:hover .card-icon {
-      stroke: #a78bfa;
+      stroke: var(--t-ac);
     }
 
     .card-body {
@@ -229,16 +222,16 @@
     }
 
     .card-body h3 {
-      font-family: 'Syne', sans-serif;
+      font-family: var(--t-font, 'DM Sans', system-ui, sans-serif);
       font-weight: 700;
       font-size: 1.4rem;
       margin-bottom: 10px;
-      color: #fff;
+      color: var(--t-fg);
       transition: color 0.3s;
     }
 
     .lib-card:hover .card-body h3 {
-      color: #c4b5fd;
+      color: var(--t-ac);
     }
 
     .card-body p {
@@ -253,14 +246,14 @@
       gap: 8px;
       font-size: 0.85rem;
       font-weight: 700;
-      color: #a78bfa;
+      color: var(--t-ac);
       transition: gap 0.2s;
       z-index: 1;
     }
 
     .lib-card:hover .card-footer {
       gap: 12px;
-      color: #c4b5fd;
+      color: var(--t-ac);
     }
 
     /* Empty search state */
@@ -277,7 +270,7 @@
     }
 
     .empty-state h3 {
-      color: #fff;
+      color: var(--t-fg);
       font-size: 1.25rem;
       margin-bottom: 8px;
     }
@@ -290,8 +283,7 @@
       margin-top: 80px;
       font-size: 0.85rem;
       color: var(--text-muted);
-      backdrop-filter: blur(12px);
-      background: rgba(9, 9, 11, 0.4);
+      background: var(--t-bg2);
     }
   </style>
 </head>

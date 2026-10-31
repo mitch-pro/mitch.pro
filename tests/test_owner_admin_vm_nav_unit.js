@@ -7,7 +7,6 @@ const vmAdmin = readFileSync('webserver/admin/vms/admin-vms.js', 'utf8');
 const shell = readFileSync('webserver/app-shell.js', 'utf8');
 const shellCss = readFileSync('webserver/app.css', 'utf8');
 const tester = readFileSync('webserver/tester/index.html', 'utf8');
-const testerCss = readFileSync('webserver/tester/tester-workbench.css', 'utf8');
 
 assert.match(server, /path === '\/api\/admin\/admins'/, 'owner admin-role endpoint must exist');
 assert.match(server, /if \(!isOwnerEmail\(actor\)\) return jsonResp\(403/, 'admin-role endpoint must be owner-only');
@@ -29,8 +28,7 @@ for (const label of ['Home', 'VM Lab', 'Chat', 'Games', 'People', 'Schedule']) {
 }
 assert.match(shell, /unified-masthead/, 'home and interior mastheads must share one class');
 assert.match(shellCss, /Shared masthead/, 'shared masthead styling must be global');
-assert.match(tester, /tester-workbench\.css\?v=2/, 'tester page must load its custom design');
-assert.match(testerCss, /home-burning-cherry\.webp/, 'tester colors must be designed around its actual background');
-assert.doesNotMatch(testerCss, /BREAK THINGS|deliberately|imperfect/i, 'tester design must not include gimmicky generated comments');
+assert.match(tester, /href="\/app\.css"/, 'tester page must use the shared site stylesheet');
+assert.doesNotMatch(tester, /home-burning-cherry|staff-galaxy|--t-bgr/, 'tester page must not carry its own backdrop');
 
 console.log('Owner admin controls, owner VM access, shared navigation, and tester redesign checks passed.');
