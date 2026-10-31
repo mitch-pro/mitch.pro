@@ -681,6 +681,17 @@
         </form>
         <div id="admin-role-status" class="form-status" role="status"></div>
       </section>
+      <section class="action-card" id="reserved-usernames-card" hidden>
+        <h2>Reserved usernames</h2>
+        <p>Reserved usernames can't be claimed at signup or in profile settings. Leave the email empty to block everyone, or enter an account email to let only that account use the name. Accounts that already have the name keep it.</p>
+        <div id="reserved-usernames-list" style="font-size:.78rem;margin-bottom:10px;"></div>
+        <form onsubmit="addReservedUsername(event)" style="display:flex;gap:7px;flex-wrap:wrap;">
+          <input id="reserved-username-name" type="text" placeholder="username" required maxlength="40" autocomplete="off" style="flex:1;min-width:140px">
+          <input id="reserved-username-email" type="email" placeholder="allowed account email (optional)" autocomplete="off" style="flex:2;min-width:200px">
+          <button type="submit" style="width:auto">Reserve</button>
+        </form>
+        <div id="reserved-usernames-status" class="form-status" role="status"></div>
+      </section>
       <section class="action-card" id="tester-self-card" hidden>
         <h2>Tester mode</h2>
         <p>Use the sandbox tester tools (unlimited test coins, test premium) on your own account.</p>
@@ -1840,6 +1851,51 @@
       } catch (err) {
         await customAlert('Revert Failed', err.message || 'Could not revert action.');
       }
+    }
+
+    function renderReservedUsernames(rows) {
+      const list = document.getElementById('reserved-usernames-list');
+      if (!list) return;
+      list.innerHTML = (rows || []).map(r => `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;padding:7px 9px;border:1px solid var(--t-bd, rgba(255,255,255,.15));border-radius:8px;">
+          <span><strong>${esc(r.username)}</strong>${r.holderEmail ? ` <span class="muted">only ${esc(r.holderEmail)}</span>` : ' <span class="muted">nobody</span>'}</span>
+          <button type="button" onclick='removeReservedUsername(${JSON.stringify(r.username)})' style="padding:4px 8px;font-size:11px;width:auto;">Remove</button>
+        </div>
+      `).join('') || '<div class="muted">No reserved usernames.</div>';
+    }
+
+    async function loadReservedUsernames() {
+      if (!currentUser?.isOwner) return;
+      try {
+        const r = await fetch('/api/admin/reserved-usernames', { credentials: 'include', cache: 'no-store', headers: getAdminHeaders() });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || 'Could not load reserved usernames.');
+        renderReservedUsernames(d.reserved);
+      } catch (err) {
+        setStatus('reserved-usernames-status', err.message, 'err');
+      }
+    }
+
+    async function addReservedUsername(event) {
+      event.preventDefault();
+      const name = document.getElementById('reserved-username-name');
+      const email = document.getElementById('reserved-username-email');
+      setStatus('reserved-usernames-status', 'Saving...', '');
+      try {
+        const d = await postAdmin('/api/admin/reserved-usernames', { username: name.value.trim(), email: email.value.trim(), active: true });
+        renderReservedUsernames(d.reserved);
+        name.value = ''; email.value = '';
+        setStatus('reserved-usernames-status', 'Reserved.', 'ok');
+      } catch (err) { setStatus('reserved-usernames-status', err.message, 'err'); }
+    }
+
+    async function removeReservedUsername(username) {
+      if (!(await customConfirm('Remove reservation', `Let anyone claim "${username}" again?`))) return;
+      try {
+        const d = await postAdmin('/api/admin/reserved-usernames', { username, active: false });
+        renderReservedUsernames(d.reserved);
+        setStatus('reserved-usernames-status', 'Removed.', 'ok');
+      } catch (err) { setStatus('reserved-usernames-status', err.message, 'err'); }
     }
 
     async function loadTesterSelf() {
@@ -3738,6 +3794,7 @@
       if (currentUser.isOwner) {
         document.getElementById('owner-operations').appendChild(document.getElementById('soft-maintenance-card'));
         document.getElementById('coowner-role-card').hidden = false;
+        document.getElementById('reserved-usernames-card').hidden = false;
         // Built here (not in the static HTML) so admins and developers never
         // receive any mention of the owner-only container.
         const ocCard = document.createElement('div');
@@ -3776,7 +3833,7 @@
         await checkPassphraseStatus();
       }
 
-      if (currentUser.isOwner) loadCoOwners();
+      if (currentUser.isOwner) { loadCoOwners(); loadReservedUsernames(); }
       if (currentUser.isOwner || currentUser.isCoOwner) loadAdministrators();
 
       const r = await adminFetch('/api/admin/advanced-data');

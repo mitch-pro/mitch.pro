@@ -122,3 +122,15 @@ developers:
 - View System Logs (see [system-logs.md](system-logs.md)).
 - Toggle themselves as a tester (`/api/admin/tester-self`).
 - Use the VM owner-customization limits (`can_customize_owner_vm`).
+
+## Changing an account's email
+
+`rename_email_references` (`routes/me/account.rs`) moves an account's data to
+its new email but does **not** touch the staff lists: `data/admins.json`
+(`owners`, `coOwners`, `admins`), `data/moderators.json`, `data/testers.json`,
+or `virtual_machines.owner_email`. Staff status is keyed by email, so changing a
+staff member's email drops their role and detaches their computers until the
+lists are updated to the new address. This is deliberate for now: migrating
+roles automatically would let a hijacked session move an owner or admin role to
+an attacker's address. Update the lists first, then change the email. See also
+[reserved-usernames.md](reserved-usernames.md).

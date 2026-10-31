@@ -211,6 +211,12 @@ impl DataStore {
                         created_at INTEGER NOT NULL,
                         PRIMARY KEY (user_email, friend_email, status)
                     );
+                    CREATE TABLE IF NOT EXISTS reserved_usernames (
+                        username TEXT PRIMARY KEY,
+                        holder_email TEXT NOT NULL DEFAULT '',
+                        reserved_by TEXT NOT NULL DEFAULT '',
+                        reserved_at INTEGER NOT NULL
+                    );
                     CREATE TABLE IF NOT EXISTS referrals (
                         email TEXT NOT NULL,
                         source TEXT DEFAULT '',

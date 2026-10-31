@@ -269,6 +269,22 @@ pub fn handle(
         ));
     }
 
+    // GET /api/admin/reserved-usernames (owners only).
+    if path == "/api/admin/reserved-usernames" && *method == Method::GET {
+        if !ctx.is_owner(state) {
+            return Some(forbidden());
+        }
+        return Some(reserved_usernames_response(state));
+    }
+
+    // POST /api/admin/reserved-usernames (owners only): {username, email?, active}.
+    if path == "/api/admin/reserved-usernames" && *method == Method::POST {
+        if !ctx.is_owner(state) {
+            return Some(forbidden());
+        }
+        return Some(set_reserved_username(state, body, ctx));
+    }
+
     // POST /api/admin/testers (admins only).
     if path == "/api/admin/testers" && *method == Method::POST {
         if !ctx.is_admin(state) {
@@ -771,6 +787,72 @@ fn set_tester(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response {
         json!({ "target": target_raw }),
     );
     json_response(200, json!({ "ok": true, "testers": testers }))
+}
+
+fn reserved_usernames_response(state: &Arc<AppState>) -> Response {
+    let rows = mitch_lib::reserved_usernames::list(&state.store);
+    json_response(
+        200,
+        json!({
+            "ok": true,
+            "reserved": rows.iter().map(|r| json!({
+                "username": r.username,
+                "holderEmail": r.holder_email,
+                "reservedBy": r.reserved_by,
+                "reservedAt": r.reserved_at,
+            })).collect::<Vec<_>>(),
+        }),
+    )
+}
+
+/// `POST /api/admin/reserved-usernames` (owners only). `active: true` reserves
+/// `username` (optionally for one account's `email`); `active: false` frees it.
+/// Existing holders of a newly reserved name keep it.
+fn set_reserved_username(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response {
+    let username = mitch_lib::profile::normalize_username(
+        body.get("username").and_then(|v| v.as_str()).unwrap_or(""),
+    );
+    if !mitch_lib::profile::is_valid_username(&username) {
+        return json_response(
+            400,
+            json!({ "error": "Username must be 2-40 characters: lowercase letters, numbers, \".\", \"_\" or \"-\"." }),
+        );
+    }
+    let active = body.get("active").and_then(|v| v.as_bool()) != Some(false);
+    let admin_email = ctx.email(state);
+    if !active {
+        mitch_lib::reserved_usernames::release(&state.store, &username);
+    } else {
+        let holder_raw = body
+            .get("email")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
+        let holder = if holder_raw.is_empty() {
+            String::new()
+        } else {
+            let resolved = super::resolve_admin_target(state, holder_raw);
+            if !resolved.contains('@') {
+                return json_response(400, json!({ "error": "valid account email required" }));
+            }
+            resolved
+        };
+        if !mitch_lib::reserved_usernames::reserve(&state.store, &username, &holder, &admin_email) {
+            return json_response(500, json!({ "error": "Could not save the reservation." }));
+        }
+    }
+    mitch_lib::admin::log_admin_action(
+        &state.store,
+        &state.cfg.data_dir,
+        &admin_email,
+        if active {
+            "reserve_username"
+        } else {
+            "release_username"
+        },
+        json!({ "target": username }),
+    );
+    reserved_usernames_response(state)
 }
 
 /// `GET|POST /api/admin/tester-self` — reports or changes whether the caller

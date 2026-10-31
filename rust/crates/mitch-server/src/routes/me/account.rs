@@ -336,6 +336,22 @@ fn post_profile(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -
         );
     }
 
+    // Reserved usernames can't be claimed; the account already holding one keeps it.
+    let current_username = mitch_lib::profile::normalize_username(
+        existing
+            .get("username")
+            .and_then(|v| v.as_str())
+            .unwrap_or(""),
+    );
+    if username != current_username
+        && mitch_lib::reserved_usernames::is_blocked_for(&state.store, &username, &norm)
+    {
+        return json_response(
+            400,
+            json!({ "error": "That username is reserved. Pick a different one." }),
+        );
+    }
+
     let pfp_raw = body.get("pfp").and_then(|v| v.as_str()).unwrap_or("");
     let bg_raw = body
         .get("background")

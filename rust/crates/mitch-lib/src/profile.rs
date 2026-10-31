@@ -569,6 +569,22 @@ pub fn ensure_profile_defaults(
         }
     }
     let existing = profiles.get(norm_email).cloned().unwrap_or(json!({}));
+    // Reserved usernames count as taken (default-username generation skips
+    // them too), except for the account that already holds the name or the
+    // reservation's named holder.
+    let current_username = normalize_username(
+        existing
+            .get("username")
+            .and_then(|v| v.as_str())
+            .unwrap_or(""),
+    );
+    for name in crate::reserved_usernames::all_names(store) {
+        if name != current_username
+            && crate::reserved_usernames::is_blocked_for(store, &name, norm_email)
+        {
+            used.insert(name);
+        }
+    }
     // JS: patch.username || existing.username || '' (truthiness).
     let truthy_str = |v: Option<&Value>| -> Option<String> {
         match v {

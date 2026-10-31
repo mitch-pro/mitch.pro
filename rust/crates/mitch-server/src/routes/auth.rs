@@ -360,6 +360,16 @@ async fn signup(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -
                 json!({ "success": false, "message": "Username must use lowercase letters, numbers, \".\", \"_\", or \"-\"." }),
             );
         }
+        if mitch_lib::reserved_usernames::is_blocked_for(
+            &state.store,
+            &requested_username,
+            &norm_email,
+        ) {
+            return json_resp(
+                400,
+                json!({ "success": false, "message": "Username is already taken." }),
+            );
+        }
         let profiles = mitch_lib::profiles::profile_all(&state.store);
         if let Some(obj) = profiles.as_object() {
             if obj.values().any(|p| {
