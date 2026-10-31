@@ -17,15 +17,19 @@ Not proxied, loaded by the visitor's browser directly: poster art (TMDB), YouTub
 
 Upstream requests use the `curl` binary (installed in the production image), not an in-process HTTP client. Cloudflare answers 403 to some clients on the stream endpoints; this combination is known to pass: HTTP/2, curl's TLS handshake, and a desktop-Chrome User-Agent. The proxy always sends its own fixed User-Agent (the visitor's is not forwarded: `node` and headless-browser agents get a 403, and there's no reason to pass a visitor's browser details upstream). Redirects are not followed server-side; a redirect on the same host is mapped back into the mount and the browser follows it. Response bodies that aren't rewritten (images, playlists, segments, JSON) are streamed, and the curl process is killed if the visitor goes away.
 
-If Movies loads but something returns 403, the server log has `[movies] cno.to answered 403 (cf-ray ...)`. Reproduce with `curl --interface eth1 --http2 -A "<a Chrome UA>" https://cno.to/...` from inside the container.
+If Movies loads but something returns 403, the server log has `[movies] cno.to answered 403 (cf-ray ...)`. Reproduce with `curl --proxy http://127.0.0.1:3128 --http2 -A "<a Chrome UA>" https://cno.to/...` from the host.
 
-## VPN interface (eth1)
+## VPN egress (movies-egress sidecar)
 
-Every upstream connection is bound to one interface (`curl --interface`), set with `MOVIES_EGRESS_INTERFACE` in `.env` (default `eth1`). Everything else the container does keeps using its normal interface.
+The VPN interface (`eth1`) exists on the **host**, not inside the webserver containers. So the webserver runs curl with `--proxy $MOVIES_EGRESS_PROXY` (default `http://host.docker.internal:3128`), and the `movies-egress` service (`egress-proxy/proxy.py`, `network_mode: host`) dials out with `SO_BINDTODEVICE` on `eth1` (`MOVIES_EGRESS_INTERFACE`), the same pinning `curl --interface` does. TLS stays end to end between curl and cno.to; the sidecar only sees a CONNECT.
 
-- It **fails closed**: if the interface doesn't exist in the container, Movies returns 503 "Movies are unavailable right now" and never falls back to the normal connection. The log says which interface it wanted and which are present: `[movies] egress interface "eth1" not found in this container (present: eth0, lo)`. That line is the first thing to check when Movies shows the 503.
-- The interface needs its own route to the internet (a default route, which can have a higher metric than eth0). Binding only forces the interface; it doesn't create a route.
-- DNS lookups use the container's normal resolver. Only the connections are bound.
+The sidecar listens on the host, so it is locked down: only private/loopback clients, only `CONNECT` to port 443 of `cno.to`, `v.cno.to` and `api.theintrodb.org` (`ALLOWED_HOSTS`), capabilities dropped to `NET_RAW`, read-only filesystem. It **fails closed**: if `eth1` is missing it answers 503 (it keeps running, so it never blocks a deploy), and the webserver has no fallback to the normal connection. If the host firewall blocks Docker networks from reaching the host on port 3128, Movies shows 502/503; allow it from the Docker bridge subnets only.
+
+Triage: webserver log `[movies] request to cno.to failed: ...` means it couldn't reach the sidecar; sidecar log (`docker logs mitch-movies-egress`) shows refusals and `connect to ... via eth1 failed`. Quick check from the host: `curl --proxy http://127.0.0.1:3128 -I https://cno.to/`.
+
+Without `MOVIES_EGRESS_PROXY` (e.g. local development) the webserver falls back to binding curl to a local interface named by `MOVIES_EGRESS_INTERFACE` (default `eth1`) and returns 503 if there isn't one. A malformed `MOVIES_EGRESS_PROXY` also returns 503.
+
+- DNS lookups use the normal resolver; only the connections are bound to the VPN.
 
 ## Cookies
 

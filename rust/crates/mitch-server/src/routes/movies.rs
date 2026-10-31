@@ -2,13 +2,15 @@
 //!
 //! Everything upstream (the site itself, its API, its HLS streams) is fetched
 //! by this server, not by the visitor's browser, and every one of those
-//! requests leaves through one VPN network interface (see [`egress_interface`]).
+//! requests leaves through the VPN: via the egress sidecar (`MOVIES_EGRESS_PROXY`,
+//! see `egress-proxy/`) or, where the VPN interface exists in this container,
+//! by binding to it (see [`egress_interface`]).
 //! The requests are made with the `curl` binary (in the production image), not
 //! an in-process HTTP client: Cloudflare turns away reqwest's TLS handshake on
 //! the site's stream endpoints (403) but accepts curl's, and curl can pin the
 //! connection to a network interface. Requests always carry a fixed desktop
 //! Chrome User-Agent (the stream endpoints also 403 `node`/headless ones).
-//! If that interface isn't present the proxy answers 503 instead of quietly
+//! If neither is configured/present the proxy answers 503 instead of quietly
 //! falling back to the server's normal connection ("fail closed").
 //!
 //! What is proxied, and what is not:
@@ -96,6 +98,28 @@ fn available_interfaces() -> Vec<String> {
     names
 }
 
+/// How upstream connections are pinned to the VPN: through the egress sidecar
+/// (`MOVIES_EGRESS_PROXY`, the production setup, since the VPN interface lives
+/// on the host, not in this container) or by binding to a local interface.
+#[derive(Clone, Debug, PartialEq)]
+enum Egress {
+    Proxy(String),
+    Interface(String),
+}
+
+/// `MOVIES_EGRESS_PROXY` (e.g. `http://host.docker.internal:3128`): an HTTP
+/// CONNECT proxy that dials out over the VPN. Must be plain `http://host[:port]`.
+fn egress_proxy() -> Option<String> {
+    let value = std::env::var("MOVIES_EGRESS_PROXY").ok()?;
+    let value = value.trim();
+    let rest = value.strip_prefix("http://")?;
+    let ok = !rest.is_empty()
+        && rest
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':' | '_'));
+    ok.then(|| value.to_string())
+}
+
 /// Why a request couldn't be started.
 enum EgressError {
     /// The configured interface isn't there (or the name is invalid).
@@ -103,10 +127,17 @@ enum EgressError {
 }
 
 /// The interface to bind to, or `Unavailable` (fail closed) if it's missing.
-fn egress_ready() -> Result<String, EgressError> {
+fn egress_ready() -> Result<Egress, EgressError> {
+    if let Some(proxy) = egress_proxy() {
+        return Ok(Egress::Proxy(proxy));
+    }
+    if std::env::var("MOVIES_EGRESS_PROXY").is_ok_and(|v| !v.trim().is_empty()) {
+        eprintln!("[movies] MOVIES_EGRESS_PROXY must look like http://host:port; refusing to go out the normal connection");
+        return Err(EgressError::Unavailable);
+    }
     let interface = egress_interface();
     if interface_exists(&interface) {
-        return Ok(interface);
+        return Ok(Egress::Interface(interface));
     }
     // Say why, once per request, so a missing eth1 is obvious in the logs.
     eprintln!(
@@ -127,7 +158,7 @@ fn header_value_ok(value: &str) -> bool {
 /// (the handler maps them), `--globoff` stops `{}`/`[]` in paths being treated
 /// as ranges, and `--proto =https` refuses anything but HTTPS.
 fn curl_args(
-    interface: &str,
+    egress: &Egress,
     method: &Method,
     url: &str,
     headers: &[(String, String)],
@@ -149,12 +180,20 @@ fn curl_args(
         "1",
         "--speed-time",
         "30",
-        "--interface",
     ]
     .iter()
     .map(|s| s.to_string())
     .collect();
-    args.push(interface.to_string());
+    match egress {
+        Egress::Interface(interface) => {
+            args.push("--interface".into());
+            args.push(interface.clone());
+        }
+        Egress::Proxy(proxy) => {
+            args.push("--proxy".into());
+            args.push(proxy.clone());
+        }
+    }
     if *method == Method::HEAD {
         args.push("--head".into());
     } else if *method == Method::POST {
@@ -251,7 +290,7 @@ impl Upstream {
 }
 
 async fn curl_fetch(
-    interface: &str,
+    egress: &Egress,
     method: &Method,
     url: &str,
     headers: &[(String, String)],
@@ -261,7 +300,7 @@ async fn curl_fetch(
     let has_body = *method == Method::POST;
     let mut command = tokio::process::Command::new("curl");
     command
-        .args(curl_args(interface, method, url, headers, has_body))
+        .args(curl_args(egress, method, url, headers, has_body))
         .stdin(if has_body {
             std::process::Stdio::piped()
         } else {
@@ -453,8 +492,8 @@ pub async fn handle(
         return Some(crate::errors::err_resp(413, None, None));
     }
 
-    let interface = match egress_ready() {
-        Ok(interface) => interface,
+    let egress = match egress_ready() {
+        Ok(egress) => egress,
         Err(EgressError::Unavailable) => {
             return Some(text_response(
                 StatusCode::SERVICE_UNAVAILABLE,
@@ -493,8 +532,7 @@ pub async fn handle(
         }
     }
 
-    let upstream = match curl_fetch(&interface, method, &target.url, &upstream_headers, body).await
-    {
+    let upstream = match curl_fetch(&egress, method, &target.url, &upstream_headers, body).await {
         Ok(upstream) => upstream,
         Err(err) => {
             // Which host failed and why (never the full URL or any visitor data).
@@ -832,6 +870,10 @@ mod tests {
         }
     }
 
+    fn eth1() -> Egress {
+        Egress::Interface("eth1".into())
+    }
+
     #[test]
     fn interface_names_are_validated() {
         assert!(valid_interface_name("eth1"));
@@ -843,17 +885,34 @@ mod tests {
     }
 
     #[test]
-    fn missing_interface_fails_closed() {
+    fn egress_settings_are_validated_and_fail_closed() {
+        // One test: these mutate process-wide env vars.
         std::env::set_var("MOVIES_EGRESS_INTERFACE", "definitely-not-a-nic0");
-        let ready = egress_ready();
+        let missing = egress_ready();
         std::env::remove_var("MOVIES_EGRESS_INTERFACE");
-        assert!(matches!(ready, Err(EgressError::Unavailable)));
+        assert!(matches!(missing, Err(EgressError::Unavailable)));
+        std::env::set_var("MOVIES_EGRESS_PROXY", "http://host.docker.internal:3128");
+        let ok = egress_ready();
+        std::env::set_var("MOVIES_EGRESS_PROXY", "socks5://evil");
+        let bad = egress_ready();
+        std::env::remove_var("MOVIES_EGRESS_PROXY");
+        assert!(matches!(ok, Ok(Egress::Proxy(p)) if p == "http://host.docker.internal:3128"));
+        assert!(matches!(bad, Err(EgressError::Unavailable)));
+        let args = curl_args(
+            &Egress::Proxy("http://h:3128".into()),
+            &Method::GET,
+            "https://cno.to/",
+            &[],
+            false,
+        );
+        let joined = args.join(" ");
+        assert!(joined.contains("--proxy http://h:3128") && !joined.contains("--interface"));
     }
 
     #[test]
     fn curl_is_pinned_to_the_interface_and_locked_down() {
         let args = curl_args(
-            "eth1",
+            &eth1(),
             &Method::GET,
             "https://cno.to/api/s/1?x={y}",
             &[
@@ -875,10 +934,10 @@ mod tests {
             .iter()
             .any(|a| a == "--location" || a == "-L" || a == "--config" || a == "-K"));
         assert!(!args.contains(&"--data-binary".to_string()));
-        let post = curl_args("eth1", &Method::POST, "https://cno.to/api/p", &[], true);
+        let post = curl_args(&eth1(), &Method::POST, "https://cno.to/api/p", &[], true);
         assert!(post.join(" ").contains("--request POST --data-binary @-"));
         assert!(
-            curl_args("eth1", &Method::HEAD, "https://cno.to/", &[], false)
+            curl_args(&eth1(), &Method::HEAD, "https://cno.to/", &[], false)
                 .contains(&"--head".to_string())
         );
     }
@@ -889,7 +948,7 @@ mod tests {
         assert!(!header_value_ok("a\r\nX-Evil: 1"));
         assert!(!header_value_ok("a\nb"));
         let args = curl_args(
-            "eth1",
+            &eth1(),
             &Method::GET,
             "https://cno.to/",
             &[

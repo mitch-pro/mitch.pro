@@ -34,6 +34,24 @@ services:
       retries: 30
       start_period: 5s
 
+  # Egress sidecar for Movies: an HTTP CONNECT proxy on the host network whose
+  # outbound connections are bound to the host's VPN interface (eth1). The VPN
+  # interface isn't visible inside the webserver containers. Allowlisted hosts
+  # only, private clients only; see egress-proxy/proxy.py and docs/movies.md.
+  movies-egress:
+    build: ./egress-proxy
+    container_name: mitch-movies-egress
+    restart: unless-stopped
+    network_mode: host
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW
+    environment:
+      - EGRESS_INTERFACE=${MOVIES_EGRESS_INTERFACE:-eth1}
+      - LISTEN_PORT=3128
+
   # Production Slot A: Blue Webserver
   webserver-blue:
     build:
@@ -45,6 +63,8 @@ services:
       conduit:
         condition: service_started
       livekit:
+        condition: service_started
+      movies-egress:
         condition: service_started
       mail-rs:
         condition: service_started
@@ -131,9 +151,10 @@ services:
       - PROXMOX_VM_STORAGE
       - PROXMOX_VM_BRIDGE
       - HIDE_VM_FEATURES
-      # Movies proxy: the container interface that routes through the VPN
-      # (default eth1).
-      - MOVIES_EGRESS_INTERFACE
+      # Movies proxy: leave through the movies-egress sidecar (VPN on the host).
+      - MOVIES_EGRESS_PROXY=${MOVIES_EGRESS_PROXY:-http://host.docker.internal:3128}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # Production Slot B: Green Webserver
   webserver-green:
@@ -146,6 +167,8 @@ services:
       conduit:
         condition: service_started
       livekit:
+        condition: service_started
+      movies-egress:
         condition: service_started
       mail-rs:
         condition: service_started
@@ -225,9 +248,10 @@ services:
       - PROXMOX_VM_STORAGE
       - PROXMOX_VM_BRIDGE
       - HIDE_VM_FEATURES
-      # Movies proxy: the container interface that routes through the VPN
-      # (default eth1).
-      - MOVIES_EGRESS_INTERFACE
+      # Movies proxy: leave through the movies-egress sidecar (VPN on the host).
+      - MOVIES_EGRESS_PROXY=${MOVIES_EGRESS_PROXY:-http://host.docker.internal:3128}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # Rust mail pipeline (plan Step 2 of the Rust rewrite, on the rust branch).
   # Replaces the mail/*.js nodemailer CLIs + imap_watcher; the JS scripts
