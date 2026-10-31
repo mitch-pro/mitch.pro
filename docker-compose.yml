@@ -151,6 +151,10 @@ services:
       - PROXMOX_VM_STORAGE
       - PROXMOX_VM_BRIDGE
       - HIDE_VM_FEATURES
+      # Owner container desktop (VNC server inside the container); see docs/owner-container.md.
+      - OWNER_CONTAINER_VNC_HOST
+      - OWNER_CONTAINER_VNC_PORT
+      - OWNER_CONTAINER_VNC_PASSWORD
       # Movies proxy: leave through the movies-egress sidecar (VPN on the host).
       - MOVIES_EGRESS_PROXY=${MOVIES_EGRESS_PROXY:-http://host.docker.internal:3128}
     extra_hosts:
@@ -248,6 +252,10 @@ services:
       - PROXMOX_VM_STORAGE
       - PROXMOX_VM_BRIDGE
       - HIDE_VM_FEATURES
+      # Owner container desktop (VNC server inside the container); see docs/owner-container.md.
+      - OWNER_CONTAINER_VNC_HOST
+      - OWNER_CONTAINER_VNC_PORT
+      - OWNER_CONTAINER_VNC_PASSWORD
       # Movies proxy: leave through the movies-egress sidecar (VPN on the host).
       - MOVIES_EGRESS_PROXY=${MOVIES_EGRESS_PROXY:-http://host.docker.internal:3128}
     extra_hosts:

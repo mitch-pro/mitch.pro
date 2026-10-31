@@ -2564,6 +2564,7 @@ pub fn handle_desktop_ws_upgrade(
     let ws_data = json!({
         "isProxmoxVnc": true,
         "ownerContainer": owner_container,
+        "vncTcp": session.get("vncTcp").map(jsval::truthy).unwrap_or(false),
         "recordId": record_id,
         "actorEmail": actor.email,
         "sid": actor.sid,
@@ -2677,6 +2678,18 @@ async fn run_desktop_bridge(
         socket_id,
         record_id: record_id.clone(),
     };
+
+    // Owner container desktop: relay to the container's own VNC server.
+    if data.get("vncTcp").map(jsval::truthy).unwrap_or(false) {
+        crate::routes::admin::owner_container::bridge_vnc_tcp(
+            Arc::clone(&state),
+            client_ws,
+            data.clone(),
+            close_rx,
+        )
+        .await;
+        return;
+    }
 
     let upstream_url = jsval::str_or(data.get("upstreamUrl"), "");
     let upstream_auth = jsval::str_or(data.get("upstreamAuthorization"), "");

@@ -31,11 +31,30 @@ exists, so:
 | --- | --- | --- |
 | `GET /api/admin/owner-container` | | `{exists, name, type, status, cpuCores, memoryMb, diskGb, uptime}` from Proxmox |
 | `POST /api/admin/owner-container/power` | `{action}` (`start`, `shutdown`, `restart`, `force-stop`) | Proxmox power action |
-| `POST /api/admin/owner-container/console` | | One-time noVNC session (`socketPath`, `credentials`); container must be running |
+| `POST /api/admin/owner-container/console` | `{mode}` (`desktop` default, or `text`) | One-time noVNC session (`socketPath`, `credentials`); container must be running |
 
-POSTs require a same-origin request. The console uses Proxmox's `vncproxy` for
-the guest's own type (`lxc`) through the normal `/api/vm/desktop/ws` bridge.
-Sessions carry `ownerContainer: true`, which makes the bridge (and its periodic
+POSTs require a same-origin request. `GET` also returns `desktopConfigured`.
+
+## Consoles
+
+- **Text console** (`mode: "text"`): Proxmox's `vncproxy` for the guest's own
+  type through the normal `/api/vm/desktop/ws` bridge. For an LXC this is only
+  the text login; Proxmox cannot show an LXC's GNOME session.
+- **Desktop** (`mode: "desktop"`, used when `OWNER_CONTAINER_VNC_HOST` is set):
+  the server opens a TCP connection to the VNC server running inside the
+  container and relays it to the browser's noVNC (`bridge_vnc_tcp`). The
+  container must be reachable from the webserver container/host.
+
+Server environment (`.env`; passed through in `docker-compose.yml`):
+
+| Variable | Meaning |
+| --- | --- |
+| `OWNER_CONTAINER_VNC_HOST` | IP or hostname of the container's VNC server. Empty disables the desktop button. |
+| `OWNER_CONTAINER_VNC_PORT` | VNC port, default `5901` (display `:1`). |
+| `OWNER_CONTAINER_VNC_PASSWORD` | VNC password; sent to the owner's browser over TLS when noVNC asks. Classic VNC auth uses only the first 8 characters. |
+
+The host comes only from the environment, never from a request.
+Sessions (both modes) carry `ownerContainer: true`, which makes the bridge (and its periodic
 re-authorization in `vm_desktop_socket_authorized`) accept them for an owner
 session only, with no database record.
 

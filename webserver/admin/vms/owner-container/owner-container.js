@@ -50,6 +50,8 @@ async function refresh() {
     $('oc-mem').textContent = d.memoryMb ? d.memoryMb + ' MB' : '-';
     $('oc-disk').textContent = d.diskGb ? d.diskGb + ' GB' : '-';
     $('oc-uptime').textContent = d.status === 'running' ? uptime(d.uptime) : '-';
+    $('oc-desktop').hidden = !d.desktopConfigured;
+    $('oc-desktop').disabled = d.status !== 'running';
     $('oc-console').disabled = d.status !== 'running';
   } catch (err) {
     $('oc-card').hidden = true;
@@ -66,10 +68,10 @@ async function power(action) {
   } catch (err) { say(err.message, true); }
 }
 
-async function openConsole() {
+async function openConsole(mode) {
   say('Connecting...');
   try {
-    const session = await api('/console', { method: 'POST', body: '{}' });
+    const session = await api('/console', { method: 'POST', body: JSON.stringify({ mode }) });
     if (typeof session.socketPath !== 'string' || !session.socketPath.startsWith('/api/vm/desktop/ws?session=')) {
       throw new Error('The console connection could not be opened.');
     }
@@ -88,6 +90,7 @@ async function openConsole() {
 }
 
 document.querySelectorAll('[data-power]').forEach(b => b.addEventListener('click', () => power(b.dataset.power)));
-$('oc-console').addEventListener('click', openConsole);
+$('oc-console').addEventListener('click', () => openConsole('text'));
+$('oc-desktop').addEventListener('click', () => openConsole('desktop'));
 $('oc-refresh').addEventListener('click', refresh);
 refresh();
