@@ -30,6 +30,7 @@ pub async fn handle(
     let node_env_test = std::env::var("NODE_ENV").unwrap_or_default() == "test";
     let is_admin = auth::is_admin_id(&state.store, &state.id_secret, &sid, node_env_test);
     let is_moderator = auth::is_moderator_id(&state.store, &state.id_secret, &sid);
+    let is_owner = auth::is_owner_id(&state.store, &state.id_secret, &sid);
     let email = auth::email_from_sid(&state.store, &state.id_secret, &sid);
     let is_tester = email
         .as_deref()
@@ -40,6 +41,7 @@ pub async fn handle(
             "isAdmin": is_admin,
             "isModerator": is_moderator,
             "isTester": is_tester,
+            "isOwner": is_owner,
             "isStaff": is_admin || is_moderator || is_tester,
         }),
     ))

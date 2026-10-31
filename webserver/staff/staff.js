@@ -12,7 +12,7 @@
     var adminOk = status.isAdmin;
     var modOk = status.isAdmin || status.isModerator;
     var testerOk = status.isTester;
-    return [
+    var list = [
       { href: '/admin/', name: 'Admin dashboard', desc: 'Approvals, people, economy, moderation, VM cloud, logs', ok: adminOk },
       { href: '/admin/bans/', name: 'Account bans', desc: 'Review bans and restore accounts', ok: adminOk },
       { href: '/admin/vms/', name: 'Virtual machines', desc: 'Manage computers and resources', ok: adminOk },
@@ -21,6 +21,12 @@
       { href: '/moderator/', name: 'Moderator panel', desc: 'Reports and content review', ok: modOk },
       { href: '/tester/', name: 'Beta tester hub', desc: 'Tester tools and cooldown bypasses', ok: testerOk },
     ];
+    // Owner-only: added only for the owner, never shown as a locked card, so
+    // other staff can't tell it exists.
+    if (status.isOwner) {
+      list.push({ href: '/admin/vms/owner-container/', name: 'Container 500', desc: 'Status, power, and console', ok: true });
+    }
+    return list;
   }
 
   function render(status) {

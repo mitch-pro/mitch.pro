@@ -24,7 +24,11 @@ required" if `isStaff` is false. The homepage footer link
 (`webserver/index.html`, near `_agree_footer`) does the same check and
 stays `hidden` unless `isStaff`.
 
-Each linked card is shown locked (greyed out, no `href`) rather than
+The owner-only container card (see [owner-container.md](owner-container.md)) is the
+exception: `status.isOwner` adds it for the owner and nobody else, and it is never
+shown locked.
+
+Other cards are shown locked (greyed out, no `href`) rather than
 hidden entirely when the viewer doesn't have that specific role — e.g. a
 tester who isn't an admin still sees the Admin dashboard card exists, just
 can't open it. Hiding it outright would make the directory look
