@@ -218,6 +218,7 @@
   // Game progress is written while playing on pages that don't run sync.js, so
   // pick up changes shortly after any sync page opens and when it's hidden.
   setTimeout(saveIdb, 8000);
+  setInterval(saveIdb, INTERVAL_MS);
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') saveIdb(); });
   window.addEventListener('beforeunload', saveBeacon);
 

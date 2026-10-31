@@ -185,6 +185,7 @@
     window.MitchPresence?.setActivity(null);
     player.hidden = true;
     frame.src = 'about:blank';
+    window._mitchSync?.saveIdb();
     document.body.style.overflow = '';
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     render();

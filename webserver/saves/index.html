@@ -228,6 +228,7 @@
     if (IDB) localStorage.setItem(IDB_HASH_KEY, IDB.hash(localIdb));
   }
 
+  var autoPushed = false;
   async function load() {
     var r;
     try { r = await api('GET'); } catch (e) { status('Could not reach the server.', 'err'); return false; }
@@ -250,6 +251,16 @@
     manualIdb = (server && typeof server._idb2 === 'object' && server._idb2) || {};
     local = localSnap();
     await refreshLocalIdb();
+    // Game databases changed since the last upload (played on a page that
+    // doesn't run sync.js) go up automatically when auto-sync is on.
+    if (!autoPushed) {
+      autoPushed = true;
+      var ps = {};
+      try { ps = JSON.parse(localStorage.getItem('_prefSync') || '{}') || {}; } catch (e) {}
+      if (ps.enabled !== false && IDB && IDB.supported && Object.keys(localIdb).length && IDB.hash(localIdb) !== localStorage.getItem(IDB_HASH_KEY)) {
+        try { await pushIdb(); serverIdb = Object.assign({}, serverIdb, localIdb); } catch (e) {}
+      }
+    }
     $('signin-panel').hidden = true;
     $('main').hidden = false;
     render();
