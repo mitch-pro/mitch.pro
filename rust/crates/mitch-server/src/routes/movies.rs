@@ -192,6 +192,9 @@ fn curl_args(
         Egress::Proxy(proxy) => {
             args.push("--proxy".into());
             args.push(proxy.clone());
+            // Otherwise --include prints the proxy's own "200 Connection
+            // Established" block first and it would be parsed as the response.
+            args.push("--suppress-connect-headers".into());
         }
     }
     if *method == Method::HEAD {
@@ -907,6 +910,7 @@ mod tests {
         );
         let joined = args.join(" ");
         assert!(joined.contains("--proxy http://h:3128") && !joined.contains("--interface"));
+        assert!(joined.contains("--suppress-connect-headers"));
     }
 
     #[test]
