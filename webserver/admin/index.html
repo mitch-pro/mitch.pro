@@ -547,6 +547,11 @@
       display: none !important;
     }
 
+    body.no-log-access a[href="#logs-tools"],
+    body.no-log-access #logs-tools {
+      display: none !important;
+    }
+
     body.moderator-mode a[href="#economy-tools"],
     body.moderator-mode a[href="#shop-tools"],
     body.moderator-mode a[href="#logs-tools"],
@@ -654,11 +659,11 @@
       </nav>
       <div class="tool-area">
     <section class="tool-group" id="owner-tools">
-      <div class="section-head"><h2>Site operations</h2><span class="tag">Owner access</span></div>
+      <div class="section-head"><h2>Site operations</h2><span class="tag">Owner and developer access</span></div>
       <div class="actions-panel" id="owner-operations"></div>
       <section class="action-card" id="coowner-role-card" hidden style="border-color:#38bdf8;background:rgba(14,165,233,.12);margin-bottom:18px;">
         <h2>Developer Access</h2>
-        <p>Developers have elevated administrative privileges across the site, but remain subordinate to the primary Owner. Developers cannot add, remove, or modify the Owner, and only the Owner can delete developers or admins.</p>
+        <p>Developers have elevated administrative privileges across the site, but remain subordinate to the primary Owner. Developers cannot modify the Owner, and only the Owner can add or remove developers. Developers can add and remove admins.</p>
         <div id="coowner-role-list" style="font-size:.78rem;margin-bottom:10px;"></div>
         <form onsubmit="addCoOwner(event)" style="display:flex;gap:7px;flex-wrap:wrap;">
           <input id="coowner-role-email" type="email" placeholder="existing-user@email.com" required style="flex:1;min-width:220px">
@@ -668,13 +673,19 @@
       </section>
       <section class="action-card" id="admin-role-card" hidden style="border-color:#ef4444;background:rgba(127,29,29,.16);margin-bottom:18px;">
         <h2>Full Administrator Access</h2>
-        <p><strong>Danger zone.</strong> Administrators have broad control over accounts, moderation, content, coins, and site operations. Owner changes here apply immediately with no approval step.</p>
+        <p><strong>Danger zone.</strong> Administrators have broad control over accounts, moderation, content, coins, and site operations. Changes here apply immediately with no approval step.</p>
         <div id="admin-role-list" style="font-size:.78rem;margin-bottom:10px;"></div>
         <form onsubmit="addAdministrator(event)" style="display:flex;gap:7px;flex-wrap:wrap;">
           <input id="admin-role-email" type="email" placeholder="existing-user@email.com" required style="flex:1;min-width:220px">
           <button type="submit" data-danger style="width:auto">Grant full admin</button>
         </form>
         <div id="admin-role-status" class="form-status" role="status"></div>
+      </section>
+      <section class="action-card" id="tester-self-card" hidden>
+        <h2>Tester mode</h2>
+        <p>Use the sandbox tester tools (unlimited test coins, test premium) on your own account.</p>
+        <label style="display:flex;gap:8px;align-items:center;"><input type="checkbox" id="tester-self-toggle" style="width:auto;margin:0;"> Tester on my account</label>
+        <div id="tester-self-status" class="form-status" role="status"></div>
       </section>
       <section class="owner-account-tools" id="owner-account-tools" hidden aria-label="Owner account controls">
         <h3>Accounts &amp; Mitch Coins</h3>
@@ -1831,9 +1842,33 @@
       }
     }
 
+    async function loadTesterSelf() {
+      const box = document.getElementById('tester-self-toggle');
+      if (!box) return;
+      try {
+        const r = await fetch('/api/admin/tester-self', { credentials: 'include', cache: 'no-store', headers: getAdminHeaders() });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || 'Could not load tester state.');
+        box.checked = !!d.tester;
+        box.onchange = async () => {
+          const want = box.checked;
+          setStatus('tester-self-status', 'Saving...', '');
+          try {
+            await postAdmin('/api/admin/tester-self', { active: want });
+            setStatus('tester-self-status', want ? 'Tester mode on.' : 'Tester mode off.', 'ok');
+          } catch (err) {
+            box.checked = !want;
+            setStatus('tester-self-status', err.message, 'err');
+          }
+        };
+      } catch (err) {
+        setStatus('tester-self-status', err.message, 'err');
+      }
+    }
+
     async function loadAdministrators() {
       const list = document.getElementById('admin-role-list');
-      if (!list || !currentUser?.isOwner) return;
+      if (!list || !(currentUser?.isOwner || currentUser?.isCoOwner)) return;
       try {
         const r = await fetch('/api/admin/admins', { credentials: 'include', cache: 'no-store', headers: getAdminHeaders() });
         const d = await r.json().catch(() => ({}));
@@ -3695,13 +3730,21 @@
       document.body.classList.toggle('owner-mode', !!currentUser.isOwner);
       const ownerSwitch = document.querySelector('.owner-switch');
       if (ownerSwitch) ownerSwitch.hidden = !currentUser.isOwner;
-      document.querySelector('.owner-nav').hidden = !currentUser.isOwner;
+      // Developers get the admin-management, tester and log tools; the rest of
+      // "Site operations" stays owner-only.
+      const ownerOrDev = !!(currentUser.isOwner || currentUser.isCoOwner);
+      document.body.classList.toggle('no-log-access', !ownerOrDev);
+      document.querySelector('.owner-nav').hidden = !ownerOrDev;
       if (currentUser.isOwner) {
         document.getElementById('owner-operations').appendChild(document.getElementById('soft-maintenance-card'));
         document.getElementById('coowner-role-card').hidden = false;
-        document.getElementById('admin-role-card').hidden = false;
       }
-      if (location.hash === '#owner-tools' && !currentUser.isOwner) activateToolGroup('approval-tools');
+      if (ownerOrDev) {
+        document.getElementById('admin-role-card').hidden = false;
+        document.getElementById('tester-self-card').hidden = false;
+        loadTesterSelf();
+      }
+      if (location.hash === '#owner-tools' && !ownerOrDev) activateToolGroup('approval-tools');
       const eyebrow = document.querySelector('.staff-eyebrow');
       if (eyebrow && currentUser.isCoOwner) eyebrow.textContent = 'mitch.pro / developer systems';
       document.body.classList.toggle('moderator-mode', !!(currentUser.isModerator && !currentUser.isAdmin));
@@ -3727,10 +3770,8 @@
         await checkPassphraseStatus();
       }
 
-      if (currentUser.isOwner) {
-        loadCoOwners();
-        loadAdministrators();
-      }
+      if (currentUser.isOwner) loadCoOwners();
+      if (currentUser.isOwner || currentUser.isCoOwner) loadAdministrators();
 
       const r = await adminFetch('/api/admin/advanced-data');
       if (!r.ok) {
@@ -3770,7 +3811,7 @@
       await loadMatrixModeration();
       loadConduitHealth();
       loadCasinoStatus();
-      if (currentUser.isAdmin && location.hash === '#logs-tools') {
+      if ((currentUser.isOwner || currentUser.isCoOwner) && location.hash === '#logs-tools') {
         loadAppLogs();
       }
       if (currentUser.isAdmin && location.hash === '#email-tools') {
@@ -4192,7 +4233,7 @@
       if (!unlocked) return;
       if (target === 'logs-tools') {
         const output = document.getElementById('app-log-output');
-        if (currentUser.isAdmin && output && !output.dataset.loaded) {
+        if ((currentUser.isOwner || currentUser.isCoOwner) && output && !output.dataset.loaded) {
           loadAppLogs();
         }
       }

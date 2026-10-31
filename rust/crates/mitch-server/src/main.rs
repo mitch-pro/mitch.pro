@@ -21,6 +21,7 @@ use axum::Router;
 use std::sync::Arc;
 
 mod access;
+mod app_log_layer;
 mod chat_cleanup;
 mod env_file;
 mod errors;
@@ -42,12 +43,20 @@ mod ws;
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info,tower=warn,hyper=warn".into()),
-        )
-        .init();
+    {
+        use tracing_subscriber::layer::SubscriberExt;
+        use tracing_subscriber::util::SubscriberInitExt;
+        // Everything printed to the console is also written to `app_logs`
+        // (the admin System Logs viewer) by `app_log_layer`.
+        tracing_subscriber::registry()
+            .with(
+                tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| "info,tower=warn,hyper=warn".into()),
+            )
+            .with(tracing_subscriber::fmt::layer())
+            .with(app_log_layer::init())
+            .init();
+    }
 
     if mitch_lib::auth::god_mode_enabled() {
         let bar = "=".repeat(60);
@@ -63,12 +72,7 @@ async fn main() {
     );
     let state = Arc::new(state::AppState::new(cfg.clone(), store.clone()));
 
-    mitch_lib::log::log_rewrite(
-        &store,
-        "info",
-        "mitch-server (rust) core skeleton listening — host routing, static serving, HTML pipeline ported",
-    )
-    .await;
+    app_log_layer::start_writer(store.clone());
 
     let app: Router = Router::new().fallback(get_any).with_state(state.clone());
 
@@ -126,6 +130,10 @@ async fn get_any(
         // cap; this just needs headroom above the server-side per-chunk
         // ceiling in routes/byo_os.rs (MAX_CHUNK_BYTES, 24MB).
         "/api/vm/byo-os/iso/chunk" => 25 * 1024 * 1024,
+        // Save sync uploads IndexedDB game databases (base64 inside JSON), which
+        // routinely exceed the 256KB default; the handler's own 1GiB quota still
+        // applies, this only bounds how much one request may buffer in memory.
+        "/api/userdata" => 64 * 1024 * 1024,
         _ => 256 * 1024,
     };
     let body_bytes = match axum::body::to_bytes(body, cap).await {

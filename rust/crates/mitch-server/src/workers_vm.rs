@@ -50,9 +50,10 @@ pub(crate) async fn purge_expired_vms_worker(state: &AppState) {
 
     for (email, vmid) in to_purge {
         if vmid > 0.0 {
-            println!(
+            tracing::info!(
                 "[purge-vm] Restoring period expired for VM {} ({}). Purging from Proxmox...",
-                vmid as i64, email
+                vmid as i64,
+                email
             );
             let _ = crate::routes::vm::destroy_user_vm(state, vmid).await;
         }
@@ -106,9 +107,12 @@ pub(crate) async fn delete_inactive_vms_worker(state: &AppState) {
         if has_open_socket {
             continue;
         }
-        println!(
+        tracing::info!(
             "[vm-inactive-delete] Deleting VM {} (VMID {}) owned by {}: unused for {}+ days",
-            record.id, record.vmid as i64, record.owner_email, VM_INACTIVE_DELETE_DAYS as i64
+            record.id,
+            record.vmid as i64,
+            record.owner_email,
+            VM_INACTIVE_DELETE_DAYS as i64
         );
         if let Err(e) = desktop.delete_guest(&rec_json, false).await {
             crate::routes::vm::vm_audit(
@@ -170,9 +174,12 @@ pub(crate) async fn prune_inactive_free_vms_worker(state: &AppState) {
     };
 
     for (email, vmid, is_inactive, is_expired) in to_prune {
-        println!(
+        tracing::info!(
             "[free-vm] Pruning free VM {} for {} (inactive: {}, expired: {})",
-            vmid as i64, email, is_inactive, is_expired
+            vmid as i64,
+            email,
+            is_inactive,
+            is_expired
         );
         let _ = crate::routes::vm::terminate_user_vm(state, vmid).await;
         state
@@ -391,7 +398,7 @@ pub(crate) async fn enforce_vm_max_uptime_worker(state: &AppState) {
 
             if must_force_stop {
                 let elapsed_ms = shutdown_initiated.map(|t| now - t).unwrap_or(0);
-                println!(
+                tracing::info!(
                     "[vm-watchdog] VM {} (VMID {}) did not shut off in 10m after shutdown signal (elapsed: {}m). Force stopping...",
                     record_key,
                     vmid as i64,
@@ -449,7 +456,7 @@ pub(crate) async fn enforce_vm_max_uptime_worker(state: &AppState) {
                     .unwrap_or_else(|e| e.into_inner())
                     .insert(record_key.clone(), now);
 
-                println!(
+                tracing::info!(
                     "[vm-watchdog] VM {} (VMID {}) reached {} (inactive: {}m). Requesting graceful shutdown...",
                     record_key,
                     vmid as i64,
@@ -533,44 +540,48 @@ fn init_portal_ssh_key(data_dir: &Path) {
     let priv_key = data_dir.join("portal_id_rsa");
     let pub_key = data_dir.join("portal_id_rsa.pub");
     if !priv_key.exists() {
-        println!("[ssh-init] Generating dedicated portal SSH key pair...");
+        tracing::info!("[ssh-init] Generating dedicated portal SSH key pair...");
         let status = std::process::Command::new("ssh-keygen")
             .args(["-t", "rsa", "-b", "2048", "-N", "", "-f"])
             .arg(&priv_key)
             .status();
         match status {
             Ok(s) if s.success() => {
-                println!("[ssh-init] Portal SSH key pair generated successfully.");
+                tracing::info!("[ssh-init] Portal SSH key pair generated successfully.");
             }
             Ok(s) => {
-                eprintln!(
+                tracing::warn!(
                     "[ssh-init] Failed to generate portal SSH key pair: exit status {}",
                     s
                 );
                 return;
             }
             Err(e) => {
-                eprintln!("[ssh-init] Failed to generate portal SSH key pair: {}", e);
+                tracing::warn!("[ssh-init] Failed to generate portal SSH key pair: {}", e);
                 return;
             }
         }
     }
     if let Ok(pub_content) = std::fs::read_to_string(&pub_key) {
         let trimmed = pub_content.trim();
-        println!("\n========================================================================");
-        println!("[SSH GATEWAY SECURITY KEY]");
-        println!("To allow the web application to automatically configure new containers,");
-        println!("please add the following public key to your Proxmox host /root/.ssh/authorized_keys file:");
-        println!("\n{}\n", trimmed);
-        println!("========================================================================\n");
+        tracing::info!(
+            "\n========================================================================"
+        );
+        tracing::info!("[SSH GATEWAY SECURITY KEY]");
+        tracing::info!("To allow the web application to automatically configure new containers,");
+        tracing::info!("please add the following public key to your Proxmox host /root/.ssh/authorized_keys file:");
+        tracing::info!("\n{}\n", trimmed);
+        tracing::info!(
+            "========================================================================\n"
+        );
     } else {
-        eprintln!("[ssh-init] Failed to read portal public SSH key");
+        tracing::warn!("[ssh-init] Failed to read portal public SSH key");
     }
 }
 
 /// Checks for leftover ephemeral containers (200..210) on Proxmox on startup (server.js:28541-28558).
 async fn cleanup_all_ephemeral_vms(state: &Arc<AppState>) {
-    println!("[startup] Checking for leftover ephemeral containers on Proxmox...");
+    tracing::info!("[startup] Checking for leftover ephemeral containers on Proxmox...");
     let existing_ids = crate::routes::vm::get_existing_vmids().await;
     for id in 200..210 {
         // The persistent provisioning pool also starts at 200. A registered
@@ -578,14 +589,14 @@ async fn cleanup_all_ephemeral_vms(state: &Arc<AppState>) {
         if existing_ids.contains_key(&id)
             && vmlib::get_virtual_machine_by_vmid(&state.store, id as f64).is_none()
         {
-            println!("[startup] Leftover ephemeral VMID {id} detected. Wiping...");
+            tracing::info!("[startup] Leftover ephemeral VMID {id} detected. Wiping...");
             let state_c = Arc::clone(state);
             tokio::spawn(async move {
                 let _ = crate::routes::vm::terminate_user_vm(&state_c, id as f64).await;
             });
         }
     }
-    println!("[startup] Leftover ephemeral containers cleanup sequence completed.");
+    tracing::info!("[startup] Leftover ephemeral containers cleanup sequence completed.");
 }
 
 /// Spawns all VM background worker loops and runs the boot sequence.

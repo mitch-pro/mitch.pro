@@ -50,6 +50,11 @@ pub const PRESERVED_ROOT_FILES: &[&str] = &[];
 /// simple without pulling in an error-crate dependency.
 pub type DataError = Box<dyn std::error::Error + Send + Sync>;
 
+/// How long app logs are kept: 30 days.
+pub const APP_LOG_RETENTION_MS: i64 = 30 * 24 * 60 * 60 * 1000;
+/// Backstop on table size if something logs in a tight loop.
+pub const APP_LOG_MAX_ROWS: i64 = 1_000_000;
+
 /// One app_logs row (mirrors `queryAppLogs` entries).
 #[derive(Debug, Clone)]
 pub struct AppLogRow {
@@ -1470,8 +1475,8 @@ impl DataStore {
         Ok(std::fs::read_to_string(file).ok())
     }
 
-    /// `appendAppLog` (sync form; callers wrap in spawn_blocking). Prunes to
-    /// the newest 20000 rows on the same 1-in-250 cadence as the JS.
+    /// `appendAppLog` (sync form; callers wrap in spawn_blocking). Prunes by age
+    /// (30 days) on every 250th write.
     pub fn append_app_log_sync(
         &self,
         ts: i64,
@@ -1485,20 +1490,34 @@ impl DataStore {
             "INSERT INTO app_logs (ts, level, category, message, details) VALUES (?1, ?2, ?3, ?4, ?5)",
             rusqlite::params![ts, level, category, message, details],
         )?;
-        // JS parity: appLogWriteCount++ then prune on every 250th write,
-        // id-ordered (NOT ts — out-of-order ts values would misprune).
+        // Prune on every 250th write (cheap; the ts index makes it a range delete).
         let writes = self
             .app_log_writes
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             + 1;
         if writes.is_multiple_of(250) {
-            conn.execute(
-                "DELETE FROM app_logs WHERE id NOT IN (
-                    SELECT id FROM app_logs ORDER BY id DESC LIMIT 20000
-                )",
-                [],
-            )?;
+            Self::prune_app_logs_locked(&conn, ts)?;
         }
+        Ok(())
+    }
+
+    /// Deletes app logs older than [`APP_LOG_RETENTION_MS`] (30 days) and, as a
+    /// runaway-logging backstop, anything beyond the newest
+    /// [`APP_LOG_MAX_ROWS`] rows. Called every 250th write and at startup.
+    pub fn prune_app_logs_sync(&self, now_ms: i64) -> Result<(), DataError> {
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
+        Self::prune_app_logs_locked(&conn, now_ms)
+    }
+
+    fn prune_app_logs_locked(conn: &rusqlite::Connection, now_ms: i64) -> Result<(), DataError> {
+        conn.execute(
+            "DELETE FROM app_logs WHERE ts < ?1",
+            rusqlite::params![now_ms - APP_LOG_RETENTION_MS],
+        )?;
+        conn.execute(
+            "DELETE FROM app_logs WHERE id <= (SELECT MAX(id) FROM app_logs) - ?1",
+            rusqlite::params![APP_LOG_MAX_ROWS],
+        )?;
         Ok(())
     }
 

@@ -231,17 +231,17 @@ pub fn handle(
         ));
     }
 
-    // POST /api/admin/admins (owners only).
+    // POST /api/admin/admins (owners and developers).
     if path == "/api/admin/admins" && *method == Method::POST {
-        if !ctx.is_owner(state) {
+        if !ctx.is_owner_or_developer(state) {
             return Some(forbidden());
         }
         return Some(set_admin(state, body, ctx));
     }
 
-    // GET /api/admin/admins (owners only).
+    // GET /api/admin/admins (owners and developers).
     if path == "/api/admin/admins" && *method == Method::GET {
-        if !ctx.is_owner(state) {
+        if !ctx.is_owner_or_developer(state) {
             return Some(forbidden());
         }
         return Some(json_response(
@@ -286,6 +286,15 @@ pub fn handle(
             200,
             json!({ "testers": tester_emails(state) }),
         ));
+    }
+
+    // GET/POST /api/admin/tester-self (owner and developers): a staff member
+    // toggling their own sandbox-tester state, without touching anyone else's.
+    if path == "/api/admin/tester-self" && (*method == Method::GET || *method == Method::POST) {
+        if !ctx.is_owner_or_developer(state) {
+            return Some(forbidden());
+        }
+        return Some(tester_self(state, method, body, ctx));
     }
 
     // POST /api/admin/audit/revert (admins and owners).
@@ -764,7 +773,27 @@ fn set_tester(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response {
     json_response(200, json!({ "ok": true, "testers": testers }))
 }
 
-/// `POST /api/admin/admins` (owners only). Updates `data/admins.json["admins"]`.
+/// `GET|POST /api/admin/tester-self` — reports or changes whether the caller
+/// is on the tester list. Reuses [`set_tester`] with the caller's own email so
+/// the list, sandbox row and audit log stay consistent with the admin panel.
+fn tester_self(state: &Arc<AppState>, method: &Method, body: &Value, ctx: &AdminCtx) -> Response {
+    let me = mitch_lib::auth::normalize_email(&ctx.email(state));
+    if *method == Method::POST {
+        let Some(active) = body.get("active").and_then(|v| v.as_bool()) else {
+            return json_response(400, json!({ "error": "active (boolean) required" }));
+        };
+        let resp = set_tester(state, &json!({ "email": me, "active": active }), ctx);
+        if !resp.status().is_success() {
+            return resp;
+        }
+    }
+    let is_tester = tester_emails(state)
+        .iter()
+        .any(|m| mitch_lib::auth::normalize_email(m) == me);
+    json_response(200, json!({ "ok": true, "tester": is_tester }))
+}
+
+/// `POST /api/admin/admins` (owners and developers). Updates `data/admins.json["admins"]`.
 fn set_admin(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response {
     let admin_email = ctx.email(state);
     let target_raw = body
@@ -781,6 +810,17 @@ fn set_admin(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response {
     let active = body.get("active").and_then(|v| v.as_bool()) == Some(true);
     if !active && mitch_lib::auth::is_owner_email(&state.store, &target) {
         return json_response(403, json!({ "error": "Cannot delete or demote the owner" }));
+    }
+    // Developers manage admins, but only the owner may touch an owner or
+    // another developer's entry.
+    if !ctx.is_owner(state)
+        && (mitch_lib::auth::is_owner_email(&state.store, &target)
+            || mitch_lib::auth::is_co_owner_email(&state.store, &target))
+    {
+        return json_response(
+            403,
+            json!({ "error": "Only the owner can change an owner or developer." }),
+        );
     }
     let admins_file = state.cfg.base_dir.join("data/admins.json");
     let mut doc = state.store.read_document(&admins_file, json!({}));
@@ -975,7 +1015,7 @@ fn revert_admin_action(
             }
         }
         "add_admin" => {
-            if !ctx.is_owner(state) {
+            if !ctx.is_owner_or_developer(state) {
                 return forbidden();
             }
             let target = details.get("target").and_then(|v| v.as_str()).unwrap_or("");
@@ -991,7 +1031,7 @@ fn revert_admin_action(
             }
         }
         "remove_admin" => {
-            if !ctx.is_owner(state) {
+            if !ctx.is_owner_or_developer(state) {
                 return forbidden();
             }
             let target = details.get("target").and_then(|v| v.as_str()).unwrap_or("");

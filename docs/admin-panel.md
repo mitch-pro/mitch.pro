@@ -109,3 +109,16 @@ endpoints as a health check.
   `mitch_lib::matrix::strip_blocked_name_events`, so no client we serve shows
   them. Responses that can't contain one aren't parsed. Clients that talk to the
   homeserver directly, bypassing the gateway, are not covered.
+
+## Roles
+
+Owner > developer (stored as `coOwners` in `data/admins.json`) > admin >
+moderator. Developers and admins are otherwise equal, with these additions for
+developers:
+
+- Add and remove admins (`/api/admin/admins`); only the owner may change an
+  owner or another developer, and only the owner manages developers
+  (`/api/admin/co-owners`).
+- View System Logs (see [system-logs.md](system-logs.md)).
+- Toggle themselves as a tester (`/api/admin/tester-self`).
+- Use the VM owner-customization limits (`can_customize_owner_vm`).

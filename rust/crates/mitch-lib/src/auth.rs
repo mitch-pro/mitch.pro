@@ -1450,6 +1450,17 @@ pub fn is_owner_id(store: &DataStore, id_secret: &[u8], sid: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Owner or developer (co-owner) session. Gates the tools that sit between
+/// admin and owner: managing admins, tester self-toggle, system logs.
+pub fn is_owner_or_developer_id(store: &DataStore, id_secret: &[u8], sid: &str) -> bool {
+    if sid.is_empty() {
+        return false;
+    }
+    email_from_sid(store, id_secret, sid)
+        .map(|email| is_owner_email(store, &email) || is_co_owner_email(store, &email))
+        .unwrap_or(false)
+}
+
 /// `isAdminId(sid)` (server.js:6181) — three stages in exact JS order:
 /// 1. NODE_ENV=test backdoor: `emailFromSid(sid)` normalizes to admin@mitch.pro
 ///    (no admins.json read — a synthetic test session resolves via names.json).

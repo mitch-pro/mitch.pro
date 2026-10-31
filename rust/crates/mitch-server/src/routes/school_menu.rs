@@ -308,7 +308,7 @@ mod tests {
             .await
             .expect("official menu fetched");
         assert!(!feed.published_options.entrees.is_empty());
-        println!(
+        tracing::info!(
             "Published month: {}; lunch choices: {}; dated days: {}",
             feed.published_month,
             feed.published_options.entrees.len(),

@@ -658,7 +658,7 @@ pub(crate) fn notify_capacity_full_on_attempt(
         norm,
         action_desc,
     );
-    println!("[vm-ntfy] {}: {}", title, msg);
+    tracing::info!("[vm-ntfy] {}: {}", title, msg);
     if std::env::var("NODE_ENV").unwrap_or_default() == "test" {
         let mut list = load_vm_json(state, "test_vm_ntfy_log.json", json!([]));
         if let Some(arr) = list.as_array_mut() {
@@ -1408,9 +1408,10 @@ pub(crate) async fn get_running_non_admin_vm_resources(state: &AppState) -> Valu
             json!({ "count": count + p_count, "cores": cores + p_cores, "memoryMb": memory_mb + p_mem })
         }
         Err(err) => {
-            eprintln!(
+            tracing::warn!(
                 "[vm] Error calculating running non-admin VM resources: {} ({})",
-                err.code, err.message
+                err.code,
+                err.message
             );
             json!({ "count": 0, "cores": 0, "memoryMb": 0 })
         }
@@ -1860,7 +1861,7 @@ pub(crate) async fn power_user_vm(state: &AppState, vmid: f64, action: &str) -> 
             json!({ "success": true })
         }
         Err(err) => {
-            eprintln!("[proxmox] Power state control error for {type_}: {}", err);
+            tracing::warn!("[proxmox] Power state control error for {type_}: {}", err);
             json!({ "success": false, "error": err.to_string() })
         }
     }
@@ -2007,7 +2008,7 @@ pub(crate) async fn create_lxc_container(
                 // fetchWithDeadline null → the pct create timed out.
                 return json!({ "success": false, "error": "Proxmox unreachable (pct create timed out)" });
             }
-            eprintln!("[proxmox] Error creating LXC container: {}", err);
+            tracing::warn!("[proxmox] Error creating LXC container: {}", err);
             return json!({ "success": false, "error": err.to_string() });
         }
     };
@@ -2016,7 +2017,7 @@ pub(crate) async fn create_lxc_container(
     let data: Value = match serde_json::from_str(&text) {
         Ok(v) => v,
         Err(_) => {
-            eprintln!(
+            tracing::warn!(
                 "[proxmox] LXC creation: non-JSON response: {} {}",
                 status.as_u16(),
                 text.chars().take(500).collect::<String>()
@@ -2034,7 +2035,7 @@ pub(crate) async fn create_lxc_container(
         }
     };
     if !status.is_success() {
-        eprintln!("[proxmox] LXC creation failed: {}", status.as_u16());
+        tracing::warn!("[proxmox] LXC creation failed: {}", status.as_u16());
         let error = match data.get("errors") {
             Some(v) if !v.is_null() => v.to_string(),
             _ => jsval::str_or(data.get("message"), "LXC creation failed"),
@@ -2046,9 +2047,9 @@ pub(crate) async fn create_lxc_container(
     tokio::spawn(async move {
         let r = attach_sshd_hook_to_lxc(vmid).await;
         if r.get("success").and_then(Value::as_bool).unwrap_or(false) {
-            println!("[proxmox] sshd hook attached for LXC {}", vmid as i64);
+            tracing::info!("[proxmox] sshd hook attached for LXC {}", vmid as i64);
         } else {
-            eprintln!(
+            tracing::warn!(
                 "[proxmox] sshd hook attach failed for LXC {}: {} {}",
                 vmid as i64,
                 jsval::str_or(r.get("error"), ""),
@@ -2070,7 +2071,7 @@ pub(crate) async fn clone_user_vm(
 ) -> Value {
     let _ = email;
     if pve_token().is_empty() {
-        eprintln!("[proxmox] API token is not configured in environment.");
+        tracing::warn!("[proxmox] API token is not configured in environment.");
         return json!({ "success": false, "error": "Proxmox token not configured." });
     }
     if let Err(msg) = assert_vmid_in_range(vmid, "cloneUserVm") {
@@ -2101,7 +2102,7 @@ pub(crate) async fn clone_user_vm(
     let clone_res = match clone_res {
         Ok(r) => r,
         Err(err) => {
-            eprintln!("[proxmox] Error during VM provisioning: {}", err);
+            tracing::warn!("[proxmox] Error during VM provisioning: {}", err);
             return json!({ "success": false, "error": err.to_string() });
         }
     };
@@ -2109,12 +2110,12 @@ pub(crate) async fn clone_user_vm(
     let clone_data: Value = match clone_res.json::<Value>().await {
         Ok(v) => v,
         Err(err) => {
-            eprintln!("[proxmox] Error during VM provisioning: {}", err);
+            tracing::warn!("[proxmox] Error during VM provisioning: {}", err);
             return json!({ "success": false, "error": err.to_string() });
         }
     };
     if !clone_status.is_success() || clone_data.get("data").map(Value::is_null).unwrap_or(true) {
-        eprintln!(
+        tracing::warn!(
             "[proxmox] Clone request failed: {} {}",
             clone_status.as_u16(),
             clone_data
@@ -2162,13 +2163,13 @@ pub(crate) async fn clone_user_vm(
         .await;
     match config_res {
         Ok(r) if !r.status().is_success() => {
-            eprintln!(
+            tracing::warn!(
                 "[proxmox] Warning: Configuration update returned status {}",
                 r.status().as_u16()
             );
         }
         Err(_) => {
-            eprintln!("[proxmox] Warning: Configuration update request failed");
+            tracing::warn!("[proxmox] Warning: Configuration update request failed");
         }
         _ => {}
     }
@@ -2187,13 +2188,13 @@ pub(crate) async fn clone_user_vm(
         .await;
     match start_res {
         Ok(r) if !r.status().is_success() => {
-            eprintln!(
+            tracing::warn!(
                 "[proxmox] Warning: VM start returned status {}",
                 r.status().as_u16()
             );
         }
         Err(_) => {
-            eprintln!("[proxmox] Warning: VM start request failed");
+            tracing::warn!("[proxmox] Warning: VM start request failed");
         }
         _ => {}
     }
@@ -2230,7 +2231,7 @@ pub(crate) async fn stop_user_vm(state: &AppState, vmid: f64) -> Value {
             json!({ "success": res.status().is_success() })
         }
         Err(err) => {
-            eprintln!("[proxmox] Error stopping {type_}: {}", err);
+            tracing::warn!("[proxmox] Error stopping {type_}: {}", err);
             json!({ "success": false, "error": err.to_string() })
         }
     }
@@ -2256,22 +2257,23 @@ pub(crate) async fn destroy_user_vm(state: &AppState, vmid: f64) -> Value {
     {
         Ok(r) => r,
         Err(err) => {
-            eprintln!("[proxmox] Error destroying {type_}: {}", err);
+            tracing::warn!("[proxmox] Error destroying {type_}: {}", err);
             return json!({ "success": false, "error": err.to_string() });
         }
     };
     let destroy_ok = res.status().is_success();
     if res.status().as_u16() == 404 {
-        println!(
+        tracing::info!(
             "[proxmox] {} VMID {} already deleted (404). Treating as successful destruction.",
-            type_, vmid_int
+            type_,
+            vmid_int
         );
         return json!({ "success": true });
     }
     let data: Value = match res.json::<Value>().await {
         Ok(v) => v,
         Err(err) => {
-            eprintln!("[proxmox] Error destroying {type_}: {}", err);
+            tracing::warn!("[proxmox] Error destroying {type_}: {}", err);
             return json!({ "success": false, "error": err.to_string() });
         }
     };
@@ -2571,9 +2573,11 @@ async fn run_desktop_bridge(
                 != mitch_lib::auth::normalize_email(&actor_email);
     if is_admin_using_other {
         let r = vmlib::get_virtual_machine_by_id(&state.store, &record_id).map(|r| r.to_json());
-        println!(
+        tracing::info!(
             "[vm-audit] Admin {} connected to desktop console on VM {} owned by {}",
-            actor_email, record_id, owner_email
+            actor_email,
+            record_id,
+            owner_email
         );
         vm_audit(
             &state,
@@ -2990,7 +2994,7 @@ pub(crate) async fn handle(
                 }
             }
 
-            println!("[free-vm] Evicting VMID {oldest_id} to free up slot.");
+            tracing::info!("[free-vm] Evicting VMID {oldest_id} to free up slot.");
             let _ = terminate_user_vm(state, oldest_id as f64).await;
             target_vmid = Some(oldest_id);
         }
@@ -3337,7 +3341,7 @@ pub(crate) async fn handle(
                 .and_then(|v| v.get("vmid").and_then(jsval::number))
         };
         if let Some(vmid) = old_vmid {
-            println!("[free-vm] User {email} requested reset. Wiping old VMID {vmid}");
+            tracing::info!("[free-vm] User {email} requested reset. Wiping old VMID {vmid}");
             let _ = terminate_user_vm(state, vmid).await;
         }
 
@@ -3395,7 +3399,7 @@ pub(crate) async fn handle(
                 }
             }
 
-            println!("[free-vm] Reset eviction: wiping VMID {oldest_id}");
+            tracing::info!("[free-vm] Reset eviction: wiping VMID {oldest_id}");
             let _ = terminate_user_vm(state, oldest_id as f64).await;
             target_vmid = Some(oldest_id);
         }
@@ -4917,9 +4921,13 @@ pub(crate) async fn handle(
                     .or_else(|| record.get("hostname"))
                     .and_then(Value::as_str)
                     .unwrap_or("My Computer");
-                println!(
+                tracing::info!(
                     "[vm-audit] Admin {} used VM {} ({}) owned by {}. Action: power-{}",
-                    actor.email, comp_id, vm_name, record_owner, action
+                    actor.email,
+                    comp_id,
+                    vm_name,
+                    record_owner,
+                    action
                 );
                 vm_audit(
                     state,
@@ -5116,9 +5124,12 @@ pub(crate) async fn handle(
                     .or_else(|| record.get("hostname"))
                     .and_then(Value::as_str)
                     .unwrap_or("My Computer");
-                println!(
+                tracing::info!(
                     "[vm-audit] Admin {} used VM {} ({}) owned by {}. Action: desktop-session",
-                    actor.email, comp_id, vm_name, record_owner
+                    actor.email,
+                    comp_id,
+                    vm_name,
+                    record_owner
                 );
                 vm_audit(
                     state,

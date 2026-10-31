@@ -79,3 +79,12 @@ server never touches localStorage. Pushes set `_sync_ts` locally so `sync.js`
 doesn't immediately offer to restore what was just uploaded.
 
 Linked from `data/sites` and Preferences → Sync. Test: `tests/test_saves_page.mjs`.
+
+## Request size
+
+`POST /api/userdata` bodies may be up to 64 MiB (`main.rs`, path-aware body cap);
+the default cap for other API routes is 256 KiB, and a larger body is replaced
+with zero bytes, which fails JSON parsing as `400 Bad JSON`. Game databases
+uploaded from IndexedDB exceed 256 KiB, so this route needs the higher cap. The
+1 GiB per-account quota still applies. A reverse proxy in front of the server
+needs a body limit at least as large.

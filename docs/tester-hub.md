@@ -10,7 +10,9 @@ touching the real economy.
 lists tester emails. Admins count as testers for *access* (`auth::is_tester_email`,
 used by the staff hub link) but only accounts **on the list** get the sandbox: all
 `/api/tester/*` endpoints return 403 for everyone else, so an admin's real balance
-is never replaced by a sandbox one. Add an admin to the list if they want it.
+is never replaced by a sandbox one. Add an admin to the list if they want it. The owner and developers can also toggle themselves from
+the admin panel (Site operations -> Tester mode, `GET|POST /api/admin/tester-self`), which adds or removes
+only their own email.
 
 Sandbox state lives in the `tester_settings` SQL table
 (`mitch_lib::tester`): `premium`, `unlimited_coins`, `custom_coins`,

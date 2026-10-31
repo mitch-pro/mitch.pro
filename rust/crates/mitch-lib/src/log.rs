@@ -5,7 +5,7 @@
 //! {debug, info, warn, error} (anything else → info), category lowercased and
 //! collapsed to [a-z0-9._-] (max 48 chars, default "general"), message
 //! cleaned of ANSI escapes and capped at 4000 chars, details stringified and
-//! capped at 8000. Every 250th write prunes the table to the newest 20000.
+//! capped at 8000. Rows older than 30 days are pruned (see `DataStore::prune_app_logs_sync`).
 
 use crate::data::DataStore;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -62,8 +62,8 @@ fn normalize_category(category: &str) -> String {
     out.chars().take(48).collect()
 }
 
-/// `appendAppLog` — one row into app_logs; prunes to 20000 rows on the same
-/// cadence as the JS (every 250th write).
+/// `appendAppLog` — one row into app_logs; old rows (30 days) are pruned every
+/// 250th write.
 pub async fn append_app_log(
     store: &std::sync::Arc<DataStore>,
     level: &str,
@@ -138,6 +138,24 @@ mod tests {
         append_app_log(&store, "info", "c", &"x".repeat(6000), None).await;
         let logs = store.query_app_logs_sync("all", "all", "", 100).unwrap();
         assert_eq!(logs[0].message.chars().count(), 4000);
+        std::fs::remove_dir_all(base).ok();
+    }
+
+    #[test]
+    fn prune_drops_rows_older_than_thirty_days() {
+        let (base, store) = temp_store("prune");
+        let now = now_millis();
+        let day = 24 * 60 * 60 * 1000;
+        store
+            .append_app_log_sync(now - 31 * day, "info", "c", "old".into(), String::new())
+            .unwrap();
+        store
+            .append_app_log_sync(now - 29 * day, "info", "c", "recent".into(), String::new())
+            .unwrap();
+        store.prune_app_logs_sync(now).unwrap();
+        let logs = store.query_app_logs_sync("all", "all", "", 100).unwrap();
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].message, "recent");
         std::fs::remove_dir_all(base).ok();
     }
 }

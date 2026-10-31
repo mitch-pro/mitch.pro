@@ -1507,7 +1507,7 @@ pub async fn handle(
                     })
                     .await;
                 if let Err(e) = clone_res {
-                    eprintln!("[fleet-chromeos] Failed to clone {}: {:?}", hostname, e);
+                    tracing::warn!("[fleet-chromeos] Failed to clone {}: {:?}", hostname, e);
                     continue;
                 }
             }

@@ -63,6 +63,11 @@ impl AdminCtx {
         mitch_lib::admin::can_grant_premium_id(&state.store, &state.id_secret, &self.sid)
     }
 
+    /// Owner or developer (co-owner): see `auth::is_owner_or_developer_id`.
+    pub fn is_owner_or_developer(&self, state: &AppState) -> bool {
+        mitch_lib::auth::is_owner_or_developer_id(&state.store, &state.id_secret, &self.sid)
+    }
+
     /// `isOwnerId(sid)`.
     pub fn is_owner(&self, state: &AppState) -> bool {
         mitch_lib::auth::is_owner_id(&state.store, &state.id_secret, &self.sid)

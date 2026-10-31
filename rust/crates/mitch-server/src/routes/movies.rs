@@ -132,7 +132,7 @@ fn egress_ready() -> Result<Egress, EgressError> {
         return Ok(Egress::Proxy(proxy));
     }
     if std::env::var("MOVIES_EGRESS_PROXY").is_ok_and(|v| !v.trim().is_empty()) {
-        eprintln!("[movies] MOVIES_EGRESS_PROXY must look like http://host:port; refusing to go out the normal connection");
+        tracing::warn!("[movies] MOVIES_EGRESS_PROXY must look like http://host:port; refusing to go out the normal connection");
         return Err(EgressError::Unavailable);
     }
     let interface = egress_interface();
@@ -140,7 +140,7 @@ fn egress_ready() -> Result<Egress, EgressError> {
         return Ok(Egress::Interface(interface));
     }
     // Say why, once per request, so a missing eth1 is obvious in the logs.
-    eprintln!(
+    tracing::warn!(
         "[movies] egress interface {interface:?} not found in this container (present: {}); refusing to go out the normal connection",
         available_interfaces().join(", ")
     );
@@ -539,7 +539,7 @@ pub async fn handle(
         Ok(upstream) => upstream,
         Err(err) => {
             // Which host failed and why (never the full URL or any visitor data).
-            eprintln!("[movies] request to {} failed: {err}", target.host);
+            tracing::warn!("[movies] request to {} failed: {err}", target.host);
             return Some(upstream_error());
         }
     };
@@ -547,7 +547,7 @@ pub async fn handle(
     if status == StatusCode::FORBIDDEN {
         // Cloudflare turns away clients it doesn't like; the blocking ray id is
         // what a bug report needs.
-        eprintln!(
+        tracing::warn!(
             "[movies] {} answered 403 (cf-ray {})",
             target.host,
             upstream.head.get("cf-ray").unwrap_or("-")

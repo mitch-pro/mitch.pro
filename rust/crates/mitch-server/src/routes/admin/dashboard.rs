@@ -27,17 +27,17 @@ pub fn handle(
         return Some(resources());
     }
 
-    // GET /api/admin/app-logs (admins only).
+    // GET /api/admin/app-logs (owner and developers only).
     if path == "/api/admin/app-logs" && *method == Method::GET {
-        if !ctx.is_admin(state) {
+        if !ctx.is_owner_or_developer(state) {
             return Some(forbidden());
         }
         return Some(app_logs(state, search));
     }
 
-    // GET /api/admin/docker-logs (admins only).
+    // GET /api/admin/docker-logs (owner and developers only).
     if path == "/api/admin/docker-logs" && *method == Method::GET {
-        if !ctx.is_admin(state) {
+        if !ctx.is_owner_or_developer(state) {
             return Some(forbidden());
         }
         return Some(docker_logs(search));
