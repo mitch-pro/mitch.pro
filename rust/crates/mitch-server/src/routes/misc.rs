@@ -450,6 +450,10 @@ fn ranked_players(
         if norm == mitch_lib::auth::OWNER_TEST_ACCOUNT_EMAIL {
             continue;
         }
+        // Banned accounts (permanent or not yet expired) are not ranked.
+        if mitch_lib::auth::banned_info_for_email(store, norm).is_some() {
+            continue;
+        }
         let profile = profiles.get(norm).and_then(|v| v.as_object());
         let stats = user_stats.get(norm).and_then(|v| v.as_object());
         let cosm_val = mitch_lib::shop::cosmetics_get(store, norm);
@@ -1191,7 +1195,8 @@ mod tests {
             )
             .unwrap();
 
-        let mut coins = json!({ "hero@example.test": 0, "tester@example.test": 1e12 });
+        mitch_lib::bans::blacklist_insert(&store, "banned@example.test", "test", "admin").unwrap();
+        let mut coins = json!({ "hero@example.test": 0, "tester@example.test": 1e12, "banned@example.test": 5000 });
         let mut profiles = json!({
             "hero@example.test": {
                 "username": "hero", "nickname": "Old name", "displayName": "Current name",
@@ -1218,6 +1223,7 @@ mod tests {
         let rows = ranked_players(&store, docs, "hero@example.test", b"test-secret", "coins");
         assert_eq!(rows.len(), 108);
         assert!(!rows.iter().any(|row| row["handle"] == "tester"));
+        assert!(!rows.iter().any(|row| row["name"] == "banned"));
         let hero = rows.iter().find(|row| row["isMe"] == true).unwrap();
         assert_eq!(hero["name"], "Current name");
         assert_eq!(hero["profileId"], "hero");

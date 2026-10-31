@@ -24,7 +24,7 @@
     // Owner-only: added only for the owner, never shown as a locked card, so
     // other staff can't tell it exists.
     if (status.isOwner) {
-      list.push({ href: '/admin/vms/owner-container/', name: 'Container 500', desc: 'Status, power, and console', ok: true });
+      list.push({ href: '/vms/desktop/?container=owner', name: 'Container 500', desc: 'Owner-only desktop', ok: true });
     }
     return list;
   }

@@ -1,7 +1,16 @@
 import RFB from '/novnc/core/rfb.js';
 
 const $ = id => document.getElementById(id);
-const id = new URLSearchParams(location.search).get('id') || '';
+const query = new URLSearchParams(location.search);
+const id = query.get('id') || '';
+// `?container=owner` opens the owner's private container through the same page.
+// Its API lives under /api/admin/owner-container and needs the admin passphrase.
+const ownerMode = query.get('container') === 'owner';
+const OWNER_API = '/api/admin/owner-container';
+if (ownerMode) {
+  const back = document.querySelector('.back-button');
+  if (back) { back.href = '/admin/'; back.setAttribute('aria-label', 'Back to admin'); }
+}
 const screen = $('screen'), frame = $('display-frame'), cover = $('connection-cover');
 const headers = { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' };
 const MAX_RETRIES = 3;
@@ -12,6 +21,14 @@ let hasWarned10m = false, hasWarned3m = false;
 let uptimeInterval = null;
 const uptimePillText = $('uptime-pill-text'), uptimeBtn = $('uptime-button');
 const uptimeDialog = $('uptime-dialog');
+
+// Owner container info, shaped like /api/vm/computers/<id> so connect() is shared.
+// The owner has no session limit, so the lease is always exempt.
+async function ownerInfo(signal) {
+  const d = await request(OWNER_API, { signal });
+  if (!d.exists) throw new Error('This computer could not be found.');
+  return { computer: { name: d.name || 'Container', status: d.status, lease: { remainingSeconds: 0, maxUptimeSeconds: 0, canExtend: false, extended: false, isExempt: true } } };
+}
 
 function formatUptime(seconds) {
   const total = Math.max(0, Math.floor(Number(seconds) || 0));
@@ -126,7 +143,7 @@ async function extendSession() {
 }
 
 async function syncLease() {
-  if (disposed || !id) return;
+  if (disposed || !id || ownerMode) return;
   try {
     const data = await request(`/api/vm/computers/${encodeURIComponent(id)}`);
     if (data?.computer?.lease) {
@@ -168,9 +185,54 @@ function friendlyError(status, data) {
   if (status === 429) return 'Please wait a minute before opening another desktop connection.';
   return data?.error || 'Your computer could not be reached.';
 }
+function adminHeaders(extra = {}) {
+  const h = { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1', ...extra };
+  const pass = sessionStorage.getItem('admin_passphrase');
+  if (pass) h['X-Admin-Passphrase'] = pass;
+  return h;
+}
+// Asks for the admin passphrase in a dialog on this page and verifies it
+// server-side; resolves once it is stored for later requests.
+function askPassphrase() {
+  const dialog = $('passphrase-dialog'), form = $('passphrase-form'), input = $('passphrase-input');
+  const status = $('passphrase-status'), submit = $('passphrase-submit'), cancel = $('passphrase-cancel');
+  return new Promise((resolve, reject) => {
+    status.textContent = ''; input.value = '';
+    const done = (fn, value) => { form.onsubmit = null; cancel.onclick = null; dialog.close(); fn(value); };
+    cancel.onclick = () => done(reject, new Error('Admin passphrase required.'));
+    form.onsubmit = async event => {
+      event.preventDefault();
+      const pass = input.value.trim();
+      if (!pass) return;
+      submit.disabled = true; status.textContent = 'Verifying...';
+      try {
+        const res = await fetch('/api/admin/passphrase-status', {
+          method: 'POST', credentials: 'same-origin', cache: 'no-store',
+          headers: adminHeaders({ 'X-Admin-Passphrase': pass }), body: JSON.stringify({ passphrase: pass }),
+        });
+        const d = await res.json().catch(() => ({}));
+        if (res.ok && d.ok) { sessionStorage.setItem('admin_passphrase', pass); done(resolve, pass); return; }
+        sessionStorage.removeItem('admin_passphrase');
+        status.textContent = 'Incorrect admin passphrase. Try again.'; input.select();
+      } catch { status.textContent = 'Verification failed. Try again.'; }
+      finally { submit.disabled = false; }
+    };
+    dialog.showModal(); input.focus();
+  });
+}
 async function request(url, options = {}) {
-  const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store', ...options });
-  const data = await response.json().catch(() => ({}));
+  const send = () => fetch(url, { credentials: 'same-origin', cache: 'no-store', ...options, ...(ownerMode ? { headers: adminHeaders(options.headers || {}) } : {}) });
+  let response = await send();
+  let data = await response.json().catch(() => ({}));
+  if (ownerMode && response.status === 403 && data.error === 'invalid_passphrase') {
+    sessionStorage.removeItem('admin_passphrase');
+    await askPassphrase();
+    response = await send();
+    data = await response.json().catch(() => ({}));
+  }
+  if (ownerMode && response.status === 403 && data.error === 'passphrase_not_configured') {
+    throw new Error('Set your admin passphrase on the admin page first.');
+  }
   if (!response.ok) { const error = new Error(friendlyError(response.status, data)); error.status = response.status; error.code = data.code; throw error; }
   return data;
 }
@@ -192,8 +254,8 @@ async function connect() {
   showCover(reconnectAttempts ? 'Reconnecting to your desktop' : 'Opening your desktop', 'Connecting securely...', false, true);
   connectionState('Connecting');
   try {
-    if (!/^[a-zA-Z0-9_-]{1,80}$/.test(id)) throw new Error('Go back to My Computer and choose a desktop.');
-    const data = await request(`/api/vm/computers/${encodeURIComponent(id)}`, { signal });
+    if (!ownerMode && !/^[a-zA-Z0-9_-]{1,80}$/.test(id)) throw new Error('Go back to My Computer and choose a desktop.');
+    const data = ownerMode ? await ownerInfo(signal) : await request(`/api/vm/computers/${encodeURIComponent(id)}`, { signal });
     if (token !== generation) return;
     const computer = data.computer;
     $('machine-name').textContent = computer?.name || 'My Computer';
@@ -214,7 +276,9 @@ async function connect() {
     const setupDeadline = Date.now() + 8 * 60 * 1000;
     while (!session) {
       try {
-        session = await request(`/api/vm/computers/${encodeURIComponent(id)}/desktop-session`, {method:'POST',headers,body:'{}',signal});
+        session = ownerMode
+          ? await request(`${OWNER_API}/console`, {method:'POST',headers,body:JSON.stringify({mode:'desktop'}),signal})
+          : await request(`/api/vm/computers/${encodeURIComponent(id)}/desktop-session`, {method:'POST',headers,body:'{}',signal});
       } catch (error) {
         if (error.code !== 'desktop_preparing' || Date.now() > setupDeadline) throw error;
         showCover('Preparing your desktop', 'Setting up automatic sign-in and video support. This can take a few minutes on the first start.', false, true);
@@ -272,7 +336,7 @@ async function power(action) {
   if (!confirm(labels[action])) return;
   powerBusy = true; document.querySelectorAll('[data-power]').forEach(button => { button.disabled = true; });
   try {
-    await request(`/api/vm/computers/${encodeURIComponent(id)}/power`, { method: 'POST', headers, body: JSON.stringify({ action }) });
+    await request(ownerMode ? `${OWNER_API}/power` : `/api/vm/computers/${encodeURIComponent(id)}/power`, { method: 'POST', headers, body: JSON.stringify({ action }) });
     closeConnection();
     connectionState(action === 'restart' ? 'Restarting' : 'Shutting down');
     showCover(action === 'restart' ? 'Restarting your computer' : 'Shutting down your computer', action === 'restart' ? 'Reconnect in a moment when your desktop is ready.' : 'You can safely return to My Computer.', action === 'restart');

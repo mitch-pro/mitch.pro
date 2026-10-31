@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#090b0f">
   <title>Desktop · mitch.pro</title>
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="/vms/desktop/desktop.css?v=4">
+  <link rel="stylesheet" href="/vms/desktop/desktop.css?v=5">
 </head>
 <body class="cloud-desktop" data-shell="off">
   <main class="desktop-page">
@@ -65,6 +65,19 @@
     </form>
   </dialog>
 
+  <dialog id="passphrase-dialog" class="uptime-dialog">
+    <form id="passphrase-form" class="uptime-dialog-content" autocomplete="off">
+      <h2>Admin passphrase</h2>
+      <p>Enter your admin passphrase to continue.</p>
+      <input type="password" id="passphrase-input" class="passphrase-input" autocomplete="current-password" aria-label="Admin passphrase" required>
+      <p id="passphrase-status" class="passphrase-status" role="status"></p>
+      <div class="uptime-dialog-actions">
+        <button type="button" id="passphrase-cancel">Cancel</button>
+        <button type="submit" id="passphrase-submit" class="primary">Unlock</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="uptime-dialog" class="uptime-dialog">
     <div class="uptime-dialog-content">
       <div class="uptime-icon-wrap" aria-hidden="true">
@@ -88,6 +101,6 @@
     </div>
   </dialog>
 
-  <script type="module" src="/vms/desktop/desktop.js?v=8"></script>
+  <script type="module" src="/vms/desktop/desktop.js?v=9"></script>
 </body>
 </html>

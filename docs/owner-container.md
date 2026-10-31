@@ -1,18 +1,21 @@
 # Owner container (VMID 500)
 
 A Proxmox container that only the owner can see or use. It is created by hand
-in Proxmox (the site never creates or deletes it) and is reached at
-`/admin/vms/owner-container/` (a card on the admin page's Site operations tab
-links there for the owner).
+in Proxmox (the site never creates or deletes it) and is opened with the normal
+VM desktop page in owner mode, `/vms/desktop/?container=owner` (fullscreen,
+clipboard, Ctrl+Alt+Del, power menu, cursor options, reconnect all work as on
+any computer). Cards on the admin page's Site operations tab and the staff page
+link there for the owner only. The page asks for the admin passphrase in a
+dialog when it is needed.
 
 ## Who can see it
 
 Only an owner (`auth::is_owner_email`). Admins and developers must not learn it
 exists, so:
 
-- `/api/admin/owner-container*` and the page return the same 404 as an unknown
-  route to everyone except the owner (`routes/admin/owner_container.rs`,
-  `handler.rs`). Admin-passphrase gating still applies to the API first.
+- `/api/admin/owner-container*` returns the same 404 as an unknown route to
+  everyone except the owner (`routes/admin/owner_container.rs`); the shared
+  desktop page in owner mode then shows "could not be found". Admin-passphrase gating still applies to the API first.
 - `ProxmoxDesktopService::list_guests` drops VMID 500, so none of the admin
   fleet/VM lists, capacity numbers or workers include it. Only
   `list_guests_all` (used by this module) returns it.

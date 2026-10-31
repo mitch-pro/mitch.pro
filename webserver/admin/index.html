@@ -3742,7 +3742,7 @@
         // receive any mention of the owner-only container.
         const ocCard = document.createElement('div');
         ocCard.className = 'action-card';
-        ocCard.innerHTML = '<h2>Container 500</h2><p>Owner-only Proxmox container: status, power, and console.</p><a href="/admin/vms/owner-container/">Open</a>';
+        ocCard.innerHTML = '<h2>Container 500</h2><p>Owner-only container desktop.</p><a href="/vms/desktop/?container=owner">Open</a>';
         document.getElementById('owner-operations').appendChild(ocCard);
       }
       if (ownerOrDev) {
