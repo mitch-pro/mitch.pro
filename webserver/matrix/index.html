@@ -697,7 +697,7 @@
             if (stored.token && stored.userId && stored.deviceId &&
                 (!status.authenticated || stored.userId === status.user_id) &&
                 await storedSessionIsValid(stored.token, stored.userId, stored.deviceId)) {
-              localStorage.setItem('cinny_hs_base_url', 'https://mitchdog.com');
+              localStorage.setItem('cinny_hs_base_url', location.origin);
               if (banner) banner.style.display = 'none';
               bootCinny();
               joinMitchSpace(stored.token, stored.userId);
