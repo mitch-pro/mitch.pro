@@ -582,7 +582,7 @@ async fn change_email_confirm(
     .trim()
     .to_string();
     // The lock is released inside this block, before any `.await` below.
-    let rec = match (|| -> Result<PendingEmailChange, Response> {
+    let rec = match (|| -> Result<PendingEmailChange, (u16, &'static str)> {
         let mut changes = state
             .pending_email_changes
             .lock()
@@ -597,10 +597,7 @@ async fn change_email_confirm(
         if !valid {
             changes.remove(&token);
             drop(changes);
-            return Err(json_response(
-                401,
-                json!({ "error": "email change expired" }),
-            ));
+            return Err((401, "email change expired"));
         }
         let rec = changes
             .get_mut(&token)
@@ -609,21 +606,21 @@ async fn change_email_confirm(
         if rec.attempts > 5 {
             changes.remove(&token);
             drop(changes);
-            return Err(json_response(429, json!({ "error": "too many attempts" })));
+            return Err((429, "too many attempts"));
         }
         let supplied = jsval::string(&jsval::or(body.get("code"), json!("")))
             .trim()
             .to_string();
         if supplied != rec.code {
             drop(changes);
-            return Err(json_response(400, json!({ "error": "invalid code" })));
+            return Err((400, "invalid code"));
         }
         Ok(changes
             .remove(&token)
             .unwrap_or_else(|| unreachable!("entry checked above")))
     })() {
         Ok(rec) => rec,
-        Err(resp) => return resp,
+        Err((status, message)) => return json_response(status, json!({ "error": message })),
     };
     if let Err(err) = apply_email_change(state, &rec.old_norm, &rec.new_norm, &rec.new_email).await
     {

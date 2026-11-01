@@ -274,11 +274,10 @@ pub fn list_tickets(store: &DataStore, status: Option<&str>, limit: i64) -> Vec<
         return Vec::new();
     };
     let rows = stmt.query_map(rusqlite::params![filter, limit], ticket_from_row);
-    let out = match rows {
+    match rows {
         Ok(iter) => iter.filter_map(|r| r.ok()).collect(),
         Err(_) => Vec::new(),
-    };
-    out
+    }
 }
 
 pub fn set_status(store: &DataStore, id: &str, status: &str) -> bool {
@@ -414,11 +413,10 @@ pub fn email_requests_for_ticket(store: &DataStore, ticket_id: &str) -> Vec<Emai
         return Vec::new();
     };
     let rows = stmt.query_map(rusqlite::params![ticket_id], request_from_row);
-    let out = match rows {
+    match rows {
         Ok(iter) => iter.filter_map(|r| r.ok()).collect(),
         Err(_) => Vec::new(),
-    };
-    out
+    }
 }
 
 /// Requests with the given status, oldest first.
@@ -430,11 +428,10 @@ pub fn email_requests_with_status(store: &DataStore, status: &str) -> Vec<EmailR
         return Vec::new();
     };
     let rows = stmt.query_map(rusqlite::params![status], request_from_row);
-    let out = match rows {
+    match rows {
         Ok(iter) => iter.filter_map(|r| r.ok()).collect(),
         Err(_) => Vec::new(),
-    };
-    out
+    }
 }
 
 /// Approves or denies a pending request. `decided_by` must differ from the
@@ -488,7 +485,7 @@ pub enum CodeCheck {
     Wrong,
     TooManyAttempts,
     Expired,
-    Ok(EmailRequest),
+    Ok(Box<EmailRequest>),
 }
 
 /// Checks `code_hash` against the approved request for the ticket. Counts the
@@ -526,7 +523,7 @@ pub fn check_code(store: &DataStore, ticket_id: &str, code_hash: &str) -> CodeCh
     }
     drop(conn);
     match email_request(store, id) {
-        Some(req) => CodeCheck::Ok(req),
+        Some(req) => CodeCheck::Ok(Box::new(req)),
         None => CodeCheck::Nothing,
     }
 }

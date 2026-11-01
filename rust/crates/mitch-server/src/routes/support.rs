@@ -249,7 +249,7 @@ async fn confirm_email(state: &Arc<AppState>, body: &Value) -> Response {
     let code = text(body, "code", 12);
     let hash = mitch_lib::crypto::sha256_hex(format!("{}:{}", t.id, code).as_bytes());
     let req = match db::check_code(&state.store, &t.id, &hash) {
-        db::CodeCheck::Ok(req) => req,
+        db::CodeCheck::Ok(req) => *req,
         db::CodeCheck::Wrong => {
             return json_resp(400, json!({ "error": "That code isn't right." }));
         }

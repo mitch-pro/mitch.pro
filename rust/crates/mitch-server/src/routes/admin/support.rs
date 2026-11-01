@@ -191,14 +191,13 @@ fn request_json(state: &AppState, r: &db::EmailRequest) -> Value {
     })
 }
 
-fn existing_ticket(state: &AppState, body: &Value) -> Result<db::Ticket, axum::response::Response> {
-    db::ticket(&state.store, &text(body, "id", 64)).ok_or_else(|| err(404, "Ticket not found."))
+fn existing_ticket(state: &AppState, body: &Value) -> Option<db::Ticket> {
+    db::ticket(&state.store, &text(body, "id", 64))
 }
 
 fn reply(state: &Arc<AppState>, body: &Value, staff: &str) -> axum::response::Response {
-    let t = match existing_ticket(state, body) {
-        Ok(t) => t,
-        Err(r) => return r,
+    let Some(t) = existing_ticket(state, body) else {
+        return err(404, "Ticket not found.");
     };
     let message = text(body, "body", 4000);
     if message.is_empty() {
@@ -215,9 +214,8 @@ fn reply(state: &Arc<AppState>, body: &Value, staff: &str) -> axum::response::Re
 }
 
 fn set_status(state: &Arc<AppState>, body: &Value) -> axum::response::Response {
-    let t = match existing_ticket(state, body) {
-        Ok(t) => t,
-        Err(r) => return r,
+    let Some(t) = existing_ticket(state, body) else {
+        return err(404, "Ticket not found.");
     };
     if !db::set_status(&state.store, &t.id, &text(body, "status", 20)) {
         return err(400, "Unknown status.");
@@ -226,9 +224,8 @@ fn set_status(state: &Arc<AppState>, body: &Value) -> axum::response::Response {
 }
 
 fn flag(state: &Arc<AppState>, body: &Value, staff: &str) -> axum::response::Response {
-    let t = match existing_ticket(state, body) {
-        Ok(t) => t,
-        Err(r) => return r,
+    let Some(t) = existing_ticket(state, body) else {
+        return err(404, "Ticket not found.");
     };
     let on = body.get("compromised").and_then(Value::as_bool) == Some(true);
     db::set_compromised(&state.store, &t.id, on);
@@ -260,9 +257,8 @@ fn flag(state: &Arc<AppState>, body: &Value, staff: &str) -> axum::response::Res
 }
 
 fn assign(state: &Arc<AppState>, body: &Value, staff: &str) -> axum::response::Response {
-    let t = match existing_ticket(state, body) {
-        Ok(t) => t,
-        Err(r) => return r,
+    let Some(t) = existing_ticket(state, body) else {
+        return err(404, "Ticket not found.");
     };
     let take = body.get("assign").and_then(Value::as_bool) != Some(false);
     db::set_assigned(&state.store, &t.id, if take { staff } else { "" });
@@ -274,9 +270,8 @@ fn request_email_change(
     body: &Value,
     staff: &str,
 ) -> axum::response::Response {
-    let t = match existing_ticket(state, body) {
-        Ok(t) => t,
-        Err(r) => return r,
+    let Some(t) = existing_ticket(state, body) else {
+        return err(404, "Ticket not found.");
     };
     if t.account_email.is_empty() {
         return err(400, "This ticket isn't linked to an account.");
