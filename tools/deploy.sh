@@ -83,10 +83,17 @@ main() {
     NTFY_USER="${NTFY_USER:-}"
     NTFY_PASS="${NTFY_PASS:-}"
 
+    # The dev server runs this same script with `dev` checked out. Tag its
+    # notifications so they can't be mistaken for production deploys.
+    DEPLOY_LABEL=""
+    if [ "$(run_git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")" = "dev" ]; then
+        DEPLOY_LABEL=" (dev)"
+    fi
+
     send_notification() {
         [ -z "${NTFY_TOPIC:-}" ] && return 0
         local msg="$1"
-        local title="${2:-Deploy Status}"
+        local title="${2:-Deploy Status}${DEPLOY_LABEL:-}"
         local priority="${3:-default}"
         local url
         if [[ "$NTFY_TOPIC" =~ ^https?:// ]]; then
