@@ -1,0 +1,27 @@
+/* Shared by the public support pages. Colors come from the site theme tokens
+   (app.css / theme.js) so light and dark mode both work. */
+.support-main { max-width: 760px; margin: 0 auto; padding: 28px 16px 56px; }
+.support-main h1 { margin: 0 0 6px; font-size: 1.7rem; font-weight: 700; letter-spacing: -0.03em; }
+.support-sub { margin: 0 0 20px; color: var(--t-fg2); line-height: 1.5; }
+.support-card { background: var(--t-bg2); border: 1px solid var(--t-bd); border-radius: var(--t-radius, 10px); padding: 18px; margin-bottom: 16px; }
+.support-field { display: block; margin-bottom: 14px; }
+.support-field > span { display: block; font-size: .85rem; font-weight: 600; margin-bottom: 5px; }
+.support-field small { display: block; color: var(--t-fg2); margin-top: 4px; font-size: .8rem; }
+.support-field input, .support-field select, .support-field textarea {
+  width: 100%; box-sizing: border-box; padding: 10px 12px; font: inherit; color: var(--t-fg);
+  background: var(--t-bg3, var(--t-bg)); border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm, 7px);
+}
+.support-field textarea { min-height: 130px; resize: vertical; }
+.support-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.support-btn { padding: 10px 18px; font: inherit; font-weight: 600; cursor: pointer; border-radius: var(--t-radius-sm, 7px); border: 1px solid var(--t-bd); background: transparent; color: var(--t-fg); }
+.support-btn.primary { background: var(--t-ac); border-color: var(--t-ac); color: var(--t-ac-ink, #fff); }
+.support-btn:disabled { opacity: .55; cursor: default; }
+.support-status { min-height: 1.3em; margin-top: 10px; color: var(--t-fg2); }
+.support-status.err { color: #d92d20; }
+.support-link { word-break: break-all; font-family: monospace; font-size: .85rem; }
+.support-thread { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.support-msg { max-width: 85%; padding: 10px 12px; border-radius: var(--t-radius, 10px); border: 1px solid var(--t-bd); background: var(--t-bg2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.support-msg.user { align-self: flex-end; background: var(--t-bg3, var(--t-bg2)); }
+.support-msg.system { align-self: center; max-width: 100%; color: var(--t-fg2); font-size: .85rem; text-align: center; border-style: dashed; }
+.support-msg small { display: block; color: var(--t-fg2); font-size: .72rem; margin-bottom: 3px; }
+.support-pill { display: inline-block; padding: 2px 8px; border: 1px solid var(--t-bd); border-radius: 99px; font-size: .75rem; color: var(--t-fg2); }

@@ -37,6 +37,7 @@ pub mod proxy;
 pub mod push;
 pub mod school_menu;
 pub mod staff_hub;
+pub mod support;
 pub mod team;
 pub mod tester;
 pub mod vm;

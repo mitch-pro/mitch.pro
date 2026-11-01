@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Support — mitch.pro</title>
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/support/support.css">
+<script src="/app-shell.js" defer></script>
+</head>
+<body class="app-shell">
+<main class="support-main">
+  <h1>Support</h1>
+  <p class="support-sub">Can't sign in, think someone else has your account, or need to change your email? Tell us and a moderator will reply here.</p>
+
+  <section class="support-card" id="existing" hidden>
+    <strong>Your requests</strong>
+    <div id="existing-list"></div>
+  </section>
+
+  <form class="support-card" id="form" autocomplete="off">
+    <label class="support-field"><span>What do you need help with?</span>
+      <select id="category" required>
+        <option value="signin">I can't sign in</option>
+        <option value="compromised">My account may have been taken over</option>
+        <option value="email">I need to change my email</option>
+        <option value="banned">I was banned or restricted</option>
+        <option value="other">Something else</option>
+      </select>
+    </label>
+    <label class="support-field"><span>Your username or email</span>
+      <input id="account" type="text" maxlength="254" required placeholder="username or you@example.com">
+      <small>This only helps us find your account. We won't confirm to anyone whether it exists.</small>
+    </label>
+    <label class="support-field"><span>Contact email (optional)</span>
+      <input id="contact" type="email" maxlength="254" placeholder="where we can reach you if needed">
+    </label>
+    <label class="support-field"><span>Subject (optional)</span>
+      <input id="subject" type="text" maxlength="120">
+    </label>
+    <label class="support-field"><span>What happened?</span>
+      <textarea id="message" maxlength="4000" required></textarea>
+    </label>
+    <div class="support-hp" aria-hidden="true"><label>Website <input id="website" tabindex="-1" autocomplete="off"></label></div>
+    <button class="support-btn primary" id="send" type="submit">Send request</button>
+    <div class="support-status" id="status" role="status"></div>
+  </form>
+</main>
+<script>
+(function () {
+  var KEY = 'support_tickets';
+  function saved() { try { return JSON.parse(localStorage.getItem(KEY) || '[]') || []; } catch (e) { return []; } }
+  var list = saved();
+  if (list.length) {
+    document.getElementById('existing').hidden = false;
+    var box = document.getElementById('existing-list');
+    list.slice().reverse().forEach(function (t) {
+      var a = document.createElement('a');
+      a.href = '/support/ticket/#' + t.id + '.' + t.token;
+      a.textContent = (t.subject || 'Request') + ' · ' + new Date(t.at).toLocaleDateString();
+      a.style.display = 'block';
+      a.style.marginTop = '6px';
+      box.appendChild(a);
+    });
+  }
+  var status = document.getElementById('status');
+  document.getElementById('form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var btn = document.getElementById('send');
+    btn.disabled = true;
+    status.className = 'support-status';
+    status.textContent = 'Sending...';
+    try {
+      var captcha = window.getCaptchaToken ? (await window.getCaptchaToken('support_open')) || '' : '';
+      var res = await fetch('/api/support/open', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
+        body: JSON.stringify({
+          category: document.getElementById('category').value,
+          account: document.getElementById('account').value,
+          contactEmail: document.getElementById('contact').value,
+          subject: document.getElementById('subject').value,
+          message: document.getElementById('message').value,
+          website: document.getElementById('website').value,
+          recaptcha_token: captcha
+        })
+      });
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok) throw new Error(data.error || 'Could not send your request.');
+      list.push({ id: data.id, token: data.token, subject: document.getElementById('subject').value.trim(), at: Date.now() });
+      localStorage.setItem(KEY, JSON.stringify(list.slice(-20)));
+      location.href = '/support/ticket/#' + data.id + '.' + data.token;
+    } catch (err) {
+      status.className = 'support-status err';
+      status.textContent = err.message;
+      btn.disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>

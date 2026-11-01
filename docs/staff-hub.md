@@ -33,3 +33,5 @@ hidden entirely when the viewer doesn't have that specific role — e.g. a
 tester who isn't an admin still sees the Admin dashboard card exists, just
 can't open it. Hiding it outright would make the directory look
 incomplete depending on who's looking at it.
+
+Moderators and above also get a **Support tickets** card (`/moderator/support/`), see [support.md](support.md).

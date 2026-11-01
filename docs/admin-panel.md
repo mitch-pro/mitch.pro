@@ -132,5 +132,5 @@ or `virtual_machines.owner_email`. Staff status is keyed by email, so changing a
 staff member's email drops their role and detaches their computers until the
 lists are updated to the new address. This is deliberate for now: migrating
 roles automatically would let a hijacked session move an owner or admin role to
-an attacker's address. Update the lists first, then change the email. See also
+an attacker's address. Update the lists first, then change the email. Regular accounts are handled by the support portal, see [support.md](support.md). See also
 [reserved-usernames.md](reserved-usernames.md).

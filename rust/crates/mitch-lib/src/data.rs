@@ -211,6 +211,50 @@ impl DataStore {
                         created_at INTEGER NOT NULL,
                         PRIMARY KEY (user_email, friend_email, status)
                     );
+                    CREATE TABLE IF NOT EXISTS support_tickets (
+                        id TEXT PRIMARY KEY,
+                        token_hash TEXT NOT NULL,
+                        ip_hash TEXT NOT NULL DEFAULT '',
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'open',
+                        category TEXT NOT NULL DEFAULT 'other',
+                        subject TEXT NOT NULL DEFAULT '',
+                        claimed_account TEXT NOT NULL DEFAULT '',
+                        account_email TEXT NOT NULL DEFAULT '',
+                        contact_email TEXT NOT NULL DEFAULT '',
+                        compromised INTEGER NOT NULL DEFAULT 0,
+                        assigned_to TEXT NOT NULL DEFAULT ''
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets (status, updated_at DESC);
+                    CREATE INDEX IF NOT EXISTS idx_support_tickets_ip ON support_tickets (ip_hash, created_at);
+                    CREATE TABLE IF NOT EXISTS support_messages (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ticket_id TEXT NOT NULL,
+                        sender TEXT NOT NULL,
+                        staff_email TEXT NOT NULL DEFAULT '',
+                        body TEXT NOT NULL,
+                        created_at INTEGER NOT NULL
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_support_messages_ticket ON support_messages (ticket_id, id);
+                    CREATE TABLE IF NOT EXISTS support_email_requests (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ticket_id TEXT NOT NULL,
+                        old_email TEXT NOT NULL,
+                        new_email TEXT NOT NULL,
+                        reason TEXT NOT NULL DEFAULT '',
+                        requested_by TEXT NOT NULL,
+                        requested_at INTEGER NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'pending',
+                        decided_by TEXT NOT NULL DEFAULT '',
+                        decided_at INTEGER,
+                        decision_note TEXT NOT NULL DEFAULT '',
+                        code_hash TEXT NOT NULL DEFAULT '',
+                        code_expires INTEGER NOT NULL DEFAULT 0,
+                        code_attempts INTEGER NOT NULL DEFAULT 0,
+                        applied_at INTEGER
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_support_email_requests_ticket ON support_email_requests (ticket_id, status);
                     CREATE TABLE IF NOT EXISTS reserved_usernames (
                         username TEXT PRIMARY KEY,
                         holder_email TEXT NOT NULL DEFAULT '',

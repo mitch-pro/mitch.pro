@@ -30,6 +30,7 @@ pub mod legacy;
 pub mod moderation;
 pub mod newsletters;
 pub mod owner_container;
+pub mod support;
 pub mod vm;
 
 pub type Resp = Option<Response>;
@@ -245,6 +246,11 @@ pub async fn handle(
 
     // ── Economy/coins/premium ──
     if let Some(resp) = economy::handle(state, method, path, headers, body, &ctx) {
+        return Some(resp);
+    }
+
+    // ── Support portal staff API (moderators and above) ──
+    if let Some(resp) = support::handle(state, method, path, search, body, &ctx) {
         return Some(resp);
     }
 

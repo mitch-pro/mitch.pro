@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Support tickets — mitch.pro</title>
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/support/support.css">
+<link rel="stylesheet" href="/moderator/support/staff.css">
+<script src="/app-shell.js" defer></script>
+</head>
+<body class="app-shell">
+<main class="staff-wrap">
+  <h1>Support tickets</h1>
+  <p class="support-sub" id="denied" hidden>This page is for moderators and admins.</p>
+  <div id="app" hidden>
+    <section class="support-card" id="approvals" hidden>
+      <strong>Email changes waiting for approval</strong>
+      <div id="approval-list"></div>
+    </section>
+    <div class="staff-grid">
+      <aside class="staff-list">
+        <div class="staff-tabs" id="tabs"></div>
+        <div id="tickets"></div>
+      </aside>
+      <section class="staff-detail" id="detail">
+        <p class="support-sub">Select a ticket.</p>
+      </section>
+    </div>
+  </div>
+  <div class="support-status" id="status" role="status"></div>
+
+  <dialog id="pass-dialog" class="staff-dialog">
+    <form id="pass-form" autocomplete="off">
+      <h2>Admin passphrase</h2>
+      <input type="password" id="pass-input" class="staff-input" autocomplete="current-password" aria-label="Admin passphrase" required>
+      <p class="support-status" id="pass-status"></p>
+      <div class="staff-row"><button type="button" class="support-btn" id="pass-cancel">Cancel</button><button type="submit" class="support-btn primary">Unlock</button></div>
+    </form>
+  </dialog>
+</main>
+<script src="/moderator/support/support-staff.js"></script>
+</body>
+</html>

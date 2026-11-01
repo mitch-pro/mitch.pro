@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Support request — mitch.pro</title>
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/support/support.css">
+<script src="/app-shell.js" defer></script>
+</head>
+<body class="app-shell">
+<main class="support-main">
+  <a href="/support/" class="support-sub">&larr; All requests</a>
+  <h1 id="title">Support request</h1>
+  <p class="support-sub"><span class="support-pill" id="state">...</span></p>
+  <section class="support-card" id="linkcard" hidden>
+    <strong>Keep this page's address.</strong> It's the only way back to this conversation, and anyone who has it can read and reply:
+    <div class="support-link" id="link"></div>
+  </section>
+  <div class="support-thread" id="thread"></div>
+  <form class="support-card" id="codeform" hidden>
+    <label class="support-field"><span>Code sent to <b id="codeto"></b></span>
+      <input id="code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code">
+    </label>
+    <button class="support-btn primary" id="codebtn" type="submit">Confirm new email</button>
+  </form>
+  <form id="replyform">
+    <label class="support-field"><span>Reply</span><textarea id="reply" maxlength="4000"></textarea></label>
+    <button class="support-btn primary" id="replybtn" type="submit">Send</button>
+  </form>
+  <div class="support-status" id="status" role="status"></div>
+</main>
+<script>
+(function () {
+  var parts = location.hash.replace(/^#/, '').split('.');
+  var id = parts[0] || '', token = parts[1] || '';
+  var status = document.getElementById('status');
+  var lastCount = -1;
+  function say(text, bad) { status.className = 'support-status' + (bad ? ' err' : ''); status.textContent = text; }
+  function call(path, extra) {
+    return fetch('/api/support/' + path, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
+      body: JSON.stringify(Object.assign({ id: id, token: token }, extra || {}))
+    }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, data: d }; }); });
+  }
+  var LABELS = { open: 'Waiting for support', pending: 'Support replied', resolved: 'Resolved' };
+  var WHO = { user: 'You', staff: 'Support', system: '' };
+  function render(d) {
+    document.getElementById('title').textContent = d.ticket.subject || 'Support request';
+    document.getElementById('state').textContent = LABELS[d.ticket.status] || d.ticket.status;
+    var thread = document.getElementById('thread');
+    if (d.messages.length !== lastCount) {
+      lastCount = d.messages.length;
+      thread.textContent = '';
+      d.messages.forEach(function (m) {
+        var div = document.createElement('div');
+        div.className = 'support-msg ' + m.from;
+        if (WHO[m.from]) {
+          var who = document.createElement('small');
+          who.textContent = WHO[m.from] + ' · ' + new Date(m.at).toLocaleString();
+          div.appendChild(who);
+        }
+        div.appendChild(document.createTextNode(m.body));
+        thread.appendChild(div);
+      });
+    }
+    var ec = d.emailChange;
+    var waiting = ec && ec.state === 'awaiting_code';
+    document.getElementById('codeform').hidden = !waiting;
+    if (waiting) document.getElementById('codeto').textContent = ec.newEmail;
+  }
+  async function load() {
+    var res = await call('view');
+    if (!res.ok) { say('This request could not be found. Check the address you opened.', true); return false; }
+    render(res.data);
+    return true;
+  }
+  if (!id || !token) { say('This address is missing its request code.', true); return; }
+  document.getElementById('linkcard').hidden = false;
+  document.getElementById('link').textContent = location.href;
+  load();
+  setInterval(function () { if (!document.hidden) load(); }, 6000);
+  document.getElementById('replyform').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var box = document.getElementById('reply');
+    if (!box.value.trim()) return;
+    var btn = document.getElementById('replybtn'); btn.disabled = true;
+    var res = await call('reply', { body: box.value });
+    if (res.ok) { box.value = ''; say(''); await load(); } else say(res.data.error || 'Could not send.', true);
+    btn.disabled = false;
+  });
+  document.getElementById('codeform').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var btn = document.getElementById('codebtn'); btn.disabled = true;
+    var res = await call('confirm-email', { code: document.getElementById('code').value });
+    if (res.ok) { say('Your email was changed.'); await load(); } else say(res.data.error || 'Could not confirm.', true);
+    btn.disabled = false;
+  });
+})();
+</script>
+</body>
+</html>

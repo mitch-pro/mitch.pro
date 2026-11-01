@@ -27,6 +27,10 @@ pub const HTML_OPEN: &[&str] = &[
     "/password",
     "/appeal",
     "/appeal/index",
+    "/support",
+    "/support/index",
+    "/support/ticket",
+    "/support/ticket/index",
     "/unsubscribe",
     "/admin",
     "/faq",
@@ -915,6 +919,8 @@ pub async fn handle(
         || clean_path.starts_with("/livekit/")
         || clean_path.starts_with("/game-portal")
         || clean_path.starts_with("/msn-games")
+        || clean_path == "/support"
+        || clean_path.starts_with("/support/")
         || clean_path == "/rjuhsd"
         || clean_path.starts_with("/rjuhsd/")
         || clean_path == "/sexypickleclub"
@@ -1259,6 +1265,12 @@ pub async fn handle(
         // Beta tester hub API.
         if let Some(resp) =
             crate::routes::tester::handle(&state, &method, &path, headers, body_bytes).await
+        {
+            return resp;
+        }
+        // Public support portal (no session needed; ticket token in the body).
+        if let Some(resp) =
+            crate::routes::support::handle(&state, &method, &path, headers, body_bytes).await
         {
             return resp;
         }

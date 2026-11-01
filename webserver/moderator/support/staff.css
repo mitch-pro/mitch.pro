@@ -1,0 +1,19 @@
+.staff-wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 56px; }
+.staff-wrap h1 { margin: 0 0 14px; font-size: 1.6rem; font-weight: 700; letter-spacing: -0.03em; }
+.staff-grid { display: grid; grid-template-columns: minmax(240px, 320px) 1fr; gap: 16px; align-items: start; }
+@media (max-width: 760px) { .staff-grid { grid-template-columns: 1fr; } }
+.staff-tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.staff-tabs button { padding: 6px 12px; font: inherit; border-radius: 99px; border: 1px solid var(--t-bd); background: transparent; color: var(--t-fg); cursor: pointer; }
+.staff-tabs button[aria-pressed="true"] { background: var(--t-ac); border-color: var(--t-ac); color: var(--t-ac-ink, #fff); }
+.staff-ticket { display: block; width: 100%; text-align: left; margin-bottom: 8px; padding: 10px 12px; font: inherit; color: var(--t-fg); background: var(--t-bg2); border: 1px solid var(--t-bd); border-radius: var(--t-radius, 10px); cursor: pointer; }
+.staff-ticket[aria-current="true"] { border-color: var(--t-ac); }
+.staff-ticket small { display: block; color: var(--t-fg2); margin-top: 2px; }
+.staff-detail { background: var(--t-bg2); border: 1px solid var(--t-bd); border-radius: var(--t-radius, 10px); padding: 16px; min-width: 0; }
+.staff-detail h2 { margin: 0 0 6px; font-size: 1.2rem; }
+.staff-meta { color: var(--t-fg2); font-size: .85rem; margin-bottom: 12px; line-height: 1.6; }
+.staff-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+.staff-input { width: 100%; box-sizing: border-box; padding: 9px 11px; font: inherit; color: var(--t-fg); background: var(--t-bg3, var(--t-bg)); border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm, 7px); }
+.staff-box { border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm, 7px); padding: 12px; margin: 12px 0; }
+.staff-warn { color: #d92d20; }
+.staff-dialog { max-width: 380px; width: calc(100% - 24px); padding: 18px; border: 1px solid var(--t-bd); border-radius: var(--t-radius, 10px); background: var(--t-bg2); color: var(--t-fg); }
+.staff-dialog h2 { margin-top: 0; }

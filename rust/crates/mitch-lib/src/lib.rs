@@ -53,6 +53,7 @@ pub mod school;
 pub mod shop;
 pub mod sso;
 pub mod state;
+pub mod support;
 pub mod tester;
 pub mod tokens;
 pub mod totp;
