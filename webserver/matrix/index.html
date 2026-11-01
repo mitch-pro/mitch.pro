@@ -68,26 +68,25 @@
 
     <!-- Cinny Stylesheet & Mitch.pro chat overrides -->
     <link rel="stylesheet" crossorigin href="/matrix/assets/index-DmaX6Xe5.css" />
-    <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=9" />
+    <link rel="stylesheet" href="/theme-tokens.css" />
+    <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=10" />
     <script defer src="/matrix/media-auth.js?v=3"></script>
   </head>
   <body id="appBody">
     <header id="matrix-site-bar">
-      <a class="matrix-wordmark" href="/" aria-label="mitch.pro home"><b>mitch</b><span>.pro</span></a>
+      <a class="matrix-wordmark" href="/" aria-label="mitch.pro home"><img src="/icon-192.png" alt="" width="32" height="32"><b>mitch<span>.pro</span></b></a>
       <nav class="matrix-site-links" aria-label="Main navigation">
         <a href="/">Home</a>
         <a href="/vms/">VM Lab <span class="matrix-free-pill">FREE</span></a>
         <a href="/matrix/" aria-current="page">Chat</a>
         <a href="/game-portal/">Games</a>
-        <a href="https://woodcreek.site/">Blooket Bot</a>
         <a href="/members/">People</a>
         <a href="https://rjuhsd.school/">Schedule</a>
       </nav>
       <div class="matrix-site-actions">
-        <span class="matrix-network-status"><i></i> Encrypted</span>
-        <a id="matrix-account-link" class="matrix-account-link" href="/preferences/#account">
+        <a id="matrix-account-link" class="matrix-account-link" href="/profile/" aria-label="Open your profile">
           <span id="matrix-account-avatar" aria-hidden="true">M</span>
-          <span id="matrix-account-name">Account</span>
+          <span id="matrix-account-name">My account</span>
         </a>
       </div>
     </header>
@@ -324,6 +323,36 @@
         }
         document.title = defaultTitle;
 
+        // Upstream's empty-state screen promotes Cinny (its GitHub, a donation
+        // page, a version link). Point it at this site instead. Only text and
+        // link attributes are touched, never the element tree, so React's own
+        // bookkeeping stays valid.
+        const WELCOME_COPY = 'Pick a room from the list, or find someone to message.';
+        function tidyWelcomeText(textNode) {
+          const v = textNode.nodeValue || '';
+          if (v.includes('Yet another matrix client')) textNode.nodeValue = v.replace(/Yet another matrix client\.?/, WELCOME_COPY);
+          else if (v.trim() === 'Welcome to Cinny' || v.trim() === `Welcome to ${matrixLabel}`) textNode.nodeValue = 'Chat';
+          else if (v.trim() === 'Source Code') textNode.nodeValue = 'Find people';
+        }
+        function tidyWelcomeLinks(rootNode) {
+          if (!rootNode.querySelectorAll) return;
+          const links = rootNode.matches && rootNode.matches('a[href]') ? [rootNode] : [];
+          rootNode.querySelectorAll('a[href]').forEach(a => links.push(a));
+          links.forEach(a => {
+            const href = a.getAttribute('href') || '';
+            let target = '';
+            if (href === 'https://github.com/cinnyapp/cinny') target = '/members/';
+            else if (href.startsWith('https://cinny.in')) target = '/support/';
+            else if (href.startsWith('https://github.com/cinnyapp/cinny/releases')) { a.style.display = 'none'; return; }
+            else return;
+            a.setAttribute('href', target);
+            a.removeAttribute('target');
+            a.removeAttribute('rel');
+            const icon = a.querySelector('svg');
+            if (icon) icon.style.display = 'none';
+          });
+        }
+
         function sanitizeCinnyBranding(rootNode) {
           if (!rootNode) return;
           if (rootNode.nodeType === Node.TEXT_NODE) {
@@ -333,8 +362,10 @@
                 .replace(/Cinny Web/g, matrixLabel)
                 .replace(/Cinny/g, matrixLabel);
             }
+            tidyWelcomeText(rootNode);
             return;
           }
+          tidyWelcomeLinks(rootNode);
           const walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_TEXT, null, false);
           let node;
           while ((node = walker.nextNode())) {
@@ -344,6 +375,7 @@
                 .replace(/Cinny Web/g, matrixLabel)
                 .replace(/Cinny/g, matrixLabel);
             }
+            tidyWelcomeText(node);
           }
           if (rootNode.querySelectorAll) {
             const logos = rootNode.querySelectorAll('img[alt*="Cinny" i]');
@@ -351,7 +383,7 @@
               img.src = '/icon-192.png';
               img.alt = `${brandName} Logo`;
               img.style.borderRadius = '14px';
-              img.style.boxShadow = '0 8px 24px rgba(184, 108, 255, 0.35)';
+              img.style.boxShadow = '0 8px 24px color-mix(in srgb, var(--t-ac) 30%, transparent)';
             });
           }
         }
@@ -747,7 +779,7 @@
           } else {
             link.removeAttribute('title');
           }
-          link.href = '/preferences/#account';
+          link.href = '/profile/';
         };
       })();
 
