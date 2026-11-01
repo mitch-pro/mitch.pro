@@ -142,10 +142,42 @@ function labelFromLink(el) {
   return String((named ? named.textContent : el.textContent) || '').trim();
 }
 
+// Rotating link aliases: /<daily uuid>/<section uuid>/rest serves /<section>/rest.
+var linkAlias = null;
+var UUID_SEG = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+function realHref(href) {
+  return String(href || '').replace(new RegExp('^/' + UUID_SEG + '(/' + UUID_SEG + ')?(?=/|$)', 'i'), '').replace(/^$/, '/');
+}
+function aliasHref(href) {
+  if (!linkAlias || typeof href !== 'string' || href.charAt(0) !== '/' || href.charAt(1) === '/') return href;
+  var m = href.match(/^\/([^\/?#]+)(.*)$/);
+  if (!m) return href;
+  var token = linkAlias.sections[m[1]];
+  return token ? '/' + linkAlias.root + '/' + token + m[2] : href;
+}
+function applyLinkAliases() {
+  if (!linkAlias) return;
+  document.querySelectorAll('a[href^="/"]').forEach(function(a) {
+    var real = a.getAttribute('href');
+    var aliased = aliasHref(real);
+    if (aliased !== real) a.setAttribute('href', aliased);
+  });
+}
+function loadLinkAliases() {
+  fetch('/api/alias', { cache: 'no-store' }).then(function(r) { return r.ok ? r.json() : null; }).then(function(data) {
+    if (!data || !data.root || !data.sections) return;
+    linkAlias = data;
+    applyLinkAliases();
+    new MutationObserver(applyLinkAliases).observe(document.body, { childList: true, subtree: true });
+  }).catch(function() {});
+}
+
 function openHomeHref(event, href) {
   if (event && (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button > 0)) return;
   if (event) event.preventDefault();
+  href = realHref(href);
   recordRecentVisit(href, event && event.currentTarget ? labelFromLink(event.currentTarget) : '');
+  href = aliasHref(href);
   try {
     launchSite('url', href);
   } catch (e) {
@@ -1287,6 +1319,7 @@ function initFriendsSystem() {
 }
 
 async function initHome() {
+  loadLinkAliases();
     /* TASK4 */ optimizeForDevice();
   setupHomeSearch();
   setupAboutBlankToggle();

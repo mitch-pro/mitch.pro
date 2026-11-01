@@ -133,6 +133,21 @@ pub async fn handle(
     if path == "/api/games" && (*method == Method::GET || *method == Method::POST) {
         return Some(games(state, body, headers));
     }
+    if path == "/api/alias" && *method == Method::GET {
+        let mut response = json_response(
+            200,
+            crate::alias::today(
+                &state.id_secret,
+                &state.cfg.webroot,
+                mitch_lib::school::now_millis(),
+            ),
+        );
+        response.headers_mut().insert(
+            axum::http::header::CACHE_CONTROL,
+            axum::http::HeaderValue::from_static("no-store"),
+        );
+        return Some(response);
+    }
     if path == "/api/presence/count" && *method == Method::GET {
         return Some(json_response(
             200,

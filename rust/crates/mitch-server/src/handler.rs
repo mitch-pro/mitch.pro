@@ -570,7 +570,34 @@ pub fn get_real_ip(headers: &HeaderMap, peer_ip: Option<&str>) -> String {
 
 /// The full ported flow. `authenticated` is the session stub (Step 6 wires
 /// the real `checkPasswordCookie`).
+/// Entry point: resolves rotating URL aliases (see `alias.rs`) to the real
+/// path first, so bans, auth and routing only ever see the real path.
 pub async fn handle(
+    state: Arc<AppState>,
+    method: Method,
+    uri: &axum::http::Uri,
+    headers: &HeaderMap,
+    body_bytes: &[u8],
+    ws_upgrade: Option<axum::extract::ws::WebSocketUpgrade>,
+) -> Response {
+    let real = crate::alias::rewrite(
+        &state.id_secret,
+        &state.cfg.webroot,
+        mitch_lib::school::now_millis(),
+        uri,
+    );
+    handle_resolved(
+        state,
+        method,
+        real.as_ref().unwrap_or(uri),
+        headers,
+        body_bytes,
+        ws_upgrade,
+    )
+    .await
+}
+
+async fn handle_resolved(
     state: Arc<AppState>,
     method: Method,
     uri: &axum::http::Uri,

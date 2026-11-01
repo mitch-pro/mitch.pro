@@ -573,6 +573,7 @@ pub const PUBLIC_API_PATHS: &[&str] = &[
     "/api/bell/published",
     "/api/site-info",
     "/api/presence/count",
+    "/api/alias",
     "/api/guest-session",
     "/api/verify-open",
     "/verify-open.json",

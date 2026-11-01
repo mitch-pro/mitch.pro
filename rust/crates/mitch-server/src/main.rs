@@ -21,6 +21,7 @@ use axum::Router;
 use std::sync::Arc;
 
 mod access;
+mod alias;
 mod app_log_layer;
 mod chat_cleanup;
 mod env_file;
