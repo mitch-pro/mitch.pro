@@ -13,7 +13,7 @@
 <title>mitch.pro</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"></noscript>
 <link rel="stylesheet" href="/app.css">
-<link rel="stylesheet" href="/home.css?v=14">
+<link rel="stylesheet" href="/home.css?v=15">
 <script src="/app-shell.js" defer></script>
 <script src="/home-friends.js?v=5" defer></script>
 <script>
@@ -1471,14 +1471,11 @@ if (document.readyState === 'loading') {
 <iframe id="fullframe" src="about:blank" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-orientation-lock" allowfullscreen allow="fullscreen; autoplay; clipboard-read; clipboard-write; encrypted-media"></iframe>
 
 <div id="_agree_footer"><span class="footer-agreement">By using mitch.pro you agree to the <a href="/use-agreement/" target="_blank">use agreement</a> and <a href="/privacy/" target="_blank">privacy policy</a>. </span><span class="footer-cookies">See also <a href="/cookies/" target="_blank">cookies</a> and <a href="/copyright/" target="_blank">copyright</a>. </span><span class="footer-oss">mitch.pro is open source — <a href="https://github.com/mitch-pro/mitch.pro" target="_blank" rel="noopener">view the code yourself on GitHub</a></span><span class="footer-discord"> · <a href="https://discord.gg/nrBCnK7KM5" target="_blank" rel="noopener">Discord</a></span></div>
-<p id="_staff_footer_link" hidden style="text-align:center;margin:12px 0 0;"><a href="/staff/" class="home-staff-pill" style="display:inline-flex;">Staff workspace &rarr;</a></p>
 <script>
   fetch('/api/staff-hub/status', { credentials: 'same-origin', cache: 'no-store' })
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (status) {
       if (status && status.isStaff) {
-        var p = document.getElementById('_staff_footer_link');
-        if (p) p.hidden = false;
         var pill = document.getElementById('home-staff-pill');
         if (pill) pill.hidden = false;
       }
@@ -1497,16 +1494,6 @@ if (document.readyState === 'loading') {
     premium_star_badge: { text: '⭐', cls: 'badge-shop' },
     owner_fan_badge: { text: '👑', cls: 'badge-shop' },
   };
-var origShow = showIframe;
-showIframe = function(src, escape) {
-  origShow(src, escape);
-  document.getElementById('backbtn').style.display = 'block';
-};
-var origBack = goBack;
-goBack = function() {
-  origBack();
-  document.getElementById('backbtn').style.display = 'none';
-};
 </script>
 
 <!-- CORE SCRIPTS -->

@@ -428,20 +428,12 @@ body.home ::-webkit-scrollbar-track { background: transparent; }
 }
 
 /* --------------------------------------------------------------------------
-   Console overlay
-   -------------------------------------------------------------------------- */
-
-  position: fixed; inset: 0; z-index: 200; display: none; flex-direction: column;
-  width: min(700px, calc(100vw - 2rem)); height: min(480px, calc(100vh - 2rem)); margin: auto;
-  background: var(--mh-ink); color: var(--mh-bg); border-radius: var(--mh-radius); overflow: hidden;
-  box-shadow: 0 24px 64px rgba(20, 16, 24, 0.28);
-}
-
-/* --------------------------------------------------------------------------
    Floating chrome
    -------------------------------------------------------------------------- */
 
 #backbtn { position: fixed; left: 14px; bottom: 14px; z-index: 90; display: none; align-items: center; gap: 0.4rem; padding: 0.45rem 0.85rem; background: var(--mh-bg); border-color: var(--mh-border-strong); font-weight: 500; font-size: 0.8rem; border-radius: 999px; box-shadow: 0 4px 16px rgba(20,16,24,0.08); }
+/* Only while a game or site is open in the in-page frame (index.html sets the class). */
+body.is-browsing-frame #backbtn { display: inline-flex; }
 #unsubscribe-btn {
   position: fixed; bottom: 14px; right: 14px; z-index: 90; width: 32px; height: 32px;
   display: flex; align-items: center; justify-content: center; border-radius: 50%;
