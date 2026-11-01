@@ -585,43 +585,6 @@ pub async fn handle(
         return response;
     }
 
-    // 0. mitch.pro canonical redirect (server.js:9285-9295).
-    let incoming_host = request_host(headers)
-        .split(':')
-        .next()
-        .unwrap_or("")
-        .to_ascii_lowercase();
-    let is_compatibility_endpoint = path.starts_with("/api/")
-        || path.starts_with("/_matrix/")
-        || path.starts_with("/.well-known/matrix/")
-        // LiveKit calls (token endpoints, the SDK's /rtc/.../validate
-        // reachability check, the /rtc WS signaling proxy) are a backend API
-        // surface, not a page to canonicalize — the call widget is given
-        // "https://mitch.pro/livekit" as its focus URL regardless of which
-        // mitch.pro-family domain it's embedded in, so redirecting those
-        // requests to mitchdog.com just turns them into a cross-origin
-        // redirect with no CORS headers, which the browser blocks outright.
-        || path.starts_with("/livekit/")
-        || path == "/ws"
-        || path == "/health"
-        || path == "/healthz";
-    if incoming_host == "mitch.pro"
-        && (method == Method::GET || method == Method::HEAD)
-        && !is_compatibility_endpoint
-    {
-        let query_part = if search.is_empty() {
-            String::new()
-        } else {
-            format!("?{search}")
-        };
-        let canonical_destination = format!("https://mitchdog.com{path}{query_part}");
-        if state.check_password_cookie(headers, None) {
-            let encoded = encode_uri_component(&canonical_destination);
-            return crate::routes::auth::sso_bridge(&state, headers, &format!("back={encoded}"));
-        }
-        return redirect(&canonical_destination, 308);
-    }
-
     if let Some(response) = games_library_redirect(&path, &method, &search) {
         return response;
     }
@@ -2407,5 +2370,107 @@ mod games_library_tests {
         ] {
             assert!(games_library_redirect(path, &Method::GET, "").is_none());
         }
+    }
+}
+
+#[cfg(test)]
+mod host_tests {
+    use super::*;
+    use axum::http::{header, HeaderValue, Uri};
+
+    fn state() -> (Arc<AppState>, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!(
+            "mitch-host-test-{}",
+            mitch_lib::crypto::random_bytes_hex(12)
+        ));
+        std::fs::create_dir_all(dir.join("data")).unwrap();
+        let cfg = SiteConfig {
+            data_dir: dir.join("data"),
+            // The repo's real pages, wherever the tests are run from.
+            webroot: std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../../webserver")
+                .canonicalize()
+                .unwrap(),
+            ..SiteConfig::load()
+        };
+        let store = Arc::new(mitch_lib::data::DataStore::open(&dir, &dir.join("data")).unwrap());
+        (Arc::new(AppState::new(cfg, store)), dir)
+    }
+
+    async fn get(state: &Arc<AppState>, host: &str, path: &str) -> Response {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::HOST, HeaderValue::from_str(host).unwrap());
+        headers.insert(
+            header::USER_AGENT,
+            HeaderValue::from_static("Mozilla/5.0 (X11; Linux x86_64) Chrome/130.0 Safari/537.36"),
+        );
+        handle(
+            state.clone(),
+            Method::GET,
+            &path.parse::<Uri>().unwrap(),
+            &headers,
+            b"",
+            None,
+        )
+        .await
+    }
+
+    fn location(resp: &Response) -> String {
+        resp.headers()
+            .get(header::LOCATION)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_string()
+    }
+
+    /// mitch.pro is a real host: it serves its own pages (or sends the visitor
+    /// to its own sign-in page) instead of redirecting to mitchdog.com.
+    #[tokio::test]
+    async fn mitch_pro_does_not_redirect_to_mitchdog_com() {
+        let (state, dir) = state();
+        for path in [
+            "/",
+            "/enroll/",
+            "/support/",
+            "/appeal/",
+            "/friends/",
+            "/games/",
+        ] {
+            let resp = get(&state, "mitch.pro", path).await;
+            let to = location(&resp);
+            assert!(!to.contains("mitchdog.com"), "{path} redirected to {to}");
+            assert!(
+                to.is_empty() || to.starts_with('/') || to.starts_with("https://mitch.pro/"),
+                "{path} redirected off-site to {to}"
+            );
+        }
+        for path in ["/enroll/", "/support/", "/appeal/"] {
+            assert_eq!(get(&state, "mitch.pro", path).await.status(), 200, "{path}");
+        }
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    /// The sign-in bridge sends a signed-out visitor to sign in on the host they
+    /// are on, not always on mitchdog.com.
+    #[tokio::test]
+    async fn signing_in_from_mitch_pro_stays_on_mitch_pro() {
+        let (state, dir) = state();
+        let resp = get(
+            &state,
+            "mitch.pro",
+            "/api/sso/bridge?back=https%3A%2F%2Fmitch.pro%2Ffriends%2F",
+        )
+        .await;
+        let to = location(&resp);
+        assert!(to.starts_with("https://mitch.pro/enroll/?next="), "{to}");
+        assert!(!to.contains("mitchdog.com/enroll"), "{to}");
+        let resp = get(
+            &state,
+            "mitchdog.com",
+            "/api/sso/bridge?back=https%3A%2F%2Fmitchdog.com%2Ffriends%2F",
+        )
+        .await;
+        assert!(location(&resp).starts_with("https://mitchdog.com/enroll/?next="));
+        std::fs::remove_dir_all(dir).ok();
     }
 }

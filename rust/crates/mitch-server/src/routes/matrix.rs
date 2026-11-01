@@ -3059,20 +3059,6 @@ pub async fn resolve_matrix_account(
     None
 }
 
-/// Origin (scheme + host) the requesting browser reached us on. The chat
-/// client talks to the homeserver through this same origin (`/_matrix/...` is
-/// proxied), so every host the site is served from, including dev and
-/// alternate domains, must hand the client its own origin, not a fixed one.
-fn request_origin(headers: &HeaderMap) -> String {
-    let host = request_host(headers);
-    let proto = if host.starts_with("localhost") || host.starts_with("127.0.0.1") {
-        "http://"
-    } else {
-        "https://"
-    };
-    format!("{proto}{host}")
-}
-
 /// Dynamic Cinny configuration for Mitch.pro.
 pub fn handle_cinny_config(state: &AppState, headers: &HeaderMap) -> Response {
     let host = request_host(headers);
@@ -3627,7 +3613,7 @@ async fn api_sso_login(state: &AppState, headers: &HeaderMap, body_bytes: &[u8])
             "access_token": access_token,
             "device_id": device_id,
             "home_server": "mitch.pro",
-            "base_url": request_origin(headers),
+            "base_url": crate::hosts::request_origin(headers),
             "username": final_user,
             "displayName": display_name,
             "pfp": pfp_val,
@@ -8626,7 +8612,7 @@ mod tests {
         let with_host = |host: &str| {
             let mut h = HeaderMap::new();
             h.insert("host", HeaderValue::from_str(host).unwrap());
-            request_origin(&h)
+            crate::hosts::request_origin(&h)
         };
         assert_eq!(with_host("dev.example.org"), "https://dev.example.org");
         assert_eq!(with_host("mitch.pro"), "https://mitch.pro");

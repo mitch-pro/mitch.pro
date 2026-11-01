@@ -397,7 +397,7 @@ Record one row per plan step; report honestly — partial passes are data.
 - Scope: **Parity Harness & Static Body Parity Sweep (Step 14 / 14b)**.
 - **Components & Fixes**:
   - `handler.rs`:
-    - Ported `incomingHost === 'mitch.pro'` canonical redirection at the very top of `handle()` (`mitch.pro` non-compatibility GET/HEAD requests redirect to `https://mitchdog.com` via 308 for anonymous or 302 to SSO bridge if logged in with password cookie, matching `server.js:9285-9295`).
+    - Ported `incomingHost === 'mitch.pro'` canonical redirection at the very top of `handle()` (`mitch.pro` non-compatibility GET/HEAD requests redirect to `https://mitchdog.com` via 308 for anonymous or 302 to SSO bridge if logged in with password cookie, matching `server.js:9285-9295`). **Removed later:** mitch.pro is a first-class host (it is the primary domain in `data/site.json`), so it now serves its own pages, and `/api/sso/bridge` sends signed-out visitors to sign in on the host they are on instead of always on mitchdog.com.
     - Ported `prepare_rjuhsd_html` matching `server.js:25812-25940` (substituting `primaryHost` with `altHost` in sign-in buttons, updating SSO bridge `href`, handling RJUHSD hub school SEO / meta tag replacements, `\n</body>` replacement).
     - Fixed search query string formatting in `bell_schedule_redirect`, `blooket_bot_redirect`, directory trailing-slash 302 redirects, and `site_page_block`.
     - Fixed `site_page_block` gating and redirects (`domain == "rjuhsd.school"` redirects unauthenticated users to `/enroll/?next=...`, while other domains redirect to `/api/sso/bridge?back=...`; `open = page_base == "/" || (members_open && page_base == "/members")`).

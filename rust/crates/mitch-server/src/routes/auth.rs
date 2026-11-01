@@ -1717,7 +1717,9 @@ pub(crate) fn sso_bridge(state: &Arc<AppState>, headers: &HeaderMap, search: &st
         );
     }
 
-    let login_origin = "https://mitchdog.com";
+    // Sign in on the host the visitor is on (mitch.pro, mitchdog.com, ...), not
+    // a fixed one, so no domain bounces people to another just to log in.
+    let login_origin = crate::hosts::request_origin(headers);
     crate::static_files::redirect(
         &format!(
             "{login_origin}/enroll/?next={}",

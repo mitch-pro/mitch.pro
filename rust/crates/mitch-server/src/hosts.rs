@@ -51,6 +51,20 @@ impl SiteConfig {
 
 /// `requestHost()`: X-Forwarded-Host (first comma value, trimmed) else Host
 /// else the URL host. No port stripping, no lowercasing — parity with the JS.
+/// Origin (scheme + host) the requesting browser reached us on: `https`
+/// everywhere except local development. Anything that hands the browser a URL
+/// back to this site (chat server address, sign-in return) should use this
+/// rather than a fixed domain, so every host the site is served from works.
+pub fn request_origin(headers: &axum::http::HeaderMap) -> String {
+    let host = request_host(headers);
+    let proto = if host.starts_with("localhost") || host.starts_with("127.0.0.1") {
+        "http://"
+    } else {
+        "https://"
+    };
+    format!("{proto}{host}")
+}
+
 pub fn request_host(headers: &axum::http::HeaderMap) -> String {
     if let Some(fwd) = headers
         .get("x-forwarded-host")
