@@ -95,7 +95,7 @@ jobs:
       && github.event.workflow_run.conclusion == 'success'
       && github.event.workflow_run.event == 'push'
       && github.event.workflow_run.head_branch == 'master'
-      && (github.event.workflow_run.actor.login == 'urashil' || github.event.workflow_run.actor.login == 'tylerthompson3725')
+      && github.event.workflow_run.actor.login == 'urashil'
 
     steps:
       - name: Trigger Remote Deployment
