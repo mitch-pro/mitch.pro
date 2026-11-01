@@ -333,6 +333,7 @@
     background: color-mix(in srgb, var(--t-ac) 10%, transparent);
   }
 
+  .subhead { margin: 1.6rem 0 .25rem; font-size: 1rem; font-weight: 700; }
   .field-sub {
     font-size: 0.76rem;
     color: var(--t-fg2);
@@ -925,6 +926,28 @@
       <a class="soft-btn" href="/profile/">View public profile</a>
     </div>
     <div class="status-line" id="profileStatus">Loading profile...</div>
+
+    <h3 class="subhead">Email address</h3>
+    <p class="section-sub">Your account, computers, coins and chat history move with you. We email a code to the new address to confirm it, then sign you out everywhere. Moderators, admins and the owner can't change email here.</p>
+    <div class="control-grid">
+      <div class="field">
+        <label>Current email</label>
+        <input id="currentEmail" type="text" readonly>
+      </div>
+      <div class="field">
+        <label>New email</label>
+        <input id="newEmail" type="email" maxlength="254" placeholder="new@example.com" autocomplete="email">
+      </div>
+    </div>
+    <div class="field" id="emailCodeField" hidden>
+      <label>Confirmation code</label>
+      <input id="emailChangeCode" type="text" inputmode="numeric" maxlength="6" placeholder="6-digit code" autocomplete="one-time-code">
+    </div>
+    <div class="mini-actions">
+      <button class="soft-btn primary" type="button" id="sendEmailCodeBtn">Send code</button>
+      <button class="soft-btn primary" type="button" id="confirmEmailBtn" hidden>Confirm new email</button>
+    </div>
+    <div class="status-line" id="emailChangeStatus"></div>
   </section>
 
   <section class="pref-section" id="privacy">
@@ -2456,6 +2479,53 @@ async function deleteAccount() {
   }
 
   document.getElementById('changePassBtn').onclick = changePassword;
+
+  // --- Change email: send a code to the new address, then confirm it. ---
+  (function () {
+    var changeToken = '';
+    var status = document.getElementById('emailChangeStatus');
+    function say(text, bad) { status.style.color = bad ? 'var(--rose)' : ''; status.textContent = text; }
+    fetch('/api/me', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : {}; })
+      .then(function (me) { if (me && me.email) document.getElementById('currentEmail').value = me.email; })
+      .catch(function () {});
+    document.getElementById('sendEmailCodeBtn').onclick = async function () {
+      var newEmail = document.getElementById('newEmail').value.trim();
+      if (!newEmail) { say('Enter the new email address.', true); return; }
+      this.disabled = true;
+      say('Sending code...');
+      try {
+        var res = await fetch('/api/me/change-email', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
+          body: JSON.stringify({ newEmail: newEmail })
+        });
+        var data = await res.json().catch(function () { return {}; });
+        if (!res.ok) throw new Error(data.error || 'Could not send the code.');
+        changeToken = data.change_token;
+        document.getElementById('emailCodeField').hidden = false;
+        document.getElementById('confirmEmailBtn').hidden = false;
+        say('Code sent to ' + newEmail + '. It expires in 30 minutes.');
+      } catch (err) { say(err.message, true); }
+      this.disabled = false;
+    };
+    document.getElementById('confirmEmailBtn').onclick = async function () {
+      var code = document.getElementById('emailChangeCode').value.trim();
+      if (!code) { say('Enter the code from the email.', true); return; }
+      this.disabled = true;
+      say('Confirming...');
+      try {
+        var res = await fetch('/api/me/change-email/confirm', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
+          body: JSON.stringify({ change_token: changeToken, code: code })
+        });
+        var data = await res.json().catch(function () { return {}; });
+        if (!res.ok) throw new Error(data.error || 'Could not change the email.');
+        say('Email changed. Reloading...');
+        setTimeout(function () { location.reload(); }, 800);
+      } catch (err) { say(err.message, true); this.disabled = false; }
+    };
+  })();
 
   let badPasswords = [];
   try {
