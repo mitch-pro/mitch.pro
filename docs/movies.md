@@ -27,7 +27,7 @@ The sidecar listens on the host, so it is locked down: only private/loopback cli
 
 Triage: webserver log `[movies] request to cno.to failed: ...` means it couldn't reach the sidecar; sidecar log (`docker logs mitch-movies-egress`) shows refusals and `connect to ... via eth1 failed`. Quick check from the host: `curl --proxy http://127.0.0.1:3128 -I https://cno.to/`.
 
-Without `MOVIES_EGRESS_PROXY` (e.g. local development) the webserver falls back to binding curl to a local interface named by `MOVIES_EGRESS_INTERFACE` (default `eth1`) and returns 503 if there isn't one. A malformed `MOVIES_EGRESS_PROXY` also returns 503.
+Without `MOVIES_EGRESS_PROXY` (e.g. local development) the webserver falls back to binding curl to a local interface named by `MOVIES_EGRESS_INTERFACE` (default `eth1`) and returns 503 if there isn't one. Setting `MOVIES_EGRESS_INTERFACE=direct` turns pinning off, for a machine that is already on a VPN (local testing); it is never the default, so production still fails closed. A malformed `MOVIES_EGRESS_PROXY` also returns 503.
 
 - DNS lookups use the normal resolver; only the connections are bound to the VPN.
 

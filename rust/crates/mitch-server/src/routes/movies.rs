@@ -63,7 +63,8 @@ pub fn is_path(path: &str) -> bool {
 // ── egress ──────────────────────────────────────────────────────────────────
 
 /// The interface Movies traffic must leave through: `MOVIES_EGRESS_INTERFACE`,
-/// default `eth1` (the container's VPN-routed interface).
+/// default `eth1` (the container's VPN-routed interface). The value `direct`
+/// turns pinning off, for a machine that is already on the VPN.
 fn egress_interface() -> String {
     std::env::var("MOVIES_EGRESS_INTERFACE")
         .ok()
@@ -105,6 +106,9 @@ fn available_interfaces() -> Vec<String> {
 enum Egress {
     Proxy(String),
     Interface(String),
+    /// `MOVIES_EGRESS_INTERFACE=direct`: no pinning. For a machine that is
+    /// itself already on the VPN (local testing); never the default.
+    Direct,
 }
 
 /// `MOVIES_EGRESS_PROXY` (e.g. `http://host.docker.internal:3128`): an HTTP
@@ -136,6 +140,9 @@ fn egress_ready() -> Result<Egress, EgressError> {
         return Err(EgressError::Unavailable);
     }
     let interface = egress_interface();
+    if interface.eq_ignore_ascii_case("direct") {
+        return Ok(Egress::Direct);
+    }
     if interface_exists(&interface) {
         return Ok(Egress::Interface(interface));
     }
@@ -189,6 +196,7 @@ fn curl_args(
             args.push("--interface".into());
             args.push(interface.clone());
         }
+        Egress::Direct => {}
         Egress::Proxy(proxy) => {
             args.push("--proxy".into());
             args.push(proxy.clone());
@@ -912,6 +920,13 @@ mod tests {
         let joined = args.join(" ");
         assert!(joined.contains("--proxy http://h:3128") && !joined.contains("--interface"));
         assert!(joined.contains("--suppress-connect-headers"));
+        // `direct` is opt-in only; an unset interface still fails closed.
+        std::env::set_var("MOVIES_EGRESS_INTERFACE", "direct");
+        let direct = egress_ready();
+        std::env::remove_var("MOVIES_EGRESS_INTERFACE");
+        assert!(matches!(direct, Ok(Egress::Direct)));
+        let args = curl_args(&Egress::Direct, &Method::GET, "https://cno.to/", &[], false);
+        assert!(!args.join(" ").contains("--interface") && !args.join(" ").contains("--proxy"));
     }
 
     #[test]
