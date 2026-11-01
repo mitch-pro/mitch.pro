@@ -255,6 +255,13 @@ impl DataStore {
                         applied_at INTEGER
                     );
                     CREATE INDEX IF NOT EXISTS idx_support_email_requests_ticket ON support_email_requests (ticket_id, status);
+                    CREATE TABLE IF NOT EXISTS admin_passphrase_resets (
+                        email TEXT PRIMARY KEY,
+                        code_hash TEXT NOT NULL,
+                        requested_at INTEGER NOT NULL,
+                        expires_at INTEGER NOT NULL,
+                        attempts INTEGER NOT NULL DEFAULT 0
+                    );
                     CREATE TABLE IF NOT EXISTS reserved_usernames (
                         username TEXT PRIMARY KEY,
                         holder_email TEXT NOT NULL DEFAULT '',

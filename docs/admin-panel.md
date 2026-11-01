@@ -33,6 +33,27 @@ re-show the lock screen on any `invalid_passphrase`/
 `passphrase_not_configured` response. `/admin/companion/` (see
 `docs/companion.md`) follows the same pattern.
 
+## Forgotten passphrase
+
+An admin who is signed in but has forgotten their passphrase uses
+`/admin/passphrase-reset/` (every passphrase prompt links there; the link comes
+from `/admin/passphrase-help.js`). It emails a one-time code to the account's own
+address, then sets a new passphrase when the code is entered.
+
+- `POST /api/admin/passphrase-reset/request` sends the code. `POST
+  /api/admin/passphrase-reset/confirm` takes `{code, passphrase}` (8+ characters).
+  Both need an admin session and the usual CSRF header, but not the passphrase
+  header, so `handler.rs` exempts them from the passphrase gate.
+- Codes are 8 characters (about 40 bits), valid for 15 minutes, single use, locked
+  after 5 wrong tries, and a new one can be requested once a minute. Only a keyed
+  hash is stored, in the SQL table `admin_passphrase_resets` (one row per admin).
+  The rules live in `mitch_lib::passphrase_reset`.
+- Requests and resets are recorded in the admin log, and the admin gets an email
+  after a reset. The code goes to the address on the account, never one supplied
+  in the request.
+- The passphrase itself is still stored in `admin_passphrase.json` (see
+  `json-blobs-remaining.md`).
+
 Account bans use `/admin/bans/`: searchable records, a visible reason, explicit
 duration, confirmation, expiry, restoration, and chat-cleanup status. Usernames
 and registered addresses resolve through the existing account directory. VM and

@@ -43,6 +43,7 @@ pub mod log;
 pub mod matrix;
 pub mod minigames;
 pub mod newsletter_unsub;
+pub mod passphrase_reset;
 pub mod passwords;
 pub mod profile;
 pub mod profiles;

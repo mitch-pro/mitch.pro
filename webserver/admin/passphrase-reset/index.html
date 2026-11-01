@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Reset admin passphrase — mitch.pro</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/admin/passphrase-reset/reset.css">
+  <script src="/app-shell.js" defer></script>
+  <script src="/admin/passphrase-reset/reset.js" defer></script>
+</head>
+<body class="reset-page">
+  <main class="reset-main">
+    <header class="reset-heading">
+      <a href="/admin/">Administration</a>
+      <h1>Reset admin passphrase</h1>
+      <p id="reset-intro">We'll email a code to your account address.</p>
+    </header>
+
+    <section class="reset-panel" id="step-request">
+      <button type="button" id="send-code">Email me a code</button>
+      <p id="request-status" class="reset-status" role="status"></p>
+    </section>
+
+    <section class="reset-panel" id="step-confirm" hidden>
+      <form id="confirm-form">
+        <label for="reset-code">Code</label>
+        <input id="reset-code" type="text" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="12" required>
+        <label for="reset-passphrase">New passphrase</label>
+        <input id="reset-passphrase" type="password" autocomplete="new-password" minlength="8" required>
+        <label for="reset-passphrase-again">New passphrase again</label>
+        <input id="reset-passphrase-again" type="password" autocomplete="new-password" minlength="8" required>
+        <button type="submit" id="confirm-button">Set passphrase</button>
+        <p id="confirm-status" class="reset-status" role="status"></p>
+      </form>
+      <button type="button" id="resend" class="reset-link">Send a new code</button>
+    </section>
+  </main>
+</body>
+</html>

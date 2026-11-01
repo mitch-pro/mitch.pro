@@ -197,6 +197,29 @@ pub async fn handle(
         return Some(json_response(200, json!({ "ok": true, "set": true })));
     }
 
+    // Forgotten passphrase: email a one-time code to the signed-in admin's own
+    // address, then set a new passphrase with it. These two paths are exempt
+    // from the passphrase gate in handler.rs (the admin can't pass it), so they
+    // check the session and admin role here instead.
+    if path == "/api/admin/passphrase-reset/request" && *method == Method::POST {
+        if !valid_id(&ctx.sid, state) {
+            return Some(unauthorized());
+        }
+        if !ctx.is_admin(state) {
+            return Some(forbidden());
+        }
+        return Some(passphrase_reset_request(state, &ctx.email(state)));
+    }
+    if path == "/api/admin/passphrase-reset/confirm" && *method == Method::POST {
+        if !valid_id(&ctx.sid, state) {
+            return Some(unauthorized());
+        }
+        if !ctx.is_admin(state) {
+            return Some(forbidden());
+        }
+        return Some(passphrase_reset_confirm(state, &ctx.email(state), body));
+    }
+
     // POST /api/admin/reset-other-passphrase.
     if path == "/api/admin/reset-other-passphrase" && *method == Method::POST {
         if !valid_id(&ctx.sid, state) {
@@ -775,4 +798,198 @@ pub fn send_premium_email_offer(
     // ride the Gmail script (sendEmailBg), not support@mitch.pro SMTP.
     crate::routes::push::send_email_bg(state, &to_email, subject, &html);
     tracing::info!("[premium] Sent premium email offer to {to_email}");
+}
+
+/// `a***@example.com`: enough for the admin to recognise the address.
+fn mask_address(email: &str) -> String {
+    match email.split_once('@') {
+        Some((local, domain)) => {
+            let first: String = local.chars().take(1).collect();
+            format!("{first}***@{domain}")
+        }
+        None => "***".to_string(),
+    }
+}
+
+/// Emails a one-time code to the admin's own address (see
+/// `mitch_lib::passphrase_reset` for the rules).
+fn passphrase_reset_request(state: &Arc<AppState>, email: &str) -> Response {
+    let norm = mitch_lib::auth::normalize_email(email);
+    if !norm.contains('@') {
+        return json_response(400, json!({ "error": "no_email" }));
+    }
+    mitch_lib::passphrase_reset::prune(&state.store, now_millis());
+    let code = mitch_lib::passphrase_reset::new_code();
+    let hash = mitch_lib::passphrase_reset::code_hash(&state.id_secret, &norm, &code);
+    match mitch_lib::passphrase_reset::start(&state.store, &norm, &hash, now_millis()) {
+        mitch_lib::passphrase_reset::Start::Started => {}
+        mitch_lib::passphrase_reset::Start::TooSoon => {
+            return json_response(429, json!({ "error": "too_soon" }));
+        }
+        mitch_lib::passphrase_reset::Start::Database => {
+            return json_response(500, json!({ "error": "database" }));
+        }
+    }
+    crate::routes::push::send_email_bg(
+        state,
+        &norm,
+        "Reset your mitch.pro admin passphrase",
+        &format!(
+            "Your admin passphrase reset code is {code}. It works once and expires in 15 minutes. If you didn't ask for this, ignore this email; your passphrase hasn't changed."
+        ),
+    );
+    mitch_lib::admin::log_admin_action(
+        &state.store,
+        &state.cfg.data_dir,
+        email,
+        "request_admin_passphrase_reset",
+        json!({}),
+    );
+    json_response(200, json!({ "ok": true, "sentTo": mask_address(&norm) }))
+}
+
+/// Sets a new passphrase when `body.code` is the emailed code.
+fn passphrase_reset_confirm(state: &Arc<AppState>, email: &str, body: &Value) -> Response {
+    let norm = mitch_lib::auth::normalize_email(email);
+    let code = body.get("code").and_then(|v| v.as_str()).unwrap_or("");
+    let new_passphrase = body
+        .get("passphrase")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+    if new_passphrase.chars().count() < 8 {
+        return json_response(400, json!({ "error": "passphrase_too_short" }));
+    }
+    let hash = mitch_lib::passphrase_reset::code_hash(&state.id_secret, &norm, code);
+    let error = match mitch_lib::passphrase_reset::check(&state.store, &norm, &hash, now_millis()) {
+        mitch_lib::passphrase_reset::Check::Ok => None,
+        mitch_lib::passphrase_reset::Check::Wrong => Some("wrong_code"),
+        mitch_lib::passphrase_reset::Check::TooManyAttempts => Some("too_many_attempts"),
+        mitch_lib::passphrase_reset::Check::Expired => Some("expired"),
+        mitch_lib::passphrase_reset::Check::Nothing => Some("no_request"),
+    };
+    if let Some(error) = error {
+        return json_response(400, json!({ "error": error }));
+    }
+    mitch_lib::admin::save_admin_passphrase_for_user(
+        &state.store,
+        &state.cfg.data_dir,
+        &norm,
+        json!({
+            "hash": mitch_lib::crypto::argon2_hash(new_passphrase),
+            "updatedAt": now_millis(),
+            "setBy": email,
+            "resetByEmail": true,
+        }),
+    );
+    mitch_lib::admin::log_admin_action(
+        &state.store,
+        &state.cfg.data_dir,
+        email,
+        "reset_admin_passphrase_by_email",
+        json!({}),
+    );
+    crate::routes::push::send_email_bg(
+        state,
+        &norm,
+        "Your mitch.pro admin passphrase was reset",
+        "Your admin passphrase was just changed using an emailed code. If this wasn't you, contact the owner right away.",
+    );
+    json_response(200, json!({ "ok": true }))
+}
+
+#[cfg(test)]
+mod passphrase_reset_tests {
+    use super::*;
+    use axum::body::to_bytes;
+
+    async fn read(resp: Response) -> (u16, Value) {
+        let status = resp.status().as_u16();
+        let bytes = to_bytes(resp.into_body(), 1 << 20).await.unwrap();
+        (status, serde_json::from_slice(&bytes).unwrap_or(json!({})))
+    }
+
+    fn state() -> Arc<AppState> {
+        let dir = std::env::temp_dir().join(format!(
+            "mitch-server-passphrase-reset-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("data")).unwrap();
+        let cfg = crate::hosts::SiteConfig {
+            data_dir: dir.join("data"),
+            ..crate::hosts::SiteConfig::load()
+        };
+        let store = Arc::new(mitch_lib::data::DataStore::open(&dir, &dir.join("data")).unwrap());
+        Arc::new(AppState::new(cfg, store))
+    }
+
+    #[tokio::test]
+    async fn the_emailed_code_sets_a_new_passphrase_once() {
+        let state = state();
+        let email = "Admin@X.test";
+        let norm = mitch_lib::auth::normalize_email(email);
+        let old = json!({ "hash": mitch_lib::crypto::argon2_hash("old passphrase") });
+        mitch_lib::admin::save_admin_passphrase_for_user(
+            &state.store,
+            &state.cfg.data_dir,
+            &norm,
+            old,
+        );
+
+        // Requesting emails a code; a second request right away is refused.
+        let (status, body) = read(passphrase_reset_request(&state, "other@x.test")).await;
+        assert_eq!(status, 200);
+        assert_eq!(body["sentTo"], "o***@x.test");
+        assert_eq!(
+            read(passphrase_reset_request(&state, "other@x.test"))
+                .await
+                .0,
+            429
+        );
+
+        // The emailed code isn't visible here, so store a known one for this admin.
+        let code = "ABCD-EFGH";
+        let hash = mitch_lib::passphrase_reset::code_hash(&state.id_secret, &norm, code);
+        assert_eq!(
+            mitch_lib::passphrase_reset::start(&state.store, &norm, &hash, now_millis()),
+            mitch_lib::passphrase_reset::Start::Started
+        );
+
+        let bad = json!({ "code": "WRONG-CODE", "passphrase": "a new passphrase" });
+        assert_eq!(
+            read(passphrase_reset_confirm(&state, email, &bad)).await.1["error"],
+            "wrong_code"
+        );
+        let short = json!({ "code": code, "passphrase": "short" });
+        assert_eq!(
+            read(passphrase_reset_confirm(&state, email, &short))
+                .await
+                .1["error"],
+            "passphrase_too_short"
+        );
+        // Someone else's code doesn't work for this admin.
+        let other = mitch_lib::passphrase_reset::code_hash(&state.id_secret, "other@x.test", code);
+        assert_ne!(
+            other,
+            mitch_lib::passphrase_reset::code_hash(&state.id_secret, &norm, code)
+        );
+
+        let good = json!({ "code": "abcd efgh", "passphrase": "a new passphrase" });
+        assert_eq!(
+            read(passphrase_reset_confirm(&state, email, &good)).await.0,
+            200
+        );
+        let saved = mitch_lib::admin::load_admin_passphrase(&state.store, &state.cfg.data_dir);
+        let hash = saved[norm.as_str()]["hash"].as_str().unwrap();
+        assert!(mitch_lib::crypto::argon2_verify(hash, "a new passphrase"));
+        assert!(!mitch_lib::crypto::argon2_verify(hash, "old passphrase"));
+        // The code can't be reused.
+        assert_eq!(
+            read(passphrase_reset_confirm(&state, email, &good)).await.1["error"],
+            "no_request"
+        );
+    }
 }

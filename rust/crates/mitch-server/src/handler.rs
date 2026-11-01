@@ -810,6 +810,7 @@ async fn handle_resolved(
     // isAnyAdminId, and (for full admins) the X-Admin-Passphrase header.
     if path.starts_with("/api/admin/")
         && path != "/api/admin/passphrase-status"
+        && !path.starts_with("/api/admin/passphrase-reset/")
         && path != "/api/admin/cache/refresh"
     {
         if let Some(resp) = crate::routes::admin::admin_gate(&state, headers) {
@@ -1542,9 +1543,14 @@ async fn handle_resolved(
         }
     }
     if is_html_request
-        && ["/admin/vms", "/admin/email", "/admin/bans"]
-            .iter()
-            .any(|base| html_base == *base || html_base.starts_with(&format!("{base}/")))
+        && [
+            "/admin/vms",
+            "/admin/email",
+            "/admin/bans",
+            "/admin/passphrase-reset",
+        ]
+        .iter()
+        .any(|base| html_base == *base || html_base.starts_with(&format!("{base}/")))
     {
         match authenticated_vm_actor(&state, headers, node_env_test) {
             None => return redirect("/enroll/", 302),
