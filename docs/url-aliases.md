@@ -42,7 +42,8 @@ them means changing `id_secret`, which also signs sessions. Tails such as a
 game name or asset file are still visible to a filter, and absolute links
 inside other pages go to the real path.
 
-The Movies page is a proxied single-page app whose router expects
-`/proxy/movies`, so its HTML carries a small script that puts the real path
-back in the address bar before the app starts (`ALIAS_RESTORE` in
-`routes/movies.rs`).
+The Movies page is a proxied single-page app. `movies.js` notices when the
+page was opened through an alias and sets `window.__mitchMoviesBase`; the
+router's default basename is that prefix instead of `/proxy/movies`, so the
+address bar keeps the alias. Matrix chat is never aliased: it needs
+`/matrix/`, so aliased Matrix URLs redirect there.

@@ -42,10 +42,6 @@ use axum::response::Response;
 use std::sync::Arc;
 
 const MOUNT: &str = "/proxy/movies";
-/// The page may be opened through a rotating URL alias (`/<uuid>/<uuid>/`, see
-/// `alias.rs`). The router's basename is the real mount, so put the real path
-/// back in the address bar before the app starts.
-const ALIAS_RESTORE: &str = r#"(function(){var u='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';var m=location.pathname.match(new RegExp('^/'+u+'(?:/'+u+')?(/.*)?$','i'));if(m)history.replaceState(null,'','/proxy/movies'+(m[1]||'/')+location.search+location.hash)})();"#;
 const LEGACY_MOUNT: &str = "/proxy/rivestream";
 const API_MOUNT: &str = "/proxy/movies/__api/";
 const SITE_HOST: &str = "cno.to";
@@ -773,9 +769,7 @@ fn rewrite_html(html: &str) -> String {
     let runtime = include_str!("movies.js");
     html.replacen(
         "<head>",
-        &format!(
-            r#"<head><base href="{MOUNT}/"><script>{ALIAS_RESTORE}</script><script>{runtime}</script>"#
-        ),
+        &format!(r#"<head><base href="{MOUNT}/"><script>{runtime}</script>"#),
         1,
     )
 }
@@ -783,7 +777,8 @@ fn rewrite_html(html: &str) -> String {
 /// cno.to's React Router is created without a `basename`, so under the mount it
 /// would see `/proxy/movies/...` as an unknown route. React Router's
 /// `createBrowserRouter(routes, opts)` forwards `opts.basename`; default it to
-/// the mount.
+/// the mount, or to the alias prefix when opened through a rotating URL alias
+/// (`window.__mitchMoviesBase`, set by `movies.js`).
 fn rewrite_js(js: &str) -> String {
     static ROUTER_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     let router_re = ROUTER_RE.get_or_init(|| {
@@ -792,7 +787,7 @@ fn rewrite_js(js: &str) -> String {
     router_re
         .replace_all(js, |caps: &regex::Captures<'_>| {
             format!(
-                r#"{{basename:{}?.basename??"{MOUNT}",getContext:"#,
+                r#"{{basename:{}?.basename??(window.__mitchMoviesBase||"{MOUNT}"),getContext:"#,
                 &caps[1]
             )
         })
@@ -1061,7 +1056,9 @@ mod tests {
     fn react_router_gets_the_mount_as_its_default_basename() {
         let js = r#"function $a(e,t){return Kn({basename:t?.basename,getContext:t?.getContext,future:t?.future,history:at({window:t?.window})}).initialize()}"#;
         let out = rewrite_js(js);
-        assert!(out.contains(r#"{basename:t?.basename??"/proxy/movies",getContext:t?.getContext"#));
+        assert!(out.contains(
+            r#"{basename:t?.basename??(window.__mitchMoviesBase||"/proxy/movies"),getContext:t?.getContext"#
+        ));
         // Unrelated code is untouched.
         assert_eq!(rewrite_js("let a=1;"), "let a=1;");
     }

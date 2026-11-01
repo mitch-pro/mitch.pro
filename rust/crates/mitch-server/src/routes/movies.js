@@ -5,6 +5,12 @@
 // (and out the VPN interface) instead of leaving the visitor's browser directly.
 (() => {
   const prefix = '/proxy/movies';
+  // When opened through a rotating URL alias (/<uuid>/<uuid>/...), the app's
+  // router lives at that prefix instead of /proxy/movies.
+  const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+  const aliasMatch = location.pathname.match(new RegExp('^/' + uuid + '/' + uuid + '(?=/|$)', 'i'));
+  const aliasBase = aliasMatch ? aliasMatch[0] : '';
+  window.__mitchMoviesBase = aliasBase || prefix;
   const siteOrigin = 'https://cno.to';
   // Other hosts the app calls (also on the server-side allowlist in movies.rs).
   const apiHosts = ['v.cno.to', 'api.theintrodb.org'];
@@ -26,6 +32,7 @@
     if (url.origin === location.origin) {
       const path = url.pathname;
       if (path === prefix || path.startsWith(prefix + '/')) return value;
+      if (aliasBase && (path === aliasBase || path.startsWith(aliasBase + '/'))) return value;
       if (mitchOwned.some(re => re.test(path))) return value;
       return prefix + path + url.search + url.hash;
     }

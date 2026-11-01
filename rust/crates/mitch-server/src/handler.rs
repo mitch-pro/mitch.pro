@@ -587,6 +587,18 @@ pub async fn handle(
         mitch_lib::school::now_millis(),
         uri,
     );
+    if let Some(real) = &real {
+        if crate::alias::is_matrix(real.path()) {
+            // Chat is pinned to /matrix/; send aliased visits to the real URL.
+            return crate::static_files::redirect(
+                &real
+                    .path_and_query()
+                    .map(|pq| pq.to_string())
+                    .unwrap_or_else(|| "/matrix/".into()),
+                302,
+            );
+        }
+    }
     handle_resolved(
         state,
         method,

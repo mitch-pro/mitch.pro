@@ -101,8 +101,11 @@ pub fn today(
     now_ms: i64,
 ) -> serde_json::Value {
     let day = day_number(now_ms);
+    // Matrix chat can't run under a prefix (its client and homeserver URLs are
+    // fixed to /matrix/), so it is never handed out; see `is_matrix`.
     let map: BTreeMap<String, String> = sections(webroot, data_dir)
         .into_iter()
+        .filter(|s| s != "matrix")
         .map(|s| {
             let t = section_token(secret, day, &s);
             (s, t)
@@ -148,6 +151,12 @@ pub fn resolve(
     Some(format!("/{tail}"))
 }
 
+/// True for the Matrix chat paths, which are redirected to the real URL
+/// instead of being served under an alias.
+pub fn is_matrix(path: &str) -> bool {
+    path == "/matrix" || path.starts_with("/matrix/")
+}
+
 /// Rewrite `uri` to its real path (query kept) when it is an alias.
 pub fn rewrite(
     secret: &[u8],
@@ -176,6 +185,7 @@ mod tests {
         ));
         std::fs::create_dir_all(dir.join("game-portal")).unwrap();
         std::fs::create_dir_all(dir.join("games")).unwrap();
+        std::fs::create_dir_all(dir.join("matrix")).unwrap();
         dir
     }
 
@@ -199,6 +209,12 @@ mod tests {
         assert_eq!(r(&format!("/{root}")).unwrap(), "/");
         assert_eq!(r(&format!("/{root}/")).unwrap(), "/");
         assert!(r("/games/run-3/").is_none());
+        let mx = section_token(key, day, "matrix");
+        assert_eq!(r(&format!("/{root}/{mx}/")).unwrap(), "/matrix/");
+        assert!(is_matrix("/matrix/") && is_matrix("/matrix") && !is_matrix("/matrixx"));
+        assert!(today(key, &dir, &dir, NOW)["sections"]
+            .get("matrix")
+            .is_none());
         assert!(r(&format!("/{}/{gp}/", root_token(b"other", day))).is_none());
         // A section UUID from another day does not match this root.
         assert!(r(&format!(

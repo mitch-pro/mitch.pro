@@ -79,9 +79,9 @@ function aboutBlankOn() {
 }
 
 function launchSite(type, href) {
-  href = realHref(href || '/');
-  var realPath = href;
-  href = aliasHref(href);
+  href = href || '/';
+  var realPath = realHref(href);
+  if (!isAliasedHref(href)) href = aliasHref(href);
   var abToggle = typeof document !== 'undefined' && document.getElementById('abToggle');
   if (abToggle && abToggle.checked) {
     openAboutBlank(href);
@@ -148,8 +148,22 @@ function labelFromLink(el) {
 // Rotating link aliases: /<daily uuid>/<section uuid>/rest serves /<section>/rest.
 var linkAlias = null;
 var UUID_SEG = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+function isAliasedHref(href) {
+  return new RegExp('^/' + UUID_SEG + '(/|$)', 'i').test(String(href || ''));
+}
+// Inverse of aliasHref: /<root>/<section uuid>/rest -> /<section>/rest.
 function realHref(href) {
-  return String(href || '').replace(new RegExp('^/' + UUID_SEG + '(/' + UUID_SEG + ')?(?=/|$)', 'i'), '').replace(/^$/, '/');
+  href = String(href || '');
+  var m = href.match(new RegExp('^/' + UUID_SEG + '(?:/(' + UUID_SEG + '))?(/[^?#]*|)([?#].*)?$', 'i'));
+  if (!m) return href;
+  var rest = (m[2] || '') + (m[3] || '');
+  if (!m[1]) return rest || '/';
+  if (linkAlias) {
+    for (var key in linkAlias.sections) {
+      if (linkAlias.sections[key] === m[1].toLowerCase()) return '/' + key + (rest || '/');
+    }
+  }
+  return href;
 }
 function aliasHref(href) {
   if (!linkAlias || typeof href !== 'string' || href.charAt(0) !== '/' || href.charAt(1) === '/') return href;

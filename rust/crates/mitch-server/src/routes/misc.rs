@@ -91,13 +91,11 @@ pub async fn handle(
         return Some(crate::routes::bell_sync::published(state, &school_key).await);
     }
     if path == "/api/bell/override" && *method == Method::GET {
-        let override_val = state
+        let doc = state
             .store
             .read_document(&state.data_dir().join("bell_overrides.json"), Value::Null);
-        return Some(json_resp(
-            200,
-            serde_json::json!({ "override": override_val }),
-        ));
+        let school = school_param(_search);
+        return Some(json_resp(200, bell_override_response(&doc, &school)));
     }
     if path == "/api/bad-passwords" && *method == Method::GET {
         return Some(bad_passwords(state));
@@ -167,6 +165,40 @@ fn presence_heartbeat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[
         crate::ws::touch_user_presence(state, &email, playing.trim());
     }
     json_response(200, json!({ "ok": true }))
+}
+
+/// Per-school bell overrides. `bell_overrides.json` is either
+/// `{"overrides":[{"school":"roseville","date":...,"schedule":...}, ...]}` or
+/// the older single object, which belongs to Woodcreek. `override` is the
+/// entry for the requested school (Woodcreek when none is given), so existing
+/// callers keep working; `overrides` lists every school's entry.
+fn bell_override_response(doc: &Value, school: &str) -> Value {
+    let mut entries: Vec<Value> = match doc.get("overrides").and_then(Value::as_array) {
+        Some(list) => list.clone(),
+        None if doc.get("date").is_some() => vec![doc.clone()],
+        None => Vec::new(),
+    };
+    for entry in &mut entries {
+        let name = entry
+            .get("school")
+            .and_then(Value::as_str)
+            .unwrap_or("woodcreek")
+            .to_ascii_lowercase();
+        if let Some(obj) = entry.as_object_mut() {
+            obj.insert("school".into(), Value::String(name));
+        }
+    }
+    let wanted = if school.is_empty() {
+        "woodcreek"
+    } else {
+        school
+    };
+    let chosen = entries
+        .iter()
+        .find(|e| e.get("school").and_then(Value::as_str) == Some(wanted))
+        .cloned()
+        .unwrap_or(Value::Null);
+    serde_json::json!({ "override": chosen, "overrides": entries })
 }
 
 /// The `school` query parameter, or "" when absent.
@@ -1339,7 +1371,28 @@ mod tests {
 
 #[cfg(test)]
 mod school_param_tests {
-    use super::school_param;
+    use super::{bell_override_response, school_param};
+    use serde_json::json;
+
+    #[test]
+    fn bell_overrides_are_per_school_and_accept_the_legacy_shape() {
+        let legacy = json!({"date":"2026-11-02","name":"Rally","schedule":{}});
+        assert_eq!(
+            bell_override_response(&legacy, "")["override"]["school"],
+            "woodcreek"
+        );
+        assert!(bell_override_response(&legacy, "roseville")["override"].is_null());
+        let doc = json!({"overrides":[
+            {"school":"roseville","date":"2026-11-02","name":"A","schedule":{}},
+            {"school":"woodcreek","date":"2026-11-02","name":"B","schedule":{}}
+        ]});
+        assert_eq!(
+            bell_override_response(&doc, "roseville")["override"]["name"],
+            "A"
+        );
+        assert_eq!(bell_override_response(&doc, "")["override"]["name"], "B");
+        assert!(bell_override_response(&json!(null), "")["override"].is_null());
+    }
 
     #[test]
     fn reads_the_school_with_or_without_a_question_mark() {

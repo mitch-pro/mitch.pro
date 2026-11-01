@@ -70,6 +70,29 @@ const dataDir = join(__dirname, '..', 'data');
 const presetsPath = join(dataDir, 'bell_presets.json');
 const overridePath = join(dataDir, 'bell_overrides.json');
 
+const SCHOOLS = {
+  woodcreek: 'Woodcreek',
+  roseville: 'Roseville',
+  granitebay: 'Granite Bay',
+  antelope: 'Antelope',
+  westpark: 'West Park',
+  oakmont: 'Oakmont'
+};
+
+// bell_overrides.json holds {"overrides": [{school, date, ...}]}. The older
+// format was a single object for Woodcreek; it is converted on the next write.
+function loadOverrides() {
+  try {
+    if (!fs.existsSync(overridePath)) return [];
+    const doc = JSON.parse(fs.readFileSync(overridePath, 'utf8'));
+    if (Array.isArray(doc.overrides)) return doc.overrides;
+    if (doc && doc.date) return [{ school: 'woodcreek', ...doc }];
+  } catch (e) {
+    console.error('Error loading overrides:', e);
+  }
+  return [];
+}
+
 function loadPresets() {
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
@@ -98,8 +121,20 @@ function savePreset(name, schedule) {
 
 async function main() {
   console.log("\n=============================================");
-  console.log("   WHS SPECIAL BELL SCHEDULE OVERRIDE WIZARD ");
+  console.log("      SPECIAL BELL SCHEDULE OVERRIDE WIZARD  ");
   console.log("=============================================");
+
+  const schoolKeys = Object.keys(SCHOOLS);
+  console.log("\nWhich school is this for?");
+  schoolKeys.forEach((key, idx) => console.log(`${idx + 1}) ${SCHOOLS[key]}`));
+  const schoolChoice = parseInt(await ask(`Select school [1-${schoolKeys.length}]: `), 10) - 1;
+  if (!(schoolChoice >= 0 && schoolChoice < schoolKeys.length)) {
+    console.log("Invalid school. Nothing was changed.");
+    rl.close();
+    return;
+  }
+  const school = schoolKeys[schoolChoice];
+  console.log(`\nSchool: ${SCHOOLS[school]}`);
 
   const customPresets = loadPresets();
   const allPresets = [...BUILTIN_PRESETS, ...customPresets];
@@ -219,16 +254,20 @@ async function main() {
   const specialEvent = await ask("\nEnter any special event notices (optional, e.g. Assembly in gym): ");
   
   const overrideObj = {
+    school,
     date: targetDateStr,
     name: scheduleName,
     special_event: specialEvent ? specialEvent.trim() : null,
     schedule: chosenSchedule
   };
   
-  fs.writeFileSync(overridePath, JSON.stringify(overrideObj, null, 2));
-  
+  // Keep other schools' overrides that haven't passed; replace this school's.
+  const todayLA = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+  const kept = loadOverrides().filter(o => o.school !== school && o.date >= todayLA);
+  fs.writeFileSync(overridePath, JSON.stringify({ overrides: [...kept, overrideObj] }, null, 2));
+
   console.log(`\n✓ Success! Special schedule successfully loaded into ${overridePath}`);
-  console.log(`Mitch.pro will display the "${scheduleName}" schedule on ${targetDateStr}!`);
+  console.log(`${SCHOOLS[school]} will show the "${scheduleName}" schedule on ${targetDateStr}!`);
   
   rl.close();
 }

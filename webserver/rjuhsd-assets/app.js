@@ -360,9 +360,11 @@ async function load(){
  calendarVerified=false;calendarState="checking";
  data=buildData();render();
  try{
-  const [r, or, pr]=await Promise.all([
-   fetch("/api/school-info?school="+selected,{cache:"no-store",signal:AbortSignal.timeout(20000)}).catch(()=>null),
-   fetch("/api/bell/override",{cache:"no-store",signal:AbortSignal.timeout(10000)}).catch(()=>null),
+  // Overrides and published bells are ours and quick; the school-info fetch
+  // reaches the school's own site and can take seconds. Show the former first.
+  const infoRequest=fetch("/api/school-info?school="+selected,{cache:"no-store",signal:AbortSignal.timeout(20000)}).catch(()=>null);
+  const [or, pr]=await Promise.all([
+   fetch("/api/bell/override?school="+selected,{cache:"no-store",signal:AbortSignal.timeout(10000)}).catch(()=>null),
    fetch("/api/bell/published?school="+selected,{cache:"no-store",signal:AbortSignal.timeout(15000)}).catch(()=>null)
   ]);
   if(version!==requestVersion)return;
@@ -380,6 +382,9 @@ async function load(){
     bellOverride=od?.override||null;
    }catch{}
   }
+  data=buildData();render();
+  const r=await infoRequest;
+  if(version!==requestVersion)return;
   if(r && r.ok){
    const result=await r.json();
    if(version===requestVersion){
