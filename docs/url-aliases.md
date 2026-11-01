@@ -12,9 +12,13 @@ of `/games/run-3/`, so a school URL filter never sees the same path twice.
 | `/<root>` | `/` |
 
 - `root` = UUID for the UTC day: `HMAC-SHA256(id_secret, "alias-root:<day>")`.
-- `section` = UUID for one top-level webroot directory (plus `proxy`) on that
-  day: `HMAC-SHA256(id_secret, "alias-section:<day>:<name>")`. A section UUID
-  only resolves under the root of the same day.
+- `section` = UUID for one section on that day:
+  `HMAC-SHA256(id_secret, "alias-section:<day>:<name>")`. A section UUID only
+  resolves under the root of the same day. A section is a top-level webroot
+  directory, `proxy` / `proxy/movies`, or any local link listed in
+  `data/sites` cut to its directory (`games/adrian-clicker`, up to three
+  segments). The homepage picks the longest matching section, so
+  `/proxy/movies/` becomes `/<root>/<movies uuid>/`.
 - Both are formatted as version-4 UUIDs. Nothing is stored in the database.
 - A day's UUIDs work for 365 days (`alias::VALID_DAYS`), then stop. The real
   paths always keep working.
@@ -37,3 +41,8 @@ Aliases are not access control. Anyone can fetch `/api/alias`, and revoking
 them means changing `id_secret`, which also signs sessions. Tails such as a
 game name or asset file are still visible to a filter, and absolute links
 inside other pages go to the real path.
+
+The Movies page is a proxied single-page app whose router expects
+`/proxy/movies`, so its HTML carries a small script that puts the real path
+back in the address bar before the app starts (`ALIAS_RESTORE` in
+`routes/movies.rs`).

@@ -42,6 +42,10 @@ use axum::response::Response;
 use std::sync::Arc;
 
 const MOUNT: &str = "/proxy/movies";
+/// The page may be opened through a rotating URL alias (`/<uuid>/<uuid>/`, see
+/// `alias.rs`). The router's basename is the real mount, so put the real path
+/// back in the address bar before the app starts.
+const ALIAS_RESTORE: &str = r#"(function(){var u='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';var m=location.pathname.match(new RegExp('^/'+u+'(?:/'+u+')?(/.*)?$','i'));if(m)history.replaceState(null,'','/proxy/movies'+(m[1]||'/')+location.search+location.hash)})();"#;
 const LEGACY_MOUNT: &str = "/proxy/rivestream";
 const API_MOUNT: &str = "/proxy/movies/__api/";
 const SITE_HOST: &str = "cno.to";
@@ -769,7 +773,9 @@ fn rewrite_html(html: &str) -> String {
     let runtime = include_str!("movies.js");
     html.replacen(
         "<head>",
-        &format!(r#"<head><base href="{MOUNT}/"><script>{runtime}</script>"#),
+        &format!(
+            r#"<head><base href="{MOUNT}/"><script>{ALIAS_RESTORE}</script><script>{runtime}</script>"#
+        ),
         1,
     )
 }

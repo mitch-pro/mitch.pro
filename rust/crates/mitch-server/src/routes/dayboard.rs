@@ -4,6 +4,7 @@
 #![allow(clippy::expect_used)]
 
 use axum::response::Response;
+use chrono::Datelike;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -263,7 +264,8 @@ pub async fn school_info(school_key: &str) -> Response {
             );
             json_resp(200, result)
         }
-        Err(_) => {
+        Err(err) => {
+            tracing::warn!("[school-info] {school_key}: {err}");
             let c = cache().lock().unwrap_or_else(|e| e.into_inner());
             if let Some(item) = c.school_info.get(&school_key) {
                 let mut stale = item.payload.clone();
@@ -311,38 +313,66 @@ async fn fetch_school_info_payload(
     let calendar_url = format!("{}/{}", school.url, calendar_subpath);
     let mut calendar_verified = false;
 
-    if let Ok(cal_res) = client
-        .get(&calendar_url)
-        .header(reqwest::header::ACCEPT, "text/html")
-        .send()
-        .await
-    {
-        if cal_res.status().is_success() {
-            if let Ok(cal_html) = cal_res.text().await {
-                let cal_events = parse_school_calendar(&cal_html);
-                calendar_verified = !cal_events.is_empty();
-                let mut seen = std::collections::HashSet::new();
-                let mut merged = Vec::new();
-                for ev in cal_events.into_iter().chain(events) {
-                    let d = ev.get("date").and_then(|v| v.as_str()).unwrap_or("");
-                    let t = ev
-                        .get("title")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_ascii_lowercase();
-                    let key = format!("{d}|{t}");
-                    if seen.insert(key) {
-                        merged.push(ev);
-                    }
-                }
-                merged.sort_by(|a, b| {
-                    let da = a.get("date").and_then(|v| v.as_str()).unwrap_or("");
-                    let db = b.get("date").and_then(|v| v.as_str()).unwrap_or("");
-                    da.cmp(db)
-                });
-                events = merged;
+    // The month view only lists one month; `?cal_date=` picks others, so
+    // fetch this month and the next two to have upcoming events at month end.
+    let mut cal_events: Vec<Value> = Vec::new();
+    let first = chrono::Utc::now().date_naive().with_day0(0);
+    let urls: Vec<String> = (0..3u32)
+        .map(|n| {
+            let month = first
+                .and_then(|d| d.checked_add_months(chrono::Months::new(n)))
+                .map(|d| d.format("%Y-%m-%d").to_string());
+            match (n, month) {
+                (0, _) | (_, None) => calendar_url.clone(),
+                (_, Some(d)) => format!("{calendar_url}?cal_date={d}"),
+            }
+        })
+        .collect();
+    let pages = futures_util::future::join_all(urls.iter().map(|url| {
+        let client = client.clone();
+        async move {
+            let res = client
+                .get(url)
+                .header(reqwest::header::ACCEPT, "text/html")
+                .header(
+                    reqwest::header::USER_AGENT,
+                    "mitch.pro school hub (rjuhsd.school)",
+                )
+                .send()
+                .await
+                .ok()?;
+            if !res.status().is_success() {
+                return None;
+            }
+            res.text().await.ok()
+        }
+    }))
+    .await;
+    for html in pages.into_iter().flatten() {
+        cal_events.extend(parse_school_calendar(&html));
+    }
+    if !cal_events.is_empty() {
+        calendar_verified = true;
+        let mut seen = std::collections::HashSet::new();
+        let mut merged = Vec::new();
+        for ev in cal_events.into_iter().chain(events) {
+            let d = ev.get("date").and_then(|v| v.as_str()).unwrap_or("");
+            let t = ev
+                .get("title")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            let key = format!("{d}|{t}");
+            if seen.insert(key) {
+                merged.push(ev);
             }
         }
+        merged.sort_by(|a, b| {
+            let da = a.get("date").and_then(|v| v.as_str()).unwrap_or("");
+            let db = b.get("date").and_then(|v| v.as_str()).unwrap_or("");
+            da.cmp(db)
+        });
+        events = merged;
     }
 
     static MOTTO_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
@@ -747,7 +777,7 @@ pub fn parse_school_calendar(html: &str) -> Vec<Value> {
 
     static TITLE_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     let title_re = TITLE_RE.get_or_init(|| {
-        regex::Regex::new(r#"class="fsCalendarEventTitle[^"]*"[^>]*title="([^"]+)""#)
+        regex::Regex::new(r#"class="fsCalendar(?:EventTitle|Title)[^"]*"[^>]*title="([^"]+)""#)
             .expect("static regex")
     });
 
@@ -866,5 +896,23 @@ mod tests {
         assert_eq!(events[0]["date"], "2026-09-18");
         assert_eq!(events[0]["title"], "Minimum Day & Staff Meeting");
         assert_eq!(events[0]["all_day"], true);
+    }
+
+    #[test]
+    fn parses_current_finalsite_event_buttons() {
+        let html = r#"
+        <div class="fsCalendarDate"
+             data-day="2"
+             data-year="2026"
+             data-month="10">
+        </div>
+        <button name="button" type="button" class="fsCalendarTitle fsCalendarEventLink fsButtonReset" title="Teacher Work day- No School" data-occur-id="1">
+          Teacher Work day- No School
+        </button>
+        "#;
+        let events = parse_school_calendar(html);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0]["date"], "2026-11-02");
+        assert_eq!(events[0]["title"], "Teacher Work day- No School");
     }
 }

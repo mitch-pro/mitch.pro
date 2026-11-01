@@ -81,26 +81,13 @@ pub async fn handle(
         let date = params.get("date").map(String::as_str).unwrap_or("");
         return Some(crate::routes::school_menu::school_menu(school, date).await);
     }
+    // `_search` arrives without the leading `?`; accept either form.
     if path == "/api/school-info" && *method == Method::GET {
-        let school_key = if let Some(query) = _search.strip_prefix('?') {
-            url::form_urlencoded::parse(query.as_bytes())
-                .find(|(k, _)| k == "school")
-                .map(|(_, v)| v.to_string())
-                .unwrap_or_default()
-        } else {
-            String::new()
-        };
+        let school_key = school_param(_search);
         return Some(crate::routes::dayboard::school_info(&school_key).await);
     }
     if path == "/api/bell/published" && *method == Method::GET {
-        let school_key = _search
-            .strip_prefix('?')
-            .and_then(|query| {
-                url::form_urlencoded::parse(query.as_bytes())
-                    .find(|(k, _)| k == "school")
-                    .map(|(_, v)| v.to_string())
-            })
-            .unwrap_or_default();
+        let school_key = school_param(_search);
         return Some(crate::routes::bell_sync::published(state, &school_key).await);
     }
     if path == "/api/bell/override" && *method == Method::GET {
@@ -139,6 +126,7 @@ pub async fn handle(
             crate::alias::today(
                 &state.id_secret,
                 &state.cfg.webroot,
+                &state.cfg.data_dir,
                 mitch_lib::school::now_millis(),
             ),
         );
@@ -179,6 +167,14 @@ fn presence_heartbeat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[
         crate::ws::touch_user_presence(state, &email, playing.trim());
     }
     json_response(200, json!({ "ok": true }))
+}
+
+/// The `school` query parameter, or "" when absent.
+fn school_param(search: &str) -> String {
+    url::form_urlencoded::parse(search.trim_start_matches('?').as_bytes())
+        .find(|(k, _)| k == "school")
+        .map(|(_, v)| v.to_string())
+        .unwrap_or_default()
 }
 
 fn json_response(code: u16, obj: serde_json::Value) -> Response {
@@ -1338,5 +1334,17 @@ mod tests {
     fn test_health_check() {
         let res = health_check();
         assert_eq!(res.status(), StatusCode::OK);
+    }
+}
+
+#[cfg(test)]
+mod school_param_tests {
+    use super::school_param;
+
+    #[test]
+    fn reads_the_school_with_or_without_a_question_mark() {
+        assert_eq!(school_param("school=roseville"), "roseville");
+        assert_eq!(school_param("?school=roseville&x=1"), "roseville");
+        assert_eq!(school_param(""), "");
     }
 }

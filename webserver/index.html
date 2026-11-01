@@ -79,7 +79,9 @@ function aboutBlankOn() {
 }
 
 function launchSite(type, href) {
-  href = href || '/';
+  href = realHref(href || '/');
+  var realPath = href;
+  href = aliasHref(href);
   var abToggle = typeof document !== 'undefined' && document.getElementById('abToggle');
   if (abToggle && abToggle.checked) {
     openAboutBlank(href);
@@ -87,7 +89,8 @@ function launchSite(type, href) {
   }
   try {
     var siteUrl = new URL(href, location.href);
-    var isGameRuntime = (siteUrl.pathname.startsWith('/games/') && !['/games/', '/games/index.html'].includes(siteUrl.pathname)) || siteUrl.pathname.startsWith('/proxy/');
+    var realUrl = new URL(realPath, location.href);
+    var isGameRuntime = (realUrl.pathname.startsWith('/games/') && !['/games/', '/games/index.html'].includes(realUrl.pathname)) || realUrl.pathname.startsWith('/proxy/');
     if (siteUrl.origin === location.origin && !isGameRuntime) {
       window.location.href = siteUrl.href;
       return;
@@ -150,10 +153,15 @@ function realHref(href) {
 }
 function aliasHref(href) {
   if (!linkAlias || typeof href !== 'string' || href.charAt(0) !== '/' || href.charAt(1) === '/') return href;
-  var m = href.match(/^\/([^\/?#]+)(.*)$/);
+  var m = href.match(/^\/([^?#]*)(.*)$/);
   if (!m) return href;
-  var token = linkAlias.sections[m[1]];
-  return token ? '/' + linkAlias.root + '/' + token + m[2] : href;
+  var segs = m[1].split('/');
+  // The longest section wins, so /proxy/movies/ gets its own UUID, not /proxy's.
+  for (var n = Math.min(segs.length, 3); n >= 1; n--) {
+    var token = linkAlias.sections[segs.slice(0, n).join('/')];
+    if (token) return '/' + linkAlias.root + '/' + token + '/' + segs.slice(n).join('/') + m[2];
+  }
+  return href;
 }
 function applyLinkAliases() {
   if (!linkAlias) return;
