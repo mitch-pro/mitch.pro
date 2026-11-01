@@ -10,7 +10,8 @@
 //! Aliases are not access control: anyone can ask `/api/alias` for today's
 //! values, and the real paths keep working. They only change what a URL
 //! filter sees. Auth and bans run on the resolved path.
-use axum::http::Uri;
+use axum::http::{HeaderValue, Uri};
+use axum::response::Response;
 use std::collections::BTreeMap;
 
 /// How many days (including the issue day) an alias keeps working.
@@ -157,6 +158,29 @@ pub fn is_matrix(path: &str) -> bool {
     path == "/matrix" || path.starts_with("/matrix/")
 }
 
+/// The site CSP Caddy adds to every page outside `/proxy/*` and `/games/*`
+/// (`caddy/Caddyfile`). Caddy can't see the real path of an alias URL, so the
+/// app applies the same headers to those responses. A test checks this matches
+/// the Caddyfile.
+pub const PAGE_CSP: &str = "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data: https://fonts.googleapis.com https://cdnjs.cloudflare.com https://www.google.com https://www.gstatic.com https://www.recaptcha.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' blob: data: https: wss: ws:; worker-src 'self' blob: data:; frame-src 'self' blob: data: https://www.google.com https://www.recaptcha.net https://html5.gamemonetize.co https://html5.gamemonetize.com https://lumassets.pages.dev https://calculated2.github.io https://jellyfin.mitchdog.com https://*.mitchdog.com https://cinesrc.st";
+
+/// Adds the headers Caddy would have added for `real_path`: `/proxy/*` and
+/// `/games/*` get the game-content set, everything else the page security set.
+pub fn add_security_headers(response: &mut Response, real_path: &str) {
+    let headers = response.headers_mut();
+    let mut set = |name: &'static str, value: &'static str| {
+        headers.insert(name, HeaderValue::from_static(value));
+    };
+    set("x-content-type-options", "nosniff");
+    if real_path.starts_with("/proxy/") || real_path.starts_with("/games/") {
+        set("access-control-allow-origin", "*");
+        return;
+    }
+    set("referrer-policy", "strict-origin-when-cross-origin");
+    set("x-frame-options", "SAMEORIGIN");
+    set("content-security-policy", PAGE_CSP);
+}
+
 /// Rewrite `uri` to its real path (query kept) when it is an alias.
 pub fn rewrite(
     secret: &[u8],
@@ -263,6 +287,33 @@ mod tests {
         // Not valid before the day it was issued for.
         assert!(at(-1).is_none());
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn alias_responses_get_the_headers_caddy_gives_the_real_path() {
+        let page = || Response::new(axum::body::Body::empty());
+        let mut r = page();
+        add_security_headers(&mut r, "/shop/");
+        assert_eq!(r.headers()["content-security-policy"], PAGE_CSP);
+        assert_eq!(r.headers()["x-frame-options"], "SAMEORIGIN");
+        for path in ["/proxy/movies/", "/games/run-3/index.html"] {
+            let mut r = page();
+            add_security_headers(&mut r, path);
+            assert!(
+                r.headers().get("content-security-policy").is_none(),
+                "{path}"
+            );
+            assert_eq!(r.headers()["access-control-allow-origin"], "*");
+        }
+    }
+
+    #[test]
+    fn page_csp_matches_the_caddyfile() {
+        let caddyfile = include_str!("../../../../caddy/Caddyfile");
+        assert!(
+            caddyfile.contains(&format!("Content-Security-Policy \"{PAGE_CSP}\"")),
+            "update PAGE_CSP in alias.rs to match caddy/Caddyfile"
+        );
     }
 
     #[test]

@@ -599,7 +599,7 @@ pub async fn handle(
             );
         }
     }
-    handle_resolved(
+    let mut response = handle_resolved(
         state,
         method,
         real.as_ref().unwrap_or(uri),
@@ -607,7 +607,12 @@ pub async fn handle(
         body_bytes,
         ws_upgrade,
     )
-    .await
+    .await;
+    // Caddy can't see the real path behind an alias, so it skips these.
+    if let Some(real) = &real {
+        crate::alias::add_security_headers(&mut response, real.path());
+    }
+    response
 }
 
 async fn handle_resolved(

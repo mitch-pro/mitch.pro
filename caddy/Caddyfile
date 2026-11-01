@@ -20,9 +20,17 @@
         header_up CF-Connecting-IP {mitch_client_ip}
     }
 
+    # Rotating URL aliases (/<uuid>/<uuid>/...) hide the real path from Caddy.
+    # The app sets these headers itself for them (src/alias.rs), based on the
+    # real path, so they are left out here.
     @not_game_content {
         not path /proxy/* /games/*
+        not path_regexp alias_prefix ^/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(/|$)
     }
+    @alias_paths {
+        path_regexp alias_paths ^/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(/|$)
+    }
+    header @alias_paths -Server
     header @not_game_content {
         X-Content-Type-Options nosniff
         Referrer-Policy strict-origin-when-cross-origin
