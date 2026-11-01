@@ -501,6 +501,17 @@ $('mobile-escape').addEventListener('click', () => rfb?.sendKey(0xff1b));
 $('reconnect-button')?.addEventListener('click', () => { reconnectAttempts=0; connect(); });
 $('retry-button').addEventListener('click', () => { reconnectAttempts = 0; connect(); });
 window.addEventListener('pagehide', () => { disposed = true; closeConnection(); });
+// Owner container: report real input so the server can shut it down after ten idle minutes.
+if (ownerMode) {
+  let lastPing = 0;
+  const reportActivity = () => {
+    const now = Date.now();
+    if (!connected || now - lastPing < 30000) return;
+    lastPing = now;
+    fetch(`${OWNER_API}/activity`, { method: 'POST', credentials: 'same-origin', cache: 'no-store', headers: adminHeaders({ 'Content-Type': 'application/json' }), body: '{}' }).catch(() => {});
+  };
+  ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'].forEach(type => document.addEventListener(type, reportActivity, { passive: true, capture: true }));
+}
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && resumeWhenVisible && !disposed && !connected && !connecting) { resumeWhenVisible = false; reconnectAttempts = 0; connect(); }
 });

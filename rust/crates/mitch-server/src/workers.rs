@@ -14,6 +14,7 @@
 /// Starts every live worker task. Call once from `main` after the state build.
 pub fn spawn(state: std::sync::Arc<crate::state::AppState>) {
     crate::chat_cleanup::spawn(state.clone());
+    crate::routes::admin::owner_container::spawn_idle_shutdown();
     // saveCanvasPixels — every 60s, skipped when nothing's dirty.
     {
         let state = state.clone();

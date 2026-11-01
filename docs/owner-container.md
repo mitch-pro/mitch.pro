@@ -61,6 +61,21 @@ Sessions (both modes) carry `ownerContainer: true`, which makes the bridge (and 
 re-authorization in `vm_desktop_socket_authorized`) accept them for an owner
 session only, with no database record.
 
+## Idle shutdown
+
+The container is shut down (a graceful Proxmox `shutdown`) after 10 minutes
+without owner input. The desktop page reports pointer, key, wheel and touch
+input to `POST /api/admin/owner-container/activity` at most every 30 seconds
+while connected; a connected but untouched tab does not count. Starting or
+restarting the container, and opening a console, also reset the clock. A check
+runs every minute (`spawn_idle_shutdown`, started with the other workers): a
+running container idle for 10 minutes is shut down; one that is not running
+clears the clock, so a container started from the Proxmox UI gets a fresh ten
+minutes when first seen running. The timestamp lives in memory only, and
+nothing here is logged, in keeping with the rules above. A server restart also
+starts the clock over. After a shutdown the desktop page's reconnect finds the
+container offline and says so.
+
 ## Untested against real Proxmox
 
 The code compiles and the unit tests pass, but it was written without a Proxmox

@@ -28,6 +28,64 @@ use mitch_lib::vm::OWNER_CONTAINER_VMID;
 
 const BASE: &str = "/api/admin/owner-container";
 
+/// The container is shut down after this long without owner input.
+const IDLE_LIMIT_MS: i64 = 10 * 60 * 1000;
+/// How often the idle check runs.
+const IDLE_CHECK_SECS: u64 = 60;
+
+/// When the owner last did something with the container (millis; 0 = not
+/// known yet). In memory only: nothing about this is written anywhere
+/// admins or developers can read.
+static LAST_ACTIVITY: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+
+fn note_activity() {
+    LAST_ACTIVITY.store(
+        mitch_lib::school::now_millis(),
+        std::sync::atomic::Ordering::Relaxed,
+    );
+}
+
+/// What the idle check does for one look at the container. Returns the new
+/// activity time and whether to shut the container down.
+///
+/// A container that is not running clears the clock, so one started some other
+/// way (the Proxmox UI) gets a fresh ten minutes the first time it is seen
+/// running instead of being judged by an old timestamp.
+fn idle_decision(running: bool, last: i64, now: i64) -> (i64, bool) {
+    if !running {
+        return (0, false);
+    }
+    if last == 0 {
+        return (now, false);
+    }
+    if now - last >= IDLE_LIMIT_MS {
+        // Restart the clock so a slow shutdown isn't requested again each tick.
+        return (now, true);
+    }
+    (last, false)
+}
+
+/// Starts the background check that shuts the container down after ten
+/// minutes without owner input. Failures are ignored: this module never logs.
+pub fn spawn_idle_shutdown() {
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(IDLE_CHECK_SECS));
+        loop {
+            tick.tick().await;
+            let Ok(Some(guest)) = find_container().await else {
+                continue;
+            };
+            let running = jsval::str_or(guest.get("status"), "") == "running";
+            let last = LAST_ACTIVITY.load(std::sync::atomic::Ordering::Relaxed);
+            let (next, shutdown) = idle_decision(running, last, mitch_lib::school::now_millis());
+            LAST_ACTIVITY.store(next, std::sync::atomic::Ordering::Relaxed);
+            if shutdown {
+                let _ = desktop().power(&record_for(&guest), "shutdown", true).await;
+            }
+        }
+    });
+}
+
 /// The container's own VNC server, from the server environment only (never
 /// from a request, so this can't be pointed at an arbitrary host).
 /// `OWNER_CONTAINER_VNC_HOST` enables it; `_PORT` defaults to 5901;
@@ -111,6 +169,12 @@ pub async fn handle(
         ));
     }
 
+    // The desktop page pings this while the owner is using the container.
+    if path == format!("{BASE}/activity") && *method == Method::POST {
+        note_activity();
+        return Some(json_response(200, json!({ "ok": true })));
+    }
+
     let guest = match find_container().await {
         Ok(g) => g,
         Err(e) => return Some(proxmox_error(e)),
@@ -168,7 +232,11 @@ pub async fn handle(
 async fn power(record: &Value, body: &Value) -> axum::response::Response {
     let action = jsval::str_or(body.get("action"), "");
     match desktop().power(record, &action, true).await {
-        Ok(_) => json_response(202, json!({ "ok": true })),
+        Ok(_) => {
+            // A start or restart begins a fresh ten minutes.
+            note_activity();
+            json_response(202, json!({ "ok": true }))
+        }
         Err(e) => proxmox_error(e),
     }
 }
@@ -186,6 +254,7 @@ async fn console(
     if jsval::str_or(guest.get("status"), "") != "running" {
         return json_response(409, json!({ "error": "The container is not running." }));
     }
+    note_activity();
     crate::routes::vm::cleanup_vm_desktop_sessions(state);
     // Desktop mode: no Proxmox console is minted; the bridge dials the
     // container's VNC server itself.
@@ -354,5 +423,28 @@ pub(crate) async fn bridge_vnc_tcp(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod idle_tests {
+    use super::*;
+
+    #[test]
+    fn shuts_down_only_a_running_container_idle_for_ten_minutes() {
+        let now = 100 * 60 * 1000;
+        // Newly seen running: the clock starts now, no shutdown.
+        assert_eq!(idle_decision(true, 0, now), (now, false));
+        // Active recently.
+        let recent = now - IDLE_LIMIT_MS + 1;
+        assert_eq!(idle_decision(true, recent, now), (recent, false));
+        // Idle long enough: shut down, and the clock restarts.
+        assert_eq!(idle_decision(true, now - IDLE_LIMIT_MS, now), (now, true));
+        // A stopped container is never shut down and clears the clock, so a
+        // later start doesn't inherit an old timestamp.
+        assert_eq!(
+            idle_decision(false, now - 2 * IDLE_LIMIT_MS, now),
+            (0, false)
+        );
     }
 }
