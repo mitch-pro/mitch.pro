@@ -280,7 +280,7 @@ async function connect() {
       updateUptimeDisplay();
     }
     if (computer?.desktopSetup?.status === 'failed') showNotice('Desktop repair needs another try. You can still open the console; choose Repair desktop in My Computer to retry.');
-    if (computer?.status !== 'running') throw new Error('Your computer is offline. Start it from My Computer, then reconnect.');
+    if (computer?.status !== 'running') throw new Error(ownerMode ? 'The container is stopped. Choose Start Computer in the ⋮ menu.' : 'Your computer is offline. Start it from My Computer, then reconnect.');
     let session;
     const setupDeadline = Date.now() + 8 * 60 * 1000;
     while (!session) {
@@ -371,13 +371,27 @@ async function connect() {
     showCover('Desktop unavailable', error.message, ![401, 403, 404].includes(error.status));
   }
 }
+// Owner container: after Start, wait for Proxmox to report it running, then connect.
+async function startThenConnect() {
+  closeConnection(); connectionState('Starting');
+  showCover('Starting your computer', 'Connecting as soon as it is ready...', false, true);
+  for (let i = 0; i < 30 && !disposed; i++) {
+    await new Promise(resolve => setTimeout(resolve, 4000));
+    try {
+      const d = await request(OWNER_API);
+      if (d.status === 'running') { powerBusy = false; reconnectAttempts = 0; connect(); return; }
+    } catch {}
+  }
+  showCover('Computer did not start', 'It is taking longer than expected. Try again in a moment.', true);
+}
 async function power(action) {
   if (powerBusy) return;
   const labels = { restart: 'Restart this computer? Save your work first.', shutdown: 'Shut down this computer? Save your work first.', 'force-stop': 'Force stop this computer? Unsaved work may be lost and files could be damaged.' };
-  if (!confirm(labels[action])) return;
+  if (action !== 'start' && !confirm(labels[action])) return;
   powerBusy = true; document.querySelectorAll('[data-power]').forEach(button => { button.disabled = true; });
   try {
     await request(ownerMode ? `${OWNER_API}/power` : `/api/vm/computers/${encodeURIComponent(id)}/power`, { method: 'POST', headers, body: JSON.stringify({ action }) });
+    if (action === 'start') { startThenConnect(); return; }
     closeConnection();
     connectionState(action === 'restart' ? 'Restarting' : 'Shutting down');
     showCover(action === 'restart' ? 'Restarting your computer' : 'Shutting down your computer', action === 'restart' ? 'Reconnect in a moment when your desktop is ready.' : 'You can safely return to My Computer.', action === 'restart');
@@ -501,6 +515,7 @@ $('mobile-escape').addEventListener('click', () => rfb?.sendKey(0xff1b));
 $('reconnect-button')?.addEventListener('click', () => { reconnectAttempts=0; connect(); });
 $('retry-button').addEventListener('click', () => { reconnectAttempts = 0; connect(); });
 window.addEventListener('pagehide', () => { disposed = true; closeConnection(); });
+if (ownerMode) $('start-computer').hidden = false;
 // Owner container: report real input so the server can shut it down after ten idle minutes.
 if (ownerMode) {
   let lastPing = 0;
