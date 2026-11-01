@@ -110,6 +110,25 @@ body.silver-theme,
   --oq6d071v: color-mix(in srgb, var(--t-fg) 45%, transparent) !important;
 }
 
+/* Cinny colors each person's name, and each space/room/people avatar, from
+   eight --mx-uc-N variables picked by hashing the ID. Its defaults are fully
+   saturated hues (blue, magenta, lime, orange...) that clash with the rest of
+   the site, so use shades of the site's own accent and text colors instead.
+   Mixing with --t-fg keeps them readable: darker in light mode, lighter in dark
+   mode. Cinny sets its dark values on <body>, which beats anything inherited
+   from <html>, so this targets both and uses !important. */
+html,
+body {
+  --mx-uc-1: color-mix(in srgb, var(--t-ac) 70%, var(--t-fg)) !important;
+  --mx-uc-2: color-mix(in srgb, var(--t-ac) 45%, var(--t-fg)) !important;
+  --mx-uc-3: var(--t-fg2) !important;
+  --mx-uc-4: color-mix(in srgb, var(--t-ac) 30%, var(--t-fg2)) !important;
+  --mx-uc-5: color-mix(in srgb, var(--t-fg) 85%, var(--t-ac)) !important;
+  --mx-uc-6: color-mix(in srgb, var(--t-ac) 55%, var(--t-fg2)) !important;
+  --mx-uc-7: color-mix(in srgb, var(--t-fg2) 70%, var(--t-fg)) !important;
+  --mx-uc-8: color-mix(in srgb, var(--t-fg) 80%, var(--t-ac)) !important;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -1398,3 +1417,9 @@ button[data-variant='critical'] {
 
 
 .mitch-dm-notice{position:fixed;inset:calc(3.6rem + 12px) 16px auto;z-index:10000;display:flex;align-items:center;gap:12px;max-width:700px;margin:auto;padding:14px 16px;border:1px solid var(--t-bd,#5d6265);border-radius:12px;background:var(--t-bg2,#202526);color:var(--t-fg,#fff);box-shadow:0 8px 30px #0003;font:14px/1.5 system-ui}.mitch-dm-notice span{flex:1}.mitch-dm-notice button{border:1px solid var(--t-bd,#5d6265);border-radius:8px;background:transparent;color:inherit;padding:8px 12px;cursor:pointer}@media(max-width:500px){.mitch-dm-notice{flex-wrap:wrap}.mitch-dm-notice span{flex-basis:100%}}
+
+/* Names above messages are colored by the sender's role tag (pure blue for a
+   room's founder, teal for members), which reads as random next to the rest of
+   the site. Use the normal text color; the avatar and member list still show
+   roles. */
+#root b._161nxvev { color: var(--t-fg) !important; }
