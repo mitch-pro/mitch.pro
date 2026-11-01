@@ -2391,6 +2391,21 @@ pub fn find_profile_email_by_matrix_user_id(
     crate::routes::auth::resolve_login_identifier(state, clean)
 }
 
+/// The name other people see in chat for this profile: the same ladder the
+/// leaderboard uses (display name, then nickname, then username), skipping
+/// empty values. The Matrix user id (`@localpart:mitch.pro`) is permanent and
+/// can't follow a username change without losing the account's rooms and
+/// history, so the display name is the part that tracks the site username.
+pub fn matrix_display_name(profile: &Value, fallback: &str) -> String {
+    ["displayName", "nickname", "username"]
+        .iter()
+        .filter_map(|k| profile.get(*k).and_then(|v| v.as_str()))
+        .map(str::trim)
+        .find(|v| !v.is_empty())
+        .unwrap_or(fallback)
+        .to_string()
+}
+
 pub async fn sync_profile_to_matrix(
     state: &AppState,
     norm_email: &str,
@@ -3292,11 +3307,8 @@ async fn api_sso_status(state: &AppState, headers: &HeaderMap) -> Response {
     let assigned_username = matrix_username_for_email(state, &norm)
         .await
         .unwrap_or_else(|| username.to_string());
-    let display_name = prof
-        .get("displayName")
-        .or_else(|| prof.get("nickname"))
-        .and_then(|v| v.as_str())
-        .unwrap_or(username);
+    let display_name_owned = matrix_display_name(&prof, username);
+    let display_name = display_name_owned.as_str();
     let raw_pfp = prof.get("pfp").and_then(|v| v.as_str()).unwrap_or("");
     let pfp_val = if let Some(stripped) = raw_pfp.strip_prefix("mxc://") {
         format!("/_matrix/media/v3/download/{stripped}")
@@ -3351,11 +3363,8 @@ async fn api_sso_login(state: &AppState, headers: &HeaderMap, body_bytes: &[u8])
                 "user"
             }
         });
-    let display_name = prof
-        .get("displayName")
-        .or_else(|| prof.get("nickname"))
-        .and_then(|v| v.as_str())
-        .unwrap_or(username);
+    let display_name_owned = matrix_display_name(&prof, username);
+    let display_name = display_name_owned.as_str();
 
     let body_json: Value = serde_json::from_slice(body_bytes).unwrap_or(json!({}));
     let requested_device_id = sanitize_matrix_device_id(
@@ -8555,6 +8564,15 @@ pub async fn admin_conduit_health(state: &Arc<AppState>) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn matrix_display_name_skips_empty_values_and_tracks_the_username() {
+        let p = json!({ "displayName": "", "nickname": " ", "username": "new-name" });
+        assert_eq!(matrix_display_name(&p, "oldlocalpart"), "new-name");
+        let p = json!({ "displayName": "", "nickname": "Nick", "username": "new-name" });
+        assert_eq!(matrix_display_name(&p, "x"), "Nick");
+        assert_eq!(matrix_display_name(&json!({}), "fallback"), "fallback");
+    }
 
     #[test]
     fn matrix_notification_retries_do_not_increment_and_latest_message_updates_destination() {

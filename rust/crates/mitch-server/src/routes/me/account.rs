@@ -476,10 +476,9 @@ fn post_profile(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -
 
     let state_clone = Arc::clone(state);
     let norm_clone = norm.clone();
-    let dn_clone = record
-        .get("displayName")
-        .and_then(|v| v.as_str())
-        .map(str::to_string);
+    let dn_clone = Some(crate::routes::matrix::matrix_display_name(
+        &record, &username,
+    ));
     let pfp_clone = record
         .get("pfp")
         .and_then(|v| v.as_str())
