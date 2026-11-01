@@ -644,7 +644,7 @@ impl ProxmoxDesktopService {
     /// `assertVmid(vmid)` — `Number.isInteger` + 100..=9_999_999.
     pub fn assert_vmid(&self, vmid: Option<f64>) -> Result<i64, ProxmoxServiceError> {
         let value = vmid.unwrap_or(f64::NAN);
-        if !value.is_finite() || value.fract() != 0.0 || value < 100.0 || value > 9_999_999.0 {
+        if !value.is_finite() || value.fract() != 0.0 || !(100.0..=9_999_999.0).contains(&value) {
             return Err(ProxmoxServiceError::new(
                 "INVALID_VM",
                 "Invalid computer record.",

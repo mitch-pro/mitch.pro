@@ -1816,7 +1816,7 @@ pub async fn handle(
         let file = state.cfg.data_dir.join("vm_apps.json");
         let mut data = state.store.read_document(&file, json!({}));
         let norm = mitch_lib::auth::normalize_email(&target_email);
-        if !data.get(norm.as_str()).is_some() {
+        if data.get(norm.as_str()).is_none() {
             return Some(json_response(
                 400,
                 json!({ "error": "No VM application found." }),

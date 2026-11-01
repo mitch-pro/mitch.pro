@@ -551,8 +551,9 @@ fn normalize_ships(ships: &Value) -> Result<Vec<BsShip>, &'static str> {
         };
         let size = SHIP_SIZES[i];
         // JS `row < 0 || row > 9 || col < 0 || col > 9` — NaN fails both
-        // comparisons and passes.
-        if row < 0.0 || row > 9.0 || col < 0.0 || col > 9.0 {
+        // comparisons and passes, so only non-NaN values can be out of bounds.
+        let out_of_bounds = |v: f64| !v.is_nan() && !(0.0..=9.0).contains(&v);
+        if out_of_bounds(row) || out_of_bounds(col) {
             return Err("ship out of bounds");
         }
         let mut cells = Vec::new();
@@ -658,7 +659,7 @@ fn fire(state: &Arc<AppState>, body: &Value, my_norm: &str) -> axum::response::R
     }
     let row = js_num_field(body, "row");
     let col = js_num_field(body, "col");
-    if row.is_nan() || col.is_nan() || row < 0.0 || row > 9.0 || col < 0.0 || col > 9.0 {
+    if row.is_nan() || col.is_nan() || !(0.0..=9.0).contains(&row) || !(0.0..=9.0).contains(&col) {
         return resp(400, &json!({ "error": "invalid coordinate" }));
     }
     let opp_email = if mitch_lib::auth::normalize_email(&g.player1) == my_norm {

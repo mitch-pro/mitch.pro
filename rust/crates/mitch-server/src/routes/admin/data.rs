@@ -216,7 +216,7 @@ fn requests(state: &Arc<AppState>) -> Response {
                     let infinite = d.get("infinite").and_then(|v| v.as_bool()).unwrap_or(false);
                     let used = d.get("used").and_then(|v| v.as_bool()).unwrap_or(false);
                     let claimed = d.get("claimed_domains").is_some();
-                    !infinite && !(used && !claimed)
+                    !infinite && (!used || claimed)
                 })
                 .map(|(tok, d)| {
                     json!({

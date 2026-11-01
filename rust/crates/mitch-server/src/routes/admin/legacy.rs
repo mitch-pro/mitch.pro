@@ -388,7 +388,7 @@ pub async fn handle(
         }
         let banned_file = state.cfg.data_dir.join("canvas_banned.json");
         let mut banned = state.store.read_document(&banned_file, json!({}));
-        if !banned.get(painter).is_some() {
+        if banned.get(painter).is_none() {
             return Some(json_response(404, json!({ "error": "painter not banned" })));
         }
         if let Some(map) = banned.as_object_mut() {

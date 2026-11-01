@@ -1783,7 +1783,7 @@ fn js_vmid_str(vmid: f64) -> String {
 /// `assertVmIdInRange(vmid, where)` (server.js:27996-28002) — the caller
 /// maps the message into its own result shape.
 pub(crate) fn assert_vmid_in_range(vmid: f64, where_: &str) -> Result<(), String> {
-    if !vmid.is_finite() || vmid < PVE_VMID_MIN || vmid > PVE_VMID_MAX {
+    if !vmid.is_finite() || !(PVE_VMID_MIN..=PVE_VMID_MAX).contains(&vmid) {
         return Err(format!(
             "VMID {} out of allowed range [{}, {}]{}",
             js_vmid_str(vmid),

@@ -150,7 +150,7 @@ pub(super) fn parse_price_coins(body: &serde_json::Value) -> Result<f64, Respons
         .get("priceCoins")
         .and_then(mitch_lib::jsval::number)
         .unwrap_or(0.0);
-    if !price.is_finite() || price < 0.0 || price > MAX_PRICE_COINS {
+    if !price.is_finite() || !(0.0..=MAX_PRICE_COINS).contains(&price) {
         return Err(json_response(
             400,
             json!({ "error": format!("price must be between 0 and {MAX_PRICE_COINS}") }),
