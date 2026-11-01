@@ -37,7 +37,7 @@ export async function fetchAndImportGames(amount = 500) {
   data.forEach(item => {
     if (!item.url || !item.title) return;
     const cleanUrl = String(item.url).trim();
-    const cleanTitle = String(item.title).trim();
+    const cleanTitle = String(item.title).replace(/\s*\bunblocked\b/gi, '').replace(/\s+:/g, ':').trim();
     const titleKey = cleanTitle.toLowerCase();
 
     if (seenUrls.has(cleanUrl) || seenTitles.has(titleKey)) return;
