@@ -15,7 +15,7 @@ const screen = $('screen'), frame = $('display-frame'), cover = $('connection-co
 const headers = { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' };
 const MAX_RETRIES = 3;
 let rfb = null, generation = 0, controller = null, reconnectTimer = null, connectTimer = null;
-let reconnectAttempts = 0, connected = false, connecting = false, disposed = false, powerBusy = false;
+let resumeWhenVisible = false, reconnectAttempts = 0, connected = false, connecting = false, disposed = false, powerBusy = false;
 let leaseState = { remainingSeconds: 21600, maxUptimeSeconds: 21600, canExtend: true, extended: false, isExempt: false };
 let hasWarned10m = false, hasWarned3m = false;
 let uptimeInterval = null;
@@ -239,7 +239,16 @@ async function request(url, options = {}) {
 function interrupted(token, clean = false) {
   if (disposed || token !== generation) return;
   closeConnection(); connectionState('Disconnected', 'disconnected');
-  if (clean || reconnectAttempts >= MAX_RETRIES || document.hidden) {
+  // A connection the server ends on its own (about every five minutes) is
+  // reconnected like any other drop; closing it from this page (power actions,
+  // leaving) bumps `generation` first, so those never reach here.
+  if (document.hidden) {
+    // Reconnect when the tab is visible again (see visibilitychange below).
+    resumeWhenVisible = true;
+    showCover('Desktop disconnected', 'Reconnecting when you come back to this tab.', false, true);
+    return;
+  }
+  if (reconnectAttempts >= MAX_RETRIES) {
     showCover('Desktop disconnected', clean ? 'The remote desktop connection ended.' : 'Check your connection, then reconnect to your computer.', true);
     return;
   }
@@ -332,7 +341,7 @@ async function connect() {
     client.showDotCursor = true; client.background = '#050607'; client.qualityLevel = 7; client.compressionLevel = 2;
     client.addEventListener('connect', () => {
       if (token !== generation) return;
-      clearTimeout(connectTimer); connected = true; connecting = false;
+      clearTimeout(connectTimer); connected = true; connecting = false; reconnectAttempts = 0;
       connectionState('Connected', 'connected'); cover.classList.add('is-hidden'); client.focus();
       if (!uptimeInterval) {
         uptimeInterval = setInterval(() => {
@@ -492,6 +501,9 @@ $('mobile-escape').addEventListener('click', () => rfb?.sendKey(0xff1b));
 $('reconnect-button')?.addEventListener('click', () => { reconnectAttempts=0; connect(); });
 $('retry-button').addEventListener('click', () => { reconnectAttempts = 0; connect(); });
 window.addEventListener('pagehide', () => { disposed = true; closeConnection(); });
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && resumeWhenVisible && !disposed && !connected && !connecting) { resumeWhenVisible = false; reconnectAttempts = 0; connect(); }
+});
 window.addEventListener('pageshow', event => { if (event.persisted) { disposed = false; reconnectAttempts = 0; connect(); } });
 window.addEventListener('offline', () => { closeConnection(); connectionState('Offline', 'disconnected'); showCover('You are offline', 'Check your internet connection, then reconnect.', true); });
 uptimeBtn?.addEventListener('click', openUptimeModal);
