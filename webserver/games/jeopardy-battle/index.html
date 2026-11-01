@@ -366,7 +366,7 @@
       .board-cell:hover:not(.answered):not(.locked) { transform: none; }
     }
   </style>
-<script src="/mitch-coins.js?v=1" defer></script>
+<script src="/mitch-coins.js?v=4" defer></script>
 </head>
 <body data-shell="off">
 
@@ -375,7 +375,7 @@
     <h1>📺 Jeopardy Battle</h1>
     <p>Multiplayer · 2–10 Players · Real J! Archive Clues · 750+ MitchCoins/win</p>
   </div>
-  <div class="coin-badge" id="coin-display">🪙 ...</div>
+  <div class="coin-badge mitch-coin-amount" id="coin-display" aria-label="MitchCoins balance">...</div>
 </header>
 
 <div class="container">
@@ -1233,7 +1233,7 @@ async function init() {
     const p = await fetch('/api/profile', { credentials: 'include' });
     const pd = await p.json();
     myEmail = pd.email ? pd.email.toLowerCase() : null;
-    if (pd.coins !== undefined) document.getElementById('coin-display').textContent = `🪙 ${pd.coins.toLocaleString()}`;
+    if (pd.coins !== undefined) document.getElementById('coin-display').textContent = `${pd.coins.toLocaleString()}`;
     
     // Auto-join if join code is in URL search params
     const params = new URLSearchParams(window.location.search);

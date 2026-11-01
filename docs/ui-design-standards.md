@@ -45,3 +45,9 @@ Every user-facing and internal page on the site must adhere to the design langua
 
 - Always test UI changes in both dark mode (default) and light mode (`html.theme-light`).
 - Contrast must be verified for all text, borders, buttons, and status indicators.
+
+## 4. MitchCoin Logo
+
+- `webserver/mitchcoin.svg` is the source for the lavender crown used in wallets, prices, VM upgrades, and game balances. Keep its purple facets fixed across themes and avoid circular clipping or color filters.
+- Use `/mitchcoin.svg?v=4` for images and CSS backgrounds. Inline images use `.mitch-coin-inline`; dynamic amounts can use `.mitch-coin-amount` so updating their text preserves the icon.
+- Keep `mitchcoin.png` and `mitchcoin.webp` as transparent 256×256 exports of the SVG. After changing the source, regenerate both exports and bump the logo, shared wallet script, and stylesheet versions together, including game pages that load the wallet directly.

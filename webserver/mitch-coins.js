@@ -2,7 +2,7 @@
   'use strict';
   if (window.MitchCoins || /(^|\.)rjuhsd\.school$/.test(location.hostname) || location.pathname.startsWith('/rjuhsd/')) return;
 
-  const icon = '/mitchcoin.svg?v=3';
+  const icon = '/mitchcoin.svg?v=4';
   const widgets = [];
   const fullFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
   const compactFormat = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 });
@@ -159,7 +159,7 @@
   function init() {
     if (!document.querySelector('link[href^="/mitch-coins.css"]')) {
       const style = document.createElement('link');
-      style.rel = 'stylesheet'; style.href = '/mitch-coins.css?v=3';
+      style.rel = 'stylesheet'; style.href = '/mitch-coins.css?v=4';
       document.head.appendChild(style);
     }
     if (document.body.classList.contains('encrypt-page')) {

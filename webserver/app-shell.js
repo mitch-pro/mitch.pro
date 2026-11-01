@@ -318,7 +318,7 @@
     }
     if (!IS_RJUHSD && !document.querySelector('script[src^="/mitch-coins.js"]')) {
       var coins = document.createElement('script');
-      coins.src = '/mitch-coins.js?v=3';
+      coins.src = '/mitch-coins.js?v=4';
       document.head.appendChild(coins);
     }
     if (!shouldInject()) {
