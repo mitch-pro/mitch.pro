@@ -1812,6 +1812,9 @@ pub async fn handle(
         && !is_piece_svg
         && !path.starts_with("/matrix/")
         && !path.starts_with("/unsubscribe/")
+        // The support pages are for people who can't sign in, so their
+        // stylesheet must load without a session too.
+        && !path.starts_with("/support/")
         && !path.starts_with("/images/")
         && !path.starts_with("/backgrounds/")
         && !is_larp
