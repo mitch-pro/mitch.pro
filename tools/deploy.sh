@@ -193,8 +193,33 @@ main() {
         cp -p "$PROJECT_DIR/data/admins.json" "$PROJECT_DIR/data_backup/admins.json" 2>/dev/null || true
     fi
 
+    # Tell the owner over ntfy when the pull fails, and say why. This only
+    # reports: it never stashes, resets or checks anything out to "fix" the
+    # tree, because that could hide or discard changes someone made on the
+    # server on purpose. Only file names git lists are included in the message
+    # (never raw git output, which can contain remote URLs).
+    notify_pull_failure() {
+        local log_file="$1" branch="$2" reason files msg
+        if grep -qiE 'would be overwritten|local changes|unstaged changes|uncommitted changes|commit your changes or stash' "$log_file"; then
+            reason="uncommitted local changes are blocking the pull"
+            files=$(awk '/^\t/ { sub(/^\t/, ""); print }' "$log_file" | head -8 | paste -sd',' - | sed 's/,/, /g')
+        else
+            reason="git pull failed (see the deploy log)"
+            files=""
+        fi
+        msg="$(hostname): $reason on branch $branch."
+        [ -n "$files" ] && msg="$msg Files: $files."
+        msg="$msg Nothing was stashed, reset or checked out. The deploy is continuing with the code already on the server."
+        send_notification "$msg" "Deploy: git pull failed" "high"
+    }
+
     echo "[deploy] Pulling latest code from GitHub ($CURRENT_BRANCH)..."
-    run_git pull origin "$CURRENT_BRANCH" || git -C "$PROJECT_DIR" pull origin "$CURRENT_BRANCH" || true
+    PULL_LOG="$(mktemp /tmp/deploy-pull.XXXXXX)"
+    if ! { run_git pull origin "$CURRENT_BRANCH" || git -C "$PROJECT_DIR" pull origin "$CURRENT_BRANCH"; } 2>&1 | tee "$PULL_LOG"; then
+        echo "[deploy] git pull failed; notifying."
+        notify_pull_failure "$PULL_LOG" "$CURRENT_BRANCH"
+    fi
+    rm -f "$PULL_LOG"
 
     # Restore admins.json if git untracking or deletion removed it from disk
     if [ ! -f "$PROJECT_DIR/data/admins.json" ]; then
