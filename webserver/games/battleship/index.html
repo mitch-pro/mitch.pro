@@ -330,7 +330,7 @@
     .back-link { color: var(--accent); text-decoration: none; font-size: 0.85rem; font-weight: 600; }
     .back-link:hover { text-decoration: underline; color: var(--accent); }
   </style>
-<script src="/mitch-coins.js?v=1" defer></script>
+<script src="/mitch-coins.js?v=4" defer></script>
 </head>
 <body data-shell="off">
 
@@ -339,7 +339,7 @@
     <h1>⚓ Battleship</h1>
     <p>Multiplayer · 250 MitchCoins/win</p>
   </div>
-  <div class="coin-badge" id="coin-display">🪙 ...</div>
+  <div class="coin-badge mitch-coin-amount" id="coin-display" aria-label="MitchCoins balance">...</div>
 </header>
 
 <div class="container">
@@ -495,7 +495,7 @@ function updateChallenges(challenges) {
   list.innerHTML = incoming.map(c => `
     <div class="challenge-card">
       <span><strong>${c.from.split('@')[0]}</strong> challenges you!
-        ${c.bet > 0 ? ` · Bet: <strong>🪙 ${c.bet}</strong>` : ''}
+        ${c.bet > 0 ? ` · Bet: <strong><img class="mitch-coin-inline" src="/mitchcoin.svg?v=4" width="20" height="20" alt="MitchCoins"> ${c.bet}</strong>` : ''}
       </span>
       <button class="btn btn-success" onclick="respondChallenge('${c.id}', true)">Accept</button>
       <button class="btn btn-danger" onclick="respondChallenge('${c.id}', false)">Decline</button>
@@ -850,7 +850,7 @@ async function init() {
     const p = await fetch('/api/profile', { credentials: 'include' });
     const pd = await p.json();
     myEmail = pd.email ? pd.email.toLowerCase() : null;
-    if (pd.coins !== undefined) document.getElementById('coin-display').textContent = `🪙 ${pd.coins.toLocaleString()}`;
+    if (pd.coins !== undefined) document.getElementById('coin-display').textContent = `${pd.coins.toLocaleString()}`;
   } catch(e) {}
   // Load members for autocomplete search
   await loadMembers();

@@ -354,15 +354,15 @@
 
         let actionHtml = '';
         if (isCurrent && cat === 'session' && currentVal > 21600) {
-          actionHtml = `<span class="current-tier-pill" style="margin-bottom:4px;">✓ Active (${daysLeft}d left)</span><button type="button" class="quiet-button" data-upgrade-cat="${esc(cat)}" data-upgrade-val="${tier.value}" data-duration="${sessionDurationMode}" style="min-height:30px;padding:4px 10px;font-size:0.8rem;">Renew (+${sessionDurationMode === 'week' ? '7d' : '30d'} for ${diffCost} 🪙)</button>`;
+          actionHtml = `<span class="current-tier-pill" style="margin-bottom:4px;">✓ Active (${daysLeft}d left)</span><button type="button" class="quiet-button" data-upgrade-cat="${esc(cat)}" data-upgrade-val="${tier.value}" data-duration="${sessionDurationMode}" style="min-height:30px;padding:4px 10px;font-size:0.8rem;">Renew (+${sessionDurationMode === 'week' ? '7d' : '30d'} for ${diffCost} <img class="mitch-coin-inline" src="/mitchcoin.svg?v=4" width="20" height="20" alt="MitchCoins">)</button>`;
         } else if (isCurrent) {
           actionHtml = `<span class="current-tier-pill">✓ Current</span>`;
         } else if (isOwned && cat !== 'session') {
           actionHtml = `<span class="current-tier-pill" style="opacity:0.75;">Included</span>`;
         } else if (canAfford) {
-          actionHtml = `<button type="button" class="primary-button" data-upgrade-cat="${esc(cat)}" data-upgrade-val="${tier.value}" data-duration="${sessionDurationMode}" style="min-height:36px;padding:6px 14px;font-size:0.85rem;">Upgrade for ${diffCost} 🪙</button>`;
+          actionHtml = `<button type="button" class="primary-button" data-upgrade-cat="${esc(cat)}" data-upgrade-val="${tier.value}" data-duration="${sessionDurationMode}" style="min-height:36px;padding:6px 14px;font-size:0.85rem;">Upgrade for ${diffCost} <img class="mitch-coin-inline" src="/mitchcoin.svg?v=4" width="20" height="20" alt="MitchCoins"></button>`;
         } else {
-          actionHtml = `<button type="button" class="quiet-button" disabled style="font-size:0.82rem;padding:6px 12px;">Need ${diffCost} 🪙</button>`;
+          actionHtml = `<button type="button" class="quiet-button" disabled style="font-size:0.82rem;padding:6px 12px;">Need ${diffCost} <img class="mitch-coin-inline" src="/mitchcoin.svg?v=4" width="20" height="20" alt="MitchCoins"></button>`;
         }
 
         const subLabel = (cat === 'session' && tier.cost > 0)
