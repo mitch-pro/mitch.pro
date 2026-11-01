@@ -37,7 +37,7 @@ pub(crate) async fn handle(
         return Some(change_email(state, headers, body_bytes));
     }
     if path == "/api/me/change-email/confirm" && method == Method::POST {
-        return Some(change_email_confirm(state, headers, body_bytes));
+        return Some(change_email_confirm(state, headers, body_bytes).await);
     }
     // JS: `if (path === '/api/me/change-password')` — no method check.
     if path == "/api/me/change-password" {
@@ -525,6 +525,9 @@ fn change_email(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -
     if mitch_lib::passwords::password_exists(&state.store, &new_norm) {
         return json_response(400, json!({ "error": "email already in use" }));
     }
+    if let Err(blocked) = check_email_change_allowed(state, &old_norm) {
+        return json_response(403, json!({ "error": blocked.message() }));
+    }
     let code = format!("{}", (100000.0 + js_rand() * 900000.0) as i64);
     let token = mitch_lib::totp::create_temp_token();
     state
@@ -558,7 +561,11 @@ fn change_email(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -
     json_response(200, json!({ "ok": true, "change_token": token }))
 }
 
-fn change_email_confirm(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Response {
+async fn change_email_confirm(
+    state: &Arc<AppState>,
+    headers: &HeaderMap,
+    body_bytes: &[u8],
+) -> Response {
     let cookies = cookies_of(state, headers);
     let uid = me_uid(&cookies);
     let Some(email) = auth::email_from_sid(&state.store, &state.id_secret, &uid) else {
@@ -574,50 +581,54 @@ fn change_email_confirm(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: 
     ))
     .trim()
     .to_string();
-    let mut changes = state
-        .pending_email_changes
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    let valid = match changes.get(&token) {
-        Some(rec) => {
-            mitch_lib::school::now_millis() <= rec.expires
-                && rec.old_norm == auth::normalize_email(&email)
+    // The lock is released inside this block, before any `.await` below.
+    let rec = match (|| -> Result<PendingEmailChange, Response> {
+        let mut changes = state
+            .pending_email_changes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let valid = match changes.get(&token) {
+            Some(rec) => {
+                mitch_lib::school::now_millis() <= rec.expires
+                    && rec.old_norm == auth::normalize_email(&email)
+            }
+            None => false,
+        };
+        if !valid {
+            changes.remove(&token);
+            drop(changes);
+            return Err(json_response(
+                401,
+                json!({ "error": "email change expired" }),
+            ));
         }
-        None => false,
+        let rec = changes
+            .get_mut(&token)
+            .unwrap_or_else(|| unreachable!("entry checked above"));
+        rec.attempts += 1;
+        if rec.attempts > 5 {
+            changes.remove(&token);
+            drop(changes);
+            return Err(json_response(429, json!({ "error": "too many attempts" })));
+        }
+        let supplied = jsval::string(&jsval::or(body.get("code"), json!("")))
+            .trim()
+            .to_string();
+        if supplied != rec.code {
+            drop(changes);
+            return Err(json_response(400, json!({ "error": "invalid code" })));
+        }
+        Ok(changes
+            .remove(&token)
+            .unwrap_or_else(|| unreachable!("entry checked above")))
+    })() {
+        Ok(rec) => rec,
+        Err(resp) => return resp,
     };
-    if !valid {
-        changes.remove(&token);
-        drop(changes);
-        return json_response(401, json!({ "error": "email change expired" }));
+    if let Err(err) = apply_email_change(state, &rec.old_norm, &rec.new_norm, &rec.new_email).await
+    {
+        return json_response(err.status(), json!({ "error": err.message() }));
     }
-    let rec = changes
-        .get_mut(&token)
-        .unwrap_or_else(|| unreachable!("entry checked above"));
-    rec.attempts += 1;
-    if rec.attempts > 5 {
-        changes.remove(&token);
-        drop(changes);
-        return json_response(429, json!({ "error": "too many attempts" }));
-    }
-    let supplied = jsval::string(&jsval::or(body.get("code"), json!("")))
-        .trim()
-        .to_string();
-    if supplied != rec.code {
-        drop(changes);
-        return json_response(400, json!({ "error": "invalid code" }));
-    }
-    let rec = changes
-        .remove(&token)
-        .unwrap_or_else(|| unreachable!("entry checked above"));
-    drop(changes);
-    rename_email_references(state, &rec.old_norm, &rec.new_norm, &rec.new_email);
-    auth::invalidate_auth_sessions_for_email(&state.store, &rec.old_norm, None);
-    auth::rotate_session_generation(&state.store, &rec.new_norm);
-    ntfy_notify(
-        &format!("Email changed: {} -> {}", rec.old_norm, rec.new_norm),
-        "Security",
-        "",
-    );
     auth_success_response(
         state,
         headers,
@@ -1034,6 +1045,111 @@ pub(crate) fn can_write_blog_email(state: &Arc<AppState>, email: &str) -> bool {
             || is_blog_contributor_email(state, email))
 }
 
+/// Why an account's email can't be changed right now.
+pub(crate) enum EmailChangeError {
+    /// Owners, developers, admins and moderators hold their role by email
+    /// address; changing it would silently drop the role (and lets a hijacked
+    /// session move a staff role to an attacker's address), so the owner does it
+    /// by hand.
+    Staff,
+    /// A banned account can't shed its ban by changing address.
+    Banned,
+    /// The new address already has an account.
+    InUse,
+    /// The chat service was unreachable; nothing was changed.
+    ChatUnavailable,
+}
+
+impl EmailChangeError {
+    pub(crate) fn message(&self) -> &'static str {
+        match self {
+            Self::Staff => "Staff accounts can't change email here. Ask the owner.",
+            Self::Banned => "This account can't change its email.",
+            Self::InUse => "email already in use",
+            Self::ChatUnavailable => "Chat is unavailable right now. Try again in a few minutes.",
+        }
+    }
+
+    pub(crate) fn status(&self) -> u16 {
+        match self {
+            Self::Staff | Self::Banned => 403,
+            Self::InUse => 400,
+            Self::ChatUnavailable => 503,
+        }
+    }
+}
+
+/// Checks that `old_norm`'s account may change email at all.
+pub(crate) fn check_email_change_allowed(
+    state: &Arc<AppState>,
+    old_norm: &str,
+) -> Result<(), EmailChangeError> {
+    if auth::is_admin_email(&state.store, old_norm)
+        || auth::is_moderator_email(&state.store, old_norm)
+    {
+        return Err(EmailChangeError::Staff);
+    }
+    if auth::banned_info_for_email(&state.store, old_norm).is_some() {
+        return Err(EmailChangeError::Banned);
+    }
+    Ok(())
+}
+
+/// Moves an account to a new email address, keeping everything that belongs to
+/// it: the shared rename list, the tables listed in `mitch_lib::account_email`,
+/// the passkey and tester entries, and the Matrix account (see
+/// `matrix::migrate_matrix_account_email`). Then signs the old address out
+/// everywhere. Shared by the user's own confirmed change and support-approved
+/// changes; callers must have verified the new address first.
+pub(crate) async fn apply_email_change(
+    state: &Arc<AppState>,
+    old_norm: &str,
+    new_norm: &str,
+    new_email: &str,
+) -> Result<(), EmailChangeError> {
+    check_email_change_allowed(state, old_norm)?;
+    if mitch_lib::passwords::password_exists(&state.store, new_norm) {
+        return Err(EmailChangeError::InUse);
+    }
+    // First, because it is the only step that can fail without side effects.
+    crate::routes::matrix::migrate_matrix_account_email(state, old_norm, new_norm)
+        .await
+        .map_err(|_| EmailChangeError::ChatUnavailable)?;
+    rename_email_references(state, old_norm, new_norm, new_email);
+    mitch_lib::account_email::rename_remaining_tables(&state.store, old_norm, new_norm);
+    // passkeys.json is keyed by normalized email; testers.json is a list.
+    let passkeys_file = data_file(state, "passkeys.json");
+    let mut passkeys = state.store.read_document(&passkeys_file, json!({}));
+    if let Some(map) = passkeys.as_object_mut() {
+        if let Some(creds) = map.remove(old_norm) {
+            map.insert(new_norm.to_string(), creds);
+            let _ = state.store.write_document(&passkeys_file, &passkeys);
+        }
+    }
+    let testers_file = state.cfg.base_dir.join("data/testers.json");
+    let mut testers = state.store.read_document(&testers_file, json!([]));
+    if let Some(list) = testers.as_array_mut() {
+        let mut changed = false;
+        for entry in list.iter_mut() {
+            if entry.as_str().map(auth::normalize_email).as_deref() == Some(old_norm) {
+                *entry = json!(new_norm);
+                changed = true;
+            }
+        }
+        if changed {
+            let _ = state.store.write_document(&testers_file, &testers);
+        }
+    }
+    auth::invalidate_auth_sessions_for_email(&state.store, old_norm, None);
+    auth::rotate_session_generation(&state.store, new_norm);
+    ntfy_notify(
+        &format!("Email changed: {old_norm} -> {new_norm}"),
+        "Security",
+        "",
+    );
+    Ok(())
+}
+
 /// `renameEmailReferences(oldNorm, newNorm, newEmail)` (server.js:2626-2693).
 /// The `rebuildCoreTablesFromDocuments()` tail is deferred with the rest of
 /// the SQL-table sync work.
@@ -1355,5 +1471,60 @@ mod tests {
             None,
             "a brand-new account must never come back banned"
         );
+    }
+
+    #[tokio::test]
+    async fn email_change_refuses_staff_and_banned_and_moves_a_normal_account() {
+        let (state, dir) = test_state();
+        state
+            .store
+            .write_document(
+                &dir.join("data/admins.json"),
+                &json!({ "owners": ["owner@x.test"], "admins": ["admin@x.test"] }),
+            )
+            .unwrap();
+        mitch_lib::bans::blacklist_insert(&state.store, "banned@x.test", "t", "o").unwrap();
+        assert!(matches!(
+            check_email_change_allowed(&state, "admin@x.test"),
+            Err(EmailChangeError::Staff)
+        ));
+        assert!(matches!(
+            check_email_change_allowed(&state, "owner@x.test"),
+            Err(EmailChangeError::Staff)
+        ));
+        assert!(matches!(
+            check_email_change_allowed(&state, "banned@x.test"),
+            Err(EmailChangeError::Banned)
+        ));
+
+        mitch_lib::passwords::password_set(&state.store, "user@x.test", "hash");
+        mitch_lib::vm::upsert_virtual_machine(
+            &state.store,
+            &json!({ "id": "vm1", "ownerEmail": "user@x.test", "vmid": 301, "node": "n" }),
+        )
+        .unwrap();
+        apply_email_change(&state, "user@x.test", "new@x.test", "new@x.test")
+            .await
+            .unwrap_or_else(|e| panic!("apply failed: {}", e.message()));
+        assert!(mitch_lib::passwords::password_exists(
+            &state.store,
+            "new@x.test"
+        ));
+        assert!(!mitch_lib::passwords::password_exists(
+            &state.store,
+            "user@x.test"
+        ));
+        assert_eq!(
+            mitch_lib::vm::get_virtual_machine_by_id(&state.store, "vm1")
+                .unwrap()
+                .owner_email,
+            "new@x.test"
+        );
+        // The new address is taken now.
+        assert!(matches!(
+            apply_email_change(&state, "x@x.test", "new@x.test", "new@x.test").await,
+            Err(EmailChangeError::InUse)
+        ));
+        std::fs::remove_dir_all(dir).ok();
     }
 }

@@ -410,7 +410,7 @@ pub(crate) async fn matrix_username_for_email(
 
     let old_password = get_matrix_password_for_uid_legacy(&old_uid, &state.id_secret);
     let new_password = get_matrix_password_for_email(norm_email, &state.id_secret);
-    rotate_matrix_password(&username, &old_password, &new_password).await;
+    let _ = rotate_matrix_password(&username, &old_password, &new_password).await;
 
     if let Some(obj) = matrix_users.as_object_mut() {
         obj.remove(&old_uid);
@@ -427,9 +427,13 @@ pub(crate) async fn matrix_username_for_email(
 /// account/password endpoint. A no-op (logged, not fatal) if the old
 /// password no longer works — the account just keeps using whatever
 /// password conduit already has on file.
-async fn rotate_matrix_password(username: &str, old_password: &str, new_password: &str) {
+async fn rotate_matrix_password(
+    username: &str,
+    old_password: &str,
+    new_password: &str,
+) -> Result<(), ()> {
     if old_password == new_password {
-        return;
+        return Ok(());
     }
     let mut req_headers = HeaderMap::new();
     req_headers.insert("Content-Type", HeaderValue::from_static("application/json"));
@@ -439,7 +443,9 @@ async fn rotate_matrix_password(username: &str, old_password: &str, new_password
         "password": old_password,
         "initial_device_display_name": "Mitch.pro Password Migration"
     });
-    let Ok((status, _, bytes)) = call_conduit(
+    // Err only when the homeserver can't be reached at all; a rejected login
+    // (the old password no longer matches) is the documented no-op case.
+    let (status, _, bytes) = call_conduit(
         "/_matrix/client/v3/login",
         Method::POST,
         Some(req_headers.clone()),
@@ -448,24 +454,22 @@ async fn rotate_matrix_password(username: &str, old_password: &str, new_password
         )),
     )
     .await
-    else {
-        return;
-    };
+    .map_err(|_| ())?;
     if !status.is_success() {
-        return;
+        return Ok(());
     }
     let Ok(data) = serde_json::from_slice::<Value>(&bytes) else {
-        return;
+        return Ok(());
     };
     let Some(token) = data.get("access_token").and_then(|v| v.as_str()) else {
-        return;
+        return Ok(());
     };
     let mut auth_header = req_headers;
     if let Ok(val) = HeaderValue::from_str(&format!("Bearer {token}")) {
         auth_header.insert("Authorization", val);
     }
     let change_body = account_password_change_body(username, old_password, new_password);
-    let _ = call_conduit(
+    call_conduit(
         "/_matrix/client/v3/account/password",
         Method::POST,
         Some(auth_header),
@@ -473,7 +477,45 @@ async fn rotate_matrix_password(username: &str, old_password: &str, new_password
             serde_json::to_vec(&change_body).unwrap_or_default(),
         )),
     )
-    .await;
+    .await
+    .map(|_| ())
+    .map_err(|_| ())
+}
+
+/// Moves an account's Matrix identity to its new email when the email
+/// changes, so the user keeps the same Matrix account (rooms, history,
+/// encryption keys). The Matrix password is derived from the email, so it is
+/// rotated to the new email's derived password first (`logout_devices: false`,
+/// so signed-in chat sessions stay valid), then `matrix_users.json` is rekeyed.
+/// Returns `Err` only when the homeserver is unreachable, before anything is
+/// changed, so the caller can abort the email change and let the user retry.
+pub(crate) async fn migrate_matrix_account_email(
+    state: &AppState,
+    old_norm: &str,
+    new_norm: &str,
+) -> Result<(), ()> {
+    let _guard = state.matrix_sso_login_lock.lock().await;
+    let file = state.data_dir().join("matrix_users.json");
+    let mut users = state.store.read_document(&file, json!({}));
+    let Some(username) = users
+        .get(old_norm)
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
+    else {
+        return Ok(()); // never used Matrix chat
+    };
+    rotate_matrix_password(
+        &username,
+        &get_matrix_password_for_email(old_norm, &state.id_secret),
+        &get_matrix_password_for_email(new_norm, &state.id_secret),
+    )
+    .await?;
+    if let Some(obj) = users.as_object_mut() {
+        obj.remove(old_norm);
+        obj.insert(new_norm.to_string(), json!(username));
+    }
+    let _ = state.store.write_document(&file, &users);
+    Ok(())
 }
 
 /// Body for the UIA-protected `account/password` call. `logout_devices`
