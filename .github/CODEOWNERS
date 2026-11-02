@@ -1,0 +1,9 @@
+# Every path needs approval from the owner. Branch protection on master has
+# "Require review from Code Owners" enabled, so a PR cannot be merged until the
+# owner approves it. The sensitive paths are listed explicitly so they stay
+# owner-only if the default rule is ever relaxed.
+*                       @urashil
+/.github/               @urashil
+/tools/deploy.sh        @urashil
+/AGENTS.md              @urashil
+/rust/crates/mitch-lib/src/auth.rs @urashil
