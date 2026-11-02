@@ -9,6 +9,9 @@ on:
 
 jobs:
   check:
+    # The job name is the status-check name branch protection matches on.
+    # Keep it `rust-ci`; renaming it detaches the required check on master.
+    name: rust-ci
     runs-on: ubuntu-latest
     defaults:
       run:
