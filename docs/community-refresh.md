@@ -9,4 +9,4 @@
 - Both changes write through the existing SQLite document store in a transaction and update the application's in-memory caches. No bulk action runs during deployment.
 - Recovery snapshots are in `DATA_DIR/owner-action-backups/*.enc`, outside the webroot, mode 0600. They are AES-256-GCM encrypted: 12-byte nonce, 16-byte tag, then ciphertext. The key is HMAC-SHA256 of `owner-backup-v1` using the existing `id_secret.key`. Decrypted JSON contains the action, timestamp, and pre-change documents. Recovery requires a server operator and a deliberate database restore; there is no public download or automatic restore endpoint. Keep the existing ID secret backed up securely.
 
-Verification: `bun tests/test_community_refresh.js`, `bun tests/test_owner_accounts_route.js`, existing `bun run test:unit`, `node tools/review-community.mjs` (with `bun tools/preview-ui.js` running), and Bun production bundling.
+Verification: `cargo test --manifest-path rust/Cargo.toml --workspace`.

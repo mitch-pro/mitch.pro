@@ -30,9 +30,9 @@ main() {
         PROJECT_DIR="/home/mitch/server/bun"
     elif [ -d "/home/mitch/bun-server-main/bun-server" ]; then
         PROJECT_DIR="/home/mitch/bun-server-main/bun-server"
-    elif [ -f "$SCRIPT_DIR/server.js" ]; then
+    elif [ -f "$SCRIPT_DIR/docker-compose.yml" ]; then
         PROJECT_DIR="$SCRIPT_DIR"
-    elif [ -f "$SCRIPT_DIR/../server.js" ]; then
+    elif [ -f "$SCRIPT_DIR/../docker-compose.yml" ]; then
         PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
     else
         PROJECT_DIR="$(pwd)"

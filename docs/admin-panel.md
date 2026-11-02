@@ -74,14 +74,14 @@ longer suppress actions based on them. Historical records remain available for
 audit cleanup. The VM usage leaderboard and background usage sampling were
 removed; operational VM quota enforcement remains.
 
-After building the Rust server, `node tests/test_admin_modernization.mjs` runs
-local API and responsive browser regressions with a fake HTTPS Proxmox service.
-It does not contact production or invoke delivery endpoints.
+`rust/crates/mitch-server/tests/staff_access.rs` starts a local server and checks
+the owner/co-owner/admin/member gates on the VM owner-resources and account-list
+endpoints. It does not contact production or invoke delivery endpoints.
 
 ## Quiet deployment
 
 A push whose head commit includes `[quiet]` skips the AI push-summary notification
-workflow. The normal production workflow waits for the complete Rust/browser CI
+workflow. The normal production workflow waits for the complete Rust CI
 workflow for the same revision to succeed before it can deploy. It uses a commit-pinned copy of
 `tools/deploy.sh` with `MITCH_DEPLOY_QUIET=1` as the deployment account for that rollout.
 The account must already have Docker access; the quiet path never invokes an

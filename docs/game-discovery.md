@@ -60,14 +60,3 @@ actions. Closing a game restores the catalog and search controls. External games
 are labeled as opening in another tab. The sign-in link returns to the library
 after authentication.
 
-After building `mitch-server`, run:
-
-```sh
-node tests/test_game_portal_unit.js
-node tests/test_game_discovery_browser.mjs
-```
-
-The browser fixture runs a temporary local server and mocks remote artwork,
-games, and reward responses. It checks ranking, full-catalog access, filtering,
-saved games, player cleanup, homepage navigation, legacy redirects, and mobile
-layouts. It never plays games or sends messages against production.

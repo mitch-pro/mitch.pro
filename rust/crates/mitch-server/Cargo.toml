@@ -45,6 +45,10 @@ rand = { workspace = true }
 # genServerKeypair uses WebCrypto); the SecretKey type lives in AppState.
 p256 = { workspace = true }
 
+[dev-dependencies]
+# Integration tests (tests/) spawn the real binary and seed its SQLite db.
+rusqlite = { workspace = true }
+
 [lints.rust]
 unsafe_code = "forbid"
 

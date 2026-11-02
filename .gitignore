@@ -46,13 +46,11 @@ backups/
 proxy/jail/
 webserver/backgrounds/
 
-# Test harness artifacts (created by tests/test_runner.js)
+# Test harness artifacts
 data_backup_test/
 /tests/.tmp/
 /test-results/
 /*.json
-!/package.json
-!/package-lock.json
 
 # Cache and Package directories
 __pycache__/
