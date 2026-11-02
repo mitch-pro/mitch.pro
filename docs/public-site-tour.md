@@ -53,11 +53,7 @@ For a new published version, update the video and download links, public-asset l
 cargo fmt --manifest-path rust/Cargo.toml --all --check
 cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets -- -D warnings
 cargo test --manifest-path rust/Cargo.toml --workspace
-cargo build --manifest-path rust/Cargo.toml -p mitch-server
-node tests/test_onboarding_browser.mjs
 ```
-
-The browser check starts an isolated local server and mocks account requests. It verifies the direct public intro, styles and media without a session, range responses, exact video duration, decoded audible audio, keyboard Play, replay, every chapter, both themes at five viewport sizes, and signup/login/reset flows. It creates no production accounts.
 
 The media was also checked against its sources: frames from games, Matrix, profile cosmetics, and Blooket match the original recording at the mapped times. Versions 3 and 4 have identical video-stream SHA-256 hashes. The encoded version 4 soundtrack measures -14.14 LUFS integrated, -1.87 dBTP true peak, and 8.5 LU loudness range (previously 23.7 LU). Five-second passages starting at 0:10 and 1:40 are 22.2 dB and 17.6 dB louder respectively, without clipping. Screenshots are saved under the ignored `artifacts/ui-review/onboarding` directory.
 

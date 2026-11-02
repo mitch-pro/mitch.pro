@@ -41,19 +41,8 @@ brief installation copy. Supported browsers receive their native install prompt;
 iOS receives Share / Add to Home Screen instructions. Dismissing the instructions
 stays on the school page. The banner does not promise offline access or alerts.
 
-Run the focused browser regression suite from the repository root:
-
-```sh
-node tests/test_rjuhsd_refresh_browser.mjs
-```
-
-It requires the existing `@playwright/test` development dependency and Chromium.
-`PLAYWRIGHT_MODULE` can point to an externally installed ESM entry point and
-`PLAYWRIGHT_EXECUTABLE_PATH` can select the browser. The suite serves a disposable
-static fixture and mocks calendar/weather requests. It checks bells and exact
-boundaries, midnight rollover, manual previews, lunches, overrides, holidays,
-campus switching, keyboard interaction, native/manual installation, canonical links, and both themes at 320–1440 pixels.
-Screenshots go to `/tmp`; `RJUHSD_FULL_SCREENSHOTS=1` also captures full pages.
+The dashboard has no automated browser test; check bells, lunches, overrides, and both
+themes by hand after changes.
 
 The page links only `theme-tokens.css`, not `app.css`: `app.css` carries global element rules (for example `svg { max-width: 100% }`, which collapsed the theme button's icon to under 1px). The server injects `app.css` into any page that lacks it, so `refresh.css` must stay robust to those rules.
 

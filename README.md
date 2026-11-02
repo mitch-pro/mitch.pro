@@ -47,7 +47,7 @@ mitch.pro/
 ### Prerequisites
 
 - [Rust](https://rustup.rs) (stable toolchain) — the server itself
-- [Bun](https://bun.sh) (v1.2+) — test runner and a few maintenance scripts
+- Python 3.9+ — the bell-schedule scripts (`set_special_day.sh`, `clear_special_day.sh`)
 - Docker & Docker Compose (optional, for the full containerized stack)
 
 ### Running Locally
@@ -92,10 +92,9 @@ Key environment variables:
 
 ```bash
 cargo test --manifest-path rust/Cargo.toml --workspace   # Rust unit tests (primary suite)
-bun run test:unit                                         # Same, via the npm script alias
 ```
 
-See [tests/README.md](tests/README.md) for the browser tests that run against a local server.
+See [tests/README.md](tests/README.md) for the integration tests that run against a local server.
 
 ---
 
