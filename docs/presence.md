@@ -47,11 +47,8 @@ compatibility, but cannot provide all the focus and ordering guarantees of the
 current tracker.
 
 Validation: `cargo test --workspace` includes resolver, privacy, and injection
-tests. After building `mitch-server`, run `node tests/test_presence_browser.mjs`
-for real-browser navigation, multiple tabs, iframe delegation, friend/admin vs.
-non-friend visibility, disconnects, HTTP fallback, VM/Matrix routes, page
-restoration, authentication, and stale-request checks. It uses isolated fixture
-accounts and a temporary local database.
+tests. Browser-level behavior (multiple tabs, iframe delegation, page restoration) has no
+automated test; check it by hand after changes to `presence.js`.
 
 ## Privacy defaults and ordering
 

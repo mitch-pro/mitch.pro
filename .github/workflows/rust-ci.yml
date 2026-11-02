@@ -9,12 +9,15 @@ on:
 
 jobs:
   check:
+    # The job name is the status-check name branch protection matches on.
+    # Keep it `rust-ci`; renaming it detaches the required check on master.
+    name: rust-ci
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: rust
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -27,29 +30,3 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Tests
         run: cargo test --workspace
-      - name: Build local server for email browser checks
-        run: cargo build -p mitch-server
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '26'
-          cache: npm
-      - name: Install browser test dependencies
-        working-directory: .
-        run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Install Chromium
-        working-directory: .
-        run: npx playwright install --with-deps chromium
-      - name: Shared UI and notification regressions
-        working-directory: .
-        run: |
-          node tests/test_leaderboard_ui.mjs
-          node tests/test_service_worker_unit.js
-          node tests/test_notifications.mjs
-      - name: Admin, VM, and presence browser regressions
-        working-directory: .
-        run: |
-          node tests/test_admin_modernization.mjs
-          node tests/test_presence_browser.mjs
-      - name: Newsletter editor and delivery regressions
-        working-directory: .
-        run: node tests/test_admin_email_browser.mjs

@@ -23,13 +23,4 @@ if [ "$SCHOOL" = "all" ]; then
   exit 0
 fi
 
-exec bun -e '
-const fs = require("fs");
-const [path, school] = process.argv.slice(1);
-const doc = JSON.parse(fs.readFileSync(path, "utf8"));
-const list = Array.isArray(doc.overrides) ? doc.overrides : (doc.date ? [{ school: "woodcreek", ...doc }] : []);
-const kept = list.filter(o => (o.school || "woodcreek") !== school);
-if (kept.length === list.length) { console.log("No override found for " + school + "."); process.exit(0); }
-if (kept.length) fs.writeFileSync(path, JSON.stringify({ overrides: kept }, null, 2)); else fs.unlinkSync(path);
-console.log("✓ Cleared the bell schedule override for " + school + ".");
-' "$OVERRIDE_PATH" "$SCHOOL"
+exec python3 "$BASE_DIR/tools/clear_special_day.py" "$OVERRIDE_PATH" "$SCHOOL"

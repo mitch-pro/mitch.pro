@@ -1,7 +1,7 @@
 # Bell schedule overrides
 
 A one-day replacement bell schedule for a single school, set from the server
-with `./set_special_day.sh` (asks which school, preset or custom periods, and
+with `./set_special_day.sh` (Python 3; asks which school, preset or custom periods, and
 today/tomorrow) and removed with `./clear_special_day.sh <school|all>`.
 
 `data/bell_overrides.json` is `{"overrides": [{school, date, name,

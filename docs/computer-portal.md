@@ -6,7 +6,7 @@ The customer entry point is `/vms/`; `/vms/desktop/?id=<application-record-id>` 
 
 The portal extends the existing Bun server, static HTML/CSS/JavaScript frontend, and website sessions. It uses the bundled noVNC client. There is no additional authentication service, ORM, frontend framework, or separately exposed console server.
 
-`lib/proxmox_desktop.js` owns REST calls, guest-agent status, console sessions, and provisioning. `lib/vm_security.js` contains ownership/session policy. `lib/data_store.js` creates additive `virtual_machines` and `vm_audit_logs` tables in the existing `data/mitchpro.db` SQLite database. Existing account and customization data remain in the same datastore. Approved legacy VM assignments migrate on startup; repeated starts do not create duplicate VM rows.
+The Rust server (`mitch-server`'s `proxmox_desktop.rs` and `mitch-lib`'s `vm_security.rs`) owns REST calls, guest-agent status, console sessions, provisioning, and ownership/session policy. The SQL data layer (`mitch-lib`'s `vm.rs`) creates additive `virtual_machines` and `vm_audit_logs` tables in the existing `data/mitchpro.db` SQLite database. Existing account and customization data remain in the same datastore. Approved legacy VM assignments migrate on startup; repeated starts do not create duplicate VM rows.
 
 VM operations resolve the application record first, then authorize the signed-in owner or administrator. Proxmox node, numeric VM ID, host, port, and upstream WebSocket URL come only from trusted server state. The normal-user API omits hypervisor connection details.
 
@@ -76,14 +76,10 @@ The existing `master` push workflow runs unit tests and triggers `/usr/local/bin
 Before deploying:
 
 ```sh
-bun install --frozen-lockfile
-bun run test:unit
-node --check server.js
-node --check lib/proxmox_desktop.js
-node --check lib/vm_security.js
+cargo test --manifest-path rust/Cargo.toml --workspace
 ```
 
-This repository is plain JavaScript with static frontend files. It does not currently define TypeScript, lint, or frontend production-build scripts. The production build is the Docker image build; validate it through the existing deployment or `docker compose build` on a machine with Docker. Do not claim nonexistent checks passed.
+The frontend is static JavaScript served by the Rust server, with no TypeScript, lint, or frontend production-build scripts. The production build is the Docker image build; validate it through the existing deployment or `docker compose build` on a machine with Docker. Do not claim nonexistent checks passed.
 
 Run integration tests only in a local/test checkout. Its harness backs up and restores that checkout's data directory and uses `NODE_ENV=test`; it must not point at production data or a production `BASE_URL`. Unit tests mock upstream failures, stopped guests, authorization policy, and temporary sessions. HTTP tests require exact 403 responses for User A attempting to view, start, stop, restart, shut down, or open a console for User B, and deny normal-user access to every VM admin route.
 

@@ -55,8 +55,6 @@ cache prevent mixing old design assets with the new release.
 
 ## Local validation
 
-Run the workspace format, Clippy, and test commands from `rust/`. The browser
-suite in `tests/test_site_controls.mjs` creates a disposable SQLite fixture and
-mock Matrix server. It checks role gates, resource values above the ordinary
-tiers, name suggestions, DM routing/reuse/retries, and layouts at 1440, 820, 390, and 320 pixels. It never uses live
-accounts or the real VM host.
+Run the workspace format, Clippy, and test commands from `rust/`. The role gates for
+VM owner resources and account lists are covered by
+`rust/crates/mitch-server/tests/staff_access.rs`.

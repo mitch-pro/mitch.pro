@@ -5,7 +5,7 @@
 
 High-performance, self-hosted web platform and student community built in **Rust**. Serves multi-tenant virtual hosting, End-to-End Encrypted (E2EE) chat over a federated Matrix homeserver, Proxmox LXC cloud desktops, real-time WebSockets, and a small arcade of browser games — all from one Axum-based binary with SQLite persistence.
 
-The project started as a Bun/Node server and has since been fully ported to Rust for performance and reliability; `server.js` now only exists as a thin launcher that spawns the compiled `mitch-server` binary.
+The project started as a Bun/Node server and has since been fully ported to Rust for performance and reliability.
 
 ---
 
@@ -34,13 +34,10 @@ mitch.pro/
 ├── data/                      # SQLite database + version-controlled JSON configs
 ├── caddy/                     # Reverse proxy config for the blue/green deploy
 ├── mail/                      # Legacy JS mail scripts (nodemailer fallback)
-├── lib/                       # Legacy JS modules kept as test fixtures/oracles
 ├── tests/                     # Rust and JS test suites
 ├── tools/                     # Admin, maintenance, and asset-generation scripts
 ├── docs/                      # Design notes for individual features
-├── webvm/                     # In-browser x86 WebVM integration
-├── docker-compose.yml         # Full service topology (server, Matrix, mail, SSH, proxies)
-└── server.js                  # Thin launcher — spawns the compiled Rust binary
+└── docker-compose.yml         # Full service topology (server, Matrix, mail, SSH, proxies)
 ```
 
 ---
@@ -50,7 +47,7 @@ mitch.pro/
 ### Prerequisites
 
 - [Rust](https://rustup.rs) (stable toolchain) — the server itself
-- [Bun](https://bun.sh) (v1.2+) — test runner and a few maintenance scripts
+- Python 3.9+ — the bell-schedule scripts (`set_special_day.sh`, `clear_special_day.sh`)
 - Docker & Docker Compose (optional, for the full containerized stack)
 
 ### Running Locally
@@ -58,10 +55,6 @@ mitch.pro/
 1. **Build and run the server:**
    ```bash
    cargo run --release --manifest-path rust/Cargo.toml -p mitch-server
-   ```
-   or, equivalently, via the launcher script:
-   ```bash
-   bun server.js
    ```
    The application listens on `http://0.0.0.0:6800` by default.
 
@@ -99,10 +92,9 @@ Key environment variables:
 
 ```bash
 cargo test --manifest-path rust/Cargo.toml --workspace   # Rust unit tests (primary suite)
-bun run test:unit                                         # Same, via the npm script alias
 ```
 
-See [tests/README.md](tests/README.md) for the browser tests that run against a local server.
+See [tests/README.md](tests/README.md) for the integration tests that run against a local server.
 
 ---
 

@@ -68,4 +68,4 @@ reservations that spend coins, and so on. If a new feature lets one account pay
 or credit another, it must refuse `tester::is_sandboxed` accounts too.
 
 Tests: `rust/crates/mitch-lib/src/tester.rs` (unit) and
-`tests/test_tester_hub.mjs` (end to end against a local server).
+`rust/crates/mitch-server/tests/tester_hub.rs` (end to end against a local server).

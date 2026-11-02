@@ -72,13 +72,8 @@ Local verification:
 
 ```sh
 cargo test --manifest-path rust/Cargo.toml --workspace
-cargo build --manifest-path rust/Cargo.toml -p mitch-server
-node tests/test_admin_email_browser.mjs
 ```
 
-The browser suite starts an isolated app and a local mock mail service. It never
-sends real email. Set `NEWSLETTER_ARTIFACT_DIR` to a directory outside the repo to
-export an example HTML file and preview screenshots during the test.
 
 Student delivery addresses are resolved from the registered canonical mailbox
 for both selected and everyone audiences. Authentication's dot-stripped identity

@@ -7,9 +7,6 @@
 //! - Cache-Control classes: code (html/htm/js/css or text types) →
 //!   `no-cache, no-store, must-revalidate` + Pragma + Expires 0; media exts →
 //!   `public, max-age=31536000, immutable`; else `public, max-age=2592000`.
-//! - COOP/COEP/CORP only for `/webvm`, `/webvm/*` (not the homepage: windows it opens with
-//!   `window.open` inherit COEP and could not frame ordinary pages, which broke the
-//!   about:blank launcher).
 #![allow(clippy::expect_used)] // infallible static responses
 
 use std::collections::HashMap;
@@ -455,20 +452,6 @@ pub fn redirect(target: &str, status: u16) -> Response {
         .expect("static response")
 }
 
-fn apply_common_headers(headers: &mut Vec<(HeaderName, String)>, url_path: &str) {
-    if url_path.starts_with("/webvm/") || url_path == "/webvm" {
-        if let Ok(n) = HeaderName::from_lowercase(b"cross-origin-opener-policy") {
-            headers.push((n, "same-origin".to_string()));
-        }
-        if let Ok(n) = HeaderName::from_lowercase(b"cross-origin-embedder-policy") {
-            headers.push((n, "credentialless".to_string()));
-        }
-        if let Ok(n) = HeaderName::from_lowercase(b"cross-origin-resource-policy") {
-            headers.push((n, "cross-origin".to_string()));
-        }
-    }
-}
-
 /// `serveStatic(urlPath)` — static serving with directory index handling.
 /// HTML bodies pass through `transform_html` (readability + broadcast), like
 /// the JS.
@@ -528,7 +511,6 @@ pub fn serve_static(
         headers.push((axum::http::header::VARY, "Accept-Encoding".to_string()));
     }
     headers.extend(cache_control_for(&ext, &content_type, url_path));
-    apply_common_headers(&mut headers, url_path);
 
     let body: axum::body::Body = if content_type.contains("text/html") {
         let html = transform_html(String::from_utf8_lossy(&entry.data).into_owned());
