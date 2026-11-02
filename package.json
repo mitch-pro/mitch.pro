@@ -4,7 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "preview:ui": "bun tools/preview-ui.js",
     "test:ui": "node tools/review-ui.mjs",
     "audit:site": "node tools/audit-site.mjs",
     "test:site:browser": "node tests/test_site_ui_browser.mjs",

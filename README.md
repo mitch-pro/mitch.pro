@@ -34,7 +34,6 @@ mitch.pro/
 ├── data/                      # SQLite database + version-controlled JSON configs
 ├── caddy/                     # Reverse proxy config for the blue/green deploy
 ├── mail/                      # Legacy JS mail scripts (nodemailer fallback)
-├── lib/                       # Legacy JS data store (bun:sqlite), used only by the scripts in tools/
 ├── tests/                     # Rust and JS test suites
 ├── tools/                     # Admin, maintenance, and asset-generation scripts
 ├── docs/                      # Design notes for individual features
