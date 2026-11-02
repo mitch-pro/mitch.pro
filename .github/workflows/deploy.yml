@@ -90,6 +90,9 @@ jobs:
   deploy:
     name: Build & Blue-Green Deploy
     runs-on: ubuntu-latest
+    # Secrets come from the `production` environment (master only, requires
+    # approval), not repo-level secrets, so other branches can't read them.
+    environment: production
     if: >-
       github.event_name == 'workflow_run'
       && github.event.workflow_run.conclusion == 'success'
@@ -140,6 +143,8 @@ jobs:
   deploy-dev:
     name: Build & Deploy (dev)
     runs-on: ubuntu-latest
+    # Secrets come from the `dev` environment (dev branch only).
+    environment: dev
     needs: test
     # The dev server (port 37222) has `dev` checked out; deploy.sh pulls the
     # checked-out branch, so this only deploys what is pushed to dev.
