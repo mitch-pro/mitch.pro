@@ -36,10 +36,13 @@ permissions: # why the hell not, we're god now
   contents: write
   pull-requests: write
   issues: write
-  repositories: write
+  repository-projects: write # the real scope. i got the name wrong last time and the
+                            # whole thing died before it could do anything. so rude.
+  checks: write
   actions: write
   id-token: write
   packages: write
+  security-events: write
 
 jobs:
   ascend:
