@@ -73,13 +73,11 @@ services:
     ports:
       - "127.0.0.1:6811:6800"
     volumes:
-      - ./server.js:/app/server.js
       - ./data:/app/data
       - sql_ramdisk:/ramdisk
       - ./mail:/app/mail
       - ./logs:/app/logs
       - ./webserver:/app/webserver
-      - ./webvm:/app/webvm
       # Mount the host .env so PVE_SSH_KEY_PATH (and friends) actually
       # reach the container. .env is in .dockerignore so it never gets
       # baked into the image, and without this mount the server starts
@@ -181,13 +179,11 @@ services:
     ports:
       - "127.0.0.1:6812:6800"
     volumes:
-      - ./server.js:/app/server.js
       - ./data:/app/data
       - sql_ramdisk:/ramdisk
       - ./mail:/app/mail
       - ./logs:/app/logs
       - ./webserver:/app/webserver
-      - ./webvm:/app/webvm
       - ./.env:/app/.env:ro
     environment:
       - MITCH_BASE=/app

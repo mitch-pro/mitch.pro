@@ -9,9 +9,9 @@ if [ -d "/home/mitch/server/bun" ]; then
     BASE_DIR="/home/mitch/server/bun"
 elif [ -d "/home/mitch/bun-server-main/bun-server" ]; then
     BASE_DIR="/home/mitch/bun-server-main/bun-server"
-elif [ -f "$SCRIPT_DIR/../server.js" ]; then
+elif [ -f "$SCRIPT_DIR/../docker-compose.yml" ]; then
     BASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-elif [ -f "$SCRIPT_DIR/server.js" ]; then
+elif [ -f "$SCRIPT_DIR/docker-compose.yml" ]; then
     BASE_DIR="$SCRIPT_DIR"
 else
     BASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
