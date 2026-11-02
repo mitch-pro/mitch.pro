@@ -67,7 +67,7 @@ pub fn can_access_vm_record(
 
 /// `validateDesktopSession(session, actor, record, now, options)`
 /// (vm_security.js:24-32) — the full ladder: expired → identity → record →
-/// owner → authSessionKey → access. Returns the JS `{ok, status, code}`.
+/// owner → authSessionKey → access. Checks VM tunnel session tokens; returns JS `{ok, status, code}`.
 pub fn validate_desktop_session(
     session: Option<&Value>,
     actor: Option<&Value>,
