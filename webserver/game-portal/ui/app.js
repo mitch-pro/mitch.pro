@@ -213,7 +213,7 @@
       byId('wallet-link').href = '/enroll/?next=' + encodeURIComponent('/game-portal/');
       byId('wallet-link').setAttribute('aria-label', 'Sign in to earn MitchCoins');
       byId('reward-title').textContent = 'Sign in to earn';
-      byId('reward-detail').textContent = 'Play games to collect MitchCoins';
+      byId('reward-detail').textContent = 'Play to collect MitchCoins';
       byId('reward-progress').style.width = '0%';
       byId('player-reward').textContent = 'Sign in to earn MitchCoins';
       return;
@@ -365,13 +365,13 @@
 
   function render() {
     const games = filteredGames();
-    const viewName = state.view === 'favorites' ? 'Saved' : state.view === 'recent' ? 'Recently played' : (state.category === 'All' ? 'Games' : state.category);
+    const viewName = state.view === 'favorites' ? 'Saved' : state.view === 'recent' ? 'Recently played' : (state.category === 'All' ? 'Entertainment' : state.category);
     byId('current-view-name').textContent = viewName;
-    byId('page-title').textContent = state.view === 'favorites' ? 'Saved games' : state.view === 'recent' ? 'Recently played' : 'Games';
+    byId('page-title').textContent = state.view === 'favorites' ? 'Saved' : state.view === 'recent' ? 'Recently played' : 'Entertainment Portal';
     byId('quick-picks-section').hidden = !!state.query || state.view !== 'all' || state.category !== 'All';
     byId('sort-control').hidden = state.view !== 'all';
-    byId('catalog-heading').textContent = state.view === 'favorites' ? 'Saved games' : (state.view === 'recent' ? 'Recently played' : 'All games');
-    byId('result-count').textContent = `${games.length.toLocaleString()} ${games.length === 1 ? 'game' : 'games'}`;
+    byId('catalog-heading').textContent = state.view === 'favorites' ? 'Saved' : (state.view === 'recent' ? 'Recently played' : 'All titles');
+    byId('result-count').textContent = `${games.length.toLocaleString()} ${games.length === 1 ? 'title' : 'titles'}`;
     byId('game-grid').replaceChildren(...games.slice(0, state.limit).map(game => makeCard(game)));
     byId('empty-state').hidden = games.length > 0;
     byId('load-more').hidden = games.length <= state.limit;
@@ -383,7 +383,7 @@
   async function loadCatalog() {
     try {
       const response = await fetch('/game-portal/games.json?v=2', { cache: 'no-cache' });
-      if (!response.ok) throw new Error('Could not load the game catalog');
+      if (!response.ok) throw new Error('Could not load the catalog');
       const catalog = await response.json();
       let id = 0;
       const games = [];
@@ -410,14 +410,14 @@
       for (const game of games) if (game.image) artwork.set(discovery.key(game.title), game.image);
       for (const game of games) if (!game.image) game.image = artwork.get(discovery.key(game.title)) || '';
       state.games = games;
-      byId('library-count').textContent = `${games.length.toLocaleString()} games in the library`;
+      byId('library-count').textContent = `${games.length.toLocaleString()} titles in the library`;
       renderFeatured();
       render();
       heartbeat(false);
     } catch (error) {
       byId('library-count').textContent = 'Library unavailable';
       byId('empty-state').hidden = false;
-      byId('empty-state').querySelector('p').textContent = error.message || 'Could not load games.';
+      byId('empty-state').querySelector('p').textContent = error.message || 'Could not load the list.';
     }
   }
 
