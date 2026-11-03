@@ -1,15 +1,15 @@
 //! Background email + housekeeping workers (plan Step 13, batch 1).
-//! Ports the four email timers registered at server.js:5061-5064 plus the
+//! Ports the email timers registered at server.js:5061-5064 (the daily chess
+//! puzzle email was removed) plus the
 //! three housekeeping intervals:
 //! - `weeklyDigestWorker` 600s   (server.js:4853-4907)
-//! - `dailyPuzzleWorker` 600s    (server.js:4913-4947)
 //! - `clockWarnWorker` 600s      (server.js:4948-4982)
 //! - `dmDigestWorker` 1800s      (server.js:4984-5058)
 //! - DM prune 60s                (server.js:26352-26364)
 //! - `cleanExpiredE2eAttachments` 300s + one immediate call (server.js:25227+)
 //! - rlLog sweep 300s            (server.js:3477-3483)
 //!
-//! The four email timers are plain `setInterval(fn, ms)` in the JS — the
+//! The email timers are plain `setInterval(fn, ms)` in the JS — the
 //! first run lands one period in — so each email task here consumes
 //! `interval`'s immediate first tick before its loop. The housekeeping
 //! intervals that JS pairs with an immediate call run once right away,
@@ -28,7 +28,6 @@ pub fn spawn(state: Arc<AppState>) {
     type EmailWorker = (u64, fn(&Arc<AppState>));
     let email_workers: Vec<EmailWorker> = vec![
         (600, weekly_digest_worker),
-        (600, daily_puzzle_worker),
         (600, clock_warn_worker),
         (1800, dm_digest_worker),
     ];
@@ -678,138 +677,6 @@ fn make_weekly_digest_html(
         state,
         email,
         "Your mitch.pro week in review",
-        &content,
-    )
-}
-
-// ── dailyPuzzleWorker (server.js:4913-4947) ──────────────────────────────────
-
-/// `puzzles` (server.js:1640-1646) — loaded once at boot from
-/// webserver/games/chess-bot/puzzles.json; a failed read leaves the pool
-/// empty and the worker returns (`if (!puzzles.length)`).
-fn puzzles(state: &AppState) -> &[Value] {
-    static PUZZLES: std::sync::OnceLock<Vec<Value>> = std::sync::OnceLock::new();
-    PUZZLES.get_or_init(|| {
-        let path = state
-            .cfg
-            .base_dir
-            .join("webserver/games/chess-bot/puzzles.json");
-        match std::fs::read_to_string(&path) {
-            Ok(raw) => serde_json::from_str(&raw).unwrap_or_default(),
-            Err(_) => Vec::new(),
-        }
-    })
-}
-
-fn daily_puzzle_worker(state: &Arc<AppState>) {
-    match daily_puzzle_impl(state) {
-        Ok(()) => {}
-        Err(e) => tracing::info!("[puzzle] error: {e}"),
-    }
-}
-
-fn daily_puzzle_impl(state: &Arc<AppState>) -> Result<(), String> {
-    let all = puzzles(state);
-    if all.is_empty() {
-        return Ok(());
-    }
-    let now = chrono::Local::now();
-    // Fires between 12-1am local (getHours() === 0).
-    if now.hour() != 0 {
-        return Ok(());
-    }
-    let current_slot = now.minute() / 10;
-    // `now.toISOString().slice(0, 10)` — UTC day.
-    let day_key = now
-        .with_timezone(&chrono::Utc)
-        .format("%Y-%m-%d")
-        .to_string();
-    let mut log = load_email_log(state);
-    let mut changed = false;
-    // `p[2] >= 800 && p[2] <= 1400` — non-numeric ratings compare NaN and drop.
-    let pool: Vec<&Value> = all
-        .iter()
-        .filter(|p| {
-            matches!(
-                p.get(2).and_then(|v| v.as_f64()),
-                Some(r) if (800.0..=1400.0).contains(&r)
-            )
-        })
-        .collect();
-    if pool.is_empty() {
-        return Ok(());
-    }
-    let unsub = newsletter_unsub_set(state);
-    for email in enrolled_users(state) {
-        if is_unsubscribed(state, &unsub, &email) {
-            continue;
-        }
-        if email_slot(&email, 6) != current_slot {
-            continue;
-        }
-        let ulog = log_entry(&log, &email);
-        if ulog.get("puzzle").and_then(|v| v.as_str()) == Some(day_key.as_str()) {
-            continue;
-        }
-        let target_email = canonical_email(state, &email);
-        if is_unsubscribed(state, &unsub, &target_email) {
-            continue;
-        }
-        // The log is marked BEFORE the 1-in-10 send gate (server.js:4934-4936).
-        set_log_field(&mut log, &email, "puzzle", json!(day_key.clone()));
-        changed = true;
-        // 1 in 10 chance of sending.
-        if rand::random::<f64>() < 0.1 {
-            let p = pool[(rand::random::<f64>() * pool.len() as f64) as usize];
-            let fen = jsval::string_of(p.get(0));
-            // `p[0].split(' ')[1] === 'w' ? 'White' : 'Black'`.
-            let turn = if fen.split(' ').nth(1) == Some("w") {
-                "White"
-            } else {
-                "Black"
-            };
-            let rating = p.get(2).and_then(|v| v.as_f64()).unwrap_or(f64::NAN);
-            // `String(p[3] || '').split(/\s+/).filter(Boolean).slice(0, 3).join(', ')`.
-            let themes = jsval::str_or(p.get(3), "")
-                .split_whitespace()
-                .take(3)
-                .collect::<Vec<_>>()
-                .join(", ");
-            let target_email = canonical_email(state, &email);
-            let html = make_chess_puzzle_html(state, &target_email, turn, rating, &fen, &themes);
-            crate::routes::push::send_email_bg(
-                state,
-                &target_email,
-                "Today's chess puzzle — mitch.pro",
-                &html,
-            );
-            tracing::info!("[puzzle] sent to {target_email}");
-        }
-    }
-    if changed {
-        save_email_log(state, &log);
-    }
-    Ok(())
-}
-
-/// `makeChessPuzzleHtml` (server.js:1835-1851).
-fn make_chess_puzzle_html(
-    state: &AppState,
-    email: &str,
-    turn: &str,
-    rating: f64,
-    fen: &str,
-    themes: &str,
-) -> String {
-    let solve_url = format!("{}/games/chess-bot/", site_url(state, email));
-    let content = format!(
-        "\n    <h2 style=\"margin: 0 0 16px; font-size: 20px; font-weight: 700; color: #fbbf24; text-align: center;\">♟ Daily Chess Puzzle</h2>\n    <div style=\"background-color: rgba(251, 191, 36, 0.08); border: 1px solid rgba(251, 191, 36, 0.25); border-radius: 12px; padding: 20px; margin-bottom: 24px; text-align: center;\">\n      <p style=\"margin: 0 0 12px; font-size: 16px; font-weight: 700; color: #f4f4f5;\">{} to move and find the best continuation.</p>\n      <div style=\"background: #1e293b; padding: 8px 12px; border-radius: 6px; font-family: monospace; font-size: 13px; color: #94a3b8; word-break: break-all; margin-bottom: 12px;\">\n        FEN: {}\n      </div>\n      <p style=\"margin: 0; font-size: 13px; color: #64748b;\">Rating: <strong>~{}</strong> | Themes: <em>{}</em></p>\n    </div>\n    <div style=\"text-align: center; margin-bottom: 8px;\">\n      <a href=\"{}\" style=\"display: inline-block; background: linear-gradient(135deg, #a855f7, #6366f1); color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 10px; font-weight: 700; box-shadow: 0 10px 20px rgba(168, 85, 247, 0.3);\">Solve on mitch.pro</a>\n    </div>\n  ",
-        turn, fen, fmt_js_num(rating), themes, solve_url,
-    );
-    crate::routes::admin::legacy::html_base_template(
-        state,
-        email,
-        "Today's chess puzzle — mitch.pro",
         &content,
     )
 }

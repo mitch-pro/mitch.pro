@@ -7,7 +7,7 @@
 //!   that unfixed 30s/always-write version verbatim)
 //! - `canvasHeatmap` hourly 24h sweep (server.js:4788-4793)
 //!
-//! The presence sweep, weekly digest, daily puzzle, chess-clock warning, DM
+//! The presence sweep, weekly digest, chess-clock warning, DM
 //! digest, premium maintenance, nudge, VM purge and DM-prune
 //! timers land with their owning steps.
 
@@ -64,8 +64,8 @@ pub fn spawn(state: std::sync::Arc<crate::state::AppState>) {
         });
     }
 
-    // Step 13 batch 1 — the four email workers (weekly digest, daily puzzle,
-    // clock warning, DM digest) plus the DM prune, e2e-attachment cleanup and
+    // Step 13 batch 1 — the email workers (weekly digest, clock
+    // warning, DM digest) plus the DM prune, e2e-attachment cleanup and
     // rlLog sweep timers (server.js:5061-5064, 26352, 25227+, 3477-3483).
     crate::workers_email::spawn(state.clone());
     // Daily summary, premium maintenance, and marketplace settlement.
