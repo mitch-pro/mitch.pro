@@ -123,26 +123,87 @@
     return thumb;
   }
 
+  // Titles are drawn on a <canvas> instead of written into the page, so the
+  // names are not part of the page text. The text lives in a WeakMap, never in
+  // an attribute. Font and colour come from the canvas's computed style, so CSS
+  // and the theme still control them; repaintTitles() redraws after layout,
+  // resize, font load and theme changes.
+  const titleText = new WeakMap();
+
+  function titleCanvas(text) {
+    const canvas = document.createElement('canvas');
+    canvas.className = 'title-canvas';
+    canvas.setAttribute('aria-hidden', 'true');
+    titleText.set(canvas, String(text));
+    scheduleTitlePaint();
+    return canvas;
+  }
+
+  function paintTitle(canvas) {
+    const text = titleText.get(canvas);
+    const rect = canvas.getBoundingClientRect();
+    if (text === undefined || !rect.width || !rect.height) return;
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = Math.round(rect.width * ratio);
+    canvas.height = Math.round(rect.height * ratio);
+    const ctx = canvas.getContext('2d');
+    const style = getComputedStyle(canvas);
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    ctx.fillStyle = style.color;
+    ctx.textBaseline = 'middle';
+    let shown = text;
+    if (ctx.measureText(shown).width > rect.width) {
+      let low = 0, high = text.length;
+      while (low < high) {
+        const mid = Math.ceil((low + high) / 2);
+        if (ctx.measureText(text.slice(0, mid).trimEnd() + '…').width <= rect.width) low = mid; else high = mid - 1;
+      }
+      shown = text.slice(0, low).trimEnd() + '…';
+    }
+    ctx.fillText(shown, 0, rect.height / 2);
+  }
+
+  let titlePaintQueued = false;
+  function scheduleTitlePaint() {
+    if (titlePaintQueued) return;
+    titlePaintQueued = true;
+    requestAnimationFrame(() => {
+      titlePaintQueued = false;
+      document.querySelectorAll('canvas.title-canvas').forEach(paintTitle);
+    });
+  }
+
+  function setTitle(element, text) {
+    element.replaceChildren(titleCanvas(text));
+  }
+
+  window.addEventListener('resize', scheduleTitlePaint);
+  window.addEventListener('themechange', scheduleTitlePaint);
+  new MutationObserver(scheduleTitlePaint).observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme', 'style'] });
+  if (document.fonts?.ready) document.fonts.ready.then(scheduleTitlePaint);
+
   function makeCard(game, compact = false) {
     const card = document.createElement('article');
     card.className = compact ? 'quick-card' : 'game-card';
     card.dataset.gameId = game.id;
     const info = document.createElement('div');
     info.className = 'card-info';
-    const title = document.createElement('strong');
-    title.textContent = game.title;
+    const title = document.createElement('div');
+    title.className = 'card-title';
+    setTitle(title, game.title);
     const category = document.createElement('small');
     category.textContent = game.category + (canEmbed(game) ? '' : ' · Opens in new tab');
     info.append(title, category);
     const open = document.createElement('button');
     open.className = 'card-open';
     open.type = 'button';
-    open.setAttribute('aria-label', 'Play ' + game.title + (canEmbed(game) ? '' : ' (opens in new tab)'));
+    open.setAttribute('aria-label', canEmbed(game) ? 'Play' : 'Play (opens in new tab)');
     open.addEventListener('click', () => launch(game));
     const favorite = document.createElement('button');
     favorite.className = 'favorite-button' + (state.favorites.includes(game.id) ? ' is-saved' : '');
     favorite.type = 'button';
-    favorite.setAttribute('aria-label', `${state.favorites.includes(game.id) ? 'Remove' : 'Save'} ${game.title}`);
+    favorite.setAttribute('aria-label', state.favorites.includes(game.id) ? 'Remove from saved' : 'Save');
     favorite.append(icon('heart'));
     favorite.addEventListener('click', () => toggleFavorite(game.id));
     card.append(imageFor(game), info, open, favorite);
@@ -165,11 +226,11 @@
     previousFocus = document.activeElement;
     state.recent = [game.id, ...state.recent.filter(id => id !== game.id)].slice(0, 30);
     saveList('mitch.games.catalog.recent', state.recent);
-    byId('player-title').textContent = game.title;
+    setTitle(byId('player-title'), game.title);
     byId('player-new-tab').href = game.url;
     byId('open-source-credit').hidden = !game.openSource;
     frame.src = game.url;
-    frame.title = game.title;
+    frame.title = 'Player';
     player.hidden = false;
     document.body.style.overflow = 'hidden';
     byId('player-back').focus();
@@ -342,7 +403,7 @@
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'sidebar-recent-game';
-      button.setAttribute('aria-label', `Play ${game.title} again`);
+      button.setAttribute('aria-label', 'Play again');
       const art = document.createElement('span');
       art.className = 'sidebar-recent-art';
       art.textContent = game.title.slice(0, 1);
@@ -356,7 +417,7 @@
       }
       const title = document.createElement('span');
       title.className = 'sidebar-recent-title';
-      title.textContent = game.title;
+      setTitle(title, game.title);
       button.append(art, title);
       button.addEventListener('click', () => { closeMenu(); launch(game); });
       return button;
