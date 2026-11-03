@@ -123,65 +123,10 @@
     return thumb;
   }
 
-  // Titles are drawn on a <canvas> instead of written into the page, so the
-  // names are not part of the page text. The text lives in a WeakMap, never in
-  // an attribute. Font and colour come from the canvas's computed style, so CSS
-  // and the theme still control them; repaintTitles() redraws after layout,
-  // resize, font load and theme changes.
-  const titleText = new WeakMap();
-
-  function titleCanvas(text) {
-    const canvas = document.createElement('canvas');
-    canvas.className = 'title-canvas';
-    canvas.setAttribute('aria-hidden', 'true');
-    titleText.set(canvas, String(text));
-    scheduleTitlePaint();
-    return canvas;
-  }
-
-  function paintTitle(canvas) {
-    const text = titleText.get(canvas);
-    const rect = canvas.getBoundingClientRect();
-    if (text === undefined || !rect.width || !rect.height) return;
-    const ratio = window.devicePixelRatio || 1;
-    canvas.width = Math.round(rect.width * ratio);
-    canvas.height = Math.round(rect.height * ratio);
-    const ctx = canvas.getContext('2d');
-    const style = getComputedStyle(canvas);
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-    ctx.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-    ctx.fillStyle = style.color;
-    ctx.textBaseline = 'middle';
-    let shown = text;
-    if (ctx.measureText(shown).width > rect.width) {
-      let low = 0, high = text.length;
-      while (low < high) {
-        const mid = Math.ceil((low + high) / 2);
-        if (ctx.measureText(text.slice(0, mid).trimEnd() + '…').width <= rect.width) low = mid; else high = mid - 1;
-      }
-      shown = text.slice(0, low).trimEnd() + '…';
-    }
-    ctx.fillText(shown, 0, rect.height / 2);
-  }
-
-  let titlePaintQueued = false;
-  function scheduleTitlePaint() {
-    if (titlePaintQueued) return;
-    titlePaintQueued = true;
-    requestAnimationFrame(() => {
-      titlePaintQueued = false;
-      document.querySelectorAll('canvas.title-canvas').forEach(paintTitle);
-    });
-  }
-
+  // Names are drawn on canvases (see canvas-text.js), not written into the page.
   function setTitle(element, text) {
-    element.replaceChildren(titleCanvas(text));
+    element.replaceChildren(window.MitchCanvasText.create(text, { block: true }));
   }
-
-  window.addEventListener('resize', scheduleTitlePaint);
-  window.addEventListener('themechange', scheduleTitlePaint);
-  new MutationObserver(scheduleTitlePaint).observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme', 'style'] });
-  if (document.fonts?.ready) document.fonts.ready.then(scheduleTitlePaint);
 
   function makeCard(game, compact = false) {
     const card = document.createElement('article');
