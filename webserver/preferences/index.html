@@ -558,6 +558,8 @@
     align-items: center;
   }
 
+  .status-line.err, .field-sub.err { color: #e11d48; }
+  html.theme-light .status-line.err { color: #be123c; }
   .status-line {
     min-height: 1.2rem;
     margin-top: 0.55rem;
@@ -1021,6 +1023,7 @@
           </label>
           <span class="toggle-desc">Receive email when new blog posts are published.</span>
         </div>
+        <div class="status-line" id="blogAlertsStatus" aria-live="polite"></div>
       </div>
       <div class="field">
         <label>Block Profile Lookups</label>
@@ -1148,7 +1151,7 @@
         <input id="ntfyTopicInput" type="text" maxlength="256" placeholder="ntfy topic or custom URL (e.g. mitch-chat-x7k2 or https://ntfy.example.com/topic)" style="flex:1;min-width:220px">
         <button class="soft-btn" id="saveNtfyBtn" type="button" onclick="saveNtfyTopic()">Save</button>
       </div>
-      <div class="status-line" id="ntfyStatus"></div>
+      <div class="status-line" id="ntfyStatus" aria-live="polite"></div>
       <p class="section-sub" style="margin-top:14px">Looking for more? <a href="/notifications/" style="font-weight:650">Full notification settings</a> — mute chat, groups, friends-online and digests, or set quiet hours.</p>
     </div>
   </section>
@@ -1505,9 +1508,18 @@ function showSaved() {
   }, 1500);
 }
 
-function setStatus(id, text) {
+function setStatus(id, text, isErr) {
   var el = document.getElementById(id);
-  if (el) el.textContent = text || '';
+  if (!el) return;
+  el.textContent = text || '';
+  el.classList.toggle('err', !!isErr);
+}
+
+// Network failures surface as "Failed to fetch"; say what to do instead.
+function errMsg(e, fallback) {
+  if (e instanceof TypeError) return 'No connection. Check your network and try again.';
+  if (e instanceof SyntaxError || !e || !e.message) return fallback;
+  return e.message;
 }
 
 function setSelectValue(id, value) {
@@ -1547,7 +1559,7 @@ async function loadAccountProfile() {
     setPasswordChangeVerificationUi(enabled && type === 'totp' ? 'totp' : 'email');
   } catch (e) {
     profileYearOptions('');
-    setStatus('profileStatus', e.message || 'Could not load profile.');
+    setStatus('profileStatus', errMsg(e, 'Could not load profile.'), true);
     setStatus('twofaStatus', 'Unavailable');
     setPasswordChangeVerificationUi('email');
   }
@@ -1656,7 +1668,7 @@ async function saveAccountProfile() {
     window.dispatchEvent(new CustomEvent('mitch-profile-updated', { detail: d.profile }));
     setStatus('profileStatus', d.bonusGranted ? 'Profile saved. +500 MitchCoins bonus granted.' : 'Profile saved. Changes are live now.');
   } catch (e) {
-    setStatus('profileStatus', e.message || 'Profile save failed.');
+    setStatus('profileStatus', errMsg(e, 'Profile save failed.'), true);
   } finally {
     btn.disabled = false;
   }
@@ -1699,7 +1711,7 @@ async function setupTotp2fa() {
     document.getElementById('setupTotpBtn').textContent = 'Done - enable app 2FA';
     setStatus('twofaMessage', 'Email verification code sent. Scan the QR code, then enter both codes and click Done.');
   } catch (e) {
-    setStatus('twofaMessage', e.message || 'Authenticator setup failed.');
+    setStatus('twofaMessage', errMsg(e, 'Authenticator setup failed.'), true);
   }
 }
 
@@ -1732,7 +1744,7 @@ async function enable2fa(type) {
     document.getElementById('setupTotpBtn').textContent = 'Set up authenticator app';
     setStatus('twofaMessage', '2FA enabled.');
   } catch (e) {
-    setStatus('twofaMessage', e.message || 'Could not enable 2FA.');
+    setStatus('twofaMessage', errMsg(e, 'Could not enable 2FA.'), true);
   }
 }
 
@@ -1742,7 +1754,7 @@ async function disable2fa() {
     try {
       await requestSecurityCode('disable_2fa', 'twofaMessage');
     } catch (e) {
-      setStatus('twofaMessage', e.message || 'Could not send email verification code.');
+      setStatus('twofaMessage', errMsg(e, 'Could not send email verification code.'), true);
     }
     return;
   }
@@ -1766,7 +1778,7 @@ async function disable2fa() {
     document.getElementById('twofaCode').value = '';
     setStatus('twofaMessage', '2FA disabled.');
   } catch (e) {
-    setStatus('twofaMessage', e.message || 'Could not disable 2FA.');
+    setStatus('twofaMessage', errMsg(e, 'Could not disable 2FA.'), true);
   }
 }
 
@@ -2129,13 +2141,19 @@ function saveAll() {
 }
 
 async function loadBlogAlerts() {
+  const toggle = document.getElementById('blogAlertsToggle');
+  if (!toggle) return;
+  toggle.disabled = true;
   try {
     const res = await fetch('/api/blog/subscription', { credentials: 'include', cache: 'no-store' });
-    if (!res.ok) return;
+    if (!res.ok) throw new Error('load failed');
     const data = await res.json();
-    const toggle = document.getElementById('blogAlertsToggle');
-    if (toggle) toggle.checked = data.enabled === true;
-  } catch {}
+    toggle.checked = data.enabled === true;
+    toggle.disabled = false;
+  } catch {
+    // Leave it disabled: showing an unchecked box would misstate the setting.
+    setStatus('blogAlertsStatus', 'Could not load this setting. Reload the page to try again.', true);
+  }
 }
 
 async function loadNtfyTopic() {
@@ -2150,9 +2168,12 @@ async function loadNtfyTopic() {
 
 async function saveNtfyTopic() {
   const input = document.getElementById('ntfyTopicInput');
-  const status = document.getElementById('ntfyStatus');
-  if (!input) return;
+  const btn = document.getElementById('saveNtfyBtn');
+  if (!input || btn.disabled) return;
   const topic = input.value.trim();
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  setStatus('ntfyStatus', '');
   try {
     const res = await fetch('/api/ntfy/topic', {
       method: 'POST',
@@ -2162,33 +2183,41 @@ async function saveNtfyTopic() {
     });
     const data = await res.json().catch(function(){ return {}; });
     if (res.ok) {
-      status.textContent = topic ? 'Saved — ntfy alerts will go to "' + topic + '".' : 'ntfy alerts disabled.';
-      status.style.color = '';
+      setStatus('ntfyStatus', topic ? 'Saved — ntfy alerts will go to "' + topic + '".' : 'ntfy alerts disabled.');
     } else {
-      status.textContent = data.error || 'Could not save topic.';
-      status.style.color = '#f87171';
+      setStatus('ntfyStatus', data.error || 'Could not save topic. Try again.', true);
     }
   } catch (e) {
-    status.textContent = 'Could not save topic.';
-    status.style.color = '#f87171';
+    setStatus('ntfyStatus', errMsg(e, 'Could not save topic. Try again.'), true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save';
   }
 }
 
 async function saveBlogAlerts() {
   const toggle = document.getElementById('blogAlertsToggle');
   if (!toggle) return;
+  const wanted = toggle.checked;
+  toggle.disabled = true;
+  setStatus('blogAlertsStatus', 'Saving…');
   try {
     const res = await fetch('/api/blog/subscription', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled: toggle.checked })
+      body: JSON.stringify({ enabled: wanted })
     });
-    if (!res.ok) throw new Error('save failed');
-    applyAppearanceLive(toggle.checked ? 'Blog alerts enabled.' : 'Blog alerts disabled.');
-  } catch {
-    toggle.checked = !toggle.checked;
-    applyAppearanceLive('Could not update blog alerts.');
+    if (!res.ok) {
+      const d = await res.json().catch(function() { return {}; });
+      throw new Error(d.error || 'Server error (' + res.status + ')');
+    }
+    setStatus('blogAlertsStatus', wanted ? 'Blog alerts on.' : 'Blog alerts off.');
+  } catch (e) {
+    toggle.checked = !wanted;
+    setStatus('blogAlertsStatus', 'Could not update blog alerts: ' + errMsg(e, 'try again') + ' The setting was not changed.', true);
+  } finally {
+    toggle.disabled = false;
   }
 }
 
@@ -2296,7 +2325,7 @@ async function deleteAccount() {
     setStatus('deleteAccountStatus', 'Account deleted. Logging out...');
     setTimeout(function() { location.href = '/'; }, 700);
   } catch (e) {
-    setStatus('deleteAccountStatus', e.message || 'Account deletion failed.');
+    setStatus('deleteAccountStatus', errMsg(e, 'Account deletion failed.'), true);
     btn.disabled = false;
   }
 }
@@ -2314,7 +2343,7 @@ async function deleteAccount() {
       document.getElementById('profilePfp').value = await imageFileToAvatarDataUrl(this.files[0]);
       setStatus('profileStatus', 'Profile picture downscaled. Save your profile to apply it.');
     } catch (e) {
-      setStatus('profileStatus', e.message || 'Could not downscale image.');
+      setStatus('profileStatus', errMsg(e, 'Could not downscale image.'), true);
       this.value = '';
     }
   });
@@ -2380,6 +2409,8 @@ async function deleteAccount() {
     document.getElementById(id).addEventListener('change', saveAll);
   });
   document.getElementById('blogAlertsToggle').addEventListener('change', saveBlogAlerts);
+  document.getElementById('ntfyTopicInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); saveNtfyTopic(); } });
+  document.querySelectorAll('.status-line').forEach(function(el) { el.setAttribute('aria-live', 'polite'); });
   document.getElementById('exportPrefsBtn').onclick = exportPreferences;
   document.getElementById('importPrefsBtn').onclick = function() { document.getElementById('importPrefsInput').click(); };
   document.getElementById('importPrefsInput').onchange = function() { importPreferencesFile(this.files && this.files[0]); };
@@ -2421,7 +2452,7 @@ async function deleteAccount() {
         status.textContent = 'Email verification code sent. Enter it and click Change Password again.';
       } catch (e) {
         status.style.color = 'var(--rose)';
-        status.textContent = e.message || 'Could not send email verification code.';
+        status.textContent = errMsg(e, 'Could not send email verification code.');
       } finally {
         btn.disabled = false;
       }
@@ -2483,7 +2514,7 @@ async function deleteAccount() {
       }
     } catch (e) {
       status.style.color = 'var(--rose)';
-      status.textContent = 'Server error.';
+      status.textContent = 'Could not reach the server. Try again.';
     } finally {
       btn.disabled = false;
     }
@@ -2687,7 +2718,7 @@ async function deleteAccount() {
       }
     } catch (e) {
       status.style.color = 'var(--rose)';
-      status.textContent = 'Server error.';
+      status.textContent = 'Could not reach the server. Try again.';
     } finally {
       btn.disabled = false;
     }
