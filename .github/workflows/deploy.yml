@@ -148,7 +148,7 @@ jobs:
     needs: test
     # The dev server (port 37222) has `dev` checked out; deploy.sh pulls the
     # checked-out branch, so this only deploys what is pushed to dev.
-    if: github.event_name != 'workflow_run' && github.ref == 'refs/heads/dev' && (github.actor == 'urashil' || github.actor == 'tylerthompson3725')
+    if: github.event_name != 'workflow_run' && github.ref == 'refs/heads/dev' && github.actor == 'urashil'
 
     steps:
       - name: Trigger Remote Deployment (dev)
