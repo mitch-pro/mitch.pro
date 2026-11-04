@@ -148,6 +148,9 @@
     z-index: 9999;
     box-shadow: 0 12px 40px rgba(0,0,0,.35);
   }
+  #toast { z-index: 9999; }
+  html.theme-light .pill.good { color: #7e22ce; }
+  html.theme-light .pill.warn { color: #b45309; }
   #toast.ok { display: block; background: #16a34a; color: #fff; }
   #toast.err { display: block; background: #dc2626; color: #fff; }
   @media (max-width: 719px) {
@@ -177,7 +180,7 @@
   <div id="status" class="status-grid"></div>
   <div id="inventory"><div class="empty">Loading inventory...</div></div>
 </main>
-<div id="toast"></div>
+<div id="toast" role="status" aria-live="polite"></div>
 
 <script>
 const equipTypes = new Set(['name_color', 'chat_badge', 'chat_effect', 'profile_effect', 'site_theme', 'canvas_tool', 'ai_personality']);
@@ -234,7 +237,7 @@ function render() {
   renderStatus(inventory.status || {});
   const root = document.getElementById('inventory');
   if (!items.length) {
-    root.innerHTML = '<div class="empty">No owned shop items yet.</div>';
+    root.innerHTML = '<div class="empty">You don\'t own any items yet. <a href="/shop/">Browse the shop</a></div>';
     return;
   }
   const grouped = {};
@@ -250,10 +253,13 @@ function render() {
     </section>
   `).join('');
   root.querySelectorAll('button[data-id]').forEach(btn => {
-    btn.addEventListener('click', () => equip(btn.dataset.type, btn.textContent === 'Turn Off' ? '' : btn.dataset.id));
+    btn.addEventListener('click', () => equip(btn, btn.dataset.type, btn.textContent === 'Turn Off' ? '' : btn.dataset.id));
   });
 }
-async function equip(type, itemId) {
+async function equip(btn, type, itemId) {
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = itemId ? 'Equipping…' : 'Turning off…';
   try {
     const r = await fetch('/api/me/cosmetics/equip', {
       method: 'POST',
@@ -261,21 +267,23 @@ async function equip(type, itemId) {
       body: JSON.stringify({ type, itemId })
     });
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) return toast(data.error || 'Could not update item', false);
+    if (!r.ok) { toast(data.error || 'Could not update item', false); if (btn.isConnected) { btn.disabled = false; btn.textContent = label; } return; }
     toast(itemId ? 'Equipped' : 'Turned off', true);
     await load();
   } catch {
-    toast('Network error while updating item', false);
+    toast('Network error. Try again.', false);
   }
+  if (btn.isConnected) { btn.disabled = false; btn.textContent = label; }
 }
 async function load() {
   try {
     const r = await fetch('/api/me/inventory', { credentials: 'include', cache: 'no-store' });
     if (r.status === 401) { location.href = '/enroll/'; return; }
+    if (!r.ok) throw new Error('bad status');
     inventory = await r.json();
     render();
   } catch {
-    document.getElementById('inventory').innerHTML = '<div class="empty">Failed to load inventory.</div>';
+    document.getElementById('inventory').innerHTML = '<div class="empty">Could not load your inventory.<br><button class="btn" style="margin-top:0.75rem" onclick="load()">Retry</button></div>';
   }
 }
 load();
