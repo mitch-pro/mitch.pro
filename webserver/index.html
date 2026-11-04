@@ -1346,8 +1346,8 @@ function initFriendsSystem() {
 function setupHolidayPill() {
   var pill = document.getElementById('holiday-pill');
   var theme = window.__siteTheme;
-  if (!pill || !theme || !theme.holidayFor) return;
-  var season = theme.holidayFor(new Date());
+  if (!pill || !theme || !theme.holidaySeason) return;
+  var season = theme.holidaySeason();
   if (!season) return;
   function paint() {
     pill.textContent = theme.holidayOff() ? 'Bring back the holiday theme' : "Don't like the holiday theme?";

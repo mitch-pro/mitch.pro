@@ -7,7 +7,7 @@ import vm from 'node:vm';
 
 const source = fs.readFileSync(new URL('../webserver/site-theme.js', import.meta.url), 'utf8');
 
-function load(search = '', stored = {}) {
+function load(search = '', stored = {}, pinned) {
   const attrs = {};
   const root = {
     style: { setProperty() {}, removeProperty() {}, getPropertyValue: () => '' },
@@ -19,7 +19,7 @@ function load(search = '', stored = {}) {
   };
   const sandbox = {
     document: { documentElement: root, cookie: '', head: { appendChild() {} }, createElement: () => ({}), querySelector: () => null },
-    window: { dispatchEvent() {}, matchMedia: () => ({ matches: false }), addEventListener() {} },
+    window: { dispatchEvent() {}, matchMedia: () => ({ matches: false }), addEventListener() {}, __holidayForce: pinned },
     location: { search },
     localStorage: { getItem: k => stored[k] ?? null, setItem: (k, v) => { stored[k] = String(v); }, removeItem: k => { delete stored[k]; } },
     getComputedStyle: () => ({ getPropertyValue: () => '' }),
@@ -58,6 +58,14 @@ assert.equal(load('?holiday=christmas').attrs['data-holiday'], 'christmas');
 assert.equal(load('?holiday=thanksgiving').attrs['data-holiday'], 'thanksgiving');
 assert.equal(load('?holiday=none').attrs['data-holiday'], undefined);
 assert.equal(load('', { theme_holiday: 'off' }).attrs['data-holiday'], undefined);
+
+// A server run can pin the season; the Preferences opt-out and ?holiday= still apply.
+assert.equal(load('', {}, 'christmas').attrs['data-holiday'], 'christmas');
+assert.equal(load('', {}, 'thanksgiving').theme.holidaySeason(), 'thanksgiving');
+assert.equal(load('', {}, 'none').attrs['data-holiday'], undefined);
+assert.equal(load('', { theme_holiday: 'off' }, 'christmas').attrs['data-holiday'], undefined);
+assert.equal(load('?holiday=thanksgiving', {}, 'christmas').attrs['data-holiday'], 'thanksgiving');
+assert.equal(load('', {}, 'bogus').theme.holidaySeason(), load().theme.holidaySeason());
 
 // The homepage pill turns it off for every page by writing the same setting.
 const toggled = load();

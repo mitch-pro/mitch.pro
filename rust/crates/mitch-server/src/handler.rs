@@ -648,6 +648,23 @@ async fn handle_resolved(
         return response;
     }
 
+    // A server run can pin the holiday theme (MITCH_HOLIDAY_THEME): the pin is put
+    // in front of the theme script, which every page loads.
+    if path == "/site-theme.js" && matches!(method, Method::GET | Method::HEAD) {
+        let pin =
+            crate::inject::holiday_pin_prefix(std::env::var("MITCH_HOLIDAY_THEME").ok().as_deref());
+        if !pin.is_empty() {
+            if let Ok(script) = std::fs::read_to_string(state.cfg.webroot.join("site-theme.js")) {
+                return Response::builder()
+                    .status(200)
+                    .header("content-type", "application/javascript; charset=utf-8")
+                    .header("cache-control", "no-store")
+                    .body(axum::body::Body::from(format!("{pin}{script}")))
+                    .unwrap_or_else(|_| err_resp(500, None, None));
+            }
+        }
+    }
+
     if let Some(response) = games_library_redirect(&path, &method, &search) {
         return response;
     }

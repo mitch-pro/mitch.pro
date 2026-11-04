@@ -20,6 +20,7 @@
 ## Local testing
 
 - Run the local testing server on port 8080 whenever possible (`PORT=8080`). If 8080 is taken, say so and use the next free port instead of stopping the other process.
+- Start local testing servers with `GOD_MODE=1` unless told otherwise. It logs every visitor in as the dev admin so signed-in and admin pages can be exercised without an account (local development only: it never takes effect when `NODE_ENV=production`, and it must never be set on a deployed server).
 
 ## Production server access
 

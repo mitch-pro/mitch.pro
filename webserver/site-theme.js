@@ -132,16 +132,28 @@
     return '';
   }
 
+  // A server run can pin the season (MITCH_HOLIDAY_THEME, see docs/holiday-themes.md):
+  // the server puts window.__holidayForce in front of this script.
+  var SEASONS = { thanksgiving: 1, christmas: 1 };
+
+  // The theme that is in season: the server's pinned one, else by date.
+  function holidaySeason() {
+    var pinned = window.__holidayForce;
+    if (pinned === 'none') return '';
+    if (SEASONS[pinned]) return pinned;
+    return holidayFor(new Date());
+  }
+
   function applyHoliday() {
     var root = document.documentElement;
     var forced = (location.search.match(/[?&]holiday=([a-z]+)/) || [])[1];
     var name;
     if (forced === 'none') name = '';
-    else if (forced === 'thanksgiving' || forced === 'christmas') name = forced;
+    else if (SEASONS[forced]) name = forced;
     else {
       var preference = '';
       try { preference = localStorage.getItem('theme_holiday') || ''; } catch (_) {}
-      name = preference === 'off' ? '' : holidayFor(new Date());
+      name = preference === 'off' ? '' : holidaySeason();
     }
     if (name) root.setAttribute('data-holiday', name);
     else root.removeAttribute('data-holiday');
@@ -184,6 +196,7 @@
 
   window.__siteTheme = {
     holidayFor: holidayFor,
+    holidaySeason: holidaySeason,
     holidayOff: holidayOff,
     setHolidayOff: setHolidayOff,
     getMode: function () { return readCookie('theme'); },

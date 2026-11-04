@@ -31,6 +31,15 @@ starts Nov 27 that year). The dates use the visitor's local calendar.
 - Preferences → Appearance → Holiday theme: Automatic or Off (stored as
   `theme_holiday` in local storage, like the other appearance settings).
 
+## Pinning a theme for a server run
+
+`MITCH_HOLIDAY_THEME=christmas|thanksgiving|none` (environment, see `.env.example`)
+makes every page of that server use that theme regardless of the date. The server
+puts `window.__holidayForce` in front of `/site-theme.js` (`inject::holiday_pin_prefix`;
+unknown values are dropped). The Preferences opt-out and the homepage pill still
+turn it off, and `?holiday=` in the address still wins. Example for a local test
+server: `MITCH_HOLIDAY_THEME=christmas PORT=8080 mitch-server`.
+
 ## Previewing
 
 Add `?holiday=thanksgiving`, `?holiday=christmas` or `?holiday=none` to a page's

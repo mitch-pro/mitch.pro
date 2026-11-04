@@ -248,3 +248,40 @@ mod tests {
         assert_eq!(inject_readability(html, "/games/chess/"), html);
     }
 }
+
+/// Line put in front of `/site-theme.js` when the server pins a holiday theme
+/// (`MITCH_HOLIDAY_THEME` = `christmas`, `thanksgiving` or `none`). Anything
+/// else, or nothing, pins nothing and the theme follows the date.
+pub fn holiday_pin_prefix(value: Option<&str>) -> String {
+    match value.map(str::trim) {
+        Some(v @ ("christmas" | "thanksgiving" | "none")) => {
+            format!("window.__holidayForce=\"{v}\";\n")
+        }
+        _ => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod holiday_pin_tests {
+    use super::holiday_pin_prefix;
+
+    #[test]
+    fn only_known_themes_are_pinned() {
+        assert_eq!(
+            holiday_pin_prefix(Some("christmas")),
+            "window.__holidayForce=\"christmas\";\n"
+        );
+        assert_eq!(
+            holiday_pin_prefix(Some(" thanksgiving ")),
+            "window.__holidayForce=\"thanksgiving\";\n"
+        );
+        assert_eq!(
+            holiday_pin_prefix(Some("none")),
+            "window.__holidayForce=\"none\";\n"
+        );
+        // Nothing user-controlled can reach the script: unknown values are dropped.
+        assert_eq!(holiday_pin_prefix(Some("x\";alert(1);//")), "");
+        assert_eq!(holiday_pin_prefix(Some("")), "");
+        assert_eq!(holiday_pin_prefix(None), "");
+    }
+}
