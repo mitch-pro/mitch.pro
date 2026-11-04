@@ -442,8 +442,11 @@
     }
   };
 
+  let marketLoaded = false;
   async function loadData() {
-    document.getElementById('listingsFeed').innerHTML = '<div class="empty-state">Loading listings…</div>';
+    // Only the first load blanks the feed; refreshes after an action keep the
+    // current listings on screen until the new data arrives.
+    if (!marketLoaded) document.getElementById('listingsFeed').innerHTML = '<div class="empty-state">Loading listings…</div>';
     try {
       const meRes = await fetch('/api/me', { credentials:'include', cache:'no-store' });
       if (!meRes.ok) throw new Error('Sign in required');
@@ -457,6 +460,7 @@
       document.getElementById('myCoins').textContent = Number(d.coins).toFixed(2);
       myInventory = d.inventory || { cosmetics:{} };
       fullListings = d.listings || [];
+      marketLoaded = true;
 
       // Populate owned cosmetics dropdown
       listingItem.innerHTML = '<option value="">-- Choose Owned Cosmetic --</option>';
@@ -481,6 +485,7 @@
 
       renderFeed();
     } catch (e) {
+      if (marketLoaded) { notify('Could not refresh the market. ' + (e.message || 'Check your connection.'), 'err'); return; }
       document.getElementById('listingsFeed').innerHTML = `<div class="empty-state"><strong>Could not load the market</strong><br>${esc(e.message || 'Check your connection.')}<br><button class="btn" style="margin-top:0.75rem" onclick="loadData()">Retry</button></div>`;
     }
   }
