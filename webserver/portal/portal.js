@@ -5,6 +5,9 @@
 
   const $ = id => document.getElementById(id);
   const PAGE = 48;
+  // ?probe=<letters> strips the page down for finding what a school filter
+  // reacts to: i = no thumbnails, n = hide titles, l = no list at all.
+  const probe = new URLSearchParams(location.search).get('probe') || '';
   // Players that can run inside the page. Everything else opens in a new tab.
   const EMBED_PREFIXES = ['/prox/luma/', '/prox/calculated2/', '/prox/gamemonetize/', '/games/', '/game-portal/ui/open-source/'];
   // Same storage keys as the older game-portal page, so saved and recent lists carry over.
@@ -36,6 +39,7 @@
   }
 
   async function api(name, params = {}) {
+    if (probe.includes('l')) return null;
     const query = new URLSearchParams(params).toString();
     try {
       const response = await fetch(`/api/portal/${name}${query ? '?' + query : ''}`, { credentials: 'same-origin' });
@@ -56,7 +60,7 @@
   // ── cards ──────────────────────────────────────────────────────────────
   function makeCard(item) {
     const thumb = h('div', { class: 'pt-thumb' }, h('span', {}, item.title.slice(0, 2).toUpperCase()));
-    if (item.image) {
+    if (item.image && !probe.includes('i')) {
       const img = h('img', { src: item.image, alt: '', loading: 'lazy', decoding: 'async' });
       img.addEventListener('error', () => img.remove(), { once: true });
       thumb.append(img);
@@ -66,7 +70,7 @@
       h('button', { type: 'button', class: 'pt-open', onclick: () => play(item) },
         thumb,
         h('span', { class: 'pt-info' },
-          h('span', { class: 'pt-name' }, item.title),
+          h('span', { class: 'pt-name' }, probe.includes('n') ? '•••' : item.title),
           h('span', { class: 'pt-meta' }, item.category + (canEmbed(item) ? '' : ' · new tab')))),
       h('button', {
         type: 'button', class: 'pt-save', 'aria-pressed': String(saved), 'aria-label': saved ? 'Remove from saved' : 'Save',
@@ -95,7 +99,7 @@
     }
     if (token !== S.token) return;
     S.loading = false;
-    if (!page) { $('pt-empty').textContent = 'Could not load the list.'; $('pt-empty').hidden = false; return; }
+    if (!page) { $('pt-empty').textContent = probe.includes('l') ? '' : 'Could not load the list.'; $('pt-empty').hidden = false; return; }
     page.items.forEach(remember);
     S.total = page.total;
     S.items = reset ? page.items : S.items.concat(page.items);
@@ -127,7 +131,7 @@
 
   async function loadSummary() {
     const summary = await api('summary');
-    if (!summary) { $('pt-count').textContent = 'The library is unavailable right now.'; return; }
+    if (!summary) { $('pt-count').textContent = probe.includes('l') ? '' : 'The library is unavailable right now.'; return; }
     S.summary = summary;
     $('pt-count').textContent = `${summary.total.toLocaleString()} titles`;
     $('pt-featured-grid').replaceChildren(...summary.featured.map(item => makeCard(remember(item))));
