@@ -187,3 +187,5 @@ h1 { font-size: clamp(30px, 3vw, 40px); font-weight: 650; letter-spacing: -.035e
   html { scroll-behavior: auto; }
   *, *::before, *::after { transition-duration: .01ms !important; }
 }
+.item-grid.is-loading { opacity: .45; transition: opacity .15s; pointer-events: none; }
+.load-more:disabled, .shuffle-button:disabled { opacity: .6; cursor: default; }

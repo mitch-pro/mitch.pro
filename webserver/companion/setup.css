@@ -226,3 +226,7 @@ html.theme-light #companion-create-form button,
 html.theme-light .companion-mine-card button {
   color: #fff;
 }
+
+.companion-setup-card:focus-visible { outline: 2px solid var(--t-ac); outline-offset: 2px; }
+.companion-setup-shell button:disabled { opacity: 0.6; cursor: default; }
+.mine-msg:empty { display: none; }

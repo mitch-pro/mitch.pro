@@ -154,8 +154,16 @@
   }
 
   async function randomGame() {
+    const button = byId('shuffle');
+    if (button.disabled) return;
+    button.disabled = true;
+    const label = button.textContent;
+    button.textContent = 'Picking…';
     const data = await api('random');
+    button.disabled = false;
+    button.textContent = label;
     if (data?.item) { remember(data.item); launch(data.item); }
+    else showToast('Could not pick a title. Try again.');
   }
 
   function formatCoins(value) {
@@ -194,6 +202,15 @@
     byId('player-reward').textContent = state.dailyEarned >= state.dailyCap
       ? 'Daily MitchCoins complete'
       : `+${state.rewardPerMinute}/min · ${formatCoins(state.dailyEarned)}/${formatCoins(state.dailyCap)} today`;
+  }
+
+  let toastTimer = null;
+  function showToast(text) {
+    const toast = byId('coin-toast');
+    toast.textContent = text;
+    toast.classList.add('is-visible');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('is-visible'), 3500);
   }
 
   function showCoinToast(amount) {
@@ -249,6 +266,42 @@
     } catch { return null; }
   }
 
+  // Fills the shared empty-state box: 'error' offers Retry, anything else
+  // describes why the list is empty and offers a way out.
+  let retryAction = null;
+  function showEmpty(kind) {
+    const box = byId('empty-state');
+    const h = box.querySelector('h3');
+    const p = box.querySelector('p');
+    const btn = byId('clear-filters');
+    btn.hidden = false;
+    if (kind === 'error') {
+      h.textContent = 'Could not load titles';
+      p.textContent = 'Check your connection and try again.';
+      btn.textContent = 'Retry';
+      retryAction = () => { loadSummary(); loadList(true); };
+    } else if (state.view === 'favorites') {
+      h.textContent = 'Nothing saved yet';
+      p.textContent = 'Use the heart on a title to save it here.';
+      btn.textContent = 'Browse all titles';
+      retryAction = null;
+    } else if (state.view === 'recent') {
+      h.textContent = 'Nothing played yet';
+      p.textContent = 'Titles you play will show up here.';
+      btn.textContent = 'Browse all titles';
+      retryAction = null;
+    } else {
+      h.textContent = 'Nothing found';
+      p.textContent = state.query.trim() ? `No titles match "${state.query.trim()}".` : 'No titles in this category.';
+      btn.textContent = 'Clear filters';
+      retryAction = null;
+    }
+    box.hidden = false;
+    byId('item-grid').replaceChildren();
+    byId('load-more').hidden = true;
+    byId('result-count').textContent = '';
+  }
+
   function remember(item) { state.items.set(item.id, item); return item; }
 
   async function itemsById(ids) {
@@ -269,7 +322,19 @@
   // Loads the first page (reset) or the next one of the current view.
   async function loadList(reset) {
     const token = ++listToken;
-    if (reset) { state.list = []; state.total = 0; }
+    const grid = byId('item-grid');
+    const more = byId('load-more');
+    if (reset) {
+      state.list = []; state.total = 0;
+      byId('empty-state').hidden = true;
+      grid.setAttribute('aria-busy', 'true');
+      grid.classList.add('is-loading');
+      byId('result-count').textContent = 'Loading…';
+      more.hidden = true;
+    } else {
+      more.disabled = true;
+      more.textContent = 'Loading…';
+    }
     state.loading = true;
     let page = null;
     if (state.view === 'all') {
@@ -281,9 +346,13 @@
     }
     if (token !== listToken) return;
     state.loading = false;
+    grid.removeAttribute('aria-busy');
+    grid.classList.remove('is-loading');
+    more.disabled = false;
+    more.textContent = 'Show more';
     if (!page) {
-      byId('empty-state').hidden = false;
-      byId('empty-state').querySelector('p').textContent = 'Could not load the list.';
+      if (reset) { renderFilters(); showEmpty('error'); }
+      else { more.textContent = 'Could not load more. Try again'; }
       return;
     }
     state.total = page.total;
@@ -357,7 +426,7 @@
     byId('catalog-heading').textContent = state.view === 'favorites' ? 'Saved' : (state.view === 'recent' ? 'Recently played' : 'All titles');
     byId('result-count').textContent = `${state.total.toLocaleString()} ${state.total === 1 ? 'title' : 'titles'}`;
     byId('item-grid').replaceChildren(...state.list.map(game => makeCard(game)));
-    byId('empty-state').hidden = state.total > 0 || state.loading;
+    if (state.total === 0 && !state.loading) showEmpty(); else byId('empty-state').hidden = true;
     byId('load-more').hidden = state.list.length >= state.total;
     renderFilters();
     renderSidebarRecent();
@@ -368,8 +437,6 @@
     const summary = await api('summary');
     if (!summary) {
       byId('library-count').textContent = 'Library unavailable';
-      byId('empty-state').hidden = false;
-      byId('empty-state').querySelector('p').textContent = 'Could not load the list.';
       return;
     }
     state.summary = summary;
@@ -395,7 +462,10 @@
   });
   byId('menu-scrim').addEventListener('click', closeMenu);
   document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => { state.view = button.dataset.view; state.category = 'All'; closeMenu(); loadList(true); }));
-  byId('clear-filters').addEventListener('click', () => { state.category = 'All'; state.view = 'all'; state.query = ''; search.value = ''; loadList(true); });
+  byId('clear-filters').addEventListener('click', () => {
+    if (retryAction) { retryAction(); return; }
+    state.category = 'All'; state.view = 'all'; state.query = ''; search.value = ''; loadList(true);
+  });
   byId('load-more').addEventListener('click', () => loadList(false));
   byId('shuffle').addEventListener('click', randomGame);
   byId('player-back').addEventListener('click', () => closePlayer());

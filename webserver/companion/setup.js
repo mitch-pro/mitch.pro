@@ -11,7 +11,30 @@
     var headers = Object.assign({ 'X-Mitch-Requested-With': '1' }, opts.headers || {});
     if (opts.body) headers['Content-Type'] = 'application/json';
     return fetch(url, Object.assign({ credentials: 'same-origin', cache: 'no-store' }, opts, { headers: headers }))
-      .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, status: r.status, data: data }; }); });
+      .then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (data) { return { ok: r.ok, status: r.status, data: data }; });
+      })
+      .catch(function () {
+        return { ok: false, status: 0, data: { error: 'Network error. Check your connection and try again.' } };
+      });
+  }
+
+  // Disables a button and swaps its label while `promise` is pending.
+  function busy(btn, label, promise) {
+    var orig = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = label;
+    return promise.then(function (v) { btn.disabled = false; btn.textContent = orig; return v; });
+  }
+
+  function errMsg(res, fallback) {
+    return (res.data && res.data.error) || fallback;
+  }
+
+  function showStatus(msg) {
+    var s = $('companion-setup-status');
+    s.textContent = msg;
+    if (msg) s.scrollIntoView({ block: 'nearest' });
   }
 
   function escapeHtml(s) {
@@ -52,10 +75,14 @@
 
   function subscribe(plan) {
     var el = $('companion-subscription-status');
+    var btn = $(plan === 'week' ? 'companion-sub-week' : 'companion-sub-month');
+    var other = $(plan === 'week' ? 'companion-sub-month' : 'companion-sub-week');
     el.textContent = 'Subscribing...';
-    api('/api/companion/subscribe', { method: 'POST', body: JSON.stringify({ plan: plan }) }).then(function (res) {
+    other.disabled = true;
+    busy(btn, 'Subscribing...', api('/api/companion/subscribe', { method: 'POST', body: JSON.stringify({ plan: plan }) })).then(function (res) {
+      other.disabled = false;
       if (!res.ok) {
-        el.textContent = (res.data && res.data.error) || 'Could not subscribe.';
+        el.textContent = errMsg(res, 'Could not subscribe.');
         return;
       }
       renderSubscription({ subscriptionActive: true, subscriptionExpiresAt: res.data.expiresAt });
@@ -82,19 +109,29 @@
         (c.priceCoins > 0 ? '<div class="companion-setup-card-price">' + c.priceCoins + ' coins</div>' : '') +
         (!c.unlocked ? '<button type="button" class="companion-unlock-btn">Unlock for ' + c.priceCoins + ' coins</button>' : '');
       if (c.unlocked) {
-        card.addEventListener('click', function () {
+        card.tabIndex = 0;
+        card.setAttribute('role', 'button');
+        card.setAttribute('aria-pressed', c.id === selectedId ? 'true' : 'false');
+        var choose = function () {
           selectedId = c.id;
           renderGrid();
+          var again = $('companion-setup-grid').querySelector('.selected');
+          if (again) again.focus();
+        };
+        card.addEventListener('click', choose);
+        card.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(); }
         });
       } else {
         card.querySelector('.companion-unlock-btn').addEventListener('click', function (e) {
           e.stopPropagation();
-          api('/api/companion/characters/unlock', { method: 'POST', body: JSON.stringify({ characterId: c.id }) })
+          busy(e.currentTarget, 'Unlocking...', api('/api/companion/characters/unlock', { method: 'POST', body: JSON.stringify({ characterId: c.id }) }))
             .then(function (res) {
               if (!res.ok) {
-                alert((res.data && res.data.error) || 'Could not unlock.');
+                showStatus(errMsg(res, 'Could not unlock.'));
                 return;
               }
+              showStatus('');
               c.unlocked = true;
               selectedId = c.id;
               renderGrid();
@@ -108,7 +145,15 @@
   function loadCharacters() {
     return api('/api/companion/characters').then(function (res) {
       if (!res.ok) {
-        $('companion-setup-status').textContent = 'Could not load characters.';
+        $('companion-setup-grid').innerHTML = '';
+        var msg = document.createElement('p');
+        msg.textContent = errMsg(res, 'Could not load characters.') + ' ';
+        var retry = document.createElement('button');
+        retry.type = 'button';
+        retry.textContent = 'Retry';
+        retry.addEventListener('click', function () { $('companion-setup-grid').textContent = 'Loading...'; loadCharacters(); });
+        msg.appendChild(retry);
+        $('companion-setup-grid').appendChild(msg);
         return;
       }
       characters = res.data.characters || [];
@@ -122,13 +167,15 @@
 
   function init() {
     var status = $('companion-setup-status');
+    $('companion-setup-grid').textContent = 'Loading...';
     api('/api/companion/settings').then(function (res) {
       if (res.status === 401) {
         location.href = '/enroll/?next=' + encodeURIComponent('/companion/');
         return;
       }
       if (!res.ok) {
-        status.textContent = 'Could not load your companion settings.';
+        status.textContent = errMsg(res, 'Could not load your companion settings.') + ' Reload the page to try again.';
+        $('companion-subscription-status').textContent = '';
         return;
       }
       $('companion-setup-enabled').checked = !!res.data.enabled;
@@ -152,16 +199,17 @@
       return;
     }
     status.textContent = 'Saving...';
-    api('/api/companion/settings', {
+    busy($('companion-setup-save'), 'Saving...', api('/api/companion/settings', {
       method: 'POST',
       body: JSON.stringify({ enabled: enabled, activeCharacterId: selectedId }),
-    }).then(function (res) {
+    })).then(function (res) {
       if (!res.ok) {
-        status.textContent = (res.data && res.data.error) || 'Could not save.';
+        status.textContent = errMsg(res, 'Could not save.');
         return;
       }
       // Reload so companion-widget.js re-reads the new settings and
       // shows/hides the live character accordingly.
+      $('companion-setup-save').disabled = true;
       location.reload();
     });
   });
@@ -171,15 +219,16 @@
   $('companion-create-form').addEventListener('submit', function (e) {
     e.preventDefault();
     var status = $('companion-create-status');
-    status.textContent = 'Creating (500 coins)...';
+    var submit = e.currentTarget.querySelector('button[type="submit"]');
+    status.textContent = '';
     var payload = {
       name: $('companion-create-name').value.trim(),
       personalityPrompt: $('companion-create-prompt').value.trim(),
       priceCoins: Number($('companion-create-price').value) || 0,
     };
-    api('/api/companion/mine', { method: 'POST', body: JSON.stringify(payload) }).then(function (res) {
+    busy(submit, 'Creating...', api('/api/companion/mine', { method: 'POST', body: JSON.stringify(payload) })).then(function (res) {
       if (!res.ok) {
-        status.textContent = (res.data && res.data.error) || 'Could not create character.';
+        status.textContent = errMsg(res, 'Could not create character.');
         return;
       }
       status.textContent = 'Created — add its mood images below in "Your characters".';
@@ -196,7 +245,16 @@
 
   function loadMine() {
     return api('/api/companion/mine').then(function (res) {
-      if (!res.ok) return;
+      if (!res.ok) {
+        var list = $('companion-mine-list');
+        list.textContent = errMsg(res, 'Could not load your characters.') + ' ';
+        var retry = document.createElement('button');
+        retry.type = 'button';
+        retry.textContent = 'Retry';
+        retry.addEventListener('click', loadMine);
+        list.appendChild(retry);
+        return;
+      }
       mine = res.data.characters || [];
       renderMine();
     });
@@ -206,7 +264,7 @@
     var list = $('companion-mine-list');
     list.innerHTML = '';
     if (!mine.length) {
-      list.textContent = "You haven't created any characters yet.";
+      list.textContent = "You haven't created any characters yet. Use the form above to make one.";
       return;
     }
     mine.forEach(function (c) {
@@ -227,7 +285,10 @@
         '<label>Personality prompt</label><textarea class="mine-prompt" rows="4" maxlength="4000">' + escapeHtml(c.personalityPrompt) + '</textarea>' +
         '<label>Price for others to unlock (coins)</label><input type="number" class="mine-price" min="0" step="1" value="' + c.priceCoins + '">' +
         '<button type="button" class="mine-save-btn">Save changes</button>' +
-        '<button type="button" class="mine-delete-btn">Delete character</button>';
+        '<button type="button" class="mine-delete-btn">Delete character</button>' +
+        '<p class="mine-msg" role="status"></p>';
+
+      function setCardMsg(msg) { card.querySelector('.mine-msg').textContent = msg; }
 
       var moodsEl = card.querySelector('.companion-mine-moods');
       (c.moods || []).forEach(function (mood) {
@@ -237,32 +298,37 @@
           '<img src="' + imageUrl(c.id, mood) + '" alt="' + escapeHtml(mood) + '">' +
           '<div>' + escapeHtml(mood) + '</div>' +
           '<button type="button" class="mine-remove-mood-btn">Remove</button>';
-        tile.querySelector('.mine-remove-mood-btn').addEventListener('click', function () {
-          api('/api/companion/mine/image/delete', { method: 'POST', body: JSON.stringify({ id: c.id, mood: mood }) })
-            .then(function () { imgVersion++; loadMine(); });
+        tile.querySelector('.mine-remove-mood-btn').addEventListener('click', function (e) {
+          busy(e.currentTarget, 'Removing...', api('/api/companion/mine/image/delete', { method: 'POST', body: JSON.stringify({ id: c.id, mood: mood }) }))
+            .then(function (res) {
+              if (!res.ok) { setCardMsg(errMsg(res, 'Could not remove image.')); return; }
+              imgVersion++; loadMine();
+            });
         });
         moodsEl.appendChild(tile);
       });
 
-      card.querySelector('.mine-save-btn').addEventListener('click', function () {
+      card.querySelector('.mine-save-btn').addEventListener('click', function (e) {
         var payload = {
           id: c.id,
           name: card.querySelector('.mine-name').value.trim(),
           personalityPrompt: card.querySelector('.mine-prompt').value.trim(),
           priceCoins: Number(card.querySelector('.mine-price').value) || 0,
         };
-        api('/api/companion/mine/update', { method: 'POST', body: JSON.stringify(payload) }).then(function (res) {
+        busy(e.currentTarget, 'Saving...', api('/api/companion/mine/update', { method: 'POST', body: JSON.stringify(payload) })).then(function (res) {
           if (!res.ok) {
-            alert((res.data && res.data.error) || 'Could not save.');
+            setCardMsg(errMsg(res, 'Could not save.'));
             return;
           }
+          setCardMsg('Saved.');
           loadMine();
           loadCharacters();
         });
       });
-      card.querySelector('.mine-delete-btn').addEventListener('click', function () {
+      card.querySelector('.mine-delete-btn').addEventListener('click', function (e) {
         if (!confirm('Delete "' + c.name + '" and all its images? Anyone who unlocked it loses access.')) return;
-        api('/api/companion/mine/delete', { method: 'POST', body: JSON.stringify({ id: c.id }) }).then(function () {
+        busy(e.currentTarget, 'Deleting...', api('/api/companion/mine/delete', { method: 'POST', body: JSON.stringify({ id: c.id }) })).then(function (res) {
+          if (!res.ok) { setCardMsg(errMsg(res, 'Could not delete.')); return; }
           loadMine();
           loadCharacters();
         });
@@ -271,19 +337,21 @@
         e.preventDefault();
         var moodInput = card.querySelector('.mine-mood-name');
         var fileInput = card.querySelector('.mine-mood-file');
+        var submitBtn = e.currentTarget.querySelector('button[type="submit"]');
         var form = new FormData();
         form.append('id', c.id);
         form.append('mood', moodInput.value.trim());
         form.append('file', fileInput.files[0]);
-        fetch('/api/companion/mine/image', {
+        busy(submitBtn, 'Uploading...', fetch('/api/companion/mine/image', {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'X-Mitch-Requested-With': '1' },
           body: form,
         })
-          .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+          .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, data: d }; }); })
+          .catch(function () { return { ok: false, data: { error: 'Network error. Try again.' } }; }))
           .then(function (res) {
-            if (!res.ok) { alert(res.data.error || 'upload failed'); return; }
+            if (!res.ok) { setCardMsg(errMsg(res, 'Upload failed.')); return; }
             imgVersion++;
             loadMine();
           });
