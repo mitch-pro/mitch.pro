@@ -31,7 +31,8 @@
   .btn-sm { min-height: 1.9rem; padding: 0.2rem 0.65rem; font-size: 0.78rem; }
 
   #status { display: none; margin-top: 1.1rem; padding: 0.65rem 0.9rem; border-radius: var(--t-radius-sm); border: 1px solid var(--t-bd); background: var(--t-bg2); font-size: 0.86rem; }
-  #status.show { display: block; }
+  #status.show { display: block; position: sticky; top: 4rem; z-index: 5; }
+  #status .btn { margin-left: .6rem; }
   #status.ok { border-color: var(--t-gr, #3fb950); }
   #status.err { border-color: var(--t-rd, #e5534b); }
 
@@ -159,9 +160,18 @@
 
   var $ = function (id) { return document.getElementById(id); };
 
+  var retryable = false;
   function status(msg, kind) {
     var el = $('status');
     el.textContent = msg;
+    if (kind === 'err' && retryable) {
+      var rb = document.createElement('button');
+      rb.type = 'button';
+      rb.className = 'btn btn-sm';
+      rb.textContent = 'Retry';
+      rb.addEventListener('click', function () { status('Loading…'); load(); });
+      el.appendChild(rb);
+    }
     el.className = 'show' + (kind ? ' ' + kind : '');
   }
 
@@ -231,6 +241,7 @@
   var autoPushed = false;
   async function load() {
     var r;
+    retryable = !server;
     try { r = await api('GET'); } catch (e) { status('Could not reach the server.', 'err'); return false; }
     if (r.status === 401) {
       $('signin-panel').hidden = false;
@@ -264,6 +275,7 @@
     $('signin-panel').hidden = true;
     $('main').hidden = false;
     render();
+    if (/^Loading/.test($('status').textContent)) $('status').className = '';
     return true;
   }
 
@@ -398,9 +410,16 @@
   }
 
   async function guard(btn, fn) {
+    var label = btn.textContent;
     btn.disabled = true;
-    try { await fn(); } catch (err) { status(err && err.message ? err.message : 'That failed.', 'err'); }
-    finally { btn.disabled = false; }
+    btn.textContent = 'Working…';
+    try { await fn(); } catch (err) { status((err && err.message ? err.message : 'That failed.') + ' Try again.', 'err'); }
+    finally {
+      btn.textContent = label;
+      // render() decides whether the manual-slot buttons have anything to act on.
+      var needsSlot = btn.id === 'btn-m-restore' || btn.id === 'btn-m-delete';
+      btn.disabled = needsSlot && !(Object.keys(manualSnap).length + Object.keys(manualIdb).length);
+    }
   }
 
   async function uploadDb(name) {
@@ -563,6 +582,7 @@
     });
   });
 
+  status('Loading…');
   load();
 })();
 </script>
