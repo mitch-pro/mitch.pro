@@ -522,7 +522,7 @@
 
   // Load lunch preference
   if (localStorage.getItem('whs_lunch_preference')) {
-    activeLunch = parseInt(localStorage.getItem('whs_lunch_preference'));
+    activeLunch = parseInt(localStorage.getItem('whs_lunch_preference')) === 2 ? 2 : 1;
   }
   updateLunchUI();
 
@@ -538,6 +538,8 @@
   function updateLunchUI() {
     document.getElementById('lunch1Btn').classList.toggle('active', activeLunch === 1);
     document.getElementById('lunch2Btn').classList.toggle('active', activeLunch === 2);
+    document.getElementById('lunch1Btn').setAttribute('aria-pressed', String(activeLunch === 1));
+    document.getElementById('lunch2Btn').setAttribute('aria-pressed', String(activeLunch === 2));
     const lunchLabel = document.getElementById('autoLunchLabel');
     if (lunchLabel) lunchLabel.textContent = `Lunch ${activeLunch}`;
   }
@@ -723,7 +725,7 @@
 
   async function checkOverrides() {
     try {
-      const res = await fetch('/api/bell/override');
+      const res = await fetch('/api/bell/override', { cache: 'no-store' });
       const data = await res.json();
       if (data && data.override) {
         // Match today's date in local time YYYY-MM-DD
@@ -741,12 +743,18 @@
   }
 
   // Init sequence
+  // Render the regular schedule right away; the override lookup is a network
+  // call and must not hold up (or, if it hangs, block) the page.
+  syncDayUI({ autoOpen: true });
+  loadTodaySchedule();
+  populateAllWeeks();
+  updateLiveTracker();
+  setInterval(updateLiveTracker, 1000); // refresh every 1s
   checkOverrides().then(() => {
-    syncDayUI({ autoOpen: true });
+    if (!activeOverride) return;
     loadTodaySchedule();
     populateAllWeeks();
     updateLiveTracker();
-    setInterval(updateLiveTracker, 1000); // refresh every 1s
   });
 </script>
 
