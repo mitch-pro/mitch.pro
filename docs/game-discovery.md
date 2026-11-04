@@ -71,5 +71,5 @@ the featured row), `/api/portal/list?cat=&q=&sort=&offset=&limit=` (one page of
 Search, category filtering and both sorts run on the server. Ids are the same
 numbering as before, so saved and recent lists keep working. The legacy catalog URLs (`/games/`,
 `/games/index.html`, ...) redirect to `/game-portal/` only while
-`GAMES_LIBRARY_REDIRECT_ENABLED` in `handler.rs` is true; it is off for now, so
-`/games/` serves its own page.
+`GAMES_LIBRARY_REDIRECT_ENABLED` in `handler.rs` is true; it is on. Set it to false to make
+`/games/` serve its own page again.

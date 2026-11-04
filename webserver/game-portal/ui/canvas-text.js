@@ -13,9 +13,10 @@
 
   // options.block: fill the container's width (names that get cut off with an
   // ellipsis); otherwise the canvas is as wide as its text.
+  // options.wrap: a paragraph that wraps onto several lines at the container's width.
   function create(text, options = {}) {
     const canvas = document.createElement('canvas');
-    canvas.className = options.block ? 'title-canvas' : 'text-canvas';
+    canvas.className = options.wrap ? 'wrap-canvas' : options.block ? 'title-canvas' : 'text-canvas';
     canvas.setAttribute('aria-hidden', 'true');
     texts.set(canvas, String(text));
     queue();
@@ -31,8 +32,42 @@
     canvas.style.height = Math.ceil(lineHeight) + 'px';
   }
 
+  function wrapLines(ctx, text, width) {
+    const lines = [];
+    let line = '';
+    for (const word of text.split(' ')) {
+      const next = line ? line + ' ' + word : word;
+      if (line && ctx.measureText(next).width > width) { lines.push(line); line = word; } else line = next;
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  function paintWrapped(canvas, text) {
+    const style = getComputedStyle(canvas);
+    const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.4;
+    measure.font = fontOf(style);
+    const width = canvas.getBoundingClientRect().width;
+    if (!width) return;
+    const lines = wrapLines(measure, text, width);
+    canvas.style.height = Math.ceil(lines.length * lineHeight) + 'px';
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(lines.length * lineHeight * ratio);
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.font = fontOf(style);
+    ctx.fillStyle = style.color;
+    ctx.textBaseline = 'middle';
+    const align = ['center', 'right'].includes(style.textAlign) ? style.textAlign : 'left';
+    ctx.textAlign = align;
+    const x = align === 'center' ? width / 2 : align === 'right' ? width : 0;
+    lines.forEach((line, i) => ctx.fillText(line, x, (i + 0.5) * lineHeight));
+  }
+
   function paint(canvas) {
     const text = texts.get(canvas);
+    if (text !== undefined && canvas.classList.contains('wrap-canvas')) { paintWrapped(canvas, text); return; }
     layout(canvas);
     const rect = canvas.getBoundingClientRect();
     if (text === undefined || !rect.width || !rect.height) return;
@@ -63,7 +98,7 @@
     queued = true;
     requestAnimationFrame(() => {
       queued = false;
-      document.querySelectorAll('canvas.title-canvas, canvas.text-canvas').forEach(paint);
+      document.querySelectorAll('canvas.title-canvas, canvas.text-canvas, canvas.wrap-canvas').forEach(paint);
     });
   }
 
@@ -79,7 +114,7 @@
     if (!raw || !raw.trim() || skipped(node)) return;
     const parts = [];
     if (/^\s/.test(raw)) parts.push(document.createTextNode(' '));
-    parts.push(create(raw.replace(/\s+/g, ' ').trim()));
+    parts.push(create(raw.replace(/\s+/g, ' ').trim(), { wrap: node.parentElement?.tagName === 'P' }));
     if (/\s$/.test(raw)) parts.push(document.createTextNode(' '));
     node.replaceWith(...parts);
   }

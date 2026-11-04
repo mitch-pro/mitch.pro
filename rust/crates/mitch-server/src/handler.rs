@@ -422,8 +422,8 @@ fn manifest_response(manifest: serde_json::Value) -> Response {
 }
 
 /// While false, `/games/` serves its own page instead of redirecting to
-/// `/game-portal/`. Switch it back on to restore the redirect.
-const GAMES_LIBRARY_REDIRECT_ENABLED: bool = false;
+/// `/game-portal/`. Turn it off to stop the redirect.
+const GAMES_LIBRARY_REDIRECT_ENABLED: bool = true;
 
 /// Keep old catalog bookmarks on the current library without redirecting any
 /// playable `/games/<slug>/` pages or API requests (see
@@ -2538,9 +2538,10 @@ mod host_tests {
     }
 
     #[test]
-    fn the_redirect_is_off_while_the_switch_is_off() {
-        for path in ["/games", "/games/", "/games/index.html"] {
-            assert!(games_library_redirect(path, &Method::GET, "").is_none());
-        }
+    fn the_redirect_is_on_and_goes_to_the_portal() {
+        let response = games_library_redirect("/games/", &Method::GET, "").unwrap();
+        assert_eq!(response.status(), 302);
+        assert_eq!(response.headers()["location"], "/game-portal/");
+        assert!(games_library_redirect("/games/run3/", &Method::GET, "").is_none());
     }
 }
