@@ -15,6 +15,7 @@
     var list = [
       { href: '/admin/', name: 'Admin dashboard', desc: 'Approvals, people, economy, moderation, VM cloud, logs', ok: adminOk },
       { href: '/admin/bans/', name: 'Account bans', desc: 'Review bans and restore accounts', ok: adminOk },
+      { href: '/admin/updates/', name: 'Updates', desc: 'Write the homepage update log', ok: adminOk },
       { href: '/admin/vms/', name: 'Virtual machines', desc: 'Manage computers and resources', ok: adminOk },
       { href: '/admin/email/', name: 'Email & newsletters', desc: 'Compose and send site email', ok: adminOk },
       { href: '/admin/companion/', name: 'Companion characters', desc: 'Preset characters and review queue', ok: adminOk },
