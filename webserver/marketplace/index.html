@@ -288,6 +288,9 @@
   .status-finalized { background: rgba(59,130,246,0.12); color: #60a5fa; border: 1px solid rgba(59,130,246,0.25); }
   .status-undone { background: var(--t-bg3); color: var(--t-fg2); border: 1px solid var(--t-bd); }
   .status-disputed { background: rgba(239, 68, 68, 0.12); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.25); }
+  html.theme-light .status-finalized { color: #1d4ed8; }
+  html.theme-light .status-disputed { color: #b91c1c; }
+  html.theme-light .status-pending { color: #b45309; }
   .empty-state {
     text-align: center;
     padding: 2.5rem 1.25rem;
@@ -305,7 +308,6 @@
 <main class="app-main">
   <header class="page-head market-hero app-fade-in">
     <div class="market-hero-copy">
-      <div class="kicker"><span></span> Player exchange</div>
       <h1>Player <span>Market</span></h1>
       <p class="subline">Trade cosmetics and community services using MitchCoins.</p>
     </div>
@@ -320,7 +322,7 @@
     <div class="warning-icon" aria-hidden="true">✓</div>
     <div class="warning-text">
       <h4>Trade inside mitch.pro</h4>
-      <p>Keep transactions in MitchCoins and use a trusted mediator when needed. Virtual goods have no real-world value.</p>
+      <p>Keep transactions in MitchCoins and use a trusted mediator when needed.</p>
     </div>
     <span class="market-protection">24h mediator protection</span>
   </div>
@@ -330,7 +332,7 @@
       <div class="card-title"><span><small>Sell something</small>Create listing</span><b>＋</b></div>
       <form id="createListingForm">
         <div class="form-group">
-          <label>Listing Type</label>
+          <label for="listingType">Listing Type</label>
           <select id="listingType" required>
             <option value="text">Custom Text / Services</option>
             <option value="cosmetic">Owned Shop Cosmetic</option>
@@ -338,29 +340,29 @@
         </div>
 
         <div id="textDetailsGroup" class="form-group">
-          <label>Listing Description / Text</label>
+          <label for="listingDesc">Listing Description / Text</label>
           <textarea id="listingDesc" rows="4" placeholder="e.g. Selling goldfish, helping with algebra homework, custom pixel art design..." maxlength="500"></textarea>
         </div>
 
         <div id="cosmeticsDetailsGroup" class="form-group" style="display: none;">
-          <label>Select Cosmetic Item</label>
+          <label for="listingItem">Select Cosmetic Item</label>
           <select id="listingItem">
             <option value="">-- Choose Owned Cosmetic --</option>
           </select>
         </div>
 
         <div class="form-group">
-          <label>Price (MitchCoins)</label>
-          <input type="number" id="listingPrice" min="0" placeholder="0" required>
+          <label for="listingPrice">Price (MitchCoins)</label>
+          <input type="number" id="listingPrice" min="1" step="1" placeholder="0" required>
         </div>
 
         <div class="form-group">
-          <label>Mediator Email (Optional)</label>
+          <label for="listingMediator">Mediator Email (Optional)</label>
           <input type="email" id="listingMediator" placeholder="mediator@student.mitch.pro">
           <p class="hint">Specifying a mediator holds coins in escrow for 24h. The mediator can resolve the trade or refund the coins if rules are breached.</p>
         </div>
 
-        <button type="submit" class="btn" style="margin-top: 0.35rem;">Post Listing</button>
+        <button type="submit" id="postListingBtn" class="btn" style="margin-top: 0.35rem;">Post Listing</button>
       </form>
     </div>
 
@@ -369,7 +371,7 @@
         <div><small>Community listings</small><h2>Browse the market</h2></div>
         <span class="market-count"><b id="marketCount">0</b> listings</span>
       </div>
-      <div class="feed-tabs">
+      <div class="feed-tabs" role="tablist">
         <button class="feed-tab active" data-tab="active">Live listings</button>
         <button class="feed-tab" data-tab="my-trades">My Transactions</button>
         <button class="feed-tab" data-tab="mediate-inbox">Mediation Inbox (<span id="mediationCount">0</span>)</button>
@@ -414,6 +416,7 @@
   };
 
   async function loadData() {
+    document.getElementById('listingsFeed').innerHTML = '<div class="empty-state">Loading listings…</div>';
     try {
       const meRes = await fetch('/api/me', { credentials:'include', cache:'no-store' });
       if (!meRes.ok) throw new Error('Sign in required');
@@ -451,7 +454,7 @@
 
       renderFeed();
     } catch (e) {
-      document.getElementById('listingsFeed').innerHTML = `<div class="empty-state"><strong>Market connection lost</strong><br>${esc(e.message || 'Please try again shortly.')}</div>`;
+      document.getElementById('listingsFeed').innerHTML = `<div class="empty-state"><strong>Could not load the market</strong><br>${esc(e.message || 'Check your connection.')}<br><button class="btn" style="margin-top:0.75rem" onclick="loadData()">Retry</button></div>`;
     }
   }
 
@@ -475,7 +478,8 @@
     document.getElementById('mediationCount').textContent = fullListings.filter(l => l.isMediator && l.status === 'pending').length;
 
     if (items.length === 0) {
-      feed.innerHTML = '<div class="empty-state">No listings found in this feed.</div>';
+      const msgs = { active: marketQuery ? 'No listings match your search.' : 'No listings yet. Post the first one.', 'my-trades': 'You have no transactions yet.', 'mediate-inbox': 'Nothing waiting for your review.' };
+      feed.innerHTML = `<div class="empty-state">${msgs[activeTab] || 'Nothing here.'}</div>`;
       return;
     }
 
@@ -511,21 +515,21 @@
       let actionBtn = '';
       if (activeTab === 'active') {
         if (l.isSeller) {
-          actionBtn = `<button class="btn danger" onclick="cancelListing('${l.id}')">Cancel listing</button>`;
+          actionBtn = `<button class="btn danger" onclick="cancelListing('${l.id}', this)">Cancel listing</button>`;
         } else {
-          actionBtn = `<button class="btn" onclick="buyListing('${l.id}')">Buy for ${l.price} Coins</button>`;
+          actionBtn = `<button class="btn" onclick="buyListing('${l.id}', this)">Buy for ${l.price} Coins</button>`;
         }
       } else if (activeTab === 'my-trades') {
         if (l.status === 'pending' || l.status === 'finalized' || l.status === 'undone') {
-          actionBtn = `<button class="btn danger" onclick="appealListing('${l.id}')">Dispute / Appeal to Admin</button>`;
+          actionBtn = `<button class="btn danger" onclick="appealListing('${l.id}', this)">Dispute / Appeal to Admin</button>`;
         } else {
           actionBtn = `<button class="btn sec" disabled>${l.status.toUpperCase()}</button>`;
         }
       } else if (activeTab === 'mediate-inbox') {
         actionBtn = `
           <div style="display:flex; gap:10px;">
-            <button class="btn" onclick="mediateListing('${l.id}', 'resolve')" style="font-size:11px;">Finalize & Release</button>
-            <button class="btn danger" onclick="mediateListing('${l.id}', 'undo')" style="font-size:11px;">Refund & Reverse</button>
+            <button class="btn" onclick="mediateListing('${l.id}', 'resolve', this)" style="font-size:11px;">Finalize & Release</button>
+            <button class="btn danger" onclick="mediateListing('${l.id}', 'undo', this)" style="font-size:11px;">Refund & Reverse</button>
           </div>
         `;
       }
@@ -561,12 +565,20 @@
     return '';
   }
 
+  // Shows a pending label on a button for the duration of an async action.
+  async function pending(btn, label, fn) {
+    const old = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = label; }
+    try { return await fn(); }
+    finally { if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = old; } }
+  }
+
   // Action listeners
-  async function buyListing(id) {
+  async function buyListing(id, btn) {
     if (actionBusy) return;
     if (!(await customConfirm('Purchase', 'Are you sure you want to purchase this listing? Coins will be deducted immediately.'))) return;
     actionBusy = true;
-    try {
+    try { await pending(btn, 'Buying…', async () => {
     const recaptcha_token = await getMarketplaceCaptchaToken('buy_listing');
     const r = await fetchWithRetry('/api/marketplace/buy', {
       method: 'POST',
@@ -578,51 +590,59 @@
     if (!r.ok) throw new Error(d.error || 'Purchase failed');
     alert(d.message || 'Purchase complete.');
     await loadData();
-    } catch (e) { alert(e.message); } finally { actionBusy = false; }
+    }); } catch (e) { alert((e.message || 'Purchase failed') + '. Try again.'); } finally { actionBusy = false; }
   }
 
-  async function appealListing(id) {
+  async function appealListing(id, btn) {
     const reason = await customPrompt('Appeal Trade', 'Please describe the dispute or why you are appealing this trade to admins:');
     if (!reason || !reason.trim()) return;
-    const r = await fetch('/api/marketplace/appeal', {
-      method: 'POST',
-      credentials: 'include',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ listingId: id, reason })
+    await pending(btn, 'Sending…', async () => {
+      try {
+        const r = await fetch('/api/marketplace/appeal', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ listingId: id, reason })
+        });
+        const d = await r.json().catch(() => ({}));
+        alert(d.message || d.error || (r.ok ? 'Appeal sent.' : 'Could not send appeal. Try again.'));
+        await loadData();
+      } catch { alert('Network error. Try again.'); }
     });
-    const d = await r.json();
-    alert(d.message || d.error);
-    loadData();
   }
 
-  async function cancelListing(id) {
+  async function cancelListing(id, btn) {
     if (actionBusy || !(await customConfirm('Cancel Listing', 'Cancel this listing? Any listed cosmetic will return to your inventory.'))) return;
     actionBusy = true;
-    try {
+    try { await pending(btn, 'Cancelling…', async () => {
       const r = await fetch('/api/marketplace/cancel', { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ listingId:id }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || 'Could not cancel listing');
       alert(d.message || 'Listing cancelled.');
       await loadData();
-    } catch (error) { alert(error.message); }
+    }); } catch (error) { alert(error.message); }
     finally { actionBusy = false; }
   }
 
-  async function mediateListing(id, action) {
+  async function mediateListing(id, action, btn) {
     const confirmMsg = action === 'resolve' 
       ? 'Resolve trade: release virtual coins/items to respective parties?' 
       : 'Undo trade: refund coins back to buyer and restore any cosmetic items back to seller?';
     if (!(await customConfirm(action === 'resolve' ? 'Resolve Trade' : 'Undo Trade', confirmMsg))) return;
 
-    const r = await fetch('/api/marketplace/mediate', {
-      method: 'POST',
-      credentials: 'include',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ listingId: id, action })
+    await pending(btn, 'Working…', async () => {
+      try {
+        const r = await fetch('/api/marketplace/mediate', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ listingId: id, action })
+        });
+        const d = await r.json().catch(() => ({}));
+        alert(d.message || d.error || (r.ok ? 'Done.' : 'Could not update the trade. Try again.'));
+        await loadData();
+      } catch { alert('Network error. Try again.'); }
     });
-    const d = await r.json();
-    alert(d.message || d.error);
-    loadData();
   }
 
   // Create listing submit
@@ -648,7 +668,8 @@
     }
 
     actionBusy = true;
-    try {
+    const postBtn = document.getElementById('postListingBtn');
+    try { await pending(postBtn, 'Posting…', async () => {
     const recaptcha_token = await getMarketplaceCaptchaToken('create_listing');
     const r = await fetch('/api/marketplace/list', {
       method: 'POST',
@@ -656,17 +677,17 @@
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ type, itemId, description, price, mediator, recaptcha_token })
     });
-    const d = await r.json();
+    const d = await r.json().catch(() => ({}));
     if (d.ok) {
       alert('Listing posted successfully!');
       createForm.reset();
       listingType.onchange();
       await loadData();
     } else {
-      alert(d.error || 'Failed to create listing.');
+      alert(d.error || 'Failed to create listing. Try again.');
     }
-    } catch (error) {
-      alert(error.message || 'Failed to create listing.');
+    }); } catch (error) {
+      alert((error.message || 'Failed to create listing') + '. Try again.');
     } finally {
       actionBusy = false;
     }
