@@ -36,30 +36,69 @@ pub struct Section {
 impl Default for Draft {
     fn default() -> Self {
         Self {
-            subject: "mitch.pro updates — October 16–18".into(),
-            preheader: "A weekend of updates to profiles, chat, movies, Blooket, privacy, and more. From Mitch & Tyler.".into(),
-            edition: "October 16–18, 2026".into(),
-            title: "This weekend on mitch.pro".into(),
-            intro: "Hey everyone,\n\nWe’ve been updating the site throughout Friday, Saturday, and Sunday. Here’s what changed, from the pages you use every day to the tools running behind them.".into(),
+            subject: "What’s new on mitch.pro — Portal access restored, MitchSync, and new features".into(),
+            preheader: "The Entertainment Portal is back online across school networks, plus MitchSync cross-device saves, Cloud Linux desktops, and smoother streaming.".into(),
+            edition: "November 2026".into(),
+            title: "Features you might not know about on mitch.pro".into(),
+            intro: "Hey everyone,\n\nIt’s been a little while since our last newsletter! Rather than just listing routine code changes, we wanted to highlight a few key features across the site that you might not know about yet—starting with the fact that the Entertainment Portal is fully back online and working smoothly on school networks.\n\nHere is what’s running and ready to use:".into(),
             hero_url: String::new(),
             button_label: "Open mitch.pro".into(),
             button_url: "https://mitchdog.com".into(),
-            signature: "Mitch & Tyler".into(),
+            signature: "mitch.pro".into(),
             accent: "#2563eb".into(),
             theme: "paper".into(),
             audience: "selected".into(),
             recipients: vec![],
             sections: vec![
-                Section { title: "Homepage and navigation".into(), body: "We refreshed the homepage, preferences, games, shop, coins, friends, members, casino, and school pages with simpler layouts and more direct labels. The site logo and MitchCoin artwork were updated too.\n\nMovies now opens the Rivestream homepage through the site’s proxy. Blooket Bot has its own full-width shortcut below the other four homepage cards and a link in the top navigation.".into() },
-                Section { title: "Profiles and the leaderboard".into(), body: "The leaderboard was rebuilt around people’s actual profile photos and equipped cosmetics, including their profile colors, badges, and effects. Search and the layout were cleaned up, and Tylerium’s account display now keeps those same profile details.".into() },
-                Section { title: "Sign-in and the new site tour".into(), body: "The login and public signup pages have simpler layouts and clearer account controls. Login styles also load correctly before you sign in.\n\nThe public introduction now centers on the new recording, edited to 3 minutes and 57 seconds with a louder soundtrack. The extra promotional copy and soundtrack caption were removed.".into() },
-                Section { title: "Matrix chat and suggestions".into(), body: "Direct messages now find or reuse the right conversation. We fixed the disappearing Home space button and the empty bottom gap in the installed Matrix app.\n\nThere’s a public #suggestions channel, an administrator-only channel manager, and a moderation audit log. Unbanning someone no longer repeatedly invites or rejects them.".into() },
-                Section { title: "People, friends, and privacy".into(), body: "Presence now follows individual tabs more accurately across People and Friends. Page and activity details are restricted to friends, yourself, and administrators.\n\nA Page Location toggle in Preferences lets you hide those details from everyone, including administrators. Privacy choices are enforced by the backend, and live presence stays in memory.".into() },
-                Section { title: "Cloud Linux and administration".into(), body: "We repaired VM controls and desktop connections. Owners can adjust CPU, memory, and disk from VM Lab’s resource dialog, and staff account search now suggests names, usernames, and email addresses.\n\nThe admin panel’s collapsing layouts, passphrase wiring, and backend routes were fixed. Account, ban, economy, and VM tools received related fixes, and routine moderator visits are no longer added to the activity log. The Activity Log also has a fullscreen view.".into() },
-                Section { title: "Tylerium Services and Blooket".into(), body: "Woodcreek’s main app is now Tylerium Services, with Tylerium branding and navigation. Its dashboard is available at /blooket-bot/ through Mitch, and both backends share Mitch accounts and sign-in.\n\nBlooket joins and retries use a shared queue with capacity checks, cancellation, and clearer connection errors. Existing game identities are preserved. Settings and game controls now use one controller, and a visible Start answering / Stop answering button controls answering. Server status controls and the remaining school-themed labels were removed; the browser tab uses Clever Portal branding.".into() },
-                Section { title: "Email and site maintenance".into(), body: "Admin email tools now connect to the existing mitch-mail-rs service. Newsletters have their own editor with member selection, individual addresses, an everyone audience, saved drafts, and a preview before sending. Unsubscribed addresses are excluded.\n\nBuild-cache handling was repaired and capped at 12 GB. Rust formatting and CI checks were fixed, larger pull-request reviews handle their diffs correctly, and the push-notification workflow’s AI provider was updated. This email and its editor have also been redesigned, with this weekend’s changes loaded as the default update.\n\nThanks for using the site. If something needs fixing, let us know at support@mitch.pro.".into() },
+                Section {
+                    title: "The Entertainment Portal is back online".into(),
+                    body: "If you noticed the Entertainment Portal failing to connect or getting restricted on campus Wi-Fi recently, that has been resolved.\n\nWe rebuilt how the catalog and web titles load behind the scenes. Pages now stream lightweight, clean assets without running into network timeouts or connection drops on district devices. Everything is accessible again directly from your homepage shortcuts.".into(),
+                },
+                Section {
+                    title: "Never lose progress with MitchSync".into(),
+                    body: "Switching Chromebooks between classes or hopping between home and school used to mean starting from scratch. MitchSync solves that by automatically syncing your save data and preferences to your account in the cloud.\n\nIt backs up both local data and full save files (including browser-based game progress) silently while you play. When you log in on another device, your progress carries over with you. You can also view, export, or create manual snapshot backups anytime in the Save Manager at /saves/.".into(),
+                },
+                Section {
+                    title: "Cloud Linux desktops in your browser".into(),
+                    body: "Need a full desktop environment or a Linux terminal on a Chromebook? Check out the Cloud Linux portal at /vms/.\n\nEach desktop runs a dedicated graphical Linux instance straight inside a regular browser tab—no developer mode or local installation required. It includes a terminal, graphical desktop tools, and persistent storage, giving you a full PC workspace anywhere.".into(),
+                },
+                Section {
+                    title: "Smoother movie & media playback".into(),
+                    body: "The Movies portal accessible from your homepage shortcuts has received several performance upgrades behind the scenes.\n\nStreaming routes now dial through optimized dedicated connections for quicker buffer times, skip-intro support, and clean playback without third-party popups or interruptions. If you haven’t checked it out recently, streams load significantly faster and more reliably now.".into(),
+                },
             ],
         }
+    }
+}
+
+/// Stored backup of the October 16–18 weekend update so previous content is
+/// not lost and can be restored whenever requested.
+#[allow(dead_code)]
+pub fn weekend_update_october_backup() -> Draft {
+    Draft {
+        subject: "mitch.pro updates — October 16–18".into(),
+        preheader: "A weekend of updates to profiles, chat, movies, Blooket, privacy, and more.".into(),
+        edition: "October 16–18, 2026".into(),
+        title: "This weekend on mitch.pro".into(),
+        intro: "Hey everyone,\n\nWe’ve been updating the site throughout Friday, Saturday, and Sunday. Here’s what changed, from the pages you use every day to the tools running behind them.".into(),
+        hero_url: String::new(),
+        button_label: "Open mitch.pro".into(),
+        button_url: "https://mitchdog.com".into(),
+        signature: "mitch.pro".into(),
+        accent: "#2563eb".into(),
+        theme: "paper".into(),
+        audience: "selected".into(),
+        recipients: vec![],
+        sections: vec![
+            Section { title: "Homepage and navigation".into(), body: "We refreshed the homepage, preferences, games, shop, coins, friends, members, casino, and school pages with simpler layouts and more direct labels. The site logo and MitchCoin artwork were updated too.\n\nMovies now opens the Rivestream homepage through the site’s proxy. Blooket Bot has its own full-width shortcut below the other four homepage cards and a link in the top navigation.".into() },
+            Section { title: "Profiles and the leaderboard".into(), body: "The leaderboard was rebuilt around people’s actual profile photos and equipped cosmetics, including their profile colors, badges, and effects. Search and the layout were cleaned up, and Tylerium’s account display now keeps those same profile details.".into() },
+            Section { title: "Sign-in and the new site tour".into(), body: "The login and public signup pages have simpler layouts and clearer account controls. Login styles also load correctly before you sign in.\n\nThe public introduction now centers on the new recording, edited to 3 minutes and 57 seconds with a louder soundtrack. The extra promotional copy and soundtrack caption were removed.".into() },
+            Section { title: "Matrix chat and suggestions".into(), body: "Direct messages now find or reuse the right conversation. We fixed the disappearing Home space button and the empty bottom gap in the installed Matrix app.\n\nThere’s a public #suggestions channel, an administrator-only channel manager, and a moderation audit log. Unbanning someone no longer repeatedly invites or rejects them.".into() },
+            Section { title: "People, friends, and privacy".into(), body: "Presence now follows individual tabs more accurately across People and Friends. Page and activity details are restricted to friends, yourself, and administrators.\n\nA Page Location toggle in Preferences lets you hide those details from everyone, including administrators. Privacy choices are enforced by the backend, and live presence stays in memory.".into() },
+            Section { title: "Cloud Linux and administration".into(), body: "We repaired VM controls and desktop connections. Owners can adjust CPU, memory, and disk from VM Lab’s resource dialog, and staff account search now suggests names, usernames, and email addresses.\n\nThe admin panel’s collapsing layouts, passphrase wiring, and backend routes were fixed. Account, ban, economy, and VM tools received related fixes, and routine moderator visits are no longer added to the activity log. The Activity Log also has a fullscreen view.".into() },
+            Section { title: "Tylerium Services and Blooket".into(), body: "Woodcreek’s main app is now Tylerium Services, with Tylerium branding and navigation. Its dashboard is available at /blooket-bot/ through Mitch, and both backends share Mitch accounts and sign-in.\n\nBlooket joins and retries use a shared queue with capacity checks, cancellation, and clearer connection errors. Existing game identities are preserved. Settings and game controls now use one controller, and a visible Start answering / Stop answering button controls answering. Server status controls and the remaining school-themed labels were removed; the browser tab uses Clever Portal branding.".into() },
+            Section { title: "Email and site maintenance".into(), body: "Admin email tools now connect to the existing mitch-mail-rs service. Newsletters have their own editor with member selection, individual addresses, an everyone audience, saved drafts, and a preview before sending. Unsubscribed addresses are excluded.\n\nBuild-cache handling was repaired and capped at 12 GB. Rust formatting and CI checks were fixed, larger pull-request reviews handle their diffs correctly, and the push-notification workflow’s AI provider was updated. This email and its editor have also been redesigned, with this weekend’s changes loaded as the default update.\n\nThanks for using the site. If something needs fixing, let us know at support@mitch.pro.".into() },
+        ],
     }
 }
 
@@ -154,11 +193,29 @@ fn unsubscribed(state: &AppState) -> BTreeSet<String> {
             set.insert(norm);
         }
     }
+    // Also include any in unsub_requests.json (pending / submitted unsub requests)
+    let reqs_file = state.data_dir().join("unsub_requests.json");
+    let reqs = state.store.read_document(&reqs_file, serde_json::json!([]));
+    if let Some(arr) = reqs.as_array() {
+        for item in arr {
+            if let Some(em) = item.get("email").and_then(|v| v.as_str()) {
+                let low = em.to_lowercase().trim().to_string();
+                if !low.is_empty() {
+                    let norm = mitch_lib::auth::normalize_email(&low);
+                    set.insert(low);
+                    if !norm.is_empty() {
+                        set.insert(norm);
+                    }
+                }
+            }
+        }
+    }
     set
 }
 
 fn directory(state: &AppState) -> Vec<Value> {
     let unsub = unsubscribed(state);
+    let unsub_set: std::collections::HashSet<String> = unsub.iter().cloned().collect();
     let mut seen = BTreeSet::new();
     super::accounts::directory(state).into_iter().filter_map(|account| {
         // accounts::directory() keys accounts by their normalized identity
@@ -177,13 +234,17 @@ fn directory(state: &AppState) -> Vec<Value> {
         .trim()
         .to_lowercase();
         if !valid_email(&email) || !seen.insert(email.clone()) { return None; }
-        let eligible = !unsub.contains(&email) && !unsub.contains(&norm);
+        let eligible = !unsub.contains(&email)
+            && !unsub.contains(&norm)
+            && !crate::workers_email::is_unsubscribed(state, &unsub_set, &email)
+            && !crate::workers_email::is_unsubscribed(state, &unsub_set, &norm);
         Some(json!({"email":email,"displayName":account["displayName"],"username":account["username"],"eligible":eligible}))
     }).collect()
 }
 
 fn resolve_recipients(state: &AppState, draft: &Draft) -> Result<Vec<String>, &'static str> {
     let unsub = unsubscribed(state);
+    let unsub_set: std::collections::HashSet<String> = unsub.iter().cloned().collect();
     let candidates = if draft.audience == "everyone" {
         directory(state)
             .iter()
@@ -213,7 +274,11 @@ fn resolve_recipients(state: &AppState, draft: &Draft) -> Result<Vec<String>, &'
         if !valid_email(&email) {
             return Err("One of the recipient email addresses is invalid.");
         }
-        if !unsub.contains(&email) && !unsub.contains(&norm) {
+        if !unsub.contains(&email)
+            && !unsub.contains(&norm)
+            && !crate::workers_email::is_unsubscribed(state, &unsub_set, &email)
+            && !crate::workers_email::is_unsubscribed(state, &unsub_set, &norm)
+        {
             recipients.insert(email);
         }
     }
@@ -263,9 +328,15 @@ pub async fn handle(
     let response = match (method, path) {
         (&Method::GET, "/api/admin/newsletters/recipients") => {
             let accounts = directory(state);
+            let unsub = unsubscribed(state);
             json_resp(
                 200,
-                json!({"ok":true,"accounts":accounts,"eligible":accounts.iter().filter(|a| a["eligible"] == true).count()}),
+                json!({
+                    "ok": true,
+                    "accounts": accounts,
+                    "unsubscribed": unsub.into_iter().collect::<Vec<_>>(),
+                    "eligible": accounts.iter().filter(|a| a["eligible"] == true).count()
+                }),
             )
         }
         (&Method::GET, "/api/admin/newsletters/draft") => {
@@ -410,8 +481,11 @@ async fn deliver(state: Arc<AppState>, file: std::path::PathBuf, mut job: Value,
         .iter()
         .filter_map(|a| a["email"].as_str().map(String::from))
         .collect();
+    let unsub_all = unsubscribed(&state);
+    let unsub_set: std::collections::HashSet<String> = unsub_all.iter().cloned().collect();
     for email in recipients {
-        let outcome = if unsubscribed(&state).contains(&email)
+        let outcome = if unsub_all.contains(&email)
+            || crate::workers_email::is_unsubscribed(&state, &unsub_set, &email)
             || (draft.audience == "everyone" && !registered.contains(&email))
         {
             "skipped"
@@ -598,7 +672,7 @@ mod tests {
         draft.edition = "<img src=x onerror=alert(1)>".into();
         let html = template::render(&draft, "#");
         assert!(html.contains("&lt;img src=x onerror=alert(1)&gt;"));
-        assert!(html.contains("Mitch &amp; Tyler"));
+        assert!(html.contains("mitch.pro"));
         draft.edition = "x".repeat(81);
         assert!(parse_draft(&json!(draft), false).is_err());
         draft.edition.clear();

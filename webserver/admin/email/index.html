@@ -10,7 +10,7 @@
 <body class="newsletter-editor">
   <main class="newsletter-app" id="newsletter-app">
     <header class="editor-header">
-      <div class="editor-heading"><a class="back-link" href="/admin/#email-tools">Admin / Email</a><div class="editor-title"><h1>Newsletter</h1><span class="author-credit">Mitch &amp; Tyler</span></div></div>
+      <div class="editor-heading"><a class="back-link" href="/admin/#email-tools">Admin / Email</a><div class="editor-title"><h1>Newsletter</h1><span class="author-credit">mitch.pro</span></div></div>
       <div class="header-actions"><span id="draft-status" role="status"></span><button id="save-draft" type="button" disabled>Save draft</button><button id="review-email" class="primary" type="button" disabled>Review email</button></div>
     </header>
 
@@ -29,8 +29,8 @@
         </div>
         <form id="newsletter-form" class="editor-fields">
           <section id="panel-message" class="field-card" role="tabpanel" aria-labelledby="tab-message" data-editor-panel="message">
-            <div class="card-heading"><h2>Message</h2><button type="button" class="text-button" id="load-example">Load weekend update</button></div>
-            <p class="example-note" id="example-note">Default update: October 16–18, 2026.</p>
+            <div class="card-heading"><h2>Message</h2><button type="button" class="text-button" id="load-example">Load default draft</button></div>
+            <p class="example-note" id="example-note">Default draft: November 2026.</p>
             <label for="subject">Subject</label><input id="subject" name="subject" maxlength="180" required>
             <label for="preheader">Inbox preview text</label><input id="preheader" name="preheader" maxlength="250">
             <div class="message-divider"></div>
@@ -74,7 +74,7 @@
       <section class="preview-pane" aria-label="Newsletter preview">
         <div class="preview-toolbar"><h2>Preview</h2><div class="preview-actions"><div class="view-switch" role="group" aria-label="Preview width"><button type="button" data-preview-width="desktop" aria-pressed="true">Desktop</button><button type="button" data-preview-width="phone" aria-pressed="false">Phone</button></div><button type="button" id="download-html" class="text-button">Download HTML</button></div></div>
         <div class="preview-surface">
-          <div class="inbox-preview"><div class="sender-avatar" aria-hidden="true">m.</div><div class="inbox-copy"><span class="sender">Mitch &amp; Tyler <small>mitch.pro</small></span><strong id="preview-subject"></strong><p id="preview-preheader"></p></div></div>
+          <div class="inbox-preview"><div class="sender-avatar" aria-hidden="true">m.</div><div class="inbox-copy"><span class="sender">mitch.pro <small>updates</small></span><strong id="preview-subject"></strong><p id="preview-preheader"></p></div></div>
           <div class="preview-canvas" id="preview-canvas"><iframe id="newsletter-preview" title="Newsletter example and live preview" sandbox="" referrerpolicy="no-referrer"></iframe></div>
         </div>
         <p class="preview-note" id="preview-status" role="status">Loading preview…</p>

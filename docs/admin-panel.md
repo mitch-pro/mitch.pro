@@ -11,7 +11,7 @@ replacing the old competing command-center styles. Its shortcuts cover
 newsletters, account bans, virtual machines, and public rankings. Newsletter and
 VM shortcuts stay hidden until `/api/me` confirms `isAdmin`. The newsletter API
 also requires full admin status; manually opening a URL cannot bypass that check.
-The newsletter's Mitch & Tyler signature is retained.
+The newsletter uses mitch.pro branding and signature.
 
 Administrative API requests use the signed account session, full role checks,
 and `X-Admin-Passphrase`. Passphrases are verified on the server and kept only in

@@ -3,7 +3,7 @@
   const $ = id => document.getElementById(id);
   const fields = ['subject', 'preheader', 'edition', 'title', 'intro', 'heroUrl', 'buttonLabel', 'buttonUrl', 'signature', 'accent', 'theme'];
   const selected = new Set();
-  let accounts = [], example, draft, previewHtml = '', previewTimer, previewVersion = 0;
+  let accounts = [], unsubscribedList = new Set(), example, draft, previewHtml = '', previewTimer, previewVersion = 0;
   let dirty = false, ready = false, reviewing = false, sending = false, review, reviewSnapshot = '', jobTimer;
   const dialog = $('review-dialog');
   const tabs = [...document.querySelectorAll('[data-editor-tab]')];
@@ -63,11 +63,18 @@
   }
   function audience() { return document.querySelector('input[name="audience"]:checked').value; }
   function otherRecipients() { return $('extra-recipients').value.split(/[,;\n]+/).map(s => s.trim().toLowerCase()).filter(Boolean); }
+  function isUnsubscribed(email) {
+    const low = String(email || '').trim().toLowerCase();
+    if (!low) return false;
+    if (unsubscribedList.has(low)) return true;
+    const account = accounts.find(a => a.email.toLowerCase() === low);
+    return account ? !account.eligible : false;
+  }
   function readDraft() {
     const value = { ...draft };
     for (const field of fields) value[field] = $(field).value;
     value.audience = audience();
-    value.recipients = [...new Set([...selected, ...otherRecipients()])];
+    value.recipients = [...new Set([...selected, ...otherRecipients()])].filter(email => !isUnsubscribed(email));
     value.sections = [...document.querySelectorAll('.content-section')].map(section => ({
       title: section.querySelector('[data-section-title]').value,
       body: section.querySelector('[data-section-body]').value,
@@ -99,9 +106,18 @@
     draft = structuredClone(value);
     for (const field of fields) $(field).value = value[field] ?? '';
     selected.clear();
-    const known = new Set(accounts.map(a => a.email));
-    value.recipients.forEach(email => { if (known.has(email)) selected.add(email); });
-    $('extra-recipients').value = value.recipients.filter(email => !known.has(email)).join(', ');
+    const known = new Set(accounts.map(a => a.email.toLowerCase()));
+    value.recipients.forEach(email => {
+      const lower = email.toLowerCase();
+      const account = accounts.find(a => a.email.toLowerCase() === lower);
+      if (account && account.eligible && !isUnsubscribed(lower)) {
+        selected.add(account.email);
+      }
+    });
+    $('extra-recipients').value = value.recipients.filter(email => {
+      const lower = email.toLowerCase();
+      return !known.has(lower) && !isUnsubscribed(lower);
+    }).join(', ');
     document.querySelector(`input[name="audience"][value="${value.audience}"]`).checked = true;
     $('newsletter-sections').replaceChildren();
     value.sections.forEach(addSection);
@@ -115,10 +131,11 @@
     for (const account of matches.slice(0, 100)) {
       const label = document.createElement('label'); label.className = 'recipient-option';
       const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.value = account.email;
-      checkbox.checked = selected.has(account.email); checkbox.disabled = !account.eligible;
+      const unsub = isUnsubscribed(account.email);
+      checkbox.checked = selected.has(account.email) && !unsub; checkbox.disabled = !account.eligible || unsub;
       checkbox.onchange = () => { checkbox.checked ? selected.add(account.email) : selected.delete(account.email); changed(); };
       const name = document.createElement('span'); name.textContent = account.displayName || account.email;
-      const email = document.createElement('small'); email.textContent = account.email + (account.eligible ? '' : ' · Unsubscribed'); name.append(email);
+      const email = document.createElement('small'); email.textContent = account.email + (account.eligible && !unsub ? '' : ' · Unsubscribed'); name.append(email);
       label.append(checkbox, name); list.append(label);
     }
     if (!matches.length || matches.length > 100) {
@@ -128,10 +145,11 @@
   }
   function updateAudience() {
     $('selected-recipients').hidden = audience() === 'everyone';
-    const eligible = accounts.filter(a => a.eligible).length;
+    const eligible = accounts.filter(a => a.eligible && !isUnsubscribed(a.email)).length;
     $('everyone-count').textContent = `(${eligible})`;
-    const unsub = new Set(accounts.filter(a => !a.eligible).map(a => a.email));
-    const count = audience() === 'everyone' ? eligible : [...new Set([...selected, ...otherRecipients()])].filter(email => !unsub.has(email)).length;
+    const others = otherRecipients().filter(email => !isUnsubscribed(email));
+    const activeSelected = [...selected].filter(email => !isUnsubscribed(email));
+    const count = audience() === 'everyone' ? eligible : [...new Set([...activeSelected, ...others])].length;
     $('recipient-count').textContent = `${count} ${count === 1 ? 'recipient' : 'recipients'}`;
   }
   function changed() {
@@ -159,7 +177,9 @@
       const me = await api('/api/me');
       if (!me.isAdmin) { showAccess('This page is available to administrators.', false); return; }
       const [saved, directory] = await Promise.all([api('/api/admin/newsletters/draft'), api('/api/admin/newsletters/recipients')]);
-      accounts = directory.accounts; example = saved.example;
+      accounts = directory.accounts || [];
+      unsubscribedList = new Set((directory.unsubscribed || []).map(e => String(e).toLowerCase()));
+      example = saved.example;
       populate(saved.draft);
       $('access-panel').hidden = true; $('editor-workspace').hidden = false;
       $('save-draft').disabled = $('review-email').disabled = false;

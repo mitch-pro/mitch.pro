@@ -39,7 +39,7 @@ Download HTML exports the preview without a personal unsubscribe token.
 Message, Appearance, and Recipients tabs sit beside the live preview. Arrow keys,
 Home, and End navigate the tabs; reviewing an invalid field opens its tab. The
 email uses a sans-serif layout with a dark masthead, unnumbered update cards,
-and Mitch & Tyler branding and sign-off. The edition/date line is editable.
+and mitch.pro branding and sign-off. The edition/date line is editable.
 
 The default is the October 16–18, 2026 weekend update, based on this repository's
 Friday-through-Sunday changes: site design and shortcuts, profiles and leaderboard,
