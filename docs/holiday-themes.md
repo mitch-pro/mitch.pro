@@ -17,7 +17,11 @@ starts Nov 27 that year).
 
 - `webserver/site-theme.js` (`holidayFor`, `applyHoliday`) sets
   `data-holiday="thanksgiving|christmas"` on `<html>` before first paint on every
-  page that loads the site theme.
+  page that loads the site theme. The server injects it into ordinary pages;
+  `/matrix/` is served by the Matrix SPA fallback, which skips that injection,
+  so `webserver/matrix/index.html` loads `/site-theme.js` itself. Its Cinny
+  overrides (`matrix-galaxy.css`) read the same `--t-*` tokens, so the chat
+  follows the holiday palette too.
 - `webserver/theme-tokens.css` has the palettes, for light and dark mode, under
   `:root[data-holiday=…]`. They override the same `--t-*` tokens the rest of the
   site uses, so pages follow without changes. A custom accent chosen in
