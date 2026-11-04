@@ -245,6 +245,7 @@
     try { r = await api('GET'); } catch (e) { status('Could not reach the server.', 'err'); return false; }
     if (r.status === 401) {
       $('signin-panel').hidden = false;
+      $('status').className = '';
       $('main').hidden = true;
       $('signin-link').href = '/enroll/?next=' + encodeURIComponent('/saves/');
       return false;
