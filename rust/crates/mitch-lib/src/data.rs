@@ -255,6 +255,18 @@ impl DataStore {
                         applied_at INTEGER
                     );
                     CREATE INDEX IF NOT EXISTS idx_support_email_requests_ticket ON support_email_requests (ticket_id, status);
+                    CREATE TABLE IF NOT EXISTS feedback_entries (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        kind TEXT NOT NULL DEFAULT '',
+                        text TEXT NOT NULL,
+                        account TEXT NOT NULL DEFAULT '',
+                        created_at INTEGER NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'new',
+                        handled_by TEXT NOT NULL DEFAULT '',
+                        handled_at INTEGER,
+                        UNIQUE (created_at, kind, text)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_feedback_status ON feedback_entries (status, created_at DESC);
                     CREATE TABLE IF NOT EXISTS site_updates (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         title TEXT NOT NULL,

@@ -175,33 +175,21 @@ fn users(state: &Arc<AppState>) -> Response {
     json_response(200, json!({ "users": users }))
 }
 
-/// dtype `suggestions`.
+/// dtype `suggestions`: the feedback entries, in the shape this legacy endpoint
+/// always returned. The data lives in the `feedback_entries` table now; the
+/// staff page is `/moderator/feedback/` (docs/feedback.md).
 fn suggestions(state: &Arc<AppState>) -> Response {
-    let mut sugs = state
-        .store
-        .read_document(&state.cfg.data_dir.join("suggestions.json"), json!([]))
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
-    for s in sugs.iter_mut() {
-        let id = s
-            .get("id")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        let name = mitch_lib::auth::names_get_email(&state.store, &id)
-            .or_else(|| s.get("name").and_then(|v| v.as_str()).map(str::to_string))
-            .unwrap_or_else(|| id.chars().take(20).collect::<String>());
-        if let Some(obj) = s.as_object_mut() {
-            obj.insert("name".into(), json!(name));
-        }
-    }
-    sugs.sort_by(|a, b| {
-        b.get("ts")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0)
-            .cmp(&a.get("ts").and_then(|v| v.as_i64()).unwrap_or(0))
-    });
+    let sugs: Vec<Value> = mitch_lib::feedback::list(&state.store, "all")
+        .iter()
+        .map(|e| {
+            json!({
+                "name": e.account,
+                "type": e.kind,
+                "text": e.text,
+                "ts": e.created_at as f64 / 1000.0,
+            })
+        })
+        .collect();
     json_response(200, json!({ "suggestions": sugs }))
 }
 

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Feedback — mitch.pro</title>
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/moderator/feedback/feedback.css">
+<script src="/app-shell.js" defer></script>
+</head>
+<body class="app-shell">
+<main class="fb-wrap">
+  <h1>Feedback</h1>
+  <p class="fb-sub" id="denied" hidden>This page is for moderators and admins.</p>
+  <div id="app" hidden>
+    <div class="fb-tabs" id="tabs" role="tablist" aria-label="Filter"></div>
+    <div id="list"></div>
+    <p class="fb-status" id="status" role="status"></p>
+  </div>
+
+  <dialog id="pass-dialog" class="fb-dialog">
+    <form id="pass-form" autocomplete="off">
+      <h2>Admin passphrase</h2>
+      <input type="password" id="pass-input" autocomplete="current-password" aria-label="Admin passphrase" required>
+      <p class="fb-status" id="pass-status"></p>
+      <div class="fb-row"><button type="button" class="fb-btn" id="pass-cancel">Cancel</button><button type="submit" class="fb-btn primary">Unlock</button></div>
+    </form>
+  </dialog>
+</main>
+<script src="/moderator/feedback/feedback.js"></script>
+<script src="/admin/passphrase-help.js" defer></script>
+</body>
+</html>

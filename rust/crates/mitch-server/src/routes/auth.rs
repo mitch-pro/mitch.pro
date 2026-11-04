@@ -1548,25 +1548,16 @@ async fn suggest(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) 
         return json_resp(400, json!({ "success": false, "message": "Empty." }));
     }
 
-    let name = mitch_lib::auth::names_get_email(&state.store, &user_id)
-        .unwrap_or_else(|| user_id.chars().take(12).collect::<String>());
-
-    let entry = json!({
-        "id": user_id,
-        "name": name,
-        "type": sug_type,
-        "text": text,
-        "ts": (now_ms() as f64) / 1000.0
-    });
-
-    let mut sugs = state
-        .store
-        .read_document(&data_file(state, "suggestions.json"), json!([]));
-    if let Some(arr) = sugs.as_array_mut() {
-        arr.push(entry);
-        let _ = state
-            .store
-            .write_document(&data_file(state, "suggestions.json"), &sugs);
+    // The sender's account email when we know it (never the raw session id).
+    let account = mitch_lib::auth::names_get_email(&state.store, &user_id)
+        .filter(|e| e.contains('@'))
+        .unwrap_or_default();
+    if mitch_lib::feedback::add(&state.store, &sug_type, &text, &account, now_ms() as i64).is_none()
+    {
+        return json_resp(
+            500,
+            json!({ "success": false, "message": "Could not save that. Try again." }),
+        );
     }
 
     let label = match sug_type.as_str() {
