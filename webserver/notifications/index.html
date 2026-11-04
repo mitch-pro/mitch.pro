@@ -97,6 +97,8 @@
   .quiet-times input[type="time"]:disabled { opacity: 0.45; }
   .status-line { margin-top: 0.7rem; font-size: 0.82rem; font-weight: 600; color: var(--t-ac); min-height: 1.2em; }
   .status-line.err { color: #e11d48; }
+  html.theme-light .status-line.err { color: #be123c; }
+  .status-line:empty { display: none; }
   .device-state {
     display: inline-flex;
     align-items: center;
@@ -136,6 +138,8 @@
   .device-row { align-items: stretch; }
   .device-state { border-radius: 11px; flex: 1; }
   #pushToggleBtn { min-height: 40px; }
+  html.theme-light .load-error { color: #991b1b; }
+  .load-error .btn { margin-left: .5rem; }
   .load-error { margin-bottom: .85rem !important; color: #fecaca; border-color: color-mix(in srgb, #ef4444 45%, var(--t-bd)); }
   @media (min-width: 761px) and (max-height: 800px) {
     .notif-page .app-main { padding-top: .85rem !important; }
@@ -164,7 +168,9 @@
     <p class="empty-note">You're not signed in. <a href="/" style="color:var(--t-ac);font-weight:650">Head to the homepage</a> to sign in, then come back here to manage your notifications.</p>
   </div>
 
-  <div id="loadError" class="card load-error" style="display:none" role="alert">Notification settings could not be loaded. Try refreshing this page.</div>
+  <div id="loadError" class="card load-error" style="display:none" role="alert">Notification settings could not be loaded. <button class="btn" id="retryLoad" type="button">Retry</button></div>
+
+  <div class="status-line" id="saveStatus" role="status" aria-live="polite"></div>
 
   <div id="prefsUI" class="settings-grid" style="display:none">
     <div class="card alerts-card">
@@ -235,7 +241,6 @@
         <label for="quietEnd">to</label>
         <input type="time" id="quietEnd" value="08:00">
       </div>
-      <div class="status-line" id="saveStatus"></div>
     </div>
 
     <div class="card device-card">
@@ -262,7 +267,7 @@
     statusEl.textContent = msg || '';
     statusEl.classList.toggle('err', !!isErr);
     clearTimeout(statusTimer);
-    if (msg && !isErr) statusTimer = setTimeout(function () { statusEl.textContent = ''; }, 2500);
+    if (msg && !isErr && msg !== 'Saving…') statusTimer = setTimeout(function () { statusEl.textContent = ''; }, 2500);
   }
 
   // tzOffset uses the JS Date.getTimezoneOffset() convention: minutes to add
@@ -304,23 +309,32 @@
     document.getElementById('quietEnd').disabled = !on;
   }
 
+  // `prefs` always holds the last state the server confirmed. If a save fails
+  // and nothing newer is queued, the controls are put back to that state.
   function savePrefs() {
-    var payload = collectPrefs();
     if (saving) { pendingSave = true; return; }
+    var payload = collectPrefs();
     saving = true;
+    showStatus('Saving…');
+    var failed = null;
     fetch('/api/me/notif-prefs', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
       body: JSON.stringify(payload),
     }).then(function (r) {
-      if (!r.ok) return r.json().then(function (d) { throw new Error(d.error || 'Save failed'); });
+      if (!r.ok) return r.json().catch(function () { return {}; }).then(function (d) { throw new Error(d.error || 'Server error (' + r.status + ')'); });
+      prefs = Object.assign({}, prefs, payload);
       showStatus('Saved ✓');
     }).catch(function (e) {
-      showStatus(e.message || 'Could not save', true);
+      failed = e;
     }).finally(function () {
       saving = false;
-      if (pendingSave) { pendingSave = false; savePrefs(); }
+      if (pendingSave) { pendingSave = false; savePrefs(); return; }
+      if (failed) {
+        reflectPrefs();
+        showStatus('Couldn’t save: ' + (failed instanceof TypeError ? 'no connection' : failed.message) + '. Your change was undone; try again.', true);
+      }
     });
   }
 
@@ -363,16 +377,18 @@
   document.getElementById('pushToggleBtn').addEventListener('click', async function () {
     var btn = this;
     btn.disabled = true;
+    btn.textContent = 'Working…';
     try {
       var reg = await navigator.serviceWorker.getRegistration('/');
       var sub = reg ? await reg.pushManager.getSubscription() : null;
       if (sub) {
-        await fetch('/api/push/unsubscribe', {
+        var un = await fetch('/api/push/unsubscribe', {
           method: 'POST', credentials: 'include',
           headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
-        }).catch(function () {});
+        }).catch(function () { return null; });
         try { await sub.unsubscribe(); } catch (e) {}
         setPushState(false);
+        if (!un || !un.ok) showStatus('This device is off, but the server may still list it. Try again later.', true);
       } else if (typeof window.__enableSiteNotifications === 'function') {
         var ok = await window.__enableSiteNotifications();
         setPushState(!!ok);
@@ -381,10 +397,16 @@
         setPushState(false, 'Couldn’t enable push here');
       }
     } catch (e) {
-      setPushState(false, 'Something went wrong');
+      await refreshPushState();
+      showStatus('Couldn’t change push for this device. Try again.', true);
     } finally {
       btn.disabled = false;
     }
+  });
+
+  document.querySelectorAll('.toggle-row').forEach(function (row) {
+    var b = row.querySelector('.toggle-label b'), i = row.querySelector('input');
+    if (b && i) i.setAttribute('aria-label', b.textContent);
   });
 
   // Wire toggles: change → reflect dependent UI → save.
@@ -422,6 +444,10 @@
       document.getElementById('loadError').style.display = '';
     }
   }
+  document.getElementById('retryLoad').addEventListener('click', function () {
+    document.getElementById('loadError').style.display = 'none';
+    boot();
+  });
   boot();
 })();
 </script>
