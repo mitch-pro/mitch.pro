@@ -566,6 +566,8 @@
     align-items: center;
   }
 
+  .inline-row.lead { grid-template-columns: auto minmax(0, 1fr); }
+
   .inline-color {
     display: grid;
     grid-template-columns: 54px minmax(0, 1fr) auto;
@@ -809,8 +811,8 @@
       </div>
 
       <div class="field">
-        <label>High Contrast</label>
-        <div class="inline-row">
+        <label for="contrastToggle">High Contrast</label>
+        <div class="inline-row lead">
           <button class="soft-btn" type="button" id="contrastToggle">Off</button>
           <small class="hint">Stronger text and border contrast for readability.</small>
         </div>
