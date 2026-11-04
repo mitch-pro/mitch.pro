@@ -4,15 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#17191b">
-  <meta name="description" content="Play on mitch.pro and earn MitchCoins while you play.">
+  <meta name="description" content="Entertainment Portal on mitch.pro.">
   <title>Entertainment Portal — mitch.pro</title>
   <link rel="icon" href="/icon-192.png">
-  <link rel="stylesheet" href="./ui/style.css?v=5">
+  <link rel="stylesheet" href="./ui/style.css?v=6">
   <script defer src="/sync.js"></script>
   <script defer src="./ui/lucide.min.js"></script>
   <script defer src="./ui/popularity.js?v=1"></script>
   <script defer src="./ui/canvas-text.js?v=1"></script>
-  <script defer src="./ui/app.js?v=6"></script>
+  <script defer src="./ui/app.js?v=7"></script>
 </head>
 <body data-shell="off">
   <div class="shell">
@@ -48,7 +48,7 @@
           <div class="section-heading"><h2 id="popular-heading">Popular</h2><a class="browse-link" href="#catalog">Browse all</a></div>
           <div class="quick-grid" id="quick-grid" aria-label="Popular"></div>
         </section>
-        <section class="catalog-section" id="catalog" aria-label="All titles"><div class="section-heading catalog-heading-row"><h2 id="catalog-heading">All titles</h2><div class="catalog-controls"><span class="result-count" id="result-count" aria-live="polite"></span><label id="sort-control" class="sort-control">Sort <select id="sort-games" aria-label="Sort"><option value="popular">Popular first</option><option value="alphabetical">A–Z</option></select></label></div></div><div class="filters" id="filters" aria-label="Filter by category"></div><div class="game-grid" id="game-grid"></div><div id="empty-state" class="empty-state" hidden><i data-lucide="search-x"></i><h3>Nothing found</h3><p>Try another search or category.</p><button id="clear-filters" type="button">Clear filters</button></div><button id="load-more" class="load-more" type="button" hidden>Show more</button></section>
+        <section class="catalog-section" id="catalog" aria-label="All titles"><div class="section-heading catalog-heading-row"><h2 id="catalog-heading">All titles</h2><div class="catalog-controls"><span class="result-count" id="result-count" aria-live="polite"></span><label id="sort-control" class="sort-control">Sort <select id="sort-items" aria-label="Sort"><option value="popular">Popular first</option><option value="alphabetical">A–Z</option></select></label></div></div><div class="filters" id="filters" aria-label="Filter by category"></div><div class="item-grid" id="item-grid"></div><div id="empty-state" class="empty-state" hidden><i data-lucide="search-x"></i><h3>Nothing found</h3><p>Try another search or category.</p><button id="clear-filters" type="button">Clear filters</button></div><button id="load-more" class="load-more" type="button" hidden>Show more</button></section>
       </main>
       <footer class="footer"><a href="/" target="_top">mitch.pro homepage</a><span>Titles and artwork belong to their respective creators. <a href="./ui/THIRD_PARTY_NOTICES.md">Open-source credits</a></span></footer>
     </div>

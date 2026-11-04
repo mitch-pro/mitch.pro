@@ -80,9 +80,9 @@ h1 { font-size: clamp(30px, 3vw, 40px); font-weight: 650; letter-spacing: -.035e
 .section-heading { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 17px; }
 .section-heading h2 { font-size: 20px; font-weight: 600; letter-spacing: -.02em; }
 .browse-link { font-size: 12px; color: var(--muted); white-space: nowrap; }
-.quick-grid, .game-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; }
-.quick-card, .game-card { position: relative; min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); transition: border-color .15s; }
-.quick-card:hover, .game-card:hover { border-color: #838b94; }
+.quick-grid, .item-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; }
+.quick-card, .item-card { position: relative; min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); transition: border-color .15s; }
+.quick-card:hover, .item-card:hover { border-color: #838b94; }
 .thumb { position: relative; aspect-ratio: 1.4; background: #272c30; overflow: hidden; }
 .thumb img { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; }
 .thumb-fallback { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 28px; font-weight: 600; }
@@ -129,7 +129,7 @@ h1 { font-size: clamp(30px, 3vw, 40px); font-weight: 650; letter-spacing: -.035e
 .coin-toast { position: fixed; z-index: 70; right: 24px; bottom: 24px; padding: 12px 17px; border: 1px solid #bfa66a; border-radius: 8px; background: #2d291d; color: #f1d99f; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .2s; }
 .coin-toast.is-visible { opacity: 1; }
 @media (max-width: 1250px) {
-  .quick-grid, .game-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .quick-grid, .item-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .shell { grid-template-columns: 200px minmax(0, 1fr); }
   .topbar, .main { padding-left: 24px; padding-right: 24px; }
   .topbar { gap: 12px; }
@@ -139,7 +139,7 @@ h1 { font-size: clamp(30px, 3vw, 40px); font-weight: 650; letter-spacing: -.035e
   .topbar { flex-wrap: wrap; gap: 12px; }
   .topbar-actions { flex: 1; }
   .search-box { flex: 1; min-width: 0; }
-  .quick-grid, .game-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .quick-grid, .item-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .catalog-heading-row { align-items: flex-start; }
   .catalog-controls { gap: 10px; }
   .result-count { display: none; }
@@ -164,7 +164,7 @@ h1 { font-size: clamp(30px, 3vw, 40px); font-weight: 650; letter-spacing: -.035e
   .page-intro { align-items: flex-start; margin-bottom: 25px; }
   .coin-summary { max-width: 180px; }
   .coin-summary > img { display: none; }
-  .quick-grid, .game-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .quick-grid, .item-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .section-heading h2 { font-size: 19px; }
   .catalog-section { margin-top: 30px; padding-top: 24px; }
   .sort-control { font-size: 0; }

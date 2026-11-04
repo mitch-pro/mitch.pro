@@ -397,7 +397,7 @@ fn cache_control_for(ext: &str, content_type: &str, url_path: &str) -> Vec<(Head
         )];
     }
     // json: static data files fetched by client JS (e.g. game-portal's
-    // games.json) need the same freshness guarantee as code — a 30-day
+    // catalog.json) need the same freshness guarantee as code — a 30-day
     // default here meant updating one required visitors to hard-reload,
     // since a normal reload never even asked the server.
     let is_code = matches!(ext, "html" | "htm" | "js" | "css" | "json")
@@ -625,11 +625,11 @@ mod tests {
             cache_control_for("bin", "application/octet-stream", "/data.bin")[0].1,
             "public, max-age=2592000"
         );
-        // A client-fetched data file (e.g. game-portal/games.json) must
+        // A client-fetched data file (e.g. game-portal/catalog.json) must
         // revalidate like code does, not cache for 30 days — otherwise a
         // normal reload never even asks the server about an update.
         assert_eq!(
-            cache_control_for("json", "application/json", "/game-portal/games.json")[0].1,
+            cache_control_for("json", "application/json", "/game-portal/catalog.json")[0].1,
             "no-cache, no-store, must-revalidate"
         );
     }

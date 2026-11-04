@@ -51,7 +51,7 @@ and Atari 2600.
 The player supports drag-and-drop loading of user-provided ROM files and saves state
 locally in IndexedDB. Legal public-domain and open-source homebrew demo games are
 provided for instant play. Direct console links (e.g. `/games/retro/?console=psx`)
-are cataloged in `/game-portal/games.json` under the Retro genre.
+are cataloged in `/game-portal/catalog.json` under the Retro genre.
 
 ## Navigation and verification
 

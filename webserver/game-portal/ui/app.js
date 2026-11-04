@@ -130,8 +130,8 @@
 
   function makeCard(game, compact = false) {
     const card = document.createElement('article');
-    card.className = compact ? 'quick-card' : 'game-card';
-    card.dataset.gameId = game.id;
+    card.className = compact ? 'quick-card' : 'item-card';
+    card.dataset.itemId = game.id;
     const info = document.createElement('div');
     info.className = 'card-info';
     const title = document.createElement('div');
@@ -378,7 +378,7 @@
     byId('sort-control').hidden = state.view !== 'all';
     byId('catalog-heading').textContent = state.view === 'favorites' ? 'Saved' : (state.view === 'recent' ? 'Recently played' : 'All titles');
     byId('result-count').textContent = `${games.length.toLocaleString()} ${games.length === 1 ? 'title' : 'titles'}`;
-    byId('game-grid').replaceChildren(...games.slice(0, state.limit).map(game => makeCard(game)));
+    byId('item-grid').replaceChildren(...games.slice(0, state.limit).map(game => makeCard(game)));
     byId('empty-state').hidden = games.length > 0;
     byId('load-more').hidden = games.length <= state.limit;
     renderFilters();
@@ -388,7 +388,7 @@
 
   async function loadCatalog() {
     try {
-      const response = await fetch('/game-portal/games.json?v=2', { cache: 'no-cache' });
+      const response = await fetch('/game-portal/catalog.json?v=3', { cache: 'no-cache' });
       if (!response.ok) throw new Error('Could not load the catalog');
       const catalog = await response.json();
       let id = 0;
@@ -428,7 +428,7 @@
   }
 
   search.value = state.query;
-  byId('sort-games').addEventListener('change', event => { state.sort = event.target.value; state.limit = 60; render(); });
+  byId('sort-items').addEventListener('change', event => { state.sort = event.target.value; state.limit = 60; render(); });
   search.addEventListener('input', () => { state.query = search.value; state.limit = 60; render(); });
   function closeMenu() {
     byId('sidebar').classList.remove('is-open');
