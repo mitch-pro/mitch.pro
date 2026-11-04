@@ -693,7 +693,7 @@ async function submit(isResend = false) {
   } catch (e) {
     _submitInFlight = false;
     msg.className = 'err';
-    msg.textContent = 'Server error.';
+    msg.textContent = 'Could not reach the server. Check your connection and try again.';
     btn.disabled = false;
     if (isResend) resendBtn.disabled = false;
     resetCaptcha();
@@ -752,7 +752,7 @@ async function verifySignup() {
   } catch (e) {
     _verifyInFlight = false;
     tmsg.className = 'err';
-    tmsg.textContent = 'Server error.';
+    tmsg.textContent = 'Could not reach the server. Check your connection and try again.';
     btn.disabled = false;
     resetCaptcha();
   }
@@ -802,7 +802,7 @@ async function requestReset() {
   } catch (e) {
     _resetRequestInFlight = false;
     msg.className = 'err';
-    msg.textContent = 'Server error.';
+    msg.textContent = 'Could not reach the server. Check your connection and try again.';
     btn.disabled = false;
     resetCaptcha();
   }
@@ -838,17 +838,26 @@ function showNoEmailForm() {
 
 async function applyNoEmail() {
   const email = document.getElementById('email').value.trim();
-  const reason = document.getElementById('no-email-reason').value.trim();
+  const reasonEl = document.getElementById('no-email-reason');
+  const reason = reasonEl.value.trim();
   const msg = document.getElementById('msg');
+  const form = document.getElementById('no-email-form');
+  const btn = form.querySelector('button');
+  if (btn && btn.disabled) return;
+  const fail = (text) => { msg.className = 'err'; msg.textContent = text; if (btn) btn.disabled = false; resetCaptcha(); };
 
   if (!reason) {
-    alert("Please provide a reason.");
+    msg.className = 'err'; msg.textContent = 'Enter a brief reason.';
+    reasonEl.focus();
     return;
   }
+  if (btn) btn.disabled = true;
+  msg.className = ''; msg.textContent = 'Submitting request...';
 
   const captcha = await getCaptchaResponse('apply_no_email');
   if (!captcha) {
-    alert("Please complete captcha above.");
+    msg.className = 'err'; msg.textContent = 'Please complete reCAPTCHA.';
+    if (btn) btn.disabled = false;
     return;
   }
 
@@ -860,14 +869,13 @@ async function applyNoEmail() {
     });
     const d = await r.json();
     if (d.success) {
-      document.getElementById('no-email-form').innerHTML = '<p class="ok" style="font-size:0.8rem;font-weight:700;">Manual request submitted. We will review it soon.</p>';
+      msg.textContent = '';
+      form.innerHTML = '<p class="ok" style="font-size:0.8rem;font-weight:700;">Manual request submitted. We will review it soon.</p>';
     } else {
-      alert(d.message || "Failed to submit request.");
-      resetCaptcha();
+      fail(d.message || 'Failed to submit request.');
     }
   } catch (e) {
-    alert("Server error.");
-    resetCaptcha();
+    fail('Could not reach the server. Check your connection and try again.');
   }
 }
 
@@ -951,7 +959,7 @@ async function login() {
   } catch (e) {
     _loginInFlight = false;
     msg.className = 'err';
-    msg.textContent = 'Server error.';
+    msg.textContent = 'Could not reach the server. Check your connection and try again.';
     btn.disabled = false;
     resetCaptcha();
   }
@@ -989,7 +997,7 @@ async function verifyLogin2fa() {
     }
   } catch (e) {
     msg.className = 'err';
-    msg.textContent = 'Server error.';
+    msg.textContent = 'Could not reach the server. Check your connection and try again.';
     btn.disabled = false;
   }
 }
@@ -1123,7 +1131,7 @@ async function claimToken(mode) {
   } catch (e) {
     _claimTokenInFlight = false;
     tmsg.className = 'err';
-    tmsg.textContent = 'Server error.';
+    tmsg.textContent = 'Could not reach the server. Check your connection and try again.';
     if (btn) btn.disabled = false;
     resetCaptcha();
   }
