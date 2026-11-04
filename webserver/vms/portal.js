@@ -148,6 +148,41 @@
     dialog.returnValue = ''; dialog.showModal();
     return new Promise(resolve => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true }));
   }
+  /**
+   * In-page replacement for confirm()/prompt(). Resolves true/false (or the note
+   * string when `note` is set, null on cancel). Esc and Cancel close it; focus
+   * returns to the trigger. Shared with byo-os.js via window.mitchConfirm.
+   */
+  function mitchConfirm({ title, body, confirmLabel, note }) {
+    return new Promise(resolve => {
+      const trigger = document.activeElement;
+      const dlg = document.createElement('dialog');
+      dlg.className = 'confirm-dialog';
+      const form = document.createElement('form'); form.method = 'dialog';
+      const h = document.createElement('h2'); h.textContent = title;
+      const p = document.createElement('p'); p.textContent = body;
+      form.append(h, p);
+      let input = null;
+      if (note) {
+        input = document.createElement('textarea'); input.rows = 3; input.maxLength = 500;
+        input.className = 'confirm-note'; input.setAttribute('aria-label', note);
+        input.placeholder = note; form.append(input);
+      }
+      const actions = document.createElement('div'); actions.className = 'dialog-actions';
+      const cancel = document.createElement('button'); cancel.value = 'cancel'; cancel.className = 'quiet-button'; cancel.textContent = 'Cancel';
+      const ok = document.createElement('button'); ok.value = 'confirm'; ok.className = 'danger-button'; ok.textContent = confirmLabel;
+      actions.append(cancel, ok); form.append(actions); dlg.append(form);
+      dlg.addEventListener('close', () => {
+        const confirmed = dlg.returnValue === 'confirm';
+        const value = input ? input.value.trim() : '';
+        dlg.remove();
+        if (trigger && trigger.isConnected && trigger.focus) trigger.focus();
+        resolve(note ? (confirmed ? value : null) : confirmed);
+      });
+      document.body.append(dlg); dlg.showModal(); cancel.focus();
+    });
+  }
+  window.mitchConfirm = mitchConfirm;
   async function power(id, action) {
     const vm = computers.find(item => item.id === id);
     if (!vm || pending.has(id)) return;
@@ -156,7 +191,7 @@
       return;
     }
     if (action === 'windows-compatibility') {
-      if (!confirm('Prepare this VM for a Windows 11 installation? Shut it down first. This enables UEFI, Secure Boot, and TPM 2.0, with at least 2 CPU cores 4 GB RAM, and 64 GB storage. An existing legacy BIOS installation may need reinstalling. Disks and files are preserved.')) return;
+      if (!await mitchConfirm({ title: 'Prepare for Windows 11?', body: 'Shut the computer down first. This enables UEFI, Secure Boot, and TPM 2.0, with at least 2 CPU cores, 4 GB RAM, and 64 GB storage. An existing legacy BIOS installation may need reinstalling. Disks and files are kept.', confirmLabel: 'Prepare for Windows 11' }) || pending.has(id)) return;
       pending.set(id, 'Preparing Windows installer…'); render();
       try {
         const response = await fetch('/api/vm/byo-os/windows-compatibility', { method: 'POST', credentials: 'same-origin', headers, body: JSON.stringify({ id, confirmInstallerRepair: true }) });
@@ -167,7 +202,7 @@
       return;
     }
     if (action === 'detach-iso') {
-      if (!confirm('Detach the install ISO? Only do this once your OS is fully installed — restart your computer afterward to boot from disk.')) return;
+      if (!await mitchConfirm({ title: 'Detach install ISO?', body: 'Only do this once your OS is fully installed. Restart the computer afterward to boot from disk.', confirmLabel: 'Detach ISO' }) || pending.has(id)) return;
       pending.set(id, 'Detaching ISO...'); render();
       try {
         const response = await fetch('/api/vm/byo-os/detach-iso', { method: 'POST', credentials: 'same-origin', headers, body: JSON.stringify({ id }) });

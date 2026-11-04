@@ -275,7 +275,8 @@
       if (rawUrl) fetchFromUrl(rawUrl);
     });
     deleteBtn.addEventListener('click', async () => {
-      if (!confirm('Remove your stored ISO? You will need to upload (and pay) again to use BYO-OS.')) return;
+      if (!await window.mitchConfirm({ title: 'Remove stored ISO?', body: 'You will need to upload (and pay) again to use BYO-OS.', confirmLabel: 'Remove ISO' })) return;
+      deleteBtn.disabled = true;
       try {
         await api('/api/vm/byo-os/iso/delete', {
           method: 'POST',
@@ -285,10 +286,12 @@
         await refreshIsoState();
       } catch (e) {
         setStatus(e.message, true);
+      } finally {
+        deleteBtn.disabled = false;
       }
     });
     refundBtn.addEventListener('click', async () => {
-      if (!confirm('Refund this ISO as a wrong link? It will be removed and your coins returned.')) return;
+      if (!await window.mitchConfirm({ title: 'Refund this ISO?', body: 'It will be removed and your coins returned.', confirmLabel: 'Refund ISO' })) return;
       refundBtn.disabled = true;
       try {
         const data = await api('/api/vm/byo-os/iso/refund-undersized', {
@@ -305,7 +308,8 @@
       }
     });
     reportBtn.addEventListener('click', async () => {
-      const note = prompt('Optional: what went wrong? (leave blank to just flag it)') || '';
+      const note = await window.mitchConfirm({ title: 'Report a problem', body: 'Flag this ISO as having an issue. Details are optional.', confirmLabel: 'Report', note: 'What went wrong? (optional)' });
+      if (note === null) return;
       reportBtn.disabled = true;
       try {
         const data = await api('/api/vm/byo-os/iso/report-issue', {
@@ -322,9 +326,11 @@
     });
     createBtn.addEventListener('click', async () => {
       if (hasExistingComputer) {
-        const ok = confirm(
-          'This will permanently delete your current computer and all its files, then create a new one from this ISO. This cannot be undone. Continue?',
-        );
+        const ok = await window.mitchConfirm({
+          title: 'Replace your computer?',
+          body: 'This permanently deletes your current computer and all its files, then creates a new one from this ISO. This cannot be undone.',
+          confirmLabel: 'Delete and create',
+        });
         if (!ok) return;
       }
       createBtn.disabled = true;
@@ -352,10 +358,10 @@
         const presetId = select && select.value;
         if (!presetId) return;
         const presetLabel = select.options[select.selectedIndex].textContent;
-        const warning = hasExistingComputer
-          ? `This will permanently delete your current computer and all its files, then create a new one from ${presetLabel}. This cannot be undone. Continue?`
-          : `Create a computer from ${presetLabel}? This cannot be undone.`;
-        if (!confirm(warning)) return;
+        const ok = await window.mitchConfirm(hasExistingComputer
+          ? { title: 'Replace your computer?', body: `This permanently deletes your current computer and all its files, then creates a new one from ${presetLabel}. This cannot be undone.`, confirmLabel: 'Delete and create' }
+          : { title: 'Create computer?', body: `Create a computer from ${presetLabel}.`, confirmLabel: 'Create computer' });
+        if (!ok) return;
         presetBtn.disabled = true;
         setStatus(
           hasExistingComputer

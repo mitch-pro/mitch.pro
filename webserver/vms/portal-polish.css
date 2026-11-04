@@ -226,3 +226,6 @@ body.computer-portal .computer-card:only-child {grid-column:1/-1;max-width:760px
 
 #upgrade-dialog .upgrade-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;overflow:visible}
 #upgrade-dialog .upgrade-tab{padding:10px 4px;min-width:0;font-size:.8rem;text-align:center}
+
+.confirm-dialog .confirm-note { width: 100%; box-sizing: border-box; margin-top: 14px; padding: 10px 12px; border: 1px solid var(--t-bd); border-radius: 9px; background: var(--t-bg); color: var(--t-fg); font: inherit; resize: vertical; }
+.confirm-dialog .confirm-note:focus-visible { outline: 2px solid var(--t-ac); outline-offset: 1px; }
