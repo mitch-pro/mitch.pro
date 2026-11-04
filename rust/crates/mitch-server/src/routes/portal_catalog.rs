@@ -98,7 +98,52 @@ pub struct Item {
     rank: usize,
 }
 
+/// The proxied game hosts, short names, with the host's own prefix.
+const GAME_PREFIXES: &[&str] = &["/prox/luma/", "/prox/calculated2/", "/prox/gamemonetize/"];
+
+/// Where a proxied game lives: which proxy, its directory on that host and its
+/// entry file. `/prox/g/<id>/...` is served from here (see `proxy::game_proxy`).
+pub struct GameDir {
+    pub prefix: &'static str,
+    /// Directory on the host, with a trailing slash, e.g. `snowrider3d/`.
+    pub dir: String,
+    /// The entry file in that directory, "" when the game opens at the directory.
+    pub file: String,
+    /// The query string the entry address carries, with its `?`, or "".
+    pub query: String,
+}
+
+fn split_game_url(url: &str) -> Option<GameDir> {
+    let prefix = GAME_PREFIXES.iter().find(|p| url.starts_with(**p))?;
+    let rest = &url[prefix.len()..];
+    let (path, query) = match rest.split_once('?') {
+        Some((p, q)) => (p, format!("?{q}")),
+        None => (rest, String::new()),
+    };
+    let (dir, file) = match path.rfind('/') {
+        Some(i) => (&path[..=i], &path[i + 1..]),
+        None => ("", path),
+    };
+    Some(GameDir {
+        prefix,
+        dir: dir.to_string(),
+        file: file.to_string(),
+        query,
+    })
+}
+
 impl Item {
+    /// What the page is told to open for this game. Proxied games are addressed
+    /// by id (`/prox/g/<id>/<file>`) so the game's name is not in its address;
+    /// the server maps it back ([`game_dir`]). Local and external games keep
+    /// their address.
+    fn game_ref(&self) -> String {
+        match split_game_url(&self.url) {
+            Some(g) => format!("/prox/g/{}/{}{}", self.id, g.file, g.query),
+            None => self.url.clone(),
+        }
+    }
+
     /// What the page is told to load for this item's art. Art that is served
     /// from this site is addressed by id (`/prox/i/<id>`) so no game name
     /// appears in an image address; the server maps the id back (see
@@ -117,7 +162,7 @@ impl Item {
             "title": self.title,
             "category": self.category,
             "image": self.image_ref(),
-            "url": self.url,
+            "url": self.game_ref(),
             "openSource": self.open_source,
             "external": self.external,
         })
@@ -401,6 +446,24 @@ impl Catalog {
     }
 }
 
+/// Where game `id` lives on its proxy, or `None` for an unknown id or a game
+/// that is not behind one of the game proxies.
+pub fn game_dir(state: &AppState, id: usize) -> Option<GameDir> {
+    split_game_url(&catalog(state).items.get(id)?.url)
+}
+
+/// The real address (`/prox/gamemonetize/...`) behind a `/prox/g/<id>/...` page
+/// address, for play statistics.
+pub fn real_game_url(state: &AppState, page: &str) -> Option<String> {
+    let id: usize = page
+        .strip_prefix("/prox/g/")?
+        .split('/')
+        .next()?
+        .parse()
+        .ok()?;
+    Some(catalog(state).items.get(id)?.url.clone())
+}
+
 /// Maps `/prox/i/<id>` to the real address of that item's art, so the request
 /// can be served as if it had asked for that address. `None` for any other path
 /// or an id with no local art.
@@ -569,6 +632,33 @@ mod tests {
         ]}]}));
         assert_eq!(other.items[0].json()["image"], "https://cdn.example/x.png");
         assert_eq!(other.items[1].json()["image"], "");
+    }
+
+    #[test]
+    fn proxied_games_are_addressed_by_id_and_other_games_are_left_alone() {
+        let c = sample();
+        // Luma and gamemonetize games: /prox/g/<id>/<entry file>.
+        assert_eq!(c.items[0].json()["url"], "/prox/g/0/");
+        assert_eq!(c.items[1].json()["url"], "/prox/g/1/");
+        // A query on the entry address is kept.
+        assert_eq!(c.items[3].json()["url"], "/prox/g/3/?x=1");
+        // Open-source, local and external games keep their address.
+        assert_eq!(
+            c.items[2].json()["url"],
+            "/game-portal/ui/open-source/2048/"
+        );
+        assert_eq!(c.items[4].json()["url"], "/games/run3/");
+        assert_eq!(c.items[5].json()["url"], "https://example.org/blast");
+
+        let g = split_game_url("/prox/luma/snowrider3d/index.html").unwrap();
+        assert_eq!(
+            (g.prefix, g.dir.as_str(), g.file.as_str()),
+            ("/prox/luma/", "snowrider3d/", "index.html")
+        );
+        let g = split_game_url("/prox/gamemonetize/abc123/").unwrap();
+        assert_eq!((g.dir.as_str(), g.file.as_str()), ("abc123/", ""));
+        assert!(split_game_url("/games/run3/").is_none());
+        assert!(split_game_url("https://example.org/x").is_none());
     }
 
     #[test]

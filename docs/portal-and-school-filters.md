@@ -64,6 +64,12 @@ page:
   free of game names.
 - **Page at a time.** The catalog is `data/portal_catalog.json`, outside the web
   root; the browser only gets the 48–60 titles on screen.
+- **Games by id.** `/api/portal/*` opens proxied games as `/prox/g/<id>/<file>`
+  (`portal_catalog::game_dir`, `proxy::game_proxy`), so the game's name is not in
+  its address. The server serves it from the real directory; the page's `<base>`
+  and its root-relative requests come back through the id address. The file names
+  inside a game (`SnowRider3D-gd-1.json`) are still the game's own. Play
+  statistics map the id back to the real address.
 - **Short proxy names.** `/prox/gamemonetize/`, `/prox/gm-icon/`, `/prox/luma/`,
   `/prox/calculated2/` serve the same proxies as `/proxy/…`, and a page opened
   through one keeps that prefix in its links. Caddy treats `/prox/*` like
@@ -76,8 +82,10 @@ page:
 - `/api/portal/*` responses contain the titles. A filter that reads response
   bodies would see them. The fix would be to encode those responses and decode
   them in the page.
-- Once a game is opened, its address is in the frame (for example
-  `/prox/luma/run-3/`). That only matters if the block fires after pressing play.
+- Once a game is open, the files it loads inside the frame keep the game's own
+  names (for example `Build/SnowRider3D-gd-1.json`). The address of the game
+  itself is name-free (`/prox/g/<id>/`). Added after Snow Rider 3D was blocked
+  while playing; whether the name in the address was the trigger is untested.
 - The `/game-portal/` path, and the tab title "Entertainment Portal — mitch.pro".
 - The sitewide guest-preview dialog says "play games" after 60 seconds for signed
   out visitors. On the main portal it is drawn on canvas, but it is still visible.

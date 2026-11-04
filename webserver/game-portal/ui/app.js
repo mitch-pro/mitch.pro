@@ -43,7 +43,7 @@
     try {
       const url = new URL(game.url, location.origin);
       return url.origin === location.origin && [
-        '/prox/luma/', '/prox/calculated2/', '/prox/gamemonetize/',
+        '/prox/g/', '/prox/luma/', '/prox/calculated2/', '/prox/gamemonetize/',
         '/games/', '/game-portal/ui/open-source/'
       ].some(prefix => url.pathname.startsWith(prefix));
     } catch { return false; }

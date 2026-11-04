@@ -316,6 +316,10 @@ pub async fn ping(
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
+    // `/prox/g/<id>/` stands for a proxied game; count it as the game itself.
+    if let Some(real) = crate::routes::portal_catalog::real_game_url(state, &page) {
+        page = real;
+    }
     if let Some(rest) = gamemonetize_subpath(&page) {
         page = format!("https://html5.gamemonetize.co/{rest}");
     }
@@ -512,7 +516,7 @@ pub fn prox_redirect_or_gone(path: &str, search: &str) -> Option<Response> {
     // `/prox/<name>/...` are the short names of the fixed game proxies and are
     // served directly (see GAME_PROXY_ORIGINS); only the long legacy form below
     // redirects.
-    if ["gamemonetize", "gm-icon", "luma", "calculated2"]
+    if ["gamemonetize", "gm-icon", "luma", "calculated2", "g"]
         .iter()
         .any(|name| path.starts_with(&format!("/prox/{name}/")))
     {
@@ -680,6 +684,13 @@ fn fixed_proxy_target(path: &str, headers: &HeaderMap) -> Option<(&'static str, 
     })
 }
 
+/// `/prox/g/<id>/<rest>` as `(id, rest)`.
+fn parse_game_path(path: &str) -> Option<(usize, &str)> {
+    let rest = path.strip_prefix("/prox/g/")?;
+    let (id, rest) = rest.split_once('/').unwrap_or((rest, ""));
+    Some((id.parse().ok()?, rest))
+}
+
 /// Fixed-origin game and movie proxies.
 pub async fn game_proxy(
     state: &Arc<AppState>,
@@ -688,7 +699,29 @@ pub async fn game_proxy(
     search: &str,
     headers: &HeaderMap,
 ) -> Option<Response> {
-    let (game_proxy_prefix, game_proxy_path) = fixed_proxy_target(path, headers)?;
+    // `/prox/g/<id>/<rest>` is a proxied game addressed by id, so its name is not
+    // in the address. `game_dir` says where it lives; its own requests (root
+    // relative, or relative to the page) come back through the same prefix.
+    let mut by_id: Option<(usize, crate::routes::portal_catalog::GameDir)> = None;
+    let (game_proxy_prefix, game_proxy_path) = if let Some((id, rest)) = parse_game_path(path) {
+        let g = crate::routes::portal_catalog::game_dir(state, id)?;
+        let rest = if rest.is_empty() {
+            g.file.as_str()
+        } else {
+            rest
+        };
+        let target = (g.prefix, format!("/{}{}", g.dir, rest));
+        by_id = Some((id, g));
+        target
+    } else if let Some(found) = fixed_proxy_target(path, headers) {
+        found
+    } else {
+        let referer = headers.get(axum::http::header::REFERER)?.to_str().ok()?;
+        let page = url::Url::parse(referer).ok()?;
+        let (id, _) = parse_game_path(page.path())?;
+        let g = crate::routes::portal_catalog::game_dir(state, id)?;
+        (g.prefix, path.to_string())
+    };
 
     if *method != axum::http::Method::GET && *method != axum::http::Method::HEAD {
         return Some(crate::errors::err_resp(
@@ -855,7 +888,16 @@ pub async fn game_proxy(
                         last_seg.replace(&final_path, "").to_string()
                     };
                     let dir_clean = directory.trim_start_matches('/');
-                    let base_tag = format!(r#"<base href="{game_proxy_prefix}{dir_clean}">"#);
+                    // A game opened by id keeps its id in the base address, not its name.
+                    let base_tag = match &by_id {
+                        Some((id, g)) if dir_clean.starts_with(g.dir.as_str()) => {
+                            format!(
+                                r#"<base href="/prox/g/{id}/{}">"#,
+                                &dir_clean[g.dir.len()..]
+                            )
+                        }
+                        _ => format!(r#"<base href="{game_proxy_prefix}{dir_clean}">"#),
+                    };
                     static HEAD_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
                     let head_re = HEAD_RE.get_or_init(|| {
                         regex::Regex::new(r"(?i)<head\b[^>]*>").expect("static regex")
@@ -939,6 +981,19 @@ mod tests {
             gamemonetize_subpath("/prox/gamemonetize/abc/"),
             Some("abc/")
         );
+    }
+
+    #[test]
+    fn games_opened_by_id_are_not_redirected_and_the_path_parses() {
+        assert!(prox_redirect_or_gone("/prox/g/12/index.html", "").is_none());
+        assert_eq!(
+            parse_game_path("/prox/g/12/index.html"),
+            Some((12, "index.html"))
+        );
+        assert_eq!(parse_game_path("/prox/g/12/"), Some((12, "")));
+        assert_eq!(parse_game_path("/prox/g/12"), Some((12, "")));
+        assert_eq!(parse_game_path("/prox/g/x/y"), None);
+        assert_eq!(parse_game_path("/prox/luma/12/"), None);
     }
 
     #[test]

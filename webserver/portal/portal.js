@@ -9,7 +9,7 @@
   // reacts to: i = no thumbnails, n = hide titles, l = no list at all.
   const probe = new URLSearchParams(location.search).get('probe') || '';
   // Players that can run inside the page. Everything else opens in a new tab.
-  const EMBED_PREFIXES = ['/prox/luma/', '/prox/calculated2/', '/prox/gamemonetize/', '/games/', '/game-portal/ui/open-source/'];
+  const EMBED_PREFIXES = ['/prox/g/', '/prox/luma/', '/prox/calculated2/', '/prox/gamemonetize/', '/games/', '/game-portal/ui/open-source/'];
   // Same storage keys as the older game-portal page, so saved and recent lists carry over.
   const KEYS = { saved: 'mitch.games.catalog.favorites', recent: 'mitch.games.catalog.recent' };
 
