@@ -47,3 +47,5 @@ page was opened through an alias and sets `window.__mitchMoviesBase`; the
 router's default basename is that prefix instead of `/proxy/movies`, so the
 address bar keeps the alias. Matrix chat is never aliased: it needs
 `/matrix/`, so aliased Matrix URLs redirect there.
+
+What else the portal does about school filters: `docs/portal-and-school-filters.md`.

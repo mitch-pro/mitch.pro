@@ -86,3 +86,5 @@ same `/api/game-portal/status` and `/heartbeat` endpoints for MitchCoin rewards
 (the reward rules are unchanged). It is public like `/game-portal/`: `/portal` is
 in `HTML_OPEN`, the password-enforcement exemptions and the public-assets gate in
 `handler.rs`.
+
+How the portal was made reachable on a school network, and what the filter seems to react to: `docs/portal-and-school-filters.md`.
