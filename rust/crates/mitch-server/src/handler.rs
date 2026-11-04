@@ -53,6 +53,8 @@ pub const HTML_OPEN: &[&str] = &[
     "/games/index",
     "/game-portal",
     "/game-portal/index",
+    "/portal",
+    "/portal/index",
     "/msn-games",
     "/msn-games/index",
     "/matrix",
@@ -939,6 +941,8 @@ async fn handle_resolved(
         || clean_path == "/livekit"
         || clean_path.starts_with("/livekit/")
         || clean_path.starts_with("/game-portal")
+        || clean_path == "/portal"
+        || clean_path.starts_with("/portal/")
         || clean_path.starts_with("/msn-games")
         || clean_path == "/support"
         || clean_path.starts_with("/support/")
@@ -1846,6 +1850,7 @@ async fn handle_resolved(
         && !is_larp
         && !path.starts_with("/games")
         && !path.starts_with("/game-portal/")
+        && !path.starts_with("/portal/")
         && !state.check_password_cookie(headers, None)
     {
         let cookie_header = headers
@@ -2484,6 +2489,19 @@ mod host_tests {
             .and_then(|v| v.to_str().ok())
             .unwrap_or("")
             .to_string()
+    }
+
+    /// The portal is public like the older game portal: a signed-out visitor
+    /// gets the page itself, not a redirect to sign in.
+    #[tokio::test]
+    async fn the_portal_page_is_public() {
+        let (state, dir) = state();
+        for path in ["/portal/", "/portal/portal.js", "/portal/portal.css"] {
+            let response = get(&state, "mitch.pro", path).await;
+            assert_eq!(response.status(), 200, "{path}");
+        }
+        drop(state);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     /// mitch.pro is a real host: it serves its own pages (or sends the visitor

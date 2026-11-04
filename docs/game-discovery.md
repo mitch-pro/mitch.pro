@@ -73,3 +73,16 @@ numbering as before, so saved and recent lists keep working. The legacy catalog 
 `/games/index.html`, ...) redirect to `/game-portal/` only while
 `GAMES_LIBRARY_REDIRECT_ENABLED` in `handler.rs` is true; it is on. Set it to false to make
 `/games/` serve its own page again.
+
+## The /portal/ page
+
+`/portal/` (`webserver/portal/`) is a second front end for the same library,
+written separately from `/game-portal/`. It uses the shared masthead and theme
+tokens, so it follows the site's light and dark themes. It reads only
+`/api/portal/*`, loading 48 titles at a time as the grid scrolls, and every game,
+thumbnail and file it loads goes through the short `/prox/` paths. It keeps the
+older page's saved/recent storage keys, so those lists carry over, and uses the
+same `/api/game-portal/status` and `/heartbeat` endpoints for MitchCoin rewards
+(the reward rules are unchanged). It is public like `/game-portal/`: `/portal` is
+in `HTML_OPEN`, the password-enforcement exemptions and the public-assets gate in
+`handler.rs`.

@@ -93,7 +93,7 @@ fn fallback_activity(page: &str) -> String {
     match root {
         "" | "index.html" => "On the homepage".into(),
         "matrix" => "In Matrix chat".into(),
-        "game-portal" | "games" => "Browsing games".into(),
+        "game-portal" | "games" | "portal" => "Browsing games".into(),
         "members" => "Viewing people".into(),
         "friends" => "Viewing friends".into(),
         "vms" => "Using Cloud Linux".into(),

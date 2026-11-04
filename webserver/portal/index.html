@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Portal — mitch.pro</title>
+  <link rel="icon" href="/icon-192.png">
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/portal/portal.css?v=3">
+  <script src="/app-shell.js" defer></script>
+  <script src="/portal/portal.js?v=1" defer></script>
+</head>
+<body class="app-shell">
+  <main class="pt-main">
+    <header class="pt-head">
+      <h1>Portal</h1>
+      <p class="pt-sub" id="pt-count"></p>
+    </header>
+
+    <div class="pt-tools">
+      <input id="pt-q" type="search" placeholder="Search" aria-label="Search" autocomplete="off">
+      <select id="pt-sort" aria-label="Sort">
+        <option value="popular">Popular</option>
+        <option value="alphabetical">A–Z</option>
+      </select>
+      <button type="button" id="pt-random" class="pt-btn">Random</button>
+    </div>
+
+    <div class="pt-tabs" role="tablist" aria-label="View">
+      <button type="button" role="tab" data-view="all" aria-selected="true">All</button>
+      <button type="button" role="tab" data-view="saved" aria-selected="false">Saved</button>
+      <button type="button" role="tab" data-view="recent" aria-selected="false">Recent</button>
+    </div>
+    <div class="pt-chips" id="pt-chips" aria-label="Category"></div>
+
+    <section class="pt-block" id="pt-featured" hidden>
+      <h2>Popular</h2>
+      <div class="pt-grid pt-grid-featured" id="pt-featured-grid"></div>
+    </section>
+
+    <section class="pt-block">
+      <h2 id="pt-list-title">All</h2>
+      <div class="pt-grid" id="pt-grid"></div>
+      <p class="pt-empty" id="pt-empty" hidden>Nothing found.</p>
+      <div id="pt-sentinel" aria-hidden="true"></div>
+      <button type="button" class="pt-btn pt-more" id="pt-more" hidden>Show more</button>
+    </section>
+  </main>
+
+  <dialog class="pt-player" id="pt-player" aria-label="Player">
+    <div class="pt-player-bar">
+      <button type="button" class="pt-btn" id="pt-back">Back</button>
+      <span class="pt-player-title" id="pt-player-title"></span>
+      <span class="pt-reward" id="pt-reward"></span>
+      <a class="pt-btn" id="pt-newtab" target="_blank" rel="noopener">New tab</a>
+      <button type="button" class="pt-btn" id="pt-full">Fullscreen</button>
+    </div>
+    <iframe class="pt-frame" id="pt-frame" title="Player" allow="fullscreen; autoplay; gamepad"></iframe>
+  </dialog>
+  <div class="pt-toast" id="pt-toast" role="status"></div>
+</body>
+</html>
