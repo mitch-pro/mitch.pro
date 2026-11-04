@@ -91,27 +91,55 @@
     }).catch(function () {});
   }
 
+  // Outcome of the latest push. A failed push leaves the unsynced marker set (in
+  // sessionStorage, so it never ends up in a snapshot) and the interval, the
+  // unload beacon and the next page load all retry it.
+  var DIRTY_KEY = '_sync_dirty';
+  function setDirty(v) {
+    try { if (v) sessionStorage.setItem(DIRTY_KEY, '1'); else sessionStorage.removeItem(DIRTY_KEY); } catch (e) {}
+  }
+  function isDirty() {
+    try { return sessionStorage.getItem(DIRTY_KEY) === '1'; } catch (e) { return false; }
+  }
+  function emit(detail) {
+    try { window.dispatchEvent(new CustomEvent('mitchsync', { detail: detail })); } catch (e) {}
+  }
+
+  // Pushes the full snapshot. Returns a promise that always resolves with
+  // { ok, skipped?, error? } once the server answers: ok is true only when the
+  // server accepted it. Also fires a 'mitchsync' event on window with
+  // detail.state of 'saving', 'saved' or 'error'. Existing callers can ignore both.
   function save() {
-    if (pendingRestore || prefSync().enabled === false) return;
+    if (pendingRestore || prefSync().enabled === false) return Promise.resolve({ ok: true, skipped: true });
 
     var snap = getSnap();
     var ts   = Date.now();
     localStorage.setItem(SYNC_TS_KEY, ts);
-    fetch('/api/userdata', {
+    setDirty(true);
+    emit({ state: 'saving' });
+    var result = fetch('/api/userdata', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({ _snapshot: snap, _snapshot_ts: ts }),
     }).then(function(r) {
+      if (r.ok) { setDirty(false); return { ok: true }; }
+      // Signed out: nothing to sync to, the values stay on this device.
+      if (r.status === 401 || r.status === 403) { setDirty(false); return { ok: true, skipped: true }; }
       if (r.status === 413) {
-        r.json().then(function(d) {
+        return r.json().then(function(d) {
           if (window._syncOnQuotaExceeded) window._syncOnQuotaExceeded(d);
-        }).catch(function(){});
-      } else {
-        r.text().catch(function(){});
+        }).catch(function(){}).then(function () { return { ok: false, error: 'Your synced storage is full.' }; });
       }
-    }).catch(function () {});
+      return r.text().catch(function(){}).then(function () { return { ok: false, error: 'The server returned an error (' + r.status + ').' }; });
+    }, function () {
+      return { ok: false, error: 'Could not reach the server.' };
+    }).then(function (res) {
+      emit(res.ok ? { state: 'saved', skipped: !!res.skipped } : { state: 'error', error: res.error });
+      return res;
+    });
     saveIdb();
+    return result;
   }
 
   function saveBeacon() {
@@ -218,9 +246,11 @@
   // Game progress is written while playing on pages that don't run sync.js, so
   // pick up changes shortly after any sync page opens and when it's hidden.
   setTimeout(saveIdb, 8000);
+  // A push that failed before the last unload is retried shortly after load.
+  if (isDirty()) setTimeout(save, 3000);
   setInterval(saveIdb, INTERVAL_MS);
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') saveIdb(); });
   window.addEventListener('beforeunload', saveBeacon);
 
-  window._mitchSync = { save: save, saveIdb: saveIdb, check: checkRestore };
+  window._mitchSync = { save: save, saveIdb: saveIdb, check: checkRestore, isDirty: isDirty };
 })();

@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="/preferences/preferences-galaxy.css?v=12">
 <script src="/api.js"></script>
 <script src="/app-shell.js" defer></script>
-<script src="/sync.js"></script>
+<script src="/sync.js?v=2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/zxcvbn/4.4.2/zxcvbn.js" defer></script>
 <style>
   /* Preferences chrome — tokens from app.css (--t-*), overridable live via site-theme.js */
@@ -375,10 +375,25 @@
 
   #savedMsg {
     font-size: 0.82rem;
-    color: #4ade80;
+    color: var(--t-fg2);
     display: none;
     font-weight: 650;
+    transition: opacity 0.18s ease;
   }
+  #savedMsg.is-ok { color: #4ade80; }
+  #savedMsg.is-err { color: #e11d48; }
+  html.theme-light #savedMsg.is-ok { color: #15803d; }
+  html.theme-light #savedMsg.is-err { color: #be123c; }
+  #syncRetryBtn { margin-left: 0.5rem; }
+  #syncRetryBtn[hidden] { display: none; }
+
+  .hint { color: var(--t-fg2); font-size: 0.78rem; }
+  .file-input-gap { margin-top: 0.55rem; }
+  .hidden { display: none; }
+  .ntfy-topic-input { flex: 1; min-width: 220px; }
+  .ntfy-label { flex: 0 0 100%; text-align: left; font-size: 0.78rem; font-weight: 600; color: var(--t-fg2); }
+  .section-sub.spaced { margin-top: 14px; }
+  .section-sub.spaced a { font-weight: 650; }
 
   .danger-btn {
     width: 100%;
@@ -797,7 +812,7 @@
         <label>High Contrast</label>
         <div class="inline-row">
           <button class="soft-btn" type="button" id="contrastToggle">Off</button>
-          <small style="color: var(--t-fg2); font-size: .78rem;">Stronger text and border contrast for readability.</small>
+          <small class="hint">Stronger text and border contrast for readability.</small>
         </div>
       </div>
     </div>
@@ -923,7 +938,7 @@
         <label>Profile Picture</label>
         <input id="profilePfp" type="text" maxlength="140000" placeholder="https://example.com/image.png">
         <p class="field-sub">Use an image URL, or choose a local image to downscale into a small avatar.</p>
-        <input id="profilePfpFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" style="margin-top:.55rem;">
+        <input id="profilePfpFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" class="file-input-gap">
       </div>
     </div>
     <div class="field">
@@ -1015,7 +1030,7 @@
         </div>
       </div>
       <div class="field">
-        <label>Blog Alerts</label>
+        <label for="blogAlertsToggle">Blog Alerts</label>
         <div class="toggle-row">
           <label class="toggle-switch">
             <input type="checkbox" id="blogAlertsToggle">
@@ -1098,7 +1113,7 @@
           <input id="twofaCode" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="123456">
         </div>
       </div>
-      <div id="twofaTotpSetup" style="display:none;">
+      <div id="twofaTotpSetup" class="hidden">
         <div class="control-grid">
           <div>
             <img id="twofaQr" alt="Authenticator QR code">
@@ -1148,11 +1163,12 @@
       <h3 class="subsection-title">Chat Alerts via ntfy</h3>
       <p class="section-sub">Get Secure Chat alerts on your phone with the free <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a> app, even without web push. Enter a topic name (letters, numbers, dashes, underscores) to use ntfy.sh, or paste a full custom server URL. Leave blank to disable.</p>
       <div class="session-actions">
-        <input id="ntfyTopicInput" type="text" maxlength="256" placeholder="ntfy topic or custom URL (e.g. mitch-chat-x7k2 or https://ntfy.example.com/topic)" style="flex:1;min-width:220px">
+        <label class="ntfy-label" for="ntfyTopicInput">ntfy topic or URL</label>
+        <input id="ntfyTopicInput" class="ntfy-topic-input" type="text" maxlength="256" placeholder="mitch-chat-x7k2 or https://ntfy.example.com/topic">
         <button class="soft-btn" id="saveNtfyBtn" type="button" onclick="saveNtfyTopic()">Save</button>
       </div>
       <div class="status-line" id="ntfyStatus" aria-live="polite"></div>
-      <p class="section-sub" style="margin-top:14px">Looking for more? <a href="/notifications/" style="font-weight:650">Full notification settings</a> — mute chat, groups, friends-online and digests, or set quiet hours.</p>
+      <p class="section-sub spaced">Looking for more? <a href="/notifications/">Full notification settings</a> — mute chat, groups, friends-online and digests, or set quiet hours.</p>
     </div>
   </section>
 
@@ -1212,12 +1228,12 @@
 
   <p class="section-sub"><a href="/saves/">Manage saves</a></p>
 
-  <div id="specialToolsSection" style="display:none">
+  <div id="specialToolsSection" class="hidden">
     <hr class="divider">
     <h2>Special Tools</h2>
     <p class="section-sub">Features unlocked via the Market.</p>
     <div class="control-grid">
-      <div class="field" id="toolCanvasLock" style="display:none">
+      <div class="field hidden" id="toolCanvasLock">
         <label>Canvas Protection</label>
         <div class="toggle-row">
           <label class="toggle-switch">
@@ -1227,7 +1243,7 @@
           <span class="toggle-desc">Lock your own pixels on the canvas.</span>
         </div>
       </div>
-      <div class="field" id="toolQuickAccess" style="display:none">
+      <div class="field hidden" id="toolQuickAccess">
         <label>Quick Access Bar</label>
         <div class="toggle-row">
           <label class="toggle-switch">
@@ -1237,7 +1253,7 @@
           <span class="toggle-desc">Floating shortcuts on every page.</span>
         </div>
       </div>
-      <div class="field" id="toolDailyBonus" style="display:none">
+      <div class="field hidden" id="toolDailyBonus">
         <label>Daily Bonus Plus</label>
         <div class="toggle-row">
           <label class="toggle-switch">
@@ -1285,7 +1301,8 @@
   </div>
 
   <div class="save-status">
-    <span id="savedMsg">✓ Saved</span>
+    <span id="savedMsg" role="status" aria-live="polite"></span>
+    <button class="soft-btn" id="syncRetryBtn" type="button" hidden>Retry</button>
   </div>
 </main>
 
@@ -1497,16 +1514,43 @@ function setThemePref(key, value) {
   } catch(e) {}
 }
 
-function showSaved() {
+// Shows the save state under the Save button: 'saving' until the server
+// confirms, then 'ok' (fades), or 'err' with a Retry button.
+function showSaveState(state, text) {
   var msg = document.getElementById('savedMsg');
+  var retry = document.getElementById('syncRetryBtn');
+  clearTimeout(_saveTimer);
+  msg.className = state === 'ok' ? 'is-ok' : state === 'err' ? 'is-err' : '';
+  msg.textContent = text;
   msg.style.display = 'inline';
   msg.style.opacity = '1';
-  clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(function() {
-    msg.style.opacity = '0';
-    setTimeout(function() { msg.style.display = 'none'; }, 180);
-  }, 1500);
+  retry.hidden = state !== 'err';
+  if (state === 'ok') {
+    _saveTimer = setTimeout(function() {
+      msg.style.opacity = '0';
+      setTimeout(function() { msg.style.display = 'none'; }, 180);
+    }, 1500);
+  }
 }
+
+// Pushes to the server and reflects the outcome. Only the newest push updates
+// the message so an older response can't overwrite a newer state.
+var _pushSeq = 0;
+function pushSync() {
+  var sync = window._mitchSync;
+  if (!sync || !sync.save) { showSaveState('ok', '✓ Saved'); return; }
+  var seq = ++_pushSeq;
+  showSaveState('saving', 'Saving…');
+  sync.save().then(function(res) {
+    if (seq !== _pushSeq) return;
+    if (res && res.ok === false) {
+      showSaveState('err', 'Saved on this device, but not synced: ' + (res.error || 'try again') + ' It will retry automatically.');
+    } else {
+      showSaveState('ok', '✓ Saved');
+    }
+  });
+}
+document.getElementById('syncRetryBtn').addEventListener('click', pushSync);
 
 function setStatus(id, text, isErr) {
   var el = document.getElementById(id);
@@ -1695,7 +1739,7 @@ async function requestSecurityCode(action, statusId) {
 
 async function setupTotp2fa() {
   var panel = document.getElementById('twofaTotpSetup');
-  if (panel.style.display !== 'none') {
+  if (getComputedStyle(panel).display !== 'none') {
     await enable2fa('totp');
     return;
   }
@@ -2134,10 +2178,7 @@ function saveAll() {
   } catch(e) {}
 
   updateSummaries();
-  showSaved();
-  if (window._mitchSync && window._mitchSync.save) {
-    window._mitchSync.save();
-  }
+  pushSync();
 }
 
 async function loadBlogAlerts() {
