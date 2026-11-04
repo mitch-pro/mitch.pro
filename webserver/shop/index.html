@@ -426,7 +426,7 @@
   <div class="shop-catalog-heading"><div><h2>Browse items</h2></div><span class="shop-stock"><b id="shop-stock-count">0</b> items</span></div>
   <div class="shop-tools"><label><span aria-hidden="true">⌕</span><input id="shop-search" type="search" placeholder="Search the shop" autocomplete="off" aria-label="Search the shop"></label></div>
   <div id="tabs" class="tabs"></div>
-  <div id="market"></div>
+  <div id="market"><div class="empty">Loading items…</div></div>
 
   <div id="admin-section" class="admin-box panel">
     <div class="section-title">Admin Coin Gift</div>
@@ -457,7 +457,7 @@
   </div>
 </div>
 
-<div id="status-msg"></div>
+<div id="status-msg" role="status" aria-live="polite"></div>
 
 <script>
   const typeToActive = {
@@ -539,7 +539,7 @@
     el.className = ok ? 'ok' : 'err';
     el.style.display = 'block';
     clearTimeout(showStatus.timer);
-    showStatus.timer = setTimeout(() => { el.style.display = 'none'; }, 3200);
+    showStatus.timer = setTimeout(() => { el.style.display = 'none'; }, ok ? 3200 : 6000);
   }
 
   function sections() {
@@ -664,7 +664,7 @@
     if (shopQuery) filtered = filtered.filter(item => [item.name,item.desc,item.perk,item.section,item.tier].some(value => String(value || '').toLowerCase().includes(shopQuery)));
     document.getElementById('shop-stock-count').textContent = filtered.length;
     if (!filtered.length) {
-      market.innerHTML = '<div class="empty">No items in this section yet.</div>';
+      market.innerHTML = shopQuery ? '<div class="empty">No items match your search.</div>' : '<div class="empty">No items in this section yet.</div>';
       return;
     }
     const grouped = {};
@@ -683,6 +683,7 @@
       </section>
     `).join('');
     market.querySelectorAll('.btn-buy[data-item]').forEach(btn => {
+      btn.dataset.wasDisabled = btn.disabled ? '1' : '0';
       btn.addEventListener('click', () => handleItem(btn.dataset.item));
     });
     market.querySelectorAll('[data-info]').forEach(button => {
@@ -690,9 +691,21 @@
     });
   }
 
+  let shopBusy = false;
+  function setShopBusy(on) {
+    shopBusy = on;
+    document.querySelectorAll('.btn-buy').forEach(b => { b.disabled = on || b.dataset.wasDisabled === '1'; });
+  }
+
   async function handleItem(itemId) {
     const item = items.find(entry => entry.id === itemId);
-    if (!item) return;
+    if (!item || shopBusy) return;
+    setShopBusy(true);
+    showStatus(owns(item) && toggleable(item) ? 'Updating…' : 'Processing purchase…', true);
+    try { await runItem(item); } finally { setShopBusy(false); }
+  }
+
+  async function runItem(item) {
     if (item.type === 'premium') return buyPremium();
     if (owns(item) && toggleable(item)) {
       return toggleItem(item, activeFor(item) ? '' : item.id);
@@ -720,7 +733,7 @@
       showStatus(data.message || 'Purchase successful', true);
       await load();
     } catch {
-      showStatus('Network error while buying item', false);
+      showStatus('Network error while buying item. Try again.', false);
     }
   }
 
@@ -736,7 +749,7 @@
       showStatus(itemId ? 'Turned on' : 'Turned off', true);
       await load();
     } catch {
-      showStatus('Network error while updating item', false);
+      showStatus('Network error while updating item. Try again.', false);
     }
   }
 
@@ -753,7 +766,7 @@
       showStatus(data.message || 'Welcome to Premium', true);
       setTimeout(() => load(), 800);
     } catch {
-      showStatus('Network error while buying premium', false);
+      showStatus('Network error while buying premium. Try again.', false);
     }
   }
 
@@ -762,6 +775,8 @@
     if (!targetEmail) return showStatus('Please enter a friend\'s email address', false);
     const premiumPrice = items.find(item => item.id === 'premium')?.cost || 500;
     if (!(await customConfirm('Gift Premium', `Are you sure you want to gift Lifetime Premium to ${targetEmail}? This costs ${premiumPrice} coins and is limited to one gift ever.`))) return;
+    const giftBtn = document.querySelector('button[onclick="giftPremium()"]');
+    if (giftBtn) { giftBtn.disabled = true; giftBtn.textContent = 'Gifting…'; }
     const recaptcha_token = await getShopCaptchaToken('gift_premium');
     try {
       const r = await fetch('/api/coins/gift-premium', {
@@ -776,7 +791,9 @@
       if (input) input.value = '';
       setTimeout(() => load(), 800);
     } catch {
-      showStatus('Network error while gifting premium', false);
+      showStatus('Network error while gifting premium. Try again.', false);
+    } finally {
+      if (giftBtn) { giftBtn.disabled = false; giftBtn.textContent = 'Gift'; }
     }
   }
 
@@ -784,6 +801,8 @@
     const targetEmail = document.getElementById('admin-email').value.trim();
     const amount = Number(document.getElementById('admin-amt').value);
     if (!targetEmail || !amount) return showStatus('Enter an email and coin amount', false);
+    const gb = document.getElementById('gift-btn');
+    gb.disabled = true; gb.textContent = 'Sending…';
     try {
       const r = await fetch('/api/admin/gift-coins', {
         method: 'POST',
@@ -797,7 +816,9 @@
       document.getElementById('admin-amt').value = '';
       await load();
     } catch {
-      showStatus('Network error while gifting coins', false);
+      showStatus('Network error while gifting coins. Try again.', false);
+    } finally {
+      gb.disabled = false; gb.textContent = 'Gift';
     }
   }
 
@@ -859,7 +880,7 @@
       render();
     } catch (err) {
       console.error(err);
-      document.getElementById('market').innerHTML = '<div class="empty">Failed to load the shop. Try refreshing.</div>';
+      document.getElementById('market').innerHTML = '<div class="empty">Could not load the shop.<br><button type="button" class="mini-btn btn-primary" style="margin-top:0.75rem" onclick="load()">Retry</button></div>';
       showStatus('Failed to load shop data', false);
     }
   }
@@ -924,6 +945,7 @@
   }
 
   modalClose.addEventListener('click', closeModal);
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && modal.classList.contains('show')) closeModal(); });
   modal.addEventListener('click', (event) => {
     if (event.target === modal) closeModal();
   });
