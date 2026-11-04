@@ -6,6 +6,10 @@
 (() => {
   'use strict';
   const texts = new WeakMap();
+  // Repaint a canvas whenever its box changes size (layout settling, rotation,
+  // a neighbour resizing). Without this a label painted while the layout was
+  // still narrow stayed clipped until some unrelated update repainted everything.
+  const sizeWatcher = new ResizeObserver(entries => entries.forEach(entry => paint(entry.target)));
   const measure = document.createElement('canvas').getContext('2d');
   const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'CANVAS', 'INPUT', 'TEXTAREA', 'SELECT', 'OPTION', 'IFRAME', 'TITLE', 'svg', 'SVG']);
 
@@ -19,6 +23,7 @@
     canvas.className = options.wrap ? 'wrap-canvas' : options.block ? 'title-canvas' : 'text-canvas';
     canvas.setAttribute('aria-hidden', 'true');
     texts.set(canvas, String(text));
+    sizeWatcher.observe(canvas);
     queue();
     return canvas;
   }
@@ -145,4 +150,6 @@
   window.addEventListener('themechange', queue);
   new MutationObserver(queue).observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme', 'style'] });
   if (document.fonts?.ready) document.fonts.ready.then(queue);
+  // A font that finishes loading later (a theme font, say) changes text widths.
+  document.fonts?.addEventListener?.('loadingdone', queue);
 })();
