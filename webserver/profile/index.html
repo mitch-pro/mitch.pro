@@ -8,8 +8,8 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     min-height: 100vh;
-    background: var(--t-bg, #0d0d0d);
-    color: var(--t-fg, #e8e8e8);
+    background: var(--t-bg);
+    color: var(--t-fg);
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     display: flex; flex-direction: column; align-items: center;
     padding: 48px 20px 80px;
@@ -50,7 +50,7 @@
 
   .avatar {
     width: 80px; height: 80px; border-radius: 50%;
-    background: var(--t-ac, #a78bfa); display: flex; align-items: center;
+    background: var(--t-ac); display: flex; align-items: center;
     justify-content: center; font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     font-weight: 800; font-size: 2rem; color: #fff;
     margin-bottom: 16px; flex-shrink: 0;
@@ -83,38 +83,38 @@
   .badge-og { color: #ef4444; border: 1px solid #ef4444; padding: 1px 4px; border-radius: 4px; font-weight: 800; text-transform: uppercase; font-size: 9px; }
   .badge-shop { color: #f59e0b; border: 1px solid rgba(245,158,11,.5); padding: 1px 4px; border-radius: 4px; font-weight: 800; text-transform: uppercase; font-size: 9px; }
 
-  .email-line { font-size: 11px; color: var(--t-fg2, #666); margin-bottom: 20px; }
-  .bio { font-size: 13px; color: var(--t-fg, #ccc); line-height: 1.7; margin-bottom: 20px; font-style: italic; font-weight: 300; }
-  .website a { font-size: 12px; color: var(--t-ac, #a78bfa); text-decoration: none; }
+  .email-line { font-size: 11px; color: var(--t-fg2); margin-bottom: 20px; }
+  .bio { font-size: 13px; color: var(--t-fg); line-height: 1.7; margin-bottom: 20px; font-style: italic; font-weight: 300; }
+  .website a { font-size: 12px; color: var(--t-ac); text-decoration: none; }
   .website a:hover { text-decoration: underline; }
 
   .divider { height: 1px; background: rgba(255,255,255,0.08); margin: 28px 0; }
 
   .edit-section h2 {
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px;
-    font-weight: 700; margin-bottom: 20px; color: var(--t-fg2, #888);
+    font-weight: 700; margin-bottom: 20px; color: var(--t-fg2);
     text-transform: uppercase; letter-spacing: 0.08em;
   }
   .field { margin-bottom: 18px; }
   label { display: block; font-size: 10px; font-weight: 500; letter-spacing: 0.1em;
-    text-transform: uppercase; color: var(--t-fg2, #666); margin-bottom: 7px; }
+    text-transform: uppercase; color: var(--t-fg2); margin-bottom: 7px; }
   input, textarea, select {
     width: 100%; background: rgba(255,255,255,0.04);
     border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
-    color: var(--t-fg, #e8e8e8); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    color: var(--t-fg); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     font-size: 13px; padding: 10px 13px; outline: none;
     transition: border-color 0.15s, box-shadow 0.15s;
   }
   input:focus, textarea:focus, select:focus {
-    border-color: var(--t-ac, #a78bfa);
+    border-color: var(--t-ac);
     box-shadow: 0 0 0 3px rgba(167,139,250,0.08);
   }
-  select option { background: #111; color: #e8e8e8; }
+  select option { background: var(--t-bg2); color: var(--t-fg); }
   textarea { resize: vertical; min-height: 90px; line-height: 1.6; }
   input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.2); font-style: italic; }
 
   .save-btn {
-    width: 100%; background: var(--t-ac, #a78bfa); color: #fff;
+    width: 100%; background: var(--t-ac); color: #fff;
     border: none; border-radius: 8px; padding: 12px;
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px; font-weight: 700;
     cursor: pointer; transition: opacity 0.15s, transform 0.15s;
@@ -127,7 +127,7 @@
 
   .not-found { text-align: center; padding: 60px 20px; }
   .not-found h1 { font-family: 'Syne', sans-serif; font-size: 1.4rem; font-weight: 800; margin-bottom: 8px; }
-  .not-found p { font-size: 13px; color: var(--t-fg2, #777); }
+  .not-found p { font-size: 13px; color: var(--t-fg2); }
 
   .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
   .stat-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px; text-align: center; }
@@ -171,13 +171,30 @@
       grid-template-columns: 1fr !important;
     }
   }
+  .home-btn { position: fixed; top: 12px; left: 12px; z-index: 50; display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--t-bd); background: var(--t-bg2); color: var(--t-fg); font: 600 12.5px/1 'DM Sans', system-ui, sans-serif; text-decoration: none; }
+  .home-btn:hover { border-color: var(--t-ac); }
+  .home-btn:focus-visible, .back-link:focus-visible { outline: 2px solid var(--t-ac); outline-offset: 2px; }
+  .loading-line { color: var(--t-fg2); font-size: 13px; }
+  .profile-head { display: flex; flex-direction: column; align-items: flex-start; margin-bottom: 32px; }
+  .wrap .stats-grid { width: 100%; }
+  .prefs-note { font-size: 12px; line-height: 1.6; color: var(--t-fg2); margin-bottom: 16px; }
+  .link-btn { display: block; text-align: center; text-decoration: none; }
+  .retry-btn { width: auto; padding: 8px 18px; }
+  html.theme-light #msg.ok { color: #166534; } html.theme-light #msg.err { color: #b91c1c; }
+  html.theme-light .badge-premium, html.theme-light .badge-shop, html.theme-light .premium-label, html.theme-light .bonus-banner strong { color: #92400e; }
+  html.theme-light .badge-admin, html.theme-light .badge-og { color: #b91c1c; }
+  @media (prefers-color-scheme: light) {
+    html:not([data-theme="dark"]) #msg.ok { color: #166534; } html:not([data-theme="dark"]) #msg.err { color: #b91c1c; }
+    html:not([data-theme="dark"]) .badge-premium, html:not([data-theme="dark"]) .badge-shop, html:not([data-theme="dark"]) .premium-label, html:not([data-theme="dark"]) .bonus-banner strong { color: #92400e; }
+    html:not([data-theme="dark"]) .badge-admin, html:not([data-theme="dark"]) .badge-og { color: #b91c1c; }
+  }
+  .back-link { color: var(--t-ac); font-size: 12px; text-decoration: none; }
 </style>
 </head>
 <body class="profile-page">
-<a id="profile-home-btn" href="/" title="Back to homepage"
-   style="position:fixed;top:12px;left:12px;z-index:50;display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;border:1px solid var(--t-bd,rgba(255,255,255,.18));background:var(--t-bg2,rgba(20,20,28,.8));color:var(--t-fg,#eee);font:600 12.5px/1 system-ui,sans-serif;text-decoration:none;">⌂ Home</a>
+<a id="profile-home-btn" class="home-btn" href="/" title="Back to homepage">⌂ Home</a>
 <div class="wrap" id="wrap">
-  <div style="color:var(--t-fg2,#666);font-size:13px">Loading…</div>
+  <div class="loading-line">Loading…</div>
 </div>
 <div class="coin-toast" id="coin-toast">🎁 +500 MitchCoins! Profile complete bonus!</div>
 
@@ -293,7 +310,7 @@ async function load(forceNetwork) {
   let badgeHtml = badge ? `<span class="profile-badge ${badge.cls}" title="${esc(String(profile.activeBadge).replace(/_badge$/, '').replace(/_/g, ' '))} badge">${badge.text}</span>` : '';
 
   let html = `
-    <div style="display:flex;flex-direction:column;align-items:flex-start;margin-bottom:32px">
+    <div class="profile-head">
       <div class="avatar">
         ${safePfp ? `<img src="${esc(safePfp)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="">` : initials}
       </div>
@@ -306,7 +323,7 @@ async function load(forceNetwork) {
       ${profile.bio ? `<div class="bio">${esc(profile.bio)}</div>` : ''}
       ${safeWebsite ? `<div class="website"><a href="${esc(safeWebsite)}" target="_blank" rel="noopener noreferrer">${esc(safeWebsite)}</a></div>` : ''}
       
-      <div class="stats-grid" style="width:100%">
+      <div class="stats-grid">
         <div class="stat-card"><div class="stat-val">${stats.pixels || 0}</div><div class="stat-lbl">Pixels</div></div>
         <div class="stat-card"><div class="stat-val">${stats.chess_wins || 0}</div><div class="stat-lbl">Chess Wins</div></div>
         <div class="stat-card"><div class="stat-val">${stats.battleship_wins || 0}</div><div class="stat-lbl">Battleship Wins</div></div>
@@ -327,8 +344,8 @@ async function load(forceNetwork) {
       <div class="divider"></div>
       <div class="edit-section">
         <h2>Manage Profile</h2>
-        <p style="font-size: 12px; line-height: 1.6; color: var(--t-fg2, #888); margin-bottom: 16px;">Profile editing, account details, 2FA, and account deletion now live in Preferences.</p>
-        <a class="save-btn" href="/preferences/#account" style="display:block;text-align:center;text-decoration:none;">Open Preferences</a>
+        <p class="prefs-note">Profile editing, account details, 2FA, and account deletion now live in Preferences.</p>
+        <a class="save-btn link-btn" href="/preferences/#account">Open Preferences</a>
       </div>`;
   }
 
@@ -336,15 +353,15 @@ async function load(forceNetwork) {
 }
 
 function showLoadError(wrap) {
-  wrap.innerHTML = '<div class="not-found"><p>Could not load this profile.</p><button type="button" id="profile-retry" class="save-btn" style="width:auto;padding:8px 18px">Try again</button></div>';
+  wrap.innerHTML = '<div class="not-found"><p>Could not load this profile.</p><button type="button" id="profile-retry" class="save-btn retry-btn">Try again</button></div>';
   document.getElementById('profile-retry').addEventListener('click', function () {
-    wrap.innerHTML = '<div style="color:var(--t-fg2,#666);font-size:13px">Loading…</div>';
+    wrap.innerHTML = '<div class="loading-line">Loading…</div>';
     load(true);
   });
 }
 
 function showNotFound(wrap) {
-  wrap.innerHTML = '<div class="not-found"><h1>404</h1><p>Profile not found.</p><a href="/" style="color:var(--t-ac);font-size:12px;text-decoration:none;">← Home</a></div>';
+  wrap.innerHTML = '<div class="not-found"><h1>404</h1><p>Profile not found.</p><a class="back-link" href="/">← Home</a></div>';
 }
 
 load();
