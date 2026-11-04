@@ -299,6 +299,15 @@
     border: 1px dashed var(--t-bd);
     border-radius: var(--radius);
   }
+  .form-status { margin: 0.6rem 0 0; font-size: 0.8rem; line-height: 1.4; color: var(--t-fg2); }
+  .form-status:empty { display: none; }
+  .form-status.err { color: color-mix(in srgb, #ef4444 62%, var(--t-fg)); }
+  .market-toasts { position: fixed; z-index: 9000; left: 50%; bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; flex-direction: column; gap: 0.5rem; width: min(26rem, calc(100% - 2rem)); pointer-events: none; }
+  .market-toast { pointer-events: auto; display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.7rem 0.9rem; background: var(--t-bg2); color: var(--t-fg); border: 1px solid var(--t-bd); border-left: 3px solid var(--t-ac); border-radius: var(--radius); box-shadow: 0 8px 24px rgba(0,0,0,.28); font-size: 0.84rem; line-height: 1.4; }
+  @media (max-width: 900px) { .market-toasts { bottom: calc(6rem + env(safe-area-inset-bottom, 0px)); } }
+  .market-toast.err { border-left-color: #ef4444; }
+  .market-toast span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .market-toast button { background: none; border: 0; color: var(--t-fg2); cursor: pointer; font-size: 1.1rem; line-height: 1; padding: 0.15rem 0.35rem; min-height: 28px; }
   @media (prefers-reduced-motion: reduce) {
     .btn, .feed-tab, .listing-item { transition: none !important; }
   }
@@ -330,7 +339,7 @@
   <div class="layout">
     <div class="card panel market-create-card">
       <div class="card-title"><span><small>Sell something</small>Create listing</span><b>＋</b></div>
-      <form id="createListingForm">
+      <form id="createListingForm" novalidate>
         <div class="form-group">
           <label for="listingType">Listing Type</label>
           <select id="listingType" required>
@@ -363,6 +372,7 @@
         </div>
 
         <button type="submit" id="postListingBtn" class="btn" style="margin-top: 0.35rem;">Post Listing</button>
+        <p class="form-status" id="listingStatus" role="status" aria-live="polite"></p>
       </form>
     </div>
 
@@ -387,7 +397,7 @@
     </div>
   </div>
 </main>
-
+<div class="market-toasts" id="marketToasts" role="status" aria-live="polite"></div>
 <script>
   let activeTab = 'active';
   let myInventory = { cosmetics: {} };
@@ -397,6 +407,23 @@
   let marketSort = 'newest';
   let actionBusy = false;
 
+  // Non-blocking feedback. Errors stay until dismissed; successes fade out.
+  function notify(message, kind = 'ok') {
+    const box = document.getElementById('marketToasts');
+    const toast = document.createElement('div');
+    toast.className = 'market-toast' + (kind === 'err' ? ' err' : '');
+    const text = document.createElement('span');
+    text.textContent = message;
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.setAttribute('aria-label', 'Dismiss');
+    close.textContent = '×';
+    close.onclick = () => toast.remove();
+    toast.append(text, close);
+    box.appendChild(toast);
+    while (box.children.length > 3) box.firstChild.remove();
+    if (kind !== 'err') setTimeout(() => toast.remove(), 5000);
+  }
   const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
   const createForm = document.getElementById('createListingForm');
@@ -588,9 +615,9 @@
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.error || 'Purchase failed');
-    alert(d.message || 'Purchase complete.');
+    notify(d.message || 'Purchase complete.');
     await loadData();
-    }); } catch (e) { alert((e.message || 'Purchase failed') + '. Try again.'); } finally { actionBusy = false; }
+    }); } catch (e) { notify((e.message || 'Purchase failed') + '. Try again.', 'err'); } finally { actionBusy = false; }
   }
 
   async function appealListing(id, btn) {
@@ -605,22 +632,22 @@
           body: JSON.stringify({ listingId: id, reason })
         });
         const d = await r.json().catch(() => ({}));
-        alert(d.message || d.error || (r.ok ? 'Appeal sent.' : 'Could not send appeal. Try again.'));
+        notify(d.message || d.error || (r.ok ? 'Appeal sent.' : 'Could not send appeal. Try again.'), r.ok ? 'ok' : 'err');
         await loadData();
-      } catch { alert('Network error. Try again.'); }
+      } catch { notify('Network error. Try again.', 'err'); }
     });
   }
 
   async function cancelListing(id, btn) {
-    if (actionBusy || !(await customConfirm('Cancel Listing', 'Cancel this listing? Any listed cosmetic will return to your inventory.'))) return;
+    if (actionBusy) return;
     actionBusy = true;
     try { await pending(btn, 'Cancelling…', async () => {
       const r = await fetch('/api/marketplace/cancel', { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ listingId:id }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || 'Could not cancel listing');
-      alert(d.message || 'Listing cancelled.');
+      notify(d.message || 'Listing cancelled.');
       await loadData();
-    }); } catch (error) { alert(error.message); }
+    }); } catch (error) { notify((error.message || 'Could not cancel listing') + '. Try again.', 'err'); }
     finally { actionBusy = false; }
   }
 
@@ -639,9 +666,9 @@
           body: JSON.stringify({ listingId: id, action })
         });
         const d = await r.json().catch(() => ({}));
-        alert(d.message || d.error || (r.ok ? 'Done.' : 'Could not update the trade. Try again.'));
+        notify(d.message || d.error || (r.ok ? 'Done.' : 'Could not update the trade. Try again.'), r.ok ? 'ok' : 'err');
         await loadData();
-      } catch { alert('Network error. Try again.'); }
+      } catch { notify('Network error. Try again.', 'err'); }
     });
   }
 
@@ -654,17 +681,15 @@
     const price = document.getElementById('listingPrice').value;
     const mediator = document.getElementById('listingMediator').value;
 
-    if (type === 'cosmetic' && !itemId) {
-      alert('Please choose a cosmetic item from your inventory to sell.');
-      return;
-    }
-    if (type === 'text' && !description.trim()) { alert('Describe what you are listing.'); return; }
-    if (!Number.isFinite(Number(price)) || Number(price) <= 0) { alert('Price must be greater than zero.'); return; }
+    const status = document.getElementById('listingStatus');
+    const fail = (message, field) => { status.textContent = message; status.className = 'form-status err'; field?.focus(); };
+    status.textContent = ''; status.className = 'form-status';
+    if (type === 'cosmetic' && !itemId) return fail('Choose a cosmetic from your inventory to sell.', listingItem);
+    if (type === 'text' && !description.trim()) return fail('Describe what you are listing.', document.getElementById('listingDesc'));
+    if (!Number.isFinite(Number(price)) || Number(price) <= 0) return fail('Price must be greater than zero.', document.getElementById('listingPrice'));
     if (actionBusy) return;
-
     if (mediator && typeof myEmail === 'string' && mediator.trim().toLowerCase() === myEmail.trim().toLowerCase()) {
-      alert('You cannot choose yourself as the mediator for your own listing!');
-      return;
+      return fail('You cannot be the mediator on your own listing.', document.getElementById('listingMediator'));
     }
 
     actionBusy = true;
@@ -679,15 +704,15 @@
     });
     const d = await r.json().catch(() => ({}));
     if (d.ok) {
-      alert('Listing posted successfully!');
+      notify('Listing posted.');
       createForm.reset();
       listingType.onchange();
       await loadData();
     } else {
-      alert(d.error || 'Failed to create listing. Try again.');
+      fail(d.error || 'Failed to create listing. Try again.');
     }
     }); } catch (error) {
-      alert((error.message || 'Failed to create listing') + '. Try again.');
+      fail((error.message || 'Failed to create listing') + '. Try again.');
     } finally {
       actionBusy = false;
     }
