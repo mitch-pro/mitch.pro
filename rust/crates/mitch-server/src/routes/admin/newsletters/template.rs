@@ -9,6 +9,15 @@ fn escape(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
+fn normalize_img_url(url: &str) -> String {
+    let trimmed = url.trim();
+    if trimmed.starts_with('/') && !trimmed.starts_with("//") {
+        format!("https://mitchdog.com{trimmed}")
+    } else {
+        trimmed.to_string()
+    }
+}
+
 fn paragraphs(value: &str) -> String {
     value
         .replace("\r\n", "\n")
@@ -47,15 +56,35 @@ pub(super) fn render(draft: &Draft, unsubscribe: &str) -> String {
     let preheader = escape(&draft.preheader);
     let intro = paragraphs(&draft.intro);
     let signature = escape(&draft.signature);
+    let signoff_sub = if draft.signoff_sub.trim().is_empty() {
+        String::new()
+    } else {
+        format!(
+            r#"<p style="margin:0;font:12px/1.4 Arial,Helvetica,sans-serif;color:{muted};">{}</p>"#,
+            escape(&draft.signoff_sub)
+        )
+    };
+    let avatar_src = normalize_img_url(&draft.avatar_url);
+    let avatar_cell = if avatar_src.is_empty() {
+        format!(
+            r#"<td width="36" height="36" align="center" bgcolor="{accent}" style="background:{accent};border-radius:50%;font:700 13px Arial,Helvetica,sans-serif;color:{accent_ink};">m.</td>"#
+        )
+    } else {
+        format!(
+            r#"<td width="36" height="36" align="center" style="width:36px;height:36px;border-radius:50%;overflow:hidden;"><img src="{}" width="36" height="36" alt="" style="display:block;width:36px;height:36px;border-radius:50%;object-fit:cover;border:0;"></td>"#,
+            escape(&avatar_src)
+        )
+    };
     let edition = if draft.edition.trim().is_empty() {
         String::new()
     } else {
         format!("<p style=\"margin:0 0 14px;font:600 13px/1.5 Arial,Helvetica,sans-serif;color:{muted};\">{}</p>", escape(&draft.edition))
     };
-    let hero = if draft.hero_url.is_empty() {
+    let hero = if draft.hero_url.trim().is_empty() {
         String::new()
     } else {
-        format!("<tr><td class=\"content\" style=\"padding:0 40px 28px;\"><img src=\"{}\" width=\"620\" alt=\"\" style=\"display:block;width:100%;max-width:620px;height:auto;border:0;border-radius:8px;\"></td></tr>", escape(&draft.hero_url))
+        let hero_src = normalize_img_url(&draft.hero_url);
+        format!("<tr><td class=\"content\" style=\"padding:0 40px 28px;\"><img src=\"{}\" width=\"620\" alt=\"\" style=\"display:block;width:100%;max-width:620px;height:auto;border:0;border-radius:8px;\"></td></tr>", escape(&hero_src))
     };
     let sections: String = draft.sections.iter()
         .filter(|section| !section.title.trim().is_empty() || !section.body.trim().is_empty())
@@ -88,7 +117,7 @@ pub(super) fn render(draft: &Draft, unsubscribe: &str) -> String {
 <tr><td class="content" style="padding:32px 40px 18px;">{edition}<h1 class="headline" style="margin:0;font:750 42px/1.12 Arial,Helvetica,sans-serif;letter-spacing:-1.6px;color:{ink};">{title}</h1></td></tr>
 <tr><td class="content" style="padding:0 40px 14px;font:16px/1.8 Arial,Helvetica,sans-serif;color:{muted};">{intro}</td></tr>
 {hero}{sections}{button}
-<tr><td class="content" style="padding:0 40px 32px;"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td width="44" valign="middle"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td width="32" height="32" align="center" bgcolor="{accent}" style="background:{accent};border-radius:50%;font:700 13px Arial,Helvetica,sans-serif;color:{accent_ink};">m.</td></tr></table></td><td style="padding-left:4px;"><p style="margin:0 0 3px;font:700 16px/1.4 Arial,Helvetica,sans-serif;color:{ink};">{signature}</p><p style="margin:0;font:12px/1.4 Arial,Helvetica,sans-serif;color:{muted};">mitch.pro</p></td></tr></table></td></tr>
+<tr><td class="content" style="padding:0 40px 32px;"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td width="48" valign="middle"><table role="presentation" cellpadding="0" cellspacing="0"><tr>{avatar_cell}</tr></table></td><td style="padding-left:6px;"><p style="margin:0 0 3px;font:700 16px/1.4 Arial,Helvetica,sans-serif;color:{ink};">{signature}</p>{signoff_sub}</td></tr></table></td></tr>
 <tr><td class="content" style="padding:22px 40px;border-top:1px solid {line};font:11px/1.9 Arial,Helvetica,sans-serif;color:{muted};text-align:center;">
 Delivered by <a href="https://mitchdog.com" style="color:{muted};text-decoration:underline;font-weight:600;">mitchdog.com</a> | <a href="https://mitch.pro" style="color:{muted};text-decoration:underline;">mitch.pro</a><br>
 To opt-out of these communications, you can <a href="{unsubscribe}" style="color:{muted};text-decoration:underline;">unsubscribe from this list</a>.<br>

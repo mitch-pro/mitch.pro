@@ -19,6 +19,8 @@ pub struct Draft {
     button_label: String,
     button_url: String,
     signature: String,
+    signoff_sub: String,
+    avatar_url: String,
     accent: String,
     theme: String,
     audience: String,
@@ -45,6 +47,8 @@ impl Default for Draft {
             button_label: "Open mitch.pro".into(),
             button_url: "https://mitchdog.com".into(),
             signature: "mitch.pro".into(),
+            signoff_sub: "mitch.pro".into(),
+            avatar_url: "https://mitchdog.com/public/pfp_dark.png".into(),
             accent: "#2563eb".into(),
             theme: "paper".into(),
             audience: "selected".into(),
@@ -85,6 +89,8 @@ pub fn weekend_update_october_backup() -> Draft {
         button_label: "Open mitch.pro".into(),
         button_url: "https://mitchdog.com".into(),
         signature: "mitch.pro".into(),
+        signoff_sub: "mitch.pro".into(),
+        avatar_url: String::new(),
         accent: "#2563eb".into(),
         theme: "paper".into(),
         audience: "selected".into(),
@@ -131,6 +137,16 @@ fn safe_url(value: &str) -> bool {
             }))
 }
 
+fn safe_image_url(value: &str) -> bool {
+    value.is_empty()
+        || (value.len() <= 2048
+            && (safe_url(value)
+                || (value.starts_with('/')
+                    && !value.starts_with("//")
+                    && !value.contains('\\')
+                    && !value.chars().any(char::is_control))))
+}
+
 fn parse_draft(body: &Value, ready: bool) -> Result<Draft, &'static str> {
     let draft: Draft =
         serde_json::from_value(body.clone()).map_err(|_| "Invalid newsletter fields.")?;
@@ -141,6 +157,8 @@ fn parse_draft(body: &Value, ready: bool) -> Result<Draft, &'static str> {
         || draft.title.len() > 180
         || draft.intro.len() > 12_000
         || draft.signature.len() > 120
+        || draft.signoff_sub.len() > 120
+        || draft.avatar_url.len() > 2048
         || draft.button_label.len() > 80
         || draft.sections.len() > 8
         || draft
@@ -164,7 +182,10 @@ fn parse_draft(body: &Value, ready: bool) -> Result<Draft, &'static str> {
     {
         return Err("Choose a valid accent color.");
     }
-    if !safe_url(&draft.hero_url) || !safe_url(&draft.button_url) {
+    if !safe_image_url(&draft.hero_url)
+        || !safe_image_url(&draft.avatar_url)
+        || !safe_url(&draft.button_url)
+    {
         return Err("Image and button links must be HTTP or HTTPS URLs.");
     }
     if ready
@@ -679,6 +700,16 @@ mod tests {
         draft.hero_url = "javascript:alert(1)".into();
         assert!(parse_draft(&json!(draft), false).is_err());
         draft.hero_url.clear();
+        draft.avatar_url = "javascript:alert(1)".into();
+        assert!(parse_draft(&json!(draft), false).is_err());
+        draft.avatar_url = "/public/pfp_dark.png".into();
+        draft.signoff_sub = "Lead Admin".into();
+        let html = template::render(&draft, "#");
+        assert!(html.contains("https://mitchdog.com/public/pfp_dark.png"));
+        assert!(html.contains("Lead Admin"));
+        draft.avatar_url.clear();
+        let fallback_html = template::render(&draft, "#");
+        assert!(fallback_html.contains(">m.</td>"));
         draft.subject = "Hello\r\nBcc: other@example.test".into();
         assert!(parse_draft(&json!(draft), false).is_err());
         draft.subject.clear();

@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  const fields = ['subject', 'preheader', 'edition', 'title', 'intro', 'heroUrl', 'buttonLabel', 'buttonUrl', 'signature', 'accent', 'theme'];
+  const fields = ['subject', 'preheader', 'edition', 'title', 'intro', 'heroUrl', 'buttonLabel', 'buttonUrl', 'signature', 'signoffSub', 'avatarUrl', 'accent', 'theme'];
   const selected = new Set();
   let accounts = [], unsubscribedList = new Set(), example, draft, previewHtml = '', previewTimer, previewVersion = 0;
   let dirty = false, ready = false, reviewing = false, sending = false, review, reviewSnapshot = '', jobTimer;
@@ -121,7 +121,7 @@
     document.querySelector(`input[name="audience"][value="${value.audience}"]`).checked = true;
     $('newsletter-sections').replaceChildren();
     value.sections.forEach(addSection);
-    updateAudience(); renderRecipients();
+    updateAudience(); renderRecipients(); updateAvatarPreview();
   }
   function renderRecipients() {
     const query = $('recipient-search').value.trim().toLowerCase();
@@ -158,8 +158,19 @@
     status('draft-status', 'Unsaved changes');
     updateAudience(); clearTimeout(previewTimer); previewTimer = setTimeout(updatePreview, 350);
   }
+  function updateAvatarPreview() {
+    const avatarEl = document.querySelector('.sender-avatar');
+    if (!avatarEl) return;
+    const url = ($('avatarUrl') ? $('avatarUrl').value.trim() : '');
+    if (url) {
+      avatarEl.innerHTML = `<img src="${encodeURI(url)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">`;
+    } else {
+      avatarEl.textContent = 'm.';
+    }
+  }
   async function updatePreview() {
     if (!ready) return;
+    updateAvatarPreview();
     const version = ++previewVersion;
     status('preview-status', 'Updating preview…');
     try {
