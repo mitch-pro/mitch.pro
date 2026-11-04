@@ -134,6 +134,8 @@
   }
   #msg.ok { color: #4ade80; }
   #msg.err { color: #f87171; }
+  html.theme-light #msg.err { color: #b91c1c; }
+  .role-card-opt:focus-visible { outline: 2px solid var(--t-ac); outline-offset: 2px; }
   .success-state {
     display: none;
     text-align: center;
@@ -178,21 +180,21 @@
   </header>
 
   <section class="panel apply-panel">
-    <label style="font-size:0.8rem;font-weight:700;margin-bottom:0.6rem;display:block;color:var(--t-fg2);">SELECT ROLE YOU ARE APPLYING FOR</label>
-    <div class="role-selector-grid">
-      <div class="role-card-opt selected" data-role="tester">
+    <div id="role-label" class="role-label" style="font-size:0.8rem;font-weight:700;margin-bottom:0.6rem;display:block;color:var(--t-fg2);">SELECT ROLE YOU ARE APPLYING FOR</div>
+    <div class="role-selector-grid" role="radiogroup" aria-labelledby="role-label">
+      <div class="role-card-opt selected" data-role="tester" role="radio" tabindex="0" aria-checked="true">
         <span class="role-opt-title">🧪 Beta Tester</span>
         <p class="role-opt-desc">Test new arcade games, test VM performance, hunt down bugs, and provide QA feedback.</p>
       </div>
-      <div class="role-card-opt" data-role="moderator">
+      <div class="role-card-opt" data-role="moderator" role="radio" tabindex="0" aria-checked="false">
         <span class="role-opt-title">🛡️ Moderator</span>
         <p class="role-opt-desc">Keep Matrix chat safe, assist students, review reports, and ensure community guidelines are upheld.</p>
       </div>
-      <div class="role-card-opt" data-role="developer">
+      <div class="role-card-opt" data-role="developer" role="radio" tabindex="0" aria-checked="false">
         <span class="role-opt-title">💻 Developer</span>
         <p class="role-opt-desc">Build web apps, arcade games, backend systems, APIs, Proxmox virtualization, or Linux tooling.</p>
       </div>
-      <div class="role-card-opt" data-role="designer">
+      <div class="role-card-opt" data-role="designer" role="radio" tabindex="0" aria-checked="false">
         <span class="role-opt-title">🎨 Designer</span>
         <p class="role-opt-desc">Create pixel art, badges, themes, vector graphics, UI improvements, and visual branding.</p>
       </div>
@@ -250,7 +252,7 @@
 
       <div class="submit-row">
         <button type="submit" class="btn-primary" id="submit-btn">Submit Application</button>
-        <div id="msg"></div>
+        <div id="msg" role="status" aria-live="polite"></div>
       </div>
     </form>
 
@@ -271,10 +273,15 @@
 const roleCards = document.querySelectorAll('.role-card-opt');
 const selectedRoleInput = document.getElementById('selected-role');
 roleCards.forEach(card => {
-  card.addEventListener('click', () => {
-    roleCards.forEach(c => c.classList.remove('selected'));
+  const pick = () => {
+    roleCards.forEach(c => { c.classList.remove('selected'); c.setAttribute('aria-checked', 'false'); });
     card.classList.add('selected');
+    card.setAttribute('aria-checked', 'true');
     selectedRoleInput.value = card.dataset.role;
+  };
+  card.addEventListener('click', pick);
+  card.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); }
   });
 });
 
@@ -288,11 +295,6 @@ document.getElementById('form').addEventListener('submit', async e => {
   msg.className = '';
   msg.textContent = '';
 
-  let recaptcha_token = '';
-  if (window.getCaptchaToken) {
-    recaptcha_token = await window.getCaptchaToken('submit_application') || '';
-  }
-
   const payload = {
     role:         document.getElementById('selected-role').value,
     name:         document.getElementById('name').value.trim(),
@@ -303,23 +305,28 @@ document.getElementById('form').addEventListener('submit', async e => {
     skills:       document.getElementById('skills').value.trim(),
     portfolio:    document.getElementById('portfolio').value.trim(),
     extra:        document.getElementById('extra').value.trim(),
-    recaptcha_token: recaptcha_token,
+    recaptcha_token: '',
   };
 
   try {
+    if (window.getCaptchaToken) {
+      payload.recaptcha_token = await window.getCaptchaToken('submit_application') || '';
+    }
     const r = await fetch('/api/apply', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error || 'Something went wrong.');
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || d.message || 'Could not submit. Your answers are still here; try again.');
     document.getElementById('form').style.display = 'none';
     document.querySelector('.role-selector-grid').style.display = 'none';
+    document.getElementById('role-label').style.display = 'none';
+    document.getElementById('success').scrollIntoView({ block: 'center' });
     document.getElementById('success').style.display = 'block';
   } catch (err) {
     msg.className = 'err';
-    msg.textContent = err.message;
+    msg.textContent = err instanceof TypeError ? 'Could not reach the server. Your answers are still here; try again.' : err.message;
     btn.disabled = false;
     btn.textContent = 'Submit Application';
   }

@@ -231,8 +231,9 @@
     min-height: 1.3em;
   }
 
-  #status.ok { color: #c084fc; }
+  #status.ok { color: var(--t-ac); }
   #status.err { color: #f87171; }
+  html.theme-light #status.err { color: #b91c1c; }
 
   .recaptcha-wrap { margin-top: 0.75rem; transform-origin: left top; }
 
@@ -284,34 +285,34 @@
     <section class="panel">
       <form id="feedbackForm">
         <div class="field">
-          <label>Type <span>Pick the closest match</span></label>
-          <div class="chips" id="typeChips">
-            <button class="chip active" type="button" data-type="feedback">General feedback</button>
-            <button class="chip" type="button" data-type="broken_game">Something is broken</button>
-            <button class="chip" type="button" data-type="add_page">Add a page/game</button>
-            <button class="chip" type="button" data-type="general">Other idea</button>
+          <label id="typeLabel">Type <span>Pick the closest match</span></label>
+          <div class="chips" id="typeChips" role="group" aria-labelledby="typeLabel">
+            <button class="chip active" type="button" aria-pressed="true" data-type="feedback">General feedback</button>
+            <button class="chip" type="button" aria-pressed="false" data-type="broken_game">Something is broken</button>
+            <button class="chip" type="button" aria-pressed="false" data-type="add_page">Add a page/game</button>
+            <button class="chip" type="button" aria-pressed="false" data-type="general">Other idea</button>
           </div>
         </div>
 
         <div class="row">
           <div class="field">
-            <label>Page <span>optional</span></label>
+            <label for="pageField">Page <span>optional</span></label>
             <input id="pageField" placeholder="/matrix/ or homepage">
           </div>
           <div class="field">
-            <label>Mood <span>optional</span></label>
+            <label for="moodField">Mood <span>optional</span></label>
             <input id="moodField" placeholder="bug, idea, urgent, nice">
           </div>
         </div>
 
         <div class="field">
-          <label>Message <span id="count">0 / 2000</span></label>
-          <textarea id="site" placeholder="What should we fix or build? Add details like device, browser, page, and what you expected."></textarea>
+          <label for="site">Message <span id="count">0 / 2000</span></label>
+          <textarea id="site" maxlength="2000" placeholder="What should we fix or build? Add details like device, browser, page, and what you expected."></textarea>
         </div>
 
         <div class="actions">
           <button id="submitBtn" type="submit">Send feedback</button>
-          <div id="status"></div>
+          <div id="status" role="status" aria-live="polite"></div>
         </div>
         <p class="tiny">This form sends your signed-in ID with the report so admins can understand context and prevent spam.</p>
       </form>
@@ -354,7 +355,7 @@ function studentId() {
 document.querySelectorAll('.chip').forEach(function(btn) {
   btn.addEventListener('click', function() {
     selectedType = btn.dataset.type;
-    document.querySelectorAll('.chip').forEach(function(b) { b.classList.toggle('active', b === btn); });
+    document.querySelectorAll('.chip').forEach(function(b) { b.classList.toggle('active', b === btn); b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'); });
   });
 });
 document.getElementById('site').addEventListener('input', function() {
@@ -367,11 +368,12 @@ async function submitSite(e) {
   var text = document.getElementById('site').value.trim();
   var page = document.getElementById('pageField').value.trim();
   var mood = document.getElementById('moodField').value.trim();
-  if (!text) return setStatus('Write a little feedback first.', 'err');
+  if (!text) { setStatus('Write a little feedback first.', 'err'); document.getElementById('site').focus(); return; }
   if (_sugSpam()) return setStatus('Slow down a little before sending more.', 'err');
   var btn = document.getElementById('submitBtn');
   btn.disabled = true;
-  setStatus('Sending...', '');
+  btn.textContent = 'Sending…';
+  setStatus('', '');
   var details = text;
   if (page) details += '\n\nPage: ' + page;
   if (mood) details += '\nMood: ' + mood;
@@ -392,7 +394,7 @@ async function submitSite(e) {
         recaptcha_token: recaptcha_token
       })
     });
-    var r = await resp.json();
+    var r = await resp.json().catch(function() { return {}; });
     if (r.success) {
       setStatus('Submitted. Thank you.', 'ok');
       document.getElementById('site').value = '';
@@ -400,12 +402,13 @@ async function submitSite(e) {
       document.getElementById('moodField').value = '';
       document.getElementById('count').textContent = '0 / 2000';
     } else {
-      setStatus(r.message || 'Could not send feedback.', 'err');
+      setStatus(r.message || (resp.status === 429 ? 'Too many submissions. Wait a minute and try again.' : 'Could not send feedback. Your message is still here; try again.'), 'err');
     }
   } catch (err) {
-    setStatus('Network error. Try again.', 'err');
+    setStatus('Could not reach the server. Your message is still here; try again.', 'err');
   }
   btn.disabled = false;
+  btn.textContent = 'Send feedback';
 }
 </script>
 <script src="/cookie-consent.js" defer></script>
