@@ -1197,12 +1197,23 @@ function paintAt(wx, wy, brushSz, isClick) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ x: wx, y: wy, brushSz, color, painter: pid, lock: lock, zoneId: currentZoneId }),
-  }).then(r => r.json()).then(d => {
+  }).then(r => r.json().catch(() => ({ error: r.ok ? '' : 'Could not save your pixels.' }))).then(d => {
     if (d.error) {
       if (d.error === 'banned') { banned = true; showBanned(d.reason); }
-      else showToast(d.error, 'warn');
+      else { showToast(d.error, 'warn'); reconcileAfterFailedSave(); }
     }
-  }).catch(() => {});
+  }).catch(() => {
+    showToast('Could not save your pixels. Check your connection.', 'err');
+    reconcileAfterFailedSave();
+  });
+}
+
+// Pixels are drawn locally before the server confirms them. If a save fails,
+// reload from the server shortly after so the canvas shows what really exists.
+let reconcileTimer = null;
+function reconcileAfterFailedSave() {
+  clearTimeout(reconcileTimer);
+  reconcileTimer = setTimeout(() => { loadPixels(); }, 1500);
 }
 
 function eraseAt(wx, wy, brushSz, isClick) {
@@ -1226,7 +1237,10 @@ function eraseAt(wx, wy, brushSz, isClick) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ x: wx, y: wy, brushSz, painter: pid, zoneId: currentZoneId }),
-  }).catch(() => {});
+  }).then(r => { if (!r.ok) throw new Error('erase failed'); }).catch(() => {
+    showToast('Could not erase. Check your connection.', 'err');
+    reconcileAfterFailedSave();
+  });
 }
 
 function clientToCanvas(cx, cy) { return [cx, cy - TB]; }
@@ -1667,8 +1681,12 @@ async function loadPixels() {
   clearAllChunkCanvases();
   updatePixelCount();
   requestRender();
-  const visible = await chunksForCurrentView(3);
-  await loadChunks(visible, loadVersion);
+  try {
+    const visible = await chunksForCurrentView(3);
+    await loadChunks(visible, loadVersion);
+  } catch (err) {
+    showToast((err && err.message) || 'Failed to load canvas. Use refresh to retry.', 'err');
+  }
   btn.textContent = '↻';
 }
 
