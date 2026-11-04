@@ -2,6 +2,10 @@
   const light = /(?:^|;\s*)theme=light(?:;|$)/.test(document.cookie);
   const apply = value => {
     document.documentElement.classList.toggle('theme-light', value);
+    // The holiday palettes in theme-tokens.css pick light or dark from
+    // data-theme, so pin it to this page's own mode.
+    document.documentElement.setAttribute('data-theme', value ? 'light' : 'dark');
+    if (window.__holidayFx) window.__holidayFx.refresh();
     document.documentElement.style.colorScheme = value ? 'light' : 'dark';
     document.querySelectorAll('[data-theme-toggle]').forEach(button => {
       button.setAttribute('aria-label', `Switch to ${value ? 'dark' : 'light'} mode`);
