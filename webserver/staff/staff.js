@@ -49,12 +49,15 @@
     container.hidden = false;
   }
 
+  function load() {
+  $('staff-status').textContent = 'Loading...';
   fetch('/api/staff-hub/status', { credentials: 'same-origin', cache: 'no-store' })
     .then(function (r) {
       if (r.status === 401) {
         location.href = '/enroll/?next=' + encodeURIComponent('/staff/');
         return null;
       }
+      if (!r.ok) throw new Error('status ' + r.status);
       return r.json();
     })
     .then(function (status) {
@@ -68,6 +71,14 @@
       render(status);
     })
     .catch(function () {
-      $('staff-status').textContent = 'Could not load staff status.';
+      var el = $('staff-status');
+      el.textContent = 'Could not load staff status. ';
+      var retry = document.createElement('button');
+      retry.type = 'button';
+      retry.textContent = 'Retry';
+      retry.addEventListener('click', load);
+      el.appendChild(retry);
     });
+  }
+  load();
 })();
