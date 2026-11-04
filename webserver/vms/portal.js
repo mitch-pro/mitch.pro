@@ -10,6 +10,8 @@
   const pending = new Map();
   let computers = [], loading = false, provisionMode = 'create';
   let upgradeData = null, activeUpgradeTab = 'cpu', upgradeBusy = false;
+  // fetch() rejects with a bare TypeError ('Failed to fetch') on network loss; say what to do instead.
+  const friendly = error => error instanceof TypeError ? 'Could not reach the server. Check your connection and try again.' : (error?.message || 'Something went wrong. Try again.');
   const esc = value => String(value ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const bytes = value => Number(value) ? `${(Number(value) / 1073741824).toLocaleString(undefined, { maximumFractionDigits: 1 })} GB` : '\u2014';
   const uptime = value => { const n = Number(value) || 0, d = Math.floor(n / 86400), h = Math.floor(n % 86400 / 3600), m = Math.floor(n % 3600 / 60); return !n ? '\u2014' : d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`; };
@@ -128,7 +130,7 @@
       $('refresh-status').textContent = ''; render();
     } catch (error) {
       if (computers.length) $('refresh-status').textContent = 'Status could not be refreshed. Try again shortly.';
-      else { $('error-copy').textContent = error.message; setState('error-state'); }
+      else { $('error-copy').textContent = friendly(error); setState('error-state'); }
     } finally {
       loading = false;
       refreshButton.disabled = false;
@@ -160,7 +162,7 @@
         const response = await fetch('/api/vm/byo-os/windows-compatibility', { method: 'POST', credentials: 'same-origin', headers, body: JSON.stringify({ id, confirmInstallerRepair: true }) });
         const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Could not prepare the installer.');
         $('refresh-status').textContent = data.message;
-      } catch (error) { $('refresh-status').textContent = error.message; }
+      } catch (error) { $('refresh-status').textContent = friendly(error); }
       finally { pending.delete(id); await load(); }
       return;
     }
@@ -173,7 +175,7 @@
         if (!response.ok) throw new Error(data.error || 'Could not detach the ISO.');
         $('refresh-status').textContent = data.message || 'ISO detached — restart your computer to boot from disk.';
         pending.delete(id); render();
-      } catch (error) { pending.delete(id); render(); $('refresh-status').textContent = error.message; }
+      } catch (error) { pending.delete(id); render(); $('refresh-status').textContent = friendly(error); }
       return;
     }
     if (!await confirmPower(action, vm.name || 'your computer') || pending.has(id)) return;
@@ -185,7 +187,7 @@
         if (!response.ok) throw new Error(data.error || 'Session could not be extended.');
         $('refresh-status').textContent = 'Session extended by 30 minutes.';
         setTimeout(() => { pending.delete(id); load(); }, 1200);
-      } catch (error) { pending.delete(id); render(); $('refresh-status').textContent = error.message; }
+      } catch (error) { pending.delete(id); render(); $('refresh-status').textContent = friendly(error); }
       return;
     }
     pending.set(id, { start: 'Starting...', restart: 'Restarting...', shutdown: 'Shutting down...' }[action]); render();
@@ -194,7 +196,7 @@
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Your computer could not be reached.');
       setTimeout(() => { pending.delete(id); load(); }, 6000);
-    } catch (error) { pending.delete(id); render(); $('refresh-status').textContent = error.message; }
+    } catch (error) { pending.delete(id); render(); $('refresh-status').textContent = friendly(error); }
   }
 
   function openProvisionModal(mode) {
@@ -210,6 +212,7 @@
     provDialog.showModal();
   }
 
+  $('error-retry')?.addEventListener('click', () => load());
   $('provision-cancel')?.addEventListener('click', () => provDialog?.close());
   $('create-vm-btn')?.addEventListener('click', () => openProvisionModal('create'));
 
@@ -233,7 +236,7 @@
       setTimeout(load, 3000);
       setTimeout(load, 10000);
     } catch (err) {
-      statusEl.textContent = err.message || 'An error occurred.';
+      statusEl.textContent = friendly(err);
     } finally {
       $('provision-submit').disabled = false;
     }
@@ -271,7 +274,7 @@
         : 'Optional upgrades use earned MitchCoins. Hardware upgrades stay with your account.';
       renderUpgradeTab();
     } catch (err) {
-      $('upgrade-status').textContent = err.message || 'Error loading upgrades.';
+      $('upgrade-status').textContent = friendly(err);
     }
   }
 
@@ -303,7 +306,7 @@
           const response = await fetch('/api/vm/owner-resources',{method:'POST',credentials:'same-origin',headers,body:JSON.stringify({category:cat,value})});
           const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Could not save resources.');
           upgradeData.current = result.upgrades; status.textContent = 'Resources saved.'; await load();
-        } catch (error) { status.textContent = error.message; }
+        } catch (error) { status.textContent = friendly(error); }
         finally { upgradeBusy = false; renderUpgradeTab(); }
       };
       return;
@@ -411,7 +414,7 @@
       }
       await load();
     } catch (err) {
-      statusEl.textContent = err.message || 'Upgrade failed.';
+      statusEl.textContent = friendly(err);
       statusEl.style.color = '#f87171';
     } finally {
       upgradeBusy = false;
@@ -461,7 +464,7 @@
       button.disabled = true;
       fetch(`/api/vm/computers/${encodeURIComponent(id)}/repair-desktop`, {method:'POST',credentials:'same-origin',headers,body:'{}'})
         .then(async response => {const data=await response.json();if(!response.ok) throw new Error(data.error || 'Repair could not start.');$('refresh-status').textContent=data.message;await load();})
-        .catch(error => {$('refresh-status').textContent=error.message;button.disabled=false;});
+        .catch(error => {$('refresh-status').textContent=friendly(error);button.disabled=false;});
       return;
     }
     power(id, action);
