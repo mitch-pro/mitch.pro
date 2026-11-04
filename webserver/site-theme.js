@@ -168,8 +168,24 @@
 
   apply();
 
+  function holidayOff() {
+    try { return localStorage.getItem('theme_holiday') === 'off'; } catch (_) { return false; }
+  }
+
+  // Turns the holiday theme off (or back on) for every page; Preferences shows
+  // the same setting.
+  function setHolidayOff(off) {
+    try {
+      if (off) localStorage.setItem('theme_holiday', 'off');
+      else localStorage.removeItem('theme_holiday');
+    } catch (_) {}
+    apply();
+  }
+
   window.__siteTheme = {
     holidayFor: holidayFor,
+    holidayOff: holidayOff,
+    setHolidayOff: setHolidayOff,
     getMode: function () { return readCookie('theme'); },
     setMode: function (mode) {
       writeCookie('theme', mode === 'light' || mode === 'dark' ? mode : '');

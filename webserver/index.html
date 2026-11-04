@@ -13,7 +13,7 @@
 <title>mitch.pro</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"></noscript>
 <link rel="stylesheet" href="/app.css">
-<link rel="stylesheet" href="/home.css?v=16">
+<link rel="stylesheet" href="/home.css?v=17">
 <script src="/app-shell.js" defer></script>
 <script src="/home-friends.js?v=5" defer></script>
 <script>
@@ -1340,13 +1340,36 @@ function initFriendsSystem() {
   setInterval(sendPresenceHeartbeat, 30000);
 }
 
-// The manual update log (written on /admin/updates/).
+// "Don't like the holiday theme?" turns the seasonal theme off on every page
+// (the same setting as Preferences); the pill then offers to bring it back. It
+// is only shown while a holiday theme is in season.
+function setupHolidayPill() {
+  var pill = document.getElementById('holiday-pill');
+  var theme = window.__siteTheme;
+  if (!pill || !theme || !theme.holidayFor) return;
+  var season = theme.holidayFor(new Date());
+  if (!season) return;
+  function paint() {
+    pill.textContent = theme.holidayOff() ? 'Bring back the holiday theme' : "Don't like the holiday theme?";
+    pill.hidden = false;
+  }
+  pill.addEventListener('click', function() { theme.setHolidayOff(!theme.holidayOff()); paint(); });
+  paint();
+}
+
+// The manual update log (written on /admin/updates/). Collapsed it is one line
+// with the newest title; clicking it lists recent entries with their details.
 function loadUpdates() {
   fetch('/api/updates?limit=5', { cache: 'no-store' }).then(function(r) { return r.ok ? r.json() : null; }).then(function(data) {
     var list = data && data.updates;
     if (!list || !list.length) return;
-    var ol = document.getElementById('home-updates-list');
-    ol.replaceChildren.apply(ol, list.map(function(u) {
+    function day(ms) { return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
+    var latest = list[0];
+    var bar = document.getElementById('updates-bar');
+    var items = document.getElementById('home-updates-list');
+    document.getElementById('updates-latest-date').textContent = day(latest.postedAt);
+    document.getElementById('updates-latest-title').textContent = latest.title;
+    items.replaceChildren.apply(items, list.map(function(u) {
       var li = document.createElement('li');
       var date = document.createElement('time');
       date.dateTime = new Date(u.postedAt).toISOString().slice(0, 10);
@@ -1357,11 +1380,21 @@ function loadUpdates() {
       if (u.body) { var p = document.createElement('p'); p.textContent = u.body; li.append(p); }
       return li;
     }));
+    // Nothing more to show when the only entry has no details.
+    var expandable = list.length > 1 || !!latest.body;
+    bar.classList.toggle('is-static', !expandable);
+    bar.addEventListener('click', function() {
+      if (!expandable) return;
+      var open = bar.getAttribute('aria-expanded') !== 'true';
+      bar.setAttribute('aria-expanded', String(open));
+      items.hidden = !open;
+    });
     document.getElementById('home-updates').hidden = false;
   }).catch(function() {});
 }
 
 async function initHome() {
+  setupHolidayPill();
   loadUpdates();
   loadLinkAliases();
     /* TASK4 */ optimizeForDevice();
@@ -1472,6 +1505,7 @@ if (document.readyState === 'loading') {
     <a id="home-staff-pill" href="/staff/" class="home-staff-pill" hidden><span>&#9881;</span> Staff workspace &rarr;</a>
     <label id="abToggleBar" class="ab-toggle" title="Open links in an about:blank tab"><span>Private window</span><span class="toggle-switch"><input type="checkbox" id="abToggle" aria-label="Open links in an about:blank tab"><span class="toggle-slider"></span></span></label>
     </div>
+    <button type="button" id="holiday-pill" class="holiday-pill" hidden></button>
     </div>
     <div class="hello-emblem" aria-hidden="true">
       <div class="hello-logo-shadow"></div>
@@ -1490,6 +1524,16 @@ if (document.readyState === 'loading') {
   <section class="home-recent" id="home-recent" hidden aria-label="Continue where you left off">
     <div class="home-section-heading home-recent-heading"><h2>Continue where you left off</h2></div>
     <div id="home-recent-list" class="recent-strip"></div>
+  </section>
+
+  <section class="home-updates" id="home-updates" hidden aria-label="Updates">
+    <button type="button" class="updates-bar" id="updates-bar" aria-expanded="false" aria-controls="home-updates-list">
+      <span class="updates-tag">Update</span>
+      <time id="updates-latest-date"></time>
+      <strong id="updates-latest-title"></strong>
+      <span class="updates-chev" aria-hidden="true"></span>
+    </button>
+    <ol class="updates-list" id="home-updates-list" hidden></ol>
   </section>
 
   <div class="home-section-heading"><h2>Shortcuts</h2></div>
@@ -1535,10 +1579,6 @@ if (document.readyState === 'loading') {
         </div>
         <div id="links-empty" style="display:none;">No matching pages.</div>
       </div>
-  </section>
-  <section class="home-updates" id="home-updates" hidden aria-labelledby="home-updates-title">
-    <div class="home-section-heading"><h2 id="home-updates-title">Updates</h2></div>
-    <ol class="updates-list" id="home-updates-list"></ol>
   </section>
   <section class="home-controls" aria-label="Your settings">
     <a id="vm-status-chip" class="home-control-card" href="/vms/" hidden><div><h2>Your computer</h2><p>Open your desktop or manage its resources.</p></div><span class="control-status"><span class="status-dot" id="vm-status-dot"></span><span id="vm-status-text">Computer</span></span></a>

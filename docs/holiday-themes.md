@@ -24,6 +24,10 @@ starts Nov 27 that year). The dates use the visitor's local calendar.
   canvas. It is loaded only while a holiday is active, pauses when the tab is
   hidden, and does not run with reduced motion, with Animations off in
   Preferences, or on `/vms/desktop`.
+- A pill on the homepage, right below the Private window toggle, says "Don't like
+  the holiday theme?" while a holiday is in season. Clicking it turns the theme off
+  on every page and the pill becomes "Bring back the holiday theme"
+  (`__siteTheme.setHolidayOff`). It is the same setting as the one below.
 - Preferences → Appearance → Holiday theme: Automatic or Off (stored as
   `theme_holiday` in local storage, like the other appearance settings).
 

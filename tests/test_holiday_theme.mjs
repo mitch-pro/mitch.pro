@@ -21,7 +21,7 @@ function load(search = '', stored = {}) {
     document: { documentElement: root, cookie: '', head: { appendChild() {} }, createElement: () => ({}), querySelector: () => null },
     window: { dispatchEvent() {}, matchMedia: () => ({ matches: false }), addEventListener() {} },
     location: { search },
-    localStorage: { getItem: k => stored[k] ?? null },
+    localStorage: { getItem: k => stored[k] ?? null, setItem: (k, v) => { stored[k] = String(v); }, removeItem: k => { delete stored[k]; } },
     getComputedStyle: () => ({ getPropertyValue: () => '' }),
     CustomEvent: class {},
     Object, Math, Date, RegExp, parseInt, String
@@ -29,7 +29,7 @@ function load(search = '', stored = {}) {
   sandbox.window.document = sandbox.document;
   vm.createContext(sandbox);
   vm.runInContext(source, sandbox);
-  return { theme: sandbox.window.__siteTheme, attrs };
+  return { theme: sandbox.window.__siteTheme, attrs, stored };
 }
 
 const { theme } = load();
@@ -58,5 +58,16 @@ assert.equal(load('?holiday=christmas').attrs['data-holiday'], 'christmas');
 assert.equal(load('?holiday=thanksgiving').attrs['data-holiday'], 'thanksgiving');
 assert.equal(load('?holiday=none').attrs['data-holiday'], undefined);
 assert.equal(load('', { theme_holiday: 'off' }).attrs['data-holiday'], undefined);
+
+// The homepage pill turns it off for every page by writing the same setting.
+const toggled = load();
+assert.equal(toggled.theme.holidayOff(), false);
+toggled.theme.setHolidayOff(true);
+assert.equal(toggled.stored.theme_holiday, 'off');
+assert.equal(toggled.theme.holidayOff(), true);
+assert.equal(toggled.attrs['data-holiday'], undefined);
+toggled.theme.setHolidayOff(false);
+assert.equal(toggled.stored.theme_holiday, undefined);
+assert.equal(toggled.theme.holidayOff(), false);
 
 console.log('holiday theme: ok');

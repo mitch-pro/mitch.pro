@@ -10,7 +10,9 @@ not generated from commit messages and are not tracked by git.
 - **Reading (public):** `GET /api/updates?limit=5` (max 20) returns
   `{updates: [{id, title, body, postedAt}]}`, newest first, cached for a minute.
   `webserver/index.html` (`loadUpdates`) shows the section only when there is at
-  least one entry. Text is inserted with `textContent`, so entries are plain text
+  least one entry. It sits between "Continue where you left off" and Shortcuts as
+  one quiet line (the newest title and date, no details); clicking it lists the
+  recent entries with their details. Text is inserted with `textContent`, so entries are plain text
   (line breaks are kept).
 - **Writing (admins):** `/admin/updates/` (linked from the admin page's
   shortcuts) lists every entry and posts, edits and deletes them through

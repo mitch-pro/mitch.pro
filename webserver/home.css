@@ -624,11 +624,27 @@ body.members-rail-open #people-edge-trigger {display:none}
 .ab-toggle .toggle-slider::before { width:14px; height:14px; }
 .ab-toggle .toggle-switch input:checked + .toggle-slider::before { transform:translate(14px,-50%); }
 
-/* Update log */
-.home-updates { margin-top: var(--mh-gap); }
+/* Update log: one quiet line, expands on click */
+.home-updates { margin-top: 1.1rem; }
 .home-updates[hidden] { display: none; }
-.updates-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-.updates-list li { display: grid; gap: 3px; padding: 14px 16px; border: 1px solid var(--t-bd); border-radius: 12px; background: var(--t-bg2); }
-.updates-list time { font-size: .74rem; font-weight: 600; letter-spacing: .04em; color: var(--t-fg2); text-transform: uppercase; }
-.updates-list strong { font-size: .98rem; font-weight: 600; }
-.updates-list p { margin: 2px 0 0; font-size: .88rem; line-height: 1.55; color: var(--t-fg2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.updates-bar { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 100%; box-sizing: border-box; padding: 7px 14px; border: 1px solid var(--t-bd); border-radius: 999px; background: var(--t-bg2); color: var(--t-fg); font: inherit; font-size: .84rem; text-align: left; cursor: pointer; }
+.updates-bar:hover { border-color: var(--t-ac); }
+.updates-bar.is-static { cursor: default; }
+.updates-bar.is-static:hover { border-color: var(--t-bd); }
+.updates-bar.is-static .updates-chev { display: none; }
+.updates-tag { flex: none; padding: 2px 8px; border-radius: 999px; background: var(--t-ac); color: var(--t-ac-ink, #fff); font-size: .68rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.updates-bar time { flex: none; font-size: .76rem; font-weight: 600; color: var(--t-fg2); }
+.updates-bar strong { min-width: 0; flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.updates-chev { flex: none; width: 7px; height: 7px; margin-right: 3px; border-right: 2px solid var(--t-fg2); border-bottom: 2px solid var(--t-fg2); transform: rotate(45deg) translateY(-2px); transition: transform .15s; }
+.updates-bar[aria-expanded="true"] .updates-chev { transform: rotate(-135deg) translateY(-2px); }
+.updates-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.updates-list[hidden] { display: none; }
+.updates-list li { display: grid; gap: 2px; padding: 11px 14px; border: 1px solid var(--t-bd); border-radius: 12px; background: var(--t-bg2); }
+.updates-list time { font-size: .72rem; font-weight: 600; letter-spacing: .04em; color: var(--t-fg2); text-transform: uppercase; }
+.updates-list strong { font-size: .92rem; font-weight: 600; }
+.updates-list p { margin: 2px 0 0; font-size: .85rem; line-height: 1.5; color: var(--t-fg2); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Holiday theme pill, right below the private-window pill */
+.holiday-pill { display: inline-flex; align-items: center; margin-top: 8px; padding: 6px 14px; border: 1px solid var(--t-bd); border-radius: 999px; background: var(--t-bg2); color: var(--t-fg2); font: inherit; font-size: .82rem; font-weight: 600; line-height: 1.2; cursor: pointer; }
+.holiday-pill[hidden] { display: none; }
+.holiday-pill:hover { border-color: var(--t-ac); color: var(--t-fg); }
