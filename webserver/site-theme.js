@@ -116,16 +116,60 @@
     root.classList.toggle('theme-no-motion', reducedMotion);
   }
 
+  // Holiday themes: autumn colors from Nov 1 through Thanksgiving Day, winter
+  // colors from the day after Thanksgiving through Dec 26. Thanksgiving is the
+  // fourth Thursday of November. The palettes live in theme-tokens.css
+  // (html[data-holiday]); a custom accent from Preferences still wins.
+  function thanksgivingDay(year) {
+    var firstThursday = 1 + ((4 - new Date(year, 10, 1).getDay() + 7) % 7);
+    return firstThursday + 21;
+  }
+
+  function holidayFor(now) {
+    var month = now.getMonth(), day = now.getDate();
+    if (month === 10) return day <= thanksgivingDay(now.getFullYear()) ? 'thanksgiving' : 'christmas';
+    if (month === 11) return day <= 26 ? 'christmas' : '';
+    return '';
+  }
+
+  function applyHoliday() {
+    var root = document.documentElement;
+    var forced = (location.search.match(/[?&]holiday=([a-z]+)/) || [])[1];
+    var name;
+    if (forced === 'none') name = '';
+    else if (forced === 'thanksgiving' || forced === 'christmas') name = forced;
+    else {
+      var preference = '';
+      try { preference = localStorage.getItem('theme_holiday') || ''; } catch (_) {}
+      name = preference === 'off' ? '' : holidayFor(new Date());
+    }
+    if (name) root.setAttribute('data-holiday', name);
+    else root.removeAttribute('data-holiday');
+    if (window.__holidayFx) window.__holidayFx.refresh();
+    else if (name && !loadingFx) {
+      loadingFx = true;
+      var script = document.createElement('script');
+      script.src = '/holiday-fx.js?v=1';
+      script.defer = true;
+      document.head.appendChild(script);
+    }
+  }
+  var loadingFx = false;
+
   function apply() {
+    applyHoliday();
     applyMode(readCookie('theme'));
     applyAccent(readCookie('accent'));
     applyContrast(readCookie('contrast'));
     applyLayout();
+    // Repaint the effect once the light/dark mode is final.
+    if (window.__holidayFx) window.__holidayFx.refresh();
   }
 
   apply();
 
   window.__siteTheme = {
+    holidayFor: holidayFor,
     getMode: function () { return readCookie('theme'); },
     setMode: function (mode) {
       writeCookie('theme', mode === 'light' || mode === 'dark' ? mode : '');

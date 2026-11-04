@@ -13,7 +13,7 @@
 <title>mitch.pro</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"></noscript>
 <link rel="stylesheet" href="/app.css">
-<link rel="stylesheet" href="/home.css?v=15">
+<link rel="stylesheet" href="/home.css?v=16">
 <script src="/app-shell.js" defer></script>
 <script src="/home-friends.js?v=5" defer></script>
 <script>
@@ -1340,7 +1340,29 @@ function initFriendsSystem() {
   setInterval(sendPresenceHeartbeat, 30000);
 }
 
+// The manual update log (written on /admin/updates/).
+function loadUpdates() {
+  fetch('/api/updates?limit=5', { cache: 'no-store' }).then(function(r) { return r.ok ? r.json() : null; }).then(function(data) {
+    var list = data && data.updates;
+    if (!list || !list.length) return;
+    var ol = document.getElementById('home-updates-list');
+    ol.replaceChildren.apply(ol, list.map(function(u) {
+      var li = document.createElement('li');
+      var date = document.createElement('time');
+      date.dateTime = new Date(u.postedAt).toISOString().slice(0, 10);
+      date.textContent = new Date(u.postedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      var title = document.createElement('strong');
+      title.textContent = u.title;
+      li.append(date, title);
+      if (u.body) { var p = document.createElement('p'); p.textContent = u.body; li.append(p); }
+      return li;
+    }));
+    document.getElementById('home-updates').hidden = false;
+  }).catch(function() {});
+}
+
 async function initHome() {
+  loadUpdates();
   loadLinkAliases();
     /* TASK4 */ optimizeForDevice();
   setupHomeSearch();
@@ -1513,6 +1535,10 @@ if (document.readyState === 'loading') {
         </div>
         <div id="links-empty" style="display:none;">No matching pages.</div>
       </div>
+  </section>
+  <section class="home-updates" id="home-updates" hidden aria-labelledby="home-updates-title">
+    <div class="home-section-heading"><h2 id="home-updates-title">Updates</h2></div>
+    <ol class="updates-list" id="home-updates-list"></ol>
   </section>
   <section class="home-controls" aria-label="Your settings">
     <a id="vm-status-chip" class="home-control-card" href="/vms/" hidden><div><h2>Your computer</h2><p>Open your desktop or manage its resources.</p></div><span class="control-status"><span class="status-dot" id="vm-status-dot"></span><span id="vm-status-text">Computer</span></span></a>

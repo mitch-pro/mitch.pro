@@ -154,3 +154,49 @@
   --t-ac2: #ffd1df;
   --t-ac3: #ffd1df;
 }
+
+/* Holiday themes (see site-theme.js for the dates). These sit last so they win
+   over the default palettes above; a custom accent set from Preferences is an
+   inline style on <html> and still wins over them. */
+/* Thanksgiving: warm autumn */
+:root[data-holiday="thanksgiving"] {
+  --t-bg: #faf5ee; --t-bg2: #fffdf9; --t-bg3: #f1e7d8;
+  --t-fg: #2a2118; --t-fg2: #7a6853; --t-fg3: #7a6853;
+  --t-ac: #b85414; --t-ac-ink: #ffffff; --t-ac2: #9c4410; --t-ac3: #9c4410;
+  --t-bd: #e6d9c6; --t-bda: #d3c1a6; --t-gls: #fbeedd; --t-gr: #b85414;
+}
+:root[data-holiday="thanksgiving"][data-theme="dark"] {
+  --t-bg: #1a1714; --t-bg2: #25201b; --t-bg3: #2e2822;
+  --t-fg: #f6f1ea; --t-fg2: #b3a794; --t-fg3: #8f8472;
+  --t-ac: #f28c38; --t-ac-ink: #1a1208; --t-ac2: #ffa45c; --t-ac3: #ffa45c;
+  --t-bd: #3b332b; --t-bda: #544838; --t-gls: #35261a; --t-gr: #f28c38;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-holiday="thanksgiving"]:not([data-theme="light"]) {
+    --t-bg: #1a1714; --t-bg2: #25201b; --t-bg3: #2e2822;
+    --t-fg: #f6f1ea; --t-fg2: #b3a794; --t-fg3: #8f8472;
+    --t-ac: #f28c38; --t-ac-ink: #1a1208; --t-ac2: #ffa45c; --t-ac3: #ffa45c;
+    --t-bd: #3b332b; --t-bda: #544838; --t-gls: #35261a; --t-gr: #f28c38;
+  }
+}
+/* Christmas: red and evergreen */
+:root[data-holiday="christmas"] {
+  --t-bg: #f4f8f3; --t-bg2: #ffffff; --t-bg3: #e5eee3;
+  --t-fg: #1b2a20; --t-fg2: #5c6e62; --t-fg3: #5c6e62;
+  --t-ac: #c0282f; --t-ac-ink: #ffffff; --t-ac2: #a11f25; --t-ac3: #a11f25;
+  --t-bd: #d6e3d3; --t-bda: #bdd0b8; --t-gls: #fbe9ea; --t-gr: #c0282f;
+}
+:root[data-holiday="christmas"][data-theme="dark"] {
+  --t-bg: #121815; --t-bg2: #1b231e; --t-bg3: #232d27;
+  --t-fg: #f3f6f1; --t-fg2: #a9b8ae; --t-fg3: #86978b;
+  --t-ac: #ec5a5f; --t-ac-ink: #ffffff; --t-ac2: #ff7a7e; --t-ac3: #ff7a7e;
+  --t-bd: #2f3d35; --t-bda: #42574a; --t-gls: #35191c; --t-gr: #ec5a5f;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-holiday="christmas"]:not([data-theme="light"]) {
+    --t-bg: #121815; --t-bg2: #1b231e; --t-bg3: #232d27;
+    --t-fg: #f3f6f1; --t-fg2: #a9b8ae; --t-fg3: #86978b;
+    --t-ac: #ec5a5f; --t-ac-ink: #ffffff; --t-ac2: #ff7a7e; --t-ac3: #ff7a7e;
+    --t-bd: #2f3d35; --t-bda: #42574a; --t-gls: #35191c; --t-gr: #ec5a5f;
+  }
+}

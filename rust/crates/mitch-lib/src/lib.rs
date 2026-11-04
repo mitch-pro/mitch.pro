@@ -52,6 +52,7 @@ pub mod reserved_usernames;
 pub mod revoked;
 pub mod school;
 pub mod shop;
+pub mod site_updates;
 pub mod sso;
 pub mod state;
 pub mod support;

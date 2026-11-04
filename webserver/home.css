@@ -623,3 +623,12 @@ body.members-rail-open #people-edge-trigger {display:none}
 .ab-toggle .toggle-switch { width:34px; height:20px; }
 .ab-toggle .toggle-slider::before { width:14px; height:14px; }
 .ab-toggle .toggle-switch input:checked + .toggle-slider::before { transform:translate(14px,-50%); }
+
+/* Update log */
+.home-updates { margin-top: var(--mh-gap); }
+.home-updates[hidden] { display: none; }
+.updates-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.updates-list li { display: grid; gap: 3px; padding: 14px 16px; border: 1px solid var(--t-bd); border-radius: 12px; background: var(--t-bg2); }
+.updates-list time { font-size: .74rem; font-weight: 600; letter-spacing: .04em; color: var(--t-fg2); text-transform: uppercase; }
+.updates-list strong { font-size: .98rem; font-weight: 600; }
+.updates-list p { margin: 2px 0 0; font-size: .88rem; line-height: 1.55; color: var(--t-fg2); white-space: pre-wrap; overflow-wrap: anywhere; }

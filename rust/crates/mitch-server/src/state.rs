@@ -574,6 +574,7 @@ pub const PUBLIC_API_PATHS: &[&str] = &[
     "/api/site-info",
     "/api/presence/count",
     "/api/alias",
+    "/api/updates",
     "/api/portal/summary",
     "/api/portal/list",
     "/api/portal/items",

@@ -43,6 +43,24 @@ pub async fn handle(
             json!({"ok":true, "authenticated":state.check_password_cookie(headers, None)}),
         ));
     }
+    // Public: the homepage's update log.
+    if path == "/api/updates" && *method == Method::GET {
+        let limit = url::form_urlencoded::parse(_search.trim_start_matches('?').as_bytes())
+            .find(|(k, _)| k == "limit")
+            .and_then(|(_, v)| v.parse::<i64>().ok())
+            .unwrap_or(5);
+        let updates: Vec<serde_json::Value> =
+            mitch_lib::site_updates::list(&state.store, limit.min(20))
+                .iter()
+                .map(crate::routes::admin::updates::public_json)
+                .collect();
+        let mut response = json_resp(200, json!({ "updates": updates }));
+        response.headers_mut().insert(
+            axum::http::header::CACHE_CONTROL,
+            axum::http::HeaderValue::from_static("public, max-age=60"),
+        );
+        return Some(response);
+    }
     if path == "/api/site-info" && *method == Method::GET {
         return Some(site_info(state));
     }

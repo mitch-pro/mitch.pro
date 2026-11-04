@@ -95,6 +95,7 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/api.js",
     "/app-shell.js",
     "/site-theme.js",
+    "/holiday-fx.js",
     "/site-status.js",
     "/ban-guard.js",
     "/mitch-coins.js",
@@ -1572,6 +1573,7 @@ async fn handle_resolved(
             "/admin/email",
             "/admin/bans",
             "/admin/passphrase-reset",
+            "/admin/updates",
         ]
         .iter()
         .any(|base| html_base == *base || html_base.starts_with(&format!("{base}/")))

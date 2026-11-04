@@ -31,6 +31,7 @@ pub mod moderation;
 pub mod newsletters;
 pub mod owner_container;
 pub mod support;
+pub mod updates;
 pub mod vm;
 
 pub type Resp = Option<Response>;
@@ -250,6 +251,9 @@ pub async fn handle(
     }
 
     // ── Support portal staff API (moderators and above) ──
+    if let Some(resp) = updates::handle(state, method, path, body, &ctx) {
+        return Some(resp);
+    }
     if let Some(resp) = support::handle(state, method, path, search, body, &ctx) {
         return Some(resp);
     }

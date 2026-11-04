@@ -840,6 +840,14 @@
         </select>
       </div>
       <div class="field">
+        <label>Holiday theme</label>
+        <select id="holidaySelect">
+          <option value="auto">Automatic</option>
+          <option value="off">Off</option>
+        </select>
+        <div class="field-hint">Autumn colors until Thanksgiving, then winter colors until December 26. A custom accent color still applies.</div>
+      </div>
+      <div class="field">
         <label>Surface Material</label>
         <select id="materialSelect">
           <option value="auto">Auto (solid)</option>
@@ -1456,7 +1464,7 @@ var DISPLAY_CONFIG_KEY  = '_prefDisplay';
 var SYNC_CONFIG_KEY     = '_prefSync';
 var TOOLS_CONFIG_KEY    = '_prefTools';
 var PREF_BACKUP_KEYS    = [PRIVACY_CONFIG_KEY, HOME_CONFIG_KEY, DISPLAY_CONFIG_KEY, SYNC_CONFIG_KEY, TOOLS_CONFIG_KEY];
-var THEME_PREF_KEYS     = ['accent','density','radius','font','motion','material'];
+var THEME_PREF_KEYS     = ['accent','density','radius','font','motion','material','holiday'];
 
 function load(key, def) {
   try { return Object.assign({}, def, JSON.parse(localStorage.getItem(key) || '{}')); }
@@ -1886,6 +1894,7 @@ function syncAppearanceControls() {
   document.getElementById('radiusSelect').value = getThemePref('radius', 'soft');
   document.getElementById('fontSelect').value = getThemePref('font', 'system');
   document.getElementById('motionSelect').value = getThemePref('motion', 'on');
+  document.getElementById('holidaySelect').value = getThemePref('holiday', 'auto');
   var mat = document.getElementById('materialSelect');
   if (mat) mat.value = getThemePref('material', 'auto');
 }
@@ -1939,7 +1948,7 @@ function setupAppearanceControls() {
     syncContrast();
   }
 
-  ['densitySelect','radiusSelect','fontSelect','motionSelect','materialSelect'].forEach(function(id) {
+  ['densitySelect','radiusSelect','fontSelect','motionSelect','materialSelect','holidaySelect'].forEach(function(id) {
     var node = document.getElementById(id);
     if (!node) return;
     node.addEventListener('change', function() {
@@ -1948,7 +1957,8 @@ function setupAppearanceControls() {
         radiusSelect: 'radius',
         fontSelect: 'font',
         motionSelect: 'motion',
-        materialSelect: 'material'
+        materialSelect: 'material',
+        holidaySelect: 'holiday'
       };
       setThemePref(map[id], this.value);
       applyAppearanceLive('Appearance updated.');
@@ -2104,6 +2114,7 @@ function saveAll() {
       dailyBonus:  document.getElementById('prefDailyBonus').checked,
     }));
     setThemePref('motion', document.getElementById('motionSelect').value);
+    setThemePref('holiday', document.getElementById('holidaySelect').value);
     if (window.__siteTheme) {
       window.__siteTheme.setMode(getCookieValue('theme', ''));
       window.__siteTheme.setAccent(getThemePref('accent', ''));
