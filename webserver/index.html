@@ -1180,8 +1180,8 @@ async function loadPendingFriendRequests() {
             ${escText(req.maskedFrom)}
           </div>
           <div style="display: flex; gap: 4px; shrink: 0;">
-            <button onclick="respondFriendRequest('${escText(req.from)}', 'accept')" style="padding: 2px 6px; font-size: 10px; font-weight: bold; border-radius: 3px; border: none; background: #a855f7; color: white; cursor: pointer;">Accept</button>
-            <button onclick="respondFriendRequest('${escText(req.from)}', 'reject')" style="padding: 2px 6px; font-size: 10px; font-weight: bold; border-radius: 3px; border: none; background: #ef4444; color: white; cursor: pointer;">Deny</button>
+            <button onclick="respondFriendRequest('${escText(req.from)}', 'accept', this)" style="padding: 2px 6px; font-size: 10px; font-weight: bold; border-radius: 3px; border: none; background: #a855f7; color: white; cursor: pointer;">Accept</button>
+            <button onclick="respondFriendRequest('${escText(req.from)}', 'reject', this)" style="padding: 2px 6px; font-size: 10px; font-weight: bold; border-radius: 3px; border: none; background: #ef4444; color: white; cursor: pointer;">Deny</button>
           </div>
         </div>
       `).join('');
@@ -1194,7 +1194,7 @@ async function loadPendingFriendRequests() {
           <div style="font-size: 11px; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; margin-right: 6px;">
             ${escText(req.maskedTo)} <span style="font-size: 9px; opacity: 0.7;">(sent)</span>
           </div>
-          <button onclick="cancelFriendRequest('${escText(req.to)}')" style="padding: 2px 4px; font-size: 9px; font-weight: bold; border-radius: 3px; border: none; background: #ef4444; color: white; cursor: pointer; shrink: 0;">Cancel</button>
+          <button onclick="cancelFriendRequest('${escText(req.to)}', this)" style="padding: 2px 4px; font-size: 9px; font-weight: bold; border-radius: 3px; border: none; background: #ef4444; color: white; cursor: pointer; shrink: 0;">Cancel</button>
         </div>
       `).join('');
     }
@@ -1220,6 +1220,7 @@ async function sendFriendRequest() {
   const msg = document.getElementById('friend-req-status-msg');
   if (!input || !input.value.trim()) return;
 
+  if (btn.disabled) return;
   const email = input.value.trim();
   btn.disabled = true;
   msg.style.display = 'block';
@@ -1253,47 +1254,44 @@ async function sendFriendRequest() {
   }
 }
 
-async function respondFriendRequest(friendEmail, action) {
-  try {
-    const r = await fetch('/api/friends/request/respond', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: friendEmail, action: action })
-    });
-    if (r.ok) {
-      loadFriends();
-      loadPendingFriendRequests();
-    }
-  } catch(e) {}
+function friendActionFailed(message) {
+  const msg = document.getElementById('friend-req-status-msg');
+  if (!msg) return;
+  msg.style.display = 'block';
+  msg.style.color = '#ef4444';
+  msg.innerText = message || 'That did not go through. Try again.';
+  clearTimeout(window._friendActionTimer);
+  window._friendActionTimer = setTimeout(() => { msg.style.display = 'none'; }, 5000);
 }
 
-async function cancelFriendRequest(friendEmail) {
+async function friendAction(url, payload, buttonEl) {
+  if (buttonEl) { if (buttonEl.disabled) return; buttonEl.disabled = true; }
   try {
-    const r = await fetch('/api/friends/request/cancel', {
+    const r = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: friendEmail })
+      body: JSON.stringify(payload)
     });
-    if (r.ok) {
-      loadFriends();
-      loadPendingFriendRequests();
-    }
-  } catch(e) {}
+    if (r.ok) { loadFriends(); loadPendingFriendRequests(); return; }
+    const d = await r.json().catch(() => ({}));
+    friendActionFailed(d.error);
+  } catch (e) {
+    friendActionFailed('Connection error. Try again.');
+  }
+  if (buttonEl) buttonEl.disabled = false;
+}
+
+async function respondFriendRequest(friendEmail, action, buttonEl) {
+  await friendAction('/api/friends/request/respond', { email: friendEmail, action: action }, buttonEl);
+}
+
+async function cancelFriendRequest(friendEmail, buttonEl) {
+  await friendAction('/api/friends/request/cancel', { email: friendEmail }, buttonEl);
 }
 
 async function removeFriend(friendEmail) {
   if (!(await customConfirm('Remove Friend', 'Are you sure you want to remove this friend?'))) return;
-  try {
-    const r = await fetch('/api/friends/remove', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: friendEmail })
-    });
-    if (r.ok) {
-      loadFriends();
-      loadPendingFriendRequests();
-    }
-  } catch(e) {}
+  await friendAction('/api/friends/remove', { email: friendEmail });
 }
 
 function initFriendsSystem() {
