@@ -1,7 +1,7 @@
 //! Economy & privileged fan-out — coin multiplier (10582), grant-premium
 //! (10062), gift-coins (10104), economy audit/burn (10142-10172),
 //! broadcast (10174), send/unsend notification (10812-10910),
-//! revoke-premium (10912), trigger-daily-summary (9876).
+//! revoke-premium (10912).
 //! Shared helpers are reused by the moderator request engine in moderation.rs.
 
 use super::{forbidden, unauthorized, AdminCtx, Resp};
@@ -63,25 +63,6 @@ pub fn handle(
         return Some(json_response(
             200,
             json!({ "ok": true, "enabled": enabled }),
-        ));
-    }
-
-    // POST /api/admin/trigger-daily-summary (admins; 401 on failure per JS).
-    if path == "/api/admin/trigger-daily-summary" && *method == Method::POST {
-        if state.rate_limit_check(&ctx.ip, "anon", path).is_some() {
-            return Some(json_response(
-                429,
-                json!({ "error": "Too many requests, slow down" }),
-            ));
-        }
-        if !valid_id(&ctx.sid, state) || !ctx.is_admin(state) {
-            return Some(unauthorized());
-        }
-        let summary = build_daily_summary(state);
-        crate::routes::push::ntfy_notify(&summary, "Daily Traffic Summary", "default");
-        return Some(json_response(
-            200,
-            json!({ "success": true, "message": "Daily traffic summary notification triggered successfully." }),
         ));
     }
 
@@ -1220,93 +1201,6 @@ pub fn moderator_burn_coins(
 /// The unsend scan shared by the endpoint and remove_admin_notice.
 fn unsend_notification(state: &Arc<AppState>, id: &str, batch_id: &str) -> i64 {
     mitch_lib::coins::unsend_coin_gift_notices(&state.store, id, batch_id)
-}
-
-/// `sendDailySummaryNotification` body (server.js:3966-4014) — builds the
-/// text; the ntfy send happens in push.rs. Also shared with the batch 3
-/// daily-summary scheduler (workers_site.rs).
-pub(crate) fn build_daily_summary(state: &Arc<AppState>) -> String {
-    let logs = state
-        .store
-        .read_document(&state.cfg.data_dir.join("sessions.json"), json!([]));
-    let start_of_day = local_start_of_day_ms();
-    let mut registered: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    let mut guest_count = 0usize;
-    for entry in logs.as_array().map(|a| a.as_slice()).unwrap_or(&[]) {
-        let ts_raw = entry
-            .get("timestamp")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        let Some(entry_time) = parse_timestamp(ts_raw) else {
-            continue;
-        };
-        if entry_time < start_of_day {
-            continue;
-        }
-        let id = entry.get("id").and_then(|v| v.as_str()).unwrap_or("");
-        let mut email = mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, id);
-        if email.is_none() {
-            email = mitch_lib::auth::names_get_email(&state.store, id);
-        }
-        match email {
-            Some(e) if !e.is_empty() => {
-                registered.insert(e);
-            }
-            _ => guest_count += 1,
-        }
-    }
-    let registered_count = registered.len();
-    let total = registered_count + guest_count;
-    let mut summary = String::new();
-    summary.push_str("Daily Site Summary\n");
-    summary.push_str("------------------\n");
-    summary.push_str(&format!("Total Unique Visitors: {total}\n"));
-    summary.push_str(&format!("- Members: {registered_count}\n"));
-    summary.push_str(&format!("- Guests: {guest_count}\n\n"));
-    if registered_count > 0 {
-        summary.push_str("Members active today:\n");
-        summary.push_str(
-            &registered
-                .iter()
-                .map(|e| format!("• {e}"))
-                .collect::<Vec<_>>()
-                .join("\n"),
-        );
-    } else {
-        summary.push_str("No members visited today.");
-    }
-    summary
-}
-
-/// `new Date(y, m, d).getTime()` — local midnight today (server TZ).
-fn local_start_of_day_ms() -> i64 {
-    let secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
-    // Local offset: read /etc/localtime offset via the `date` command is
-    // heavy; derive from the TZ env when set, else UTC. The JS runs on the
-    // VPS with its local timezone; parity here is best-effort.
-    let offset = local_tz_offset_secs();
-    let local = secs + offset;
-    let day = local.div_euclid(86_400) * 86_400;
-    (day - offset) * 1000
-}
-
-pub(crate) fn local_tz_offset_secs() -> i64 {
-    // Parse `TZ` env or fall back to the offset embedded in `date +%z`.
-    if let Ok(out) = std::process::Command::new("date").arg("+%z").output() {
-        let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        // "+0530" / "-0800"
-        let sign = if s.starts_with('-') { -1 } else { 1 };
-        let digits: String = s.chars().filter(|c| c.is_ascii_digit()).collect();
-        if digits.len() == 4 {
-            let hours: i64 = digits[..2].parse().unwrap_or(0);
-            let mins: i64 = digits[2..].parse().unwrap_or(0);
-            return sign * (hours * 3600 + mins * 60);
-        }
-    }
-    0
 }
 
 /// `new Date(str).getTime()` for the session-log timestamp formats

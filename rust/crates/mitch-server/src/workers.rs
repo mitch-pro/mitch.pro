@@ -68,7 +68,7 @@ pub fn spawn(state: std::sync::Arc<crate::state::AppState>) {
     // warning, DM digest) plus the DM prune, e2e-attachment cleanup and
     // rlLog sweep timers (server.js:5061-5064, 26352, 25227+, 3477-3483).
     crate::workers_email::spawn(state.clone());
-    // Daily summary, premium maintenance, and marketplace settlement.
+    // Holiday update-log entries, premium maintenance, and marketplace settlement.
     crate::workers_site::spawn(state.clone());
     // Step 13 batch 4 — VM usage sampling, purge, prune, uptime enforcement, session cleanup.
     crate::workers_vm::spawn(state.clone());

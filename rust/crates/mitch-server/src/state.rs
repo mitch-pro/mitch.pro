@@ -66,9 +66,6 @@ pub struct AppState {
     pub sso_bridge_tokens: std::sync::Mutex<std::collections::HashMap<String, SsoBridgeToken>>,
     /// `lastRecaptchaSuccess` (server.js:3597) — sid -> last success ms.
     pub last_recaptcha_success: std::sync::Mutex<std::collections::HashMap<String, i64>>,
-    /// `lastDailySummarySentDate` (server.js:4156) — e.g. '2026-05-27'; the
-    /// daily-summary scheduler's once-per-date dedupe.
-    pub last_daily_summary_sent_date: std::sync::Mutex<String>,
     /// Canvas state (server.js:4304-4556) — in-memory pixel/chunk/lock caches
     /// with the 30s flush and hourly heatmap sweep in `crate::workers`.
     pub canvas: crate::routes::canvas::CanvasState,
@@ -355,7 +352,6 @@ impl AppState {
             pending_two_factor: std::sync::Mutex::new(std::collections::HashMap::new()),
             sso_bridge_tokens: std::sync::Mutex::new(std::collections::HashMap::new()),
             last_recaptcha_success: std::sync::Mutex::new(std::collections::HashMap::new()),
-            last_daily_summary_sent_date: std::sync::Mutex::new(String::new()),
             canvas,
             e2e_users: std::sync::Mutex::new(Vec::new()),
             e2e_messages: std::sync::Mutex::new(std::collections::HashMap::new()),

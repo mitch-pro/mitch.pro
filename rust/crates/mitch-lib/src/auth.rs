@@ -950,7 +950,6 @@ pub fn rate_limit_for(endpoint: &str) -> (u32, u32) {
         "/api/ai" => (20, 60),
         "/api/script" => (600, 60),
         "/api/admin/js" => (5, 60),
-        "/api/admin/trigger-daily-summary" => (10, 60),
         "/api/admin/gift-coins" => (10, 60),
         "/api/admin/grant-premium" => (10, 60),
         "/api/admin/revoke-premium" => (10, 60),
