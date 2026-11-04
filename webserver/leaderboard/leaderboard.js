@@ -109,6 +109,8 @@
     const version = ++sequence;
     $('board-content').setAttribute('aria-busy', 'true');
     $('refresh-board').classList.add('is-loading');
+    if (data && (data.metric !== activeMetric || (data.query || '') !== search)) $('rank-count').textContent = 'Loading ' + label(activeMetric) + '…';
+    else if (data) $('board-updated').textContent = 'Refreshing…';
     try {
       const params = new URLSearchParams({ metric: activeMetric });
       if (search) params.set('q', search);
@@ -120,14 +122,21 @@
       render();
     } catch (error) {
       if (version !== sequence || error.name === 'AbortError') return;
-      const message = data ? 'Could not refresh. Showing previous results.' : 'Unable to load rankings.';
+      const stale = data && data.metric === activeMetric;
+      const message = stale ? 'Could not refresh. Showing previous results.' : 'Unable to load rankings.';
       $('board-status').textContent = message;
-      $('board-updated').textContent = message;
-      if (!data) {
+      if (stale) {
+        $('board-updated').innerHTML = `${esc(message)} <button type="button" class="board-retry" id="retry-inline">Retry</button>`;
+        $('retry-inline').addEventListener('click', load);
+      } else {
+        $('board-updated').textContent = '';
         $('my-rank').hidden = true;
         $('rank-count').textContent = 'Rankings unavailable';
+        $('standings-head').innerHTML = '';
+        $('board-notice').hidden = true;
         $('rank-list').innerHTML = `<li class="board-empty"><p>${message}</p><button type="button" id="retry-board">Try again</button></li>`;
         $('retry-board').addEventListener('click', load);
+        $('retry-board').focus({ preventScroll: true });
       }
     } finally {
       if (version === sequence) {
@@ -142,6 +151,7 @@
     if (!button || button.dataset.metric === activeMetric) return;
     activeMetric = button.dataset.metric;
     document.querySelectorAll('.board-category').forEach(tab => tab.setAttribute('aria-pressed', String(tab === button)));
+    button.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
     load();
   });
   $('rank-search').addEventListener('input', event => {
@@ -149,6 +159,9 @@
     // Immediately invalidate pending responses while waiting for the debounce.
     request?.abort(); sequence++;
     clearTimeout(debounce); debounce = setTimeout(load, 220);
+  });
+  $('rank-search').addEventListener('keydown', event => {
+    if (event.key === 'Escape' && event.target.value) { event.target.value = ''; event.target.dispatchEvent(new Event('input')); }
   });
   $('refresh-board').addEventListener('click', load);
   // A failed external profile image falls back to the same initial as profiles.
