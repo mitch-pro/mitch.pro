@@ -301,15 +301,15 @@
 
   <div class="people-layout" id="people-layout"><div class="people-directory">
   <div class="toolbar panel">
-    <input id="search" type="search" placeholder="Search members by name, handle, or role" autocomplete="off">
-    <select id="roleFilter">
+    <input id="search" type="search" aria-label="Search members" placeholder="Search members by name, handle, or role" autocomplete="off">
+    <select id="roleFilter" aria-label="Filter by role">
       <option value="all">All roles</option>
       <option value="online">Online now</option>
       <option value="friends">Friends</option>
       <option value="premium">Premium</option>
       <option value="staff">Staff</option>
     </select>
-    <select id="sortMode">
+    <select id="sortMode" aria-label="Sort by">
       <option value="relevance">Best match</option>
       <option value="online">Online first</option>
       <option value="name">Name A-Z</option>
@@ -317,6 +317,7 @@
   </div>
 
   <div class="stats" id="stats"></div>
+  <div class="status err" id="peopleMsg" role="alert" hidden></div>
   <div class="grid" id="membersGrid"><div class="empty">Loading people…</div></div>
   </div><aside class="people-staff-tools" id="people-staff-tools" aria-label="Staff tools" hidden><h2>Staff tools</h2><nav id="people-staff-links" aria-label="Your staff access"></nav></aside></div>
 </main>
@@ -325,14 +326,14 @@
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="reportTitle">
     <h2 id="reportTitle">Report Profile</h2>
     <p id="reportTarget">Send a profile report to the admin team.</p>
-    <select id="reportReason">
+    <select id="reportReason" aria-label="Reason">
       <option value="Inappropriate profile">Inappropriate profile</option>
       <option value="Impersonation">Impersonation</option>
       <option value="Harassment or bullying">Harassment or bullying</option>
       <option value="Spam or scam">Spam or scam</option>
       <option value="Other">Other</option>
     </select>
-    <textarea id="reportDetails" maxlength="800" placeholder="Add context for admins..."></textarea>
+    <textarea id="reportDetails" aria-label="Details" maxlength="800" placeholder="Add context for admins..."></textarea>
     <div class="dialog-actions">
       <button type="button" id="cancelReport">Cancel</button>
       <button type="button" id="submitReport">Send Report</button>
@@ -344,6 +345,15 @@
 <script>
     let members = [];
     let activeReportKey = '';
+    let loadedOnce = false, lastPayload = '';
+
+    function showMsg(text) {
+      const el = document.getElementById('peopleMsg');
+      el.textContent = text;
+      el.hidden = !text;
+      clearTimeout(showMsg.timer);
+      if (text) showMsg.timer = setTimeout(() => showMsg(''), 8000);
+    }
 
     function esc(value) {
       return String(value == null ? '' : value)
@@ -510,49 +520,67 @@
       const res = await fetch('/api/members?t=' + Date.now(), { credentials: 'include', cache: 'no-store' });
       if (request !== memberRequest) return;
       if (!res.ok) {
-        document.getElementById('membersGrid').innerHTML = '<div class="empty">Please sign in to search members.</div>';
+        if (!loadedOnce) loadFailed(res.status === 401 ? 'Sign in to search members.' : 'Could not load people.', res.status !== 401);
         return;
       }
-      const data = await res.json();
+      const text = await res.text();
       if (request !== memberRequest) return;
-      members = data.members || [];
+      loadedOnce = true;
+      // Skip identical polls so focus and in-flight buttons are not reset.
+      if (text === lastPayload) return;
+      lastPayload = text;
+      members = JSON.parse(text).members || [];
       render();
-      } catch (_) { if (request === memberRequest) document.querySelectorAll('.presence-detail').forEach(el => { el.textContent = 'Status unavailable'; }); }
+      } catch (_) { if (request === memberRequest && !loadedOnce) loadFailed('Could not load people.', true); }
+    }
+
+    function loadFailed(message, retry) {
+      document.getElementById('membersGrid').innerHTML = '<div class="empty">' + message + (retry ? ' <button type="button" data-action="retry">Retry</button>' : '') + '</div>';
     }
 
     async function sendFriendRequest(key, button) {
       button.disabled = true;
-      button.textContent = 'Sending...';
+      const idle = button.textContent;
+      button.textContent = 'Sending…';
+      showMsg('');
       try {
         const recaptcha_token = await getCaptcha('friend_request');
         await postJson('/api/friends/request', { email: key, recaptcha_token });
         await reload();
       } catch (err) {
-        alert(err.message);
+        showMsg(err.message || 'Could not send the request. Try again.');
         button.disabled = false;
-        button.textContent = 'Add Friend';
+        button.textContent = idle;
       }
     }
 
     async function acceptRequest(key, button) {
       button.disabled = true;
+      showMsg('');
+      const idle = button.textContent;
+      button.textContent = 'Accepting…';
       try {
         await postJson('/api/friends/request/respond', { email: key, action: 'accept' });
         await reload();
       } catch (err) {
-        alert(err.message);
+        showMsg(err.message || 'Something went wrong. Try again.');
         button.disabled = false;
+        button.textContent = idle;
       }
     }
 
     async function cancelRequest(key, button) {
       button.disabled = true;
+      showMsg('');
+      const idle = button.textContent;
+      button.textContent = 'Cancelling…';
       try {
         await postJson('/api/friends/request/cancel', { email: key });
         await reload();
       } catch (err) {
-        alert(err.message);
+        showMsg(err.message || 'Something went wrong. Try again.');
         button.disabled = false;
+        button.textContent = idle;
       }
     }
 
@@ -564,10 +592,13 @@
       document.getElementById('reportStatus').textContent = '';
       document.getElementById('reportStatus').className = 'status';
       document.getElementById('reportModal').classList.add('show');
+      document.getElementById('reportModal').setAttribute('aria-hidden', 'false');
+      document.getElementById('reportReason').focus();
     }
 
     function closeReport() {
       document.getElementById('reportModal').classList.remove('show');
+      document.getElementById('reportModal').setAttribute('aria-hidden', 'true');
       activeReportKey = '';
     }
 
@@ -578,19 +609,25 @@
       const details = document.getElementById('reportDetails').value.trim();
       button.disabled = true;
       status.className = 'status';
-      status.textContent = 'Sending report...';
+      status.textContent = 'Sending report…';
+      let sent = false;
       try {
         await postJson('/api/profile/report', { member: activeReportKey, reason, details });
         status.className = 'status ok';
         status.textContent = 'Report sent.';
+        sent = true;
         setTimeout(closeReport, 700);
       } catch (err) {
         status.className = 'status err';
         status.textContent = err.message;
       } finally {
-        button.disabled = false;
+        if (!sent) button.disabled = false;
+        else setTimeout(() => { button.disabled = false; }, 800);
       }
     }
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && activeReportKey) closeReport();
+    });
 
     document.getElementById('membersGrid').addEventListener('click', event => {
       const control = event.target.closest('[data-action]');
@@ -600,6 +637,7 @@
       if (control.dataset.action === 'accept') acceptRequest(key, control);
       if (control.dataset.action === 'cancel') cancelRequest(key, control);
       if (control.dataset.action === 'report') openReport(key);
+      if (control.dataset.action === 'retry') { document.getElementById('membersGrid').innerHTML = '<div class="empty">Loading people…</div>'; reload(); }
     });
 
     document.getElementById('search').addEventListener('input', render);

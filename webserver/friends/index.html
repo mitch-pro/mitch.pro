@@ -285,6 +285,7 @@
   }
 
   .autocomplete-item:last-child { border-bottom: none; }
+  .autocomplete-item.is-active,
   .autocomplete-item:hover { background: color-mix(in srgb, var(--t-ac) 12%, transparent); }
   .autocomplete-item .item-name { font-weight: 650; color: var(--t-fg); }
   .autocomplete-item .item-email { font-size: 0.75rem; color: var(--t-fg2); }
@@ -384,12 +385,12 @@
     <div class="friend-search-label"><div class="section-title"><span>Add Friend</span></div><small>Search by display name or school email</small></div>
     <div class="add-box" style="position: relative; flex-direction: column; gap: 0; margin-bottom: 2rem;">
       <div style="display: flex; gap: 0.5rem; width: 100%;">
-        <input type="text" id="friendEmailInput" class="add-input" placeholder="Type display name or email to search..." autocomplete="off" oninput="onSearchInput()" />
+        <input type="text" id="friendEmailInput" class="add-input" placeholder="Display name or email" aria-label="Display name or school email" autocomplete="off" oninput="onSearchInput()" />
         <button id="friendSubmitBtn" class="btn btn-primary" onclick="sendRequest()">Add Friend</button>
       </div>
-      <div id="autocomplete-list"></div>
+      <div id="autocomplete-list" role="listbox"></div>
     </div>
-    <div id="addStatusMsg" style="font-size: 0.85rem; margin-top: -1.5rem; margin-bottom: 1.5rem; display: none; font-weight: 600;"></div>
+    <div id="addStatusMsg" role="status" aria-live="polite" style="font-size: 0.85rem; margin-top: -1.5rem; margin-bottom: 1.5rem; display: none; font-weight: 600;"></div>
 
     <div class="requests-section">
       <div>
@@ -408,7 +409,7 @@
 
     <div class="section-title"><span>Connections</span></div>
     <div id="friendsGrid" class="friend-grid">
-      <div class="empty-state" style="grid-column: 1/-1;">No friends added yet</div>
+      <div class="empty-state" style="grid-column: 1/-1;">Loading friends…</div>
     </div>
   </div>
 </main>
@@ -512,7 +513,7 @@ function onSearchInput() {
     const emailStr = escText(m.email);
     // Click calls selectMember with the target identifier (m.email)
     return `
-      <div class="autocomplete-item" onclick="selectMember('${escText(m.email)}')">
+      <div class="autocomplete-item" role="option" onclick="selectMember('${escText(m.email)}')" data-email="${escText(m.email)}">
         <span class="item-name">${nameStr}</span>
         <span class="item-email">${emailStr}</span>
       </div>
@@ -537,6 +538,10 @@ document.addEventListener('click', function(e) {
 });
 
 let friendsRequest = 0;
+let friendsLoaded = false;
+function friendsErrorHtml() {
+  return '<div class="empty-state" style="grid-column: 1/-1;">Could not load friends. <button type="button" class="btn-action" data-retry-friends>Retry</button></div>';
+}
 async function loadFriends() {
   const grid = document.getElementById('friendsGrid');
   if (document.hidden) return;
@@ -545,16 +550,17 @@ async function loadFriends() {
     const r = await fetch('/api/friends/list?t=' + Date.now(), { credentials: 'include' });
     if (request !== friendsRequest) return;
     if (!r.ok) {
-      grid.innerHTML = '<div class="empty-state">Please sign in to view friends</div>';
+      if (!friendsLoaded) grid.innerHTML = r.status === 401 ? '<div class="empty-state" style="grid-column: 1/-1;">Sign in to see your friends.</div>' : friendsErrorHtml();
       return;
     }
+    friendsLoaded = true;
     const d = await r.json();
     if (request !== friendsRequest) return;
     const list = (d.friends || []).slice().sort(window.MitchPeople.compare);
     document.getElementById('friendCount').textContent = String(list.length);
     document.getElementById('onlineCount').textContent = String(list.filter(function(friend) { return friend.online; }).length);
     if (list.length === 0) {
-      grid.innerHTML = '<div class="empty-state" style="grid-column: 1/-1;">No friends yet. Search for a username above.</div>';
+      grid.innerHTML = '<div class="empty-state" style="grid-column: 1/-1;">No friends yet. Search for someone above.</div>';
       return;
     }
     grid.innerHTML = list.map(f => {
@@ -589,17 +595,17 @@ async function loadFriends() {
     }).join('');
   } catch(e) {
     if (request !== friendsRequest) return;
-    document.getElementById('onlineCount').textContent = '—';
-    grid.innerHTML = '<div class="empty-state">Error loading friends list</div>';
+    if (!friendsLoaded) grid.innerHTML = friendsErrorHtml();
   }
 }
 
+let pendingLoaded = false;
 async function loadPending() {
   const incList = document.getElementById('incomingList');
   const outList = document.getElementById('outgoingList');
   try {
     const r = await fetch('/api/friends/requests/pending?t=' + Date.now(), { credentials: 'include' });
-    if (!r.ok) return;
+    if (!r.ok) throw new Error('pending');
     const d = await r.json();
     
     const incoming = d.incoming || [];
@@ -629,7 +635,15 @@ async function loadPending() {
         </div>
       `).join('');
     }
-  } catch(e) {}
+  } catch(e) {
+    if (!pendingLoaded) {
+      const retry = '<div class="empty-state">Could not load requests. <button type="button" class="btn-action" data-retry-friends>Retry</button></div>';
+      incList.innerHTML = retry;
+      outList.innerHTML = '';
+    }
+    return;
+  }
+  pendingLoaded = true;
 }
 
 async function getFriendsCaptchaToken(action) {
@@ -651,9 +665,11 @@ async function sendRequest() {
   if (!email || btn.disabled) return;
   
   btn.disabled = true;
+  btn.textContent = 'Adding…';
+  clearTimeout(sendRequest.hideTimer);
   msg.style.display = 'block';
   msg.style.color = 'var(--t-ac, #3b82f6)';
-  msg.innerText = 'Sending request...';
+  msg.innerText = 'Sending request…';
   
   try {
     const recaptcha_token = await getFriendsCaptchaToken('friend_request');
@@ -661,10 +677,10 @@ async function sendRequest() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, recaptcha_token })
-    }, () => { msg.innerText = 'Sending request... retrying connection...'; });
+    }, () => { msg.innerText = 'Sending request… retrying connection…'; });
     const d = await r.json();
     if (r.ok) {
-      msg.style.color = '#d8b4fe';
+      msg.style.color = 'var(--t-ac)';
       msg.innerText = d.status === 'accepted' ? 'You are now friends.' : 'Friend request sent.';
       input.value = '';
       loadFriends();
@@ -675,28 +691,30 @@ async function sendRequest() {
     }
   } catch(e) {
     msg.style.color = '#ef4444';
-    msg.innerText = 'Connection error';
+    msg.innerText = 'Could not reach the server. Check your connection and try again.';
   } finally {
     btn.disabled = false;
-    setTimeout(() => { msg.style.display = 'none'; }, 6000);
+    btn.textContent = 'Add Friend';
+    sendRequest.hideTimer = setTimeout(() => { msg.style.display = 'none'; }, 6000);
   }
 }
 
 const pendingFriendActions = new Set();
 document.addEventListener('click', async event => {
+  if (event.target.closest('[data-retry-friends]')) { loadFriends(); loadPending(); return; }
   const button=event.target.closest('[data-friend-action]');
   if (!button) return;
   const {account,friendAction}=button.dataset;
   if (pendingFriendActions.has(account)) return;
   if (friendAction==='remove' && !(await customConfirm('Remove friend','Remove this person from your friends?'))) return;
   const path=friendAction==='remove'?'/api/friends/remove':friendAction==='cancel'?'/api/friends/request/cancel':'/api/friends/request/respond';
-  pendingFriendActions.add(account);button.disabled=true;
+  pendingFriendActions.add(account);button.disabled=true;const idleLabel=button.textContent;if(friendAction!=='remove')button.textContent=friendAction==='accept'?'Accepting…':friendAction==='reject'?'Rejecting…':'Cancelling…';
   try {
     const response=await fetchWithRetry(path,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-Mitch-Requested-With':'1'},body:JSON.stringify({email:account,action:friendAction})});
     const data=await response.json();if(!response.ok)throw new Error(data.error || 'Could not update friends.');
     await Promise.all([loadFriends(),loadPending()]);
   } catch(error) { const message=document.getElementById('addStatusMsg');message.style.display='block';message.style.color='var(--t-fg)';message.textContent=error.message; }
-  finally {pendingFriendActions.delete(account);button.disabled=false;}
+  finally {pendingFriendActions.delete(account);button.disabled=false;if(button.isConnected)button.textContent=idleLabel;}
 });
 
 function sendHeartbeat() { window.MitchPresence?.send(); }
@@ -718,7 +736,20 @@ function init() {
   setInterval(sendHeartbeat, 30000);
   
   document.getElementById('friendEmailInput').onkeydown = function(e) {
-    if (e.key === 'Enter') sendRequest();
+    const listEl = document.getElementById('autocomplete-list');
+    const items = listEl.style.display === 'block' ? Array.from(listEl.querySelectorAll('.autocomplete-item')) : [];
+    const current = items.findIndex(function(el) { return el.classList.contains('is-active'); });
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && items.length) {
+      e.preventDefault();
+      const next = e.key === 'ArrowDown' ? (current + 1) % items.length : (current <= 0 ? items.length - 1 : current - 1);
+      items.forEach(function(el, i) { el.classList.toggle('is-active', i === next); });
+    } else if (e.key === 'Escape') {
+      listEl.style.display = 'none';
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (current >= 0) selectMember(items[current].dataset.email);
+      else sendRequest();
+    }
   };
 }
 

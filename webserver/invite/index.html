@@ -377,14 +377,14 @@
           </div>
         </div>
 
-        <label>Your Invite Code</label>
+        <label for="code-text">Your Invite Code</label>
         <div class="code-display">
-          <span class="code-text" id="code-text">Loading...</span>
+          <span class="code-text" id="code-text">Loading…</span>
           <button class="copy-btn" id="copy-code-btn" onclick="copyCode()">Copy</button>
         </div>
 
         <div class="link-display">
-          <span class="link-text" id="link-text">Loading your invite link...</span>
+          <span class="link-text" id="link-text">Loading your invite link…</span>
           <button class="copy-btn" id="copy-link-btn" onclick="copyLink()">Copy</button>
         </div>
       </div>
@@ -396,7 +396,7 @@
           <label for="custom-code-input">New Code (3–20 characters, letters & numbers only)</label>
           <input type="text" id="custom-code-input" placeholder="e.g. MITCHGANG" maxlength="20" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')">
           <button class="btn btn-gold" id="set-code-btn" onclick="setCode()">Set Custom Code</button>
-          <div class="msg" id="code-msg"></div>
+          <div class="msg" id="code-msg" role="status" aria-live="polite"></div>
         </div>
         <div id="premium-lock-content">
           <div class="premium-lock">
@@ -411,7 +411,7 @@
         <label for="invite-to">Friend's Email Address</label>
         <input type="email" id="invite-to" placeholder="friend@school.edu">
         <button class="btn btn-primary" id="send-btn" onclick="sendInvite()">Send Invite Email</button>
-        <div class="msg" id="send-msg"></div>
+        <div class="msg" id="send-msg" role="status" aria-live="polite"></div>
       </div>
 
       <div class="card">
@@ -448,7 +448,7 @@
           return;
         }
         const d = await res.json();
-        if (!d.success) return;
+        if (!d.success) throw new Error('load');
 
         myCode = d.code;
         myEmail = d.email || '';
@@ -457,42 +457,48 @@
         document.getElementById('stat-signups').textContent = d.signups;
         document.getElementById('stat-coins').textContent = (d.signups * 2000).toLocaleString();
 
-        const baseLink = `https://mitchdog.com/enroll?ref=${encodeURIComponent(d.code)}&email=THEIR_EMAIL`;
+        const baseLink = `https://mitchdog.com/enroll?ref=${encodeURIComponent(d.code)}`;
         document.getElementById('link-text').textContent = baseLink;
 
         if (d.isPremium) {
           document.getElementById('premium-content').style.display = 'block';
           document.getElementById('premium-lock-content').style.display = 'none';
         }
-      } catch(e) {}
+      } catch(e) {
+        document.getElementById('code-text').innerHTML = 'Could not load. <a href="#" id="retry-invite">Retry</a>';
+        document.getElementById('link-text').textContent = '';
+        document.getElementById('retry-invite').addEventListener('click', function (ev) {
+          ev.preventDefault();
+          document.getElementById('code-text').textContent = 'Loading…';
+          loadData();
+        });
+      }
     }
 
-    function copyCode() {
-      navigator.clipboard.writeText(myCode).then(() => {
-        const btn = document.getElementById('copy-code-btn');
-        btn.textContent = 'Copied!';
-        btn.classList.add('copied');
-        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
-      });
+    function flashCopy(btn, text) {
+      btn.textContent = text;
+      btn.classList.toggle('copied', text === 'Copied!');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
     }
 
-    function copyLink() {
-      const link = document.getElementById('link-text').textContent;
-      navigator.clipboard.writeText(link).then(() => {
-        const btn = document.getElementById('copy-link-btn');
-        btn.textContent = 'Copied!';
-        btn.classList.add('copied');
-        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
-      });
+    function copyText(text, btn) {
+      if (!text || !navigator.clipboard) { flashCopy(btn, 'Copy failed'); return; }
+      navigator.clipboard.writeText(text).then(() => flashCopy(btn, 'Copied!'), () => flashCopy(btn, 'Copy failed'));
     }
+
+    function copyCode() { copyText(myCode, document.getElementById('copy-code-btn')); }
+
+    function copyLink() { copyText(myCode ? document.getElementById('link-text').textContent : '', document.getElementById('copy-link-btn')); }
 
     async function setCode() {
       const input = document.getElementById('custom-code-input').value.trim();
       const msg = document.getElementById('code-msg');
       const btn = document.getElementById('set-code-btn');
+      if (btn.disabled) return;
       if (!input || input.length < 3) { msg.className='msg err'; msg.textContent='Code must be at least 3 characters.'; return; }
       btn.disabled = true;
-      msg.className = 'msg'; msg.textContent = 'Saving...';
+      msg.className = 'msg'; msg.textContent = 'Saving…';
+      btn.textContent = 'Saving…';
       try {
         const res = await fetch('/api/invite/set-code', {
           method: 'POST',
@@ -504,29 +510,32 @@
         if (d.success) {
           myCode = d.code;
           document.getElementById('code-text').textContent = d.code;
-          document.getElementById('link-text').textContent = `https://mitchdog.com/enroll?ref=${encodeURIComponent(d.code)}&email=THEIR_EMAIL`;
+          document.getElementById('link-text').textContent = `https://mitchdog.com/enroll?ref=${encodeURIComponent(d.code)}`;
           msg.className = 'msg ok'; msg.textContent = '✓ Code updated!';
         } else {
           msg.className = 'msg err'; msg.textContent = d.error || 'Failed to set code.';
         }
-      } catch(e) { msg.className = 'msg err'; msg.textContent = 'Network error.'; }
+      } catch(e) { msg.className = 'msg err'; msg.textContent = 'Could not reach the server. Try again.'; }
       btn.disabled = false;
+      btn.textContent = 'Set Custom Code';
     }
 
     async function sendInvite() {
       const to = document.getElementById('invite-to').value.trim();
       const msg = document.getElementById('send-msg');
       const btn = document.getElementById('send-btn');
+      if (btn.disabled) return;
       if (!to) { msg.className='msg err'; msg.textContent='Enter an email address.'; return; }
       btn.disabled = true;
-      msg.className = 'msg'; msg.textContent = 'Sending...';
+      msg.className = 'msg'; msg.textContent = 'Sending…';
+      btn.textContent = 'Sending…';
       try {
         const res = await fetchWithRetry('/api/invite/send', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ to })
-        }, () => { msg.textContent = 'Sending... retrying connection...'; });
+        }, () => { msg.textContent = 'Sending… retrying connection…'; });
         const d = await res.json();
         if (res.status === 429) {
           msg.className = 'msg err';
@@ -540,9 +549,17 @@
         } else {
           msg.className = 'msg err'; msg.textContent = d.error || 'Failed to send.';
         }
-      } catch(e) { msg.className = 'msg err'; msg.textContent = 'Network error.'; }
+      } catch(e) { msg.className = 'msg err'; msg.textContent = 'Could not reach the server. Try again.'; }
       btn.disabled = false;
+      btn.textContent = 'Send Invite Email';
     }
+
+    ['custom-code-input', 'invite-to'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); (id === 'invite-to' ? sendInvite : setCode)(); }
+      });
+    });
 
     loadData();
   </script>

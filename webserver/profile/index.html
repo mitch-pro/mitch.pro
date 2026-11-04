@@ -247,18 +247,20 @@ async function load(forceNetwork) {
     try {
       if (targetEmail) {
         const r = await fetch('/api/profile/' + encodeURIComponent(targetEmail), { credentials: 'include', cache: 'no-store' });
-        if (!r.ok) { showNotFound(wrap); return; }
+        if (r.status === 404) { showNotFound(wrap); return; }
+        if (!r.ok) { showLoadError(wrap); return; }
         profile = await r.json();
         stats = profile.stats || {};
         achs = profile.achievements || [];
       } else {
         const r = await fetch('/api/profile', { credentials: 'include', cache: 'no-store' });
         if (r.status === 401) { location.href = '/enroll.html'; return; }
+        if (!r.ok) { showLoadError(wrap); return; }
         profile = await r.json();
         stats = profile.stats || {};
         achs = profile.achievements || [];
       }
-    } catch { showNotFound(wrap); return; }
+    } catch { showLoadError(wrap); return; }
   }
 
   const profileName = profile.displayName || profile.nickname || profile.username || profile.email || 'Profile';
@@ -288,7 +290,7 @@ async function load(forceNetwork) {
     owner_fan_badge: { text: '👑', cls: 'badge-shop' },
   };
   const badge = badgeLabels[profile.activeBadge];
-  let badgeHtml = badge ? `<span class="profile-badge ${badge.cls}" title="${badge.title}">${badge.text}</span>` : '';
+  let badgeHtml = badge ? `<span class="profile-badge ${badge.cls}" title="${esc(String(profile.activeBadge).replace(/_badge$/, '').replace(/_/g, ' '))} badge">${badge.text}</span>` : '';
 
   let html = `
     <div style="display:flex;flex-direction:column;align-items:flex-start;margin-bottom:32px">
@@ -331,6 +333,14 @@ async function load(forceNetwork) {
   }
 
   wrap.innerHTML = html;
+}
+
+function showLoadError(wrap) {
+  wrap.innerHTML = '<div class="not-found"><p>Could not load this profile.</p><button type="button" id="profile-retry" class="save-btn" style="width:auto;padding:8px 18px">Try again</button></div>';
+  document.getElementById('profile-retry').addEventListener('click', function () {
+    wrap.innerHTML = '<div style="color:var(--t-fg2,#666);font-size:13px">Loading…</div>';
+    load(true);
+  });
 }
 
 function showNotFound(wrap) {
