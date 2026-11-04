@@ -135,7 +135,7 @@
       checkbox.checked = selected.has(account.email) && !unsub; checkbox.disabled = !account.eligible || unsub;
       checkbox.onchange = () => { checkbox.checked ? selected.add(account.email) : selected.delete(account.email); changed(); };
       const name = document.createElement('span'); name.textContent = account.displayName || account.email;
-      const email = document.createElement('small'); email.textContent = account.email + (account.eligible && !unsub ? '' : ' · Unsubscribed'); name.append(email);
+      const email = document.createElement('small'); email.textContent = account.email + (account.undeliverable ? ' · No deliverable address' : account.eligible && !unsub ? '' : ' · Unsubscribed'); name.append(email);
       label.append(checkbox, name); list.append(label);
     }
     if (!matches.length || matches.length > 100) {

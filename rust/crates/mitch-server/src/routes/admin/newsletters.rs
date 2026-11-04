@@ -234,6 +234,13 @@ fn unsubscribed(state: &AppState) -> BTreeSet<String> {
     set
 }
 
+/// A `@student.rjuhsd.us` mailbox only delivers with the dot between the
+/// first and last names; the dot-stripped form is an account identity, not
+/// an address. Accounts we only know by that identity can't be mailed.
+fn undeliverable_student_address(email: &str) -> bool {
+    email.ends_with("@student.rjuhsd.us") && !email.split('@').next().unwrap_or("").contains('.')
+}
+
 fn directory(state: &AppState) -> Vec<Value> {
     let unsub = unsubscribed(state);
     let unsub_set: std::collections::HashSet<String> = unsub.iter().cloned().collect();
@@ -255,20 +262,31 @@ fn directory(state: &AppState) -> Vec<Value> {
         .trim()
         .to_lowercase();
         if !valid_email(&email) || !seen.insert(email.clone()) { return None; }
-        let eligible = !unsub.contains(&email)
+        let undeliverable = undeliverable_student_address(&email);
+        let eligible = !undeliverable
+            && !unsub.contains(&email)
             && !unsub.contains(&norm)
             && !crate::workers_email::is_unsubscribed(state, &unsub_set, &email)
             && !crate::workers_email::is_unsubscribed(state, &unsub_set, &norm);
-        Some(json!({"email":email,"displayName":account["displayName"],"username":account["username"],"eligible":eligible}))
+        Some(json!({"email":email,"displayName":account["displayName"],"username":account["username"],"eligible":eligible,"undeliverable":undeliverable}))
     }).collect()
 }
 
-fn resolve_recipients(state: &AppState, draft: &Draft) -> Result<Vec<String>, &'static str> {
+/// Turns the draft's audience into the final, deduplicated send list.
+///
+/// "everyone" quietly skips accounts that have unsubscribed or have no
+/// deliverable address on record (see `undeliverable_student_address`) — one
+/// such account must not block the whole send. A hand-picked recipient with
+/// an undeliverable or invalid address is an error naming that address, so
+/// the admin can fix it.
+fn resolve_recipients(state: &AppState, draft: &Draft) -> Result<Vec<String>, String> {
+    let everyone = draft.audience == "everyone";
     let unsub = unsubscribed(state);
     let unsub_set: std::collections::HashSet<String> = unsub.iter().cloned().collect();
-    let candidates = if draft.audience == "everyone" {
+    let candidates = if everyone {
         directory(state)
             .iter()
+            .filter(|a| a["undeliverable"] != true)
             .filter_map(|a| a["email"].as_str().map(String::from))
             .collect()
     } else {
@@ -287,13 +305,17 @@ fn resolve_recipients(state: &AppState, draft: &Draft) -> Result<Vec<String>, &'
         let raw = candidate.trim().to_lowercase();
         let norm = mitch_lib::auth::normalize_email(&raw);
         let email = known.get(&norm).cloned().unwrap_or(raw);
-        if email.ends_with("@student.rjuhsd.us")
-            && !email.split('@').next().unwrap_or("").contains('.')
-        {
-            return Err("A student address needs a period between the first and last names. Choose the registered address or enter it in full.");
+        if undeliverable_student_address(&email) {
+            if everyone {
+                continue;
+            }
+            return Err(format!("{email} is missing the period between the first and last names. Choose the registered address or enter it in full."));
         }
         if !valid_email(&email) {
-            return Err("One of the recipient email addresses is invalid.");
+            if everyone {
+                continue;
+            }
+            return Err(format!("{email} is not a valid email address."));
         }
         if !unsub.contains(&email)
             && !unsub.contains(&norm)
@@ -304,7 +326,7 @@ fn resolve_recipients(state: &AppState, draft: &Draft) -> Result<Vec<String>, &'
         }
     }
     if recipients.is_empty() {
-        return Err("Choose at least one recipient who has not unsubscribed.");
+        return Err("Choose at least one recipient who has not unsubscribed.".into());
     }
     Ok(recipients.into_iter().collect())
 }
@@ -678,6 +700,38 @@ mod tests {
         let recipients = resolve_recipients(state, &draft).unwrap();
         assert_eq!(recipients, vec!["jane.doe@student.rjuhsd.us"]);
         assert!(!recipients.contains(&"janedoe@student.rjuhsd.us".to_string()));
+    }
+
+    #[test]
+    fn everyone_audience_skips_accounts_without_a_deliverable_student_address() {
+        let fixture = Fixture::new();
+        let state = &fixture.state;
+        auth::names_set(&state.store, "sid-dotted", "jane.doe@student.rjuhsd.us");
+        // Known only by its dot-stripped identity: no real mailbox on record.
+        profiles::profile_set(
+            &state.store,
+            "nodot@student.rjuhsd.us",
+            &json!({"username":"nodot"}),
+        );
+        let accounts = directory(state);
+        let nodot = accounts
+            .iter()
+            .find(|a| a["email"] == "nodot@student.rjuhsd.us")
+            .expect("listed in the directory");
+        assert_eq!(nodot["eligible"], false);
+        assert_eq!(nodot["undeliverable"], true);
+        let mut draft = Draft {
+            audience: "everyone".into(),
+            ..Draft::default()
+        };
+        assert_eq!(
+            resolve_recipients(state, &draft).unwrap(),
+            vec!["jane.doe@student.rjuhsd.us"]
+        );
+        draft.audience = "selected".into();
+        draft.recipients = vec!["nodot@student.rjuhsd.us".into()];
+        let error = resolve_recipients(state, &draft).unwrap_err();
+        assert!(error.contains("nodot@student.rjuhsd.us"));
     }
 
     #[test]

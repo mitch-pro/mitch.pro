@@ -79,7 +79,9 @@ Student delivery addresses are resolved from the registered canonical mailbox
 for both selected and everyone audiences. Authentication's dot-stripped identity
 is used only for matching and unsubscribe checks, never as a delivery address.
 Selected aliases deduplicate to that mailbox and honor unsubscribes under either
-identity. An unresolved student address missing the first/last-name period is
-rejected rather than guessing where a dot belongs. The admin homepage newsletter
+identity. A student address missing the first/last-name period is never
+guessed at: an entered or selected one is rejected with an error naming it, and
+in the everyone audience those accounts are skipped (listed as "No deliverable
+address") so one of them can't block the whole send. The admin homepage newsletter
 shortcut is visible only after full-admin verification; both its HTML page and
 its API enforce that role server-side. Preview/review still never deliver mail.
