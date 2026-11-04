@@ -613,10 +613,13 @@ pub async fn handle(
             );
         }
     }
+    // `/prox/i/<id>` stands for a catalog item's art, so the address the page
+    // sees has no game name in it (see portal_catalog::image_uri).
+    let art = crate::routes::portal_catalog::image_uri(&state, real.as_ref().unwrap_or(uri));
     let mut response = handle_resolved(
         state,
         method,
-        real.as_ref().unwrap_or(uri),
+        art.as_ref().or(real.as_ref()).unwrap_or(uri),
         headers,
         body_bytes,
         ws_upgrade,

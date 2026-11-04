@@ -99,12 +99,24 @@ pub struct Item {
 }
 
 impl Item {
+    /// What the page is told to load for this item's art. Art that is served
+    /// from this site is addressed by id (`/prox/i/<id>`) so no game name
+    /// appears in an image address; the server maps the id back (see
+    /// [`image_uri`]). Art on another host is left as is.
+    fn image_ref(&self) -> String {
+        if self.image.starts_with('/') {
+            format!("/prox/i/{}", self.id)
+        } else {
+            self.image.clone()
+        }
+    }
+
     fn json(&self) -> Value {
         json!({
             "id": self.id,
             "title": self.title,
             "category": self.category,
-            "image": self.image,
+            "image": self.image_ref(),
             "url": self.url,
             "openSource": self.open_source,
             "external": self.external,
@@ -389,6 +401,23 @@ impl Catalog {
     }
 }
 
+/// Maps `/prox/i/<id>` to the real address of that item's art, so the request
+/// can be served as if it had asked for that address. `None` for any other path
+/// or an id with no local art.
+pub fn image_uri(state: &AppState, uri: &axum::http::Uri) -> Option<axum::http::Uri> {
+    let id: usize = uri
+        .path()
+        .strip_prefix("/prox/i/")?
+        .trim_end_matches('/')
+        .parse()
+        .ok()?;
+    let item = catalog(state).items.get(id)?;
+    if !item.image.starts_with('/') {
+        return None;
+    }
+    item.image.parse().ok()
+}
+
 fn catalog(state: &AppState) -> &'static Catalog {
     static CATALOG: OnceLock<Catalog> = OnceLock::new();
     CATALOG.get_or_init(|| Catalog::load(&state.cfg.base_dir))
@@ -523,6 +552,23 @@ mod tests {
         assert_eq!(c.items[1].category, "Racing");
         assert_eq!(c.items[3].category, "Action");
         assert_eq!(c.items[0].category, "Arcade");
+    }
+
+    #[test]
+    fn local_art_is_addressed_by_id_so_no_name_is_in_the_image_address() {
+        let c = sample();
+        // Proxied art becomes /prox/i/<id>; the real address stays server-side.
+        assert_eq!(c.items[0].json()["image"], "/prox/i/0");
+        assert_eq!(c.items[0].image, "/prox/gm-icon/aaa/512x384.jpg");
+        // Art that borrows another entry's image gets an id address too.
+        assert_eq!(c.items[4].json()["image"], "/prox/i/4");
+        // An entry with no art and art on another host are unchanged.
+        let other = Catalog::from_json(&json!({ "links": [{ "title": "#", "games": [
+            ["Elsewhere", "https://cdn.example/x.png", "https://example.org/e", "", ""],
+            ["Bare", "", "https://example.org/b", "", ""],
+        ]}]}));
+        assert_eq!(other.items[0].json()["image"], "https://cdn.example/x.png");
+        assert_eq!(other.items[1].json()["image"], "");
     }
 
     #[test]
