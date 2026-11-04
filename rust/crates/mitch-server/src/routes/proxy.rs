@@ -509,9 +509,13 @@ fn now_millis_str() -> String {
 
 /// `/prox` and `/prox/*` redirects and gone notice — server.js:10777-10791.
 pub fn prox_redirect_or_gone(path: &str, search: &str) -> Option<Response> {
-    // `/prox/gamemonetize/...` and `/prox/gm-icon/...` are the short names of
-    // the fixed game proxies and are served directly (see GAME_PROXY_ORIGINS).
-    if path.starts_with("/prox/gamemonetize/") || path.starts_with("/prox/gm-icon/") {
+    // `/prox/<name>/...` are the short names of the fixed game proxies and are
+    // served directly (see GAME_PROXY_ORIGINS); only the long legacy form below
+    // redirects.
+    if ["gamemonetize", "gm-icon", "luma", "calculated2"]
+        .iter()
+        .any(|name| path.starts_with(&format!("/prox/{name}/")))
+    {
         return None;
     }
     if path == "/prox" || path.starts_with("/prox/") {
@@ -654,8 +658,10 @@ pub const GAME_PROXY_ORIGINS: &[(&str, &str)] = &[
     ("/proxy/luma/", "https://lumassets.pages.dev"),
     ("/proxy/calculated2/", "https://calculated2.github.io"),
     ("/proxy/gamemonetize/", "https://html5.gamemonetize.co"),
-    // Short name for the same proxy; links inside the page are rewritten to
+    // Short names for the same proxies; links inside a page are rewritten to
     // whichever prefix the request came in on.
+    ("/prox/luma/", "https://lumassets.pages.dev"),
+    ("/prox/calculated2/", "https://calculated2.github.io"),
     ("/prox/gamemonetize/", "https://html5.gamemonetize.co"),
 ];
 
@@ -895,6 +901,19 @@ mod tests {
     fn short_game_proxy_names_are_served_not_redirected() {
         assert!(prox_redirect_or_gone("/prox/gamemonetize/abc/", "").is_none());
         assert!(prox_redirect_or_gone("/prox/gm-icon/a/b.jpg", "").is_none());
+        assert!(prox_redirect_or_gone("/prox/luma/Slope/index.html", "").is_none());
+        assert!(prox_redirect_or_gone("/prox/calculated2/calc/", "").is_none());
+        let none = HeaderMap::new();
+        assert_eq!(
+            fixed_proxy_target("/prox/luma/Slope/", &none).unwrap().0,
+            "/prox/luma/"
+        );
+        assert_eq!(
+            fixed_proxy_target("/prox/calculated2/calc/", &none)
+                .unwrap()
+                .0,
+            "/prox/calculated2/"
+        );
         // Anything else under /prox is still gone.
         assert_eq!(
             prox_redirect_or_gone("/prox/other/", "").unwrap().status(),

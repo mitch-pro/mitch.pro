@@ -49,7 +49,7 @@
     if (raw.startsWith('/img/gamems/')) return '/game-portal/icons/' + raw.slice('/img/gamems/'.length);
     if (raw.startsWith('/game-portal/icons/')) return raw;
     if (raw.startsWith('https://img.gamemonetize.com/')) return '/prox/gm-icon/' + raw.slice('https://img.gamemonetize.com/'.length);
-    if (raw.startsWith('https://lumassets.pages.dev/')) return '/proxy/luma/' + raw.slice('https://lumassets.pages.dev/'.length);
+    if (raw.startsWith('https://lumassets.pages.dev/')) return '/prox/luma/' + raw.slice('https://lumassets.pages.dev/'.length);
     if (/^https:\/\//i.test(raw)) return raw;
     return '';
   }
@@ -57,13 +57,13 @@
   function gameUrl(value) {
     const raw = String(value || '');
     if (raw.startsWith('/games/')) return raw;
-    if (raw.startsWith('/proxy/')) return raw;
-    if (raw.startsWith('/')) return '/proxy/calculated2' + raw;
+    if (raw.startsWith('/prox/')) return raw;
+    if (raw.startsWith('/')) return '/prox/calculated2' + raw;
     try {
       const url = new URL(raw);
       if (url.protocol !== 'https:') return '';
-      if (url.hostname === 'lumassets.pages.dev') return '/proxy/luma' + url.pathname + url.search + url.hash;
-      if (url.hostname === 'calculated2.github.io') return '/proxy/calculated2' + url.pathname + url.search + url.hash;
+      if (url.hostname === 'lumassets.pages.dev') return '/prox/luma' + url.pathname + url.search + url.hash;
+      if (url.hostname === 'calculated2.github.io') return '/prox/calculated2' + url.pathname + url.search + url.hash;
       if (['html5.gamemonetize.co', 'html5.gamemonetize.com'].includes(url.hostname)) return '/prox/gamemonetize' + url.pathname + url.search + url.hash;
       return url.href;
     } catch { return ''; }
@@ -74,7 +74,7 @@
     try {
       const url = new URL(game.url, location.origin);
       return url.origin === location.origin && [
-        '/proxy/luma/', '/proxy/calculated2/', '/proxy/gamemonetize/', '/prox/gamemonetize/',
+        '/prox/luma/', '/prox/calculated2/', '/prox/gamemonetize/',
         '/games/', '/game-portal/ui/open-source/'
       ].some(prefix => url.pathname.startsWith(prefix));
     } catch { return false; }
