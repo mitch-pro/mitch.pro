@@ -819,10 +819,10 @@ function resolveGameHref(href) {
   href = String(href || '').trim();
   if (!href) return '#';
   if (href.startsWith('https://html5.gamemonetize.co/')) {
-    return href.replace('https://html5.gamemonetize.co/', '/proxy/gamemonetize/');
+    return href.replace('https://html5.gamemonetize.co/', '/prox/gamemonetize/');
   }
   if (href.startsWith('https://html5.gamemonetize.com/')) {
-    return href.replace('https://html5.gamemonetize.com/', '/proxy/gamemonetize/');
+    return href.replace('https://html5.gamemonetize.com/', '/prox/gamemonetize/');
   }
   if (/^(https?:|data:|blob:)/i.test(href)) return href;
   if (href.charAt(0) === '/') return href;

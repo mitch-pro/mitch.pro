@@ -24,7 +24,7 @@
     # The app sets these headers itself for them (src/alias.rs), based on the
     # real path, so they are left out here.
     @not_game_content {
-        not path /proxy/* /games/*
+        not path /proxy/* /prox/* /games/*
         not path_regexp alias_prefix ^/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(/|$)
     }
     @alias_paths {
@@ -40,7 +40,7 @@
     }
 
     @game_content {
-        path /proxy/* /games/*
+        path /proxy/* /prox/* /games/*
     }
     header @game_content {
         X-Content-Type-Options nosniff

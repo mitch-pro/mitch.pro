@@ -172,7 +172,10 @@ pub fn add_security_headers(response: &mut Response, real_path: &str) {
         headers.insert(name, HeaderValue::from_static(value));
     };
     set("x-content-type-options", "nosniff");
-    if real_path.starts_with("/proxy/") || real_path.starts_with("/games/") {
+    if real_path.starts_with("/proxy/")
+        || real_path.starts_with("/prox/")
+        || real_path.starts_with("/games/")
+    {
         set("access-control-allow-origin", "*");
         return;
     }

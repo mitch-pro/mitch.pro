@@ -316,11 +316,8 @@ pub async fn ping(
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
-    if page.starts_with("/proxy/gamemonetize/") {
-        page = format!(
-            "https://html5.gamemonetize.co/{}",
-            &page["/proxy/gamemonetize/".len()..]
-        );
+    if let Some(rest) = gamemonetize_subpath(&page) {
+        page = format!("https://html5.gamemonetize.co/{rest}");
     }
     let category = body
         .get("category")
@@ -465,6 +462,12 @@ pub async fn ping(
     ))
 }
 
+/// The part after `/proxy/gamemonetize/` or the short `/prox/gamemonetize/`.
+fn gamemonetize_subpath(path: &str) -> Option<&str> {
+    path.strip_prefix("/proxy/gamemonetize/")
+        .or_else(|| path.strip_prefix("/prox/gamemonetize/"))
+}
+
 fn normalize_game_page(page: &str) -> String {
     let mut p = page.to_string();
     // Strip origin prefix.
@@ -474,11 +477,8 @@ fn normalize_game_page(page: &str) -> String {
         }
     }
     // Unmangle proxy prefix back to the external URL.
-    if p.starts_with("/proxy/gamemonetize/") {
-        p = format!(
-            "https://html5.gamemonetize.co/{}",
-            &p["/proxy/gamemonetize/".len()..]
-        );
+    if let Some(rest) = gamemonetize_subpath(&p) {
+        p = format!("https://html5.gamemonetize.co/{rest}");
     }
     // Count only game pages.
     if !p.starts_with("https://html5.gamemonetize.co/") && !p.starts_with("/games/") {
@@ -509,6 +509,11 @@ fn now_millis_str() -> String {
 
 /// `/prox` and `/prox/*` redirects and gone notice — server.js:10777-10791.
 pub fn prox_redirect_or_gone(path: &str, search: &str) -> Option<Response> {
+    // `/prox/gamemonetize/...` and `/prox/gm-icon/...` are the short names of
+    // the fixed game proxies and are served directly (see GAME_PROXY_ORIGINS).
+    if path.starts_with("/prox/gamemonetize/") || path.starts_with("/prox/gm-icon/") {
+        return None;
+    }
     if path == "/prox" || path.starts_with("/prox/") {
         static GM_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
         let gm_re = GM_RE.get_or_init(|| {
@@ -561,7 +566,9 @@ pub fn prox_redirect_or_gone(path: &str, search: &str) -> Option<Response> {
 
 /// `/proxy/gm-icon/*` caching thumbnail proxy — server.js:10838-10877.
 pub async fn gm_icon_proxy(state: &Arc<AppState>, path: &str) -> Option<Response> {
-    let sub_path = path.strip_prefix("/proxy/gm-icon/")?;
+    let sub_path = path
+        .strip_prefix("/proxy/gm-icon/")
+        .or_else(|| path.strip_prefix("/prox/gm-icon/"))?;
     static PATH_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     let path_re = PATH_RE.get_or_init(|| {
         regex::Regex::new(r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+$").expect("static regex")
@@ -647,6 +654,9 @@ pub const GAME_PROXY_ORIGINS: &[(&str, &str)] = &[
     ("/proxy/luma/", "https://lumassets.pages.dev"),
     ("/proxy/calculated2/", "https://calculated2.github.io"),
     ("/proxy/gamemonetize/", "https://html5.gamemonetize.co"),
+    // Short name for the same proxy; links inside the page are rewritten to
+    // whichever prefix the request came in on.
+    ("/prox/gamemonetize/", "https://html5.gamemonetize.co"),
 ];
 
 fn fixed_proxy_target(path: &str, headers: &HeaderMap) -> Option<(&'static str, String)> {
@@ -880,6 +890,37 @@ fn game_proxy_error() -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn short_game_proxy_names_are_served_not_redirected() {
+        assert!(prox_redirect_or_gone("/prox/gamemonetize/abc/", "").is_none());
+        assert!(prox_redirect_or_gone("/prox/gm-icon/a/b.jpg", "").is_none());
+        // Anything else under /prox is still gone.
+        assert_eq!(
+            prox_redirect_or_gone("/prox/other/", "").unwrap().status(),
+            410
+        );
+        let headers = HeaderMap::new();
+        let (prefix, path) = fixed_proxy_target("/prox/gamemonetize/abc/", &headers).unwrap();
+        assert_eq!((prefix, path.as_str()), ("/prox/gamemonetize/", "/abc/"));
+        let (prefix, _) = fixed_proxy_target("/proxy/gamemonetize/abc/", &headers).unwrap();
+        assert_eq!(prefix, "/proxy/gamemonetize/");
+        // Root-relative requests from a page opened through either name.
+        let mut from_short = HeaderMap::new();
+        from_short.insert(
+            axum::http::header::REFERER,
+            "https://mitch.pro/prox/gamemonetize/abc/".parse().unwrap(),
+        );
+        let (prefix, path) = fixed_proxy_target("/assets/app.js", &from_short).unwrap();
+        assert_eq!(
+            (prefix, path.as_str()),
+            ("/prox/gamemonetize/", "/assets/app.js")
+        );
+        assert_eq!(
+            gamemonetize_subpath("/prox/gamemonetize/abc/"),
+            Some("abc/")
+        );
+    }
 
     #[test]
     fn test_prox_redirect_or_gone() {

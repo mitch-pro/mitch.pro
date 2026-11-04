@@ -714,7 +714,7 @@ fn games(state: &Arc<AppState>, body: &serde_json::Value, headers: &HeaderMap) -
         .collect();
     let content: Vec<String> = page
         .iter()
-        .map(|s| s.replace("https://html5.gamemonetize.co/", "/proxy/gamemonetize/"))
+        .map(|s| s.replace("https://html5.gamemonetize.co/", "/prox/gamemonetize/"))
         .collect();
 
     // Featured: top 8 by play count, only on page 0 with no filters.
@@ -734,7 +734,7 @@ fn games(state: &Arc<AppState>, body: &serde_json::Value, headers: &HeaderMap) -
         let top: Vec<String> = ranked
             .iter()
             .take(8)
-            .map(|(line, _)| line.replace("https://html5.gamemonetize.co/", "/proxy/gamemonetize/"))
+            .map(|(line, _)| line.replace("https://html5.gamemonetize.co/", "/prox/gamemonetize/"))
             .collect();
         top.join("\n")
     } else {
