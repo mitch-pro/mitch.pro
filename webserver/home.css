@@ -648,3 +648,9 @@ body.members-rail-open #people-edge-trigger {display:none}
 .holiday-pill { display: inline-flex; align-items: center; margin-top: 8px; padding: 6px 14px; border: 1px solid var(--t-bd); border-radius: 999px; background: var(--t-bg2); color: var(--t-fg2); font: inherit; font-size: .82rem; font-weight: 600; line-height: 1.2; cursor: pointer; }
 .holiday-pill[hidden] { display: none; }
 .holiday-pill:hover { border-color: var(--t-ac); color: var(--t-fg); }
+
+/* Holiday greeting and break countdown, in the hello block */
+.hello-holiday { margin: 6px 0 0; font-size: 1rem; font-weight: 700; color: var(--t-ac); }
+.hello-holiday[hidden] { display: none; }
+.break-chip { margin: 8px 0 0; font-size: .82rem; font-weight: 600; color: var(--t-fg2); }
+.break-chip[hidden] { display: none; }

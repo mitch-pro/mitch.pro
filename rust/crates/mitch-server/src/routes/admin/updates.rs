@@ -38,6 +38,16 @@ fn error_message(err: &db::SaveError) -> (u16, &'static str) {
     }
 }
 
+fn season_label(season: &str) -> &'static str {
+    match season {
+        "halloween" => "Halloween (Oct 15)",
+        "thanksgiving" => "Thanksgiving (Nov 1)",
+        "christmas" => "Christmas (day after Thanksgiving)",
+        "newyear" => "New Year's (Dec 27)",
+        _ => "Valentine's (Feb 7)",
+    }
+}
+
 pub fn public_json(update: &db::Update) -> Value {
     json!({
         "id": update.id,
@@ -55,7 +65,7 @@ pub fn handle(
     ctx: &AdminCtx,
 ) -> Resp {
     let rest = path.strip_prefix(BASE)?;
-    if !(rest.is_empty() || rest == "/delete") {
+    if !(rest.is_empty() || rest == "/delete" || rest == "/auto") {
         return None;
     }
     if !ctx.is_admin(state) {
@@ -118,6 +128,41 @@ pub fn handle(
                         id,
                     );
                     json_response(200, json!({ "ok": true, "id": id }))
+                }
+                Err(err) => {
+                    let (code, message) = error_message(&err);
+                    json_response(code, json!({ "error": message }))
+                }
+            }
+        }
+        ("GET", "/auto") => {
+            let templates: Vec<Value> = db::templates(&state.store)
+                .iter()
+                .map(|t| {
+                    json!({
+                        "season": t.season,
+                        "label": season_label(&t.season),
+                        "title": t.title,
+                        "body": t.body,
+                        "enabled": t.enabled,
+                    })
+                })
+                .collect();
+            json_response(200, json!({ "templates": templates }))
+        }
+        ("POST", "/auto") => {
+            let season = text(body, "season");
+            let enabled = body.get("enabled").and_then(Value::as_bool).unwrap_or(true);
+            match db::save_template(
+                &state.store,
+                &season,
+                &text(body, "title"),
+                &text(body, "body"),
+                enabled,
+            ) {
+                Ok(()) => {
+                    log("edit_auto_update", 0);
+                    json_response(200, json!({ "ok": true }))
                 }
                 Err(err) => {
                     let (code, message) = error_message(&err);

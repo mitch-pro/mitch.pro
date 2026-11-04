@@ -20,6 +20,25 @@ use serde_json::{json, Value};
 /// 100ms-delayed task, the immediate calls fire there, and the interval
 /// tasks register after.
 pub fn spawn(state: std::sync::Arc<AppState>) {
+    // Automatic update-log entries for holiday themes (docs/site-updates.md):
+    // checked every ten minutes against the Pacific date; at most one entry per
+    // season and year.
+    {
+        let state = state.clone();
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(600));
+            loop {
+                tick.tick().await;
+                let now = mitch_lib::school::now_millis();
+                let (year, month, day, ..) = mitch_lib::school::la_local_parts(now);
+                if let Some(today) =
+                    chrono::NaiveDate::from_ymd_opt(year as i32, month as u32, day as u32)
+                {
+                    mitch_lib::site_updates::run_auto(&state.store, today, now);
+                }
+            }
+        });
+    }
     // ── scheduleDailySummary — 30s tick, sends at 16:00 local ──────────────
     {
         let state = state.clone();

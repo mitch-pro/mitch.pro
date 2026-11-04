@@ -264,6 +264,19 @@ impl DataStore {
                         author TEXT NOT NULL DEFAULT ''
                     );
                     CREATE INDEX IF NOT EXISTS idx_site_updates_posted ON site_updates (posted_at DESC, id DESC);
+                    CREATE TABLE IF NOT EXISTS auto_update_templates (
+                        season TEXT PRIMARY KEY,
+                        title TEXT NOT NULL,
+                        body TEXT NOT NULL DEFAULT '',
+                        enabled INTEGER NOT NULL DEFAULT 1
+                    );
+                    CREATE TABLE IF NOT EXISTS auto_update_posted (
+                        season TEXT NOT NULL,
+                        year INTEGER NOT NULL,
+                        entry_id INTEGER,
+                        posted_at INTEGER NOT NULL,
+                        PRIMARY KEY (season, year)
+                    );
                     CREATE TABLE IF NOT EXISTS admin_passphrase_resets (
                         email TEXT PRIMARY KEY,
                         code_hash TEXT NOT NULL,

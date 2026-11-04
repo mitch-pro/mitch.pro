@@ -49,3 +49,19 @@ server: `MITCH_HOLIDAY_THEME=christmas PORT=8080 mitch-server`.
 Add `?holiday=<name>` (any theme above) or `?holiday=none` to a page's
 address to force a theme for that visit. `node tests/test_holiday_theme.mjs`
 checks the date windows, including years where Thanksgiving falls on the 22nd.
+
+## Also on the homepage
+
+- A greeting on the day itself ("Happy Thanksgiving", "Merry Christmas" on Dec 24
+  and 25, "Happy New Year's Eve", "Happy New Year", "Happy Valentine's Day",
+  "Happy Halloween") under the hello heading while the theme is on. Previews
+  (`?holiday=`, a pinned server) show the theme's own greeting.
+- "Thanksgiving break in 19 days": the next break from the district calendar
+  (`webserver/rjuhsd-assets/calendar.js`, the same file `rjuhsd.school` uses),
+  shown when it is within 60 days. `rjuhsd.school` lists the breaks in its
+  Countdowns card from the same milestones.
+- An automatic update-log entry when a theme starts: `docs/site-updates.md`.
+
+`mitch_lib::seasons` has the same date windows as `site-theme.js`; both are tested
+with the same dates.
+

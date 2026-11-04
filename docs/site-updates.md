@@ -23,3 +23,23 @@ not generated from commit messages and are not tracked by git.
   and delete is recorded in the admin log.
 - **Dates:** the date field is optional (default now); a given day is stored as
   noon UTC so it reads the same in every time zone.
+
+## Automatic entries
+
+When a holiday theme starts (`mitch_lib::seasons`, `docs/holiday-themes.md`), one
+entry is posted from an editable template (`mitch_lib::site_updates::run_auto`,
+checked every ten minutes by a worker in `workers_site.rs` against the Pacific
+date). The entry is an ordinary row: author `automatic`, dated the day it was
+posted, and editable or deletable like any other.
+
+- **Templates:** `auto_update_templates` has one row per season (title, details,
+  on/off), created with default wording on first use. Admins edit them under
+  "Automatic entries" on `/admin/updates/` (`GET/POST /api/admin/updates/auto`).
+- **Once per season and year:** `auto_update_posted` records each season/year that
+  was handled. Deleting an automatic entry therefore does not bring it back that
+  year, and a season whose template is switched off is recorded without posting.
+- **Never retroactive:** the first time the worker runs (nothing recorded yet) it
+  only records the season already under way and posts nothing. When this was
+  introduced, Thanksgiving 2026 was already running, so it was skipped and posted
+  by hand; the first automatic entry is Christmas 2026 (Nov 27).
+

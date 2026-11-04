@@ -67,6 +67,18 @@ assert.equal(day(2027, 11, 26), 'christmas');
 assert.equal(day(2029, 11, 22), 'thanksgiving');
 assert.equal(day(2029, 11, 23), 'christmas');
 
+// Greetings on the day itself.
+const greet = (y, m, d) => theme.greetingFor(new Date(y, m - 1, d));
+assert.equal(greet(2026, 10, 31), 'Happy Halloween');
+assert.equal(greet(2026, 11, 26), 'Happy Thanksgiving');
+assert.equal(greet(2026, 11, 25), '');
+assert.equal(greet(2026, 12, 24), 'Merry Christmas');
+assert.equal(greet(2026, 12, 25), 'Merry Christmas');
+assert.equal(greet(2026, 12, 31), "Happy New Year's Eve");
+assert.equal(greet(2027, 1, 1), 'Happy New Year');
+assert.equal(greet(2027, 2, 14), "Happy Valentine's Day");
+assert.equal(greet(2027, 2, 13), '');
+
 // The page picks it up: preview parameter and the Preferences opt-out.
 assert.equal(load('?holiday=christmas').attrs['data-holiday'], 'christmas');
 assert.equal(load('?holiday=thanksgiving').attrs['data-holiday'], 'thanksgiving');

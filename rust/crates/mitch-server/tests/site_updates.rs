@@ -168,3 +168,102 @@ async fn admins_manage_the_update_log_and_the_public_sees_it() {
         1
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn admins_edit_the_automatic_entry_templates() {
+    let admins = json!({"owners": [], "coOwners": [], "admins": [ADMIN]}).to_string();
+    let s = TestServer::start(&[("admins.json", &admins)], "/api/tester/status", 403).await;
+    let sid = s.session_for(ADMIN);
+    let member = s.session_for(MEMBER);
+    let r = admin(
+        &s,
+        Some(&sid),
+        "POST",
+        "/api/admin/passphrase-status",
+        Some(json!({"passphrase": PASS})),
+    )
+    .await;
+    assert_eq!(r.status, 200, "{}", r.text);
+
+    // Every season has a default template.
+    let list = admin(&s, Some(&sid), "GET", "/api/admin/updates/auto", None).await;
+    assert_eq!(list.status, 200, "{}", list.text);
+    let templates = list.json["templates"].as_array().unwrap();
+    let seasons: Vec<&str> = templates
+        .iter()
+        .map(|t| t["season"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        seasons,
+        [
+            "halloween",
+            "thanksgiving",
+            "christmas",
+            "newyear",
+            "valentines"
+        ]
+    );
+    assert!(templates.iter().all(|t| t["enabled"] == true
+        && !t["title"].as_str().unwrap().is_empty()
+        && t["label"].as_str().is_some()));
+
+    // Edit one, switch another off.
+    let edit = admin(&s, Some(&sid), "POST", "/api/admin/updates/auto", Some(json!({"season": "christmas", "title": "Winter theme", "body": "Snow.", "enabled": true}))).await;
+    assert_eq!(edit.status, 200, "{}", edit.text);
+    let off = admin(
+        &s,
+        Some(&sid),
+        "POST",
+        "/api/admin/updates/auto",
+        Some(json!({"season": "newyear", "title": "New Year", "body": "", "enabled": false})),
+    )
+    .await;
+    assert_eq!(off.status, 200, "{}", off.text);
+    let list = admin(&s, Some(&sid), "GET", "/api/admin/updates/auto", None).await;
+    let templates = list.json["templates"].as_array().unwrap();
+    assert_eq!(templates[2]["title"], "Winter theme");
+    assert_eq!(templates[3]["enabled"], false);
+
+    // Bad input and bad seasons are refused; members cannot touch them.
+    let blank = admin(
+        &s,
+        Some(&sid),
+        "POST",
+        "/api/admin/updates/auto",
+        Some(json!({"season": "christmas", "title": " ", "body": ""})),
+    )
+    .await;
+    assert_eq!(blank.status, 400, "{}", blank.text);
+    let unknown = admin(
+        &s,
+        Some(&sid),
+        "POST",
+        "/api/admin/updates/auto",
+        Some(json!({"season": "easter", "title": "x"})),
+    )
+    .await;
+    assert_eq!(unknown.status, 404, "{}", unknown.text);
+    for sid in [Some(member.as_str()), None] {
+        let r = admin(&s, sid, "GET", "/api/admin/updates/auto", None).await;
+        assert!(
+            r.status == 401 || r.status == 403,
+            "{} {}",
+            r.status,
+            r.text
+        );
+        let r = admin(
+            &s,
+            sid,
+            "POST",
+            "/api/admin/updates/auto",
+            Some(json!({"season": "christmas", "title": "x"})),
+        )
+        .await;
+        assert!(
+            r.status == 401 || r.status == 403,
+            "{} {}",
+            r.status,
+            r.text
+        );
+    }
+}

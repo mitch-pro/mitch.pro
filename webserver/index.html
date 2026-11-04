@@ -13,7 +13,8 @@
 <title>mitch.pro</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"></noscript>
 <link rel="stylesheet" href="/app.css">
-<link rel="stylesheet" href="/home.css?v=17">
+<link rel="stylesheet" href="/home.css?v=18">
+<script defer src="/rjuhsd-assets/calendar.js?v=7"></script>
 <script src="/app-shell.js" defer></script>
 <script src="/home-friends.js?v=5" defer></script>
 <script>
@@ -1340,6 +1341,37 @@ function initFriendsSystem() {
   setInterval(sendPresenceHeartbeat, 30000);
 }
 
+// A greeting on the day itself ("Happy Thanksgiving"), shown while the holiday theme is on.
+function setupHolidayGreeting() {
+  var el = document.getElementById('holiday-greeting');
+  var theme = window.__siteTheme;
+  if (!el || !theme || !theme.holidayGreeting) return;
+  var text = theme.holidayGreeting();
+  el.textContent = text;
+  el.hidden = !text;
+}
+
+// "Winter break in 17 days": the next break from the district calendar
+// (rjuhsd-assets/calendar.js), shown when it is within two months.
+function setupBreakChip() {
+  var el = document.getElementById('break-chip');
+  var cal = window.RJUHSD_CALENDAR;
+  if (!el || !cal || !cal.district) return;
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var next = null;
+  cal.district.closures.forEach(function(c) {
+    if (!/break/i.test(c[2])) return;
+    var p = c[0].split('-');
+    var start = new Date(+p[0], +p[1] - 1, +p[2]);
+    if (start > today && (!next || start < next.start)) next = { start: start, name: c[2] };
+  });
+  if (!next) return;
+  var days = Math.round((next.start - today) / 86400000);
+  if (days > 60) return;
+  el.textContent = next.name + (days === 1 ? ' starts tomorrow' : ' in ' + days + ' days');
+  el.hidden = false;
+}
+
 // "Don't like the holiday theme?" turns the seasonal theme off on every page
 // (the same setting as Preferences); the pill then offers to bring it back. It
 // is only shown while a holiday theme is in season.
@@ -1353,7 +1385,7 @@ function setupHolidayPill() {
     pill.textContent = theme.holidayOff() ? 'Bring back the holiday theme' : "Don't like the holiday theme?";
     pill.hidden = false;
   }
-  pill.addEventListener('click', function() { theme.setHolidayOff(!theme.holidayOff()); paint(); });
+  pill.addEventListener('click', function() { theme.setHolidayOff(!theme.holidayOff()); paint(); setupHolidayGreeting(); });
   paint();
 }
 
@@ -1394,6 +1426,8 @@ function loadUpdates() {
 }
 
 async function initHome() {
+  setupHolidayGreeting();
+  setupBreakChip();
   setupHolidayPill();
   loadUpdates();
   loadLinkAliases();
@@ -1500,12 +1534,14 @@ if (document.readyState === 'loading') {
     <div class="hello-copy">
     <h1 id="home-brand" class="hello-heading"><span id="greeting-text">hello</span><svg class="hello-writing" viewBox="0 0 240 96" aria-hidden="true"><path pathLength="1" d="M15 70 C22 58 47 18 40 12 C31 4 18 77 23 76 C29 57 44 46 47 56 C49 65 36 82 51 74 L63 64 C92 51 78 38 67 57 C51 84 80 85 96 65 C108 49 127 13 119 10 C107 5 86 75 99 78 C113 85 145 17 138 11 C125 1 109 76 124 78 C136 79 148 64 151 54 C160 35 178 48 169 67 C160 87 140 78 148 59 C154 45 169 43 174 55 C178 68 184 72 198 64"/></svg></h1>
     <p id="greeting-email" class="hello-email"></p>
+    <p id="holiday-greeting" class="hello-holiday" hidden></p>
     <span id="streak-badge" class="streak-badge" hidden>&#128293; <b id="streak-badge-count">0</b></span>
     <div class="hello-tools">
     <a id="home-staff-pill" href="/staff/" class="home-staff-pill" hidden><span>&#9881;</span> Staff workspace &rarr;</a>
     <label id="abToggleBar" class="ab-toggle" title="Open links in an about:blank tab"><span>Private window</span><span class="toggle-switch"><input type="checkbox" id="abToggle" aria-label="Open links in an about:blank tab"><span class="toggle-slider"></span></span></label>
     </div>
     <button type="button" id="holiday-pill" class="holiday-pill" hidden></button>
+    <p id="break-chip" class="break-chip" hidden></p>
     </div>
     <div class="hello-emblem" aria-hidden="true">
       <div class="hello-logo-shadow"></div>

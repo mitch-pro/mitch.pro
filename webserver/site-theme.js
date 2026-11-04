@@ -139,6 +139,24 @@
     return '';
   }
 
+  // A short greeting for the day itself, or '' on other days. When a theme is
+  // being previewed (?holiday= or a pinned server) its default greeting is used.
+  var GREETINGS = {
+    halloween: 'Happy Halloween', thanksgiving: 'Happy Thanksgiving', christmas: 'Merry Christmas',
+    newyear: 'Happy New Year', valentines: "Happy Valentine's Day"
+  };
+
+  function greetingFor(now) {
+    var month = now.getMonth(), day = now.getDate();
+    if (month === 9 && day === 31) return GREETINGS.halloween;
+    if (month === 10 && day === thanksgivingDay(now.getFullYear())) return GREETINGS.thanksgiving;
+    if (month === 11 && (day === 24 || day === 25)) return GREETINGS.christmas;
+    if (month === 11 && day === 31) return "Happy New Year's Eve";
+    if (month === 0 && day === 1) return GREETINGS.newyear;
+    if (month === 1 && day === 14) return GREETINGS.valentines;
+    return '';
+  }
+
   // A server run can pin the season (MITCH_HOLIDAY_THEME, see docs/holiday-themes.md):
   // the server puts window.__holidayForce in front of this script.
   var SEASONS = { halloween: 1, thanksgiving: 1, christmas: 1, newyear: 1, valentines: 1 };
@@ -187,6 +205,17 @@
 
   apply();
 
+  // The greeting to show now: nothing when the holiday theme is off, the
+  // preview greeting when a theme is forced, else the day's own greeting.
+  function holidayGreeting() {
+    var name = document.documentElement.getAttribute('data-holiday') || '';
+    if (!name) return '';
+    var forced = (location.search.match(/[?&]holiday=([a-z]+)/) || [])[1];
+    var pinned = window.__holidayForce;
+    if (SEASONS[forced] || SEASONS[pinned]) return GREETINGS[name] || '';
+    return greetingFor(new Date());
+  }
+
   function holidayOff() {
     try { return localStorage.getItem('theme_holiday') === 'off'; } catch (_) { return false; }
   }
@@ -204,6 +233,8 @@
   window.__siteTheme = {
     holidayFor: holidayFor,
     holidaySeason: holidaySeason,
+    greetingFor: greetingFor,
+    holidayGreeting: holidayGreeting,
     holidayOff: holidayOff,
     setHolidayOff: setHolidayOff,
     getMode: function () { return readCookie('theme'); },

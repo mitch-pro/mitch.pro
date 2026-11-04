@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  let entries = [], editingId = null, setup = false;
+  let entries = [], editingId = null, setup = false, autoShown = false;
 
   function headers() {
     const result = { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' };
@@ -29,6 +29,7 @@
   const needsPassphrase = error => ['invalid_passphrase', 'passphrase_not_configured'].includes(error.code);
 
   function showLock() {
+    autoShown = false;
     $('updates-workspace').hidden = true;
     $('passphrase-lock').hidden = false;
     $('lock-heading').textContent = setup ? 'Set your admin passphrase' : 'Unlock updates';
@@ -77,9 +78,62 @@
     }
   }
 
+  function renderAuto(templates) {
+    const list = $('auto-list');
+    list.replaceChildren();
+    for (const t of templates) {
+      const item = document.createElement('form');
+      item.className = 'auto-item';
+      const heading = document.createElement('h3');
+      heading.textContent = t.label;
+      const checkLabel = document.createElement('label');
+      checkLabel.className = 'auto-check';
+      const check = document.createElement('input');
+      check.type = 'checkbox';
+      check.checked = t.enabled;
+      checkLabel.append(check, document.createTextNode('Post automatically'));
+      const titleLabel = document.createElement('label');
+      titleLabel.textContent = 'Title';
+      const title = document.createElement('input');
+      title.type = 'text';
+      title.maxLength = 120;
+      title.required = true;
+      title.value = t.title;
+      const bodyLabel = document.createElement('label');
+      bodyLabel.textContent = 'Details';
+      const body = document.createElement('textarea');
+      body.rows = 3;
+      body.maxLength = 2000;
+      body.value = t.body;
+      const actions = document.createElement('div');
+      actions.className = 'updates-actions';
+      const save = document.createElement('button');
+      save.type = 'submit';
+      save.textContent = 'Save';
+      actions.append(save);
+      item.append(heading, checkLabel, titleLabel, title, bodyLabel, body, actions);
+      item.addEventListener('submit', async event => {
+        event.preventDefault();
+        save.disabled = true;
+        say('auto-status', 'Saving…');
+        try {
+          await request('/api/admin/updates/auto', { method: 'POST', body: JSON.stringify({ season: t.season, title: title.value, body: body.value, enabled: check.checked }) });
+          say('auto-status', t.label + ' saved.');
+        } catch (error) {
+          say('auto-status', error.message, true);
+          if (needsPassphrase(error)) showLock();
+        } finally {
+          save.disabled = false;
+        }
+      });
+      list.append(item);
+    }
+  }
+
   async function load() {
     const data = await request('/api/admin/updates');
     entries = data.updates || [];
+    if (!autoShown) { renderAuto((await request('/api/admin/updates/auto')).templates || []); autoShown = true; }
     $('passphrase-lock').hidden = true;
     $('updates-workspace').hidden = false;
     say('access-status', '');

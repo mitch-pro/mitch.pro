@@ -37,3 +37,12 @@ html[data-theme=dark] .updates-status[data-error=true] { color: #ff9aa9; }
 .entry-buttons { display: flex; gap: 8px; flex: none; }
 .entry-empty { margin: 0; color: var(--t-fg2); font-size: 14px; }
 @media (max-width: 560px) { .entry { flex-direction: column; } .unlock-row { flex-wrap: wrap; } .unlock-row input { flex-basis: 100%; } }
+
+.updates-note { margin: 0 0 14px; color: var(--t-fg2); font-size: 13px; line-height: 1.55; }
+.auto-item { padding: 14px 0; border-top: 1px solid var(--t-bd); }
+.auto-item:first-of-type { border-top: 0; padding-top: 0; }
+.auto-item h3 { margin: 0 0 6px; font-size: 14px; }
+.auto-item label { margin: 10px 0 6px; }
+.auto-item .auto-check { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-weight: 500; }
+.auto-item .auto-check input { width: auto; margin: 0; }
+.auto-item .updates-actions { margin-top: 10px; }

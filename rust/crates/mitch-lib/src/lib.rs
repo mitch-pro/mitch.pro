@@ -51,6 +51,7 @@ pub mod push_subs;
 pub mod reserved_usernames;
 pub mod revoked;
 pub mod school;
+pub mod seasons;
 pub mod shop;
 pub mod site_updates;
 pub mod sso;
