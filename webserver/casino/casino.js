@@ -43,7 +43,7 @@
       const data = await res.json();
       if (data.authenticated === false) { balanceEl.textContent = 'Sign in to play'; return; }
       setBalance(data.coins);
-    } catch { balanceEl.textContent = '—'; }
+    } catch { balanceEl.textContent = 'Unavailable'; }
   }
 
   async function loadStatus() {
@@ -54,6 +54,13 @@
       disabledNote.hidden = casinoEnabled;
       document.querySelectorAll('.casino-bet-form button, .casino-actions button').forEach(b => { b.disabled = !casinoEnabled; });
     } catch { /* leave default-enabled UI; the bet attempt itself will surface any real error */ }
+  }
+
+  // Disables the given buttons while a request is in flight so a click
+  // can't double-submit a bet; returns a function that restores them.
+  function busy(...btns) {
+    btns.forEach(b => { if (b) b.disabled = true; });
+    return () => btns.forEach(b => { if (b) b.disabled = !casinoEnabled; });
   }
 
   function setResult(el, text, cls) {
@@ -87,6 +94,7 @@
   });
   coinflipForm.addEventListener('submit', async e => {
     e.preventDefault();
+    const done = busy(coinflipForm.querySelector('button[type=submit]'));
     const bet = Number(document.getElementById('coinflip-bet').value);
     setResult(coinflipResult, 'Flipping…');
     try {
@@ -98,6 +106,7 @@
         d.won ? 'is-win' : 'is-loss',
       );
     } catch (err) { setResult(coinflipResult, err.message, 'is-err'); }
+    finally { done(); }
   });
 
   // ---- Dice ----
@@ -127,6 +136,7 @@
   updateDiceOdds();
   diceForm.addEventListener('submit', async e => {
     e.preventDefault();
+    const done = busy(diceForm.querySelector('button[type=submit]'));
     const bet = Number(document.getElementById('dice-bet').value);
     const target = Number(diceTarget.value);
     setResult(diceResult, 'Rolling…');
@@ -139,6 +149,7 @@
         d.won ? 'is-win' : 'is-loss',
       );
     } catch (err) { setResult(diceResult, err.message, 'is-err'); }
+    finally { done(); }
   });
 
   // ---- Slots ----
@@ -148,6 +159,7 @@
   const SLOT_EMOJI = { cherry: '🍒', lemon: '🍋', bell: '🔔', clover: '🍀', star: '⭐', seven: '7️⃣' };
   slotsForm.addEventListener('submit', async e => {
     e.preventDefault();
+    const done = busy(slotsForm.querySelector('button[type=submit]'));
     const bet = Number(document.getElementById('slots-bet').value);
     setResult(slotsResult, 'Spinning…');
     try {
@@ -160,6 +172,7 @@
         d.won ? 'is-win' : 'is-loss',
       );
     } catch (err) { setResult(slotsResult, err.message, 'is-err'); }
+    finally { done(); }
   });
 
   // ---- Shared card rendering ----
@@ -247,6 +260,7 @@
   });
 
   bjHitBtn.addEventListener('click', async () => {
+    const done = busy(bjHitBtn, bjStandBtn);
     try {
       const d = await postCasino('/api/casino/blackjack/hit', {});
       if (d.resolved) {
@@ -259,9 +273,11 @@
         bjPlayerValue.textContent = d.value;
       }
     } catch (err) { setResult(bjResult, err.message, 'is-err'); }
+    finally { done(); }
   });
 
   bjStandBtn.addEventListener('click', async () => {
+    const done = busy(bjHitBtn, bjStandBtn);
     try {
       const d = await postCasino('/api/casino/blackjack/stand', {});
       setBalance(d.balance);
@@ -269,6 +285,7 @@
       d.bet = bet;
       endBlackjackRound(d);
     } catch (err) { setResult(bjResult, err.message, 'is-err'); }
+    finally { done(); }
   });
 
   // ---- Poker ----
@@ -288,9 +305,18 @@
       el.appendChild(tag);
       el.classList.toggle('is-held', pokerHold[i]);
       if (interactive) {
-        el.addEventListener('click', () => {
+        el.tabIndex = 0;
+        el.setAttribute('role', 'button');
+        el.setAttribute('aria-pressed', String(pokerHold[i]));
+        const toggle = () => {
           pokerHold[i] = !pokerHold[i];
           renderPokerHand(hand, true);
+          const again = pokerHandEl.children[i];
+          if (again) again.focus();
+        };
+        el.addEventListener('click', toggle);
+        el.addEventListener('keydown', ev => {
+          if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); }
         });
       }
       pokerHandEl.appendChild(el);
@@ -322,6 +348,7 @@
   });
 
   pokerDrawBtn.addEventListener('click', async () => {
+    const done = busy(pokerDrawBtn);
     try {
       const d = await postCasino('/api/casino/poker/draw', { hold: pokerHold });
       setBalance(d.balance);
@@ -335,6 +362,7 @@
         d.payout > 0 ? 'is-win' : 'is-loss',
       );
     } catch (err) { setResult(pokerResult, err.message, 'is-err'); }
+    finally { done(); }
   });
 
   // Recovers an in-progress Blackjack/Poker hand after a reload — the bet
