@@ -1998,15 +1998,32 @@ window.addEventListener('keydown', e => {
   }
 });
 
+// Make an async click handler single-flight: disable the button, show a
+// pending label, and restore it when the handler settles (success or failure).
+function guardButton(btn, label) {
+  const handler = btn.onclick;
+  btn.onclick = async (e) => {
+    if (btn.dataset.busy) return;
+    btn.dataset.busy = '1';
+    const text = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = label;
+    try { await handler.call(btn, e); }
+    finally { btn.disabled = false; btn.textContent = text; delete btn.dataset.busy; }
+  };
+}
+
 // Bookmarks helper functions
 async function loadBookmarks() {
   try {
     const r = await fetch('/api/canvas/bookmarks');
     const d = await r.json();
+    if (d.error) throw new Error(d.error);
     bookmarks = d.bookmarks || [];
     renderBookmarksList(document.getElementById('bm-search').value);
   } catch {
-    document.getElementById('bookmarks-list').innerHTML = '<span style="color:#f87171">Failed to load bookmarks</span>';
+    document.getElementById('bookmarks-list').innerHTML = '<span style="color:#f87171">Failed to load bookmarks. </span><button class="adm-btn" id="bm-retry" style="font-size:10px;padding:2px 6px">Retry</button>';
+    document.getElementById('bm-retry').onclick = loadBookmarks;
   }
 }
 
@@ -2066,8 +2083,9 @@ function renderBookmarksList(query = '') {
             showToast('Bookmark approved!');
             loadBookmarks();
           }
-        } catch { showToast('Approve failed', 'err'); }
+        } catch { showToast('Approve failed. Try again.', 'err'); }
       };
+      guardButton(div.querySelector('.bm-approve-btn'), 'Approving…');
     }
     
     if (isAdmin || b.creator === pid) {
@@ -2086,8 +2104,9 @@ function renderBookmarksList(query = '') {
             showToast('Bookmark deleted!');
             loadBookmarks();
           }
-        } catch { showToast('Delete failed', 'err'); }
+        } catch { showToast('Delete failed. Try again.', 'err'); }
       };
+      guardButton(div.querySelector('.bm-delete-btn'), 'Deleting…');
     }
     
     list.appendChild(div);
@@ -2099,10 +2118,12 @@ async function loadZones() {
   try {
     const r = await fetch('/api/canvas/zones');
     const d = await r.json();
+    if (d.error) throw new Error(d.error);
     zonesList = d.zones || [];
     renderZonesList();
   } catch {
-    document.getElementById('zones-list').innerHTML = '<span style="color:#f87171">Failed to load zones</span>';
+    document.getElementById('zones-list').innerHTML = '<span style="color:#f87171">Failed to load zones. </span><button class="adm-btn" id="zones-retry" style="font-size:10px;padding:2px 6px">Retry</button>';
+    document.getElementById('zones-retry').onclick = loadZones;
   }
 }
 
@@ -2158,8 +2179,9 @@ function renderZonesList() {
             }
             loadZones();
           }
-        } catch { showToast('Delete failed', 'err'); }
+        } catch { showToast('Delete failed. Try again.', 'err'); }
       };
+      guardButton(div.querySelector('.zone-delete-btn'), 'Deleting…');
     }
     
     list.appendChild(div);
@@ -2268,8 +2290,9 @@ function renderZoneSettingsMembers() {
         currentZone.allowedUsers = d.allowedUsers;
         renderZoneSettingsMembers();
         showToast('Member removed');
-      } catch { showToast('Action failed', 'err'); }
+      } catch { showToast('Could not remove member. Try again.', 'err'); }
     };
+    guardButton(row.querySelector('.remove-member-btn'), 'Removing…');
     el.appendChild(row);
   }
 }
@@ -2338,7 +2361,7 @@ function renderZoneSettingsMembers() {
         loadBookmarks();
       }
     } catch {
-      showToast('Failed to save bookmark', 'err');
+      showToast('Failed to save bookmark. Try again.', 'err');
     }
   };
 
@@ -2396,7 +2419,7 @@ function renderZoneSettingsMembers() {
         visitZone(d.zone);
       }
     } catch {
-      showToast('Failed to create zone', 'err');
+      showToast('Failed to create zone. Try again.', 'err');
     }
   };
 
@@ -2484,8 +2507,21 @@ function renderZoneSettingsMembers() {
       userInput.value = '';
       currentZone.allowedUsers = d.allowedUsers;
       renderZoneSettingsMembers();
-    } catch { showToast('Failed to add member', 'err'); }
+    } catch { showToast('Failed to add member. Try again.', 'err'); }
   };
+
+  guardButton(document.getElementById('bm-create-btn'), 'Saving…');
+  guardButton(document.getElementById('zone-create-btn'), 'Creating…');
+  guardButton(document.getElementById('zone-settings-save-name'), 'Saving…');
+  guardButton(document.getElementById('zone-settings-save-description'), 'Saving…');
+  guardButton(document.getElementById('zone-settings-save-access'), 'Saving…');
+  guardButton(document.getElementById('zone-settings-add-btn'), 'Adding…');
+  // Enter submits the name fields.
+  for (const [input, button] of [['bm-new-name', 'bm-create-btn'], ['zone-new-name', 'zone-create-btn']]) {
+    document.getElementById(input).addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); document.getElementById(button).click(); }
+    });
+  }
 
   document.getElementById('zone-settings-add-user').addEventListener('input', () => {
     const input = document.getElementById('zone-settings-add-user');
@@ -2588,7 +2624,7 @@ function renderZoneSettingsMembers() {
       if (d.error) { showToast(d.error, 'err'); return; }
       showToast('Zone pixels cleared!');
       await loadPixels();
-    } catch { showToast('Failed to clear zone', 'err'); }
+    } catch { showToast('Failed to clear zone. Try again.', 'err'); }
   };
 
   document.getElementById('zone-settings-delete').onclick = async () => {
@@ -2606,8 +2642,10 @@ function renderZoneSettingsMembers() {
       showToast('Zone deleted');
       leaveZone();
       loadZones();
-    } catch { showToast('Failed to delete zone', 'err'); }
+    } catch { showToast('Failed to delete zone. Try again.', 'err'); }
   };
+  guardButton(document.getElementById('zone-settings-delete'), 'Deleting…');
+  guardButton(document.getElementById('zone-settings-clear'), 'Clearing…');
 
   if (isAdmin) {
     document.getElementById('admin-btn').style.display = '';
