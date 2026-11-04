@@ -579,6 +579,22 @@ function sanitizeClientHtml(html) {
   Array.from(tpl.content.childNodes).forEach(node => out.appendChild(clean(node)));
   return out.innerHTML;
 }
+// fetch that never rejects: a network failure becomes a 599 response with a
+// readable error so callers show a message instead of failing silently.
+function safeFetch(url, opts) {
+  return fetch(url, opts).catch(() => new Response(
+    JSON.stringify({ error: 'Network error. Check your connection and try again.' }),
+    { status: 599, headers: { 'Content-Type': 'application/json' } }
+  ));
+}
+// Disables a button and swaps its label while `work` runs.
+async function withBusy(btn, label, work) {
+  if (!btn) return work();
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = label;
+  try { return await work(); } finally { btn.disabled = false; btn.textContent = orig; }
+}
 function fmtDate(ts) {
   ts = Number(ts || 0);
   if (!ts) return 'Draft';
@@ -629,7 +645,7 @@ function renderList() {
   document.getElementById('postCount').textContent = String(visible.length);
   const root = document.getElementById('postList');
   if (!visible.length) {
-    root.innerHTML = '<div class="empty">No matching blog posts.</div>';
+    root.innerHTML = posts.length ? '<div class="empty">No posts match your search.</div>' : '<div class="empty">No posts yet.</div>';
     return;
   }
   root.innerHTML = visible.map(post => `
@@ -669,7 +685,7 @@ function renderArticle(post) {
   ].join('');
 }
 async function loadPosts() {
-  const res = await fetch('/api/blog/posts', { credentials: 'include', cache: 'no-store' });
+  const res = await safeFetch('/api/blog/posts', { credentials: 'include', cache: 'no-store' });
   if (res.status === 401) { location.href = '/enroll/'; return; }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'Could not load posts');
@@ -688,10 +704,16 @@ async function loadPosts() {
 async function loadPost(slug) {
   selected = slug;
   renderList();
-  const res = await fetch('/api/blog/posts/' + encodeURIComponent(slug), { credentials: 'include', cache: 'no-store' });
+  const articleEl = document.getElementById('article');
+  articleEl.setAttribute('aria-busy', 'true');
+  articleEl.innerHTML = '<div class="empty">Loading post...</div>';
+  const res = await safeFetch('/api/blog/posts/' + encodeURIComponent(slug), { credentials: 'include', cache: 'no-store' });
   const data = await res.json().catch(() => ({}));
+  articleEl.removeAttribute('aria-busy');
   if (!res.ok) {
-    toast(data.error || 'Could not load post', false);
+    articleEl.innerHTML = '<div class="empty">' + esc(res.status === 404 ? 'This post was not found.' : (data.error || 'Could not load post')) + (res.status === 404 ? '' : ' <button type="button" id="retryPost">Retry</button>') + '</div>';
+    const retry = document.getElementById('retryPost');
+    if (retry) retry.addEventListener('click', () => loadPost(slug));
     return;
   }
   history.replaceState(null, '', '#post/' + encodeURIComponent(data.post.slug));
@@ -726,10 +748,11 @@ function editCurrentPost() {
 }
 async function deleteCurrentPost() {
   if (!currentPost || !(await customConfirm('Delete', 'Delete "' + currentPost.title + '"?'))) return;
-  const res = await fetch('/api/blog/posts/' + encodeURIComponent(currentPost.slug), {
+  const delBtn = document.querySelector('#postActions button:last-child');
+  const res = await withBusy(delBtn, 'Deleting...', () => safeFetch('/api/blog/posts/' + encodeURIComponent(currentPost.slug), {
     method: 'DELETE',
     credentials: 'include'
-  });
+  }));
   const data = await res.json().catch(() => ({}));
   if (!res.ok) return toast(data.error || 'Could not delete post', false);
   toast('Post deleted');
@@ -746,7 +769,7 @@ async function loadComments(post = currentPost) {
     return;
   }
   try {
-    const res = await fetch('/api/blog/posts/' + encodeURIComponent(post.slug) + '/comments', { credentials: 'include', cache: 'no-store' });
+    const res = await safeFetch('/api/blog/posts/' + encodeURIComponent(post.slug) + '/comments', { credentials: 'include', cache: 'no-store' });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Could not load comments');
     const comments = data.comments || [];
@@ -778,12 +801,12 @@ async function submitComment(event) {
   const body = document.getElementById('commentBody').value.trim();
   if (!body) return;
   document.getElementById('commentStatus').textContent = 'Posting...';
-  const res = await fetch('/api/blog/posts/' + encodeURIComponent(currentPost.slug) + '/comments', {
+  const res = await withBusy(event.currentTarget.querySelector('button[type="submit"]'), 'Posting...', () => safeFetch('/api/blog/posts/' + encodeURIComponent(currentPost.slug) + '/comments', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ body })
-  });
+  }));
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     document.getElementById('commentStatus').textContent = data.error || 'Could not post comment';
@@ -795,7 +818,7 @@ async function submitComment(event) {
 }
 async function moderateComment(id, status) {
   if (!currentPost) return;
-  const res = await fetch('/api/blog/posts/' + encodeURIComponent(currentPost.slug) + '/comments/' + encodeURIComponent(id), {
+  const res = await safeFetch('/api/blog/posts/' + encodeURIComponent(currentPost.slug) + '/comments/' + encodeURIComponent(id), {
     method: 'PATCH',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -806,7 +829,7 @@ async function moderateComment(id, status) {
 }
 async function deleteComment(id) {
   if (!currentPost || !(await customConfirm('Delete', 'Delete this comment?'))) return;
-  const res = await fetch('/api/blog/posts/' + encodeURIComponent(currentPost.slug) + '/comments/' + encodeURIComponent(id), {
+  const res = await safeFetch('/api/blog/posts/' + encodeURIComponent(currentPost.slug) + '/comments/' + encodeURIComponent(id), {
     method: 'DELETE',
     credentials: 'include'
   });
@@ -820,7 +843,7 @@ async function loadRevisions(post = currentPost) {
     return;
   }
   try {
-    const res = await fetch('/api/blog/posts/' + encodeURIComponent(post.slug) + '/revisions', { credentials: 'include', cache: 'no-store' });
+    const res = await safeFetch('/api/blog/posts/' + encodeURIComponent(post.slug) + '/revisions', { credentials: 'include', cache: 'no-store' });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Could not load revisions');
     const revisions = data.revisions || [];
@@ -837,7 +860,7 @@ async function loadRevisions(post = currentPost) {
 }
 async function restoreRevision(id) {
   if (!currentPost || !(await customConfirm('Restore', 'Restore this revision? Current content will be saved as a new revision.'))) return;
-  const res = await fetch('/api/blog/posts/' + encodeURIComponent(currentPost.slug) + '/restore', {
+  const res = await safeFetch('/api/blog/posts/' + encodeURIComponent(currentPost.slug) + '/restore', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -868,12 +891,12 @@ async function savePost(event) {
   };
   const url = editingSlug ? '/api/blog/posts/' + encodeURIComponent(editingSlug) : '/api/blog/posts';
   const method = editingSlug ? 'PATCH' : 'POST';
-  const res = await fetch(url, {
+  const res = await withBusy(event.submitter || document.querySelector('#postForm button[type="submit"]'), 'Saving...', () => safeFetch(url, {
     method,
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
-  });
+  }));
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     setEditorStatus(data.error || 'Could not save post');
@@ -888,19 +911,19 @@ async function savePost(event) {
 async function uploadImageFile(file) {
   if (!file) return;
   if (!/^image\/(png|jpe?g|gif|webp)$/i.test(file.type)) return toast('Unsupported image type', false);
-  if (file.size > 900000) return toast('Image is too large', false);
+  if (file.size > 900000) return toast('Image is too large (max 900 KB)', false);
   const data = await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ''));
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
-  const res = await fetch('/api/blog/upload', {
+  const res = await withBusy(document.getElementById('uploadBtn'), 'Uploading...', () => safeFetch('/api/blog/upload', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ mime: file.type, name: file.name, data })
-  });
+  }));
   const result = await res.json().catch(() => ({}));
   if (!res.ok) return toast(result.error || 'Could not upload image', false);
   document.getElementById('postBody').focus();
@@ -943,19 +966,22 @@ document.getElementById('postBody').addEventListener('paste', event => {
   document.execCommand('insertHTML', false, safe);
 });
 async function loadSubscription() {
-  const res = await fetch('/api/blog/subscription', { credentials: 'include', cache: 'no-store' });
+  const res = await safeFetch('/api/blog/subscription', { credentials: 'include', cache: 'no-store' });
   if (!res.ok) return;
   const data = await res.json().catch(() => ({}));
   document.getElementById('alertToggle').checked = data.enabled === true;
 }
 async function saveSubscription() {
-  const enabled = document.getElementById('alertToggle').checked;
-  const res = await fetch('/api/blog/subscription', {
+  const toggle = document.getElementById('alertToggle');
+  const enabled = toggle.checked;
+  toggle.disabled = true;
+  const res = await safeFetch('/api/blog/subscription', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ enabled })
   });
+  toggle.disabled = false;
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     document.getElementById('alertToggle').checked = !enabled;
@@ -979,10 +1005,15 @@ document.getElementById('imageFile').addEventListener('change', event => {
 window.addEventListener('hashchange', () => {
   if (location.hash.startsWith('#post/')) loadPost(decodeURIComponent(location.hash.slice(6)));
 });
-Promise.all([loadSubscription(), loadPosts()]).catch(err => {
-  document.getElementById('postList').innerHTML = '<div class="empty">Failed to load blog.</div>';
-  toast(err.message || 'Failed to load blog', false);
-});
+function startBlog() {
+  document.getElementById('postList').innerHTML = '<div class="empty">Loading posts...</div>';
+  Promise.all([loadSubscription(), loadPosts()]).catch(err => {
+    document.getElementById('postList').innerHTML = '<div class="empty">' + esc(err.message || 'Could not load posts') + ' <button type="button" id="retryPosts">Retry</button></div>';
+    document.getElementById('retryPosts').addEventListener('click', startBlog);
+    document.getElementById('article').innerHTML = '';
+  });
+}
+startBlog();
 </script>
 </body>
 </html>
