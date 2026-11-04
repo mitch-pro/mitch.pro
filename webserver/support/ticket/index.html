@@ -44,8 +44,10 @@
       method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
       body: JSON.stringify(Object.assign({ id: id, token: token }, extra || {}))
-    }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, data: d }; }); });
+    }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, data: d }; }); },
+      function () { return { ok: false, status: 0, data: { error: "Couldn't reach the server. Check your connection and try again." } }; });
   }
+  var loaded = false;
   var LABELS = { open: 'Waiting for support', pending: 'Support replied', resolved: 'Resolved' };
   var WHO = { user: 'You', staff: 'Support', system: '' };
   function render(d) {
@@ -74,7 +76,13 @@
   }
   async function load() {
     var res = await call('view');
-    if (!res.ok) { say('This request could not be found. Check the address you opened.', true); return false; }
+    if (!res.ok) {
+      if (res.status === 404 || res.status === 403) say('This request could not be found. Check the address you opened.', true);
+      else if (!loaded) say((res.data.error || 'Could not load this request.') + ' Retrying…', true);
+      return false;
+    }
+    if (!loaded) say('');
+    loaded = true;
     render(res.data);
     return true;
   }
@@ -87,17 +95,19 @@
     e.preventDefault();
     var box = document.getElementById('reply');
     if (!box.value.trim()) return;
-    var btn = document.getElementById('replybtn'); btn.disabled = true;
+    var btn = document.getElementById('replybtn'), label = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Sending…';
     var res = await call('reply', { body: box.value });
-    if (res.ok) { box.value = ''; say(''); await load(); } else say(res.data.error || 'Could not send.', true);
-    btn.disabled = false;
+    if (res.ok) { box.value = ''; say(''); await load(); } else say(res.data.error || 'Could not send. Your message is still here — try again.', true);
+    btn.disabled = false; btn.textContent = label;
   });
   document.getElementById('codeform').addEventListener('submit', async function (e) {
     e.preventDefault();
-    var btn = document.getElementById('codebtn'); btn.disabled = true;
+    var btn = document.getElementById('codebtn'), label = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Confirming…';
     var res = await call('confirm-email', { code: document.getElementById('code').value });
     if (res.ok) { say('Your email was changed.'); await load(); } else say(res.data.error || 'Could not confirm.', true);
-    btn.disabled = false;
+    btn.disabled = false; btn.textContent = label;
   });
 })();
 </script>

@@ -69,8 +69,9 @@
     e.preventDefault();
     var btn = document.getElementById('send');
     btn.disabled = true;
+    btn.textContent = 'Sending…';
     status.className = 'support-status';
-    status.textContent = 'Sending...';
+    status.textContent = '';
     try {
       var captcha = window.getCaptchaToken ? (await window.getCaptchaToken('support_open')) || '' : '';
       var res = await fetch('/api/support/open', {
@@ -93,8 +94,9 @@
       location.href = '/support/ticket/#' + data.id + '.' + data.token;
     } catch (err) {
       status.className = 'support-status err';
-      status.textContent = err.message;
+      status.textContent = err instanceof TypeError ? "Couldn't reach the server. Check your connection and try again." : err.message;
       btn.disabled = false;
+      btn.textContent = 'Send request';
     }
   });
 })();
