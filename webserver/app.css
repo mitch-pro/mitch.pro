@@ -363,6 +363,7 @@ body.enroll-page { background: var(--t-bg); }
 #mobile-menu nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
 #mobile-menu nav a { display: flex; align-items: center; min-height: 54px; padding: 14px; border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm); background: var(--t-bg2); color: var(--t-fg); text-decoration: none; font-size: 14px; }
 #mobile-menu nav a:hover { border-color: var(--t-ac); background: var(--t-gls); }
+#mobile-menu nav a[aria-current="page"] { border-color: var(--t-ac); font-weight: 600; }
 
 @media (max-width: 760px) {
   body { --mobile-dock-space: calc(76px + env(safe-area-inset-bottom, 0px)); padding-bottom: var(--mobile-dock-space); }
