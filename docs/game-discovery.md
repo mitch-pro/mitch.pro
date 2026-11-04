@@ -8,7 +8,7 @@ inside the homepage's frame returns to the actual homepage.
 
 ## Popularity order
 
-`webserver/game-portal/ui/popularity.js` is the single maintained ordering. The
+`FEATURED_TITLES` in `rust/crates/mitch-server/src/routes/portal_catalog.rs` is the single maintained ordering. The
 initial selection was reviewed on October 21, 2026, using publishers' own lists:
 
 - [Coolmath's popular games](https://www.coolmathgames.com/blog/top-10-most-popular-games-on-coolmath-games/body)
@@ -60,3 +60,16 @@ actions. Closing a game restores the catalog and search controls. External games
 are labeled as opening in another tab. The sign-in link returns to the library
 after authentication.
 
+
+## How the portal gets its list
+
+The catalog (`data/portal_catalog.json`, about 8 MB) is not in the web root and
+the browser never downloads it. `routes/portal_catalog.rs` loads it once and
+serves only what the page shows: `/api/portal/summary` (total, category counts and
+the featured row), `/api/portal/list?cat=&q=&sort=&offset=&limit=` (one page of
+60), `/api/portal/items?ids=` (saved and recent items) and `/api/portal/random`.
+Search, category filtering and both sorts run on the server. Ids are the same
+numbering as before, so saved and recent lists keep working. The legacy catalog URLs (`/games/`,
+`/games/index.html`, ...) redirect to `/game-portal/` only while
+`GAMES_LIBRARY_REDIRECT_ENABLED` in `handler.rs` is true; it is off for now, so
+`/games/` serves its own page.

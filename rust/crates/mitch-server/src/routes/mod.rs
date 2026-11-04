@@ -33,6 +33,7 @@ pub mod members;
 pub mod misc;
 pub mod movies;
 pub mod pickle;
+pub mod portal_catalog;
 pub mod proxy;
 pub mod push;
 pub mod school_menu;

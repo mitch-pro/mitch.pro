@@ -3,12 +3,15 @@
 
   const byId = id => document.getElementById(id);
   const state = {
-    games: [],
+    items: new Map(),
+    list: [],
+    total: 0,
+    summary: null,
+    loading: false,
     category: 'All',
     view: 'all',
     query: new URLSearchParams(location.search).get('q') || '',
     sort: 'popular',
-    limit: 60,
     current: null,
     rewardTimer: null,
     authenticated: false,
@@ -18,8 +21,7 @@
     favorites: readList('mitch.games.catalog.favorites'),
     recent: readList('mitch.games.catalog.recent')
   };
-  const discovery = window.MitchGameDiscovery;
-  const categories = ['All', 'Arcade', 'Action', 'Racing', 'Sports', 'Multiplayer', 'Puzzle', 'Retro', 'Casual', 'Horror'];
+  const PAGE = 60;
   const player = byId('player');
   const frame = byId('player-frame');
   const search = byId('search');
@@ -36,39 +38,6 @@
     try { localStorage.setItem(key, JSON.stringify(list)); } catch {}
   }
 
-  function plainText(value) {
-    const raw = String(value || '');
-    if (!/[<&]/.test(raw)) return raw.replace(/\s+/g, ' ').trim();
-    const node = new DOMParser().parseFromString(raw, 'text/html');
-    return (node.body.textContent || '').replace(/\s+/g, ' ').trim();
-  }
-
-  function imageUrl(value) {
-    const raw = String(value || '');
-    if (raw.startsWith('/img/games/')) return '/game-portal/icons/' + raw.slice('/img/games/'.length);
-    if (raw.startsWith('/img/gamems/')) return '/game-portal/icons/' + raw.slice('/img/gamems/'.length);
-    if (raw.startsWith('/game-portal/icons/')) return raw;
-    if (raw.startsWith('https://img.gamemonetize.com/')) return '/prox/gm-icon/' + raw.slice('https://img.gamemonetize.com/'.length);
-    if (raw.startsWith('https://lumassets.pages.dev/')) return '/prox/luma/' + raw.slice('https://lumassets.pages.dev/'.length);
-    if (/^https:\/\//i.test(raw)) return raw;
-    return '';
-  }
-
-  function gameUrl(value) {
-    const raw = String(value || '');
-    if (raw.startsWith('/games/')) return raw;
-    if (raw.startsWith('/prox/')) return raw;
-    if (raw.startsWith('/')) return '/prox/calculated2' + raw;
-    try {
-      const url = new URL(raw);
-      if (url.protocol !== 'https:') return '';
-      if (url.hostname === 'lumassets.pages.dev') return '/prox/luma' + url.pathname + url.search + url.hash;
-      if (url.hostname === 'calculated2.github.io') return '/prox/calculated2' + url.pathname + url.search + url.hash;
-      if (['html5.gamemonetize.co', 'html5.gamemonetize.com'].includes(url.hostname)) return '/prox/gamemonetize' + url.pathname + url.search + url.hash;
-      return url.href;
-    } catch { return ''; }
-  }
-
   function canEmbed(game) {
     if (game.external) return false;
     try {
@@ -78,19 +47,6 @@
         '/games/', '/game-portal/ui/open-source/'
       ].some(prefix => url.pathname.startsWith(prefix));
     } catch { return false; }
-  }
-
-  function categoryFor(title, description, url) {
-    const value = (title + ' ' + description + ' ' + url).toLowerCase();
-    if (/fnaf|backrooms|silent hill|dreader|horror/.test(value)) return 'Horror';
-    if (/multiplayer|1v1|basket bros|shell shock|smash karts|tetr\.io/.test(value)) return 'Multiplayer';
-    if (/race|racing|moto|drift|traffic|car|highway|swerve/.test(value)) return 'Racing';
-    if (/basket|football|soccer|golf|bowl|skate|punch|pool party/.test(value)) return 'Sports';
-    if (/\/retro\/|pokemon|mario|sonic|zelda|metroid|kirby|donkey kong|final fantasy|star fox|mega ?man|tetris/.test(value)) return 'Retro';
-    if (/puzzle|riddle|wordle|2048|bloxorz|alchemy|sort|quiz|calculator|logic/.test(value)) return 'Puzzle';
-    if (/shooter|doom|quake|gun|combat|commando|battle|fight|hobo|shark|tank|action/.test(value)) return 'Action';
-    if (/papa|idle|learn to fly|duck life|buddy|sandbox|tycoon/.test(value)) return 'Casual';
-    return 'Arcade';
   }
 
   function icon(name) {
@@ -158,8 +114,7 @@
   function toggleFavorite(id) {
     state.favorites = state.favorites.includes(id) ? state.favorites.filter(item => item !== id) : [id, ...state.favorites];
     saveList('mitch.games.catalog.favorites', state.favorites);
-    renderFeatured();
-    render();
+    if (state.view === 'favorites') loadList(true); else render();
   }
 
   function launch(game) {
@@ -198,9 +153,9 @@
     (previousFocus?.isConnected ? previousFocus : search).focus();
   }
 
-  function randomGame() {
-    if (!state.games.length) return;
-    launch(state.games[Math.floor(Math.random() * state.games.length)]);
+  async function randomGame() {
+    const data = await api('random');
+    if (data?.item) { remember(data.item); launch(data.item); }
   }
 
   function formatCoins(value) {
@@ -284,65 +239,89 @@
     if (sendInactive) heartbeat(false);
   }
 
-  function renderFeatured() {
-    const seen = new Set();
-    const picks = [...state.games].sort(discovery.compare).filter(game => {
-      const key = discovery.key(game.title);
-      if (discovery.rank(game.title) === Number.MAX_SAFE_INTEGER || seen.has(key)) return false;
-      seen.add(key); return true;
-    }).slice(0, 12);
-    byId('quick-grid').replaceChildren(...picks.map(game => makeCard(game, true)));
+  // The page never gets the whole catalog: it asks the server for what is on
+  // screen (featured row, one page of the list, saved or recent items by id).
+  async function api(name, params = {}) {
+    const query = new URLSearchParams(params).toString();
+    try {
+      const response = await fetch(`/api/portal/${name}${query ? '?' + query : ''}`, { credentials: 'same-origin' });
+      return response.ok ? await response.json() : null;
+    } catch { return null; }
   }
 
-  function filteredGames() {
-    const query = state.query.trim().toLowerCase();
-    const games = state.games.filter(game => {
-      if (state.view === 'favorites' && !state.favorites.includes(game.id)) return false;
-      if (state.view === 'recent' && !state.recent.includes(game.id)) return false;
-      if (state.category !== 'All' && game.category !== state.category) return false;
-      const titleQuery = discovery.key(query);
-      return !query || game.search.includes(query) || (titleQuery && discovery.key(game.title).includes(titleQuery));
-    });
-    if (state.view === 'recent') games.sort((a, b) => state.recent.indexOf(a.id) - state.recent.indexOf(b.id));
-    else if (state.view === 'favorites') games.sort((a, b) => state.favorites.indexOf(a.id) - state.favorites.indexOf(b.id));
-    else games.sort(state.sort === 'alphabetical'
-      ? (a, b) => a.title.localeCompare(b.title)
-      : discovery.compare);
-    return games;
+  function remember(item) { state.items.set(item.id, item); return item; }
+
+  async function itemsById(ids) {
+    const missing = ids.filter(id => !state.items.has(id));
+    if (missing.length) {
+      const data = await api('items', { ids: missing.slice(0, 60).join(',') });
+      (data?.items || []).forEach(remember);
+    }
+    return ids.map(id => state.items.get(id)).filter(Boolean);
+  }
+
+  function renderFeatured(items) {
+    byId('quick-grid').replaceChildren(...items.map(game => makeCard(remember(game), true)));
+    refreshIcons();
+  }
+
+  let listToken = 0;
+  // Loads the first page (reset) or the next one of the current view.
+  async function loadList(reset) {
+    const token = ++listToken;
+    if (reset) { state.list = []; state.total = 0; }
+    state.loading = true;
+    let page = null;
+    if (state.view === 'all') {
+      page = await api('list', { cat: state.category, q: state.query.trim(), sort: state.sort, offset: state.list.length, limit: PAGE });
+    } else {
+      const ids = state.view === 'favorites' ? state.favorites : state.recent;
+      const items = await itemsById(ids.slice(state.list.length, state.list.length + PAGE));
+      page = { total: ids.length, items };
+    }
+    if (token !== listToken) return;
+    state.loading = false;
+    if (!page) {
+      byId('empty-state').hidden = false;
+      byId('empty-state').querySelector('p').textContent = 'Could not load the list.';
+      return;
+    }
+    state.total = page.total;
+    page.items.forEach(remember);
+    state.list = reset ? page.items : state.list.concat(page.items);
+    render();
   }
 
   function renderFilters() {
-    const available = categories.filter(name => name === 'All' || state.games.some(game => game.category === name));
-    const counts = new Map();
-    for (const game of state.games) counts.set(game.category, (counts.get(game.category) || 0) + 1);
-    byId('filters').replaceChildren(...available.map(name => {
+    const categories = state.summary?.categories || [];
+    byId('filters').replaceChildren(...[{ name: 'All' }, ...categories].map(({ name }) => {
       const button = document.createElement('button');
       button.className = 'filter-button' + (state.category === name ? ' is-active' : '');
       button.type = 'button';
       button.textContent = name;
       button.setAttribute('aria-pressed', String(state.category === name));
-      button.addEventListener('click', () => { state.category = name; state.limit = 60; render(); });
+      button.addEventListener('click', () => { state.category = name; loadList(true); });
       return button;
     }));
-    byId('side-categories').replaceChildren(...available.filter(name => name !== 'All').map(name => {
+    byId('side-categories').replaceChildren(...categories.map(({ name, count }) => {
       const button = document.createElement('button');
       button.className = 'side-category';
       button.type = 'button';
       const label = document.createElement('span');
       label.textContent = name;
-      const count = document.createElement('small');
-      count.className = 'side-category-count';
-      count.textContent = counts.get(name).toLocaleString();
-      button.append(label, count);
+      const total = document.createElement('small');
+      total.className = 'side-category-count';
+      total.textContent = count.toLocaleString();
+      button.append(label, total);
       button.setAttribute('aria-pressed', String(state.category === name));
-      button.addEventListener('click', () => { state.view = 'all'; state.category = name; state.limit = 60; closeMenu(); render(); });
+      button.addEventListener('click', () => { state.view = 'all'; state.category = name; closeMenu(); loadList(true); });
       return button;
     }));
     document.querySelectorAll('[data-view]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.view === state.view)));
   }
 
-  function renderSidebarRecent() {
-    const recentGames = state.recent.map(id => state.games.find(game => game.id === id)).filter(Boolean).slice(0, 2);
+  async function renderSidebarRecent() {
+    const recentGames = await itemsById(state.recent.slice(0, 2));
     byId('sidebar-recent').hidden = recentGames.length === 0;
     byId('sidebar-recent-list').replaceChildren(...recentGames.map(game => {
       const button = document.createElement('button');
@@ -370,66 +349,39 @@
   }
 
   function render() {
-    const games = filteredGames();
     const viewName = state.view === 'favorites' ? 'Saved' : state.view === 'recent' ? 'Recently played' : (state.category === 'All' ? 'Entertainment' : state.category);
     byId('current-view-name').textContent = viewName;
     byId('page-title').textContent = state.view === 'favorites' ? 'Saved' : state.view === 'recent' ? 'Recently played' : 'Entertainment Portal';
     byId('quick-picks-section').hidden = !!state.query || state.view !== 'all' || state.category !== 'All';
     byId('sort-control').hidden = state.view !== 'all';
     byId('catalog-heading').textContent = state.view === 'favorites' ? 'Saved' : (state.view === 'recent' ? 'Recently played' : 'All titles');
-    byId('result-count').textContent = `${games.length.toLocaleString()} ${games.length === 1 ? 'title' : 'titles'}`;
-    byId('item-grid').replaceChildren(...games.slice(0, state.limit).map(game => makeCard(game)));
-    byId('empty-state').hidden = games.length > 0;
-    byId('load-more').hidden = games.length <= state.limit;
+    byId('result-count').textContent = `${state.total.toLocaleString()} ${state.total === 1 ? 'title' : 'titles'}`;
+    byId('item-grid').replaceChildren(...state.list.map(game => makeCard(game)));
+    byId('empty-state').hidden = state.total > 0 || state.loading;
+    byId('load-more').hidden = state.list.length >= state.total;
     renderFilters();
     renderSidebarRecent();
     refreshIcons();
   }
 
-  async function loadCatalog() {
-    try {
-      const response = await fetch('/game-portal/catalog.json?v=3', { cache: 'no-cache' });
-      if (!response.ok) throw new Error('Could not load the catalog');
-      const catalog = await response.json();
-      let id = 0;
-      const games = [];
-      for (const section of catalog.links || []) {
-        for (const entry of section.games || []) {
-          const title = plainText(entry[0]);
-          const description = plainText(entry[3]);
-          const url = gameUrl(entry[2]);
-          if (!title || !url) continue;
-          const openSource = title.toLowerCase() === '2048';
-          games.push({
-            id: id++,
-            title,
-            category: categoryFor(title, description, url),
-            image: imageUrl(entry[1]),
-            url: openSource ? '/game-portal/ui/open-source/2048/' : url,
-            openSource,
-            external: entry[4] === 'IgnoreIframe',
-            search: (title + ' ' + description + ' ' + section.title).toLowerCase()
-          });
-        }
-      }
-      const artwork = new Map();
-      for (const game of games) if (game.image) artwork.set(discovery.key(game.title), game.image);
-      for (const game of games) if (!game.image) game.image = artwork.get(discovery.key(game.title)) || '';
-      state.games = games;
-      byId('library-count').textContent = `${games.length.toLocaleString()} titles in the library`;
-      renderFeatured();
-      render();
-      heartbeat(false);
-    } catch (error) {
+  async function loadSummary() {
+    const summary = await api('summary');
+    if (!summary) {
       byId('library-count').textContent = 'Library unavailable';
       byId('empty-state').hidden = false;
-      byId('empty-state').querySelector('p').textContent = error.message || 'Could not load the list.';
+      byId('empty-state').querySelector('p').textContent = 'Could not load the list.';
+      return;
     }
+    state.summary = summary;
+    byId('library-count').textContent = `${summary.total.toLocaleString()} titles in the library`;
+    renderFeatured(summary.featured);
+    heartbeat(false);
   }
 
   search.value = state.query;
-  byId('sort-items').addEventListener('change', event => { state.sort = event.target.value; state.limit = 60; render(); });
-  search.addEventListener('input', () => { state.query = search.value; state.limit = 60; render(); });
+  byId('sort-items').addEventListener('change', event => { state.sort = event.target.value; loadList(true); });
+  let searchTimer = null;
+  search.addEventListener('input', () => { state.query = search.value; clearTimeout(searchTimer); searchTimer = setTimeout(() => loadList(true), 250); });
   function closeMenu() {
     byId('sidebar').classList.remove('is-open');
     byId('menu-scrim').hidden = true;
@@ -442,9 +394,9 @@
     byId('mobile-menu').setAttribute('aria-expanded', String(open));
   });
   byId('menu-scrim').addEventListener('click', closeMenu);
-  document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => { state.view = button.dataset.view; state.category = 'All'; state.limit = 60; closeMenu(); render(); }));
-  byId('clear-filters').addEventListener('click', () => { state.category = 'All'; state.view = 'all'; state.query = ''; search.value = ''; render(); });
-  byId('load-more').addEventListener('click', () => { state.limit += 60; render(); });
+  document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => { state.view = button.dataset.view; state.category = 'All'; closeMenu(); loadList(true); }));
+  byId('clear-filters').addEventListener('click', () => { state.category = 'All'; state.view = 'all'; state.query = ''; search.value = ''; loadList(true); });
+  byId('load-more').addEventListener('click', () => loadList(false));
   byId('shuffle').addEventListener('click', randomGame);
   byId('player-back').addEventListener('click', () => closePlayer());
   byId('player-fullscreen').addEventListener('click', () => frame.requestFullscreen?.().catch(() => {}));
@@ -460,5 +412,6 @@
     .then(response => response.ok ? response.json() : { authenticated: false })
     .then(updateRewardUi)
     .catch(() => { byId('player-reward').textContent = 'Rewards temporarily unavailable'; });
-  loadCatalog();
+  loadSummary();
+  loadList(true);
 })();

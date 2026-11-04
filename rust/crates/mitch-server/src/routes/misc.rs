@@ -34,6 +34,9 @@ pub async fn handle(
     body: &serde_json::Value,
     body_bytes: &[u8],
 ) -> Option<Response> {
+    if let Some(response) = crate::routes::portal_catalog::handle(state, method, path, _search) {
+        return Some(response);
+    }
     if path == "/api/access/status" && *method == Method::GET {
         return Some(json_resp(
             200,

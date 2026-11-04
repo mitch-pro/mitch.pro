@@ -421,9 +421,21 @@ fn manifest_response(manifest: serde_json::Value) -> Response {
         .expect("static response")
 }
 
+/// While false, `/games/` serves its own page instead of redirecting to
+/// `/game-portal/`. Switch it back on to restore the redirect.
+const GAMES_LIBRARY_REDIRECT_ENABLED: bool = false;
+
 /// Keep old catalog bookmarks on the current library without redirecting any
-/// playable `/games/<slug>/` pages or API requests.
+/// playable `/games/<slug>/` pages or API requests (see
+/// [`GAMES_LIBRARY_REDIRECT_ENABLED`]).
 fn games_library_redirect(path: &str, method: &Method, search: &str) -> Option<Response> {
+    if !GAMES_LIBRARY_REDIRECT_ENABLED {
+        return None;
+    }
+    legacy_catalog_redirect(path, method, search)
+}
+
+fn legacy_catalog_redirect(path: &str, method: &Method, search: &str) -> Option<Response> {
     if !matches!(*method, Method::GET | Method::HEAD)
         || !matches!(
             path,
@@ -2407,11 +2419,11 @@ mod games_library_tests {
             "/games/index.htm",
         ] {
             for method in [Method::GET, Method::HEAD] {
-                let response = games_library_redirect(path, &method, "q=run%203").unwrap();
+                let response = legacy_catalog_redirect(path, &method, "q=run%203").unwrap();
                 assert_eq!(response.status(), 302);
                 assert_eq!(response.headers()["location"], "/game-portal/?q=run%203");
             }
-            assert!(games_library_redirect(path, &Method::POST, "").is_none());
+            assert!(legacy_catalog_redirect(path, &Method::POST, "").is_none());
         }
         for path in [
             "/games/run3/",
@@ -2419,7 +2431,7 @@ mod games_library_tests {
             "/api/games",
             "/game-portal/",
         ] {
-            assert!(games_library_redirect(path, &Method::GET, "").is_none());
+            assert!(legacy_catalog_redirect(path, &Method::GET, "").is_none());
         }
     }
 }
@@ -2523,5 +2535,12 @@ mod host_tests {
         .await;
         assert!(location(&resp).starts_with("https://mitchdog.com/enroll/?next="));
         std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn the_redirect_is_off_while_the_switch_is_off() {
+        for path in ["/games", "/games/", "/games/index.html"] {
+            assert!(games_library_redirect(path, &Method::GET, "").is_none());
+        }
     }
 }
