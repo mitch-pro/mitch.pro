@@ -1552,8 +1552,7 @@ async fn suggest(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) 
     let account = mitch_lib::auth::names_get_email(&state.store, &user_id)
         .filter(|e| e.contains('@'))
         .unwrap_or_default();
-    if mitch_lib::feedback::add(&state.store, &sug_type, &text, &account, now_ms()).is_none()
-    {
+    if mitch_lib::feedback::add(&state.store, &sug_type, &text, &account, now_ms()).is_none() {
         return json_resp(
             500,
             json!({ "success": false, "message": "Could not save that. Try again." }),
