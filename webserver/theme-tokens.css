@@ -155,10 +155,33 @@
   --t-ac3: #ffd1df;
 }
 
-/* Holiday themes (see site-theme.js for the dates). These sit last so they win
-   over the default palettes above; a custom accent set from Preferences is an
-   inline style on <html> and still wins over them. */
-/* Thanksgiving: warm autumn */
+/* Holiday themes (dates in site-theme.js, docs/holiday-themes.md). These sit
+   last so they win over the default palettes above; a custom accent set from
+   Preferences is an inline style on <html> and still wins over them. Each theme
+   has a light palette, a dark palette, and the same dark palette inside the
+   prefers-color-scheme query for visitors with no manual light/dark choice. */
+/* Halloween: pumpkin orange on deep purple */
+:root[data-holiday="halloween"] {
+  --t-bg: #fbf3e8; --t-bg2: #fffdf8; --t-bg3: #f1e2cf;
+  --t-fg: #2a1f2f; --t-fg2: #7a6477; --t-fg3: #7a6477;
+  --t-ac: #c2530a; --t-ac-ink: #ffffff; --t-ac2: #a24408; --t-ac3: #a24408;
+  --t-bd: #e8d5bd; --t-bda: #d5bc9a; --t-gls: #fdeadb; --t-gr: #c2530a;
+}
+:root[data-holiday="halloween"][data-theme="dark"] {
+  --t-bg: #15111b; --t-bg2: #1f1829; --t-bg3: #291f36;
+  --t-fg: #f6efe6; --t-fg2: #b9a9bd; --t-fg3: #92829a;
+  --t-ac: #ff8a1f; --t-ac-ink: #1a1006; --t-ac2: #ffa24d; --t-ac3: #ffa24d;
+  --t-bd: #372a47; --t-bda: #503d66; --t-gls: #33210f; --t-gr: #ff8a1f;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-holiday="halloween"]:not([data-theme="light"]) {
+    --t-bg: #15111b; --t-bg2: #1f1829; --t-bg3: #291f36;
+    --t-fg: #f6efe6; --t-fg2: #b9a9bd; --t-fg3: #92829a;
+    --t-ac: #ff8a1f; --t-ac-ink: #1a1006; --t-ac2: #ffa24d; --t-ac3: #ffa24d;
+    --t-bd: #372a47; --t-bda: #503d66; --t-gls: #33210f; --t-gr: #ff8a1f;
+  }
+}
+/* Thanksgiving: warm cream and amber */
 :root[data-holiday="thanksgiving"] {
   --t-bg: #faf5ee; --t-bg2: #fffdf9; --t-bg3: #f1e7d8;
   --t-fg: #2a2118; --t-fg2: #7a6853; --t-fg3: #7a6853;
@@ -179,24 +202,95 @@
     --t-bd: #3b332b; --t-bda: #544838; --t-gls: #35261a; --t-gr: #f28c38;
   }
 }
-/* Christmas: red and evergreen */
+/* Christmas: evergreen surfaces with red accents */
 :root[data-holiday="christmas"] {
-  --t-bg: #f4f8f3; --t-bg2: #ffffff; --t-bg3: #e5eee3;
-  --t-fg: #1b2a20; --t-fg2: #5c6e62; --t-fg3: #5c6e62;
-  --t-ac: #c0282f; --t-ac-ink: #ffffff; --t-ac2: #a11f25; --t-ac3: #a11f25;
-  --t-bd: #d6e3d3; --t-bda: #bdd0b8; --t-gls: #fbe9ea; --t-gr: #c0282f;
+  --t-bg: #e9f4ea; --t-bg2: #fbfffb; --t-bg3: #d3e8d5;
+  --t-fg: #14281b; --t-fg2: #4f6a58; --t-fg3: #4f6a58;
+  --t-ac: #b3151f; --t-ac-ink: #ffffff; --t-ac2: #8f1019; --t-ac3: #8f1019;
+  --t-bd: #bcd8c0; --t-bda: #9cc3a2; --t-gls: #fbe1e3; --t-gr: #b3151f;
 }
 :root[data-holiday="christmas"][data-theme="dark"] {
-  --t-bg: #121815; --t-bg2: #1b231e; --t-bg3: #232d27;
-  --t-fg: #f3f6f1; --t-fg2: #a9b8ae; --t-fg3: #86978b;
-  --t-ac: #ec5a5f; --t-ac-ink: #ffffff; --t-ac2: #ff7a7e; --t-ac3: #ff7a7e;
-  --t-bd: #2f3d35; --t-bda: #42574a; --t-gls: #35191c; --t-gr: #ec5a5f;
+  --t-bg: #0a1f14; --t-bg2: #112d1d; --t-bg3: #173b26;
+  --t-fg: #f6f4ea; --t-fg2: #b4cdb9; --t-fg3: #8fae97;
+  --t-ac: #f0494f; --t-ac-ink: #ffffff; --t-ac2: #ff6f74; --t-ac3: #ff6f74;
+  --t-bd: #22503a; --t-bda: #33704f; --t-gls: #3a1a1d; --t-gr: #f0494f;
 }
 @media (prefers-color-scheme: dark) {
   :root[data-holiday="christmas"]:not([data-theme="light"]) {
-    --t-bg: #121815; --t-bg2: #1b231e; --t-bg3: #232d27;
-    --t-fg: #f3f6f1; --t-fg2: #a9b8ae; --t-fg3: #86978b;
-    --t-ac: #ec5a5f; --t-ac-ink: #ffffff; --t-ac2: #ff7a7e; --t-ac3: #ff7a7e;
-    --t-bd: #2f3d35; --t-bda: #42574a; --t-gls: #35191c; --t-gr: #ec5a5f;
+    --t-bg: #0a1f14; --t-bg2: #112d1d; --t-bg3: #173b26;
+    --t-fg: #f6f4ea; --t-fg2: #b4cdb9; --t-fg3: #8fae97;
+    --t-ac: #f0494f; --t-ac-ink: #ffffff; --t-ac2: #ff6f74; --t-ac3: #ff6f74;
+    --t-bd: #22503a; --t-bda: #33704f; --t-gls: #3a1a1d; --t-gr: #f0494f;
   }
+}
+/* New Year's: midnight navy and gold */
+:root[data-holiday="newyear"] {
+  --t-bg: #f6f5fb; --t-bg2: #ffffff; --t-bg3: #e6e4f3;
+  --t-fg: #1a1a33; --t-fg2: #5d5c80; --t-fg3: #5d5c80;
+  --t-ac: #2d3fa3; --t-ac-ink: #ffffff; --t-ac2: #223087; --t-ac3: #223087;
+  --t-bd: #d8d6ec; --t-bda: #bcb9de; --t-gls: #e8ebfa; --t-gr: #2d3fa3;
+}
+:root[data-holiday="newyear"][data-theme="dark"] {
+  --t-bg: #0c1022; --t-bg2: #141a33; --t-bg3: #1c2445;
+  --t-fg: #f4f4fb; --t-fg2: #aeb3d4; --t-fg3: #868cb3;
+  --t-ac: #f5c451; --t-ac-ink: #1c1403; --t-ac2: #ffd77a; --t-ac3: #ffd77a;
+  --t-bd: #283159; --t-bda: #3b4880; --t-gls: #2b2512; --t-gr: #f5c451;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-holiday="newyear"]:not([data-theme="light"]) {
+    --t-bg: #0c1022; --t-bg2: #141a33; --t-bg3: #1c2445;
+    --t-fg: #f4f4fb; --t-fg2: #aeb3d4; --t-fg3: #868cb3;
+    --t-ac: #f5c451; --t-ac-ink: #1c1403; --t-ac2: #ffd77a; --t-ac3: #ffd77a;
+    --t-bd: #283159; --t-bda: #3b4880; --t-gls: #2b2512; --t-gr: #f5c451;
+  }
+}
+/* Valentine's: rose */
+:root[data-holiday="valentines"] {
+  --t-bg: #fff4f6; --t-bg2: #fffdfd; --t-bg3: #fbe1e7;
+  --t-fg: #2e1820; --t-fg2: #80586a; --t-fg3: #80586a;
+  --t-ac: #c8265e; --t-ac-ink: #ffffff; --t-ac2: #a31e4d; --t-ac3: #a31e4d;
+  --t-bd: #f3cdd7; --t-bda: #e8aebf; --t-gls: #fde3ec; --t-gr: #c8265e;
+}
+:root[data-holiday="valentines"][data-theme="dark"] {
+  --t-bg: #1b1017; --t-bg2: #27161f; --t-bg3: #331c29;
+  --t-fg: #fbeff3; --t-fg2: #c4a3b1; --t-fg3: #9d7c8b;
+  --t-ac: #ff5d8f; --t-ac-ink: #1f0610; --t-ac2: #ff85ab; --t-ac3: #ff85ab;
+  --t-bd: #43232f; --t-bda: #5f3445; --t-gls: #3a1523; --t-gr: #ff5d8f;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-holiday="valentines"]:not([data-theme="light"]) {
+    --t-bg: #1b1017; --t-bg2: #27161f; --t-bg3: #331c29;
+    --t-fg: #fbeff3; --t-fg2: #c4a3b1; --t-fg3: #9d7c8b;
+    --t-ac: #ff5d8f; --t-ac-ink: #1f0610; --t-ac2: #ff85ab; --t-ac3: #ff85ab;
+    --t-bd: #43232f; --t-bda: #5f3445; --t-gls: #3a1523; --t-gr: #ff5d8f;
+  }
+}
+
+/* Christmas string lights along the top edge, twinkling in two alternating sets. */
+html[data-holiday="christmas"]::before,
+html[data-holiday="christmas"]::after {
+  content: ""; position: fixed; top: 0; left: 0; right: 0; height: 9px;
+  pointer-events: none; z-index: 2147482999; background-repeat: repeat-x; background-size: 96px 9px;
+}
+html[data-holiday="christmas"]::before {
+  background-image:
+    radial-gradient(circle at 12px 5px, #ff3b3b 0 3.2px, rgba(255, 59, 59, .35) 3.2px 5px, transparent 5.4px),
+    radial-gradient(circle at 60px 5px, #3fe27a 0 3.2px, rgba(63, 226, 122, .35) 3.2px 5px, transparent 5.4px),
+    linear-gradient(rgba(20, 40, 28, .55), rgba(20, 40, 28, .55));
+  background-size: 96px 9px, 96px 9px, 100% 1px;
+  background-repeat: repeat-x, repeat-x, no-repeat;
+  animation: holiday-twinkle-a 2.6s ease-in-out infinite;
+}
+html[data-holiday="christmas"]::after {
+  background-image:
+    radial-gradient(circle at 36px 5px, #ffd24a 0 3.2px, rgba(255, 210, 74, .35) 3.2px 5px, transparent 5.4px),
+    radial-gradient(circle at 84px 5px, #4aa3ff 0 3.2px, rgba(74, 163, 255, .35) 3.2px 5px, transparent 5.4px);
+  animation: holiday-twinkle-b 2.6s ease-in-out infinite;
+}
+@keyframes holiday-twinkle-a { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@keyframes holiday-twinkle-b { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+html.theme-no-motion[data-holiday="christmas"]::before,
+html.theme-no-motion[data-holiday="christmas"]::after { animation: none; opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  html[data-holiday="christmas"]::before, html[data-holiday="christmas"]::after { animation: none; opacity: 1; }
 }

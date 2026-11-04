@@ -250,11 +250,13 @@ mod tests {
 }
 
 /// Line put in front of `/site-theme.js` when the server pins a holiday theme
-/// (`MITCH_HOLIDAY_THEME` = `christmas`, `thanksgiving` or `none`). Anything
+/// (`MITCH_HOLIDAY_THEME` = `halloween`, `thanksgiving`, `christmas`, `newyear`, `valentines` or `none`). Anything
 /// else, or nothing, pins nothing and the theme follows the date.
 pub fn holiday_pin_prefix(value: Option<&str>) -> String {
     match value.map(str::trim) {
-        Some(v @ ("christmas" | "thanksgiving" | "none")) => {
+        Some(
+            v @ ("halloween" | "thanksgiving" | "christmas" | "newyear" | "valentines" | "none"),
+        ) => {
             format!("window.__holidayForce=\"{v}\";\n")
         }
         _ => String::new(),

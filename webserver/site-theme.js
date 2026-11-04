@@ -116,10 +116,14 @@
     root.classList.toggle('theme-no-motion', reducedMotion);
   }
 
-  // Holiday themes: autumn colors from Nov 1 through Thanksgiving Day, winter
-  // colors from the day after Thanksgiving through Dec 26. Thanksgiving is the
-  // fourth Thursday of November. The palettes live in theme-tokens.css
-  // (html[data-holiday]); a custom accent from Preferences still wins.
+  // Holiday themes by date (local calendar):
+  //   Halloween    Oct 15 - Oct 31
+  //   Thanksgiving Nov 1 - Thanksgiving Day (fourth Thursday of November)
+  //   Christmas    the day after Thanksgiving - Dec 26
+  //   New Year's   Dec 27 - Jan 3
+  //   Valentine's  Feb 7 - Feb 14
+  // The palettes live in theme-tokens.css (html[data-holiday]); a custom accent
+  // from Preferences still wins. Keep seasonFor in mitch_lib::seasons in step.
   function thanksgivingDay(year) {
     var firstThursday = 1 + ((4 - new Date(year, 10, 1).getDay() + 7) % 7);
     return firstThursday + 21;
@@ -127,14 +131,17 @@
 
   function holidayFor(now) {
     var month = now.getMonth(), day = now.getDate();
+    if (month === 9) return day >= 15 ? 'halloween' : '';
     if (month === 10) return day <= thanksgivingDay(now.getFullYear()) ? 'thanksgiving' : 'christmas';
-    if (month === 11) return day <= 26 ? 'christmas' : '';
+    if (month === 11) return day <= 26 ? 'christmas' : 'newyear';
+    if (month === 0) return day <= 3 ? 'newyear' : '';
+    if (month === 1) return day >= 7 && day <= 14 ? 'valentines' : '';
     return '';
   }
 
   // A server run can pin the season (MITCH_HOLIDAY_THEME, see docs/holiday-themes.md):
   // the server puts window.__holidayForce in front of this script.
-  var SEASONS = { thanksgiving: 1, christmas: 1 };
+  var SEASONS = { halloween: 1, thanksgiving: 1, christmas: 1, newyear: 1, valentines: 1 };
 
   // The theme that is in season: the server's pinned one, else by date.
   function holidaySeason() {
@@ -161,7 +168,7 @@
     else if (name && !loadingFx) {
       loadingFx = true;
       var script = document.createElement('script');
-      script.src = '/holiday-fx.js?v=1';
+      script.src = '/holiday-fx.js?v=2';
       script.defer = true;
       document.head.appendChild(script);
     }

@@ -1,14 +1,17 @@
 # Holiday themes
 
-Two seasonal looks, switched on by date:
+Five seasonal looks, switched on by date (the visitor's local calendar):
 
 | Theme | Active | Look |
 | --- | --- | --- |
-| Thanksgiving | Nov 1 through Thanksgiving Day | warm cream and amber, falling leaves |
-| Christmas | the day after Thanksgiving through Dec 26 | red and evergreen, falling snow |
+| Halloween | Oct 15 – Oct 31 | pumpkin orange on deep purple, rising embers |
+| Thanksgiving | Nov 1 – Thanksgiving Day | warm cream and amber, falling leaves |
+| Christmas | the day after Thanksgiving – Dec 26 | evergreen surfaces, red accents, snow and twinkling string lights along the top edge |
+| New Year's | Dec 27 – Jan 3 | midnight navy and gold, confetti |
+| Valentine's | Feb 7 – Feb 14 | rose, floating hearts |
 
 Thanksgiving is the fourth Thursday of November (Nov 26 in 2026, so Christmas
-starts Nov 27 that year). The dates use the visitor's local calendar.
+starts Nov 27 that year).
 
 ## How it works
 
@@ -20,8 +23,9 @@ starts Nov 27 that year). The dates use the visitor's local calendar.
   site uses, so pages follow without changes. A custom accent chosen in
   Preferences is an inline style on `<html>` and still wins over the holiday
   accent.
-- `webserver/holiday-fx.js` draws the leaves or snow on a pointer-transparent
-  canvas. It is loaded only while a holiday is active, pauses when the tab is
+- `webserver/holiday-fx.js` draws the leaves, snow, embers, confetti or hearts on a pointer-transparent
+  canvas (Christmas's string lights are CSS on `<html>`'s pseudo-elements in
+  `theme-tokens.css`). It is loaded only while a holiday is active, pauses when the tab is
   hidden, and does not run with reduced motion, with Animations off in
   Preferences, or on `/vms/desktop`.
 - A pill on the homepage, right below the Private window toggle, says "Don't like
@@ -33,7 +37,7 @@ starts Nov 27 that year). The dates use the visitor's local calendar.
 
 ## Pinning a theme for a server run
 
-`MITCH_HOLIDAY_THEME=christmas|thanksgiving|none` (environment, see `.env.example`)
+`MITCH_HOLIDAY_THEME=halloween|thanksgiving|christmas|newyear|valentines|none` (environment, see `.env.example`)
 makes every page of that server use that theme regardless of the date. The server
 puts `window.__holidayForce` in front of `/site-theme.js` (`inject::holiday_pin_prefix`;
 unknown values are dropped). The Preferences opt-out and the homepage pill still
@@ -42,6 +46,6 @@ server: `MITCH_HOLIDAY_THEME=christmas PORT=8080 mitch-server`.
 
 ## Previewing
 
-Add `?holiday=thanksgiving`, `?holiday=christmas` or `?holiday=none` to a page's
+Add `?holiday=<name>` (any theme above) or `?holiday=none` to a page's
 address to force a theme for that visit. `node tests/test_holiday_theme.mjs`
 checks the date windows, including years where Thanksgiving falls on the 22nd.
