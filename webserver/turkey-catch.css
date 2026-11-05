@@ -1,0 +1,20 @@
+/* Catch the Turkey (turkey-catch.js), homepage, Thanksgiving season only. */
+.turkey-game[hidden] { display: none; }
+.turkey-game .home-section-heading { justify-content: space-between; }
+.turkey-best { color: var(--t-fg2); font-size: .85rem; font-weight: 600; }
+.turkey-stage { position: relative; overflow: hidden; border: 1px solid var(--t-bd); border-radius: var(--t-radius); background: var(--t-bg2); }
+.turkey-stage canvas { display: block; width: 100%; touch-action: none; cursor: none; outline: none; }
+.turkey-stage canvas:focus-visible { box-shadow: inset 0 0 0 2px var(--t-ac); }
+.turkey-hud { position: absolute; top: 10px; left: 14px; right: 14px; display: flex; justify-content: space-between; color: var(--t-fg); font-size: .9rem; font-weight: 600; pointer-events: none; }
+.turkey-hud #turkey-lives { color: var(--t-fg); }
+.turkey-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 20px; background: color-mix(in srgb, var(--t-bg2) 82%, transparent); text-align: center; }
+.turkey-overlay[hidden] { display: none; }
+.turkey-overlay p { max-width: 42ch; margin: 0; color: var(--t-fg2); font-size: .92rem; }
+.turkey-game .turkey-overlay button, .turkey-game .turkey-helper button { padding: 9px 20px; border: 0; border-radius: var(--t-radius-sm); background: var(--t-ac); color: var(--t-ac-ink); font: inherit; font-weight: 700; cursor: pointer; }
+.turkey-helper { display: flex; align-items: center; gap: 10px; margin-top: 10px; color: var(--t-fg2); font-size: .88rem; }
+.turkey-helper[hidden] { display: none; }
+.turkey-helper img { width: 32px; height: 32px; object-fit: contain; flex: 0 0 auto; }
+.turkey-helper span { flex: 1; }
+.turkey-game .turkey-helper button { padding: 7px 14px; background: var(--t-bg3); color: var(--t-fg); border: 1px solid var(--t-bd); }
+.turkey-helper button[hidden] { display: none; }
+.turkey-helper button:disabled { opacity: .6; }

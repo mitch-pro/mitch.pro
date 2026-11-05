@@ -14,6 +14,8 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"></noscript>
 <link rel="stylesheet" href="/app.css">
 <link rel="stylesheet" href="/home.css?v=20">
+<link rel="stylesheet" href="/turkey-catch.css?v=2">
+<script src="/turkey-catch.js?v=3" defer></script>
 <script defer src="/rjuhsd-assets/calendar.js?v=8"></script>
 <script src="/app-shell.js" defer></script>
 <script src="/home-friends.js?v=5" defer></script>
@@ -1603,6 +1605,19 @@ if (document.readyState === 'loading') {
       <span class="updates-chev" aria-hidden="true"></span>
     </button>
     <ol class="updates-list" id="home-updates-list" hidden></ol>
+  </section>
+
+  <section class="turkey-game" id="turkey-game" hidden aria-labelledby="turkey-title">
+    <div class="home-section-heading"><h2 id="turkey-title">Catch the turkey</h2><span class="turkey-best" id="turkey-best"></span></div>
+    <div class="turkey-stage">
+      <canvas id="turkey-canvas" tabindex="0" aria-label="Catch the turkey game. Move with the mouse, touch, or the arrow keys."></canvas>
+      <div class="turkey-hud" aria-live="polite"><span>Score <b id="turkey-score">0</b></span><span id="turkey-lives"></span></div>
+      <div class="turkey-overlay" id="turkey-overlay">
+        <p id="turkey-msg">Move the basket with the mouse, your finger or the arrow keys. Golden turkeys are worth 5. Don't catch the burnt ones. Miss three and the round ends.</p>
+        <button type="button" id="turkey-start">Play</button>
+      </div>
+    </div>
+    <div class="turkey-helper" id="turkey-helper" hidden><img id="turkey-helper-img" alt=""><span id="turkey-helper-text"></span><button type="button" id="turkey-sande" hidden>Sandevistan (S)</button></div>
   </section>
 
   <div class="home-section-heading"><h2>Shortcuts</h2></div>
