@@ -170,7 +170,7 @@
     margin-bottom: 0.45rem;
   }
   .live-period {
-    font-family: 'Outfit', system-ui, sans-serif;
+    font-family: var(--t-font);
     font-size: clamp(1.35rem, 3.5vw, 2rem);
     font-weight: 800;
     color: var(--t-fg);
@@ -191,7 +191,7 @@
     box-shadow: 0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset;
   }
   .card-title {
-    font-family: 'Outfit', system-ui, sans-serif;
+    font-family: var(--t-font);
     font-size: 1.05rem;
     font-weight: 750;
     margin: 0 0 0.9rem;
@@ -229,7 +229,7 @@
     font-size: 0.9rem;
     font-weight: 600;
     color: var(--t-fg);
-    font-family: 'Outfit', system-ui, sans-serif;
+    font-family: var(--t-font);
     display: flex;
     align-items: center;
     gap: 0.45rem;
@@ -249,7 +249,7 @@
   .period-duration { font-size: 0.7rem; color: color-mix(in srgb, var(--t-fg2) 80%, transparent); margin-top: 0.15rem; }
   .days-section { margin-top: 0.5rem; }
   .section-title {
-    font-family: 'Outfit', system-ui, sans-serif;
+    font-family: var(--t-font);
     font-size: 1rem;
     font-weight: 750;
     color: var(--t-fg);
@@ -271,7 +271,7 @@
     justify-content: space-between;
     align-items: center;
     cursor: pointer;
-    font-family: 'Outfit', system-ui, sans-serif;
+    font-family: var(--t-font);
     font-size: 0.9rem;
     font-weight: 700;
     color: var(--t-fg);
@@ -305,9 +305,7 @@
 <body class="bell-page">
 <main class="app-main bell-shell">
   <header class="page-head app-fade-in">
-    <div class="kicker"><span class="kicker-dot"></span> Live · Pacific Time</div>
-    <h1>Bell <span>Schedules</span></h1>
-    <p class="subline">Live tracking and period schedules for every RJUHSD school.</p>
+    <h1>Bell Schedules</h1>
   </header>
 
   <section class="bell-day-board" aria-label="Current schedule settings">

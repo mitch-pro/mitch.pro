@@ -23,15 +23,12 @@
       min-height: 3rem;
       padding: 0.45rem clamp(0.75rem, 2vw, 1.25rem);
       border-bottom: 1px solid var(--t-bd);
-      background:
-        linear-gradient(180deg, color-mix(in srgb, var(--t-bg) 88%, transparent), color-mix(in srgb, var(--t-bg2) 78%, transparent));
-      backdrop-filter: blur(14px) saturate(150%);
-      -webkit-backdrop-filter: blur(14px) saturate(150%);
+      background: var(--t-bg2);
       flex-shrink: 0;
       z-index: 50;
     }
     .tabs-brand {
-      font-family: 'Outfit', system-ui, sans-serif;
+      font-family: var(--t-font);
       font-weight: 800;
       font-size: 0.95rem;
       letter-spacing: -0.03em;
@@ -159,7 +156,6 @@
       align-items: center;
       justify-content: center;
       z-index: 500;
-      backdrop-filter: blur(8px);
     }
     .modal {
       background: var(--t-bg2);
@@ -167,12 +163,12 @@
       border-radius: calc(var(--t-radius, 8px) + 6px);
       padding: 1.5rem;
       width: min(500px, 92%);
-      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+      box-shadow: none;
       animation: app-fade-in 0.35s ease both;
     }
     .modal h3 {
       margin: 0 0 1rem;
-      font-family: 'Outfit', system-ui, sans-serif;
+      font-family: var(--t-font);
       font-size: 1.25rem;
       letter-spacing: -0.02em;
     }
@@ -285,12 +281,12 @@
 
       <label>Presets</label>
       <div class="presets">
-        <button class="preset-btn" onclick="setURL(location.origin)">🏠 mitch.pro (Home)</button>
-        <button class="preset-btn" onclick="setURL('https://www.google.com/search?igu=1')">🔍 Google Search</button>
-        <button class="preset-btn" onclick="setURL('https://www.bing.com')">🔎 Bing</button>
-        <button class="preset-btn" onclick="setURL('https://mitchdog.com/games/')">🎮 Arcade Hub</button>
-        <button class="preset-btn" onclick="setURL('https://en.wikipedia.org/wiki/Main_Page')">📖 Wikipedia</button>
-        <button class="preset-btn" onclick="setURL('https://puzzles.mitch.pro')">🧩 Chess Puzzles</button>
+        <button class="preset-btn" onclick="setURL(location.origin)">mitch.pro (Home)</button>
+        <button class="preset-btn" onclick="setURL('https://www.google.com/search?igu=1')">Google Search</button>
+        <button class="preset-btn" onclick="setURL('https://www.bing.com')">Bing</button>
+        <button class="preset-btn" onclick="setURL('https://mitchdog.com/games/')">Arcade Hub</button>
+        <button class="preset-btn" onclick="setURL('https://en.wikipedia.org/wiki/Main_Page')">Wikipedia</button>
+        <button class="preset-btn" onclick="setURL('https://puzzles.mitch.pro')">Chess Puzzles</button>
       </div>
 
       <div class="modal-actions">
