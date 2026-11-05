@@ -181,11 +181,15 @@ subsystem — no `server.js` equivalent.
   `mitch:companion-ready`): name, `imageUrl(mood)`, `hasUpgrade`,
   `inPsychosis`, `strain()`, `sandevistan()`, `act(name)` and `react(text)`
   (a silent chat message whose reply shows in the bubble). Used by the
-  homepage's Catch the Turkey game (`webserver/turkey-catch.js`): the
-  companion catches turkeys beside the basket, comments on the score at
-  the end of a round, and David's Sandevistan slows the turkeys (that use
-  builds strain like any other; in cyberpsychosis he grabs burnt turkeys
-  too). The game itself grants no coins.
+  homepage's Catch the Turkey game (`webserver/turkey-catch.js`, a full-page
+  overlay started from a pill next to the holiday pills): the companion
+  helps from the bottom of the screen and comments on the score at the end
+  of a round. It's a deliberately weak helper (slow, short reach, fumbles
+  often, ignores turkeys near your basket) and gets weaker as it goes: each
+  catch tires it for the rest of the round, and Sandevistan strain takes up
+  to 70% off its speed and grip. David's Sandevistan (S) slows the turkeys,
+  which builds strain like any other use; in cyberpsychosis he's erratic and
+  grabs burnt turkeys too. The game itself grants no coins.
 - **Prompt size.** Personality prompts can be up to 1 MB (bytes;
   `MAX_PROMPT_BYTES` in `routes/companion/admin.rs`, also used by `mine.rs`).
   `main.rs` raises the request-body cap for the three endpoints that take a
