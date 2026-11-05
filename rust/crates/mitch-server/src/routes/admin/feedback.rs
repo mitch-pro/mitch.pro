@@ -65,12 +65,21 @@ pub fn handle(
                 .iter()
                 .map(entry_json)
                 .collect();
-            json_response(200, json!({ "entries": entries, "counts": { "new": new, "handled": handled } }))
+            json_response(
+                200,
+                json!({ "entries": entries, "counts": { "new": new, "handled": handled } }),
+            )
         }
         ("POST", "/status") => {
             let status = body.get("status").and_then(Value::as_str).unwrap_or("");
             let email = ctx.email(state);
-            if db::set_status(&state.store, id, status, &email, mitch_lib::school::now_millis()) {
+            if db::set_status(
+                &state.store,
+                id,
+                status,
+                &email,
+                mitch_lib::school::now_millis(),
+            ) {
                 json_response(200, json!({ "ok": true }))
             } else {
                 json_response(404, json!({ "error": "That entry no longer exists." }))
