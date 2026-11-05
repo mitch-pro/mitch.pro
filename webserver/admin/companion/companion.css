@@ -133,3 +133,31 @@ html.theme-light .companion-form-panel button,
 html.theme-light .companion-default-tag {
   color: #fff;
 }
+
+.companion-ability-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border: 1px solid var(--t-bd, #333);
+  border-radius: 999px;
+  color: var(--t-fg2, #aaa);
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+.companion-ability {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0;
+  color: var(--t-fg2, #aaa);
+  font-size: 13px;
+}
+.companion-ability select {
+  padding: 5px 8px;
+  border: 1px solid var(--t-bd, #333);
+  border-radius: var(--t-radius-sm, 7px);
+  background: var(--t-bg3, #222);
+  color: var(--t-fg, #eee);
+  font: inherit;
+}

@@ -115,6 +115,10 @@ pub struct Capabilities {
     /// cooldown has elapsed. No opt-in needed.
     /// Gates whether `coinRequestPercent` is even mentioned in the prompt.
     pub allow_coin_requests: bool,
+    /// The character's special ability (`mitch_lib::companion::SPECIAL_ABILITIES`),
+    /// or empty. Adds one extra preset action of the same name, offered and
+    /// accepted only for this character.
+    pub special_ability: String,
 }
 
 /// Asks the character (identified by `personality_prompt`) to react to
@@ -145,7 +149,12 @@ pub async fn chat(
         )
     };
     let moods_list = moods.join(", ");
-    let actions_list = ACTIONS.join(", ");
+    let mut action_names: Vec<&str> = ACTIONS.to_vec();
+    if !caps.special_ability.is_empty() {
+        action_names.push(caps.special_ability.as_str());
+    }
+    let actions_list = action_names.join(", ");
+    let special_ability_instructions = special_ability_prompt(&caps.special_ability);
 
     let custom_js_instructions = if caps.allow_custom_js {
         "\"customJs\" is optional — a string of raw JavaScript to run on the page right now, \
@@ -194,7 +203,7 @@ pub async fn chat(
          \"action\" is optional — one of these exact names, spelled exactly as shown, if (and \
          only if) it fits what you're saying: {actions_list}. Leave it as an empty string most \
          turns; it's a physical reaction, not something to do every message. \
-         {custom_js_instructions}{coin_request_instructions}",
+         {special_ability_instructions}{custom_js_instructions}{coin_request_instructions}",
         email = user.email,
         display_name = user.display_name,
         balance = user.mitchcoin_balance,
@@ -282,7 +291,7 @@ pub async fn chat(
             reply: parsed.reply,
             mood: parsed.mood,
             remember: parsed.remember,
-            action: sanitize_action(&parsed.action),
+            action: sanitize_action(&parsed.action, &caps.special_ability),
             custom_js: if caps.allow_custom_js {
                 parsed.custom_js
             } else {
@@ -845,12 +854,35 @@ fn clean_plain_text_reply(text: &str) -> String {
 /// matches one of `ACTIONS`, else empty. This is the actual enforcement
 /// that only the fixed preset list can ever reach the widget — the prompt
 /// text asking for one of these names is a request, not a guarantee.
-fn sanitize_action(raw: &str) -> String {
+///
+/// `special_ability` (the character's own, or empty) is the one extra name
+/// accepted on top of `ACTIONS`, so a character without the ability can't
+/// trigger it even if the model names it.
+fn sanitize_action(raw: &str, special_ability: &str) -> String {
+    let raw = raw.trim();
+    if !special_ability.is_empty()
+        && mitch_lib::companion::SPECIAL_ABILITIES.contains(&special_ability)
+        && special_ability.eq_ignore_ascii_case(raw)
+    {
+        return special_ability.to_string();
+    }
     ACTIONS
         .iter()
-        .find(|a| a.eq_ignore_ascii_case(raw.trim()))
+        .find(|a| a.eq_ignore_ascii_case(raw))
         .map(|a| a.to_string())
         .unwrap_or_default()
+}
+
+/// What the model is told about its special ability, if it has one.
+fn special_ability_prompt(ability: &str) -> &'static str {
+    match ability {
+        "sandevistan" => {
+            "You have a Sandevistan implant: the \"sandevistan\" action makes you move faster \
+             than the eye can follow while the rest of the page slows down. Use it for dramatic \
+             moments, to show off, or when the person asks you to — not every turn. "
+        }
+        _ => "",
+    }
 }
 
 /// Simple keyword sniffing on the reply text itself, used whenever the
@@ -909,6 +941,17 @@ fn guess_mood(reply: &str, moods: &[String]) -> String {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn special_ability_action_only_for_its_character() {
+        assert_eq!(sanitize_action("Sandevistan", "sandevistan"), "sandevistan");
+        assert_eq!(sanitize_action("sandevistan", ""), "");
+        assert_eq!(sanitize_action("wave", "sandevistan"), "wave");
+        // An ability name that isn't in SPECIAL_ABILITIES is never honored.
+        assert_eq!(sanitize_action("teleport", "teleport"), "");
+        assert!(special_ability_prompt("sandevistan").contains("sandevistan"));
+        assert_eq!(special_ability_prompt(""), "");
+    }
 
     fn sample_moods() -> Vec<String> {
         vec![

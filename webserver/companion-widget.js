@@ -4,7 +4,7 @@
 
   var state = { enabled: false, activeCharacterId: '', characters: [] };
   var el = { root: null, sprite: null, bubble: null };
-  var phys = { x: 14, y: 0, vx: 0, vy: 0, dragging: false, lastMove: 0 };
+  var phys = { x: 14, y: 0, vx: 0, vy: 0, dragging: false, lastMove: 0, dashing: false };
   var imgCache = {};
   var currentMood = 'idle';
   var moods = ['idle'];
@@ -15,6 +15,13 @@
   // a pre-written CSS animation (see companion-widget.css); there is no
   // path from a character's `action` field to arbitrary code.
   var ACTIONS = ['spin', 'jump', 'shake', 'grow', 'shrink', 'wave', 'dance', 'peekaboo', 'confetti', 'nap'];
+
+  // Special abilities (SPECIAL_ABILITIES in mitch_lib::companion). The
+  // server only sends one as an `action` for a character that has it; the
+  // widget also checks the active character's own `specialAbility`.
+  var specialAbility = '';
+  var SANDEVISTAN_COOLDOWN_MS = 4000;
+  var lastSandevistanAt = -Infinity;
 
   // How hard a release has to be (px/frame, matching phys.vx/vy's units)
   // before it counts as a "throw" worth reacting to, and how long to wait
@@ -54,6 +61,7 @@
     if (!state.enabled || !state.activeCharacterId) return;
     var character = state.characters.filter(function (c) { return c.id === state.activeCharacterId; })[0];
     moods = (character && character.moods && character.moods.length) ? character.moods : ['idle'];
+    specialAbility = (character && character.specialAbility) || '';
     imgCache = {};
     preload(state.activeCharacterId, moods);
 
@@ -81,6 +89,10 @@
     phys.vy = 0;
     wireDrag(root);
     wireChat(root);
+    if (specialAbility === 'sandevistan') {
+      root.title = 'Double-click: Sandevistan';
+      root.addEventListener('dblclick', function (e) { e.preventDefault(); sandevistan(); });
+    }
     startPhysics();
   }
 
@@ -119,6 +131,7 @@
   // top-left) for as long as it runs. The sprite has no positioning
   // transform of its own, so animating it there is conflict-free.
   function playAction(name) {
+    if (name === 'sandevistan' && specialAbility === 'sandevistan') { sandevistan(); return; }
     if (!el.sprite || ACTIONS.indexOf(name) === -1) return;
     var cls = 'action-' + name;
     el.sprite.classList.remove.apply(el.sprite.classList, ACTIONS.map(function (a) { return 'action-' + a; }));
@@ -130,6 +143,101 @@
       el.sprite.classList.remove(cls);
       el.sprite.removeEventListener('animationend', handler);
     });
+  }
+
+  // Sandevistan: the companion zips through a few points on screen faster
+  // than the physics loop would ever move it, dropping fading afterimages
+  // along the way, while a tint washes over the page and the page's own CSS
+  // animations slow to a crawl (playbackRate), then everything snaps back.
+  // Pure presentation: inert divs/imgs that ignore the pointer, removed
+  // afterwards. Physics is paused via phys.dashing for the duration.
+  function sandevistan() {
+    if (!el.root || !el.sprite || phys.dashing) return;
+    var now = performance.now();
+    if (now - lastSandevistanAt < SANDEVISTAN_COOLDOWN_MS) return;
+    lastSandevistanAt = now;
+
+    var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var veil = document.createElement('div');
+    veil.className = 'companion-sandevistan-veil';
+    veil.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(veil);
+    var duration = reduced ? 700 : 1500;
+    setTimeout(function () { veil.classList.add('fading'); }, duration - 350);
+    setTimeout(function () { veil.remove(); }, duration + 50);
+    if (reduced) return;
+
+    // Slow everything else on the page that runs on CSS animations or the
+    // Web Animations API; our own afterimages are created after this.
+    var slowed = [];
+    if (document.getAnimations) {
+      document.getAnimations().forEach(function (a) {
+        try { a.updatePlaybackRate ? a.updatePlaybackRate(0.15) : (a.playbackRate = 0.15); slowed.push(a); } catch (e) { /* ignore */ }
+      });
+    }
+
+    var w = el.root.offsetWidth || 96;
+    var h = el.root.offsetHeight || 96;
+    var maxX = Math.max(0, window.innerWidth - w);
+    var floor = Math.max(0, window.innerHeight - h);
+    var points = [{ x: phys.x, y: phys.y }];
+    for (var i = 0; i < 4; i++) {
+      points.push({ x: Math.random() * maxX, y: floor * (0.35 + Math.random() * 0.65) });
+    }
+    points.push({ x: Math.random() * maxX, y: floor });
+
+    var LEG_MS = 170;
+    var start = performance.now();
+    var lastGhost = 0;
+    var hues = [150, 190, 300, 330];
+    var ghostIndex = 0;
+    phys.dashing = true;
+    el.root.classList.add('sandevistan-active');
+
+    function ghost(x, y) {
+      var g = document.createElement('img');
+      g.className = 'companion-afterimage';
+      g.src = el.sprite.src;
+      g.alt = '';
+      g.setAttribute('aria-hidden', 'true');
+      g.style.width = w + 'px';
+      g.style.height = h + 'px';
+      g.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+      g.style.setProperty('--ghost-hue', hues[ghostIndex++ % hues.length] + 'deg');
+      document.body.appendChild(g);
+      setTimeout(function () { g.remove(); }, 700);
+    }
+
+    function step(t) {
+      if (!el.root) return finish();
+      // rAF timestamps are the frame's start time, which can be a hair
+      // earlier than `start`; clamp so the first leg index is never -1.
+      var elapsed = Math.max(0, t - start);
+      var leg = Math.floor(elapsed / LEG_MS);
+      if (leg >= points.length - 1) return finish();
+      var k = (elapsed % LEG_MS) / LEG_MS;
+      var ease = k * k * (3 - 2 * k);
+      var a = points[leg], b = points[leg + 1];
+      phys.x = a.x + (b.x - a.x) * ease;
+      phys.y = a.y + (b.y - a.y) * ease;
+      el.root.style.transform = 'translate(' + phys.x + 'px,' + phys.y + 'px)';
+      if (t - lastGhost > 28) { lastGhost = t; ghost(phys.x, phys.y); }
+      requestAnimationFrame(safeStep);
+    }
+    // Any failure mid-dash must still hand control back to physics.
+    function safeStep(t) {
+      try { step(t); } catch (e) { finish(); }
+    }
+    function finish() {
+      var last = points[points.length - 1];
+      phys.x = last.x; phys.y = last.y; phys.vx = 0; phys.vy = 0;
+      phys.dashing = false;
+      if (el.root) el.root.classList.remove('sandevistan-active');
+      slowed.forEach(function (a) {
+        try { a.updatePlaybackRate ? a.updatePlaybackRate(1) : (a.playbackRate = 1); } catch (e) { /* ignore */ }
+      });
+    }
+    requestAnimationFrame(safeStep);
   }
 
   // Auto-repairs common LLM JavaScript syntax errors:
@@ -340,6 +448,7 @@
       var h = el.root.offsetHeight || 96;
       var floor = window.innerHeight - h;
 
+      if (phys.dashing) { rafId = requestAnimationFrame(tick); return; }
       if (!phys.dragging) {
         phys.vy += GRAVITY;
         if (now - lastWander > 4000 + Math.random() * 4000) {

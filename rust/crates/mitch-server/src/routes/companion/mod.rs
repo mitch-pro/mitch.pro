@@ -122,6 +122,7 @@ fn list_characters(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
                 "priceCoins": c.price_coins,
                 "unlocked": unlocked,
                 "moods": c.moods,
+                "specialAbility": c.special_ability,
             })
         })
         .collect();
@@ -254,6 +255,7 @@ async fn chat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> 
                 &email,
                 &character.id,
             ),
+        special_ability: character.special_ability.clone(),
     };
 
     match deepseek::chat(

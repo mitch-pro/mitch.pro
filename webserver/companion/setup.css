@@ -63,6 +63,13 @@
   margin-top: 2px;
 }
 
+.companion-setup-card .companion-setup-card-ability {
+  margin-top: 2px;
+  color: var(--t-ac);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 #companion-setup-save {
   padding: 9px 18px;
   border-radius: var(--t-radius-sm);

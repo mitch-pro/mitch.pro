@@ -155,7 +155,7 @@ pub fn inject_page(
         // renders nothing at all unless the viewer has it enabled — safe to
         // load on every page the same way popup.js/pwa-install.js are.
         if !raw.contains("/companion-widget.js") {
-            inject_str.push_str("<script src=\"/companion-widget.js?v=1\" defer></script>\n<link rel=\"stylesheet\" href=\"/companion-widget.css\">\n");
+            inject_str.push_str("<script src=\"/companion-widget.js?v=2\" defer></script>\n<link rel=\"stylesheet\" href=\"/companion-widget.css?v=2\">\n");
         }
         if !raw.contains("name=\"viewport\"") {
             inject_str.push_str("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content\">\n");

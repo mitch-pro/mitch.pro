@@ -109,6 +109,9 @@ pub async fn handle(
     if path == "/api/admin/companion/characters/set-default" && *method == Method::POST {
         return Some(set_default(state, body_bytes));
     }
+    if path == "/api/admin/companion/characters/special-ability" && *method == Method::POST {
+        return Some(set_special_ability(state, body_bytes));
+    }
     if path == "/api/admin/companion/characters/mark-reviewed" && *method == Method::POST {
         return Some(mark_reviewed(state, body_bytes));
     }
@@ -136,10 +139,14 @@ fn list(state: &Arc<AppState>) -> Response {
                 "creatorEmail": c.creator_email,
                 "priceCoins": c.price_coins,
                 "moods": c.moods,
+                "specialAbility": c.special_ability,
             })
         })
         .collect();
-    json_response(200, json!({ "characters": out }))
+    json_response(
+        200,
+        json!({ "characters": out, "specialAbilities": mitch_lib::companion::SPECIAL_ABILITIES }),
+    )
 }
 
 /// Parses and validates a price field shared with the user-facing
@@ -189,6 +196,23 @@ fn upsert(state: &Arc<AppState>, body_bytes: &[u8]) -> Response {
     }
     mitch_lib::companion::update_character(&state.store, &id, &name, &prompt, price);
     json_response(200, json!({ "ok": true, "id": id }))
+}
+
+/// `{id, ability}` — `ability` is one of `SPECIAL_ABILITIES` or `""` to clear.
+fn set_special_ability(state: &Arc<AppState>, body_bytes: &[u8]) -> Response {
+    let Some(body) = parse_body_strict(body_bytes) else {
+        return json_response(400, json!({ "error": "bad json" }));
+    };
+    let id = str_or(body.get("id"), "");
+    let ability = str_or(body.get("ability"), "").trim().to_string();
+    if !ability.is_empty() && !mitch_lib::companion::SPECIAL_ABILITIES.contains(&ability.as_str()) {
+        return json_response(400, json!({ "error": "unknown ability" }));
+    }
+    if mitch_lib::companion::set_special_ability(&state.store, &id, &ability) {
+        json_response(200, json!({ "ok": true }))
+    } else {
+        json_response(404, json!({ "error": "character not found" }))
+    }
 }
 
 fn mark_reviewed(state: &Arc<AppState>, body_bytes: &[u8]) -> Response {

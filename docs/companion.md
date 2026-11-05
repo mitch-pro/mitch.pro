@@ -136,6 +136,26 @@ subsystem — no `server.js` equivalent.
   `playAction`. Always offered to every character regardless of review
   status — these are animations, not code, so there's nothing for the
   review gate to protect against here.
+- **Special abilities.** A character can carry one admin-assigned ability
+  (`companion_characters.special_ability`, one of `SPECIAL_ABILITIES` in
+  `mitch_lib::companion`; set from the "Special ability" picker on
+  `/admin/companion/` via `POST /api/admin/companion/characters/special-ability`
+  `{id, ability}`, `""` to clear). Users can't set it on their own
+  characters. Each ability adds one extra preset action of the same name:
+  the prompt tells only that character about it (`special_ability_prompt`
+  in `deepseek.rs`) and `sanitize_action` only accepts the name for a
+  character that has it. Animation only, no coin effect.
+  - `sandevistan`: `sandevistan()` in `companion-widget.js` pauses physics
+    (`phys.dashing`), dashes the companion through a few random points
+    with fading hue-shifted afterimages, tints the page, and slows the
+    page's own CSS/Web Animations to 0.15× until it finishes (about 1.5s).
+    Reduced motion gets only the tint. Also triggered by double-clicking
+    the companion (4s cooldown).
+  - **David Martinez** (`id = david-martinez`) is a free, reviewed preset
+    with `sandevistan`, inserted by the same migration that adds the
+    column (`seed_david_martinez`), so it runs once: deleting him on
+    `/admin/companion/` is permanent. His images are uploaded by admins
+    like any other character's.
 - **Custom JS execution.** The chat response can also include a
   `customJs` field — raw JavaScript the widget runs via `new
   Function(code)()`. Only ever populated server-side when the active
@@ -235,7 +255,8 @@ shell or add it to the untracked `.env`.
 ## Data model
 
 - `companion_characters` (id, name, personality_prompt, is_preset,
-  is_default, needs_review, creator_email, price_coins, timestamps) —
+  is_default, needs_review, creator_email, price_coins, special_ability,
+  timestamps) —
   `creator_email == ''` for admin presets, a real email for user-made
   characters.
 - `companion_character_images` (character_id, mood, file, updated_at) — one

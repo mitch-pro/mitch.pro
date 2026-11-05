@@ -687,6 +687,21 @@ impl DataStore {
                 [],
             )?;
         }
+        let has_companion_special_ability = conn
+            .prepare("PRAGMA table_info(companion_characters)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+            .iter()
+            .any(|name| name == "special_ability");
+        if !has_companion_special_ability {
+            conn.execute(
+                "ALTER TABLE companion_characters ADD COLUMN special_ability TEXT NOT NULL DEFAULT ''",
+                [],
+            )?;
+            // Seeded together with the column so it happens exactly once:
+            // an admin deleting David later doesn't bring him back.
+            crate::companion::seed_david_martinez(&conn)?;
+        }
 
         // Repairs rows written before upsert_values' INSERT started
         // wrapping template_vmid in NULLIF(?, '') — a record with no

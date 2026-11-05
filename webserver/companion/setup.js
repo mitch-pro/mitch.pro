@@ -106,6 +106,7 @@
       card.innerHTML =
         (thumbMood ? '<img src="' + imageUrl(c.id, thumbMood) + '" alt="">' : '') +
         '<div class="companion-setup-card-name">' + escapeHtml(c.name) + '</div>' +
+        (c.specialAbility === 'sandevistan' ? '<div class="companion-setup-card-ability">Sandevistan</div>' : '') +
         (c.priceCoins > 0 ? '<div class="companion-setup-card-price">' + c.priceCoins + ' coins</div>' : '') +
         (!c.unlocked ? '<button type="button" class="companion-unlock-btn">Unlock for ' + c.priceCoins + ' coins</button>' : '');
       if (c.unlocked) {

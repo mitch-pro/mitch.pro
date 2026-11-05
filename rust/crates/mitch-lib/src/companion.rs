@@ -57,7 +57,25 @@ pub struct Character {
     pub creator_email: String,
     pub price_coins: f64,
     pub moods: Vec<String>,
+    /// One of `SPECIAL_ABILITIES`, or empty. Admin-assigned only (never
+    /// settable through the user-facing custom-character endpoints).
+    pub special_ability: String,
 }
+
+/// Character-specific powers beyond the shared preset actions. Each name
+/// unlocks one extra preset action of the same name in chat
+/// (`deepseek.rs`) and a matching pre-written effect in
+/// `companion-widget.js` — still animation only, never code, and with no
+/// effect on coins. Assigned per character by admins on `/admin/companion/`.
+///
+/// - `sandevistan`: the character dashes around the screen leaving
+///   afterimages while the rest of the page slows down for a moment.
+pub const SPECIAL_ABILITIES: &[&str] = &["sandevistan"];
+
+/// The preset David Martinez seeds with: a street kid turned edgerunner
+/// with a Sandevistan implant. Images are uploaded by admins as usual.
+pub const DAVID_MARTINEZ_ID: &str = "david-martinez";
+const DAVID_MARTINEZ_PROMPT: &str = "David Martinez, a teenager from a rough city who dropped out of an elite academy and became an edgerunner, a mercenary for hire. He is loyal, impulsive, warm with friends and stubborn about doing things his own way. He has a military-grade Sandevistan implant in his spine that lets him move so fast the world seems to stand still, and he is proud of it, a little reckless with it, and aware it takes a toll on his body. He talks casually, with street slang and big dreams about making it to the top.";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct UserSettings {
@@ -87,7 +105,7 @@ fn moods_for(store: &DataStore, character_id: &str) -> Vec<String> {
 
 /// Every character (presets first, then user-made, newest first within
 /// each group) — the public `/api/companion/characters` listing.
-type CharacterRow = (String, String, String, i64, i64, i64, String, f64);
+type CharacterRow = (String, String, String, i64, i64, i64, String, f64, String);
 
 fn row_to_character(store: &DataStore, row: CharacterRow) -> Character {
     let (
@@ -99,6 +117,7 @@ fn row_to_character(store: &DataStore, row: CharacterRow) -> Character {
         needs_review,
         creator_email,
         price_coins,
+        special_ability,
     ) = row;
     let moods = moods_for(store, &id);
     Character {
@@ -111,11 +130,12 @@ fn row_to_character(store: &DataStore, row: CharacterRow) -> Character {
         creator_email,
         price_coins,
         moods,
+        special_ability,
     }
 }
 
 const CHARACTER_COLUMNS: &str =
-    "id, name, personality_prompt, is_preset, is_default, needs_review, creator_email, price_coins";
+    "id, name, personality_prompt, is_preset, is_default, needs_review, creator_email, price_coins, special_ability";
 
 fn map_character_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterRow> {
     Ok((
@@ -127,6 +147,7 @@ fn map_character_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterRow> {
         row.get::<_, i64>(5)?,
         row.get::<_, String>(6)?,
         row.get::<_, f64>(7)?,
+        row.get::<_, String>(8)?,
     ))
 }
 
@@ -257,6 +278,35 @@ pub fn update_character(
     )
     .map(|n| n > 0)
     .unwrap_or(false)
+}
+
+/// Sets (or clears, with `""`) a character's special ability. Returns false
+/// for an unknown ability name or a missing character.
+pub fn set_special_ability(store: &DataStore, id: &str, ability: &str) -> bool {
+    if !ability.is_empty() && !SPECIAL_ABILITIES.contains(&ability) {
+        return false;
+    }
+    let now = now_millis();
+    let conn = store.conn();
+    conn.execute(
+        "UPDATE companion_characters SET special_ability = ?1, updated_at = ?2 WHERE id = ?3",
+        rusqlite::params![ability, now, id],
+    )
+    .map(|n| n > 0)
+    .unwrap_or(false)
+}
+
+/// Inserts the David Martinez preset (free, reviewed, with the Sandevistan
+/// ability). Called once, by the migration that adds `special_ability`, so
+/// deleting him from the admin page is permanent.
+pub fn seed_david_martinez(conn: &rusqlite::Connection) -> rusqlite::Result<usize> {
+    let now = now_millis();
+    conn.execute(
+        "INSERT OR IGNORE INTO companion_characters \
+         (id, name, personality_prompt, is_preset, is_default, needs_review, creator_email, price_coins, special_ability, created_at, updated_at) \
+         VALUES (?1, 'David Martinez', ?2, 1, 0, 0, '', 0, 'sandevistan', ?3, ?3)",
+        rusqlite::params![DAVID_MARTINEZ_ID, DAVID_MARTINEZ_PROMPT, now],
+    )
 }
 
 pub fn flag_needs_review(store: &DataStore, id: &str) {
@@ -651,4 +701,55 @@ pub fn unlock_character(store: &DataStore, email: &str, character_id: &str) {
          ON CONFLICT(email, character_id) DO NOTHING",
         rusqlite::params![norm, character_id, now],
     );
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    fn temp_store() -> DataStore {
+        let base = std::env::temp_dir().join(format!(
+            "mitch-lib-companion-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(base.join("data")).unwrap();
+        DataStore::open(&base, &base.join("data")).unwrap()
+    }
+
+    #[test]
+    fn david_martinez_is_seeded_with_sandevistan_and_stays_deleted() {
+        let store = temp_store();
+        let david = get_character(&store, DAVID_MARTINEZ_ID).unwrap();
+        assert_eq!(david.name, "David Martinez");
+        assert_eq!(david.special_ability, "sandevistan");
+        assert!(david.is_preset && !david.needs_review);
+        assert_eq!(david.price_coins, 0.0);
+
+        assert!(delete_character(&store, DAVID_MARTINEZ_ID));
+        // Reopening runs the migrations again; the column already exists,
+        // so the seed doesn't re-run.
+        let base = store.base_dir.clone();
+        drop(store);
+        let reopened = DataStore::open(&base, &base.join("data")).unwrap();
+        assert!(get_character(&reopened, DAVID_MARTINEZ_ID).is_none());
+    }
+
+    #[test]
+    fn special_ability_rejects_unknown_names() {
+        let store = temp_store();
+        let id = create_preset_character(&store, "Test", "prompt", 0.0);
+        assert!(!set_special_ability(&store, &id, "teleport"));
+        assert!(set_special_ability(&store, &id, "sandevistan"));
+        assert_eq!(
+            get_character(&store, &id).unwrap().special_ability,
+            "sandevistan"
+        );
+        assert!(set_special_ability(&store, &id, ""));
+        assert_eq!(get_character(&store, &id).unwrap().special_ability, "");
+        assert!(!set_special_ability(&store, "missing", "sandevistan"));
+    }
 }
