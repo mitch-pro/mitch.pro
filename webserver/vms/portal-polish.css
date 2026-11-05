@@ -38,22 +38,8 @@ body.computer-portal #refresh-button.is-loading svg { animation: spin .8s linear
 body.computer-portal .refresh-status { margin: -10px 0 22px; font-size: 13px; line-height: 1.5; }
 
 body.computer-portal .computer-grid { gap: 20px; }
-body.computer-portal .computer-card { display: grid; grid-template-columns: minmax(0, 43fr) minmax(0, 57fr); min-height: 540px; overflow: visible; border: 1px solid var(--computer-line); border-radius: 10px; background: var(--computer-surface); box-shadow: none; }
-body.computer-portal .desktop-preview { min-width: 0; min-height: 0; padding: 56px 28px; overflow: hidden; border-right: 1px solid var(--computer-line); border-radius: 20px 0 0 20px; background: var(--t-bg); }
-body.computer-portal .desktop-preview::before { background-size: 40px 40px; opacity: .55; }
-body.computer-portal .desktop-preview::after { opacity: .45; }
-body.computer-portal .desktop-window { width: min(530px, 100%); border-color: var(--t-bd); border-radius: 10px; box-shadow: none; transform: none; }
-body.computer-portal a.desktop-preview:hover .desktop-window { transform: translateY(-2px); box-shadow: none; }
-body.computer-portal .desktop-preview.is-offline .desktop-window { filter: saturate(.42) brightness(.62); }
-body.computer-portal .window-content { background: var(--t-bg); }
-body.computer-portal .desktop-emblem { width: 62px; height: 62px; border-color: var(--t-bd); border-radius: 10px; background: var(--t-bg); }
-body.computer-portal .desktop-dock { border-color: var(--t-bd); }
-body.computer-portal .preview-status { top: 24px; left: 24px; }
-body.computer-portal .preview-overlay { position: absolute; z-index: 1; right: 25px; bottom: 26px; left: 25px; display: flex; flex-direction: column; gap: 3px; padding: 14px 16px; border: 1px solid rgba(255,255,255,.08); border-radius: 10px; background: var(--t-bg); backdrop-filter: none; text-align: center; }
-body.computer-portal .preview-overlay strong { font-size: 13px; font-weight: 680; }
-body.computer-portal .preview-overlay span { color: var(--t-fg); font-size: 12px; }
+body.computer-portal .computer-card { display: block; overflow: visible; border: 1px solid var(--computer-line); border-radius: 10px; background: var(--computer-surface); box-shadow: none; }
 body.computer-portal .status-pill { position: static; gap: 8px; flex: 0 0 auto; padding: 5px 9px; border: 1px solid var(--computer-line); border-radius: 10px; background: rgba(255,255,255,.035); box-shadow: none; color: #c3c9d4; font-size: 11px; font-weight: 650; white-space: nowrap; backdrop-filter: none; }
-body.computer-portal .preview-status { position: absolute; background: var(--t-bg); }
 body.computer-portal .status-pill::before { width: 7px; height: 7px; background: #a3a8b3; box-shadow: none; }
 body.computer-portal .status-pill.running { color: #97dbaf; }
 body.computer-portal .status-pill.running::before { background: #65c88e; box-shadow: none; }
@@ -120,22 +106,12 @@ body.computer-portal .danger-button:hover:not(:disabled) { background: #a13a46; 
 body.computer-portal .computer-shell ~ #_agree_footer, body.computer-portal #_agree_footer { position: static !important; display: block; max-width: 1220px; margin: 0 auto; padding: 0 32px 24px; color: var(--t-fg) !important; font-size: 12px !important; line-height: 1.6; text-align: left !important; pointer-events: auto !important; }
 body.computer-portal #_agree_footer a { color: var(--t-fg) !important; }
 
-@media (min-width: 1000px) {
-  body.computer-portal .computer-grid:has(>.computer-card:nth-child(2)) { grid-template-columns: 1fr; }
-  body.computer-portal .computer-grid:has(>.computer-card:nth-child(2)) .computer-card { display: grid; min-height: 540px; }
-  body.computer-portal .computer-grid:has(>.computer-card:nth-child(2)) .desktop-preview { min-height: 0; border-right: 1px solid var(--computer-line); border-bottom: 0; }
-  body.computer-portal .computer-grid:has(>.computer-card:nth-child(2)) .computer-details { min-height: 0; }
 }
 @media (max-width: 1050px) {
-  body.computer-portal .computer-card { grid-template-columns: minmax(0, 40fr) minmax(0, 60fr); }
   body.computer-portal .computer-details { padding: 26px; }
 }
 @media (max-width: 850px) {
   body.computer-portal .computer-shell { width: min(700px, calc(100% - 40px)); padding-top: 92px; }
-  body.computer-portal .computer-card { display: block; min-height: 0; }
-  body.computer-portal .desktop-preview { min-height: 315px; border-right: 0; border-bottom: 1px solid var(--computer-line); border-radius: 20px 20px 0 0; }
-  body.computer-portal .desktop-window { width: min(520px, 100%); }
-  body.computer-portal .computer-details { min-height: 510px; }
 }
 @media (max-width: 560px) {
   body.computer-portal .computer-shell { width: calc(100% - 28px); padding-top: 82px; padding-bottom: 40px; }
@@ -145,10 +121,6 @@ body.computer-portal #_agree_footer a { color: var(--t-fg) !important; }
   body.computer-portal #refresh-button { min-width: 42px; width: 42px; height: 42px; padding: 0; }
   body.computer-portal #refresh-button span { display: none; }
   body.computer-portal .computer-card { border-radius: 10px; }
-  body.computer-portal .desktop-preview { min-height: 276px; padding: 64px 18px 56px; border-radius: 16px 16px 0 0; }
-  body.computer-portal .desktop-window { width: 100%; }
-  body.computer-portal .preview-status { top: 13px; left: 13px; }
-  body.computer-portal .preview-overlay { right: 13px; bottom: 12px; left: 13px; padding: 9px 12px; }
   body.computer-portal .computer-details { min-height: 0; padding: 21px 18px 22px; }
   body.computer-portal .computer-title-row { display: flex; align-items: start; }
   body.computer-portal .computer-title-row h2 { font-size: 20px; }
@@ -186,8 +158,14 @@ body.computer-portal #computer-grid .status-pill { min-width: 0; padding: 5px 9p
 body.computer-portal #computer-grid .status-pill.running { border-color: rgba(101,200,142,.24); background: rgba(101,200,142,.07); }
 body.computer-portal #computer-grid .status-pill.transitioning { border-color: rgba(215,170,85,.24); background: rgba(215,170,85,.07); }
 body.computer-portal #computer-grid .status-pill.unavailable { border-color: rgba(209,124,134,.24); background: rgba(209,124,134,.07); }
-body.computer-portal #computer-grid .preview-status { background: var(--t-bg); }
 body.computer-portal #computer-grid#computer-grid#computer-grid#computer-grid .access-row .quiet-button { width: auto !important; min-width: 100px !important; padding: 7px 12px !important; white-space: nowrap; }
+
+/* Status text mixes its hue with the text token, so it stays readable in light and dark. */
+body.computer-portal .status-pill { color: var(--t-fg2); }
+body.computer-portal .status-pill.running { color: color-mix(in srgb, #2f9e5e 70%, var(--t-fg)); }
+body.computer-portal .status-pill.transitioning { color: color-mix(in srgb, #c98a1e 70%, var(--t-fg)); }
+body.computer-portal .status-pill.unavailable { color: color-mix(in srgb, #d0505c 70%, var(--t-fg)); }
+body.computer-portal #computer-grid#computer-grid#computer-grid#computer-grid .menu-panel .danger-menu-action { color: color-mix(in srgb, #d0505c 75%, var(--t-fg)) !important; }
 
 /* Computer overview */
 body.computer-portal .computer-shell {max-width:1120px;}
