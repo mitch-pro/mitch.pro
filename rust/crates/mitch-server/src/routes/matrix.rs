@@ -7744,6 +7744,19 @@ async fn outside_account_gate(
     ))
 }
 
+/// True for every client-API registration endpoint (`/register`, guest
+/// registration, `/register/available`, token validity, email/phone
+/// verification), under any API version prefix.
+fn is_matrix_register_path(path: &str) -> bool {
+    static REGISTER_RE: OnceLock<regex::Regex> = OnceLock::new();
+    REGISTER_RE
+        .get_or_init(|| {
+            regex::Regex::new(r"^/_matrix/client/[^/]+/register(?:/.*)?$")
+                .unwrap_or_else(|_| unreachable_regex())
+        })
+        .is_match(path)
+}
+
 pub async fn handle_matrix_gateway(
     state: &Arc<AppState>,
     method: &Method,
@@ -7792,6 +7805,21 @@ pub async fn handle_matrix_gateway(
                 .unwrap_or("");
             return Some(handle_room_summary(state, room_param).await);
         }
+    }
+
+    // Registration is never proxied. mitch.pro creates Matrix accounts itself
+    // (api_sso_login talks to Conduit directly, not through this gateway), so
+    // no real user needs these endpoints; leaving them open would let anyone,
+    // even without a mitch.pro account, register (or register as a guest) and
+    // read the world_readable official rooms.
+    if is_matrix_register_path(path) {
+        return Some(cors_json_response(
+            403,
+            json!({
+                "errcode": "M_FORBIDDEN",
+                "error": "Registration is disabled. Sign in to mitch.pro to use chat."
+            }),
+        ));
     }
 
     // MSC2965 OIDC Discovery endpoint stub

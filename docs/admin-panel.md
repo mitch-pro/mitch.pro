@@ -118,6 +118,11 @@ endpoints as a health check.
   approved" message for a denied account. Visiting either queues the account as
   `pending` (`matrix_cookie_access` in `routes/matrix.rs`). Students, staff,
   approved accounts and signed-out visitors are unaffected.
+- **No Matrix registration.** mitch.pro creates every Matrix account itself (SSO
+  login calls Conduit directly, not through the public gateway), so the gateway
+  refuses all `/_matrix/client/*/register` endpoints with 403, including guest
+  registration. Without this, anyone could register on the homeserver and read the
+  `world_readable` official rooms without a mitch.pro account.
 - **No DMs to students.** Outside accounts, approved or not, can't `createRoom`
   with, or `invite`, a student account (the gateway resolves the target Matrix ID
   to an email and checks the domain). Staff are exempt.

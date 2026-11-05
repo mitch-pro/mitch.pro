@@ -106,3 +106,33 @@ async fn unapproved_outside_accounts_cannot_open_chat() {
         "students are never queued"
     );
 }
+
+/// Matrix accounts are only created by mitch.pro's SSO login (which talks to
+/// the homeserver directly), so the public gateway refuses every registration
+/// endpoint, signed in or not.
+#[tokio::test(flavor = "multi_thread")]
+async fn matrix_registration_is_not_proxied() {
+    let s = TestServer::start(&[], "/api/tester/status", 403).await;
+    let student = s.session_for(STUDENT);
+    for (method, path) in [
+        ("POST", "/_matrix/client/v3/register"),
+        ("POST", "/_matrix/client/v3/register?kind=guest"),
+        ("POST", "/_matrix/client/r0/register"),
+        (
+            "GET",
+            "/_matrix/client/v3/register/available?username=someone",
+        ),
+        ("POST", "/_matrix/client/v3/register/email/requestToken"),
+        (
+            "GET",
+            "/_matrix/client/v1/register/m.login.registration_token/validity?token=x",
+        ),
+    ] {
+        for sid in [None, Some(student.as_str())] {
+            let body = (method == "POST").then(|| serde_json::json!({}));
+            let r = s.call(sid, method, path, body).await;
+            assert_eq!(r.status, 403, "{method} {path}: {}", r.text);
+            assert_eq!(r.json["errcode"], "M_FORBIDDEN", "{method} {path}");
+        }
+    }
+}
