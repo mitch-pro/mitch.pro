@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="/app.css">
   <link rel="stylesheet" href="/companion/setup.css?v=4">
   <script src="/app-shell.js" defer></script>
-  <script src="/companion/setup.js?v=4" defer></script>
+  <script src="/companion/setup.js?v=5" defer></script>
   <!-- companion-widget.js/.css are injected site-wide by the shared page
        pipeline (pipeline.rs) — no need to include them here too. -->
 </head>
@@ -50,7 +50,7 @@
         <label for="companion-create-name">Name</label>
         <input id="companion-create-name" type="text" maxlength="60" required>
         <label for="companion-create-prompt">Personality prompt</label>
-        <textarea id="companion-create-prompt" rows="6" maxlength="1048576" required></textarea>
+        <textarea id="companion-create-prompt" rows="6" maxlength="16000" required></textarea>
         <label for="companion-create-price">Price for others to unlock (coins, 0 = free)</label>
         <input id="companion-create-price" type="number" min="0" step="1" value="0">
         <button type="submit">Create (500 coins)</button>

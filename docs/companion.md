@@ -198,12 +198,10 @@ subsystem — no `server.js` equivalent.
   which builds strain like any other use (in cyberpsychosis the burst
   hunts burnt turkeys, which cost lives, so spamming it backfires); in cyberpsychosis he's erratic and
   grabs burnt turkeys too. The game itself grants no coins.
-- **Prompt size.** Personality prompts can be up to 1 MB (bytes;
-  `MAX_PROMPT_BYTES` in `routes/companion/admin.rs`, also used by `mine.rs`).
-  `main.rs` raises the request-body cap for the three endpoints that take a
-  prompt to 3 MB. Every chat call sends the whole prompt to DeepSeek, so a
-  very large prompt costs more per message and may exceed the model's
-  context window, in which case chat fails for that character.
+- **Prompt size.** Personality prompts can be up to 16,000 characters
+  (`MAX_PROMPT_CHARS` in `routes/companion/admin.rs`, also used by
+  `mine.rs`; 4x the original 4,000). Every chat call sends the whole prompt
+  to DeepSeek, so longer prompts cost more per message.
 - **Custom JS execution.** The chat response can also include a
   `customJs` field — raw JavaScript the widget runs via `new
   Function(code)()`. Only ever populated server-side when the active

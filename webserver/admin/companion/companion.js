@@ -88,12 +88,12 @@
     });
   }
 
-  // Prompts can be up to 1 MB; the card only shows the start of long ones
-  // (Edit loads the whole thing).
+  // Prompts can be up to 16,000 characters; the card only shows the start
+  // of long ones (Edit loads the whole thing).
   function promptPreview(text) {
     text = text || '';
     if (text.length <= 800) return text;
-    return text.slice(0, 800) + '… (' + Math.round(new Blob([text]).size / 1024) + ' KB total)';
+    return text.slice(0, 800) + '… (' + text.length.toLocaleString() + ' characters)';
   }
 
   function renderList(characters) {

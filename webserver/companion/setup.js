@@ -339,7 +339,7 @@
         '<button type="submit">Add mood image</button>' +
         '</form>' +
         '<label>Name</label><input type="text" class="mine-name" maxlength="60" value="' + escapeHtml(c.name) + '">' +
-        '<label>Personality prompt</label><textarea class="mine-prompt" rows="4" maxlength="1048576">' + escapeHtml(c.personalityPrompt) + '</textarea>' +
+        '<label>Personality prompt</label><textarea class="mine-prompt" rows="4" maxlength="16000">' + escapeHtml(c.personalityPrompt) + '</textarea>' +
         '<label>Price for others to unlock (coins)</label><input type="number" class="mine-price" min="0" step="1" value="' + c.priceCoins + '">' +
         '<button type="button" class="mine-save-btn">Save changes</button>' +
         '<button type="button" class="mine-delete-btn">Delete character</button>' +

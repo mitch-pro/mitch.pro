@@ -21,8 +21,8 @@ pub(super) const MAX_IMAGE_BYTES: usize = 5 * 1024 * 1024;
 /// `f64` arithmetic in this module away from any extreme-value weirdness.
 pub(super) const MAX_PRICE_COINS: f64 = 1_000_000.0;
 
-/// Personality prompts can be up to 1 MB (bytes, not characters).
-pub(super) const MAX_PROMPT_BYTES: usize = 1024 * 1024;
+/// Personality prompts can be up to 16,000 characters (4x the original 4,000).
+pub(super) const MAX_PROMPT_CHARS: usize = 16_000;
 
 pub(super) fn image_ext(mime: &str) -> &'static str {
     match mime.to_lowercase().as_str() {
@@ -178,10 +178,10 @@ fn upsert(state: &Arc<AppState>, body_bytes: &[u8]) -> Response {
     if name.is_empty() || name.chars().count() > 60 {
         return json_response(400, json!({ "error": "name must be 1-60 characters" }));
     }
-    if prompt.is_empty() || prompt.len() > MAX_PROMPT_BYTES {
+    if prompt.is_empty() || prompt.chars().count() > MAX_PROMPT_CHARS {
         return json_response(
             400,
-            json!({ "error": "personality prompt must be between 1 character and 1 MB" }),
+            json!({ "error": "personality prompt must be 1-16000 characters" }),
         );
     }
     let price = match parse_price_coins(&body) {
