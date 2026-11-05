@@ -1665,6 +1665,24 @@ async fn handle_resolved(
         }
     }
 
+    // Outside accounts a moderator hasn't approved don't get the chat client
+    // (SSO refuses them a token too; see matrix_cookie_access). Static assets
+    // stay reachable since they hold no chat content.
+    if is_matrix_client_page(&path) {
+        use crate::routes::matrix::{
+            approval_needed_page, matrix_cookie_access, MatrixCookieAccess,
+        };
+        let access = matrix_cookie_access(&state, headers).await;
+        if matches!(
+            access,
+            MatrixCookieAccess::Pending | MatrixCookieAccess::Denied
+        ) {
+            let mut resp = html_response(approval_needed_page(access));
+            *resp.status_mut() = StatusCode::FORBIDDEN;
+            return resp;
+        }
+    }
+
     // SPA route fallback for Matrix Chat (/matrix/*) — server.js:24647-24657.
     if path.starts_with("/matrix/") {
         let rel_path = path.strip_prefix("/matrix/").unwrap_or("");
@@ -1920,6 +1938,51 @@ async fn handle_resolved(
         Some(headers),
         |html| crate::pipeline::serve_static_html(&state, headers, &path, html),
     )
+}
+
+/// True for `/matrix` paths that load the chat client's HTML (the SPA shell
+/// and its client-side routes), false for its scripts, styles, media and the
+/// small non-HTML files (`version`, `config.json`, ...).
+fn is_matrix_client_page(path: &str) -> bool {
+    if path != "/matrix" && !path.starts_with("/matrix/") {
+        return false;
+    }
+    if path.starts_with("/matrix/assets/") || path.starts_with("/matrix/public/") {
+        return false;
+    }
+    let last = path.rsplit('/').next().unwrap_or("");
+    if last == "version" || last == "apple-app-site-association" {
+        return false;
+    }
+    // Only known asset extensions are let through: room routes such as
+    // `/matrix/home/!abc:mitch.pro` contain dots and still load the client.
+    const ASSET_EXTS: &[&str] = &[
+        "js",
+        "mjs",
+        "css",
+        "png",
+        "jpg",
+        "jpeg",
+        "gif",
+        "svg",
+        "ico",
+        "webp",
+        "wasm",
+        "map",
+        "woff",
+        "woff2",
+        "ttf",
+        "json",
+        "webmanifest",
+        "txt",
+        "mp3",
+        "ogg",
+        "wav",
+    ];
+    match last.rsplit_once('.') {
+        Some((_, ext)) => !ASSET_EXTS.iter().any(|a| ext.eq_ignore_ascii_case(a)),
+        None => true,
+    }
 }
 
 fn html_response(html: String) -> Response {
@@ -2585,5 +2648,35 @@ mod host_tests {
         assert_eq!(response.status(), 302);
         assert_eq!(response.headers()["location"], "/game-portal/");
         assert!(games_library_redirect("/games/run3/", &Method::GET, "").is_none());
+    }
+}
+
+#[cfg(test)]
+mod matrix_page_tests {
+    use super::is_matrix_client_page;
+
+    #[test]
+    fn client_pages_are_gated_but_assets_are_not() {
+        for page in [
+            "/matrix",
+            "/matrix/",
+            "/matrix/index.html",
+            "/matrix/home/",
+            "/matrix/home/!abc:mitch.pro",
+            "/matrix/home/!abc:mitch.pro/$event",
+        ] {
+            assert!(is_matrix_client_page(page), "{page} should be gated");
+        }
+        for asset in [
+            "/matrix/assets/index-BVlPv2dR.js",
+            "/matrix/public/element-call/index.html",
+            "/matrix/config.json",
+            "/matrix/version",
+            "/matrix/olm.wasm",
+            "/matrixx/",
+            "/games/",
+        ] {
+            assert!(!is_matrix_client_page(asset), "{asset} should not be gated");
+        }
     }
 }
