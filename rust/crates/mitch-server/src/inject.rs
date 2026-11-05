@@ -168,8 +168,8 @@ pub fn inject_credit(html: &str, school: bool) -> String {
 @media (max-width:1100px) {{ #site-credit {{ grid-template-columns:minmax(0,1fr) auto; }} #site-credit-copy {{ grid-column:1; }} #site-active {{ grid-column:2; }} }}
 @media (max-width:1020px) {{ .footer-discord {{ display:none !important; }} }}
 @media (max-width:820px) {{ .footer-cookies {{ display:none !important; }} }}
-@media (max-width:580px) {{ .footer-agreement {{ display:none !important; }} }}
-@media (max-width:480px) {{ .footer-oss-lead {{ display:none !important; }} }}
+@media (max-width:580px) {{ #site-credit-copy .footer-oss {{ display:none !important; }} #site-credit {{ font-size:10px; }} }}
+@media (max-width:440px) {{ #site-active {{ display:none !important; }} }}
 @media (max-width:380px) {{ #site-credit {{ padding-inline:10px; gap:5px; font-size:10px; }} }}
 body #mobile-dock {{ bottom:calc(var(--site-credit-height) + 10px); }}
 body .mobile-nav-dock {{ bottom:var(--site-credit-height); padding-bottom:6px; }}
