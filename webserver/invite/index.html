@@ -9,24 +9,7 @@
   <script src="/api.js"></script>
   <script src="/app-shell.js" defer></script>
   <style>
-    .invite-page {
-      position: relative;
-      isolation: isolate;
-    }
-
-    .invite-page::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      z-index: -1;
-      pointer-events: none;
-      background:
-        radial-gradient(ellipse 65% 45% at 50% -8%, color-mix(in srgb, var(--t-ac) 14%, transparent), transparent 70%),
-        radial-gradient(ellipse 40% 35% at 100% 100%, color-mix(in srgb, var(--t-ac2, var(--t-ac)) 7%, transparent), transparent 65%);
-    }
-
     .invite-shell {
-      width: min(42rem, 100%);
       max-width: 42rem;
     }
 
@@ -50,23 +33,6 @@
       line-height: 1.55;
     }
 
-    .coin-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      min-height: 1.7rem;
-      padding: 0.28rem 0.75rem;
-      margin-bottom: 0.85rem;
-      border-radius: calc(var(--t-radius, 8px) + 2px);
-      background: rgba(245, 158, 11, 0.1);
-      border: 1px solid rgba(245, 158, 11, 0.32);
-      color: #f59e0b;
-      font-family: Outfit, system-ui, sans-serif;
-      font-weight: 750;
-      font-size: 0.78rem;
-      letter-spacing: 0.02em;
-    }
-
     .wrap {
       display: flex;
       flex-direction: column;
@@ -77,14 +43,12 @@
     .card {
       padding: 1.2rem 1.15rem;
       border: 1px solid var(--t-bd);
-      border-radius: calc(var(--t-radius, 8px) + 2px);
-      background:
-        linear-gradient(160deg, color-mix(in srgb, var(--t-bg2) 92%, transparent), color-mix(in srgb, var(--t-bg3) 80%, transparent));
-      box-shadow: 0 1px 0 color-mix(in srgb, #fff 6%, transparent) inset;
+      border-radius: var(--t-radius);
+      background: var(--t-bg2);
     }
 
     .card-title {
-      font-family: Outfit, system-ui, sans-serif;
+      font-family: inherit;
       font-size: 0.95rem;
       font-weight: 750;
       color: var(--t-fg);
@@ -100,15 +64,15 @@
 
     .stat-box {
       flex: 1;
-      background: color-mix(in srgb, var(--t-bg3) 70%, transparent);
+      background: var(--t-bg3);
       border: 1px solid var(--t-bd);
-      border-radius: var(--t-radius, 8px);
+      border-radius: var(--t-radius);
       padding: 0.9rem;
       text-align: center;
     }
 
     .stat-num {
-      font-family: Outfit, system-ui, sans-serif;
+      font-family: inherit;
       font-size: 1.75rem;
       color: var(--t-ac);
       font-weight: 800;
@@ -119,8 +83,6 @@
       font-size: 0.7rem;
       color: var(--t-fg2);
       font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
       margin-top: 0.2rem;
     }
 
@@ -143,11 +105,11 @@
       display: flex;
       align-items: center;
       gap: 0.65rem;
-      background: var(--t-bg2);
+      background: var(--t-bg3);
       border: 1px solid var(--t-bd);
-      border-radius: var(--t-radius, 8px);
+      border-radius: var(--t-radius);
       padding: 0.85rem 0.95rem;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-family: inherit;
       font-size: 1.35rem;
       font-weight: 800;
       color: var(--t-ac);
@@ -162,7 +124,7 @@
       border: 1px solid var(--t-bd);
       color: var(--t-fg2);
       padding: 0.35rem 0.75rem;
-      border-radius: calc(var(--t-radius, 8px) - 2px);
+      border-radius: var(--t-radius-sm);
       font-size: 0.78rem;
       font-weight: 700;
       cursor: pointer;
@@ -180,15 +142,15 @@
     }
 
     .copy-btn.copied {
-      color: #4ade80;
-      border-color: rgba(74, 222, 128, 0.4);
+      color: var(--t-ac);
+      border-color: var(--t-ac);
     }
 
     .link-display {
       margin-top: 0.75rem;
-      background: color-mix(in srgb, var(--t-bg3) 60%, transparent);
+      background: var(--t-bg3);
       border: 1px solid var(--t-bd);
-      border-radius: var(--t-radius, 8px);
+      border-radius: var(--t-radius);
       padding: 0.75rem 0.85rem;
       font-size: 0.78rem;
       color: var(--t-fg2);
@@ -206,7 +168,7 @@
       background: var(--t-bg2);
       border: 1px solid var(--t-bd);
       color: var(--t-fg);
-      border-radius: var(--t-radius, 8px);
+      border-radius: var(--t-radius);
       padding: 0.7rem 0.85rem;
       font-size: 0.92rem;
       font-family: inherit;
@@ -225,13 +187,13 @@
       width: 100%;
       appearance: none;
       border: 1px solid transparent;
-      border-radius: var(--t-radius, 8px);
+      border-radius: var(--t-radius);
       padding: 0.7rem 1.1rem;
       min-height: 2.55rem;
       font-weight: 700;
       font-size: 0.9rem;
       cursor: pointer;
-      font-family: Outfit, system-ui, sans-serif;
+      font-family: inherit;
       margin-top: 0.85rem;
       transition:
         background var(--t-motion, 0.15s) ease,
@@ -244,8 +206,8 @@
     .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
     .btn-primary {
-      background: color-mix(in srgb, var(--t-ac) 88%, #000 12%);
-      color: #fff;
+      background: var(--t-ac);
+      color: var(--t-ac-ink);
       border-color: var(--t-bda, transparent);
     }
 
@@ -255,14 +217,13 @@
     }
 
     .btn-gold {
-      background: #f59e0b;
-      color: #1c1004;
-      border-color: rgba(245, 158, 11, 0.5);
+      background: var(--t-ac);
+      color: var(--t-ac-ink);
+      border-color: var(--t-bda, transparent);
     }
 
     .btn-gold:hover:not(:disabled) {
       filter: brightness(1.05);
-      box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
     }
 
     .msg {
@@ -274,70 +235,25 @@
       color: var(--t-fg2);
     }
 
-    .msg.ok { color: #4ade80; }
+    .msg.ok { color: var(--t-ac); }
     .msg.err { color: #f87171; }
+    html.theme-light .msg.err { color: #b91c1c; }
 
     .premium-lock {
-      display: flex;
-      align-items: flex-start;
-      gap: 0.65rem;
-      background: rgba(245, 158, 11, 0.06);
-      border: 1px solid rgba(245, 158, 11, 0.25);
-      border-radius: var(--t-radius, 8px);
+      background: var(--t-bg3);
+      border: 1px solid var(--t-bd);
+      border-radius: var(--t-radius);
       padding: 0.85rem 1rem;
       font-size: 0.85rem;
-      color: rgba(245, 158, 11, 0.9);
-      font-weight: 600;
+      color: var(--t-fg2);
       line-height: 1.45;
     }
 
-    .premium-lock a { color: #f59e0b; font-weight: 700; }
-
-    .how-it-works {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 0.65rem;
-    }
-
-    .step {
-      background: color-mix(in srgb, var(--t-bg3) 55%, transparent);
-      border: 1px solid var(--t-bd);
-      border-radius: var(--t-radius, 8px);
-      padding: 0.9rem 0.75rem;
-      text-align: center;
-    }
-
-    .step-num {
-      width: 1.85rem;
-      height: 1.85rem;
-      background: color-mix(in srgb, var(--t-ac) 88%, #000 12%);
-      color: #fff;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: Outfit, system-ui, sans-serif;
-      font-weight: 800;
-      font-size: 0.85rem;
-      margin: 0 auto 0.6rem;
-    }
-
-    .step-text {
-      font-size: 0.8rem;
-      color: var(--t-fg2);
-      line-height: 1.4;
-    }
-
-    .divider {
-      height: 1px;
-      background: var(--t-bd);
-      margin: 0 0 1rem;
-    }
+    .premium-lock a { color: var(--t-ac); font-weight: 700; }
 
     #invite-email-wrap { margin-top: 0.85rem; }
 
     @media (max-width: 600px) {
-      .how-it-works { grid-template-columns: 1fr; }
       .stat-row { flex-direction: column; }
     }
 
@@ -355,17 +271,16 @@
     }
   </style>
 </head>
-<body class="invite-page">
+<body class="app-shell">
   <main class="app-main invite-shell">
     <header class="page-head">
-      <div class="coin-badge mitch-coin-amount">2,000 MitchCoins per signup</div>
       <h1>Invite Friends</h1>
-      <p class="page-sub">Share your personal invite link. Every time someone signs up using it, you earn <strong>2,000 MitchCoins</strong> — automatically, the moment they verify their email.</p>
+      <p class="page-sub">You earn 2,000 MitchCoins when someone signs up with your link and verifies their email.</p>
     </header>
 
     <div class="wrap">
       <div class="card">
-        <div class="card-title">Your Invite Stats</div>
+        <div class="card-title">Stats</div>
         <div class="stat-row">
           <div class="stat-box">
             <div class="stat-num" id="stat-signups">—</div>
@@ -373,11 +288,11 @@
           </div>
           <div class="stat-box">
             <div class="stat-num" id="stat-coins">—</div>
-            <div class="stat-label">Coins Earned</div>
+            <div class="stat-label">Coins earned</div>
           </div>
         </div>
 
-        <label for="code-text">Your Invite Code</label>
+        <label for="code-text">Invite code</label>
         <div class="code-display">
           <span class="code-text" id="code-text">Loading…</span>
           <button class="copy-btn" id="copy-code-btn" onclick="copyCode()">Copy</button>
@@ -390,48 +305,28 @@
       </div>
 
       <div class="card" id="custom-code-card">
-        <div class="card-title">Custom Invite Code</div>
+        <div class="card-title">Custom code</div>
         <div id="premium-content" style="display:none;">
-          <p>As a Premium member you can set a memorable vanity code.</p>
-          <label for="custom-code-input">New Code (3–20 characters, letters & numbers only)</label>
-          <input type="text" id="custom-code-input" placeholder="e.g. MITCHGANG" maxlength="20" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')">
+          <label for="custom-code-input">New code (3–20 letters or numbers)</label>
+          <input type="text" id="custom-code-input" maxlength="20" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')">
           <button class="btn btn-gold" id="set-code-btn" onclick="setCode()">Set Custom Code</button>
           <div class="msg" id="code-msg" role="status" aria-live="polite"></div>
         </div>
         <div id="premium-lock-content">
           <div class="premium-lock">
-            Custom codes are a <a href="/shop/">Premium</a> feature. Non-premium users get an auto-generated code.
+            Custom codes require <a href="/shop/">Premium</a>.
           </div>
         </div>
       </div>
 
       <div class="card">
-        <div class="card-title">Send an Invite Email</div>
-        <p>Enter their email below — we'll send them a personalised invite with your code and their email pre-filled in the signup form.</p>
-        <label for="invite-to">Friend's Email Address</label>
-        <input type="email" id="invite-to" placeholder="friend@school.edu">
+        <div class="card-title">Email an invite</div>
+        <label for="invite-to">Friend's email</label>
+        <input type="email" id="invite-to">
         <button class="btn btn-primary" id="send-btn" onclick="sendInvite()">Send Invite Email</button>
         <div class="msg" id="send-msg" role="status" aria-live="polite"></div>
       </div>
 
-      <div class="card">
-        <div class="card-title">How It Works</div>
-        <div class="divider"></div>
-        <div class="how-it-works">
-          <div class="step">
-            <div class="step-num">1</div>
-            <div class="step-text">Share your invite link or send an email invite to a friend</div>
-          </div>
-          <div class="step">
-            <div class="step-num">2</div>
-            <div class="step-text">They sign up with their email pre-filled and your code applied</div>
-          </div>
-          <div class="step">
-            <div class="step-num">3</div>
-            <div class="step-text">The moment they verify their email, you instantly earn 2,000 MitchCoins</div>
-          </div>
-        </div>
-      </div>
     </div>
   </main>
 

@@ -9,34 +9,20 @@
 <script src="/app-shell.js" defer></script>
 <script src="/sync.js?v=2"></script>
 <style>
-  .notif-page { position: relative; isolation: isolate; }
-  .notif-page::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    background:
-      radial-gradient(ellipse 65% 45% at 50% -8%, color-mix(in srgb, var(--t-ac) 14%, transparent), transparent 70%),
-      radial-gradient(ellipse 40% 35% at 100% 100%, color-mix(in srgb, var(--t-ac2, var(--t-ac)) 7%, transparent), transparent 65%);
-  }
-  .notif-shell { width: min(48rem, 100%); max-width: 48rem; padding-bottom: 5rem; }
+  .notif-shell { max-width: 48rem; padding-bottom: 5rem; }
   .page-head { margin-bottom: 1.15rem; animation: app-fade-in 0.45s ease both; }
   .page-title {
     margin: 0;
     font-size: clamp(1.85rem, 4vw, 2.4rem);
-    font-weight: 800;
-    letter-spacing: -0.035em;
+    font-weight: 700;
+    letter-spacing: -0.03em;
     color: var(--t-fg);
   }
-  .page-sub { margin: 0.5rem 0 0; font-size: 0.9rem; color: var(--t-fg2); line-height: 1.55; }
   .card {
     padding: 1.25rem 1.2rem;
     border: 1px solid var(--t-bd);
-    border-radius: calc(var(--t-radius, 8px) + 2px);
-    background:
-      linear-gradient(160deg, color-mix(in srgb, var(--t-bg2) 92%, transparent), color-mix(in srgb, var(--t-bg3) 80%, transparent));
-    box-shadow: 0 1px 0 color-mix(in srgb, #fff 6%, transparent) inset;
+    border-radius: var(--t-radius);
+    background: var(--t-bg2);
     margin-bottom: 1rem;
   }
   .section-title {
@@ -49,7 +35,6 @@
     letter-spacing: -0.01em;
     color: var(--t-fg);
   }
-  .section-sub { margin: -0.4rem 0 1rem; font-size: 0.82rem; color: var(--t-fg2); line-height: 1.55; }
   .toggle-row {
     display: flex;
     align-items: center;
@@ -88,8 +73,8 @@
   .quiet-times input[type="time"] {
     padding: 6px 9px;
     border: 1px solid var(--t-bd);
-    border-radius: 9px;
-    background: var(--t-bg2);
+    border-radius: var(--t-radius-sm);
+    background: var(--t-bg3);
     color: var(--t-fg);
     font: inherit;
     font-size: 0.88rem;
@@ -111,7 +96,7 @@
     color: var(--t-fg2);
   }
   .device-state .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--t-fg2); flex: none; }
-  .device-state.on .dot { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.6); }
+  .device-state.on .dot { background: #22c55e; }
   .device-state.off .dot { background: #e11d48; }
   .device-row { display: flex; align-items: center; justify-content: space-between; gap: 0.9rem; padding: 0.55rem 0; flex-wrap: wrap; }
   .link-row { margin-top: 0.9rem; font-size: 0.84rem; color: var(--t-fg2); }
@@ -122,33 +107,27 @@
     .card { padding: 1.05rem 0.95rem; }
     .toggle-row { align-items: flex-start; }
   }
-  .notif-shell { width: min(62rem, 100%); max-width: 62rem; }
+  .notif-shell { max-width: 62rem; }
   .notif-page .page-head { display: flex; align-items: end; justify-content: space-between; gap: 1rem; }
-  .notif-status-pill { display: inline-flex; align-items: center; gap: .45rem; min-height: 34px; padding: .4rem .7rem; border: 1px solid var(--t-bd); border-radius: 999px; background: color-mix(in srgb, var(--t-bg2) 88%, transparent); color: var(--t-fg2); font-size: .76rem; font-weight: 700; }
-  .notif-status-pill::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--t-ac); box-shadow: 0 0 10px var(--t-gl); }
   .settings-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(270px, .65fr); gap: .85rem; align-items: start; }
   .alerts-card { grid-row: span 2; }
-  .notif-page .card { margin: 0; padding: 1rem; border-radius: 16px; background: color-mix(in srgb, var(--t-bg2) 86%, transparent); }
+  .notif-page .card { margin: 0; padding: 1rem; }
   .section-title { padding-bottom: .7rem; border-bottom: 1px solid var(--t-bd); }
-  .section-title .section-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px; background: color-mix(in srgb, var(--t-ac) 16%, var(--t-bg3)); color: var(--t-ac); }
   .toggle-row { min-height: 68px; padding: .7rem .15rem; }
   .toggle-row:hover { background: color-mix(in srgb, var(--t-ac) 5%, transparent); }
   .toggle-slider { border: 1px solid var(--t-bd); }
   .toggle-switch input:focus-visible + .toggle-slider { outline: 2px solid var(--t-ac); outline-offset: 3px; }
   .device-row { align-items: stretch; }
-  .device-state { border-radius: 11px; flex: 1; }
+  .device-state { border-radius: var(--t-radius-sm); flex: 1; }
   #pushToggleBtn { min-height: 40px; }
-  html.theme-light .load-error { color: #991b1b; }
-  .load-error .btn { margin-left: .5rem; }
-  .load-error { margin-bottom: .85rem !important; color: #fecaca; border-color: color-mix(in srgb, #ef4444 45%, var(--t-bd)); }
+    .load-error .btn { margin-left: .5rem; }
+  .load-error { margin-bottom: .85rem !important; color: var(--t-fg); border-color: color-mix(in srgb, #ef4444 45%, var(--t-bd)); }
   @media (min-width: 761px) and (max-height: 800px) {
     .notif-page .app-main { padding-top: .85rem !important; }
     .notif-page .page-head { margin-bottom: .7rem; }
     .notif-page .page-title { font-size: 1.7rem !important; }
-    .notif-page .page-sub { margin-top: .25rem; }
-    .notif-page .card { padding: .8rem; }
+        .notif-page .card { padding: .8rem; }
     .toggle-row { min-height: 58px; padding: .5rem .1rem; }
-    .section-sub { margin-bottom: .55rem; }
   }
   @media (max-width: 760px) {
     .settings-grid { grid-template-columns: 1fr; }
@@ -157,15 +136,14 @@
   }
 </style>
 </head>
-<body class="notif-page">
+<body class="app-shell notif-page">
 <main class="app-main notif-shell">
   <header class="page-head">
-    <div><h1 class="page-title">Notifications</h1><p class="page-sub">Control alerts for every signed-in device.</p></div>
-    <span class="notif-status-pill">Auto-save on</span>
+    <div><h1 class="page-title">Notifications</h1></div>
   </header>
 
   <div id="loginGate" class="card" style="display:none">
-    <p class="empty-note">You're not signed in. <a href="/" style="color:var(--t-ac);font-weight:650">Head to the homepage</a> to sign in, then come back here to manage your notifications.</p>
+    <p class="empty-note">Sign in to manage notifications. <a href="/" style="color:var(--t-ac);font-weight:650">Go to the homepage</a></p>
   </div>
 
   <div id="loadError" class="card load-error" style="display:none" role="alert">Notification settings could not be loaded. <button class="btn" id="retryLoad" type="button">Retry</button></div>
@@ -174,13 +152,12 @@
 
   <div id="prefsUI" class="settings-grid" style="display:none">
     <div class="card alerts-card">
-      <div class="section-title"><span class="section-icon" aria-hidden="true">&#128276;</span><span>Alert types</span></div>
-      <p class="section-sub">Turn whole categories of alerts on or off. This applies to every device and every channel — PWA push and ntfy phone alerts alike.</p>
-
+      <div class="section-title"><span>Alert types</span></div>
+      
       <div class="toggle-row">
         <div class="toggle-label">
           <b>Encrypted chat messages</b>
-          <span class="toggle-desc">Direct messages sent to you on Secure Chat while you're away.</span>
+          <span class="toggle-desc">Direct messages on Secure Chat while you're away.</span>
         </div>
         <label class="toggle-switch">
           <input type="checkbox" id="t-dm" data-key="dm">
@@ -191,7 +168,7 @@
       <div class="toggle-row">
         <div class="toggle-label">
           <b>Group chat messages</b>
-          <span class="toggle-desc">Messages posted in any group chat you're a member of.</span>
+          <span class="toggle-desc">Messages in your group chats.</span>
         </div>
         <label class="toggle-switch">
           <input type="checkbox" id="t-group" data-key="group">
@@ -202,7 +179,7 @@
       <div class="toggle-row">
         <div class="toggle-label">
           <b>Friends coming online</b>
-          <span class="toggle-desc">A push alert whenever one of your friends goes from offline to online.</span>
+          <span class="toggle-desc">When a friend goes online.</span>
         </div>
         <label class="toggle-switch">
           <input type="checkbox" id="t-friends" data-key="friends_online">
@@ -213,7 +190,7 @@
       <div class="toggle-row">
         <div class="toggle-label">
           <b>Unread messages email digest</b>
-          <span class="toggle-desc">Periodic email summarizing unread chat messages that piled up while you were offline.</span>
+          <span class="toggle-desc">Periodic email of unread chat messages.</span>
         </div>
         <label class="toggle-switch">
           <input type="checkbox" id="t-digest" data-key="digest">
@@ -223,11 +200,10 @@
     </div>
 
     <div class="card quiet-card">
-      <div class="section-title"><span class="section-icon" aria-hidden="true">&#9790;</span><span>Quiet hours</span></div>
-      <p class="section-sub">During this daily window all push, ntfy and digest alerts are muted. Messages still arrive normally — nothing is lost, you just aren't buzzed.</p>
-      <div class="toggle-row">
+      <div class="section-title"><span>Quiet hours</span></div>
+            <div class="toggle-row">
         <div class="toggle-label">
-          <b>Mute alerts during quiet hours</b>
+          <b>Mute alerts</b>
           <span class="toggle-desc">Uses the timezone of the device you last saved from.</span>
         </div>
         <label class="toggle-switch">
@@ -244,14 +220,13 @@
     </div>
 
     <div class="card device-card">
-      <div class="section-title"><span class="section-icon" aria-hidden="true">&#9635;</span><span>This device</span></div>
-      <p class="section-sub">PWA push for the browser you're using right now. Toggles above control what is sent; this controls whether this device receives it.</p>
-      <div class="device-row">
+      <div class="section-title"><span>This device</span></div>
+            <div class="device-row">
         <span class="device-state off" id="pushState"><span class="dot"></span><span id="pushStateText">Checking…</span></span>
         <button class="btn btn-primary" id="pushToggleBtn" type="button">…</button>
       </div>
       <div class="link-row" id="deviceHints"></div>
-      <div class="link-row">Want alerts on your phone without PWA push? Set up a topic under <a href="/preferences/#security">Preferences → ntfy</a>.</div>
+      <div class="link-row">Phone alerts without push: <a href="/preferences/#security">Preferences → ntfy</a>.</div>
     </div>
   </div>
 </main>

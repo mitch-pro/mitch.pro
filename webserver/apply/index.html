@@ -3,13 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Join the Team — mitch.pro</title>
+<title>Apply — mitch.pro</title>
 <link rel="stylesheet" href="/app.css">
 <script src="/api.js"></script>
 <script src="/app-shell.js" defer></script>
 <style>
   .apply-shell {
-    width: min(38rem, 100%);
     max-width: 38rem;
     margin: 0 auto;
     padding-bottom: 3rem;
@@ -38,10 +37,10 @@
   .role-card-opt {
     background: var(--t-bg2);
     border: 1.5px solid var(--t-bd);
-    border-radius: var(--t-radius, 10px);
+    border-radius: var(--t-radius);
     padding: 0.85rem 1rem;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: border-color 0.15s ease, background 0.15s ease;
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
@@ -92,7 +91,7 @@
   .field textarea {
     width: 100%;
     border: 1px solid var(--t-bd);
-    border-radius: var(--t-radius, 8px);
+    border-radius: var(--t-radius);
     background: var(--t-bg2);
     color: var(--t-fg);
     font-family: inherit;
@@ -132,7 +131,7 @@
     min-height: 1.4em;
     color: var(--t-fg2);
   }
-  #msg.ok { color: #4ade80; }
+  #msg.ok { color: var(--t-ac); }
   #msg.err { color: #f87171; }
   html.theme-light #msg.err { color: #b91c1c; }
   .role-card-opt:focus-visible { outline: 2px solid var(--t-ac); outline-offset: 2px; }
@@ -172,31 +171,30 @@
   }
 </style>
 </head>
-<body>
+<body class="app-shell">
 <main class="app-main apply-shell">
   <header class="page-head">
-    <h1>Join the Team</h1>
-    <p class="page-sub">Help build, test, secure, and moderate the mitch.pro platform. We review every application personally.</p>
+    <h1>Apply</h1>
   </header>
 
   <section class="panel apply-panel">
-    <div id="role-label" class="role-label" style="font-size:0.8rem;font-weight:700;margin-bottom:0.6rem;display:block;color:var(--t-fg2);">SELECT ROLE YOU ARE APPLYING FOR</div>
+    <div id="role-label" class="role-label" style="font-size:0.8rem;font-weight:700;margin-bottom:0.6rem;display:block;color:var(--t-fg2);">Role</div>
     <div class="role-selector-grid" role="radiogroup" aria-labelledby="role-label">
       <div class="role-card-opt selected" data-role="tester" role="radio" tabindex="0" aria-checked="true">
-        <span class="role-opt-title">🧪 Beta Tester</span>
-        <p class="role-opt-desc">Test new arcade games, test VM performance, hunt down bugs, and provide QA feedback.</p>
+        <span class="role-opt-title">Beta Tester</span>
+        <p class="role-opt-desc">Test games and VMs, report bugs.</p>
       </div>
       <div class="role-card-opt" data-role="moderator" role="radio" tabindex="0" aria-checked="false">
-        <span class="role-opt-title">🛡️ Moderator</span>
-        <p class="role-opt-desc">Keep Matrix chat safe, assist students, review reports, and ensure community guidelines are upheld.</p>
+        <span class="role-opt-title">Moderator</span>
+        <p class="role-opt-desc">Keep Matrix chat safe, review reports.</p>
       </div>
       <div class="role-card-opt" data-role="developer" role="radio" tabindex="0" aria-checked="false">
-        <span class="role-opt-title">💻 Developer</span>
-        <p class="role-opt-desc">Build web apps, arcade games, backend systems, APIs, Proxmox virtualization, or Linux tooling.</p>
+        <span class="role-opt-title">Developer</span>
+        <p class="role-opt-desc">Build web apps, games, backend, and tooling.</p>
       </div>
       <div class="role-card-opt" data-role="designer" role="radio" tabindex="0" aria-checked="false">
-        <span class="role-opt-title">🎨 Designer</span>
-        <p class="role-opt-desc">Create pixel art, badges, themes, vector graphics, UI improvements, and visual branding.</p>
+        <span class="role-opt-title">Designer</span>
+        <p class="role-opt-desc">Make art, badges, themes, and UI.</p>
       </div>
     </div>
 
@@ -204,22 +202,22 @@
       <input type="hidden" id="selected-role" value="tester">
 
       <div class="field">
-        <label for="name">Name / Display Name</label>
-        <input id="name" type="text" placeholder="Your name" autocomplete="name" required>
+        <label for="name">Name</label>
+        <input id="name" type="text" autocomplete="name" required>
       </div>
 
       <div class="field">
         <label for="email">Email</label>
-        <input id="email" type="email" placeholder="you@student.rjuhsd.us or personal email" autocomplete="email" required>
+        <input id="email" type="email" autocomplete="email" required>
       </div>
 
       <div class="field">
-        <label for="discord">Discord or Matrix Username</label>
-        <input id="discord" type="text" placeholder="@username or Matrix ID" required>
+        <label for="discord">Discord or Matrix username</label>
+        <input id="discord" type="text" required>
       </div>
 
       <div class="field">
-        <label for="availability">Availability <span class="opt">hours per week</span></label>
+        <label for="availability">Availability</label>
         <select id="availability">
           <option value="1-3 hours/week">1–3 hours / week</option>
           <option value="3-5 hours/week" selected>3–5 hours / week</option>
@@ -230,22 +228,22 @@
 
       <div class="field">
         <label for="why">Why do you want to join?</label>
-        <textarea id="why" class="tall" placeholder="Tell us what motivates you to help out with mitch.pro and what role fits you best…" required></textarea>
+        <textarea id="why" class="tall" required></textarea>
       </div>
 
       <div class="field">
         <label for="skills">Skills &amp; experience</label>
-        <textarea id="skills" class="medium" placeholder="Describe your background (e.g. testing experience, bug reports, coding languages, moderation, etc.)" required></textarea>
+        <textarea id="skills" class="medium" required></textarea>
       </div>
 
       <div class="field">
-        <label for="portfolio">Links / Portfolio <span class="opt">optional</span></label>
-        <input id="portfolio" type="text" placeholder="GitHub profile, artwork, website, or projects">
+        <label for="portfolio">Links <span class="opt">optional</span></label>
+        <input id="portfolio" type="text">
       </div>
 
       <div class="field">
         <label for="extra">Anything else <span class="opt">optional</span></label>
-        <textarea id="extra" class="medium" placeholder="Questions, notes, or anything else you'd like us to know…"></textarea>
+        <textarea id="extra" class="medium"></textarea>
       </div>
 
       <hr class="divider">
@@ -257,15 +255,12 @@
     </form>
 
     <div class="success-state" id="success">
-      <span class="checkmark">✦</span>
-      <h2>Application Received!</h2>
-      <p>Thanks for applying! We review every submission personally and will reach out to you via email or Discord/Matrix.</p>
+      <h2>Application received</h2>
+      <p>We'll contact you by email or Discord/Matrix.</p>
     </div>
   </section>
 
-  <p class="contact-footer-note">
-    Need to reach an administrator or moderator directly? <a href="/contact/">Visit our Contact Page →</a>
-  </p>
+  <p class="contact-footer-note"><a href="/contact/">Contact an admin</a></p>
 </main>
 
 <script>

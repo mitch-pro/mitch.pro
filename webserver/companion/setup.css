@@ -2,21 +2,17 @@
   width: min(760px, calc(100% - 48px));
   margin: 0 auto;
   padding: 32px 0 64px;
-  color: var(--t-fg, #e9ecf1);
+  color: var(--t-fg);
 }
 
 .companion-setup-top {
   margin-bottom: 20px;
 }
 
-.companion-setup-top a {
-  font-size: 13px;
-  opacity: 0.7;
-  text-decoration: none;
-}
-
 .companion-setup-top h1 {
-  margin: 6px 0;
+  margin: 0 0 6px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
 }
 
 .companion-setup-toggle {
@@ -35,17 +31,17 @@
 }
 
 .companion-setup-card {
-  border: 1px solid var(--t-bd, rgba(255, 255, 255, 0.12));
-  border-radius: 10px;
+  border: 1px solid var(--t-bd);
+  border-radius: var(--t-radius);
   padding: 12px;
   cursor: pointer;
   text-align: center;
-  background: color-mix(in srgb, var(--t-fg, #fff) 5%, transparent);
+  background: var(--t-bg2);
 }
 
 .companion-setup-card.selected {
-  border-color: var(--t-ac, #789ce8);
-  background: rgba(120, 156, 232, 0.12);
+  border-color: var(--t-ac);
+  background: color-mix(in srgb, var(--t-ac) 12%, var(--t-bg2));
 }
 
 .companion-setup-card img {
@@ -69,17 +65,17 @@
 
 #companion-setup-save {
   padding: 9px 18px;
-  border-radius: 7px;
+  border-radius: var(--t-radius-sm);
   border: 0;
-  background: var(--t-ac, #789ce8);
-  color: #0b0d11;
+  background: var(--t-ac);
+  color: var(--t-ac-ink);
   font-weight: 600;
   cursor: pointer;
   margin-bottom: 32px;
 }
 
 .companion-setup-section {
-  border-top: 1px solid var(--t-bd, rgba(255, 255, 255, 0.12));
+  border-top: 1px solid var(--t-bd);
   padding-top: 24px;
   margin-bottom: 32px;
 }
@@ -98,9 +94,9 @@
 
 .companion-subscription-buttons button {
   padding: 8px 14px;
-  border-radius: 7px;
-  border: 1px solid var(--t-bd, rgba(255, 255, 255, 0.12));
-  background: color-mix(in srgb, var(--t-fg, #fff) 5%, transparent);
+  border-radius: var(--t-radius-sm);
+  border: 1px solid var(--t-bd);
+  background: var(--t-bg2);
   color: inherit;
   cursor: pointer;
 }
@@ -114,8 +110,8 @@
   padding: 5px 10px;
   border-radius: 6px;
   border: 0;
-  background: var(--t-ac, #789ce8);
-  color: #0b0d11;
+  background: var(--t-ac);
+  color: var(--t-ac-ink);
   font-size: 12px;
   cursor: pointer;
 }
@@ -136,10 +132,10 @@
 .companion-mine-card textarea {
   width: 100%;
   box-sizing: border-box;
-  background: var(--t-bg2, #1b1e24);
+  background: var(--t-bg3);
   color: inherit;
-  border: 1px solid var(--t-bd, rgba(255, 255, 255, 0.12));
-  border-radius: 6px;
+  border: 1px solid var(--t-bd);
+  border-radius: var(--t-radius-sm);
   padding: 8px;
   margin-top: 4px;
   font: inherit;
@@ -152,28 +148,28 @@
   padding: 7px 12px;
   border-radius: 6px;
   border: 0;
-  background: var(--t-ac, #789ce8);
-  color: #0b0d11;
+  background: var(--t-ac);
+  color: var(--t-ac-ink);
   font-weight: 600;
   cursor: pointer;
 }
 
 .companion-mine-card {
-  border: 1px solid var(--t-bd, rgba(255, 255, 255, 0.12));
-  border-radius: 10px;
+  border: 1px solid var(--t-bd);
+  border-radius: var(--t-radius);
   padding: 14px;
+  background: var(--t-bg2);
   margin-bottom: 14px;
 }
 
 .companion-mine-card .companion-review-tag {
   font-size: 11px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  padding: 2px 6px;
+    padding: 2px 6px;
   border-radius: 4px;
-  background: #e8a84f;
-  color: #0b0d11;
+  background: var(--t-bg3);
+  color: var(--t-fg);
+  border: 1px solid var(--t-bd);
   margin-left: 6px;
   vertical-align: middle;
 }
@@ -201,7 +197,7 @@
   height: 64px;
   object-fit: contain;
   border-radius: 6px;
-  background: color-mix(in srgb, var(--t-fg, #fff) 5%, transparent);
+  background: var(--t-bg3);
   display: block;
   margin-bottom: 4px;
 }
@@ -219,14 +215,7 @@
   display: inline-block;
 }
 
-/* Light mode: the accent is dark enough that near-black text on it fails contrast. */
-html.theme-light #companion-setup-save,
-html.theme-light .companion-setup-card .companion-unlock-btn,
-html.theme-light #companion-create-form button,
-html.theme-light .companion-mine-card button {
-  color: #fff;
-}
-
 .companion-setup-card:focus-visible { outline: 2px solid var(--t-ac); outline-offset: 2px; }
 .companion-setup-shell button:disabled { opacity: 0.6; cursor: default; }
 .mine-msg:empty { display: none; }
+.companion-setup-grid > :not(.companion-setup-card) { grid-column: 1 / -1; }

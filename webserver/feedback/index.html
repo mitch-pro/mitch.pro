@@ -8,104 +8,14 @@
 <script src="/api.js"></script>
 <script src="/app-shell.js" defer></script>
 <style>
-  .feedback-page {
-    position: relative;
-    isolation: isolate;
-  }
-
-  .feedback-page::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    background:
-      radial-gradient(ellipse 65% 45% at 50% -8%, color-mix(in srgb, var(--t-ac) 14%, transparent), transparent 70%),
-      radial-gradient(ellipse 40% 35% at 100% 100%, color-mix(in srgb, var(--t-ac2, var(--t-ac)) 7%, transparent), transparent 65%);
-  }
-
-  .feedback-shell {
-    width: min(64rem, 100%);
-    max-width: 64rem;
-  }
-
-  .wrap {
-    display: grid;
-    grid-template-columns: minmax(0, 0.95fr) minmax(280px, 1.05fr);
-    gap: 1.1rem;
-    align-items: stretch;
-    animation: app-fade-in 0.5s ease 0.05s both;
-  }
-
-  .intro,
+  .feedback-shell { max-width: 40rem; }
+  h1 { margin: 0 0 1rem; font-size: 1.75rem; font-weight: 700; letter-spacing: -0.03em; color: var(--t-fg); }
   .panel {
     border: 1px solid var(--t-bd);
-    border-radius: calc(var(--t-radius, 8px) + 2px);
-    background:
-      linear-gradient(160deg, color-mix(in srgb, var(--t-bg2) 92%, transparent), color-mix(in srgb, var(--t-bg3) 80%, transparent));
-    box-shadow: 0 1px 0 color-mix(in srgb, #fff 6%, transparent) inset;
+    border-radius: var(--t-radius);
+    background: var(--t-bg2);
+    padding: 1.25rem 1.2rem;
   }
-
-  .intro {
-    padding: 1.5rem 1.4rem;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    gap: 1.25rem;
-    min-height: 28rem;
-  }
-
-  .eyebrow {
-    color: var(--t-ac);
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    margin-bottom: 0.75rem;
-  }
-
-  .intro h1 {
-    margin: 0 0 0.75rem;
-    font-size: clamp(1.85rem, 4vw, 2.75rem);
-    font-weight: 800;
-    letter-spacing: -0.035em;
-    line-height: 1.05;
-    color: var(--t-fg);
-  }
-
-  .lede {
-    margin: 0;
-    color: var(--t-fg2);
-    line-height: 1.6;
-    font-size: 0.92rem;
-    max-width: 46ch;
-  }
-
-  .idea-grid {
-    display: grid;
-    gap: 0.55rem;
-    margin-top: 1.35rem;
-  }
-
-  .idea {
-    border: 1px solid var(--t-bd);
-    border-radius: var(--t-radius, 8px);
-    padding: 0.75rem 0.85rem;
-    background: color-mix(in srgb, var(--t-bg3) 70%, transparent);
-    color: var(--t-fg2);
-    font-size: 0.82rem;
-    line-height: 1.5;
-  }
-
-  .idea b {
-    color: var(--t-fg);
-    display: block;
-    margin-bottom: 0.15rem;
-    font-family: Outfit, system-ui, sans-serif;
-    font-weight: 700;
-  }
-
-  .panel { padding: 1.25rem 1.2rem; }
 
   .field { margin-bottom: 1rem; }
 
@@ -133,11 +43,11 @@
 
   .chip {
     min-height: 2.55rem;
-    border-radius: var(--t-radius, 8px);
+    border-radius: var(--t-radius);
     border: 1px solid var(--t-bd);
-    background: var(--t-bg2);
+    background: var(--t-bg3);
     color: var(--t-fg2);
-    font-family: Outfit, system-ui, sans-serif;
+    font-family: inherit;
     font-size: 0.84rem;
     font-weight: 700;
     cursor: pointer;
@@ -164,7 +74,7 @@
     background: var(--t-bg2);
     color: var(--t-fg);
     border: 1px solid var(--t-bd);
-    border-radius: var(--t-radius, 8px);
+    border-radius: var(--t-radius);
     padding: 0.7rem 0.85rem;
     font-family: inherit;
     font-size: 0.92rem;
@@ -202,12 +112,12 @@
 
   #submitBtn {
     min-height: 2.5rem;
-    border-radius: var(--t-radius, 8px);
+    border-radius: var(--t-radius);
     border: 1px solid var(--t-bda, transparent);
-    background: color-mix(in srgb, var(--t-ac) 88%, #000 12%);
-    color: #fff;
+    background: var(--t-ac);
+    color: var(--t-ac-ink);
     padding: 0 1.15rem;
-    font-family: Outfit, system-ui, sans-serif;
+    font-family: inherit;
     font-weight: 700;
     font-size: 0.9rem;
     cursor: pointer;
@@ -237,55 +147,28 @@
 
   .recaptcha-wrap { margin-top: 0.75rem; transform-origin: left top; }
 
-  .tiny {
-    color: var(--t-fg2);
-    font-size: 0.74rem;
-    line-height: 1.55;
-    margin: 0;
-  }
-
-  .tiny + .tiny { margin-top: 0.75rem; }
-
   @media (max-width: 860px) {
-    .wrap { grid-template-columns: 1fr; }
-    .intro { min-height: 0; }
     .row, .chips { grid-template-columns: 1fr; }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .wrap { animation: none !important; }
     .chip, #submitBtn { transition: none !important; }
   }
 
-  .theme-no-motion .wrap,
-  .theme-no-motion .chip,
+    .theme-no-motion .chip,
   .theme-no-motion #submitBtn {
     animation: none !important;
     transition: none !important;
   }
 </style>
 </head>
-<body class="feedback-page">
+<body class="app-shell">
 <main class="app-main feedback-shell">
-  <div class="wrap">
-    <section class="intro">
-      <div>
-        <div class="eyebrow">Help shape mitch.pro</div>
-        <h1>Tell us what should get better.</h1>
-        <p class="lede">Send bugs, feature ideas, page requests, design notes, or anything that made the site annoying to use. Good feedback gets read, sorted, and turned into actual fixes.</p>
-        <div class="idea-grid">
-          <div class="idea"><b>Broken?</b> Tell us what page, what you clicked, and what happened.</div>
-          <div class="idea"><b>Missing?</b> Ask for a game, tool, shortcut, or admin feature.</div>
-          <div class="idea"><b>Confusing?</b> Point out wording, layout, or flows that felt weird.</div>
-        </div>
-      </div>
-      <p class="tiny">Submitting feedback can award coins when you are signed in. Abuse or spam may be ignored.</p>
-    </section>
-
+  <h1>Feedback</h1>
     <section class="panel">
       <form id="feedbackForm">
         <div class="field">
-          <label id="typeLabel">Type <span>Pick the closest match</span></label>
+          <label id="typeLabel">Type</label>
           <div class="chips" id="typeChips" role="group" aria-labelledby="typeLabel">
             <button class="chip active" type="button" aria-pressed="true" data-type="feedback">General feedback</button>
             <button class="chip" type="button" aria-pressed="false" data-type="broken_game">Something is broken</button>
@@ -314,10 +197,8 @@
           <button id="submitBtn" type="submit">Send feedback</button>
           <div id="status" role="status" aria-live="polite"></div>
         </div>
-        <p class="tiny">This form sends your signed-in ID with the report so admins can understand context and prevent spam.</p>
       </form>
     </section>
-  </div>
 </main>
 
 <script>
