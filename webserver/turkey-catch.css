@@ -26,3 +26,4 @@ body.turkey-playing { cursor: crosshair; }
 .turkey-card div { display: flex; gap: 8px; }
 .turkey-card .turkey-again { border-color: var(--t-ac); background: var(--t-ac); color: var(--t-ac-ink); }
 @media (max-width: 520px) { .turkey-hud { gap: 8px; font-size: .78rem; } }
+.turkey-hud .turkey-sande-danger { border-color: color-mix(in srgb, #d0505c 60%, var(--t-bd)); color: color-mix(in srgb, #d0505c 80%, var(--t-fg)); }

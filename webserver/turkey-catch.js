@@ -15,7 +15,9 @@
 // catch in a round. Sandevistan strain (David Martinez) weakens it further,
 // and his Sandevistan (S) slows the turkeys at the cost of more strain, and
 // for a few grabs he flies anywhere on screen at full speed to snatch them
-// (fewer grabs the weaker he is; the cyberskeleton adds two). In
+// (fewer grabs the weaker he is; the cyberskeleton adds two). It recharges
+// for 12s (server-enforced), and in cyberpsychosis the burst hunts burnt
+// turkeys, which cost lives, so spamming it backfires. In
 // cyberpsychosis he's erratic and grabs burnt turkeys too. Chrome arms give a
 // little more speed and reach; the cyberskeleton doubles the slow-down.
 //
@@ -135,9 +137,10 @@
   function useSandevistan() {
     if (!companion || companion.specialAbility !== 'sandevistan' || !running) return;
     var btn = hud.querySelector('.turkey-sande');
-    btn.disabled = true;
+    if (companion.cooldownLeft && companion.cooldownLeft() > 0) return;
+    btn.dataset.busy = '1';
     companion.sandevistan().then(function (s) {
-      btn.disabled = false;
+      btn.dataset.busy = '';
       if (!s) return;
       var longer = s.upgrades && s.upgrades.indexOf('cyberskeleton') !== -1;
       slowUntil = Date.now() + (longer ? 6000 : 3000);
@@ -153,16 +156,27 @@
     if (!hud) return;
     hud.querySelector('.turkey-score').textContent = 'Score ' + score;
     hud.querySelector('.turkey-lives').textContent = 'Lives ' + Math.max(0, lives);
-    var sande = hud.querySelector('.turkey-sande');
-    if (!sande.hidden && companion) {
-      var strain = Math.round(companion.strain ? companion.strain() : 0);
-      sande.textContent = 'Sandevistan (S)' + (strain ? ' · strain ' + strain : '');
-    }
+    paintSande();
+  }
+
+  // Button text: recharge countdown, then strain or psychosis. Repainted
+  // every frame but only touches the DOM when the text changes.
+  function paintSande() {
+    var sande = hud && hud.querySelector('.turkey-sande');
+    if (!sande || sande.hidden || !companion) return;
+    var wait = companion.cooldownLeft ? Math.ceil(companion.cooldownLeft() / 1000) : 0;
+    var strain = Math.round(companion.strain ? companion.strain() : 0);
+    var text = wait ? 'Sandevistan ' + wait + 's'
+      : 'Sandevistan (S)' + (psycho() ? ' · psychosis' : strain ? ' · strain ' + strain : '');
+    if (sande.textContent !== text) sande.textContent = text;
+    var busy = sande.dataset.busy === '1';
+    sande.disabled = busy || wait > 0;
+    sande.classList.toggle('turkey-sande-danger', psycho());
   }
 
   function spawn() {
     var r = Math.random();
-    var kind = r < 0.07 ? 'golden' : (score >= 8 && r < 0.17 ? 'burnt' : 'normal');
+    var kind = r < 0.07 ? 'golden' : ((score >= 8 || psycho()) && r < 0.17 ? 'burnt' : 'normal');
     turkeys.push({
       x: TURKEY_R + Math.random() * (W - TURKEY_R * 2),
       y: -TURKEY_R,
@@ -209,8 +223,11 @@
     if (helper && companion && bursting) {
       var crazyB = psycho();
       var near = null, nearD = Infinity;
-      turkeys.forEach(function (t) {
-        if (!crazyB && t.kind === 'burnt') return;
+      // In cyberpsychosis he goes for burnt turkeys first, and every one he
+      // grabs costs a life: using it then hurts more than it helps.
+      var pool = turkeys.filter(function (t) { return crazyB ? t.kind === 'burnt' : t.kind !== 'burnt'; });
+      if (!pool.length && crazyB) pool = turkeys;
+      pool.forEach(function (t) {
         var d = Math.hypot(t.x - helper.x, t.y - helper.y);
         if (d < nearD) { near = t; nearD = d; }
       });
@@ -391,6 +408,7 @@
     last = now;
     update(dt);
     draw();
+    paintSande();
     if (running) raf = requestAnimationFrame(frame);
   }
 

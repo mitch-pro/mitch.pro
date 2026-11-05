@@ -20,7 +20,8 @@
   // server only sends one as an `action` for a character that has it; the
   // widget also checks the active character's own `specialAbility`.
   var specialAbility = '';
-  var SANDEVISTAN_COOLDOWN_MS = 4000;
+  // Mirrors COOLDOWN_MILLIS in mitch_lib::companion_chrome (the server enforces it).
+  var SANDEVISTAN_COOLDOWN_MS = 12000;
   // Per-user strain/upgrade state from /api/companion/ability
   // (mitch_lib::companion_chrome): { strain, bleeding, psychosisUntil, upgrades, now }.
   var abilityState = null;
@@ -166,9 +167,15 @@
     if (now - lastSandevistanAt < SANDEVISTAN_COOLDOWN_MS) return Promise.resolve(null);
     lastSandevistanAt = now;
     var recorded = known ? Promise.resolve(known)
-      : api('/api/companion/ability/use', { method: 'POST' }).then(function (res) { return res.ok ? res.data : null; });
+      : api('/api/companion/ability/use', { method: 'POST' }).then(function (res) {
+        if (res.ok) return res.data;
+        // Still recharging server-side (e.g. used from chat): sync the timer.
+        if (res.data && res.data.retryAfterMs) lastSandevistanAt = performance.now() - SANDEVISTAN_COOLDOWN_MS + res.data.retryAfterMs;
+        return null;
+      });
     return recorded.then(function (s) {
-      if (s) applyAbilityState(s);
+      if (!s) return null;
+      applyAbilityState(s);
       runSandevistan(s);
       return s;
     });
@@ -332,6 +339,8 @@
       inPsychosis: inPsychosis,
       strain: function () { return abilityState ? abilityState.strain : 0; },
       sandevistan: function () { return specialAbility === 'sandevistan' ? sandevistan() : Promise.resolve(null); },
+      // Milliseconds until the Sandevistan can be used again (0 when ready).
+      cooldownLeft: function () { return Math.max(0, Math.round(SANDEVISTAN_COOLDOWN_MS - (performance.now() - lastSandevistanAt))); },
       act: function (name) { playAction(name); },
       // Sends a silent context message and shows the reply in the bubble.
       react: function (text) { return sendToCompanion(text, { silent: true, showBubbleOnReply: true }); },

@@ -132,8 +132,13 @@ fn use_ability(state: &Arc<AppState>, email: &str) -> Response {
         Ok(c) => c,
         Err(r) => return r,
     };
-    let s = companion_chrome::record_use(&state.store, email, &character.id);
-    json_response(200, state_json(&character, &s))
+    match companion_chrome::record_use(&state.store, email, &character.id) {
+        Ok(s) => json_response(200, state_json(&character, &s)),
+        Err(ms) => json_response(
+            429,
+            json!({ "error": "Sandevistan is recharging", "retryAfterMs": ms }),
+        ),
+    }
 }
 
 fn buy(state: &Arc<AppState>, email: &str, body_bytes: &[u8]) -> Response {

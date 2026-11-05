@@ -306,12 +306,17 @@ async fn chat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> 
                 mitch_lib::companion::add_memory(&state.store, &email, &character.id, &r.remember);
             }
             // Using the ability in chat costs the same strain as a
-            // double-click; the widget gets the new state to show blood or
-            // cyberpsychosis.
-            let ability = if !r.action.is_empty() && r.action == character.special_ability {
-                let s =
-                    mitch_lib::companion_chrome::record_use(&state.store, &email, &character.id);
-                chrome::state_json(&character, &s)
+            // double-click and respects the same recharge; while it's
+            // recharging the action is dropped.
+            let mut action = r.action.clone();
+            let ability = if !action.is_empty() && action == character.special_ability {
+                match mitch_lib::companion_chrome::record_use(&state.store, &email, &character.id) {
+                    Ok(s) => chrome::state_json(&character, &s),
+                    Err(_) => {
+                        action.clear();
+                        serde_json::Value::Null
+                    }
+                }
             } else {
                 serde_json::Value::Null
             };
@@ -344,7 +349,7 @@ async fn chat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> 
                 json!({
                     "reply": r.reply,
                     "mood": r.mood,
-                    "action": r.action,
+                    "action": action,
                     "customJs": r.custom_js,
                     "coinRequestPercent": r.coin_request_percent,
                     "coinsTaken": coins_taken,

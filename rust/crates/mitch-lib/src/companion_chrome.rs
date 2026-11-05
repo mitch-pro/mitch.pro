@@ -4,8 +4,11 @@
 //!
 //! Strain model (all per (email, character)):
 //! - Every Sandevistan use adds `BASE_STRAIN_PER_USE` × the upgrade
-//!   multiplier, capped at `MAX_STRAIN`. Strain drains by
-//!   `DECAY_PER_MINUTE` while he rests.
+//!   multiplier × (1 + current strain / 100), capped at `MAX_STRAIN`, so
+//!   uses close together snowball. Strain drains by `DECAY_PER_MINUTE`
+//!   while he rests. Uses are at least `COOLDOWN_MILLIS` apart.
+//! - Using it during cyberpsychosis extends the psychosis by
+//!   `PSYCHOSIS_EXTENSION_MILLIS` (at most `MAX_PSYCHOSIS_AHEAD_MILLIS` out).
 //! - At `BLEEDING_STRAIN` or more he coughs up blood after each use.
 //! - Hitting `MAX_STRAIN` starts cyberpsychosis for `PSYCHOSIS_MILLIS`.
 //!   When it wears off, strain drops to `POST_PSYCHOSIS_STRAIN` and keeps
@@ -32,6 +35,13 @@ pub const DECAY_PER_MINUTE: f64 = 2.0;
 pub const BLEEDING_STRAIN: f64 = 60.0;
 pub const POST_PSYCHOSIS_STRAIN: f64 = 50.0;
 pub const PSYCHOSIS_MILLIS: i64 = 10 * 60 * 1000;
+/// Minimum time between uses, enforced here (the widget and game only
+/// mirror it), so the API can't be spammed.
+pub const COOLDOWN_MILLIS: i64 = 12_000;
+/// Each use during cyberpsychosis drags it out this much longer, up to
+/// `MAX_PSYCHOSIS_AHEAD_MILLIS` from now.
+pub const PSYCHOSIS_EXTENSION_MILLIS: i64 = 3 * 60 * 1000;
+pub const MAX_PSYCHOSIS_AHEAD_MILLIS: i64 = 30 * 60 * 1000;
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct Upgrade {
@@ -164,17 +174,32 @@ pub fn ability_state(store: &DataStore, email: &str, character_id: &str) -> Abil
     }
 }
 
-/// Records one Sandevistan use and returns the state right after it.
-pub fn record_use(store: &DataStore, email: &str, character_id: &str) -> AbilityState {
+/// Records one Sandevistan use and returns the state right after it, or
+/// `Err(ms)` with the time left when it's still recharging.
+pub fn record_use(store: &DataStore, email: &str, character_id: &str) -> Result<AbilityState, i64> {
+    record_use_at(store, email, character_id, now_millis())
+}
+
+fn record_use_at(
+    store: &DataStore,
+    email: &str,
+    character_id: &str,
+    now: i64,
+) -> Result<AbilityState, i64> {
     let norm = normalize_email(email);
-    let now = now_millis();
     let upgrades = upgrades_owned(store, &norm, character_id);
     let (strain, updated_at, until) = read_row(store, &norm, character_id);
+    if updated_at > 0 && now - updated_at < COOLDOWN_MILLIS {
+        return Err(COOLDOWN_MILLIS - (now - updated_at));
+    }
     let (strain, mut psychosis_until) = settle(strain, updated_at, until, now);
     let strain = if psychosis_until > now {
+        psychosis_until =
+            (psychosis_until + PSYCHOSIS_EXTENSION_MILLIS).min(now + MAX_PSYCHOSIS_AHEAD_MILLIS);
         MAX_STRAIN
     } else {
-        (strain + BASE_STRAIN_PER_USE * strain_multiplier(&upgrades)).min(MAX_STRAIN)
+        let cost = BASE_STRAIN_PER_USE * strain_multiplier(&upgrades) * (1.0 + strain / MAX_STRAIN);
+        (strain + cost).min(MAX_STRAIN)
     };
     if strain >= MAX_STRAIN && psychosis_until <= now {
         psychosis_until = now + PSYCHOSIS_MILLIS;
@@ -188,12 +213,12 @@ pub fn record_use(store: &DataStore, email: &str, character_id: &str) -> Ability
             rusqlite::params![norm, character_id, strain, now, psychosis_until],
         );
     }
-    AbilityState {
+    Ok(AbilityState {
         strain,
         bleeding: strain >= BLEEDING_STRAIN,
         psychosis_until,
         upgrades,
-    }
+    })
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -327,23 +352,32 @@ mod tests {
     }
 
     #[test]
-    fn overuse_leads_to_blood_then_cyberpsychosis() {
+    fn overuse_snowballs_into_cyberpsychosis_and_spam_is_blocked() {
         let store = temp_store();
         let david = crate::companion::DAVID_MARTINEZ_ID;
-        let mut last = ability_state(&store, "user@example.com", david);
-        assert_eq!(last.strain, 0.0);
-        let mut uses = 0;
+        let who = "user@example.com";
+        let mut now = now_millis();
+        let mut last = record_use_at(&store, who, david, now).unwrap();
+        assert_eq!(last.strain, BASE_STRAIN_PER_USE);
+        // Straight away again: still recharging.
+        assert!(record_use_at(&store, who, david, now + 1000).is_err());
+        let mut uses = 1;
         while last.psychosis_until == 0 {
-            last = record_use(&store, "user@example.com", david);
+            now += COOLDOWN_MILLIS;
+            last = record_use_at(&store, who, david, now).unwrap();
             uses += 1;
             if last.strain >= BLEEDING_STRAIN {
                 assert!(last.bleeding);
             }
             assert!(uses < 20);
         }
-        // 16 strain per use: the 7th use reaches 100.
-        assert_eq!(uses, 7);
-        assert!(last.in_psychosis(now_millis()));
-        assert_eq!(last.strain, MAX_STRAIN);
+        // Escalating cost: 16, 34.6, 56, 81, 100 (minus a little decay).
+        assert_eq!(uses, 5);
+        assert!(last.in_psychosis(now));
+        let until = last.psychosis_until;
+        // Using it again during psychosis drags it out.
+        now += COOLDOWN_MILLIS;
+        let again = record_use_at(&store, who, david, now).unwrap();
+        assert_eq!(again.psychosis_until, until + PSYCHOSIS_EXTENSION_MILLIS);
     }
 }

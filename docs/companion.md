@@ -159,8 +159,13 @@ subsystem — no `server.js` equivalent.
 - **Strain, blood and cyberpsychosis** (`mitch_lib::companion_chrome`,
   table `companion_ability_strain`, one row per (email, character)). Every
   Sandevistan use, from chat or a double-click/`POST /api/companion/ability/use`,
-  adds 16 strain (× upgrade multiplier, max 100); strain drains 2 per
-  minute. At 60+ he coughs up blood after each use (`coughBlood()` in the
+  adds 16 strain × upgrade multiplier × (1 + current strain / 100), max 100,
+  so uses close together snowball (5 back-to-back uses reach 100); strain
+  drains 2 per minute. Uses are at least 12 s apart (`COOLDOWN_MILLIS`,
+  enforced in `record_use`: the endpoint answers 429 with `retryAfterMs`,
+  and a chat reply's action is dropped while recharging). Using it during
+  cyberpsychosis extends the psychosis by 3 minutes (capped at 30 minutes
+  out). At 60+ he coughs up blood after each use (`coughBlood()` in the
   widget; uses a `hurt`/`sad` mood image if the character has one). Reaching
   100 starts 10 minutes of cyberpsychosis: red glitch veil over the page,
   jittering sprite, `psychosis`/`angry` mood if present, and the chat prompt
@@ -190,7 +195,8 @@ subsystem — no `server.js` equivalent.
   to 70% off its speed and grip. David's Sandevistan (S) slows the turkeys
   and sends him flying anywhere on screen to snatch a few (4 when fresh,
   fewer as he tires or strains, at least 1; +2 with the Cyberskeleton),
-  which builds strain like any other use; in cyberpsychosis he's erratic and
+  which builds strain like any other use (in cyberpsychosis the burst
+  hunts burnt turkeys, which cost lives, so spamming it backfires); in cyberpsychosis he's erratic and
   grabs burnt turkeys too. The game itself grants no coins.
 - **Prompt size.** Personality prompts can be up to 1 MB (bytes;
   `MAX_PROMPT_BYTES` in `routes/companion/admin.rs`, also used by `mine.rs`).
