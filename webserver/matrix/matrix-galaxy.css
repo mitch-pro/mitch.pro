@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
 
 :root {
   --mx-sidebar: var(--t-bg2);
@@ -354,8 +354,6 @@ html:not([data-bglayer]) body::after { display: none !important; }
 ._1ho1fyw0 {
   background: var(--mx-sidebar) !important;
   border-right: 1px solid var(--t-bd) !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 ._1ho1fyw4 {
@@ -381,8 +379,6 @@ html:not([data-bglayer]) body::after { display: none !important; }
 ._18fjf6z0 {
   background: var(--mx-sidebar) !important;
   border-right: 1px solid var(--t-bd) !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 ._1xki9of2,
@@ -428,8 +424,6 @@ html:not([data-bglayer]) body::after { display: none !important; }
   background: var(--mx-header) !important;
   border-bottom: 1px solid var(--t-bd) !important;
   box-shadow: none !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 .hru6be0 h1,
@@ -658,14 +652,10 @@ dialog {
   border: 1px solid var(--t-bd) !important;
   border-radius: 14px !important;
   box-shadow: var(--mx-shadow) !important;
-  backdrop-filter: blur(18px) saturate(125%);
-  -webkit-backdrop-filter: blur(18px) saturate(125%);
 }
 
 ._1oc5jl82 {
   background: rgba(0, 0, 0, 0.58) !important;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
 }
 
 html.theme-light ._1oc5jl82 {
@@ -787,8 +777,6 @@ pre,
   border: 1px solid var(--t-bd);
   border-radius: 12px;
   box-shadow: var(--mx-shadow);
-  backdrop-filter: blur(16px) saturate(125%);
-  -webkit-backdrop-filter: blur(16px) saturate(125%);
 }
 
 #mitch-sso-banner {
@@ -1145,12 +1133,10 @@ button[data-variant='critical'] {
   width: min(440px, calc(100vw - 20px));
   height: 460px;
   max-height: calc(100dvh - 110px - env(safe-area-inset-bottom, 0px));
-  background: rgba(18, 12, 34, 0.95);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  background: var(--t-bg2);
   border: 1px solid var(--t-bd);
-  border-radius: 16px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 30px rgba(184, 108, 255, 0.18);
+  border-radius: var(--t-radius);
+  box-shadow: var(--mx-shadow);
   display: flex;
   flex-direction: column;
   z-index: 9999;
@@ -1234,7 +1220,7 @@ button[data-variant='critical'] {
 }
 .mitch-gif-close-btn:hover {
   color: var(--t-fg);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--t-bg3);
 }
 
 .mitch-gif-categories {
@@ -1243,7 +1229,7 @@ button[data-variant='critical'] {
   padding: 8px 14px;
   overflow-x: auto;
   scrollbar-width: none;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--t-bd);
 }
 .mitch-gif-categories::-webkit-scrollbar { display: none; }
 
@@ -1253,7 +1239,7 @@ button[data-variant='critical'] {
   font-weight: 500;
   white-space: nowrap;
   color: var(--t-fg2);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--t-bg3);
   border-radius: 999px;
   cursor: pointer;
   border: 1px solid transparent;
@@ -1284,13 +1270,13 @@ button[data-variant='critical'] {
   border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--t-bg3);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .mitch-gif-card:hover {
   transform: scale(1.025);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 12px var(--t-gls);
+  box-shadow: none;
   z-index: 2;
 }
 
@@ -1352,13 +1338,13 @@ button[data-variant='critical'] {
   height: 80px;
   min-height: 80px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--t-bg3);
   cursor: pointer;
   transition: transform 0.15s ease, background 0.15s ease;
 }
 .mitch-sticker-card:hover {
   transform: scale(1.1);
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--t-bd);
 }
 .mitch-sticker-card img {
   max-width: 100%;
@@ -1373,7 +1359,7 @@ button[data-variant='critical'] {
   justify-content: space-between;
   font-size: 10px;
   color: var(--t-fg3);
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--t-bd);
 }
 
 @media (max-width: 768px) {
@@ -1416,7 +1402,7 @@ button[data-variant='critical'] {
 }
 
 
-.mitch-dm-notice{position:fixed;inset:calc(3.6rem + 12px) 16px auto;z-index:10000;display:flex;align-items:center;gap:12px;max-width:700px;margin:auto;padding:14px 16px;border:1px solid var(--t-bd,#5d6265);border-radius:12px;background:var(--t-bg2,#202526);color:var(--t-fg,#fff);box-shadow:0 8px 30px #0003;font:14px/1.5 system-ui}.mitch-dm-notice span{flex:1}.mitch-dm-notice button{border:1px solid var(--t-bd,#5d6265);border-radius:8px;background:transparent;color:inherit;padding:8px 12px;cursor:pointer}@media(max-width:500px){.mitch-dm-notice{flex-wrap:wrap}.mitch-dm-notice span{flex-basis:100%}}
+.mitch-dm-notice{position:fixed;inset:calc(3.6rem + 12px) 16px auto;z-index:10000;display:flex;align-items:center;gap:12px;max-width:700px;margin:auto;padding:14px 16px;border:1px solid var(--t-bd,#5d6265);border-radius:12px;background:var(--t-bg2,#202526);color:var(--t-fg,#fff);font:14px/1.5 var(--t-font)}.mitch-dm-notice span{flex:1}.mitch-dm-notice button{border:1px solid var(--t-bd,#5d6265);border-radius:8px;background:transparent;color:inherit;padding:8px 12px;cursor:pointer}@media(max-width:500px){.mitch-dm-notice{flex-wrap:wrap}.mitch-dm-notice span{flex-basis:100%}}
 
 /* Names above messages are colored by the sender's role tag (pure blue for a
    room's founder, teal for members), which reads as random next to the rest of
