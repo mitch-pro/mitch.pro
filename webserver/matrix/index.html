@@ -73,7 +73,7 @@
     <!-- Cinny Stylesheet & Mitch.pro chat overrides -->
     <link rel="stylesheet" crossorigin href="/matrix/assets/index-DmaX6Xe5.css" />
     <link rel="stylesheet" href="/theme-tokens.css" />
-    <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=10" />
+    <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=11" />
     <script defer src="/matrix/media-auth.js?v=3"></script>
   </head>
   <body id="appBody">
@@ -97,7 +97,7 @@
 
 
     <div id="matrix-context-bar" aria-hidden="true" style="display:none">
-      <div class="matrix-context-title"><span>COMMUNITY</span><b>Matrix chat</b></div>
+      <div class="matrix-context-title"><b>Chat</b></div>
       <p>Private rooms, direct messages, voice and video on your mitch.pro account.</p>
       <div class="matrix-context-links">
         <a href="/members/">Find people</a>
@@ -107,23 +107,22 @@
 
     <!-- Mitch.pro SSO Connect Banner (only shown if guest/logged out) -->
     <div id="mitch-sso-banner">
-      <span id="mitch-sso-msg">✨ Connect your account for instant single sign-on</span>
+      <span id="mitch-sso-msg">Sign in with your mitch.pro account</span>
       <a id="mitch-sso-btn" href="/api/sso/bridge?back=/matrix/">Sign in</a>
-      <a id="mitch-home-btn" href="/" style="margin-left: 12px; color: var(--t-fg2); text-decoration: none; font-size: 13px; opacity: 0.85; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.85'">← Return to mitch.pro</a>
+      <a id="mitch-home-btn" href="/" style="margin-left: 12px; color: var(--t-fg2); text-decoration: none; font-size: 13px; opacity: 0.85; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.85'">Back to mitch.pro</a>
     </div>
 
     <!-- Mitch.pro Push Notification Opt-in Prompt -->
     <div id="mitch-push-banner" role="dialog" aria-label="Enable notifications">
       <div class="mitch-push-header">
-        <span class="mitch-push-icon" aria-hidden="true">🔔</span>
-        <span>Enable Call & Chat Notifications</span>
+        <span>Turn on notifications</span>
       </div>
       <div class="mitch-push-desc">
-        Never miss an incoming voice/video call or message when you're away or your device is locked.
+        Get alerts for messages and calls when this tab is closed.
       </div>
       <div class="mitch-push-actions">
-        <button id="mitch-push-later" class="mitch-push-btn-later" type="button">Remind later</button>
-        <button id="mitch-push-enable" class="mitch-push-btn-enable" type="button">Turn On</button>
+        <button id="mitch-push-later" class="mitch-push-btn-later" type="button">Not now</button>
+        <button id="mitch-push-enable" class="mitch-push-btn-enable" type="button">Turn on</button>
       </div>
     </div>
 
@@ -297,11 +296,11 @@
         const ssoBtn = document.getElementById('mitch-sso-btn');
         if (ssoMsg) {
           ssoMsg.textContent = isPickle
-            ? '✨ Connect your Sexy Pickle Club account for instant single sign-on'
-            : '✨ Connect your Mitch.pro account for instant single sign-on';
+            ? 'Sign in with your Sexy Pickle Club account'
+            : 'Sign in with your mitch.pro account';
         }
         if (ssoBtn) {
-          ssoBtn.textContent = isPickle ? 'Log In' : 'Login with mitch.pro';
+          ssoBtn.textContent = 'Sign in';
         }
 
         const origTitleSetter = Object.getOwnPropertyDescriptor(Document.prototype, 'title')?.set;

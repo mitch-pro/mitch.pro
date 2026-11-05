@@ -1,3 +1,5 @@
+.staff-title { margin: 0 0 16px; font-size: clamp(30px, 4vw, 40px); font-weight: 700; letter-spacing: -0.03em; }
+#staff-status { color: var(--t-fg2); }
 .staff-links {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -7,12 +9,15 @@
 
 .staff-link-card {
   display: block;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
+  background: var(--t-bg2);
+  border: 1px solid var(--t-bd);
+  border-radius: var(--t-radius);
   padding: 16px;
   text-decoration: none;
-  color: inherit;
+  color: var(--t-fg);
 }
+
+a.staff-link-card:hover { border-color: var(--t-bda); background: var(--t-bg3); }
 
 .staff-link-card h3 {
   margin: 0 0 4px;
@@ -22,7 +27,7 @@
 .staff-link-card p {
   margin: 0;
   font-size: 13px;
-  opacity: 0.7;
+  color: var(--t-fg2);
 }
 
 .staff-link-card[data-locked] {

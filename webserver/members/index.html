@@ -9,7 +9,7 @@
 <script src="/app-shell.js" defer></script>
 <script src="/sync.js?v=2"></script>
 <style>
-  .page-head { margin-bottom: 1.15rem; max-width: 40rem; }
+  .page-head { margin-bottom: 1.15rem; max-width: none; }
   .page-head h1 {
     margin: 0;
     font-size: clamp(1.85rem, 4vw, 2.55rem);
@@ -78,16 +78,14 @@
     display: grid;
     grid-template-rows: auto 1fr auto;
     min-height: 14rem;
-    background: color-mix(in srgb, var(--t-bg2) 88%, transparent);
+    background: var(--t-bg2);
     border: 1px solid var(--t-bd);
     border-radius: var(--t-radius, 8px);
     overflow: hidden;
   }
   .cover {
     height: 3.4rem;
-    background:
-      linear-gradient(135deg, color-mix(in srgb, var(--t-ac) 28%, transparent), color-mix(in srgb, var(--t-ac2, var(--t-ac)) 14%, transparent)),
-      var(--t-bg3);
+    background: var(--t-bg3);
     border-bottom: 1px solid var(--t-bd);
     position: relative;
   }
@@ -104,7 +102,7 @@
     display: grid;
     place-items: center;
     color: var(--t-ac);
-    font-family: Outfit, system-ui, sans-serif;
+    font-family: var(--t-font);
     font-weight: 800;
     font-size: 1.15rem;
   }
@@ -119,7 +117,7 @@
     border: 2px solid var(--t-bg);
     background: #64748b;
   }
-  .online-dot.on { background: #a855f7; box-shadow: 0 0 10px rgba(168,85,247,.55); }
+  .online-dot.on { background: #22c55e; }
   .body { padding: 2.35rem 0.9rem 0.75rem; min-width: 0; }
   .name-row {
     display: flex;
@@ -133,7 +131,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-family: Outfit, system-ui, sans-serif;
+    font-family: var(--t-font);
     font-weight: 750;
     font-size: 0.98rem;
     color: var(--t-fg);
@@ -147,7 +145,8 @@
     white-space: nowrap;
   }
   .presence-detail { margin-top:0.55rem; padding:0.5rem 0.6rem; border-radius:8px; background:var(--t-bg3); color:var(--t-fg2); font-size:0.72rem; line-height:1.35; }
-  .presence-detail.is-online { color:#86efac; }
+  .presence-detail.is-online { color:#16a34a; }
+  html:not(.theme-light) .presence-detail.is-online { color:#86efac; }
   .presence-detail.is-chat { color:#d8b4fe; border:1px solid color-mix(in srgb,#a855f7 35%,transparent); }
   .presence-detail code { display:block; margin-top:0.18rem; color:var(--t-fg2); font-size:0.65rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .role {
@@ -232,7 +231,7 @@
     border: 1px solid var(--t-bd);
     border-radius: calc(var(--t-radius, 8px) + 2px);
     padding: 1rem;
-    box-shadow: 0 24px 70px rgba(0,0,0,.45);
+    box-shadow: none;
   }
   .dialog h2 {
     margin: 0 0 0.35rem;
@@ -282,7 +281,7 @@
   .people-layout { display:grid; grid-template-columns:minmax(0,1fr); gap:28px; align-items:start; }
   .people-layout.has-staff-tools { grid-template-columns:minmax(0,1fr) 224px; }
   .people-directory { min-width:0; }
-  .people-staff-tools { position:sticky; top:84px; padding:18px; border:1px solid var(--t-bd); border-radius:14px; background:var(--t-bg2); }
+  .people-staff-tools { position:sticky; top:84px; padding:18px; border:1px solid var(--t-bd); border-radius:var(--t-radius); background:var(--t-bg2); }
   .people-staff-tools[hidden] { display:none; }
   .people-staff-tools h2 { font-size:.9rem; margin:0 0 14px; }
   #people-staff-links { display:grid; gap:6px; }
@@ -298,7 +297,6 @@
 <main class="app-main">
   <header class="page-head">
     <h1>People</h1>
-    <p class="page-sub">Search people, start chats, and manage friend requests.</p>
   </header>
 
   <div class="people-layout" id="people-layout"><div class="people-directory">

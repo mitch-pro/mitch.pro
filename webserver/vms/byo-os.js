@@ -27,7 +27,7 @@
     const el = $('byo-os-status');
     if (!el) return;
     el.textContent = text || '';
-    el.style.color = isError ? '#f87171' : '#94a3b8';
+    el.style.color = isError ? 'var(--vm-danger)' : 'var(--t-fg2)';
   }
 
   async function api(url, opts) {

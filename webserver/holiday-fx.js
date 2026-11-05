@@ -2,7 +2,9 @@
 // hearts (Valentine's) over the page. Loaded by
 // site-theme.js only while a holiday theme is active. It draws on a fixed canvas
 // that ignores the pointer, stops when the tab is hidden, and does not run if
-// the visitor prefers reduced motion or turned animations off in Preferences.
+// the visitor prefers reduced motion, turned animations off in Preferences, or
+// turned off just the holiday effects (theme_holidayfx = 'off'; the holiday
+// colors stay).
 (function () {
   'use strict';
   if (window.__holidayFx) return;
@@ -16,7 +18,7 @@
 
   function allowed() {
     var off = false;
-    try { off = localStorage.getItem('theme_motion') === 'off'; } catch (_) {}
+    try { off = localStorage.getItem('theme_motion') === 'off' || localStorage.getItem('theme_holidayfx') === 'off'; } catch (_) {}
     var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     return !off && !reduced && location.pathname.indexOf('/vms/desktop') !== 0;
   }

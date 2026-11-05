@@ -17,13 +17,13 @@
       --canvas-accent: var(--t-ac);
       --canvas-accent2: #f59e0b;
       --canvas-danger: #f87171;
-      --canvas-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+      --canvas-mono: var(--t-font);
     }
     html, body {
       width: 100%; height: 100%; overflow: hidden;
       background: var(--t-bg);
       color: var(--t-fg);
-      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      font-family: var(--t-font);
       user-select: none; -webkit-user-select: none;
     }
 
@@ -42,17 +42,17 @@
     #toolbar {
       position: fixed; top: 0; left: 0; right: 0; z-index: 100;
       display: flex; align-items: center; gap: 8px;
-      padding: 0 12px; height: 44px;
-      background:
-        linear-gradient(180deg, color-mix(in srgb, var(--t-bg) 90%, transparent), color-mix(in srgb, var(--t-bg2) 78%, transparent));
-      border-bottom: 1px solid var(--canvas-line);
-      box-shadow: 0 10px 28px rgba(0,0,0,.28);
-      backdrop-filter: blur(18px) saturate(160%);
-      -webkit-backdrop-filter: blur(18px) saturate(160%);
+      /* right padding keeps the floating notification bell (broadcast.js) clear of the controls */
+      padding: 0 64px 0 12px; height: 44px;
+      background: color-mix(in srgb, var(--t-bg) 92%, transparent);
+      border-bottom: 1px solid var(--t-bd);
       font-size: 12px;
     }
+    #toolbar .mitch-wallet { flex: 0 0 auto; margin-left: 6px; min-height: 0; height: 32px; padding: 0 10px; }
+    #toolbar .mitch-wallet .mitch-wallet-label { display: none; }
+    #toolbar .mitch-wallet img { width: 20px; height: 20px; }
     .title {
-      font-family: 'Outfit', system-ui, sans-serif;
+      font-family: var(--t-font);
       font-size: 0.95rem;
       font-weight: 800;
       letter-spacing: -0.03em;
@@ -75,7 +75,7 @@
       color: var(--t-fg2);
       border: 1px solid var(--t-bd);
       border-radius: calc(var(--t-radius, 8px) - 1px);
-      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      font-family: var(--t-font);
       font-weight: 600;
       transition:
         color var(--t-motion, .12s),
@@ -161,7 +161,7 @@
       color: var(--t-fg2);
       border: 1px solid var(--t-bd);
       border-radius: calc(var(--t-radius, 8px) + 1px);
-      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      font-family: var(--t-font);
       font-weight: 600;
       transition: all var(--t-motion, .12s); flex-shrink: 0;
     }
@@ -197,7 +197,7 @@
     #controls-help.hide { display: none; }
     #controls-help kbd {
       background: var(--t-bg3); padding: 1px 5px; border-radius: 5px;
-      color: var(--t-fg); font-family: monospace; font-size: 10px;
+      color: var(--t-fg); font-family: var(--t-font); font-size: 10px;
       border: 1px solid var(--t-bd);
     }
 
@@ -206,10 +206,10 @@
       background: color-mix(in srgb, var(--t-bg) 96%, #000);
       flex-direction: column;
       align-items: center; justify-content: center; gap: 16px; text-align: center; padding: 40px;
-      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      font-family: var(--t-font);
     }
     #ban-ol.show { display: flex; }
-    #ban-ol h1 { font-family: 'Outfit', system-ui, sans-serif; font-size: 1.8rem; color: #ef4444; font-weight: 800; }
+    #ban-ol h1 { font-family: var(--t-font); font-size: 1.8rem; color: #ef4444; font-weight: 800; }
     #ban-ol .reason { color: var(--t-fg2); max-width: 400px; font-size: 0.9rem; line-height: 1.5; }
     #ban-ol .contact { font-size: 0.8rem; color: color-mix(in srgb, var(--t-fg2) 70%, transparent); }
 
@@ -217,7 +217,7 @@
       display: none; position: fixed; inset: 0; z-index: 9999;
       background: #7f1d1d; flex-direction: column;
       align-items: center; justify-content: center; gap: 22px; text-align: center; padding: 40px;
-      font-family: 'Outfit', system-ui, sans-serif;
+      font-family: var(--t-font);
     }
     #sw-alert.show { display: flex; animation: flash-bg 0.6s infinite alternate; }
     @keyframes flash-bg { from { background: #7f1d1d; } to { background: #991b1b; } }
@@ -259,7 +259,7 @@
     #admin-panel .adm-hd {
       color: #dc2626; font-weight: 800; font-size: 12px; margin-bottom: 8px;
       display: flex; align-items: center; gap: 6px;
-      font-family: 'Outfit', system-ui, sans-serif;
+      font-family: var(--t-font);
     }
     #admin-panel .adm-row { margin-bottom: 5px; color: var(--t-fg2); word-break: break-all; }
     #admin-panel .adm-row b { color: var(--t-fg); }
@@ -285,7 +285,7 @@
       backdrop-filter: blur(12px);
     }
     #admin-bans-wrap.show { display: block; }
-    #admin-bans-wrap .adm-hd { color: #f59e0b; font-weight: 800; font-size: 12px; margin-bottom: 8px; font-family: 'Outfit', system-ui, sans-serif; }
+    #admin-bans-wrap .adm-hd { color: #f59e0b; font-weight: 800; font-size: 12px; margin-bottom: 8px; font-family: var(--t-font); }
     .ban-entry { border-top: 1px solid var(--t-bd); padding: 6px 0; display: flex; flex-direction: column; gap: 3px; }
     .ban-entry .ban-id { color: var(--t-ac); font-size: 10px; }
     .ban-entry .ban-reason { color: var(--t-fg2); font-size: 10px; }
@@ -303,7 +303,7 @@
       backdrop-filter: blur(12px);
     }
     #bookmarks-panel.show { display: block; }
-    #bookmarks-panel .adm-hd { color: var(--t-ac); font-weight: 800; font-size: 12px; margin-bottom: 8px; font-family: 'Outfit', system-ui, sans-serif; }
+    #bookmarks-panel .adm-hd { color: var(--t-ac); font-weight: 800; font-size: 12px; margin-bottom: 8px; font-family: var(--t-font); }
 
     #zones-panel {
       display: none; position: fixed; top: 54px; right: 304px; z-index: 200;
@@ -315,7 +315,7 @@
       backdrop-filter: blur(12px);
     }
     #zones-panel.show { display: block; }
-    #zones-panel .adm-hd { color: var(--t-ac2, var(--t-ac)); font-weight: 800; font-size: 12px; margin-bottom: 8px; font-family: 'Outfit', system-ui, sans-serif; }
+    #zones-panel .adm-hd { color: var(--t-ac2, var(--t-ac)); font-weight: 800; font-size: 12px; margin-bottom: 8px; font-family: var(--t-font); }
     .zone-entry { border-top: 1px solid var(--t-bd); padding: 6px 0; display: flex; flex-direction: column; gap: 3px; }
     .zone-entry-header { display: flex; justify-content: space-between; align-items: center; }
     .zone-entry-name { font-weight: bold; color: var(--t-ac2, var(--t-ac)); cursor: pointer; }
@@ -331,25 +331,6 @@
     .bm-entry-coords { color: var(--t-fg2); font-size: 10px; }
     .bm-entry-meta { display: flex; gap: 6px; font-size: 9px; color: color-mix(in srgb, var(--t-fg2) 80%, transparent); margin-top: 2px; }
     .bm-entry-actions { display: flex; gap: 6px; margin-top: 4px; }
-    #play-tip {
-      position: fixed; left: 14px; bottom: 78px; z-index: 90;
-      display: flex; align-items: center; gap: 8px;
-      padding: 9px 12px; border-radius: calc(var(--t-radius, 8px) + 4px);
-      background: color-mix(in srgb, var(--t-bg2) 88%, transparent);
-      border: 1px solid var(--t-bd);
-      color: var(--t-fg2); font-size: 11px;
-      box-shadow: 0 14px 38px rgba(0,0,0,.28);
-      backdrop-filter: blur(12px);
-      pointer-events: none;
-      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-    }
-    #play-tip b { color: var(--t-fg); font-weight: 800; font-family: 'Outfit', system-ui, sans-serif; }
-    #play-tip .tip-dot {
-      width: 9px; height: 9px; border-radius: 999px; background: var(--canvas-accent);
-      box-shadow: 0 0 18px color-mix(in srgb, var(--t-ac) 55%, transparent);
-      flex: 0 0 auto;
-    }
-
     .autocomplete-item {
       padding: 10px 14px;
       cursor: pointer;
@@ -371,7 +352,6 @@
       #help-hint { display:none; }
       #palette { bottom: 8px; padding: 7px; max-width: calc(100vw - 12px); }
       .sw { width: 28px; height: 28px; }
-      #play-tip { display:none; }
       #controls-help { right: 8px; bottom: 72px; max-width: calc(100vw - 16px); }
       #mobile-canvas-notice { display: flex; }
     }
@@ -394,10 +374,10 @@
       padding: 18px;
       color: var(--t-fg);
       box-shadow: 0 22px 70px rgba(0,0,0,.5);
-      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      font-family: var(--t-font);
     }
     #mobile-canvas-notice h2 {
-      font-family: 'Outfit', system-ui, sans-serif;
+      font-family: var(--t-font);
       font-size: 1rem; margin-bottom: 8px; color: var(--t-fg);
     }
     #mobile-canvas-notice p { font-size: .86rem; line-height: 1.5; color: var(--t-fg2); margin-bottom: 14px; }
@@ -409,7 +389,7 @@
       background: color-mix(in srgb, var(--t-ac) 88%, #000 12%);
       color: #fff;
       font-weight: 800;
-      font-family: 'Outfit', system-ui, sans-serif;
+      font-family: var(--t-font);
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -427,7 +407,7 @@
 
 <canvas id="c"></canvas>
 
-<div id="toolbar">
+<div id="toolbar" data-coin-wallet>
   <span class="title">pixelplace</span>
   <div class="tsep"></div>
   <span id="coords">0, 0</span>
@@ -436,21 +416,19 @@
   <div class="tsep"></div>
   <span id="pcount">— px</span>
   <div class="tsep"></div>
-  <button class="tb-btn" id="home-btn">⌂</button>
-  <button class="tb-btn" id="ref-btn">↻</button>
-  <button class="tb-btn" id="load-all-btn" title="Load entire canvas (may take a moment)">🌐 Load All</button>
-  <button class="tb-btn" id="bookmarks-btn" title="View and search canvas bookmarks">🔖 Bookmarks</button>
-  <button class="tb-btn" id="zones-btn" title="Create and visit custom drawing zones">🌌 Zones</button>
+  <button class="tb-btn" id="home-btn" title="Go to center" aria-label="Go to center">⌂</button>
+  <button class="tb-btn" id="ref-btn" title="Refresh" aria-label="Refresh">↻</button>
+  <button class="tb-btn" id="load-all-btn" title="Load entire canvas (may take a moment)">Load All</button>
+  <button class="tb-btn" id="bookmarks-btn" title="View and search canvas bookmarks">Bookmarks</button>
+  <button class="tb-btn" id="zones-btn" title="Create and visit custom drawing zones">Zones</button>
   <button class="tb-btn" id="help-btn">?</button>
-  <button class="tb-btn" id="timelapse-btn" title="Watch canvas history timelapse">🎬 Timelapse</button>
+  <button class="tb-btn" id="timelapse-btn" title="Watch canvas history timelapse">Timelapse</button>
   <span id="premium-badge" style="display:none">✦ premium</span>
   <button class="tb-btn" id="admin-btn" style="display:none;color:#dc2626;border-color:#dc2626">⚑ admin</button>
   <button class="tb-btn" id="bans-btn" style="display:none;color:#f59e0b;border-color:#f59e0b">bans</button>
   <span id="mod-st"></span>
   <span id="help-hint">space+drag or scroll to pan · ctrl+scroll to zoom</span>
 </div>
-
-<div id="play-tip"><span class="tip-dot"></span><span><b>Tip</b> drag to paint, scroll to travel, ctrl+scroll to zoom</span></div>
 
 <div id="mobile-canvas-notice">
   <div class="notice-card">
@@ -532,7 +510,7 @@
 </div>
 
 <div id="bookmarks-panel">
-  <div class="adm-hd">🔖 Bookmarks</div>
+  <div class="adm-hd">Bookmarks</div>
   <div style="color:#94a3b8;font-size:10px;margin-bottom:8px;line-height:1.4">Bookmarks let you save coordinate locations. Max 1 public per day.</div>
   
   <div class="bm-form" style="border-bottom:1px solid #334155;padding-bottom:12px;margin-bottom:12px">
@@ -553,7 +531,7 @@
 </div>
 
 <div id="zones-panel">
-  <div class="adm-hd">🌌 Custom Zones</div>
+  <div class="adm-hd">Custom Zones</div>
   <div style="color:#94a3b8;font-size:10px;margin-bottom:8px;line-height:1.4">Create your own private or shared drawing zones. Max 10 per user.</div>
   
   <!-- Create Zone Form -->
@@ -570,7 +548,7 @@
   <!-- Active Zone Status -->
   <div id="zone-active-status" style="border-bottom:1px solid #334155;padding-bottom:10px;margin-bottom:10px;display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-      <div style="font-size:10px;color:#fbbf24;font-weight:bold">🌌 <span id="zone-active-name">None</span></div>
+      <div style="font-size:10px;color:#fbbf24;font-weight:bold"><span id="zone-active-name">None</span></div>
       <div style="display:flex;gap:4px">
         <button class="adm-btn" id="zone-settings-btn" style="font-size:9px;padding:2px 6px;border-color:#a78bfa;color:#a78bfa">⚙ Settings</button>
         <button class="adm-btn red" id="zone-leave-btn" style="font-size:9px;padding:2px 6px">✕ Leave</button>
@@ -959,7 +937,7 @@ async function toggleTimelapse() {
       if (!myHistory.length) {
         showToast("No canvas history available for your user.");
         rebuildAllChunkCanvases();
-        btn.textContent = '🎬 Timelapse';
+        btn.textContent = 'Timelapse';
         btn.style.color = '';
         btn.style.borderColor = '';
         return;
@@ -1018,7 +996,7 @@ function stopTimelapse() {
   }
   const btn = document.getElementById('timelapse-btn');
   if (btn) {
-    btn.textContent = '🎬 Timelapse';
+    btn.textContent = 'Timelapse';
     btn.style.color = '';
     btn.style.borderColor = '';
   }
@@ -1466,15 +1444,6 @@ function htmlEscape(v) {
     .replaceAll("'", '&#39;');
 }
 
-setTimeout(() => {
-  try {
-    const tip = document.getElementById('play-tip');
-    if (!tip || localStorage.getItem('canvas_help_seen')) return;
-    tip.style.opacity = '0';
-    tip.style.transform = 'translateY(8px)';
-    tip.style.transition = 'opacity .35s, transform .35s';
-  } catch {}
-}, 9000);
 
 function showBanned(reason) {
   document.getElementById('ban-reason').textContent = reason || 'Drawing inappropriate content is not permitted.';
@@ -2208,7 +2177,7 @@ async function visitZone(zone) {
   const isOwner = normalizeEmail(zone.owner) === normalizeEmail(pid);
   document.getElementById('zone-settings-btn').style.display = (isOwner || isAdmin) ? '' : 'none';
 
-  showToast(`🌌 Entering zone: ${zone.name}`);
+  showToast(`Entering zone: ${zone.name}`);
   await loadPixels();
 }
 

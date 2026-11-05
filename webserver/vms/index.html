@@ -4,20 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#101319">
-  <title>My Computer · mitch.pro</title>
+  <title>VM Lab · mitch.pro</title>
   <link rel="icon" href="/favicon.ico">
   <link rel="stylesheet" href="/app.css">
-  <link rel="stylesheet" href="/vms/portal.css?v=3">
-  <link rel="stylesheet" href="/vms/portal-polish.css?v=6">
+  <link rel="stylesheet" href="/vms/portal.css?v=7">
+  <link rel="stylesheet" href="/vms/portal-polish.css?v=8">
 </head>
 <body class="computer-portal">
   <main class="computer-shell">
     <header class="computer-hero">
       <div class="computer-heading">
-        <h1>My Computer</h1>
-        <p>Your desktop, files, and computer settings.</p>
+        <h1>VM Lab</h1>
       </div>
-      <div style="display:flex; gap:8px; align-items:center;">
+      <div class="computer-header-actions">
         <button class="quiet-button" id="byo-os-open-btn-header" type="button" title="Install your own operating system">Custom OS</button>
         <button class="quiet-button" id="refresh-button" type="button" aria-label="Refresh computer status"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5M4 18v-5h5"/><path d="M18.5 9A7 7 0 0 0 6.2 6.2L4 8m16 8-2.2 2.2A7 7 0 0 1 5.5 15"/></svg><span>Refresh</span></button>
       </div>
@@ -26,21 +25,20 @@
 
     <section id="loading-state" class="state-panel" aria-live="polite">
       <span class="loader" aria-hidden="true"></span>
-      <div><strong>Opening My Computer</strong><p>Checking its status…</p></div>
+      <div><strong>Loading</strong></div>
     </section>
 
     <section id="empty-state" class="state-panel is-hidden">
-      <div class="empty-icon" aria-hidden="true">🖥️</div>
       <div id="empty-create-box">
         <strong>Your Linux desktop</strong>
-        <p>Open a personal computer in your browser. Your files stay between sessions, and your website account signs you in automatically.</p>
+        <p>A personal computer in your browser. Files persist between sessions.</p>
         <p class="empty-specs">2 CPU cores · 4 GB memory · 64 GB storage</p>
         <button type="button" id="create-vm-btn" class="primary-button" style="margin-top: 18px; font-size: 0.96rem; padding: 12px 24px;">Create Computer</button>
         <button type="button" id="byo-os-open-btn" class="quiet-button" style="margin-top: 10px; font-size: 0.88rem;">Bring your own OS · 1,000 coins</button>
       </div>
       <div id="empty-unauthorized-box" class="is-hidden">
         <strong>No computer assigned yet</strong>
-        <p>Ask an administrator to create or assign a free computer for your account. You do not need to purchase a VM plan.</p>
+        <p>Ask an administrator to assign one to your account.</p>
       </div>
     </section>
 
@@ -54,8 +52,7 @@
 
   <dialog id="confirm-dialog" class="confirm-dialog">
     <form method="dialog">
-      <p class="eyebrow">Confirm action</p>
-      <h2 id="confirm-title">Restart computer?</h2>
+            <h2 id="confirm-title">Restart computer?</h2>
       <p id="confirm-copy">Anything unsaved inside the desktop may be lost.</p>
       <div class="dialog-actions">
         <button value="cancel" class="quiet-button">Cancel</button>
@@ -66,10 +63,10 @@
 
   <dialog id="provision-dialog" class="confirm-dialog">
     <form id="provision-form" method="dialog">
-      <p class="provision-label" id="provision-eyebrow">Personal Computer</p>
+      <p class="provision-label" id="provision-eyebrow">New Computer</p>
       <h2 id="provision-title">Create Computer</h2>
 
-      <div id="recreate-warning" class="is-hidden" style="background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; border-radius: 8px; padding: 12px; margin: 12px 0; color: #fca5a5; text-align: left;">
+      <div id="recreate-warning" class="is-hidden" style="border: 1px solid var(--vm-danger); border-radius: var(--t-radius-sm); padding: 12px; margin: 12px 0; color: var(--t-fg); text-align: left;">
         <strong>Delete this computer’s files</strong>
         <p style="margin: 6px 0 0 0; font-size: 0.88rem; line-height: 1.4;">
           This will <strong>permanently delete</strong> your current computer and create a brand new one.
@@ -77,8 +74,7 @@
         </p>
       </div>
 
-      <p class="provision-note">Your website account opens the desktop automatically. You do not need to create or remember another password.</p>
-      <p id="provision-status" class="form-status" style="color: #f87171; font-size: 0.88rem; margin: 0 0 12px 0; min-height: 1.2em;" role="status"></p>
+            <p id="provision-status" class="form-status" style="color: var(--vm-danger); font-size: 0.88rem; margin: 0 0 12px 0; min-height: 1.2em;" role="status"></p>
 
       <div class="dialog-actions">
         <button type="button" id="provision-cancel" class="quiet-button">Cancel</button>
@@ -89,18 +85,17 @@
 
   <dialog id="byo-os-dialog" class="confirm-dialog">
     <form id="byo-os-form" method="dialog">
-      <p class="eyebrow">Bring Your Own OS</p>
-      <h2>Custom ISO Computer</h2>
-      <p style="font-size: 0.85rem; color: #94a3b8; text-align: left; margin: 0 0 14px 0;">
-        Give a link to an install ISO, or upload one yourself (one stored at a time), and boot a blank computer from it instead of the standard template. You install and configure the OS yourself through the same desktop console — nothing is pre-set up. Costs 1000 MitchCoins per ISO; recreating a computer from the same stored ISO afterward is free. Uploaded files are capped at 6GB — a link has no size limit, but anything over 6GB adds a surcharge (100 <img class="mitch-coin-inline" src="/mitchcoin.svg?v=4" width="20" height="20" alt="MitchCoins">/GB, capped at 12GB).
+      <h2>Custom OS</h2>
+      <p style="font-size: 0.85rem; color: var(--t-fg2); text-align: left; margin: 0 0 14px 0;">
+        Boot a blank computer from an install ISO and set up the OS yourself. Costs 1000 MitchCoins per ISO; recreating from the same stored ISO is free. Uploads are capped at 6GB. Links over 6GB add a surcharge (100 <img class="mitch-coin-inline" src="/mitchcoin.svg?v=4" width="20" height="20" alt="MitchCoins">/GB, capped at 12GB).
       </p>
 
-      <div style="background:#0f172a; border:1px solid #334155; border-radius:8px; padding:12px; margin-bottom:16px; text-align:left;">
-        <p style="font-size:0.85rem; color:#e2e8f0; margin:0 0 8px 0; font-weight:600;">Or start from a ready-made ISO</p>
-        <p style="font-size:0.78rem; color:#64748b; margin:0 0 10px 0;">No upload needed — boots straight from a preset image. This replaces your current computer, same as above.</p>
-        <label style="display:flex; flex-direction:column; gap:6px; font-size:0.85rem; color:#94a3b8;">
+      <div style="background:var(--t-bg3); border:1px solid var(--t-bd); border-radius:8px; padding:12px; margin-bottom:16px; text-align:left;">
+        <p style="font-size:0.85rem; color:var(--t-fg); margin:0 0 8px 0; font-weight:600;">Or start from a ready-made ISO</p>
+        <p class="byo-hint">Replaces your current computer.</p>
+        <label style="display:flex; flex-direction:column; gap:6px; font-size:0.85rem; color:var(--t-fg2);">
           <span>Operating system</span>
-          <select id="byo-os-preset-select" style="padding:9px 12px; border-radius:8px; background:#0f172a; border:1px solid #334155; color:#fff;">
+          <select id="byo-os-preset-select" style="padding:9px 12px; border-radius:8px; background:var(--t-bg3); border:1px solid var(--t-bd); color:var(--t-fg);">
             <option value="">Loading…</option>
           </select>
         </label>
@@ -108,37 +103,37 @@
       </div>
 
       <div id="byo-os-no-iso">
-        <label style="display:flex; flex-direction:column; gap:6px; text-align:left; font-size:0.85rem; color:#94a3b8;">
+        <label style="display:flex; flex-direction:column; gap:6px; text-align:left; font-size:0.85rem; color:var(--t-fg2);">
           <span>Link to an ISO (http/https, any size)</span>
-          <input type="url" id="byo-os-url-input" placeholder="https://example.com/install.iso" style="padding:9px 12px; border-radius:8px; background:#0f172a; border:1px solid #334155; color:#fff;">
+          <input type="url" id="byo-os-url-input" placeholder="https://example.com/install.iso" style="padding:9px 12px; border-radius:8px; background:var(--t-bg3); border:1px solid var(--t-bd); color:var(--t-fg);">
         </label>
         <button type="button" id="byo-os-url-btn" class="primary-button" style="margin-top:10px;" disabled>Fetch from link (1000 <img class="mitch-coin-inline" src="/mitchcoin.svg?v=4" width="20" height="20" alt="MitchCoins">+)</button>
 
-        <p style="font-size:0.78rem; color:#64748b; text-align:left; margin:18px 0 6px 0;">— or upload a file instead (max 6GB) —</p>
-        <label style="display:flex; flex-direction:column; gap:6px; text-align:left; font-size:0.85rem; color:#94a3b8;">
+        <p class="byo-hint byo-or">Or upload a file</p>
+        <label style="display:flex; flex-direction:column; gap:6px; text-align:left; font-size:0.85rem; color:var(--t-fg2);">
           <span>Install ISO (.iso, max 6GB)</span>
           <input type="file" id="byo-os-file-input" accept=".iso">
         </label>
         <div id="byo-os-progress-wrap" class="is-hidden" style="margin-top:12px;">
-          <div style="height:8px; border-radius:999px; background:#1e293b; overflow:hidden;">
-            <div id="byo-os-progress-bar" style="height:100%; width:0%; background:#6366f1; transition:width .2s;"></div>
+          <div style="height:8px; border-radius:999px; background:var(--t-bd); overflow:hidden;">
+            <div id="byo-os-progress-bar" style="height:100%; width:0%; background:var(--t-ac); transition:width .2s;"></div>
           </div>
-          <p id="byo-os-progress-text" style="font-size:0.8rem; color:#94a3b8; margin:6px 0 0 0;"></p>
+          <p id="byo-os-progress-text" style="font-size:0.8rem; color:var(--t-fg2); margin:6px 0 0 0;"></p>
         </div>
         <button type="button" id="byo-os-upload-btn" class="quiet-button" style="margin-top:14px;" disabled>Upload ISO (1000 <img class="mitch-coin-inline" src="/mitchcoin.svg?v=4" width="20" height="20" alt="MitchCoins">)</button>
       </div>
 
       <div id="byo-os-has-iso" class="is-hidden" style="text-align:left;">
-        <div style="background:#0f172a; border:1px solid #334155; border-radius:8px; padding:12px; margin-bottom:12px;">
+        <div style="background:var(--t-bg3); border:1px solid var(--t-bd); border-radius:8px; padding:12px; margin-bottom:12px;">
           <strong id="byo-os-iso-name" style="word-break:break-all;"></strong>
-          <p id="byo-os-iso-meta" style="font-size:0.8rem; color:#94a3b8; margin:4px 0 0 0;"></p>
+          <p id="byo-os-iso-meta" style="font-size:0.8rem; color:var(--t-fg2); margin:4px 0 0 0;"></p>
         </div>
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
           <button type="button" id="byo-os-create-btn" class="primary-button">Create computer from this ISO →</button>
           <button type="button" id="byo-os-delete-btn" class="quiet-button">Remove ISO</button>
         </div>
-        <div id="byo-os-problem-box" style="margin-top:14px; padding-top:12px; border-top:1px solid #334155;">
-          <p style="font-size:0.78rem; color:#64748b; margin:0 0 8px 0;">Got the wrong file? (e.g. a download <em>page</em> instead of the ISO itself)</p>
+        <div id="byo-os-problem-box" style="margin-top:14px; padding-top:12px; border-top:1px solid var(--t-bd);">
+          <p style="font-size:0.78rem; color:var(--t-fg3); margin:0 0 8px 0;">Got the wrong file? (e.g. a download <em>page</em> instead of the ISO itself)</p>
           <div style="display:flex; gap:10px; flex-wrap:wrap;">
             <button type="button" id="byo-os-refund-btn" class="quiet-button is-hidden">This was the wrong link — refund me</button>
             <button type="button" id="byo-os-report-btn" class="quiet-button">Report an issue</button>
@@ -178,7 +173,7 @@
       </div>
 
       <div class="upgrade-notice">
-        <span id="upgrade-notice-copy">Your computer is free. Optional upgrades use earned MitchCoins, not real money. Hardware upgrades stay with your account; session extensions last for the selected period. Live changes depend on host capacity.</span>
+        <span id="upgrade-notice-copy">Hardware upgrades stay with your account. Session extensions last for the selected period. Live changes depend on host capacity.</span>
       </div>
 
       <p id="upgrade-status" class="form-status" role="status"></p>
@@ -190,7 +185,7 @@
   </dialog>
 
   <script src="/app-shell.js?v=17" defer></script>
-  <script src="/vms/portal.js?v=12" defer></script>
-  <script src="/vms/byo-os.js?v=3" defer></script>
+  <script src="/vms/portal.js?v=14" defer></script>
+  <script src="/vms/byo-os.js?v=4" defer></script>
 </body>
 </html>

@@ -116,7 +116,7 @@ document.addEventListener("keydown",event=>{
 });
 $("onboarding").addEventListener("click",event=>{if(event.target.classList.contains("onboarding-backdrop")||event.target.closest("#close-lunch"))closeLunch()});
 
-function renderIdentity(){const iso=data.now?.iso||pacific().date,d=new Date(`${iso}T12:00:00`),combined=!!data.today?.oneLunch;$("hero-date").dateTime=iso;$("hero-weekday").textContent=data.now?.weekdayName||d.toLocaleDateString("en-US",{weekday:"long"});$("hero-date-day").textContent=String(d.getDate()).padStart(2,"0");$("hero-date-month").textContent=d.toLocaleDateString("en-US",{month:"long"});$("hero-date-year").textContent=d.getFullYear();$("date-month").textContent=d.toLocaleDateString("en-US",{month:"short"}).toUpperCase();$("date-day").textContent=String(d.getDate()).padStart(2,"0");$("date-year").textContent=d.getFullYear();$("hero-summary").textContent=data.today?.blurb||data.today?.event||"Regular weekly schedule.";$("header-lunch").textContent=combined?"Combined lunch":lunch?`Lunch ${lunch}`:"Choose lunch";$("brief-lunch").textContent=combined?"COMBINED LUNCH":`LUNCH ${lunch||"Not set"}`;$("schedule-note").textContent=combined?"Today uses a combined lunch.":`Showing times for Lunch ${lunch||"Not set"}.`;$("snapshot-type").textContent=(data.today?.title||"Today").replace(" schedule","");}
+function renderIdentity(){const iso=data.now?.iso||pacific().date,d=new Date(`${iso}T12:00:00`),combined=!!data.today?.oneLunch;$("hero-date").dateTime=iso;$("hero-weekday").textContent=data.now?.weekdayName||d.toLocaleDateString("en-US",{weekday:"long"});$("hero-date-day").textContent=String(d.getDate()).padStart(2,"0");$("hero-date-month").textContent=d.toLocaleDateString("en-US",{month:"long"});$("hero-date-year").textContent=d.getFullYear();$("date-month").textContent=d.toLocaleDateString("en-US",{month:"short"}).toUpperCase();$("date-day").textContent=String(d.getDate()).padStart(2,"0");$("date-year").textContent=d.getFullYear();$("hero-summary").textContent=data.today?.blurb||data.today?.event||"";$("header-lunch").textContent=combined?"Combined lunch":lunch?`Lunch ${lunch}`:"Choose lunch";$("brief-lunch").textContent=combined?"COMBINED LUNCH":`LUNCH ${lunch||"Not set"}`;$("schedule-note").textContent=combined?"Today uses a combined lunch.":`Showing times for Lunch ${lunch||"Not set"}.`;$("snapshot-type").textContent=(data.today?.title||"Today").replace(" schedule","");}
 let timelineMinute="";
 function renderTimeline(){
  const blocks=schedule(),now=pacific(),live=now.date===data.now?.iso&&!data.today?.manual;
@@ -171,7 +171,7 @@ function renderEvents(){
   return `<li><time datetime="${event.date}"><span>${d.toLocaleDateString("en-US",{month:"short",timeZone:"UTC"}).toUpperCase()}</span><strong>${String(d.getUTCDate()).padStart(2,"0")}</strong></time><span><small>${d.toLocaleDateString("en-US",{weekday:"long",timeZone:"UTC"})}</small><strong>${safe(event.text)}</strong></span></li>`;
  }).join(""):`<li class="agenda-empty"><strong>${calendarSelected?"No events on this date.":"No upcoming events posted."}</strong><span>${calendarSelected?"Choose another date or return to Today.":"Check the official calendar for updates."}</span></li>`;
  const next=events.find(event=>event.date>=today);
- $("announcement-text").textContent=next?`Next up: ${next.text} · ${new Date(`${next.date}T12:00:00Z`).toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",timeZone:"UTC"})}`:(data.today?.blurb||"Published weekly schedule.");
+ $("announcement-text").textContent=next?`Next up: ${next.text} · ${new Date(`${next.date}T12:00:00Z`).toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",timeZone:"UTC"})}`:(data.today?.blurb||"");
 }
 function moveCalendar(offset){
  const d=new Date(Date.UTC(calendarCursor.year,calendarCursor.month+offset,1));
@@ -340,7 +340,7 @@ function renderFinalsCountdown(){
 function renderSourceStatus(){
  if(data.today?.manual){$("source-status").textContent="Manual preview · Published bell times";return}
  if(data.today?.type==="special"){$("source-status").textContent=`Special schedule active · ${data.today.title}`;return}
- $("source-status").textContent=calendarState==="checking"?"Checking the official calendar · Published weekly times shown":calendarVerified?"Official calendar checked · Published bell times":calendarState==="available"?"Published weekly times · Check school announcements":"Calendar unavailable · Published weekly times";
+ $("source-status").textContent=calendarState==="checking"?"Checking the school calendar…":calendarVerified?"":calendarState==="available"?"Check school announcements for changes.":"School calendar unavailable. Showing regular bell times.";
 }
 function render(){renderIdentity();renderTimeline();renderWeek();renderEvents();renderNowAdvanced();renderFinalsCountdown();renderSourceStatus();renderSchoolLunch();if(foodMenuDate&&foodMenuDate!==pacific().date)loadSchoolLunch()}
 /** Overlay regular-day times published on the school's own site onto the bundled schedule. */

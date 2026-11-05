@@ -19,6 +19,7 @@
     margin: 0;
     font-size: clamp(1.85rem, 4vw, 2.75rem);
     letter-spacing: -0.03em;
+    font-weight: 700;
   }
   .subline {
     margin: 0.55rem 0 0;
@@ -40,7 +41,6 @@
   }
   .status b {
     display: block;
-    font-family: Outfit, system-ui, sans-serif;
     font-size: 0.86rem;
     font-weight: 750;
     color: var(--t-fg);
@@ -66,7 +66,6 @@
     border-bottom: 1px solid var(--t-bd);
   }
   .section-title {
-    font-family: Outfit, system-ui, sans-serif;
     font-size: 1rem;
     font-weight: 750;
     color: var(--t-fg);
@@ -94,7 +93,6 @@
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--t-ac) 22%, transparent);
   }
   .name {
-    font-family: Outfit, system-ui, sans-serif;
     font-weight: 750;
     font-size: 1rem;
     line-height: 1.25;
@@ -124,7 +122,7 @@
     font-size: 0.65rem;
     font-weight: 700;
   }
-  .pill.good { color: #c084fc; border-color: rgba(192,132,252,.35); background: rgba(192,132,252,.08); }
+  .pill.good { color: var(--t-ac); border-color: color-mix(in srgb, var(--t-ac) 35%, var(--t-bd)); background: color-mix(in srgb, var(--t-ac) 8%, transparent); }
   .pill.warn { color: #f59e0b; border-color: rgba(245,158,11,.4); background: rgba(245,158,11,.08); }
   .pill.active { color: var(--t-ac); border-color: color-mix(in srgb, var(--t-ac) 45%, transparent); background: color-mix(in srgb, var(--t-ac) 12%, transparent); }
   .empty {
@@ -146,10 +144,10 @@
     font-weight: 700;
     font-size: 0.88rem;
     z-index: 9999;
-    box-shadow: 0 12px 40px rgba(0,0,0,.35);
+    box-shadow: 0 4px 12px rgba(0,0,0,.18);
   }
   #toast { z-index: 9999; }
-  html.theme-light .pill.good { color: #7e22ce; }
+  
   html.theme-light .pill.warn { color: #b45309; }
   #toast.ok { display: block; background: #16a34a; color: #fff; }
   #toast.err { display: block; background: #dc2626; color: #fff; }
@@ -169,10 +167,10 @@
   <header class="page-head">
     <div>
       <h1>Inventory</h1>
-      <p class="subline">Equip owned shop items, including items that are no longer listed in the market.</p>
+      <p class="subline">Equip the items you own.</p>
     </div>
     <div class="head-actions panel-actions">
-      <a class="btn" href="/shop/">Open Market</a>
+      <a class="btn" href="/shop/">Shop</a>
       <a class="btn" href="/preferences/">Preferences</a>
     </div>
   </header>

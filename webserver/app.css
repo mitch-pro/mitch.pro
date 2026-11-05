@@ -163,7 +163,9 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--t-font); font-weight: 700; line-heig
   .app-footer, #_agree_footer { white-space: normal; box-sizing: border-box; max-width: 100%; }
 }
 @media (max-width: 580px) {
-  #_agree_footer .footer-agreement, #site-credit-copy .footer-agreement { display: none !important; }
+  #_agree_footer .footer-agreement { display: none !important; }
+  /* The band is the only place the agreement appears; drop the GitHub link instead. */
+  #site-credit-copy .footer-oss { display: none !important; }
 }
 
 /* --------------------------------------------------------------------------

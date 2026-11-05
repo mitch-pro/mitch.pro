@@ -14,17 +14,6 @@
     isolation: isolate;
   }
 
-  .friends-page::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    background:
-      radial-gradient(ellipse 65% 45% at 50% -8%, color-mix(in srgb, var(--t-ac) 14%, transparent), transparent 70%),
-      radial-gradient(ellipse 40% 35% at 100% 100%, color-mix(in srgb, var(--t-ac2, var(--t-ac)) 7%, transparent), transparent 65%);
-  }
-
   .friends-shell {
     width: min(48rem, 100%);
     max-width: 48rem;
@@ -54,14 +43,12 @@
     padding: 1.25rem 1.2rem;
     border: 1px solid var(--t-bd);
     border-radius: calc(var(--t-radius, 8px) + 2px);
-    background:
-      linear-gradient(160deg, color-mix(in srgb, var(--t-bg2) 92%, transparent), color-mix(in srgb, var(--t-bg3) 80%, transparent));
-    box-shadow: 0 1px 0 color-mix(in srgb, #fff 6%, transparent) inset;
+    background: var(--t-bg2);
     animation: app-fade-in 0.55s ease 0.06s both;
   }
 
   .section-title {
-    font-family: Outfit, system-ui, sans-serif;
+    font-family: var(--t-font);
     font-size: 1rem;
     font-weight: 750;
     color: var(--t-fg);
@@ -134,9 +121,7 @@
     display: inline-block;
   }
 
-  .online .status-dot { background-color: #d8b4fe; box-shadow: 0 0 8px rgba(74, 222, 128, 0.45); }
-  .online { color: #d8b4fe; }
-  .offline .status-dot { background-color: color-mix(in srgb, var(--t-fg2) 55%, transparent); }
+    .offline .status-dot { background-color: color-mix(in srgb, var(--t-fg2) 55%, transparent); }
   .offline { color: var(--t-fg2); }
 
   .add-box {
@@ -201,8 +186,8 @@
     cursor: pointer;
   }
 
-  .btn-accept { background: #a855f7; color: white; }
-  .btn-accept:hover { background: #16a34a; }
+  .btn-accept { background: #16a34a; color: white; }
+  .btn-accept:hover { background: #15803d; }
   .btn-deny { background: #ef4444; color: white; margin-left: 0.25rem; }
   .btn-deny:hover { background: #dc2626; }
 
@@ -269,7 +254,7 @@
     overflow-y: auto;
     z-index: 1000;
     display: none;
-    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.35);
+    box-shadow: none;
   }
 
   .autocomplete-item {
@@ -326,7 +311,7 @@
   .friend-grid { grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: .75rem; }
   .friend-item { position: relative; min-height: 218px; padding: .8rem; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto 1fr auto; align-items: start; gap: .55rem; background: color-mix(in srgb, var(--t-bg2) 86%, transparent); border-radius: 16px; overflow: hidden; }
   .friend-item:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--t-ac) 55%, var(--t-bd)); }
-  .friend-avatar { grid-column: 1 / -1; position: relative; width: 100%; aspect-ratio: 1.55; display: grid; place-items: center; overflow: hidden; border-radius: 12px; background: linear-gradient(145deg, color-mix(in srgb, var(--t-ac) 22%, var(--t-bg3)), var(--t-bg3)); color: var(--t-fg); font-size: 2rem; font-weight: 800; }
+  .friend-avatar { grid-column: 1 / -1; position: relative; width: 100%; aspect-ratio: 1.55; display: grid; place-items: center; overflow: hidden; border-radius: 12px; background: var(--t-bg3); color: var(--t-fg); font-size: 2rem; font-weight: 800; }
   .friend-avatar img { width: 100%; height: 100%; object-fit: cover; }
   .friend-avatar .avatar-fallback { display: grid; place-items: center; position: absolute; inset: 0; }
   .friend-avatar img + .avatar-fallback { display: none; }
@@ -341,8 +326,9 @@
   .friend-message:hover { color: var(--t-bg); filter: brightness(1.08); }
   .btn-remove { width: 34px; min-height: 34px; border: 1px solid var(--t-bd); border-radius: 9px; color: var(--t-fg2); opacity: 1; }
   .btn-remove:hover { color: #fff; background: #dc2626; border-color: #dc2626; transform: none; }
-  .online .status-dot { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,.45); }
-  .online { color: #4ade80; }
+  .online .status-dot { background: #22c55e; }
+  .online { color: #15803d; }
+  html:not(.theme-light) .online { color: #4ade80; }
 
   @media (min-width: 761px) and (max-height: 800px) {
     .friends-page .app-main { padding-top: .85rem !important; }
@@ -365,6 +351,7 @@
     .friend-search-label small { display: none; }
   }
   @media (max-width: 380px) { .friend-grid { grid-template-columns: 1fr; } }
+  @media (max-width: 640px) { .friends-shell { padding-left: 1rem; padding-right: 1rem; box-sizing: border-box; } }
 </style>
 <script src="/people.js"></script>
 </head>
@@ -373,7 +360,6 @@
   <header class="page-head">
     <div>
       <h1 class="page-title">Friends</h1>
-      <p class="page-sub">Find people, see who is playing, and jump into chat.</p>
     </div>
     <div class="friends-summary" aria-label="Friend activity">
       <span><b id="friendCount">0</b>Friends</span>
@@ -382,7 +368,7 @@
   </header>
 
   <div class="card friends-hub">
-    <div class="friend-search-label"><div class="section-title"><span>Add Friend</span></div><small>Search by display name or school email</small></div>
+    <div class="friend-search-label"><div class="section-title"><span>Add Friend</span></div></div>
     <div class="add-box" style="position: relative; flex-direction: column; gap: 0; margin-bottom: 2rem;">
       <div style="display: flex; gap: 0.5rem; width: 100%;">
         <input type="text" id="friendEmailInput" class="add-input" placeholder="Display name or email" aria-label="Display name or school email" autocomplete="off" oninput="onSearchInput()" />

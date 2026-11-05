@@ -73,13 +73,27 @@
     return '/api/companion/character-image?id=' + encodeURIComponent(id) + '&mood=' + encodeURIComponent(mood) + '&v=' + imgVersion;
   }
 
+  // Ability names the server accepts (SPECIAL_ABILITIES in
+  // mitch_lib::companion), sent with the character list.
+  var specialAbilities = [];
+  var ABILITY_LABELS = { sandevistan: 'Sandevistan' };
+
   function loadCharacters() {
     return withLockHandling(requestJson('/api/admin/companion/characters')).then(function (data) {
       $('passphrase-lock').hidden = true;
       $('companion-workspace').hidden = false;
       status('access-status', 'Admin access verified.');
+      specialAbilities = data.specialAbilities || [];
       renderList(data.characters || []);
     });
+  }
+
+  // Prompts can be up to 16,000 characters; the card only shows the start
+  // of long ones (Edit loads the whole thing).
+  function promptPreview(text) {
+    text = text || '';
+    if (text.length <= 800) return text;
+    return text.slice(0, 800) + '… (' + text.length.toLocaleString() + ' characters)';
   }
 
   function renderList(characters) {
@@ -97,10 +111,14 @@
         '<h3>' + escapeHtml(c.name) +
         (c.isDefault ? ' <span class="companion-default-tag">Default</span>' : '') +
         (c.needsReview ? ' <span class="companion-review-tag">Needs review</span>' : '') +
+        (c.specialAbility ? ' <span class="companion-ability-tag">' + escapeHtml(ABILITY_LABELS[c.specialAbility] || c.specialAbility) + '</span>' : '') +
         '</h3>' +
-        (c.creatorEmail ? '<p class="companion-creator">Made by ' + escapeHtml(c.creatorEmail) + ' &middot; ' + c.priceCoins + ' coins to unlock</p>' : '') +
-        '<p class="companion-prompt">' + escapeHtml(c.personalityPrompt) + '</p>' +
+        '<p class="companion-creator">' + (c.creatorEmail ? 'Made by ' + escapeHtml(c.creatorEmail) + ' &middot; ' : '') + (c.priceCoins > 0 ? c.priceCoins + ' coins to unlock' : 'Free') + '</p>' +
+        '<p class="companion-prompt">' + escapeHtml(promptPreview(c.personalityPrompt)) + '</p>' +
         '<div class="companion-moods"></div>' +
+        '<label class="companion-ability">Special ability <select class="ability-select"><option value="">None</option>' +
+        specialAbilities.map(function (a) { return '<option value="' + escapeHtml(a) + '"' + (c.specialAbility === a ? ' selected' : '') + '>' + escapeHtml(ABILITY_LABELS[a] || a) + '</option>'; }).join('') +
+        '</select></label>' +
         '<div class="companion-card-actions">' +
         '<button type="button" class="edit-btn">Edit</button>' +
         '<button type="button" class="default-btn"' + (c.isDefault ? ' disabled' : '') + '>Set as default</button>' +
@@ -140,6 +158,17 @@
         $('character-cancel-edit').hidden = false;
         $('form-heading').textContent = 'Edit character';
         window.scrollTo(0, 0);
+      });
+      var abilitySelect = card.querySelector('.ability-select');
+      abilitySelect.addEventListener('change', function () {
+        abilitySelect.disabled = true;
+        withLockHandling(requestJson('/api/admin/companion/characters/special-ability', {
+          method: 'POST',
+          body: JSON.stringify({ id: c.id, ability: abilitySelect.value }),
+        })).then(loadCharacters).catch(function () {
+          abilitySelect.value = c.specialAbility || '';
+          abilitySelect.disabled = false;
+        });
       });
       card.querySelector('.default-btn').addEventListener('click', function () {
         withLockHandling(requestJson('/api/admin/companion/characters/set-default', {

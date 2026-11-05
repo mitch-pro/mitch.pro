@@ -40,7 +40,7 @@ function resolve(school,date,events=[],mode='auto',period0=false,override=null){
  if(!pair&&!reason){unknown=true;notice='Schedule not published. check the official school announcement';}
  const blocks=l=>!reason&&!unknown?(pair[l]||[]).filter(p=>period0||p.name!=='Period 0'):[];
  const lunch1=blocks(1),lunch2=blocks(2),inSession=!reason&&!unknown&&!!lunch1.length;
- return {date,type,title:reason||labels[type]||'Schedule unavailable',event:reason||(unknown?notice:''),blurb:notice||(type==='exams'?'Exam block times; use your school announcement for period assignments.':reason||'Published weekly bell times.'),inSession,unavailable:unknown,manual:mode!=='auto',oneLunch:inSession&&lunch1.length>0&&JSON.stringify(lunch1)===JSON.stringify(lunch2),lunch1,lunch2,source:schoolData.source};
+ return {date,type,title:reason||labels[type]||'Schedule unavailable',event:reason||(unknown?notice:''),blurb:notice||(type==='exams'?'Exam block times; use your school announcement for period assignments.':reason||''),inSession,unavailable:unknown,manual:mode!=='auto',oneLunch:inSession&&lunch1.length>0&&JSON.stringify(lunch1)===JSON.stringify(lunch2),lunch1,lunch2,source:schoolData.source};
 }
 g.RJUHSD_CALENDAR={district,labels,resolve};
 })(window);

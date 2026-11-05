@@ -128,10 +128,10 @@ fn create(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Resp
     if name.is_empty() || name.chars().count() > 60 {
         return json_response(400, json!({ "error": "name must be 1-60 characters" }));
     }
-    if prompt.is_empty() || prompt.chars().count() > 4000 {
+    if prompt.is_empty() || prompt.chars().count() > super::admin::MAX_PROMPT_CHARS {
         return json_response(
             400,
-            json!({ "error": "personality prompt must be 1-4000 characters" }),
+            json!({ "error": "personality prompt must be 1-16000 characters" }),
         );
     }
     let price = match parse_price_coins(&body) {
@@ -189,10 +189,10 @@ fn update(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Resp
     if name.is_empty() || name.chars().count() > 60 {
         return json_response(400, json!({ "error": "name must be 1-60 characters" }));
     }
-    if prompt.is_empty() || prompt.chars().count() > 4000 {
+    if prompt.is_empty() || prompt.chars().count() > super::admin::MAX_PROMPT_CHARS {
         return json_response(
             400,
-            json!({ "error": "personality prompt must be 1-4000 characters" }),
+            json!({ "error": "personality prompt must be 1-16000 characters" }),
         );
     }
     let price = match parse_price_coins(&body) {

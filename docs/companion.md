@@ -136,6 +136,72 @@ subsystem — no `server.js` equivalent.
   `playAction`. Always offered to every character regardless of review
   status — these are animations, not code, so there's nothing for the
   review gate to protect against here.
+- **Special abilities.** A character can carry one admin-assigned ability
+  (`companion_characters.special_ability`, one of `SPECIAL_ABILITIES` in
+  `mitch_lib::companion`; set from the "Special ability" picker on
+  `/admin/companion/` via `POST /api/admin/companion/characters/special-ability`
+  `{id, ability}`, `""` to clear). Users can't set it on their own
+  characters. Each ability adds one extra preset action of the same name:
+  the prompt tells only that character about it (`special_ability_prompt`
+  in `deepseek.rs`) and `sanitize_action` only accepts the name for a
+  character that has it. Animation only, no coin effect.
+  - `sandevistan`: `sandevistan()` in `companion-widget.js` pauses physics
+    (`phys.dashing`), dashes the companion through a few random points
+    with fading hue-shifted afterimages, tints the page, and slows the
+    page's own CSS/Web Animations to 0.15× until it finishes (about 1.5s).
+    Reduced motion gets only the tint. Also triggered by double-clicking
+    the companion (4s cooldown).
+  - **David Martinez** (`id = david-martinez`) is a free, reviewed preset
+    with `sandevistan`, inserted by the same migration that adds the
+    column (`seed_david_martinez`), so it runs once: deleting him on
+    `/admin/companion/` is permanent. His images are uploaded by admins
+    like any other character's.
+- **Strain, blood and cyberpsychosis** (`mitch_lib::companion_chrome`,
+  table `companion_ability_strain`, one row per (email, character)). Every
+  Sandevistan use, from chat or a double-click/`POST /api/companion/ability/use`,
+  adds 16 strain × upgrade multiplier × (1 + current strain / 100), max 100,
+  so uses close together snowball (5 back-to-back uses reach 100); strain
+  drains 2 per minute. Uses are at least 12 s apart (`COOLDOWN_MILLIS`,
+  enforced in `record_use`: the endpoint answers 429 with `retryAfterMs`,
+  and a chat reply's action is dropped while recharging). Using it during
+  cyberpsychosis extends the psychosis by 3 minutes (capped at 30 minutes
+  out). At 60+ he coughs up blood after each use (`coughBlood()` in the
+  widget; uses a `hurt`/`sad` mood image if the character has one). Reaching
+  100 starts 10 minutes of cyberpsychosis: red glitch veil over the page,
+  jittering sprite, `psychosis`/`angry` mood if present, and the chat prompt
+  (`ability_status_prompt` in `routes/companion/mod.rs`) tells him he's
+  paranoid and erratic. Afterwards strain drops to 50 and keeps draining.
+  Decay and the end of psychosis are computed on read; there's no job.
+- **Chrome upgrades** (`UPGRADES` in `companion_chrome.rs`, table
+  `companion_upgrades`). Bought per (email, character) on `/companion/`
+  ("Chrome" section) via `POST /api/companion/upgrades/buy {characterId, upgrade}`:
+  Immunosuppressants (400, strain × 0.5), Chrome arms (600, faster and longer
+  reach in Catch the Turkey), Cyberskeleton (1500, needs Chrome arms: the
+  Sandevistan dash and the game's slow-down last twice as long, strain × 1.5).
+  Economy: a pure sink, nobody is paid, no refunds, nothing produces coins.
+  The row is inserted before charging and removed if the charge fails, so
+  concurrent buys can't double-charge and a failed charge never installs.
+  `GET /api/companion/ability?characterId=` returns state plus the catalog.
+- **Page API for the companion** (`window.__mitchCompanion`, fired with
+  `mitch:companion-ready`): name, `imageUrl(mood)`, `hasUpgrade`,
+  `inPsychosis`, `strain()`, `sandevistan()`, `act(name)` and `react(text)`
+  (a silent chat message whose reply shows in the bubble). Used by the
+  homepage's Catch the Turkey game (`webserver/turkey-catch.js`, a full-page
+  overlay started from a pill next to the holiday pills): the companion
+  helps from the bottom of the screen and comments on the score at the end
+  of a round. It's a deliberately weak helper (slow, short reach, fumbles
+  often, ignores turkeys near your basket) and gets weaker as it goes: each
+  catch tires it for the rest of the round, and Sandevistan strain takes up
+  to 70% off its speed and grip. David's Sandevistan (S) slows the turkeys
+  and sends him flying anywhere on screen to snatch a few (4 when fresh,
+  fewer as he tires or strains, at least 1; +2 with the Cyberskeleton),
+  which builds strain like any other use (in cyberpsychosis the burst
+  hunts burnt turkeys, which cost lives, so spamming it backfires); in cyberpsychosis he's erratic and
+  grabs burnt turkeys too. The game itself grants no coins.
+- **Prompt size.** Personality prompts can be up to 16,000 characters
+  (`MAX_PROMPT_CHARS` in `routes/companion/admin.rs`, also used by
+  `mine.rs`; 4x the original 4,000). Every chat call sends the whole prompt
+  to DeepSeek, so longer prompts cost more per message.
 - **Custom JS execution.** The chat response can also include a
   `customJs` field — raw JavaScript the widget runs via `new
   Function(code)()`. Only ever populated server-side when the active
@@ -235,7 +301,8 @@ shell or add it to the untracked `.env`.
 ## Data model
 
 - `companion_characters` (id, name, personality_prompt, is_preset,
-  is_default, needs_review, creator_email, price_coins, timestamps) —
+  is_default, needs_review, creator_email, price_coins, special_ability,
+  timestamps) —
   `creator_email == ''` for admin presets, a real email for user-made
   characters.
 - `companion_character_images` (character_id, mood, file, updated_at) — one
@@ -263,6 +330,9 @@ shell or add it to the untracked `.env`.
   subscriber; see Economy above.
 - `companion_character_unlocks` (email, character_id, unlocked_at) — one
   row per paid unlock; `ON DELETE CASCADE` when the character is deleted.
+- `companion_ability_strain` (email, character_id, strain, updated_at,
+  psychosis_until) and `companion_upgrades` (email, character_id, upgrade,
+  purchased_at); see Scope.
 - `companion_coin_requests` (email, character_id, asked_at, percent) — at
   most one row per (email, character): the most recent offer, used both
   for the cooldown (`coin_request_cooldown_elapsed`) and to verify an

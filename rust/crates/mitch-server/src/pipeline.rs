@@ -155,7 +155,7 @@ pub fn inject_page(
         // renders nothing at all unless the viewer has it enabled — safe to
         // load on every page the same way popup.js/pwa-install.js are.
         if !raw.contains("/companion-widget.js") {
-            inject_str.push_str("<script src=\"/companion-widget.js?v=1\" defer></script>\n<link rel=\"stylesheet\" href=\"/companion-widget.css\">\n");
+            inject_str.push_str("<script src=\"/companion-widget.js?v=4\" defer></script>\n<link rel=\"stylesheet\" href=\"/companion-widget.css?v=3\">\n");
         }
         if !raw.contains("name=\"viewport\"") {
             inject_str.push_str("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content\">\n");
@@ -233,7 +233,15 @@ pub fn inject_page(
     let req_host_full = request_host(headers);
     let req_host_name = req_host_full.split(':').next().unwrap_or("");
     let is_rjuhsd = is_host(req_host_name, "rjuhsd.school");
-    if !is_onboarding && !is_embedded && !raw.contains("_agree_footer") {
+    // The fixed credit band injected below already carries the same
+    // agreement sentence on non-school hosts, so the in-page footer is only
+    // needed where the band won't say it (school hosts, or pages that ship
+    // their own #site-credit). Injecting both printed the line twice.
+    let is_school_credit = is_rjuhsd || path.starts_with("/rjuhsd/");
+    let band_has_agreement = (!is_embedded || is_standalone_game_portal)
+        && !is_school_credit
+        && !raw.contains("id=\"site-credit\"");
+    if !is_onboarding && !is_embedded && !band_has_agreement && !raw.contains("_agree_footer") {
         let agree = "<footer id=\"_agree_footer\" class=\"app-footer\">By using mitch.pro you agree to the <a href=\"/use-agreement/\">use agreement</a> and <a href=\"/privacy/\">privacy policy</a>.</footer>";
         match raw.rfind("</body>") {
             Some(i) => raw = format!("{}{}{}", &raw[..i], agree, &raw[i..]),

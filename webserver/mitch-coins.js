@@ -166,7 +166,8 @@
       mount(document.getElementById('sidebar-top'), 'mitch-wallet-chat-list');
       mount(document.getElementById('chat-header'), 'mitch-wallet-chat');
     } else {
-      mount(document.querySelector('.home-masthead, #app-topbar, .sales-top'));
+      // [data-coin-wallet] lets full-screen pages (canvas) host the wallet in their own toolbar.
+      mount(document.querySelector('.home-masthead, #app-topbar, .sales-top, [data-coin-wallet]'));
       if (!widgets.length && window.self === window.top) {
         const bar = document.createElement('header');
         bar.className = 'mitch-coin-gamebar';

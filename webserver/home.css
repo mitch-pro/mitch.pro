@@ -232,8 +232,8 @@ body.home ::-webkit-scrollbar-track { background: transparent; }
 
 .home-features { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .home-feature {
-  display: flex; flex-direction: column; justify-content: space-between; gap: 1.4rem;
-  min-height: 150px; padding: 1.5rem;
+  display: flex; flex-direction: column; justify-content: flex-start; gap: 0.4rem;
+  min-height: 0; padding: 1.5rem;
   background: var(--mh-bg-soft); border: 1px solid var(--mh-border); border-radius: var(--mh-radius);
   color: var(--mh-ink); text-decoration: none;
   transition: border-color var(--mh-motion), transform var(--mh-motion);
@@ -599,7 +599,7 @@ body.members-rail-open #people-edge-trigger {display:none}
 .home-control-card:hover { border-color:var(--t-bda); }
 .home-control-card h2 { font-size:.95rem; }
 .control-status { display:flex; align-items:center; gap:7px; font-size:.78rem; color:var(--t-fg2); }
-.home-compact .home-feature { min-height:110px; padding:18px; }
+.home-compact .home-feature { padding:18px; }
 .home-compact .home-directory { padding:18px; }
 @media(max-width:760px) {
   .directory-heading { flex-direction:column; align-items:stretch; gap:16px; }
@@ -648,6 +648,7 @@ body.members-rail-open #people-edge-trigger {display:none}
 .holiday-pill { display: inline-flex; align-items: center; margin-top: 8px; padding: 6px 14px; border: 1px solid var(--t-bd); border-radius: 999px; background: var(--t-bg2); color: var(--t-fg2); font: inherit; font-size: .82rem; font-weight: 600; line-height: 1.2; cursor: pointer; }
 .holiday-pill[hidden] { display: none; }
 .holiday-pill:hover { border-color: var(--t-ac); color: var(--t-fg); }
+.holiday-pills { display: flex; flex-wrap: wrap; gap: 8px; }
 
 /* Holiday greeting and break countdown, in the hello block */
 .hello-holiday { margin: 6px 0 0; font-size: 1rem; font-weight: 700; color: var(--t-ac); }

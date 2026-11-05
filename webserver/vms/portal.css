@@ -1,13 +1,13 @@
 :root{color-scheme:dark;--cloud-bg:var(--t-bg);--cloud-panel:var(--t-bg2);--cloud-raised:var(--t-bg3);--cloud-soft:var(--t-gls);--cloud-line:var(--t-bd);--cloud-line-strong:var(--t-bda);--cloud-text:var(--t-fg);--cloud-muted:var(--t-fg2);--cloud-accent:var(--t-ac);--cloud-ok:#65d49a;--cloud-warn:#e9bd67;--cloud-danger:#ef8c91}
 *{box-sizing:border-box}
-body{margin:0;min-height:100vh;background:var(--t-bg);color:var(--cloud-text);font:15px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{margin:0;min-height:100vh;background:var(--t-bg);color:var(--cloud-text);font:15px/1.5 var(--t-font)}
 button,a{font:inherit}
 .computer-shell{width:min(1220px,calc(100% - 48px));margin:0 auto;padding:104px 0 56px}
 .computer-hero{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:24px}
 .computer-heading{display:flex;align-items:center;gap:15px}.computer-heading-mark{display:grid;width:49px;height:49px;place-items:center;border:1px solid var(--cloud-line);border-radius:10px;background:var(--t-bg2);box-shadow:none}
 .computer-heading-mark svg,.quiet-button svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
 .eyebrow,.machine-label{margin:0 0 2px;color:var(--cloud-muted);font-size:.72rem;font-weight:800;letter-spacing:0;text-transform:none}
-h1{margin:0;font-size:clamp(2.1rem,5vw,3.45rem);line-height:1;letter-spacing:-.06em}
+h1{margin:0;font-size:clamp(2.1rem,5vw,3.45rem);line-height:1;letter-spacing:-.03em}
 .quiet-button,.danger-button,.primary-button,.control-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--cloud-line);border-radius:12px;padding:10px 15px;background:var(--cloud-soft);color:var(--cloud-text);font-weight:760;text-decoration:none;cursor:pointer;transition:transform .16s ease,background .16s ease,border-color .16s ease,box-shadow .16s ease}
 .quiet-button:hover,.control-button:hover{transform:translateY(-1px);border-color:var(--cloud-line-strong);background:var(--t-bg2)}
 button:disabled{opacity:.46;cursor:wait;transform:none!important}
@@ -18,7 +18,7 @@ button:disabled{opacity:.46;cursor:wait;transform:none!important}
 .state-panel p{margin:4px 0 0;color:var(--cloud-muted)}.is-hidden{display:none!important}
 .loader{width:29px;height:29px;border:2px solid var(--cloud-line);border-top-color:var(--t-bd);border-radius:50%;animation:spin .8s linear infinite}.empty-icon{display:grid;width:43px;height:43px;place-items:center;border:1px solid var(--cloud-line);border-radius:13px;background:var(--cloud-soft);font-size:1.35rem}@keyframes spin{to{transform:rotate(360deg)}}
 .computer-grid{display:grid;gap:24px}
-.computer-card{display:grid;grid-template-columns:minmax(410px,.95fr) minmax(430px,1.05fr);min-height:520px;overflow:hidden;border:1px solid var(--cloud-line);border-radius:10px;background:var(--t-bg2);box-shadow:none}
+.computer-card{display:block;overflow:hidden;border:1px solid var(--cloud-line);border-radius:10px;background:var(--t-bg2);box-shadow:none}
 .desktop-preview{position:relative;display:flex;min-width:0;align-items:center;justify-content:center;padding:54px 38px 58px;overflow:hidden;border-right:1px solid var(--cloud-line);background:var(--t-bg2);color:inherit;text-decoration:none;isolation:isolate}
 .desktop-preview:before{content:"";position:absolute;inset:0;z-index:-1;background:var(--t-bg2);background-size:32px 32px;mask-image:linear-gradient(to bottom,#000,transparent 90%)}
 .desktop-preview:after{content:"";position:absolute;left:16%;right:16%;bottom:9%;height:18px;border-radius:50%;background:var(--t-bg2);filter:blur(18px);opacity:.7}
@@ -76,3 +76,12 @@ a.desktop-preview:hover .desktop-window{transform:perspective(900px) rotateX(0) 
 .vm-sp-card b{font-size:.92rem;color:var(--t-fg)}
 .vm-sp-card small{font-size:.76rem;color:var(--t-fg2);margin-top:3px;line-height:1.4}
 @media(max-width:600px){.vm-selling-points{grid-template-columns:1fr}}
+/* Theme: DM Sans from the site token, status colors that stay readable in light mode. */
+:root{--vm-danger:#ef8c91;--vm-ok:#65d49a}
+html.theme-light{--vm-danger:#b91c1c;--vm-ok:#15803d}
+body.computer-portal,body.computer-portal button,body.computer-portal input,body.computer-portal select,body.computer-portal textarea{font-family:var(--t-font)}
+.computer-header-actions{display:flex;gap:8px;align-items:center}
+.byo-hint{font-size:.78rem;color:var(--t-fg3);margin:0 0 10px;text-align:left}.byo-or{margin:18px 0 6px}
+#empty-create-box,#empty-unauthorized-box{flex:1;min-width:0}
+#empty-create-box .quiet-button{margin-top:10px}
+@media(max-width:560px){.computer-hero{flex-wrap:wrap;align-items:flex-start}.computer-header-actions{width:100%}body.computer-portal .computer-header-actions .quiet-button{flex:0 0 auto;min-width:max-content;padding-inline:14px}#empty-create-box .primary-button,#empty-create-box .quiet-button{display:flex;width:100%;margin-left:0}}

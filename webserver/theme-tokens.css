@@ -294,3 +294,19 @@ html.theme-no-motion[data-holiday="christmas"]::after { animation: none; opacity
 @media (prefers-reduced-motion: reduce) {
   html[data-holiday="christmas"]::before, html[data-holiday="christmas"]::after { animation: none; opacity: 1; }
 }
+
+/* Signed-out pages (landing, sign-in): they keep their own --ob-* palette
+   instead of the --t-* tokens, so map the holiday palette onto it while a
+   holiday is active. onboarding-theme.js sets data-theme from the page's
+   light/dark toggle, so the matching light or dark holiday palette is used.
+   :root[data-holiday] keeps this above the pages' own html.theme-light rules. */
+:root[data-presentation="onboarding"][data-holiday] { background: var(--t-bg); }
+:root[data-holiday] body.onboarding-page {
+  --ob-bg: var(--t-bg);
+  --ob-panel: var(--t-bg2);
+  --ob-ink: var(--t-fg);
+  --ob-muted: var(--t-fg2);
+  --ob-line: var(--t-bd);
+  --ob-accent: var(--t-ac);
+  --ob-accent-ink: var(--t-ac-ink);
+}

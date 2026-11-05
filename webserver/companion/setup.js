@@ -106,6 +106,7 @@
       card.innerHTML =
         (thumbMood ? '<img src="' + imageUrl(c.id, thumbMood) + '" alt="">' : '') +
         '<div class="companion-setup-card-name">' + escapeHtml(c.name) + '</div>' +
+        (c.specialAbility === 'sandevistan' ? '<div class="companion-setup-card-ability">Sandevistan</div>' : '') +
         (c.priceCoins > 0 ? '<div class="companion-setup-card-price">' + c.priceCoins + ' coins</div>' : '') +
         (!c.unlocked ? '<button type="button" class="companion-unlock-btn">Unlock for ' + c.priceCoins + ' coins</button>' : '');
       if (c.unlocked) {
@@ -142,6 +143,61 @@
     });
   }
 
+  // Chrome: Sandevistan strain and upgrades for every unlocked character
+  // with a special ability (state and catalog come from
+  // /api/companion/ability, backed by mitch_lib::companion_chrome).
+  function renderChrome() {
+    var withAbility = characters.filter(function (c) { return c.specialAbility && c.unlocked; });
+    var list = $('companion-chrome-list');
+    $('companion-chrome').hidden = !withAbility.length;
+    list.innerHTML = '';
+    withAbility.forEach(function (c) {
+      var panel = document.createElement('div');
+      panel.className = 'companion-chrome-panel';
+      panel.textContent = 'Loading...';
+      list.appendChild(panel);
+      api('/api/companion/ability?characterId=' + encodeURIComponent(c.id)).then(function (res) {
+        if (!res.ok) { panel.textContent = errMsg(res, 'Could not load chrome.'); return; }
+        paintChrome(panel, c, res.data);
+      });
+    });
+  }
+
+  function paintChrome(panel, c, s) {
+    var pct = Math.round((s.strain / (s.maxStrain || 100)) * 100);
+    var psychosisLeft = s.psychosisUntil > s.now ? Math.ceil((s.psychosisUntil - s.now) / 60000) : 0;
+    var condition = psychosisLeft ? 'Cyberpsychosis, ' + psychosisLeft + ' min left'
+      : s.bleeding ? 'Coughing up blood. Let him rest.'
+      : pct > 0 ? 'Recovering' : 'Stable';
+    panel.innerHTML =
+      '<div class="companion-chrome-head"><strong>' + escapeHtml(c.name) + '</strong><span class="companion-chrome-condition' + (psychosisLeft ? ' psychosis' : s.bleeding ? ' bleeding' : '') + '">' + escapeHtml(condition) + '</span></div>' +
+      '<div class="companion-strain" role="meter" aria-label="Sandevistan strain" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><span style="width:' + pct + '%"></span></div>' +
+      '<p class="companion-chrome-note">Strain ' + pct + ' / 100. Each Sandevistan use adds strain; it drains while he rests.</p>' +
+      '<ul class="companion-upgrades"></ul>' +
+      '<p class="companion-chrome-status" role="status"></p>';
+    var ul = panel.querySelector('.companion-upgrades');
+    (s.catalog || []).forEach(function (u) {
+      var li = document.createElement('li');
+      var needs = u.requires && (s.upgrades || []).indexOf(u.requires) === -1;
+      var reqName = needs ? ((s.catalog.filter(function (x) { return x.id === u.requires; })[0] || {}).name || u.requires) : '';
+      li.innerHTML = '<div><strong>' + escapeHtml(u.name) + '</strong><small>' + escapeHtml(u.description) + '</small></div>' +
+        (u.owned ? '<span class="companion-upgrade-owned">Installed</span>'
+          : '<button type="button"' + (needs ? ' disabled title="Needs ' + escapeHtml(reqName) + ' first"' : '') + '>' + (needs ? 'Needs ' + escapeHtml(reqName) : 'Install, ' + u.priceCoins + ' coins') + '</button>');
+      var btn = li.querySelector('button');
+      if (btn && !needs) {
+        btn.addEventListener('click', function () {
+          busy(btn, 'Installing...', api('/api/companion/upgrades/buy', { method: 'POST', body: JSON.stringify({ characterId: c.id, upgrade: u.id }) }))
+            .then(function (res) {
+              if (!res.ok) { panel.querySelector('.companion-chrome-status').textContent = errMsg(res, 'Could not install.'); return; }
+              paintChrome(panel, c, res.data);
+              window.dispatchEvent(new CustomEvent('mitch:coins-refresh'));
+            });
+        });
+      }
+      ul.appendChild(li);
+    });
+  }
+
   function loadCharacters() {
     return api('/api/companion/characters').then(function (res) {
       if (!res.ok) {
@@ -157,6 +213,7 @@
         return;
       }
       characters = res.data.characters || [];
+      renderChrome();
       if (!selectedId) {
         var def = characters.filter(function (c) { return c.isDefault; })[0];
         if (def) selectedId = def.id;
@@ -282,7 +339,7 @@
         '<button type="submit">Add mood image</button>' +
         '</form>' +
         '<label>Name</label><input type="text" class="mine-name" maxlength="60" value="' + escapeHtml(c.name) + '">' +
-        '<label>Personality prompt</label><textarea class="mine-prompt" rows="4" maxlength="4000">' + escapeHtml(c.personalityPrompt) + '</textarea>' +
+        '<label>Personality prompt</label><textarea class="mine-prompt" rows="4" maxlength="16000">' + escapeHtml(c.personalityPrompt) + '</textarea>' +
         '<label>Price for others to unlock (coins)</label><input type="number" class="mine-price" min="0" step="1" value="' + c.priceCoins + '">' +
         '<button type="button" class="mine-save-btn">Save changes</button>' +
         '<button type="button" class="mine-delete-btn">Delete character</button>' +

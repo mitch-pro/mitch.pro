@@ -13,8 +13,10 @@
 <title>mitch.pro</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"></noscript>
 <link rel="stylesheet" href="/app.css">
-<link rel="stylesheet" href="/home.css?v=18">
-<script defer src="/rjuhsd-assets/calendar.js?v=7"></script>
+<link rel="stylesheet" href="/home.css?v=20">
+<link rel="stylesheet" href="/turkey-catch.css?v=5">
+<script src="/turkey-catch.js?v=7" defer></script>
+<script defer src="/rjuhsd-assets/calendar.js?v=8"></script>
 <script src="/app-shell.js" defer></script>
 <script src="/home-friends.js?v=5" defer></script>
 <script>
@@ -1370,20 +1372,55 @@ function setupBreakChip() {
   el.hidden = false;
 }
 
-// "Don't like the holiday theme?" turns the seasonal theme off on every page
-// (the same setting as Preferences); the pill then offers to bring it back. It
-// is only shown while a holiday theme is in season.
+// Holiday theme pills. Normally one pill, "Don't like the holiday theme?".
+// Clicking it offers two choices: turn the whole theme off (the same setting
+// as Preferences > Holiday theme), or just remove the moving effect (falling
+// leaves, snow, ...) and keep the holiday colors (Preferences > Holiday
+// effects). Afterwards a single pill offers to bring back whatever was
+// removed. Only shown while a holiday theme is in season. When animations are
+// off anyway (Preferences > Motion or reduced motion) there is no effect to
+// remove, so the first click turns the theme off directly.
 function setupHolidayPill() {
   var pill = document.getElementById('holiday-pill');
+  var fxPill = document.getElementById('holiday-fx-pill');
   var theme = window.__siteTheme;
-  if (!pill || !theme || !theme.holidaySeason) return;
+  if (!pill || !fxPill || !theme || !theme.holidaySeason || !theme.setHolidayFxOff) return;
   var season = theme.holidaySeason();
   if (!season) return;
-  function paint() {
-    pill.textContent = theme.holidayOff() ? 'Bring back the holiday theme' : "Don't like the holiday theme?";
-    pill.hidden = false;
+  var FX_NAMES = { thanksgiving: 'falling leaves', christmas: 'snow', halloween: 'embers', newyear: 'confetti', valentines: 'hearts' };
+  var fxName = FX_NAMES[season] || 'holiday effects';
+  var choosing = false;
+  function motionOff() {
+    var off = false;
+    try { off = localStorage.getItem('theme_motion') === 'off'; } catch (_) {}
+    return off || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   }
-  pill.addEventListener('click', function() { theme.setHolidayOff(!theme.holidayOff()); paint(); setupHolidayGreeting(); });
+  function state() {
+    if (theme.holidayOff()) return 'off';
+    if (theme.holidayFxOff() && !motionOff()) return 'fx-off';
+    return choosing ? 'choosing' : 'on';
+  }
+  function paint() {
+    var now = state();
+    pill.textContent = now === 'off' ? 'Bring back the holiday theme'
+      : now === 'fx-off' ? 'Bring back ' + fxName
+      : now === 'choosing' ? 'Turn off the holiday theme'
+      : "Don't like the holiday theme?";
+    pill.hidden = false;
+    fxPill.textContent = 'Just remove ' + fxName;
+    fxPill.hidden = now !== 'choosing';
+  }
+  pill.addEventListener('click', function() {
+    var now = state();
+    if (now === 'off') theme.setHolidayOff(false);
+    else if (now === 'fx-off') theme.setHolidayFxOff(false);
+    else if (now === 'on' && !motionOff()) { choosing = true; paint(); return; }
+    else theme.setHolidayOff(true);
+    choosing = false;
+    paint();
+    setupHolidayGreeting();
+  });
+  fxPill.addEventListener('click', function() { theme.setHolidayFxOff(true); choosing = false; paint(); });
   paint();
 }
 
@@ -1533,12 +1570,12 @@ if (document.readyState === 'loading') {
     <h1 id="home-brand" class="hello-heading"><span id="greeting-text">hello</span><svg class="hello-writing" viewBox="0 0 240 96" aria-hidden="true"><path pathLength="1" d="M15 70 C22 58 47 18 40 12 C31 4 18 77 23 76 C29 57 44 46 47 56 C49 65 36 82 51 74 L63 64 C92 51 78 38 67 57 C51 84 80 85 96 65 C108 49 127 13 119 10 C107 5 86 75 99 78 C113 85 145 17 138 11 C125 1 109 76 124 78 C136 79 148 64 151 54 C160 35 178 48 169 67 C160 87 140 78 148 59 C154 45 169 43 174 55 C178 68 184 72 198 64"/></svg></h1>
     <p id="greeting-email" class="hello-email"></p>
     <p id="holiday-greeting" class="hello-holiday" hidden></p>
-    <span id="streak-badge" class="streak-badge" hidden>&#128293; <b id="streak-badge-count">0</b></span>
+    <span id="streak-badge" class="streak-badge" hidden><b id="streak-badge-count">0</b> day streak</span>
     <div class="hello-tools">
-    <a id="home-staff-pill" href="/staff/" class="home-staff-pill" hidden><span>&#9881;</span> Staff workspace &rarr;</a>
+    <a id="home-staff-pill" href="/staff/" class="home-staff-pill" hidden>Staff workspace</a>
     <label id="abToggleBar" class="ab-toggle" title="Open links in an about:blank tab"><span>Private window</span><span class="toggle-switch"><input type="checkbox" id="abToggle" aria-label="Open links in an about:blank tab"><span class="toggle-slider"></span></span></label>
     </div>
-    <button type="button" id="holiday-pill" class="holiday-pill" hidden></button>
+    <div class="holiday-pills"><button type="button" id="holiday-pill" class="holiday-pill" hidden></button><button type="button" id="holiday-fx-pill" class="holiday-pill" hidden></button><button type="button" id="turkey-launch" class="holiday-pill" hidden>Catch the turkey</button></div>
     <p id="break-chip" class="break-chip" hidden></p>
     </div>
     <div class="hello-emblem" aria-hidden="true">

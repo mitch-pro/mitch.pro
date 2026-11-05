@@ -186,7 +186,7 @@
     else if (name && !loadingFx) {
       loadingFx = true;
       var script = document.createElement('script');
-      script.src = '/holiday-fx.js?v=2';
+      script.src = '/holiday-fx.js?v=3';
       script.defer = true;
       document.head.appendChild(script);
     }
@@ -230,6 +230,20 @@
     apply();
   }
 
+  // Holiday effects (falling leaves, snow, embers, confetti, hearts) can be
+  // turned off on their own; the holiday colors stay. holiday-fx.js reads the
+  // same key.
+  function holidayFxOff() {
+    try { return localStorage.getItem('theme_holidayfx') === 'off'; } catch (_) { return false; }
+  }
+  function setHolidayFxOff(off) {
+    try {
+      if (off) localStorage.setItem('theme_holidayfx', 'off');
+      else localStorage.removeItem('theme_holidayfx');
+    } catch (_) {}
+    apply();
+  }
+
   window.__siteTheme = {
     holidayFor: holidayFor,
     holidaySeason: holidaySeason,
@@ -237,6 +251,8 @@
     holidayGreeting: holidayGreeting,
     holidayOff: holidayOff,
     setHolidayOff: setHolidayOff,
+    holidayFxOff: holidayFxOff,
+    setHolidayFxOff: setHolidayFxOff,
     getMode: function () { return readCookie('theme'); },
     setMode: function (mode) {
       writeCookie('theme', mode === 'light' || mode === 'dark' ? mode : '');

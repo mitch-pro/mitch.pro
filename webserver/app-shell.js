@@ -320,7 +320,7 @@
     }
     if (!IS_RJUHSD && !document.querySelector('script[src^="/mitch-coins.js"]')) {
       var coins = document.createElement('script');
-      coins.src = '/mitch-coins.js?v=4';
+      coins.src = '/mitch-coins.js?v=5';
       document.head.appendChild(coins);
     }
     if (!shouldInject()) {

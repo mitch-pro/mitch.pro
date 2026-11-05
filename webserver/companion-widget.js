@@ -4,7 +4,7 @@
 
   var state = { enabled: false, activeCharacterId: '', characters: [] };
   var el = { root: null, sprite: null, bubble: null };
-  var phys = { x: 14, y: 0, vx: 0, vy: 0, dragging: false, lastMove: 0 };
+  var phys = { x: 14, y: 0, vx: 0, vy: 0, dragging: false, lastMove: 0, dashing: false };
   var imgCache = {};
   var currentMood = 'idle';
   var moods = ['idle'];
@@ -15,6 +15,18 @@
   // a pre-written CSS animation (see companion-widget.css); there is no
   // path from a character's `action` field to arbitrary code.
   var ACTIONS = ['spin', 'jump', 'shake', 'grow', 'shrink', 'wave', 'dance', 'peekaboo', 'confetti', 'nap'];
+
+  // Special abilities (SPECIAL_ABILITIES in mitch_lib::companion). The
+  // server only sends one as an `action` for a character that has it; the
+  // widget also checks the active character's own `specialAbility`.
+  var specialAbility = '';
+  // Mirrors COOLDOWN_MILLIS in mitch_lib::companion_chrome (the server enforces it).
+  var SANDEVISTAN_COOLDOWN_MS = 12000;
+  // Per-user strain/upgrade state from /api/companion/ability
+  // (mitch_lib::companion_chrome): { strain, bleeding, psychosisUntil, upgrades, now }.
+  var abilityState = null;
+  var psychosisTimer = null;
+  var lastSandevistanAt = -Infinity;
 
   // How hard a release has to be (px/frame, matching phys.vx/vy's units)
   // before it counts as a "throw" worth reacting to, and how long to wait
@@ -54,6 +66,7 @@
     if (!state.enabled || !state.activeCharacterId) return;
     var character = state.characters.filter(function (c) { return c.id === state.activeCharacterId; })[0];
     moods = (character && character.moods && character.moods.length) ? character.moods : ['idle'];
+    specialAbility = (character && character.specialAbility) || '';
     imgCache = {};
     preload(state.activeCharacterId, moods);
 
@@ -81,7 +94,13 @@
     phys.vy = 0;
     wireDrag(root);
     wireChat(root);
+    if (specialAbility === 'sandevistan') {
+      root.title = 'Double-click: Sandevistan';
+      root.addEventListener('dblclick', function (e) { e.preventDefault(); sandevistan(); });
+      api('/api/companion/ability').then(function (res) { if (res.ok) applyAbilityState(res.data); });
+    }
     startPhysics();
+    exposeApi(character);
   }
 
   function setMood(mood) {
@@ -118,7 +137,8 @@
   // alone (e.g. `translateY(-28px)` with no x/y, near the viewport's
   // top-left) for as long as it runs. The sprite has no positioning
   // transform of its own, so animating it there is conflict-free.
-  function playAction(name) {
+  function playAction(name, abilityFromChat) {
+    if (name === 'sandevistan' && specialAbility === 'sandevistan') { sandevistan(abilityFromChat); return; }
     if (!el.sprite || ACTIONS.indexOf(name) === -1) return;
     var cls = 'action-' + name;
     el.sprite.classList.remove.apply(el.sprite.classList, ACTIONS.map(function (a) { return 'action-' + a; }));
@@ -130,6 +150,202 @@
       el.sprite.classList.remove(cls);
       el.sprite.removeEventListener('animationend', handler);
     });
+  }
+
+  // Sandevistan: the companion zips through a few points on screen faster
+  // than the physics loop would ever move it, dropping fading afterimages
+  // along the way, while a tint washes over the page and the page's own CSS
+  // animations slow to a crawl (playbackRate), then everything snaps back.
+  // Pure presentation: inert divs/imgs that ignore the pointer, removed
+  // afterwards. Physics is paused via phys.dashing for the duration.
+  // `known` is the strain state the chat reply already recorded; without
+  // it (double-click, Catch the Turkey) the use is recorded here first.
+  // Resolves with the new state, or null when on cooldown/unavailable.
+  function sandevistan(known) {
+    if (!el.root || !el.sprite || phys.dashing) return Promise.resolve(null);
+    var now = performance.now();
+    if (now - lastSandevistanAt < SANDEVISTAN_COOLDOWN_MS) return Promise.resolve(null);
+    lastSandevistanAt = now;
+    var recorded = known ? Promise.resolve(known)
+      : api('/api/companion/ability/use', { method: 'POST' }).then(function (res) {
+        if (res.ok) return res.data;
+        // Still recharging server-side (e.g. used from chat): sync the timer.
+        if (res.data && res.data.retryAfterMs) lastSandevistanAt = performance.now() - SANDEVISTAN_COOLDOWN_MS + res.data.retryAfterMs;
+        return null;
+      });
+    return recorded.then(function (s) {
+      if (!s) return null;
+      applyAbilityState(s);
+      runSandevistan(s);
+      return s;
+    });
+  }
+
+  function hasUpgrade(id) {
+    return !!(abilityState && abilityState.upgrades && abilityState.upgrades.indexOf(id) !== -1);
+  }
+
+  function inPsychosis() {
+    return !!(abilityState && abilityState.psychosisUntil > Date.now());
+  }
+
+  // Stores the server's state, and starts or schedules the end of
+  // cyberpsychosis. `now` from the server corrects for clock skew.
+  function applyAbilityState(s) {
+    if (s.now) s.psychosisUntil = s.psychosisUntil ? Date.now() + (s.psychosisUntil - s.now) : 0;
+    abilityState = s;
+    if (!el.root) return;
+    el.root.classList.toggle('companion-cyberskeleton', hasUpgrade('cyberskeleton'));
+    clearTimeout(psychosisTimer);
+    var left = s.psychosisUntil - Date.now();
+    var on = left > 0;
+    el.root.classList.toggle('companion-psychosis', on);
+    var veil = document.getElementById('companion-psychosis-veil');
+    if (on && !veil) {
+      veil = document.createElement('div');
+      veil.id = 'companion-psychosis-veil';
+      veil.className = 'companion-psychosis-veil';
+      veil.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(veil);
+      setMoodFirst(['psychosis', 'angry', 'mad']);
+    } else if (!on && veil) {
+      veil.remove();
+      setMoodFirst(['idle']);
+    }
+    if (on) psychosisTimer = setTimeout(function () { applyAbilityState(Object.assign({}, abilityState, { psychosisUntil: 0, now: 0 })); }, left + 50);
+  }
+
+  function setMoodFirst(list) {
+    for (var i = 0; i < list.length; i++) { if (moods.indexOf(list[i]) !== -1) { setMood(list[i]); return; } }
+  }
+
+  // Stylized blood droplets from the sprite's mouth area, falling to the floor.
+  function coughBlood() {
+    if (!el.root) return;
+    for (var i = 0; i < 14; i++) {
+      var d = document.createElement('div');
+      d.className = 'companion-blood-drop';
+      d.setAttribute('aria-hidden', 'true');
+      d.style.setProperty('--bx', (Math.random() * 50 - 10) + 'px');
+      d.style.setProperty('--bfall', (40 + Math.random() * 60) + 'px');
+      d.style.animationDelay = (Math.random() * 0.25) + 's';
+      el.root.appendChild(d);
+      (function (n) { setTimeout(function () { n.remove(); }, 1400); })(d);
+    }
+    setMoodFirst(['hurt', 'sad']);
+  }
+
+  function runSandevistan(s) {
+
+    var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var veil = document.createElement('div');
+    veil.className = 'companion-sandevistan-veil';
+    veil.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(veil);
+    var duration = reduced ? 700 : (hasUpgrade('cyberskeleton') ? 2500 : 1500);
+    setTimeout(function () { veil.classList.add('fading'); }, duration - 350);
+    setTimeout(function () { veil.remove(); }, duration + 50);
+    if (reduced) { if (s && s.bleeding) coughBlood(); return; }
+
+    // Slow everything else on the page that runs on CSS animations or the
+    // Web Animations API; our own afterimages are created after this.
+    var slowed = [];
+    if (document.getAnimations) {
+      document.getAnimations().forEach(function (a) {
+        try { a.updatePlaybackRate ? a.updatePlaybackRate(0.15) : (a.playbackRate = 0.15); slowed.push(a); } catch (e) { /* ignore */ }
+      });
+    }
+
+    var w = el.root.offsetWidth || 96;
+    var h = el.root.offsetHeight || 96;
+    var maxX = Math.max(0, window.innerWidth - w);
+    var floor = Math.max(0, window.innerHeight - h);
+    var points = [{ x: phys.x, y: phys.y }];
+    // The cyberskeleton doubles how long the burst lasts.
+    var legs = hasUpgrade('cyberskeleton') ? 9 : 4;
+    for (var i = 0; i < legs; i++) {
+      points.push({ x: Math.random() * maxX, y: floor * (0.35 + Math.random() * 0.65) });
+    }
+    points.push({ x: Math.random() * maxX, y: floor });
+
+    var LEG_MS = 170;
+    var finished = false;
+    var start = performance.now();
+    var lastGhost = 0;
+    var hues = [150, 190, 300, 330];
+    var ghostIndex = 0;
+    phys.dashing = true;
+    el.root.classList.add('sandevistan-active');
+
+    function ghost(x, y) {
+      var g = document.createElement('img');
+      g.className = 'companion-afterimage';
+      g.src = el.sprite.src;
+      g.alt = '';
+      g.setAttribute('aria-hidden', 'true');
+      g.style.width = w + 'px';
+      g.style.height = h + 'px';
+      g.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+      g.style.setProperty('--ghost-hue', hues[ghostIndex++ % hues.length] + 'deg');
+      document.body.appendChild(g);
+      setTimeout(function () { g.remove(); }, 700);
+    }
+
+    function step(t) {
+      if (!el.root) return finish();
+      // rAF timestamps are the frame's start time, which can be a hair
+      // earlier than `start`; clamp so the first leg index is never -1.
+      var elapsed = Math.max(0, t - start);
+      var leg = Math.floor(elapsed / LEG_MS);
+      if (leg >= points.length - 1) return finish();
+      var k = (elapsed % LEG_MS) / LEG_MS;
+      var ease = k * k * (3 - 2 * k);
+      var a = points[leg], b = points[leg + 1];
+      phys.x = a.x + (b.x - a.x) * ease;
+      phys.y = a.y + (b.y - a.y) * ease;
+      el.root.style.transform = 'translate(' + phys.x + 'px,' + phys.y + 'px)';
+      if (t - lastGhost > 28) { lastGhost = t; ghost(phys.x, phys.y); }
+      requestAnimationFrame(safeStep);
+    }
+    // Any failure mid-dash must still hand control back to physics.
+    function safeStep(t) {
+      try { step(t); } catch (e) { finish(); }
+    }
+    function finish() {
+      if (finished) return;
+      finished = true;
+      if (s && s.bleeding) coughBlood();
+      var last = points[points.length - 1];
+      phys.x = last.x; phys.y = last.y; phys.vx = 0; phys.vy = 0;
+      phys.dashing = false;
+      if (el.root) el.root.classList.remove('sandevistan-active');
+      slowed.forEach(function (a) {
+        try { a.updatePlaybackRate ? a.updatePlaybackRate(1) : (a.playbackRate = 1); } catch (e) { /* ignore */ }
+      });
+    }
+    requestAnimationFrame(safeStep);
+  }
+
+  // Small API for pages that want to involve the companion (the homepage's
+  // Catch the Turkey game). Read-only info plus the same actions the chat
+  // already has; nothing here grants coins or bypasses the server's gates.
+  function exposeApi(character) {
+    window.__mitchCompanion = {
+      id: state.activeCharacterId,
+      name: character ? character.name : 'Companion',
+      specialAbility: specialAbility,
+      imageUrl: function (mood) { return imageUrl(state.activeCharacterId, mood || currentMood); },
+      hasUpgrade: hasUpgrade,
+      inPsychosis: inPsychosis,
+      strain: function () { return abilityState ? abilityState.strain : 0; },
+      sandevistan: function () { return specialAbility === 'sandevistan' ? sandevistan() : Promise.resolve(null); },
+      // Milliseconds until the Sandevistan can be used again (0 when ready).
+      cooldownLeft: function () { return Math.max(0, Math.round(SANDEVISTAN_COOLDOWN_MS - (performance.now() - lastSandevistanAt))); },
+      act: function (name) { playAction(name); },
+      // Sends a silent context message and shows the reply in the bubble.
+      react: function (text) { return sendToCompanion(text, { silent: true, showBubbleOnReply: true }); },
+    };
+    window.dispatchEvent(new CustomEvent('mitch:companion-ready'));
   }
 
   // Auto-repairs common LLM JavaScript syntax errors:
@@ -251,7 +467,7 @@
         if (opts.showBubbleOnReply && el.bubble) el.bubble.hidden = false;
         if (el.replyEl) el.replyEl.textContent = res.data.reply;
         setMood(res.data.mood);
-        if (res.data.action) playAction(res.data.action);
+        if (res.data.action) playAction(res.data.action, res.data.ability || null);
         if (res.data.customJs) runCustomJs(res.data.customJs);
         if (res.data.coinsTaken > 0 || res.data.coinRequestPercent > 0) {
           showCoinTaken(res.data.coinsTaken || 0, res.data.coinRequestPercent || 0);
@@ -340,6 +556,7 @@
       var h = el.root.offsetHeight || 96;
       var floor = window.innerHeight - h;
 
+      if (phys.dashing) { rafId = requestAnimationFrame(tick); return; }
       if (!phys.dragging) {
         phys.vy += GRAVITY;
         if (now - lastWander > 4000 + Math.random() * 4000) {

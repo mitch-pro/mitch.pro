@@ -1,0 +1,29 @@
+/* Catch the Turkey (turkey-catch.js): a full-page overlay started from the
+   "Catch the turkey" pill on the homepage, Thanksgiving season only. */
+.turkey-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 2147482990; pointer-events: none; }
+.turkey-canvas[hidden], .turkey-hud[hidden], .turkey-card[hidden] { display: none; }
+body.turkey-playing { cursor: crosshair; }
+.turkey-hud {
+  position: fixed; top: calc(env(safe-area-inset-top, 0px) + 64px); left: 50%; transform: translateX(-50%);
+  z-index: 2147482991; display: flex; align-items: center; gap: 12px;
+  padding: 6px 8px 6px 14px; border: 1px solid var(--t-bd); border-radius: 999px;
+  background: color-mix(in srgb, var(--t-bg2) 94%, transparent); color: var(--t-fg);
+  font-size: .85rem; font-weight: 600; box-shadow: 0 6px 18px rgba(0,0,0,.18); white-space: nowrap;
+}
+.turkey-hud button, .turkey-card button {
+  padding: 5px 12px; border: 1px solid var(--t-bd); border-radius: 999px; background: var(--t-bg3);
+  color: var(--t-fg); font: inherit; font-size: .8rem; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.turkey-hud button[hidden] { display: none; }
+.turkey-hud button:disabled { opacity: .6; }
+.turkey-card {
+  position: fixed; top: 40%; left: 50%; transform: translate(-50%, -50%); z-index: 2147482992;
+  display: grid; gap: 12px; justify-items: center; padding: 18px 22px; max-width: min(360px, calc(100vw - 32px));
+  border: 1px solid var(--t-bd); border-radius: var(--t-radius); background: var(--t-bg2); color: var(--t-fg);
+  box-shadow: 0 12px 32px rgba(0,0,0,.25); text-align: center;
+}
+.turkey-card p { margin: 0; font-size: .95rem; }
+.turkey-card div { display: flex; gap: 8px; }
+.turkey-card .turkey-again { border-color: var(--t-ac); background: var(--t-ac); color: var(--t-ac-ink); }
+@media (max-width: 520px) { .turkey-hud { gap: 8px; font-size: .78rem; } }
+.turkey-hud .turkey-sande-danger { border-color: color-mix(in srgb, #d0505c 60%, var(--t-bd)); color: color-mix(in srgb, #d0505c 80%, var(--t-fg)); }
