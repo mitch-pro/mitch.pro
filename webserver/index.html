@@ -1370,41 +1370,56 @@ function setupBreakChip() {
   el.hidden = false;
 }
 
-// "Don't like the holiday theme?" turns the seasonal theme off on every page
-// (the same setting as Preferences); the pill then offers to bring it back. It
-// is only shown while a holiday theme is in season.
+// Holiday theme pills. Normally one pill, "Don't like the holiday theme?".
+// Clicking it offers two choices: turn the whole theme off (the same setting
+// as Preferences > Holiday theme), or just remove the moving effect (falling
+// leaves, snow, ...) and keep the holiday colors (Preferences > Holiday
+// effects). Afterwards a single pill offers to bring back whatever was
+// removed. Only shown while a holiday theme is in season. When animations are
+// off anyway (Preferences > Motion or reduced motion) there is no effect to
+// remove, so the first click turns the theme off directly.
 function setupHolidayPill() {
   var pill = document.getElementById('holiday-pill');
+  var fxPill = document.getElementById('holiday-fx-pill');
   var theme = window.__siteTheme;
-  if (!pill || !theme || !theme.holidaySeason) return;
+  if (!pill || !fxPill || !theme || !theme.holidaySeason || !theme.setHolidayFxOff) return;
   var season = theme.holidaySeason();
   if (!season) return;
-  function paint() {
-    pill.textContent = theme.holidayOff() ? 'Bring back the holiday theme' : "Don't like the holiday theme?";
-    pill.hidden = false;
-  }
-  pill.addEventListener('click', function() { theme.setHolidayOff(!theme.holidayOff()); paint(); setupHolidayGreeting(); });
-  paint();
-
-  // Second pill: only the moving overlay (leaves, snow, ...), keeping the
-  // holiday colors. Hidden while the whole theme is off, and when animations
-  // are off anyway (Preferences > Motion or the OS reduced-motion setting).
-  var fxPill = document.getElementById('holiday-fx-pill');
-  if (!fxPill || !theme.setHolidayFxOff) return;
   var FX_NAMES = { thanksgiving: 'falling leaves', christmas: 'snow', halloween: 'embers', newyear: 'confetti', valentines: 'hearts' };
   var fxName = FX_NAMES[season] || 'holiday effects';
+  var choosing = false;
   function motionOff() {
     var off = false;
     try { off = localStorage.getItem('theme_motion') === 'off'; } catch (_) {}
     return off || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   }
-  function paintFx() {
-    fxPill.textContent = (theme.holidayFxOff() ? 'Turn on ' : 'Turn off ') + fxName;
-    fxPill.hidden = theme.holidayOff() || motionOff();
+  function state() {
+    if (theme.holidayOff()) return 'off';
+    if (theme.holidayFxOff() && !motionOff()) return 'fx-off';
+    return choosing ? 'choosing' : 'on';
   }
-  fxPill.addEventListener('click', function() { theme.setHolidayFxOff(!theme.holidayFxOff()); paintFx(); });
-  pill.addEventListener('click', paintFx);
-  paintFx();
+  function paint() {
+    var now = state();
+    pill.textContent = now === 'off' ? 'Bring back the holiday theme'
+      : now === 'fx-off' ? 'Bring back ' + fxName
+      : now === 'choosing' ? 'Turn off the holiday theme'
+      : "Don't like the holiday theme?";
+    pill.hidden = false;
+    fxPill.textContent = 'Just remove ' + fxName;
+    fxPill.hidden = now !== 'choosing';
+  }
+  pill.addEventListener('click', function() {
+    var now = state();
+    if (now === 'off') theme.setHolidayOff(false);
+    else if (now === 'fx-off') theme.setHolidayFxOff(false);
+    else if (now === 'on' && !motionOff()) { choosing = true; paint(); return; }
+    else theme.setHolidayOff(true);
+    choosing = false;
+    paint();
+    setupHolidayGreeting();
+  });
+  fxPill.addEventListener('click', function() { theme.setHolidayFxOff(true); choosing = false; paint(); });
+  paint();
 }
 
 // The manual update log (written on /admin/updates/). Collapsed it is one line
