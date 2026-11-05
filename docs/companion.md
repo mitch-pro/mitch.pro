@@ -187,7 +187,9 @@ subsystem — no `server.js` equivalent.
   of a round. It's a deliberately weak helper (slow, short reach, fumbles
   often, ignores turkeys near your basket) and gets weaker as it goes: each
   catch tires it for the rest of the round, and Sandevistan strain takes up
-  to 70% off its speed and grip. David's Sandevistan (S) slows the turkeys,
+  to 70% off its speed and grip. David's Sandevistan (S) slows the turkeys
+  and sends him flying anywhere on screen to snatch a few (4 when fresh,
+  fewer as he tires or strains, at least 1; +2 with the Cyberskeleton),
   which builds strain like any other use; in cyberpsychosis he's erratic and
   grabs burnt turkeys too. The game itself grants no coins.
 - **Prompt size.** Personality prompts can be up to 1 MB (bytes;

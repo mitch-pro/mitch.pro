@@ -13,7 +13,9 @@
 // and comments on the result through its normal chat. It's deliberately a
 // weak helper: slow, short reach, sometimes fumbles, and it tires with every
 // catch in a round. Sandevistan strain (David Martinez) weakens it further,
-// and his Sandevistan (S) slows the turkeys at the cost of more strain. In
+// and his Sandevistan (S) slows the turkeys at the cost of more strain, and
+// for a few grabs he flies anywhere on screen at full speed to snatch them
+// (fewer grabs the weaker he is; the cyberskeleton adds two). In
 // cyberpsychosis he's erratic and grabs burnt turkeys too. Chrome arms give a
 // little more speed and reach; the cyberskeleton doubles the slow-down.
 //
@@ -27,7 +29,9 @@
   if (season !== 'thanksgiving' && document.documentElement.getAttribute('data-holiday') !== 'thanksgiving') return;
   launch.hidden = false;
 
-  var BASKET_W = 92, BASKET_H = 24, TURKEY_R = 19;
+  var BASKET_W = 92, BASKET_H = 24, TURKEY_R = 19, HELPER_SIZE = 48;
+  // Sandevistan burst: flight speed (px/s) and grab radius.
+  var BURST_SPEED = 1500, BURST_REACH = 30;
   var canvas = null, ctx = null, hud = null, card = null;
   var W = 0, H = 0;
   var running = false, raf = 0, last = 0;
@@ -109,7 +113,8 @@
     if (companion) {
       var img = new Image();
       img.src = companion.imageUrl('idle');
-      helper = { x: W * 0.2, img: img, fatigue: 1, cooldown: 0, aim: null };
+      // y is the sprite's centre; it only leaves the floor during a Sandevistan burst.
+      helper = { x: W * 0.2, y: groundY() - HELPER_SIZE / 2, img: img, fatigue: 1, cooldown: 0, aim: null, burstLeft: 0, trail: [] };
     } else {
       helper = null;
     }
@@ -136,6 +141,8 @@
       if (!s) return;
       var longer = s.upgrades && s.upgrades.indexOf('cyberskeleton') !== -1;
       slowUntil = Date.now() + (longer ? 6000 : 3000);
+      // He flies for a few grabs; fewer the more tired or strained he is.
+      if (helper) helper.burstLeft = Math.max(1, Math.round(4 * helperPower())) + (longer ? 2 : 0);
       paintHud();
     });
   }
@@ -197,7 +204,39 @@
     var floor = groundY();
     var basketTop = floor - BASKET_H;
 
-    if (helper && companion) {
+    var bursting = !!(helper && companion && helper.burstLeft > 0 && Date.now() < slowUntil);
+    var restY = floor - HELPER_SIZE / 2;
+    if (helper && companion && bursting) {
+      var crazyB = psycho();
+      var near = null, nearD = Infinity;
+      turkeys.forEach(function (t) {
+        if (!crazyB && t.kind === 'burnt') return;
+        var d = Math.hypot(t.x - helper.x, t.y - helper.y);
+        if (d < nearD) { near = t; nearD = d; }
+      });
+      if (near) {
+        var stepB = BURST_SPEED * dt;
+        if (nearD <= stepB || nearD < BURST_REACH) {
+          helper.x = near.x; helper.y = near.y;
+          turkeys.splice(turkeys.indexOf(near), 1);
+          catchTurkey(near, true);
+          helper.burstLeft -= 1;
+        } else {
+          helper.x += (near.x - helper.x) / nearD * stepB;
+          helper.y += (near.y - helper.y) / nearD * stepB;
+        }
+      }
+      helper.trail.push({ x: helper.x, y: helper.y, t: Date.now() });
+    } else if (helper && companion && helper.y < restY - 1) {
+      // Drop back to the floor after a burst.
+      helper.y = Math.min(restY, helper.y + 900 * dt);
+      helper.trail.push({ x: helper.x, y: helper.y, t: Date.now() });
+    } else if (helper) {
+      helper.y = restY;
+    }
+    if (helper) helper.trail = helper.trail.filter(function (p) { return Date.now() - p.t < 260; });
+
+    if (helper && companion && !bursting && helper.y >= restY - 1) {
       var power = helperPower();
       var crazy = psycho();
       helper.cooldown = Math.max(0, helper.cooldown - dt);
@@ -228,7 +267,7 @@
       var gone = false;
       if (t.y + TURKEY_R >= basketTop && t.y < floor && Math.abs(t.x - basket.x) < BASKET_W / 2 + TURKEY_R * 0.4) {
         catchTurkey(t, false); gone = true;
-      } else if (helper && companion && !t.fumbled && t.y + TURKEY_R >= floor - 34 &&
+      } else if (helper && companion && !bursting && helper.y >= restY - 1 && !t.fumbled && t.y + TURKEY_R >= floor - 34 &&
         Math.abs(t.x - helper.x) < (hasArms() ? 26 : 18) &&
         (t.kind !== 'burnt' || psycho())) {
         // A tired or strained helper fumbles more often.
@@ -325,13 +364,21 @@
       ctx.globalAlpha = 1;
     });
     if (helper && companion) {
-      var size = 48;
+      var size = HELPER_SIZE;
+      // Afterimages from a Sandevistan burst.
+      helper.trail.forEach(function (p, i) {
+        ctx.save();
+        ctx.globalAlpha = 0.35 * (1 - (Date.now() - p.t) / 260);
+        ctx.filter = 'hue-rotate(' + (i % 2 ? 150 : 300) + 'deg) saturate(3)';
+        if (helper.img.complete && helper.img.naturalWidth) ctx.drawImage(helper.img, p.x - size / 2, p.y - size / 2, size, size);
+        ctx.restore();
+      });
       ctx.save();
       // Fades as it tires or strains.
       ctx.globalAlpha = 0.55 + 0.45 * helperPower();
       if (psycho()) { ctx.shadowColor = 'rgba(255,30,60,.9)'; ctx.shadowBlur = 14; }
       if (helper.img.complete && helper.img.naturalWidth) {
-        ctx.drawImage(helper.img, helper.x - size / 2, floor - size, size, size);
+        ctx.drawImage(helper.img, helper.x - size / 2, helper.y - size / 2, size, size);
       }
       ctx.restore();
     }
@@ -351,6 +398,7 @@
     if (!canvas) build();
     setupCompanion();
     score = 0; lives = 3; helperCatches = 0; turkeys = []; spawnIn = 0.5; slowUntil = 0;
+    if (helper) { helper.burstLeft = 0; helper.trail = []; }
     basket.x = basket.target = W / 2;
     card.hidden = true;
     card.querySelector('.turkey-again').textContent = 'Play again';
