@@ -596,6 +596,21 @@ impl DataStore {
                     CREATE INDEX IF NOT EXISTS idx_companion_chat_messages_lookup ON companion_chat_messages (email, character_id, created_at DESC);
                     CREATE INDEX IF NOT EXISTS idx_companion_memories_lookup ON companion_memories (email, character_id, created_at DESC);
                     CREATE INDEX IF NOT EXISTS idx_companion_character_unlocks_char ON companion_character_unlocks (character_id);
+                    CREATE TABLE IF NOT EXISTS companion_ability_strain (
+                        email TEXT NOT NULL,
+                        character_id TEXT NOT NULL REFERENCES companion_characters(id) ON DELETE CASCADE,
+                        strain REAL NOT NULL DEFAULT 0,
+                        updated_at INTEGER NOT NULL,
+                        psychosis_until INTEGER NOT NULL DEFAULT 0,
+                        PRIMARY KEY (email, character_id)
+                    );
+                    CREATE TABLE IF NOT EXISTS companion_upgrades (
+                        email TEXT NOT NULL,
+                        character_id TEXT NOT NULL REFERENCES companion_characters(id) ON DELETE CASCADE,
+                        upgrade TEXT NOT NULL,
+                        purchased_at INTEGER NOT NULL,
+                        PRIMARY KEY (email, character_id, upgrade)
+                    );
                     CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs (ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_level ON app_logs (level, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_category ON app_logs (category, ts DESC);

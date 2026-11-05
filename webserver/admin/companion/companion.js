@@ -88,6 +88,14 @@
     });
   }
 
+  // Prompts can be up to 1 MB; the card only shows the start of long ones
+  // (Edit loads the whole thing).
+  function promptPreview(text) {
+    text = text || '';
+    if (text.length <= 800) return text;
+    return text.slice(0, 800) + '… (' + Math.round(new Blob([text]).size / 1024) + ' KB total)';
+  }
+
   function renderList(characters) {
     var list = $('character-list');
     list.innerHTML = '';
@@ -105,8 +113,8 @@
         (c.needsReview ? ' <span class="companion-review-tag">Needs review</span>' : '') +
         (c.specialAbility ? ' <span class="companion-ability-tag">' + escapeHtml(ABILITY_LABELS[c.specialAbility] || c.specialAbility) + '</span>' : '') +
         '</h3>' +
-        (c.creatorEmail ? '<p class="companion-creator">Made by ' + escapeHtml(c.creatorEmail) + ' &middot; ' + c.priceCoins + ' coins to unlock</p>' : '') +
-        '<p class="companion-prompt">' + escapeHtml(c.personalityPrompt) + '</p>' +
+        '<p class="companion-creator">' + (c.creatorEmail ? 'Made by ' + escapeHtml(c.creatorEmail) + ' &middot; ' : '') + (c.priceCoins > 0 ? c.priceCoins + ' coins to unlock' : 'Free') + '</p>' +
+        '<p class="companion-prompt">' + escapeHtml(promptPreview(c.personalityPrompt)) + '</p>' +
         '<div class="companion-moods"></div>' +
         '<label class="companion-ability">Special ability <select class="ability-select"><option value="">None</option>' +
         specialAbilities.map(function (a) { return '<option value="' + escapeHtml(a) + '"' + (c.specialAbility === a ? ' selected' : '') + '>' + escapeHtml(ABILITY_LABELS[a] || a) + '</option>'; }).join('') +

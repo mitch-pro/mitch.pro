@@ -13,6 +13,7 @@
 //! See `docs/companion.md`.
 
 mod admin;
+mod chrome;
 mod deepseek;
 mod economy;
 mod mine;
@@ -49,6 +50,12 @@ pub async fn handle(
         || path == "/api/companion/coin-request/accept"
     {
         return economy::handle(state, method, path, headers, body_bytes).await;
+    }
+    if path == "/api/companion/ability"
+        || path == "/api/companion/ability/use"
+        || path == "/api/companion/upgrades/buy"
+    {
+        return chrome::handle(state, method, path, headers, body_bytes, search).await;
     }
     if path == "/api/companion/characters" && *method == Method::GET {
         return Some(list_characters(state, headers));
@@ -256,6 +263,12 @@ async fn chat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> 
                 &character.id,
             ),
         special_ability: character.special_ability.clone(),
+        ability_status: if character.special_ability.is_empty() {
+            String::new()
+        } else {
+            let s = mitch_lib::companion_chrome::ability_state(&state.store, &email, &character.id);
+            ability_status_prompt(&s)
+        },
     };
 
     match deepseek::chat(
@@ -292,6 +305,16 @@ async fn chat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> 
             if !r.remember.is_empty() {
                 mitch_lib::companion::add_memory(&state.store, &email, &character.id, &r.remember);
             }
+            // Using the ability in chat costs the same strain as a
+            // double-click; the widget gets the new state to show blood or
+            // cyberpsychosis.
+            let ability = if !r.action.is_empty() && r.action == character.special_ability {
+                let s =
+                    mitch_lib::companion_chrome::record_use(&state.store, &email, &character.id);
+                chrome::state_json(&character, &s)
+            } else {
+                serde_json::Value::Null
+            };
             let mut coins_taken = 0.0;
             if r.coin_request_percent > 0.0 {
                 let percent = r.coin_request_percent.clamp(0.0, 100.0);
@@ -325,9 +348,40 @@ async fn chat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> 
                     "customJs": r.custom_js,
                     "coinRequestPercent": r.coin_request_percent,
                     "coinsTaken": coins_taken,
+                    "ability": ability,
                 }),
             )
         }
         Err(_) => json_response(502, json!({ "error": "companion AI failed, try again" })),
     }
+}
+
+/// What the character is told about its own body this turn: chrome it has
+/// installed, and how badly the Sandevistan has strained it.
+fn ability_status_prompt(s: &mitch_lib::companion_chrome::AbilityState) -> String {
+    let mut out = String::new();
+    let names: Vec<&str> = s
+        .upgrades
+        .iter()
+        .filter_map(|id| mitch_lib::companion_chrome::upgrade(id).map(|u| u.name))
+        .collect();
+    if !names.is_empty() {
+        out.push_str(&format!(
+            "Chrome you have installed: {}. ",
+            names.join(", ")
+        ));
+    }
+    if s.in_psychosis(mitch_lib::school::now_millis()) {
+        out.push_str(
+            "Right now you are in cyberpsychosis from overusing the Sandevistan: paranoid, \
+             erratic and aggressive, hearing things, struggling to recognize the person you're \
+             talking to. Stay in that state in every reply until it passes. ",
+        );
+    } else if s.bleeding {
+        out.push_str(
+            "You've been pushing the Sandevistan too hard: your body is failing, your head is \
+             pounding and you've been coughing up blood. It shows in how you talk. ",
+        );
+    }
+    out
 }

@@ -226,3 +226,22 @@
 .companion-setup-shell button:disabled { opacity: 0.6; cursor: default; }
 .mine-msg:empty { display: none; }
 .companion-setup-grid > :not(.companion-setup-card) { grid-column: 1 / -1; }
+
+.companion-chrome-panel { padding: 14px 16px; border: 1px solid var(--t-bd); border-radius: var(--t-radius); background: var(--t-bg2); }
+.companion-chrome-panel + .companion-chrome-panel { margin-top: 10px; }
+.companion-chrome-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.companion-chrome-condition { color: var(--t-fg2); font-size: 13px; }
+.companion-chrome-condition.bleeding { color: color-mix(in srgb, #d0505c 75%, var(--t-fg)); font-weight: 600; }
+.companion-chrome-condition.psychosis { color: color-mix(in srgb, #e0344a 85%, var(--t-fg)); font-weight: 700; }
+.companion-strain { height: 8px; margin: 10px 0 6px; overflow: hidden; border-radius: 999px; background: var(--t-bg3); }
+.companion-strain span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #2bbf86, #d9a62b 60%, #d0505c); }
+.companion-chrome-note { margin: 0 0 10px; color: var(--t-fg2); font-size: 12px; }
+.companion-upgrades { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.companion-upgrades li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm); background: var(--t-bg); }
+.companion-upgrades li small { display: block; color: var(--t-fg2); font-size: 12px; }
+.companion-upgrades button { flex: 0 0 auto; padding: 7px 12px; border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm); background: var(--t-bg3); color: var(--t-fg); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.companion-upgrades button:disabled { opacity: .6; cursor: default; }
+.companion-upgrade-owned { color: var(--t-ac); font-size: 13px; font-weight: 600; }
+.companion-chrome-status:empty { display: none; }
+.companion-chrome-status { margin: 8px 0 0; color: color-mix(in srgb, #d0505c 75%, var(--t-fg)); font-size: 13px; }
+@media (max-width: 520px) { .companion-upgrades li { flex-direction: column; align-items: stretch; } }

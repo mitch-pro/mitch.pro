@@ -156,6 +156,42 @@ subsystem — no `server.js` equivalent.
     column (`seed_david_martinez`), so it runs once: deleting him on
     `/admin/companion/` is permanent. His images are uploaded by admins
     like any other character's.
+- **Strain, blood and cyberpsychosis** (`mitch_lib::companion_chrome`,
+  table `companion_ability_strain`, one row per (email, character)). Every
+  Sandevistan use, from chat or a double-click/`POST /api/companion/ability/use`,
+  adds 16 strain (× upgrade multiplier, max 100); strain drains 2 per
+  minute. At 60+ he coughs up blood after each use (`coughBlood()` in the
+  widget; uses a `hurt`/`sad` mood image if the character has one). Reaching
+  100 starts 10 minutes of cyberpsychosis: red glitch veil over the page,
+  jittering sprite, `psychosis`/`angry` mood if present, and the chat prompt
+  (`ability_status_prompt` in `routes/companion/mod.rs`) tells him he's
+  paranoid and erratic. Afterwards strain drops to 50 and keeps draining.
+  Decay and the end of psychosis are computed on read; there's no job.
+- **Chrome upgrades** (`UPGRADES` in `companion_chrome.rs`, table
+  `companion_upgrades`). Bought per (email, character) on `/companion/`
+  ("Chrome" section) via `POST /api/companion/upgrades/buy {characterId, upgrade}`:
+  Immunosuppressants (400, strain × 0.5), Chrome arms (600, faster and longer
+  reach in Catch the Turkey), Cyberskeleton (1500, needs Chrome arms: the
+  Sandevistan dash and the game's slow-down last twice as long, strain × 1.5).
+  Economy: a pure sink, nobody is paid, no refunds, nothing produces coins.
+  The row is inserted before charging and removed if the charge fails, so
+  concurrent buys can't double-charge and a failed charge never installs.
+  `GET /api/companion/ability?characterId=` returns state plus the catalog.
+- **Page API for the companion** (`window.__mitchCompanion`, fired with
+  `mitch:companion-ready`): name, `imageUrl(mood)`, `hasUpgrade`,
+  `inPsychosis`, `strain()`, `sandevistan()`, `act(name)` and `react(text)`
+  (a silent chat message whose reply shows in the bubble). Used by the
+  homepage's Catch the Turkey game (`webserver/turkey-catch.js`): the
+  companion catches turkeys beside the basket, comments on the score at
+  the end of a round, and David's Sandevistan slows the turkeys (that use
+  builds strain like any other; in cyberpsychosis he grabs burnt turkeys
+  too). The game itself grants no coins.
+- **Prompt size.** Personality prompts can be up to 1 MB (bytes;
+  `MAX_PROMPT_BYTES` in `routes/companion/admin.rs`, also used by `mine.rs`).
+  `main.rs` raises the request-body cap for the three endpoints that take a
+  prompt to 3 MB. Every chat call sends the whole prompt to DeepSeek, so a
+  very large prompt costs more per message and may exceed the model's
+  context window, in which case chat fails for that character.
 - **Custom JS execution.** The chat response can also include a
   `customJs` field — raw JavaScript the widget runs via `new
   Function(code)()`. Only ever populated server-side when the active
@@ -284,6 +320,9 @@ shell or add it to the untracked `.env`.
   subscriber; see Economy above.
 - `companion_character_unlocks` (email, character_id, unlocked_at) — one
   row per paid unlock; `ON DELETE CASCADE` when the character is deleted.
+- `companion_ability_strain` (email, character_id, strain, updated_at,
+  psychosis_until) and `companion_upgrades` (email, character_id, upgrade,
+  purchased_at); see Scope.
 - `companion_coin_requests` (email, character_id, asked_at, percent) — at
   most one row per (email, character): the most recent offer, used both
   for the cooldown (`coin_request_cooldown_elapsed`) and to verify an

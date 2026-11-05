@@ -135,6 +135,12 @@ async fn get_any(
         // routinely exceed the 256KB default; the handler's own 1GiB quota still
         // applies, this only bounds how much one request may buffer in memory.
         "/api/userdata" => 64 * 1024 * 1024,
+        // Companion personality prompts can be up to 1 MB
+        // (MAX_PROMPT_BYTES in routes/companion/admin.rs); JSON escaping can
+        // grow that, so leave headroom.
+        "/api/admin/companion/characters"
+        | "/api/companion/mine"
+        | "/api/companion/mine/update" => 3 * 1024 * 1024,
         _ => 256 * 1024,
     };
     let body_bytes = match axum::body::to_bytes(body, cap).await {

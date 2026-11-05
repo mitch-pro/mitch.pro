@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="/admin/admin.css">
   <link rel="stylesheet" href="/admin/companion/companion.css?v=3">
   <script src="/app-shell.js" defer></script>
-  <script src="/admin/companion/companion.js?v=2" defer></script>
+  <script src="/admin/companion/companion.js?v=3" defer></script>
 </head>
 <body class="admin-page">
   <div class="shell">
@@ -38,7 +38,7 @@
           <label for="character-name">Name</label>
           <input id="character-name" type="text" maxlength="60" required>
           <label for="character-prompt">Personality prompt</label>
-          <textarea id="character-prompt" rows="6" maxlength="4000" required></textarea>
+          <textarea id="character-prompt" rows="6" maxlength="1048576" required></textarea>
           <label for="character-price">Price (coins to unlock, 0 = free)</label>
           <input id="character-price" type="number" min="0" step="1" value="0">
           <button type="submit" id="character-submit">Create character</button>

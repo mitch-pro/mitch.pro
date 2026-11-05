@@ -32,6 +32,8 @@ const TABLES: &[(&str, &str)] = &[
     ("companion_memories", "email"),
     ("companion_subscriptions", "email"),
     ("companion_character_unlocks", "email"),
+    ("companion_ability_strain", "email"),
+    ("companion_upgrades", "email"),
     ("reserved_usernames", "holder_email"),
 ];
 

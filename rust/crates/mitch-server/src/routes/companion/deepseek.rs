@@ -119,6 +119,9 @@ pub struct Capabilities {
     /// or empty. Adds one extra preset action of the same name, offered and
     /// accepted only for this character.
     pub special_ability: String,
+    /// Extra prompt text about the character's chrome and strain
+    /// (`ability_status_prompt` in `mod.rs`), or empty.
+    pub ability_status: String,
 }
 
 /// Asks the character (identified by `personality_prompt`) to react to
@@ -203,11 +206,12 @@ pub async fn chat(
          \"action\" is optional — one of these exact names, spelled exactly as shown, if (and \
          only if) it fits what you're saying: {actions_list}. Leave it as an empty string most \
          turns; it's a physical reaction, not something to do every message. \
-         {special_ability_instructions}{custom_js_instructions}{coin_request_instructions}",
+         {special_ability_instructions}{ability_status}{custom_js_instructions}{coin_request_instructions}",
         email = user.email,
         display_name = user.display_name,
         balance = user.mitchcoin_balance,
         premium = user.premium,
+        ability_status = caps.ability_status,
     );
 
     let mut messages: Vec<Value> = vec![json!({ "role": "system", "content": system_prompt })];
