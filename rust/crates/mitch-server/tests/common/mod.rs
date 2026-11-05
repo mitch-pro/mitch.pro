@@ -33,9 +33,14 @@ impl TestServer {
     /// (e.g. `("testers.json", "[...]")`). `ready_path` is polled until it
     /// answers with `ready_status`, which shows the router is serving.
     pub async fn start(data_files: &[(&str, &str)], ready_path: &str, ready_status: u16) -> Self {
+        // Tests in one binary run in parallel and the clock can be coarse, so
+        // pid + time alone collided (the second server's symlink then failed
+        // with "File exists"); a per-process counter keeps every dir unique.
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let dir = std::env::temp_dir().join(format!(
-            "mitch-it-{}-{}",
+            "mitch-it-{}-{}-{}",
             std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()

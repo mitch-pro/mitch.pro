@@ -26,6 +26,7 @@ pub mod dashboard;
 pub mod data;
 pub mod economy;
 pub mod email;
+pub mod feedback;
 pub mod legacy;
 pub mod moderation;
 pub mod newsletters;
@@ -255,6 +256,11 @@ pub async fn handle(
         return Some(resp);
     }
     if let Some(resp) = support::handle(state, method, path, search, body, &ctx) {
+        return Some(resp);
+    }
+    // Feedback inbox (/moderator/feedback/): moderators read and mark handled,
+    // admins delete.
+    if let Some(resp) = feedback::handle(state, method, path, search, body, &ctx) {
         return Some(resp);
     }
 
