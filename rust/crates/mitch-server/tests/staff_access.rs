@@ -152,3 +152,103 @@ async fn owner_resources_and_account_lists_follow_roles() {
     assert_eq!(all.status, 200, "{}", all.text);
     assert_eq!(all.json["accounts"].as_array().map(Vec::len), Some(4));
 }
+
+/// The feedback inbox (`/moderator/feedback/`) shipped once with its route
+/// file never declared in `routes/admin/mod.rs`, so every request 404'd.
+/// Moderators and admins read it and mark entries handled; only admins
+/// delete; members and visitors are refused.
+#[tokio::test(flavor = "multi_thread")]
+async fn feedback_inbox_is_routed_and_follows_roles() {
+    const MODERATOR: &str = "moderator@example.com";
+    let admins = json!({"owners": [OWNER], "admins": [ADMIN]}).to_string();
+    let moderators = json!([MODERATOR]).to_string();
+    let s = TestServer::start(
+        &[("admins.json", &admins), ("moderators.json", &moderators)],
+        "/api/tester/status",
+        403,
+    )
+    .await;
+    let admin = s.session_for(ADMIN);
+    let moderator = s.session_for(MODERATOR);
+    let member = s.session_for(MEMBER);
+    let r = staff_post(
+        &s,
+        Some(&admin),
+        "/api/admin/passphrase-status",
+        json!({"passphrase": PASS}),
+    )
+    .await;
+    assert_eq!(r.status, 200, "{}", r.text);
+
+    let sent = s
+        .call_with(
+            Some(&member),
+            "POST",
+            "/api/suggest",
+            Some(json!({"type": "bug", "text": "Feedback inbox regression test"})),
+            &[("Origin", &s.url)],
+        )
+        .await;
+    assert_eq!(sent.status, 200, "{}", sent.text);
+
+    for status in ["new", "handled", "all"] {
+        let path = format!("/api/admin/feedback?status={status}");
+        let r = staff_get(&s, Some(&admin), &path, true).await;
+        assert_eq!(r.status, 200, "{path}: {}", r.text);
+        assert!(r.json["entries"].is_array(), "{path}: {}", r.text);
+    }
+    let inbox = staff_get(
+        &s,
+        Some(&moderator),
+        "/api/admin/feedback?status=new",
+        false,
+    )
+    .await;
+    assert_eq!(
+        inbox.status, 200,
+        "moderators read without a passphrase: {}",
+        inbox.text
+    );
+    let id = inbox.json["entries"][0]["id"]
+        .as_i64()
+        .expect("submitted entry is listed");
+
+    let handled = staff_post(
+        &s,
+        Some(&moderator),
+        "/api/admin/feedback/status",
+        json!({"id": id, "status": "handled"}),
+    )
+    .await;
+    assert_eq!(handled.status, 200, "{}", handled.text);
+    let moved = staff_get(&s, Some(&admin), "/api/admin/feedback?status=handled", true).await;
+    assert_eq!(moved.json["entries"][0]["id"].as_i64(), Some(id));
+
+    let denied = staff_post(
+        &s,
+        Some(&moderator),
+        "/api/admin/feedback/delete",
+        json!({"id": id}),
+    )
+    .await;
+    assert_eq!(denied.status, 403, "moderators can't delete");
+    let deleted = staff_post(
+        &s,
+        Some(&admin),
+        "/api/admin/feedback/delete",
+        json!({"id": id}),
+    )
+    .await;
+    assert_eq!(deleted.status, 200, "{}", deleted.text);
+
+    assert!([401, 403].contains(
+        &staff_get(&s, Some(&member), "/api/admin/feedback", true)
+            .await
+            .status
+    ));
+    assert!([401, 403].contains(
+        &staff_get(&s, None, "/api/admin/feedback", true)
+            .await
+            .status
+    ));
+}
