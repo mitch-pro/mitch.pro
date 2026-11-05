@@ -2,7 +2,7 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const grid = $('computer-grid');
-  document.title = `My Computer - ${location.hostname}`;
+  document.title = `VM Lab - ${location.hostname}`;
   const dialog = $('confirm-dialog');
   const provDialog = $('provision-dialog');
   const upDialog = $('upgrade-dialog');
@@ -330,7 +330,7 @@
         disk: { label: 'Storage (GB)', value: values.diskGb || 64, min: values.diskGb || 40, max: maxVals.disk, scale: 1 }
       }[cat];
       const maxAttr = config.max ? `max="${config.max}"` : '';
-      const limitHint = !isOwner ? `<p style="font-size:0.85rem;color:#94a3b8;margin-top:4px;">Non-owner limit: up to 8 CPU cores, 16 GB RAM, and 128 GB storage.</p>` : '';
+      const limitHint = !isOwner ? `<p style="font-size:0.85rem;color:var(--t-fg2);margin-top:4px;">Non-owner limit: up to 8 CPU cores, 16 GB RAM, and 128 GB storage.</p>` : '';
       container.innerHTML = `<form id="owner-resource-form" class="owner-resource-form"><label for="owner-resource-value">${config.label}</label><div><input id="owner-resource-value" type="number" min="${config.min}" ${maxAttr} step="${cat === 'ram' ? '.5' : '1'}" value="${config.value}" required><button type="submit" class="primary-button" ${upgradeBusy ? 'disabled' : ''}>Save resources</button></div><p>No account tier or coin cost.</p>${limitHint}</form>`;
       $('owner-resource-form').onsubmit = async event => {
         event.preventDefault(); if (upgradeBusy) return;
@@ -364,10 +364,10 @@
     let durationSelectorHtml = '';
     if (cat === 'session') {
       durationSelectorHtml = `
-        <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:8px 12px;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-          <div style="font-size:0.84rem;color:#cbd5e1;">
+        <div style="display:flex;align-items:center;justify-content:space-between;background:var(--t-bg3);border:1px solid var(--t-bd);border-radius:8px;padding:8px 12px;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+          <div style="font-size:0.84rem;color:var(--t-fg);">
             <strong>Pass Term:</strong>
-            ${daysLeft > 0 ? `<span style="margin-left:8px;color:#c084fc;font-weight:600;">Active pass expires in ${daysLeft}d</span>` : '<span style="margin-left:8px;color:#94a3b8;">Select 1 Week or 1 Month</span>'}
+            ${daysLeft > 0 ? `<span style="margin-left:8px;color:var(--t-ac);font-weight:600;">Active pass expires in ${daysLeft}d</span>` : '<span style="margin-left:8px;color:var(--t-fg2);">Select 1 Week or 1 Month</span>'}
           </div>
           <div style="display:flex;gap:6px;">
             <button type="button" class="${sessionDurationMode === 'month' ? 'primary-button' : 'quiet-button'}" data-term="month" style="min-height:30px;padding:4px 10px;font-size:0.8rem;">1 Month (30d)</button>
@@ -430,7 +430,7 @@
     document.querySelectorAll('#upgrade-tab-content button[data-upgrade-cat]').forEach(button => { button.disabled = true; });
     const statusEl = $('upgrade-status');
     statusEl.textContent = 'Applying upgrade…';
-    statusEl.style.color = '#fde047';
+    statusEl.style.color = 'var(--t-fg2)';
     try {
       const res = await fetch('/api/vm/upgrade', {
         method: 'POST',
@@ -441,7 +441,7 @@
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Failed to apply upgrade.');
       statusEl.textContent = data.message || 'Upgrade successful!';
-      statusEl.style.color = '#4ade80';
+      statusEl.style.color = 'var(--vm-ok)';
       if (upgradeData) {
         upgradeData.current = data.upgrades;
         upgradeData.coins = data.coins;
@@ -450,7 +450,7 @@
       await load();
     } catch (err) {
       statusEl.textContent = friendly(err);
-      statusEl.style.color = '#f87171';
+      statusEl.style.color = 'var(--vm-danger)';
     } finally {
       upgradeBusy = false;
       renderUpgradeTab();

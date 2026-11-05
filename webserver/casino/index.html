@@ -1,7 +1,7 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Casino — mitch.pro</title><meta name="description" content="Coinflip, Dice, Slots, Blackjack, and Poker, played with MitchCoins."><link rel="canonical" href="https://mitchdog.com/casino/"><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/casino/casino.css"><script src="/api.js"></script><script src="/app-shell.js" defer></script><script src="/casino/casino.js" defer></script></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Casino — mitch.pro</title><meta name="description" content="Coinflip, Dice, Slots, Blackjack, and Poker, played with MitchCoins."><link rel="canonical" href="https://mitchdog.com/casino/"><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/casino/casino.css?v=2"><script src="/api.js"></script><script src="/app-shell.js" defer></script><script src="/casino/casino.js" defer></script></head>
 <body><main class="app-main casino-main">
-<header class="casino-heading"><img src="/mitchcoin.svg?v=4" width="64" height="64" alt=""><div><h1>Casino</h1><p>Play Coinflip, Dice, Slots, Blackjack, and Poker with your MitchCoins.</p></div></header>
+<header class="casino-heading"><h1>Casino</h1></header>
 
 <section class="casino-wallet" aria-label="Your wallet">
   <div><span>Your balance</span><strong id="casino-balance">—</strong></div>
@@ -17,7 +17,6 @@
 </nav>
 
 <section class="casino-panel is-active" id="panel-coinflip" role="tabpanel">
-  <h2>Coinflip</h2>
   <p class="casino-rules">Pick heads or tails. A correct call pays 1.92× your bet.</p>
   <form id="coinflip-form" class="casino-bet-form">
     <label for="coinflip-bet">Bet</label>
@@ -32,7 +31,6 @@
 </section>
 
 <section class="casino-panel" id="panel-dice" role="tabpanel" hidden>
-  <h2>Dice</h2>
   <p class="casino-rules">Roll 1–100. Pick a target and a direction — the farther the odds are against you, the bigger the payout.</p>
   <form id="dice-form" class="casino-bet-form">
     <label for="dice-bet">Bet</label>
@@ -50,7 +48,6 @@
 </section>
 
 <section class="casino-panel" id="panel-slots" role="tabpanel" hidden>
-  <h2>Slots</h2>
   <p class="casino-rules">Three reels. Match symbols for a payout; any Cherry on an otherwise-blank spin pays a small consolation.</p>
   <form id="slots-form" class="casino-bet-form">
     <label for="slots-bet">Bet</label>
@@ -62,7 +59,6 @@
 </section>
 
 <section class="casino-panel" id="panel-blackjack" role="tabpanel" hidden>
-  <h2>Blackjack</h2>
   <p class="casino-rules">Dealer stands on every 17. Blackjack pays 3:2.</p>
   <form id="blackjack-bet-form" class="casino-bet-form">
     <label for="blackjack-bet">Bet</label>
@@ -81,7 +77,6 @@
 </section>
 
 <section class="casino-panel" id="panel-poker" role="tabpanel" hidden>
-  <h2>Poker</h2>
   <p class="casino-rules">5-card draw, Jacks or Better. Hold the cards you want to keep, then draw once. A pair of Jacks or better pushes; anything less pays nothing.</p>
   <form id="poker-bet-form" class="casino-bet-form">
     <label for="poker-bet">Bet</label>

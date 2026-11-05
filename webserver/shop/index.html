@@ -37,7 +37,7 @@
   }
   .balance-value {
     color: var(--t-ac);
-    font-family: var(--t-display, Fraunces, Georgia, serif);
+    font-family: inherit;
     font-size: 1.45rem;
     font-weight: 800;
     margin-top: 0.2rem;
@@ -82,8 +82,8 @@
   .tab-btn { padding: 0.55rem 0.85rem; }
   .tab-btn:hover, .mini-btn:hover { border-color: var(--t-ac); color: var(--t-fg); }
   .tab-btn.active {
-    background: color-mix(in srgb, var(--t-ac) 88%, #000 12%);
-    color: #fff;
+    background: var(--t-ac);
+    color: var(--t-ac-ink);
     border-color: var(--t-bda, transparent);
   }
   .section { margin: 0.85rem 0 1.1rem; }
@@ -107,7 +107,7 @@
   .section-head::after { content: '+'; color: var(--t-ac); font-weight: 800; }
   details[open] > .section-head::after { content: '−'; }
   .section-title {
-    font-family: var(--t-display, Fraunces, Georgia, serif);
+    font-family: inherit;
     font-size: 1rem;
     font-weight: 750;
     color: var(--t-fg);
@@ -136,7 +136,7 @@
   }
   .item-kicker { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.6rem; min-height: 1.5rem; }
   .item-title {
-    font-family: var(--t-display, Fraunces, Georgia, serif);
+    font-family: inherit;
     font-size: 1.05rem;
     font-weight: 750;
     color: var(--t-fg);
@@ -162,7 +162,7 @@
   }
   .price {
     color: var(--t-ac);
-    font-family: var(--t-display, Fraunces, Georgia, serif);
+    font-family: inherit;
     font-size: 1.1rem;
     font-weight: 800;
     white-space: nowrap;
@@ -186,9 +186,9 @@
   .btn-buy:hover:not(:disabled) { border-color: var(--t-ac); transform: translateY(-1px); }
   .btn-buy:disabled { opacity: .45; cursor: default; }
   .btn-buy.primary {
-    background: color-mix(in srgb, var(--t-ac) 88%, #000 12%);
+    background: var(--t-ac);
     border-color: var(--t-bda, transparent);
-    color: #fff;
+    color: var(--t-ac-ink);
   }
   .btn-buy.active {
     background: color-mix(in srgb, var(--t-ac) 16%, transparent);
@@ -225,8 +225,8 @@
     font-size: 0.8rem;
     border-radius: var(--t-radius, 8px);
     font-weight: 700;
-    background: color-mix(in srgb, var(--t-ac) 88%, #000 12%);
-    color: #fff;
+    background: var(--t-ac);
+    color: var(--t-ac-ink);
     border: 1px solid var(--t-bda, transparent);
     cursor: pointer;
     white-space: nowrap;
@@ -287,7 +287,7 @@
     z-index: 1000;
     display: none;
     max-width: min(26rem, calc(100vw - 2.25rem));
-    box-shadow: 0 12px 40px rgba(0,0,0,.35);
+    box-shadow: 0 4px 12px rgba(0,0,0,.18);
   }
   #status-msg.ok { background: #16a34a; color: #fff; display: block; }
   #status-msg.err { background: #dc2626; color: #fff; display: block; }
@@ -312,7 +312,7 @@
     max-width: 31rem;
     padding: 1.75rem;
     position: relative;
-    box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
     transform: scale(0.96);
     transition: transform 0.25s ease;
   }
@@ -332,7 +332,7 @@
   .modal-header { margin-bottom: 1rem; }
   .modal-tags { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.7rem; }
   .modal-title {
-    font-family: var(--t-display, Fraunces, Georgia, serif);
+    font-family: inherit;
     font-size: 1.55rem;
     font-weight: 800;
     color: var(--t-fg);
@@ -355,13 +355,13 @@
   }
   .modal-explain strong {
     color: var(--t-ac);
-    font-family: var(--t-display, Fraunces, Georgia, serif);
+    font-family: inherit;
   }
   .modal-explain .how {
     font-weight: 700;
     margin-bottom: 0.5rem;
     color: var(--t-ac);
-    font-family: var(--t-display, Fraunces, Georgia, serif);
+    font-family: inherit;
   }
   .modal-actions {
     display: flex;
@@ -382,7 +382,7 @@
     .price { font-size: 0.95rem; }
   }
 </style>
-<link rel="stylesheet" href="/shop/market.css?v=3">
+<link rel="stylesheet" href="/shop/market.css?v=5">
 </head>
 <body class="shop-page">
 <main class="app-main" id="market-page">
@@ -390,20 +390,19 @@
     <div class="shop-intro">
 
       <h1>Shop</h1>
-      <p class="subline" id="shop-note">Loading the shop…</p>
-      <div class="shop-hero-links"><a href="/inventory/">Your inventory </a></div>
+      <p class="subline" id="shop-note"></p>
     </div>
     <div class="panel balance-panel">
       <div class="balance-label">Balance</div>
       <div class="balance-value mitch-coin-amount"><span id="balance">...</span> <small>MitchCoins</small></div>
       <div class="state-row">
-        <span class="pill" id="premium-pill">checking premium</span>
-        <span class="pill" id="admin-pill" style="display:none;">admin owns all</span>
+        <span class="pill" id="premium-pill" style="display:none;"></span>
+        <span class="pill" id="admin-pill" style="display:none;">Admin: all items unlocked</span>
         <span class="pill" id="discount-pill" style="display:none;"></span>
       </div>
       <div class="panel-actions" style="margin-top:0.75rem;display:flex;gap:0.45rem;flex-wrap:wrap;">
-        <a class="mini-btn btn" href="/inventory/">View inventory </a>
-        <a class="mini-btn btn" href="/vms/#upgrades">Cloud PC upgrades </a>
+        <a class="mini-btn btn" href="/inventory/">Inventory</a>
+        <a class="mini-btn btn" href="/vms/#upgrades">VM upgrades</a>
       </div>
     </div>
   </header>
@@ -430,7 +429,7 @@
 
   <div id="admin-section" class="admin-box panel">
     <div class="section-title">Admin Coin Gift</div>
-    <p class="subline">Admins already own every shop item. This tool is only for sending coins to a user.</p>
+    <p class="subline">Send coins to a user. Admins already own every item.</p>
     <div class="admin-grid">
       <input id="admin-email" type="email" placeholder="user@email.com" autocomplete="off">
       <input id="admin-amt" type="number" min="1" step="1" placeholder="Coins">
@@ -850,16 +849,16 @@
       items = Array.isArray(itemData.items) ? itemData.items : [];
       premiumDiscountPct = Number(itemData.premiumDiscountPct || 0);
       document.getElementById('balance').textContent = coins.toFixed(2);
-      document.getElementById('premium-pill').textContent = isPremium ? 'premium active' : 'standard member';
+      const premiumPill = document.getElementById('premium-pill');
+      premiumPill.textContent = 'Premium';
+      premiumPill.style.display = isPremium ? '' : 'none';
       document.getElementById('premium-pill').className = isPremium ? 'pill good' : 'pill';
       document.getElementById('admin-pill').style.display = isAdmin ? '' : 'none';
       document.getElementById('admin-section').style.display = isAdmin ? 'block' : 'none';
       const discount = document.getElementById('discount-pill');
-      discount.style.display = isPremium ? '' : 'none';
-      discount.textContent = isPremium ? (itemData.premiumDiscountNote || 'premium discounts vary by item') : '';
-      document.getElementById('shop-note').textContent = isAdmin
-        ? 'Your account has shop access. Browse perks below or send coins to someone from the admin panel.'
-        : 'Looks for chat, profiles, and game sessions. Start small or save up for something permanent.';
+      discount.style.display = isPremium && itemData.premiumDiscountNote ? '' : 'none';
+      discount.textContent = isPremium ? (itemData.premiumDiscountNote || '') : '';
+      
 
       const status = inventory.status || {};
       const activeBuffs = [];
