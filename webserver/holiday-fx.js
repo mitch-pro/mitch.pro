@@ -4,7 +4,8 @@
 // that ignores the pointer, stops when the tab is hidden, and does not run if
 // the visitor prefers reduced motion, turned animations off in Preferences, or
 // turned off just the holiday effects (theme_holidayfx = 'off'; the holiday
-// colors stay).
+// colors stay). It never runs on the VM desktop or the games page (/game-portal,
+// which /games redirects to), where it would draw over the content.
 (function () {
   'use strict';
   if (window.__holidayFx) return;
@@ -20,7 +21,9 @@
     var off = false;
     try { off = localStorage.getItem('theme_motion') === 'off' || localStorage.getItem('theme_holidayfx') === 'off'; } catch (_) {}
     var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    return !off && !reduced && location.pathname.indexOf('/vms/desktop') !== 0;
+    var path = location.pathname;
+    var excluded = path.indexOf('/vms/desktop') === 0 || path.indexOf('/game-portal') === 0 || /^\/games\/?$/.test(path);
+    return !off && !reduced && !excluded;
   }
 
   function isLightBackground() {

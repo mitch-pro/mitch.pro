@@ -186,7 +186,7 @@
     else if (name && !loadingFx) {
       loadingFx = true;
       var script = document.createElement('script');
-      script.src = '/holiday-fx.js?v=3';
+      script.src = '/holiday-fx.js?v=4';
       script.defer = true;
       document.head.appendChild(script);
     }
