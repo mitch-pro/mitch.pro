@@ -1,0 +1,27 @@
+/* Shared layout for the legal pages (privacy, cookies, copyright, use agreement). */
+.legal-shell { padding-bottom: 80px; }
+.legal-hero { padding: 8px 0 20px; margin-bottom: 24px; border-bottom: 1px solid var(--t-bd); }
+.legal-hero h1 { margin: 0 0 8px; font-size: clamp(30px, 4vw, 40px); font-weight: 700; letter-spacing: -0.03em; color: var(--t-fg); }
+.legal-hero p { margin: 0; color: var(--t-fg2); font-size: 14px; }
+.legal-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 40px; align-items: start; }
+.legal-toc { position: sticky; top: 80px; display: flex; flex-direction: column; gap: 2px; padding: 6px; background: var(--t-bg2); border: 1px solid var(--t-bd); border-radius: var(--t-radius); }
+.legal-toc a { padding: 8px 10px; border-radius: var(--t-radius-sm); color: var(--t-fg2); font-size: 13px; text-decoration: none; }
+.legal-toc a:hover { background: var(--t-bg3); color: var(--t-fg); }
+.legal-content { max-width: 760px; font-size: 15px; line-height: 1.7; }
+.legal-content section { margin-bottom: 28px; }
+.legal-content h2 { margin: 0 0 10px; padding-top: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; scroll-margin-top: 80px; }
+.legal-content p, .legal-content li { color: var(--t-fg2); }
+.legal-content p { margin: 0 0 12px; }
+.legal-content ul, .legal-content ol { margin: 0 0 12px; padding-left: 22px; }
+.legal-content li { margin-bottom: 6px; }
+.legal-content strong { color: var(--t-fg); }
+.legal-content a { color: var(--t-ac); }
+.legal-content code { font-family: inherit; padding: 1px 5px; border-radius: 4px; background: var(--t-bg3); font-size: 0.92em; }
+.legal-content table { width: 100%; border-collapse: collapse; margin: 0 0 12px; font-size: 14px; }
+.legal-content th, .legal-content td { padding: 8px 10px; border-bottom: 1px solid var(--t-bd); text-align: left; vertical-align: top; color: var(--t-fg2); }
+.legal-content th { color: var(--t-fg); }
+@media (max-width: 800px) {
+  .legal-layout { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .legal-toc { position: static; flex-direction: row; flex-wrap: wrap; }
+  .legal-content table { display: block; overflow-x: auto; }
+}
