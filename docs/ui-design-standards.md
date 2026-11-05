@@ -51,3 +51,9 @@ Every user-facing and internal page on the site must adhere to the design langua
 - `webserver/mitchcoin.svg` is the source for the lavender crown used in wallets, prices, VM upgrades, and game balances. Keep its purple facets fixed across themes and avoid circular clipping or color filters.
 - Use `/mitchcoin.svg?v=4` for images and CSS backgrounds. Inline images use `.mitch-coin-inline`; dynamic amounts can use `.mitch-coin-amount` so updating their text preserves the icon.
 - Keep `mitchcoin.png` and `mitchcoin.webp` as transparent 256×256 exports of the SVG. After changing the source, regenerate both exports and bump the logo, shared wallet script, and stylesheet versions together, including game pages that load the wallet directly.
+
+## 5. Full-screen pages, legal pages and the footer band
+
+- Pages with `data-shell="off"` (canvas, game portal) don't get `#app-topbar`, so `mitch-coins.js` has nowhere to put the wallet and falls back to a "← Games" bar meant for game pages. Give the page's own toolbar a `data-coin-wallet` attribute to host the wallet there instead.
+- Privacy, cookies, copyright and use agreement share `/legal.css` (hero, sticky table of contents, content column). Keep legal-page styling there, not in per-page `<style>` blocks.
+- The server-injected credit band (`inject_credit` in `rust/crates/mitch-server/src/inject.rs`) is the one place the "By using mitch.pro you agree…" line appears. The in-page `#_agree_footer` is only injected where the band doesn't carry it (school hosts, pages with their own `#site-credit`). Don't add another copy of that sentence to pages.
