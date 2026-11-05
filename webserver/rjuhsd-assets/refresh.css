@@ -414,3 +414,6 @@ body.school-hub { background: var(--paper); color: var(--ink); }
 .countdown-list strong { font: 650 18px var(--display); font-variant-numeric: tabular-nums; }
 .countdown-list time { color: var(--muted); font-size: 13px; }
 .finals-countdown-card { display: block; padding: 4px 0 0; border: 0; background: none; min-height: 0; }
+
+/* Optional status lines collapse when there is nothing to say. */
+.hero-summary:empty, #source-status:empty, #announcement-text:empty { display: none; }
