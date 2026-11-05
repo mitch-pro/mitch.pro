@@ -109,6 +109,15 @@ endpoints as a health check.
   for uncleared outside accounts (`outside_account_cleared`); approval then joins
   them (`join_approved_outside_account`). Profile sync also applies `name_blocked`
   before writing a display name, since that write skips the gateway filter.
+- **No chat client or SSO before approval.** The official rooms are
+  `world_readable`, so any Matrix token can read them without joining. An
+  unapproved outside account therefore never gets one: `/api/matrix/sso-login`
+  returns 403 (`needsApproval: true`), `/api/matrix/sso-status` reports it as
+  signed out, and `/matrix/` (the client and its routes, not its static assets)
+  serves a "Chat needs approval" page linking to `/support/`, or a "not
+  approved" message for a denied account. Visiting either queues the account as
+  `pending` (`matrix_cookie_access` in `routes/matrix.rs`). Students, staff,
+  approved accounts and signed-out visitors are unaffected.
 - **No DMs to students.** Outside accounts, approved or not, can't `createRoom`
   with, or `invite`, a student account (the gateway resolves the target Matrix ID
   to an email and checks the domain). Staff are exempt.

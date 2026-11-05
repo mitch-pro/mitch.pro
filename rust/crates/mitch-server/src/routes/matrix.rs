@@ -985,6 +985,99 @@ pub fn outside_account_cleared(
     })
 }
 
+/// Where the signed-in mitch.pro session (from cookies, not a Matrix token)
+/// stands for chat access. See [`matrix_cookie_access`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MatrixCookieAccess {
+    /// No valid session (or a banned one). Callers keep their existing
+    /// signed-out behavior.
+    SignedOut,
+    /// Staff, a student, or an outside account a moderator approved.
+    Cleared,
+    /// An outside account still waiting on a moderator.
+    Pending,
+    /// An outside account a moderator turned down.
+    Denied,
+}
+
+/// Classifies the cookie session for Matrix: SSO login and the `/matrix/` web
+/// client are only available to cleared accounts. The official rooms are
+/// `world_readable`, so any Matrix token can read them without joining; the
+/// only way to keep unapproved outside accounts out of them is to never hand
+/// those accounts a token (and not serve them the client).
+///
+/// An uncleared account that never asked is queued as `pending` here, so a
+/// moderator sees it in the approval queue even though it can no longer reach
+/// the chat gates that used to queue it.
+pub async fn matrix_cookie_access(state: &AppState, headers: &HeaderMap) -> MatrixCookieAccess {
+    let cookies = crate::routes::me::cookies_of(state, headers);
+    let uid = cookies
+        .get("studentId")
+        .filter(|s| !s.is_empty())
+        .or_else(|| cookies.get("id"))
+        .unwrap_or("");
+    if uid.is_empty()
+        || !mitch_lib::auth::valid_id(uid, &state.id_secret)
+        || mitch_lib::auth::banned_info_for_sid(&state.store, &state.id_secret, uid).is_some()
+    {
+        return MatrixCookieAccess::SignedOut;
+    }
+    let email =
+        mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, uid).unwrap_or_default();
+    let norm = mitch_lib::auth::normalize_email(&email);
+    let user_id = matrix_username_for_email(state, &norm)
+        .await
+        .map(|u| format!("@{u}:mitch.pro"))
+        .unwrap_or_default();
+    if outside_account_cleared(state, uid, &norm, &user_id) {
+        return MatrixCookieAccess::Cleared;
+    }
+    let denied = [norm.as_str(), user_id.as_str()].iter().any(|id| {
+        !id.is_empty()
+            && mitch_lib::matrix::outside_approval_status(&state.store, id).as_deref()
+                == Some("denied")
+    });
+    if denied {
+        return MatrixCookieAccess::Denied;
+    }
+    if !norm.is_empty() && mitch_lib::matrix::outside_approval_status(&state.store, &norm).is_none()
+    {
+        mitch_lib::matrix::outside_approval_request(&state.store, &norm);
+    }
+    MatrixCookieAccess::Pending
+}
+
+/// Page served at `/matrix/` to outside accounts that aren't approved yet.
+pub fn approval_needed_page(access: MatrixCookieAccess) -> String {
+    let message = if access == MatrixCookieAccess::Denied {
+        "A moderator didn't approve this account for chat. If you think that's a mistake, contact support."
+    } else {
+        "Chat is open to students. Other accounts need a moderator's approval first, and your account is waiting for review. To ask about it, contact support."
+    };
+    format!(
+        r#"<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Chat needs approval — mitch.pro</title>
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/support/support.css">
+<script src="/app-shell.js" defer></script>
+</head>
+<body class="app-shell">
+<main class="support-main">
+  <h1>Chat needs approval</h1>
+  <p class="support-sub">{message}</p>
+  <a class="support-btn primary" href="/support/" style="display:inline-block;text-decoration:none">Contact support</a>
+</main>
+</body>
+</html>
+"#
+    )
+}
+
 /// Joins a just-approved outside account to the official rooms by logging in as
 /// it. `target` is a normalized email or a Matrix ID.
 pub async fn join_approved_outside_account(state: &AppState, target: &str) {
@@ -3320,6 +3413,12 @@ async fn api_sso_status(state: &AppState, headers: &HeaderMap) -> Response {
     {
         return cors_json_response(200, json!({ "authenticated": false }));
     }
+    if matrix_cookie_access(state, headers).await != MatrixCookieAccess::Cleared {
+        return cors_json_response(
+            200,
+            json!({ "authenticated": false, "needsApproval": true }),
+        );
+    }
 
     let email =
         mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, uid).unwrap_or_default();
@@ -3388,6 +3487,19 @@ async fn api_sso_login(state: &AppState, headers: &HeaderMap, body_bytes: &[u8])
         return cors_json_response(
             403,
             json!({ "ok": false, "error": "Account is banned", "banned": true }),
+        );
+    }
+    // Unapproved outside accounts never get a Matrix token: the official rooms
+    // are world_readable, so a token alone would let them read student chat.
+    if matrix_cookie_access(state, headers).await != MatrixCookieAccess::Cleared {
+        return cors_json_response(
+            403,
+            json!({
+                "ok": false,
+                "error": "A moderator needs to approve your account before you can use chat.",
+                "needsApproval": true,
+                "supportUrl": "/support/"
+            }),
         );
     }
 
