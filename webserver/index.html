@@ -13,7 +13,7 @@
 <title>mitch.pro</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"></noscript>
 <link rel="stylesheet" href="/app.css">
-<link rel="stylesheet" href="/home.css?v=19">
+<link rel="stylesheet" href="/home.css?v=20">
 <script defer src="/rjuhsd-assets/calendar.js?v=7"></script>
 <script src="/app-shell.js" defer></script>
 <script src="/home-friends.js?v=5" defer></script>
@@ -1385,6 +1385,26 @@ function setupHolidayPill() {
   }
   pill.addEventListener('click', function() { theme.setHolidayOff(!theme.holidayOff()); paint(); setupHolidayGreeting(); });
   paint();
+
+  // Second pill: only the moving overlay (leaves, snow, ...), keeping the
+  // holiday colors. Hidden while the whole theme is off, and when animations
+  // are off anyway (Preferences > Motion or the OS reduced-motion setting).
+  var fxPill = document.getElementById('holiday-fx-pill');
+  if (!fxPill || !theme.setHolidayFxOff) return;
+  var FX_NAMES = { thanksgiving: 'falling leaves', christmas: 'snow', halloween: 'embers', newyear: 'confetti', valentines: 'hearts' };
+  var fxName = FX_NAMES[season] || 'holiday effects';
+  function motionOff() {
+    var off = false;
+    try { off = localStorage.getItem('theme_motion') === 'off'; } catch (_) {}
+    return off || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }
+  function paintFx() {
+    fxPill.textContent = (theme.holidayFxOff() ? 'Turn on ' : 'Turn off ') + fxName;
+    fxPill.hidden = theme.holidayOff() || motionOff();
+  }
+  fxPill.addEventListener('click', function() { theme.setHolidayFxOff(!theme.holidayFxOff()); paintFx(); });
+  pill.addEventListener('click', paintFx);
+  paintFx();
 }
 
 // The manual update log (written on /admin/updates/). Collapsed it is one line
@@ -1533,12 +1553,12 @@ if (document.readyState === 'loading') {
     <h1 id="home-brand" class="hello-heading"><span id="greeting-text">hello</span><svg class="hello-writing" viewBox="0 0 240 96" aria-hidden="true"><path pathLength="1" d="M15 70 C22 58 47 18 40 12 C31 4 18 77 23 76 C29 57 44 46 47 56 C49 65 36 82 51 74 L63 64 C92 51 78 38 67 57 C51 84 80 85 96 65 C108 49 127 13 119 10 C107 5 86 75 99 78 C113 85 145 17 138 11 C125 1 109 76 124 78 C136 79 148 64 151 54 C160 35 178 48 169 67 C160 87 140 78 148 59 C154 45 169 43 174 55 C178 68 184 72 198 64"/></svg></h1>
     <p id="greeting-email" class="hello-email"></p>
     <p id="holiday-greeting" class="hello-holiday" hidden></p>
-    <span id="streak-badge" class="streak-badge" hidden><b id="streak-badge-count">0</b>-day streak</span>
+    <span id="streak-badge" class="streak-badge" hidden><b id="streak-badge-count">0</b> day streak</span>
     <div class="hello-tools">
     <a id="home-staff-pill" href="/staff/" class="home-staff-pill" hidden>Staff workspace</a>
     <label id="abToggleBar" class="ab-toggle" title="Open links in an about:blank tab"><span>Private window</span><span class="toggle-switch"><input type="checkbox" id="abToggle" aria-label="Open links in an about:blank tab"><span class="toggle-slider"></span></span></label>
     </div>
-    <button type="button" id="holiday-pill" class="holiday-pill" hidden></button>
+    <div class="holiday-pills"><button type="button" id="holiday-pill" class="holiday-pill" hidden></button><button type="button" id="holiday-fx-pill" class="holiday-pill" hidden></button></div>
     <p id="break-chip" class="break-chip" hidden></p>
     </div>
     <div class="hello-emblem" aria-hidden="true">

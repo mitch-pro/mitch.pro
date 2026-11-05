@@ -105,4 +105,14 @@ toggled.theme.setHolidayOff(false);
 assert.equal(toggled.stored.theme_holiday, undefined);
 assert.equal(toggled.theme.holidayOff(), false);
 
+// Turning off only the effects keeps the holiday colors.
+const fx = load('?holiday=thanksgiving');
+assert.equal(fx.theme.holidayFxOff(), false);
+fx.theme.setHolidayFxOff(true);
+assert.equal(fx.stored.theme_holidayfx, 'off');
+assert.equal(fx.theme.holidayFxOff(), true);
+assert.equal(fx.attrs['data-holiday'], 'thanksgiving');
+fx.theme.setHolidayFxOff(false);
+assert.equal(fx.stored.theme_holidayfx, undefined);
+
 console.log('holiday theme: ok');
