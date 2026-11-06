@@ -20,6 +20,7 @@ pub mod account_email;
 pub mod achievements;
 pub mod admin;
 pub mod auth;
+pub mod auth_sessions;
 pub mod bans;
 pub mod bell_sync;
 pub mod blog;
@@ -65,6 +66,7 @@ pub mod tokens;
 pub mod totp;
 pub mod user_stats;
 pub mod vm;
+pub mod vm_access;
 pub mod vm_security;
 pub mod webauthn;
 

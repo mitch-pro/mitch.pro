@@ -18,8 +18,8 @@ start and removes it (every step is idempotent).
 - **Presence.** Online/offline, current page, activity ("Chatting in Matrix"),
   and per-tab state live in server memory only. After a restart everyone shows
   as offline until they're seen again. See [presence.md](presence.md).
-- **Login activity times.** Login sessions store creation and expiry only, not
-  a last-used time.
+- **Login activity times.** Login sessions (`auth_sessions` table) store
+  creation and expiry only, not a last-used time, IP or user agent.
 - **Search queries.** The old search log and its admin endpoint are removed.
 - **Third-party trackers.** No analytics, ad or social scripts on site pages.
   The vendored Cookie Clicker page ships with its upstream AdSense, Facebook
@@ -34,7 +34,9 @@ start and removes it (every step is idempotent).
 | Explicit network bans | `banned_ips` — keyed HMAC of the address, never the raw IP | Ban enforcement | Until unbanned |
 | Support ticket IP hash | `support_tickets.ip_hash` (keyed HMAC) | Hourly per-IP limit on opening tickets | Cleared after 1 day |
 | Anti-cheat flags | `cheat_logs` table (account, game, reason) | Moderation | 90 days, newest 1,000 |
-| Staff actions | `admin_actions.json` (actor, action, parameters) | Audit trail of privileged changes | Newest 1,000 |
+| Staff actions | `admin_actions` table (actor, action, parameters, time) | Audit trail of every moderation and admin action | Kept |
+| Login sessions | `auth_sessions` table (hashed token, account, generation, created, expires) | Staying signed in | Until expiry or sign-out |
+| Admin access to a VM | `vm_admin_access_grants` (VM, owner, granted, expires) | The VM owner's consent ([vm-access.md](vm-access.md)) | 24 hours |
 | VM audit log | `vm_audit_logs` | VM security and abuse reports | 180 days |
 | VM usage samples | `vm_usage_samples` | Daily VM time limits and usage charts | 30 days |
 | Application logs | `app_logs` | Debugging; no IPs, user agents or account-linked paths ([system-logs.md](system-logs.md)) | 30 days |
@@ -48,8 +50,11 @@ start and removes it (every step is idempotent).
   admins — and only when the member turned on **Share activity** (off by
   default). **Hide online** hides them from everyone, including admins. Both
   are enforced in the server's presence resolver, not just the UI.
-- The admin "Active users" list reads the same in-memory presence, so it
-  respects both settings.
+- The "N online" count (public site status and the admin "Active Users"
+  card) counts every connected account, including hide-online members. It's
+  a number only: no list of who is online is shown to staff.
+- A member's VM is opened only by them and the site owner, unless they allow
+  admins in ([vm-access.md](vm-access.md)).
 - Staff never see raw IP addresses: none are stored where a staff view could
   read them.
 

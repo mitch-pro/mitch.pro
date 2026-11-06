@@ -1028,19 +1028,8 @@ fn revert_admin_action(
         return json_response(400, json!({ "error": "Action id required" }));
     }
 
-    let actions_file = state.cfg.data_dir.join("admin_actions.json");
-    let actions = state
-        .store
-        .read_document(&actions_file, json!([]))
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
-
-    let target_action = actions
-        .iter()
-        .find(|a| a.get("id").and_then(|v| v.as_str()).unwrap_or("") == action_id);
-
-    let Some(action_obj) = target_action else {
+    let target_action = mitch_lib::admin::admin_action_by_id(&state.store, action_id);
+    let Some(action_obj) = target_action.as_ref() else {
         return json_response(404, json!({ "error": "Action not found in audit log" }));
     };
 

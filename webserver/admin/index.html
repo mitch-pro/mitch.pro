@@ -1354,7 +1354,6 @@
         <option value="adminActions">Admin activity</option>
         <option value="sentNotifications">Sent notifications</option>
         <option value="bannedAccounts">Banned accounts</option>
-        <option value="activeUsers">Active users</option>
         <option value="profileReports">Profile Reports</option>
         <option value="chatReports">Chat Safety Reports</option>
         <option value="cheatLogs">Anti-Cheat Monitor</option>
@@ -1399,14 +1398,6 @@
           <span class="tag">server-enforced blocks</span>
         </div>
         <div class="table-wrap"><table id="bannedAccounts-table"></table></div>
-      </section>
-
-      <section id="activeUsers-section">
-        <div class="section-head">
-          <h2>Active Users</h2>
-          <span class="tag">online now</span>
-        </div>
-        <div class="table-wrap"><table id="activeUsers-table"></table></div>
       </section>
 
       <section id="chatReports-section">
@@ -2569,7 +2560,7 @@
       const dateFilter = document.getElementById('auditDateFilter')?.value || 'all';
       const now = Date.now(), dayMs = 24 * 60 * 60 * 1000;
       filtered = {};
-      ['adminActions','sentNotifications','bannedAccounts','activeUsers','profileReports','chatReports','cheatLogs','coinLogs'].forEach(key => {
+      ['adminActions','sentNotifications','bannedAccounts','profileReports','chatReports','cheatLogs','coinLogs'].forEach(key => {
         filtered[key] = (rawData[key] || []).filter(row => {
           if (q && !textOf(row).toLowerCase().includes(q)) return false;
           if (key === 'adminActions') {
@@ -2649,10 +2640,6 @@
       );      table('bannedAccounts-table', ['Banned At', 'Email', 'By', 'Reason'], filtered.bannedAccounts, r =>
         '<tr><td>' + esc(fmtTime(r.bannedAt)) + '</td><td>' + esc(r.email) + '</td><td>' + esc(r.by) + '</td><td class="muted">' + esc(r.reason) + '</td></tr>'
       );
-      table('activeUsers-table', ['Last Active', 'Email'], filtered.activeUsers, r =>
-        '<tr><td>' + (r.lastActiveAt ? esc(fmtTime(r.lastActiveAt)) : '<span class="muted">-</span>') + '</td><td><span class="pill ok">' + esc(r.email) + '</span></td></tr>'
-      );
-
       table('profileReports-table', ['Time', 'Target', 'Reporter', 'Reason', 'Status', 'Action'], filtered.profileReports || [], r =>
         '<tr><td>' + esc(fmtTime(r.ts)) + '</td><td><b>' + esc(r.targetHandle ? '@' + r.targetHandle : r.target) + '</b><div class="muted">' + esc(r.target) + '</div></td><td>' + esc(r.reporter) + '</td><td><div class="chat-text"><b>' + esc(r.reason) + '</b>' + (r.details ? '<br>' + esc(r.details) : '') + '</div></td><td>' + statusPill(r.status) + (r.resolvedBy ? '<div class="muted">By ' + esc(r.resolvedBy) + '</div>' : '') + '</td><td><div class="row-actions"><button type="button" class="mini ok" onclick=\'resolveProfileReport(' + JSON.stringify(r.id) + ',"reviewed")\'>Reviewed</button><button type="button" class="mini warn" onclick=\'resolveProfileReport(' + JSON.stringify(r.id) + ',"action taken")\'>Action taken</button><button type="button" class="mini" onclick=\'resolveProfileReport(' + JSON.stringify(r.id) + ',"dismissed")\'>Dismiss</button></div></td></tr>'
       );
@@ -2733,7 +2720,6 @@
       filtered.adminActions.forEach(r => lines.push(['adminActions', fmtTime(r.ts), r.actor, r.action, JSON.stringify(r.details || {}), ''].map(csvEscape).join(',')));
       filtered.sentNotifications.forEach(r => lines.push(['sentNotifications', fmtTime(r.ts), r.targetEmail, r.title, r.source, r.read ? 'read' : 'unread'].map(csvEscape).join(',')));
       filtered.bannedAccounts.forEach(r => lines.push(['bannedAccounts', fmtTime(r.bannedAt), r.email, r.by, r.reason, ''].map(csvEscape).join(',')));
-      filtered.activeUsers.forEach(r => lines.push(['activeUsers', fmtTime(r.lastActiveAt), r.email, '', '', ''].map(csvEscape).join(',')));
       (filtered.profileReports || []).forEach(r => lines.push(['profileReports', fmtTime(r.ts), r.target, r.reporter, r.reason, r.status].map(csvEscape).join(',')));
       (filtered.chatReports || []).forEach(r => lines.push(['chatReports', fmtTime(r.ts), r.reportedBy, r.reason, JSON.stringify(r.context), ''].map(csvEscape).join(',')));
       (filtered.cheatLogs || []).forEach(r => lines.push(['cheatLogs', fmtTime(r.ts), r.email, r.game, r.details].map(csvEscape).join(',')));

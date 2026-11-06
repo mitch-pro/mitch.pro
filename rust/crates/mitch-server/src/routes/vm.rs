@@ -521,9 +521,16 @@ pub(crate) fn vm_same_origin_request(headers: &HeaderMap) -> bool {
     false
 }
 
-/// `vmRecordAllowedForActor(record, actor)` (server.js:27771-27773) —
-/// canAccessVmRecord with the plain `isAdminEmail` option (no admin-grant
-/// requirement) and owner bypass.
+/// Whether `actor` may open this VM (desktop, power, status). The one access
+/// check every VM route goes through (docs/vm-access.md):
+///
+/// 1. The site owner — always (they can reach every VM through Proxmox anyway).
+/// 2. The VM's own owner.
+/// 3. Owner-locked VMs (a site owner's own VM and the owner's test account,
+///    `auth::is_vm_owner_locked`): nobody else, ever. Grants don't apply.
+/// 4. A site admin or co-owner, only while the VM's owner has explicitly
+///    allowed staff access (`mitch_lib::vm_access`, expires after 24 hours).
+/// 5. Anyone else: no.
 pub(crate) fn vm_record_allowed_for_actor(state: &AppState, record: &Value, actor: &Value) -> bool {
     if actor.get("isOwner").map(jsval::truthy).unwrap_or(false) {
         return true;
@@ -531,26 +538,61 @@ pub(crate) fn vm_record_allowed_for_actor(state: &AppState, record: &Value, acto
     let record_owner = jsval::str_or(record.get("ownerEmail"), "");
     let actor_email = jsval::str_or(actor.get("email"), "");
 
-    // If the VM belongs to a primary/root site owner, or to the owner's
-    // test-persona account, ONLY a real owner or that account's own
-    // session can access it. Co-owners and other admins CANNOT access
-    // it, unlike every other VM.
     if mitch_lib::auth::is_vm_owner_locked(&state.store, &record_owner) {
         return !actor_email.is_empty()
             && (actor_email.to_lowercase() == record_owner.to_lowercase()
                 || mitch_lib::auth::is_owner_email(&state.store, &actor_email));
     }
 
-    if actor.get("isAdmin").map(jsval::truthy).unwrap_or(false) {
-        return true;
+    let grant = |id: &str, rec: &Value| {
+        admin_access_grant(state, id, &jsval::str_or(rec.get("ownerEmail"), "")).is_some()
+    };
+    mitch_lib::vm_security::can_access_vm_record(Some(record), Some(actor), Some(&grant))
+}
+
+/// Expiry of the VM owner's live "allow admins" grant for this VM, if any.
+pub(crate) fn admin_access_grant(
+    state: &AppState,
+    record_id: &str,
+    owner_email: &str,
+) -> Option<i64> {
+    mitch_lib::vm_access::active_grant(&state.store, record_id, owner_email, now_ms())
+}
+
+/// Closes desktop sessions/sockets on this VM held by anyone other than its
+/// owner or a site owner — used when the owner withdraws staff access.
+pub(crate) fn revoke_staff_desktop_connections(
+    state: &AppState,
+    record_id: &str,
+    owner_email: &str,
+) {
+    let is_staff = |actor: &str| {
+        !actor.eq_ignore_ascii_case(owner_email)
+            && !mitch_lib::auth::is_owner_email(&state.store, actor)
+    };
+    {
+        let mut sessions = state
+            .vm_desktop_sessions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        sessions.retain(|_, s| {
+            jsval::str_or(s.get("recordId"), "") != record_id
+                || !is_staff(&jsval::str_or(s.get("actorEmail"), ""))
+        });
     }
-    mitch_lib::vm_security::can_access_vm_record(
-        Some(record),
-        Some(actor),
-        |email| mitch_lib::auth::is_admin_email(&state.store, email),
-        false,
-        None,
-    )
+    let sockets = state
+        .vm_desktop_sockets
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    for client in sockets.values() {
+        if jsval::str_or(client.data.get("recordId"), "") == record_id
+            && is_staff(&jsval::str_or(client.data.get("actorEmail"), ""))
+        {
+            let _ = client
+                .close_tx
+                .send((1008, "Admin access was turned off".to_string()));
+        }
+    }
 }
 
 // ── the data-dir JSON helpers ────────────────────────────────────────────────
@@ -1563,7 +1605,19 @@ pub(crate) fn public_vm_record(
             .unwrap_or_else(|| "unknown".to_string()),
     };
 
+    // Staff access consent, for the owner's own toggle on /vms/.
+    let access_owner = jsval::str_or(record.get("ownerEmail"), "");
+    let access_expires =
+        admin_access_grant(state, &jsval::str_or(record.get("id"), ""), &access_owner);
+    let admin_access = json!({
+        "available": !access_owner.is_empty()
+            && !mitch_lib::auth::is_vm_owner_locked(&state.store, &access_owner),
+        "allowed": access_expires.is_some(),
+        "expiresAt": access_expires,
+    });
+
     json!({
+        "adminAccess": admin_access,
         "id": jsval::str_or(record.get("id"), ""),
         "name": jsval::str_or(record.get("friendlyName"), "My Computer"),
         "hostname": jsval::str_or(
@@ -1659,21 +1713,11 @@ pub(crate) fn vm_desktop_socket_authorized(state: &AppState, data: &Value) -> bo
     }
     let session_key = jsval::str_or(data.get("authSessionKey"), "");
     if !session_key.is_empty() {
-        // `loadAuthSessions()[key]` — data/auth_sessions.json keyed by the
-        // sha256 session-token hash.
-        let sessions = state
-            .store
-            .read_document(&state.data_dir().join("auth_sessions.json"), json!({}));
-        let session = sessions.get(&session_key);
+        let session = mitch_lib::auth_sessions::get(&state.store, &session_key);
         let expires_ok = session
-            .and_then(|s| s.get("expiresAt"))
-            .and_then(jsval::number)
-            .map(|e| e > now_ms() as f64)
-            .unwrap_or(false);
-        let stored_gen = session
-            .and_then(|s| s.get("gen"))
-            .and_then(jsval::number)
-            .unwrap_or(0.0) as i64;
+            .as_ref()
+            .is_some_and(|s| s.expires_at as f64 > now_ms() as f64);
+        let stored_gen = session.as_ref().map_or(0, |s| s.gen);
         let current_gen = mitch_lib::auth::current_session_generation(
             &state.store,
             &jsval::str_or(data.get("actorEmail"), ""),
@@ -2528,9 +2572,9 @@ pub fn handle_desktop_ws_upgrade(
             Some(&actor_json),
             record_json.as_ref(),
             now_ms() as f64,
-            |email| mitch_lib::auth::is_admin_email(&state.store, email),
-            false,
-            None,
+            Some(&|id: &str, rec: &Value| {
+                admin_access_grant(state, id, &jsval::str_or(rec.get("ownerEmail"), "")).is_some()
+            }),
         )
     };
     if !ok {
@@ -4670,10 +4714,65 @@ pub(crate) async fn handle(
 
         let record_owner = jsval::str_or(record.get("ownerEmail"), "");
 
-        if operation == "admin-access" || operation == "request-admin-access" {
+        // POST /api/vm/computers/:id/admin-access {"allow": bool} — the VM's
+        // owner allows site admins to open this computer for 24 hours, or
+        // withdraws that. Only the owner of this VM can change it.
+        if operation == "admin-access" {
+            if *method != Method::POST {
+                return Some(json_response(
+                    405,
+                    json!({ "error": "Method not allowed." }),
+                ));
+            }
+            if record_owner.is_empty() || !actor.email.eq_ignore_ascii_case(&record_owner) {
+                return Some(json_response(
+                    403,
+                    json!({ "error": "Only this computer's owner can change who can open it." }),
+                ));
+            }
+            if mitch_lib::auth::is_vm_owner_locked(&state.store, &record_owner) {
+                return Some(json_response(
+                    400,
+                    json!({ "error": "Admin access isn't available for this computer." }),
+                ));
+            }
+            let body: Value = serde_json::from_slice(body_bytes).unwrap_or(Value::Null);
+            let Some(allow) = body.get("allow").and_then(Value::as_bool) else {
+                return Some(json_response(400, json!({ "error": "Invalid request." })));
+            };
+            let expires_at = if allow {
+                Some(mitch_lib::vm_access::grant(
+                    &state.store,
+                    comp_id,
+                    &record_owner,
+                    now_ms(),
+                ))
+            } else {
+                mitch_lib::vm_access::revoke(&state.store, comp_id);
+                revoke_staff_desktop_connections(state, comp_id, &record_owner);
+                None
+            };
+            vm_audit(
+                state,
+                &actor.email,
+                Some(&record),
+                if allow {
+                    "ADMIN_ACCESS_ALLOWED"
+                } else {
+                    "ADMIN_ACCESS_REVOKED"
+                },
+                true,
+                expires_at.map(|e| json!({ "expiresAt": e })).as_ref(),
+            );
+            return Some(json_response(
+                200,
+                json!({ "adminAccess": { "allowed": allow, "expiresAt": expires_at } }),
+            ));
+        }
+        if operation == "request-admin-access" {
             return Some(json_response(
                 410,
-                json!({"error":"Owner access requests have been retired."}),
+                json!({"error":"Admin access requests have been retired."}),
             ));
         }
 
@@ -4963,6 +5062,27 @@ pub(crate) async fn handle(
                 ));
             }
 
+            if is_admin_using_other_vm && !actor.is_owner {
+                let vm_name = record
+                    .get("friendlyName")
+                    .or_else(|| record.get("hostname"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("My Computer");
+                let (title, message) = mitch_lib::vm_security::format_admin_usage_notice(
+                    &actor.email,
+                    vm_name,
+                    "opened the desktop",
+                );
+                mitch_lib::coins::add_vm_admin_notification(
+                    &state.store,
+                    state.data_dir(),
+                    &record_owner,
+                    &title,
+                    &message,
+                    &actor.email,
+                    "/vms/",
+                );
+            }
             if is_admin_using_other_vm {
                 let vm_name = record
                     .get("friendlyName")
@@ -5166,6 +5286,27 @@ pub(crate) async fn handle(
                 && mitch_lib::auth::normalize_email(&record_owner)
                     != mitch_lib::auth::normalize_email(&actor.email);
 
+            if is_admin_using_other_vm && !actor.is_owner {
+                let vm_name = record
+                    .get("friendlyName")
+                    .or_else(|| record.get("hostname"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("My Computer");
+                let (title, message) = mitch_lib::vm_security::format_admin_usage_notice(
+                    &actor.email,
+                    vm_name,
+                    "opened the desktop",
+                );
+                mitch_lib::coins::add_vm_admin_notification(
+                    &state.store,
+                    state.data_dir(),
+                    &record_owner,
+                    &title,
+                    &message,
+                    &actor.email,
+                    "/vms/",
+                );
+            }
             if is_admin_using_other_vm {
                 let vm_name = record
                     .get("friendlyName")
@@ -5417,11 +5558,24 @@ mod tests {
         assert_eq!(get_vm_type_by_vmid(&state, 900.0), "qemu");
         let record =
             json!({"id":"fixture","ownerEmail":"another-admin@example.com","status":"assigned"});
-        assert!(vm_record_allowed_for_actor(
+        let staff = json!({"email":"staff@example.com","isAdmin":true});
+        // Admins can't open someone else's VM until its owner allows it...
+        assert!(!vm_record_allowed_for_actor(&state, &record, &staff));
+        let now = now_ms();
+        mitch_lib::vm_access::grant(&state.store, "fixture", "another-admin@example.com", now);
+        assert!(vm_record_allowed_for_actor(&state, &record, &staff));
+        // ...and a grant never lets a non-admin in.
+        assert!(!vm_record_allowed_for_actor(
             &state,
             &record,
-            &json!({"email":"staff@example.com","isAdmin":true})
+            &json!({"email":"neighbor@example.com","isAdmin":false})
         ));
+        // A grant from a previous owner doesn't follow the VM to a new owner.
+        let reassigned =
+            json!({"id":"fixture","ownerEmail":"new-owner@example.com","status":"assigned"});
+        assert!(!vm_record_allowed_for_actor(&state, &reassigned, &staff));
+        mitch_lib::vm_access::revoke(&state.store, "fixture");
+        assert!(!vm_record_allowed_for_actor(&state, &record, &staff));
         assert!(!vm_record_allowed_for_actor(
             &state,
             &record,
@@ -5468,6 +5622,18 @@ mod tests {
             &test_persona_record,
             &json!({"email":"admin@mitch.pro","isAdmin":true,"isOwner":false})
         ));
+        assert!(!vm_record_allowed_for_actor(
+            &state,
+            &test_persona_record,
+            &json!({"email":"co-owner@example.com","isAdmin":true,"isOwner":false})
+        ));
+        // Owner-locked VMs ignore grants entirely.
+        mitch_lib::vm_access::grant(
+            &state.store,
+            "test-persona-fixture",
+            mitch_lib::auth::OWNER_TEST_ACCOUNT_EMAIL,
+            now,
+        );
         assert!(!vm_record_allowed_for_actor(
             &state,
             &test_persona_record,

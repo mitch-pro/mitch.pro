@@ -758,17 +758,7 @@ fn logout(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     );
     let token = cookies.get("mitch_session").unwrap_or("");
     if !token.is_empty() {
-        let mut sessions = state
-            .store
-            .read_document(&data_file(state, "auth_sessions.json"), json!({}));
-        let key = auth::hash_session_token(token);
-        if let Some(map) = sessions.as_object_mut() {
-            if map.remove(&key).is_some() {
-                let _ = state
-                    .store
-                    .write_document(&data_file(state, "auth_sessions.json"), &sessions);
-            }
-        }
+        mitch_lib::auth_sessions::delete(&state.store, &auth::hash_session_token(token));
     }
 
     let secure_flag = std::env::var("SESSION_COOKIE_SECURE").unwrap_or_default();

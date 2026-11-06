@@ -234,6 +234,23 @@ fn apply(
     Ok(true)
 }
 
+/// Whether an account is connected right now, ignoring its privacy settings.
+/// Used only for the anonymous online count; per-person views go through
+/// [`view`], which applies hide-online.
+fn raw_online(record: Option<&UserPresence>, socket_seen: i64, now: i64) -> bool {
+    let socket_online = socket_seen > 0 && now - socket_seen < PRESENCE_FALLBACK_TTL_MS;
+    let Some(record) = record else {
+        return socket_online;
+    };
+    let tab_live = record
+        .sessions
+        .values()
+        .any(|tab| !tab.ended && now < tab.expires_at);
+    let legacy_online =
+        record.modern_seen == 0 && now - record.last_seen < PRESENCE_FALLBACK_TTL_MS;
+    tab_live || legacy_online || (record.modern_seen == 0 && socket_online)
+}
+
 fn view(record: Option<&UserPresence>, socket_seen: i64, now: i64) -> PresenceView {
     let socket_online = socket_seen > 0 && now - socket_seen < PRESENCE_FALLBACK_TTL_MS;
     let Some(record) = record else {
@@ -323,6 +340,47 @@ fn view(record: Option<&UserPresence>, socket_seen: i64, now: i64) -> PresenceVi
             0
         },
     }
+}
+
+/// How many accounts are online right now, counting everyone — including
+/// members who hide their online status. It is only ever a number: nothing
+/// here says who is online, so it doesn't override anyone's privacy setting.
+pub fn online_count(state: &AppState, now: i64) -> usize {
+    let records = state
+        .user_presence
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let mut socket_times = HashMap::<String, i64>::new();
+    for socket in state
+        .ws_broadcasts
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .values()
+    {
+        let ended = socket.client_id.as_ref().is_some_and(|id| {
+            records
+                .get(&socket.email_norm)
+                .and_then(|p| p.sessions.get(id))
+                .is_some_and(|tab| tab.ended)
+        });
+        if !ended && !socket.email_norm.is_empty() {
+            socket_times
+                .entry(socket.email_norm.clone())
+                .and_modify(|seen| *seen = (*seen).max(socket.last_seen))
+                .or_insert(socket.last_seen);
+        }
+    }
+    let mut count = 0;
+    for (email, record) in records.iter() {
+        if raw_online(Some(record), *socket_times.get(email).unwrap_or(&0), now) {
+            count += 1;
+        }
+    }
+    count
+        + socket_times
+            .iter()
+            .filter(|(email, seen)| !records.contains_key(*email) && raw_online(None, **seen, now))
+            .count()
 }
 
 pub fn snapshot(state: &AppState, now: i64) -> HashMap<String, PresenceView> {
@@ -609,7 +667,8 @@ mod tests {
         let hidden = view(Some(&record), 201, 201);
         assert!(!hidden.online);
         assert_eq!(hidden.last_seen, 0);
-        assert!(hidden.page.is_empty());
+        assert!(hidden.page.is_empty()); // Still counted in the anonymous online number.
+        assert!(raw_online(Some(&record), 201, 201));
     }
     #[test]
     fn pure_heartbeats_do_not_broadcast_activity_changes() {

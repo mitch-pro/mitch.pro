@@ -44,7 +44,9 @@ Presence is strictly in-memory (process-local) and is never written to disk or
 SQLite — that includes `matrix_user_last_seen` and VM page presence. Nothing
 else stands in for it on disk: login sessions don't record a last-used time,
 and `user_stats.last_active_at` holds only the day (for premium expiry). The
-admin "Active users" list reads the in-memory snapshot. See
+admin "Active Users" card and the public online count use
+`presence::online_count`, which counts every connected account, including
+hide-online members, as a bare number. See
 [privacy.md](privacy.md). A deployment or restart resets it until clients reconnect. Already-open
 tabs need one refresh to load the new tracker. Cached legacy clients retain
 compatibility, but cannot provide all the focus and ordering guarantees of the

@@ -4,7 +4,7 @@
 //!
 //! Contract highlights:
 //! - Cookie `mitch_session` (AUTH_COOKIE): value = raw 32-byte base64url
-//!   token; only sha256(token).hex is stored (auth_sessions.json key).
+//!   token; only sha256(token).hex is stored (`auth_sessions.token_hash`).
 //! - `studentId`/`id`/`adminId` client cookies are DELETED (except
 //!   NODE_ENV=test) and re-derived from the server-side session.
 //! - `makeEmailId`: sha256(email|email:vN).hex[0..24] = 'e'+hash, sig =
@@ -273,7 +273,7 @@ fn percent_decode(raw: &str) -> Option<String> {
     String::from_utf8(out).ok()
 }
 
-/// One auth_sessions.json record (server.js:2773-2784).
+/// A validated login session (one `auth_sessions` row).
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct AuthSession {
     #[serde(default)]
@@ -297,10 +297,6 @@ impl AuthSession {
     fn serialize(&self) -> String {
         serde_json::to_string(self).unwrap_or_default()
     }
-}
-
-fn sessions_file() -> std::path::PathBuf {
-    std::path::PathBuf::from("data/auth_sessions.json")
 }
 
 fn generations_file() -> std::path::PathBuf {
@@ -470,8 +466,9 @@ pub fn issue_login_session(
     student_id
 }
 
-/// `authSessionFromToken(token)` — validate + refresh (expiry, generation,
-/// 5-min lastSeen). Returns None + lazily deletes expired/stale records.
+/// `authSessionFromToken(token)` — validates a `mitch_session` token against
+/// the `auth_sessions` table (expiry, session generation). Expired or
+/// stale-generation rows are deleted on the spot.
 pub fn auth_session_from_token(
     token: &str,
     store: &DataStore,
@@ -481,63 +478,37 @@ pub fn auth_session_from_token(
         return None;
     }
     let key = hash_session_token(token);
-    let sessions_path = store.base_dir.join(sessions_file());
-    let mut sessions = store.read_document(&sessions_path, serde_json::json!({}));
+    let row = crate::auth_sessions::get(store, &key)?;
     let now = now_millis();
-
-    let mut rec = sessions.get(&key).cloned()?;
-    let rec_obj = rec.as_object_mut()?;
-
-    let expires_at = rec_obj
-        .get("expiresAt")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0);
-    if expires_at == 0 || now > expires_at {
-        if let Some(map) = sessions.as_object_mut() {
-            map.remove(&key);
-        }
-        let _ = store.write_document(&sessions_path, &sessions);
+    if row.expires_at == 0 || now > row.expires_at {
+        crate::auth_sessions::delete(store, &key);
         return None;
     }
-
-    let norm_email = rec_obj
-        .get("normEmail")
-        .or_else(|| rec_obj.get("email"))
-        .and_then(|v| v.as_str())
-        .map(normalize_email)
-        .unwrap_or_default();
+    let norm_email = normalize_email(if row.norm_email.is_empty() {
+        &row.email
+    } else {
+        &row.norm_email
+    });
     if norm_email.is_empty() {
         return None;
     }
-
-    let rec_gen = rec_obj.get("gen").and_then(|v| v.as_i64()).unwrap_or(0);
-    if rec_gen != current_session_generation(store, &norm_email) {
-        if let Some(map) = sessions.as_object_mut() {
-            map.remove(&key);
-        }
-        let _ = store.write_document(&sessions_path, &sessions);
+    if row.gen != current_session_generation(store, &norm_email) {
+        crate::auth_sessions::delete(store, &key);
         return None;
     }
-
-    let email = rec_obj
-        .get("email")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let sid = issue_login_session(store, id_secret, &norm_email, &email);
-    let stored_sid = rec_obj.get("sid").and_then(|v| v.as_str()).unwrap_or("");
-    // Only rewrite the record when the derived sid changed. Sessions used to
-    // stamp `lastSeen` here every five minutes, which kept a running record
-    // of when each account was active; expiry is fixed at creation instead.
-    if stored_sid != sid {
-        rec_obj.insert("sid".into(), Value::String(sid.clone()));
-        let _ = store.write_document(&sessions_path, &sessions);
+    let sid = issue_login_session(store, id_secret, &norm_email, &row.email);
+    if row.sid != sid {
+        crate::auth_sessions::set_sid(store, &key, &sid);
     }
-
-    let mut session: AuthSession = serde_json::from_value(rec).unwrap_or_default();
-    session.sid = sid;
-    session.norm_email = norm_email;
-    Some(session)
+    Some(AuthSession {
+        email: row.email,
+        norm_email,
+        sid,
+        gen: row.gen,
+        created_at: row.created_at,
+        expires_at: row.expires_at,
+        dev_superuser: row.dev_superuser,
+    })
 }
 
 /// `bannedInfoForEmail(email)` — blacklist lookup (`blacklist` table).
@@ -796,7 +767,7 @@ pub struct IssuedAuthSession {
 
 /// `createAuthSession(normEmail, originalEmail, req, options)`
 /// (server.js:2870-2898) — random 32-byte base64url token, hashed key,
-/// session record in auth_sessions.json.
+/// session row in the `auth_sessions` table.
 ///
 /// The record holds only what validating the session needs (identity,
 /// generation, creation and expiry). It deliberately stores no IP address,
@@ -822,23 +793,19 @@ pub fn create_auth_session(
     let token = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(token_bytes);
     let key = hash_session_token(&token);
     let now = now_millis();
-    let sessions_path = store.base_dir.join(sessions_file());
-    let mut sessions = store.read_document(&sessions_path, serde_json::json!({}));
-    if let Some(map) = sessions.as_object_mut() {
-        map.insert(
-            key,
-            serde_json::json!({
-                "email": email,
-                "normEmail": norm,
-                "sid": sid,
-                "gen": gen,
-                "createdAt": now,
-                "expiresAt": now + AUTH_SESSION_TTL_MS,
-                "devSuperuser": dev_superuser && dev_test_access_enabled(),
-            }),
-        );
-    }
-    let _ = store.write_document(&sessions_path, &sessions);
+    crate::auth_sessions::insert(
+        store,
+        &crate::auth_sessions::SessionRow {
+            token_hash: key,
+            email: email.clone(),
+            norm_email: norm.clone(),
+            sid: sid.clone(),
+            gen,
+            created_at: now,
+            expires_at: now + AUTH_SESSION_TTL_MS,
+            dev_superuser: dev_superuser && dev_test_access_enabled(),
+        },
+    );
     IssuedAuthSession {
         token,
         sid,
@@ -856,31 +823,7 @@ pub fn invalidate_auth_sessions_for_email(
 ) {
     let norm = normalize_email(norm_email);
     let keep_key = keep_token.map(hash_session_token).unwrap_or_default();
-    let sessions_path = store.base_dir.join(sessions_file());
-    let mut sessions = store.read_document(&sessions_path, serde_json::json!({}));
-    let mut changed = false;
-    if let Some(map) = sessions.as_object_mut() {
-        let stale: Vec<String> = map
-            .iter()
-            .filter(|(key, rec)| {
-                key.as_str() != keep_key
-                    && normalize_email(
-                        rec.get("normEmail")
-                            .or_else(|| rec.get("email"))
-                            .and_then(|v| v.as_str())
-                            .unwrap_or(""),
-                    ) == norm
-            })
-            .map(|(key, _)| key.clone())
-            .collect();
-        for key in stale {
-            map.remove(&key);
-            changed = true;
-        }
-    }
-    if changed {
-        let _ = store.write_document(&sessions_path, &sessions);
-    }
+    crate::auth_sessions::delete_for_email(store, &norm, &keep_key);
 }
 
 /// `rotateSessionGeneration(normEmail)` (server.js:2932-2947) — bumps the

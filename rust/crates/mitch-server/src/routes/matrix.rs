@@ -4474,19 +4474,8 @@ pub fn load_matrix_audit_log(
     data_dir: &std::path::Path,
     limit: usize,
 ) -> Vec<Value> {
-    let actions = store
-        .read_document(&data_dir.join("admin_actions.json"), json!([]))
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
-    actions
-        .into_iter()
-        .filter(|entry| {
-            let act = entry.get("action").and_then(|v| v.as_str()).unwrap_or("");
-            act.starts_with("matrix_")
-        })
-        .take(limit)
-        .collect()
+    let _ = data_dir;
+    mitch_lib::admin::admin_actions_with_prefix(store, "matrix_", limit as i64)
 }
 
 fn mod_audit_log_get(state: &AppState, headers: &HeaderMap) -> Response {

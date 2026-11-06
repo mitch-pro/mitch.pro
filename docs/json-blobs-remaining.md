@@ -25,8 +25,10 @@ Look at how `coins`, `daily_logins`, `profiles`, `tokens`, `friend_lists` were d
 ## Removed rather than migrated
 
 `sessions.json`, `last_known_ips.json` and `search_intent.json` held personal
-data the site no longer keeps; `cheat_logs.json` became the `cheat_logs` table.
-`mitch_lib::privacy::run_startup_cleanup` deletes all four on startup
+data the site no longer keeps; `cheat_logs.json`, `admin_actions.json` and
+`auth_sessions.json` became the `cheat_logs`, `admin_actions` and
+`auth_sessions` tables.
+`mitch_lib::privacy::run_startup_cleanup` imports and deletes them on startup
 (docs/privacy.md).
 
 ## Still blobs in `json_documents`
@@ -60,7 +62,6 @@ Files and the non-test modules that read or write them. Grouped by what they hol
 
 | File | Used by |
 | --- | --- |
-| `auth_sessions.json` | `auth.rs`, `vm.rs` |
 | `generations.json` | `auth.rs` |
 | `invalidated.json` | `auth.rs`, `proxy.rs` |
 | `passkeys.json` | `accounts.rs`, `webauthn.rs` |
@@ -124,7 +125,6 @@ Files and the non-test modules that read or write them. Grouped by what they hol
 | `canvas_reports.json` | `legacy.rs` |
 | `canvas_banned.json` | `legacy.rs` |
 | `byo_os_reports.json` | `byo_os.rs` |
-| `admin_actions.json` | `admin.rs`, `moderation.rs`, `matrix.rs` |
 | `shadow_bans.json` | `moderation.rs`, `matrix.rs` |
 | `moderator_requests.json` | `admin.rs` |
 

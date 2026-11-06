@@ -13,15 +13,16 @@
 //! - `search_intent.json` — retired search log (query + account).
 //! - `banned_ips.json` — legacy blob, already imported into `banned_ips`.
 //! - `cheat_logs.json` — moved to the `cheat_logs` table without IPs.
-//! - IP address, user agent and last-used time in `auth_sessions.json`.
+//! - `auth_sessions.json` — moved to the `auth_sessions` table without the IP
+//!   address, user agent and last-used time it held.
 //! - Raw IPs in `banned_ips` (hashed) and account-linked rows (deleted).
 //! - Sub-day precision in `user_stats.last_active_at`.
-//! - Staff IP address and user agent in `admin_actions.json` details.
+//! - `admin_actions.json` — moved to the `admin_actions` table without the
+//!   staff IP address and user agent it held.
 //! - `enroll_ip` in `tokens`, and `ip` in `app_logs` details/messages.
 //! - Support-ticket IP hashes older than a day (`support::prune_old`).
 
 use crate::data::DataStore;
-use serde_json::Value;
 use std::path::Path;
 
 /// JSON documents that are deleted outright, relative to the data dir.
@@ -44,59 +45,6 @@ pub fn delete_document(store: &DataStore, file: &Path) {
         );
     }
     let _ = std::fs::remove_file(file);
-}
-
-/// Removes `keys` from every object in `record` (one level), returning
-/// whether anything changed.
-fn strip_keys(record: &mut Value, keys: &[&str]) -> bool {
-    let Some(obj) = record.as_object_mut() else {
-        return false;
-    };
-    let mut changed = false;
-    for key in keys {
-        changed |= obj.remove(*key).is_some();
-    }
-    changed
-}
-
-/// Drops `ip`, `userAgent` and `lastSeen` from every stored login session.
-fn scrub_auth_sessions(store: &DataStore) -> usize {
-    let file = store.base_dir.join("data/auth_sessions.json");
-    let mut sessions = store.read_document(&file, Value::Null);
-    let Some(map) = sessions.as_object_mut() else {
-        return 0;
-    };
-    let mut changed = 0;
-    for record in map.values_mut() {
-        if strip_keys(record, &["ip", "userAgent", "lastSeen"]) {
-            changed += 1;
-        }
-    }
-    if changed > 0 {
-        let _ = store.write_document(&file, &sessions);
-    }
-    changed
-}
-
-/// Drops staff `ip` / `userAgent` from admin action log details.
-fn scrub_admin_actions(store: &DataStore) -> usize {
-    let file = store.data_dir().join("admin_actions.json");
-    let mut actions = store.read_document(&file, Value::Null);
-    let Some(list) = actions.as_array_mut() else {
-        return 0;
-    };
-    let mut changed = 0;
-    for entry in list.iter_mut() {
-        if let Some(details) = entry.get_mut("details") {
-            if strip_keys(details, &["ip", "userAgent"]) {
-                changed += 1;
-            }
-        }
-    }
-    if changed > 0 {
-        let _ = store.write_document(&file, &actions);
-    }
-    changed
 }
 
 /// SQL-side scrubs: token enrollment IPs and IPs in application logs.
@@ -131,12 +79,12 @@ fn scrub_sql(store: &DataStore) -> usize {
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct CleanupReport {
     pub documents_deleted: usize,
-    pub auth_sessions_scrubbed: usize,
+    pub auth_sessions_migrated: usize,
     pub banned_ips_deleted: usize,
     pub banned_ips_hashed: usize,
     pub user_stats_floored: usize,
     pub cheat_logs_imported: usize,
-    pub admin_actions_scrubbed: usize,
+    pub admin_actions_migrated: usize,
     pub sql_rows_scrubbed: usize,
 }
 
@@ -175,12 +123,12 @@ pub fn run_startup_cleanup(store: &DataStore, id_secret: &[u8]) -> CleanupReport
             }
         }
     }
-    report.auth_sessions_scrubbed = scrub_auth_sessions(store);
+    report.auth_sessions_migrated = crate::auth_sessions::migrate_from_json(store);
     let (deleted, hashed) = crate::bans::hash_legacy_banned_ips(store, id_secret);
     report.banned_ips_deleted = deleted;
     report.banned_ips_hashed = hashed;
     report.user_stats_floored = crate::user_stats::floor_last_active_to_day(store);
-    report.admin_actions_scrubbed = scrub_admin_actions(store);
+    report.admin_actions_migrated = crate::admin::migrate_admin_actions_from_json(store);
     report.sql_rows_scrubbed = scrub_sql(store);
     // Support tickets are otherwise pruned only when a new one is opened.
     crate::support::prune_old(
@@ -235,13 +183,13 @@ mod tests {
         store
             .write_document(
                 &data.join("auth_sessions.json"),
-                &json!({"k": {"email": "a@b.c", "gen": 0, "expiresAt": 9, "ip": "198.51.100.7", "userAgent": "UA", "lastSeen": 5}}),
+                &json!({"k": {"email": "a@b.c", "gen": 0, "expiresAt": now + 60_000, "ip": "198.51.100.7", "userAgent": "UA", "lastSeen": 5}}),
             )
             .unwrap();
         store
             .write_document(
                 &data.join("admin_actions.json"),
-                &json!([{"action": "x", "details": {"role": "admin", "ip": "198.51.100.7", "userAgent": "UA"}}]),
+                &json!([{"id": "a1", "action": "x", "details": {"role": "admin", "ip": "198.51.100.7", "userAgent": "UA"}}]),
             )
             .unwrap();
         store
@@ -258,9 +206,9 @@ mod tests {
 
         let report = run_startup_cleanup(&store, b"secret");
         assert_eq!(report.documents_deleted, 3);
-        assert_eq!(report.auth_sessions_scrubbed, 1);
+        assert_eq!(report.auth_sessions_migrated, 1);
         assert_eq!(report.cheat_logs_imported, 1);
-        assert_eq!(report.admin_actions_scrubbed, 1);
+        assert_eq!(report.admin_actions_migrated, 1);
         assert_eq!(report.user_stats_floored, 1);
 
         for name in [
@@ -268,20 +216,23 @@ mod tests {
             "last_known_ips.json",
             "search_intent.json",
             "cheat_logs.json",
+            "auth_sessions.json",
+            "admin_actions.json",
         ] {
             assert!(
-                store.read_document(&data.join(name), Value::Null).is_null(),
+                store
+                    .read_document(&data.join(name), serde_json::Value::Null)
+                    .is_null(),
                 "{name}"
             );
             assert!(!data.join(name).exists(), "{name}");
         }
-        let sessions = store.read_document(&data.join("auth_sessions.json"), Value::Null);
+        let session = crate::auth_sessions::get(&store, "k").unwrap();
+        assert_eq!(session.norm_email, "a@b.c");
         assert_eq!(
-            sessions["k"],
-            json!({"email": "a@b.c", "gen": 0, "expiresAt": 9})
+            crate::admin::admin_action_by_id(&store, "a1").unwrap()["details"],
+            json!({"role": "admin"})
         );
-        let actions = store.read_document(&data.join("admin_actions.json"), Value::Null);
-        assert_eq!(actions[0]["details"], json!({"role": "admin"}));
         let (cheats, total) = crate::admin::cheat_logs_recent(&store, 10);
         assert_eq!(total, 1);
         assert!(cheats[0].get("ip").is_none());

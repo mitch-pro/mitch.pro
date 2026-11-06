@@ -308,6 +308,33 @@ impl DataStore {
                         details TEXT DEFAULT '',
                         timestamp INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS auth_sessions (
+                        token_hash TEXT PRIMARY KEY,
+                        email TEXT NOT NULL,
+                        norm_email TEXT NOT NULL,
+                        sid TEXT NOT NULL,
+                        gen INTEGER NOT NULL,
+                        created_at INTEGER NOT NULL,
+                        expires_at INTEGER NOT NULL,
+                        dev_superuser INTEGER NOT NULL DEFAULT 0
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_auth_sessions_norm_email ON auth_sessions (norm_email);
+                    CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions (expires_at);
+                    CREATE TABLE IF NOT EXISTS admin_actions (
+                        id TEXT PRIMARY KEY,
+                        ts INTEGER NOT NULL,
+                        actor TEXT NOT NULL,
+                        action TEXT NOT NULL,
+                        details TEXT NOT NULL DEFAULT '{}'
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_admin_actions_ts ON admin_actions (ts DESC);
+                    CREATE INDEX IF NOT EXISTS idx_admin_actions_action ON admin_actions (action, ts DESC);
+                    CREATE TABLE IF NOT EXISTS vm_admin_access_grants (
+                        vm_record_id TEXT PRIMARY KEY,
+                        owner_email TEXT NOT NULL,
+                        granted_at INTEGER NOT NULL,
+                        expires_at INTEGER NOT NULL
+                    );
                     CREATE TABLE IF NOT EXISTS cheat_logs (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         ts INTEGER NOT NULL,
