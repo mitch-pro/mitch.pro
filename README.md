@@ -3,7 +3,7 @@
 [![Deploy](https://github.com/mitch-pro/mitch.pro/actions/workflows/deploy.yml/badge.svg)](https://github.com/mitch-pro/mitch.pro/actions/workflows/deploy.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-High-performance, self-hosted web platform and student community built in **Rust**. Serves multi-tenant virtual hosting, End-to-End Encrypted (E2EE) chat over a federated Matrix homeserver, Proxmox LXC cloud desktops, real-time WebSockets, and a small arcade of browser games — all from one Axum-based binary with SQLite persistence.
+High-performance, self-hosted web platform and student community built in **Rust**. Serves multi-tenant virtual hosting, End-to-End Encrypted (E2EE) chat over a self-hosted (non-federated) Matrix homeserver, Proxmox LXC cloud desktops, real-time WebSockets, and a small arcade of browser games — all from one Axum-based binary with SQLite persistence.
 
 The project started as a Bun/Node server and has since been fully ported to Rust for performance and reliability.
 
@@ -12,7 +12,7 @@ The project started as a Bun/Node server and has since been fully ported to Rust
 ## Architecture & Features
 
 - **Multi-Tenant Domain Routing:** One backend serves distinct front doors — `mitch.pro`, `rjuhsd.school` (a public school bell-schedule hub), and `sexypickleclub.com` — with shared identity and database state.
-- **Federated E2EE Chat:** A self-hosted [Conduit](https://gitlab.com/famedly/conduit) Matrix homeserver behind a [Cinny](https://github.com/cinnyapp/cinny) web client, plus a separate lightweight DM system using WebCrypto ECDH P-256 + AES-GCM-256 with timed auto-deletion and encrypted attachment streaming.
+- **E2EE Chat:** A self-hosted [Conduit](https://gitlab.com/famedly/conduit) Matrix homeserver behind a [Cinny](https://github.com/cinnyapp/cinny) web client, plus a separate lightweight DM system using WebCrypto ECDH P-256 + AES-GCM-256 with timed auto-deletion and encrypted attachment streaming.
 - **Hardened Authentication:** Argon2id password hashing, HttpOnly session cookies, email/username login resolution, and same-origin CSRF protection on every mutating API call.
 - **Cloud Desktops:** Automated, ephemeral Proxmox LXC container lifecycle management with an in-browser VNC/SSH terminal gateway and idle auto-cleanup.
 - **Real-Time WebSockets:** Live pixel canvas, multiplayer chess, presence/online indicators, and push notifications.

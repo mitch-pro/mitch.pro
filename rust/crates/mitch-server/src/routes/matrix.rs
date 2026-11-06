@@ -3285,14 +3285,8 @@ pub fn handle_well_known(method: &Method, path: &str, headers: &HeaderMap) -> Op
             }),
         ));
     }
-    if path == "/.well-known/matrix/server" && method == Method::GET {
-        let mut resp = cors_json_response(200, json!({ "m.server": "mitch.pro:443" }));
-        resp.headers_mut().insert(
-            "Cache-Control",
-            HeaderValue::from_static("public, max-age=300"),
-        );
-        return Some(resp);
-    }
+    // No `/.well-known/matrix/server`: federation is off, so other homeservers
+    // must not be told where to reach ours.
     None
 }
 
@@ -7768,6 +7762,15 @@ pub async fn handle_matrix_gateway(
         return None;
     }
 
+    // Federation is off (see conduit.toml): never forward server-to-server
+    // traffic to Conduit, even if its own setting were turned back on.
+    if path.starts_with("/_matrix/federation/") || path.starts_with("/_matrix/key/") {
+        return Some(cors_json_response(
+            404,
+            json!({ "errcode": "M_UNRECOGNIZED", "error": "Federation is disabled." }),
+        ));
+    }
+
     // MSC3266 / Nheko Room Summary
     static ROOM_SUMMARY_RE: OnceLock<regex::Regex> = OnceLock::new();
     let room_summary_re = ROOM_SUMMARY_RE.get_or_init(|| {
@@ -9042,9 +9045,8 @@ mod tests {
         assert!(resp_client.is_some());
         assert_eq!(resp_client.unwrap().status(), StatusCode::OK);
 
-        let resp_server = handle_well_known(&Method::GET, "/.well-known/matrix/server", &headers);
-        assert!(resp_server.is_some());
-        assert_eq!(resp_server.unwrap().status(), StatusCode::OK);
+        // Federation is off, so no server delegation is published.
+        assert!(handle_well_known(&Method::GET, "/.well-known/matrix/server", &headers).is_none());
 
         let resp_opt = handle_well_known(&Method::OPTIONS, "/.well-known/matrix/client", &headers);
         assert!(resp_opt.is_some());
