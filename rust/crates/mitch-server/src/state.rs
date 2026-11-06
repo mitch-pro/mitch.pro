@@ -575,7 +575,6 @@ pub const PUBLIC_API_PATHS: &[&str] = &[
     "/api/portal/list",
     "/api/portal/items",
     "/api/portal/random",
-    "/api/guest-session",
     "/api/verify-open",
     "/verify-open.json",
     "/api/backgrounds/list",

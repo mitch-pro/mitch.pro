@@ -38,7 +38,6 @@ pub mod e2e;
 pub mod email;
 pub mod feedback;
 pub mod friends;
-pub mod guest;
 pub mod invites;
 pub mod jstime;
 pub mod jsval;

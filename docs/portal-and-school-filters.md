@@ -87,8 +87,6 @@ page:
   itself is name-free (`/prox/g/<id>/`). Added after Snow Rider 3D was blocked
   while playing; whether the name in the address was the trigger is untested.
 - The `/game-portal/` path, and the tab title "Entertainment Portal — mitch.pro".
-- The sitewide guest-preview dialog says "play games" after 60 seconds for signed
-  out visitors. On the main portal it is drawn on canvas, but it is still visible.
 - Accessibility: canvas text is not read by screen readers and cannot be searched
   or copied. Button labels on the main portal carry no titles.
 
