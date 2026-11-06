@@ -12,7 +12,9 @@ requester's conversation), `/moderator/support/` (staff queue, linked from
 
 Tables: `support_tickets`, `support_messages`, `support_email_requests`
 (`mitch_lib::support`). Resolved tickets (with messages and requests) are
-deleted 90 days after their last activity.
+deleted 90 days after their last activity. Each ticket stores a keyed hash of the IP
+that opened it (never the IP itself) for the hourly per-IP opening limit; the
+hash is cleared after a day.
 
 - **Opening** (`POST /api/support/open`): category, a username or email, an
   optional contact email, a message. Protected by reCAPTCHA, a hidden honeypot

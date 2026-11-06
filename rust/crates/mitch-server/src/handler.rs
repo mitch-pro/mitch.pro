@@ -764,44 +764,6 @@ async fn handle_resolved(
         }
     }
 
-    // Track the last known IP after the global ban check.
-    {
-        let ip = get_real_ip(headers, None);
-        // Dynamically track the user's last known IP address (server.js:10478-10495)
-        let cookie_header = headers
-            .get(axum::http::header::COOKIE)
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("");
-        let cookies = mitch_lib::auth::get_cookies_from_header_value(
-            cookie_header,
-            &state.store,
-            &state.id_secret,
-            node_env_test,
-        );
-        let sid = cookies
-            .get("studentId")
-            .filter(|s| !s.is_empty())
-            .or_else(|| cookies.get("id"))
-            .unwrap_or("");
-        if !sid.is_empty() && mitch_lib::auth::valid_id(sid, &state.id_secret) {
-            if let Some(email) =
-                mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, sid)
-            {
-                let norm = mitch_lib::auth::normalize_email(&email);
-                if !norm.is_empty() {
-                    let ips_file = state.data_dir().join("last_known_ips.json");
-                    let mut ips = state.store.read_document(&ips_file, serde_json::json!({}));
-                    if ips.get(&norm).and_then(|v| v.as_str()) != Some(&ip) {
-                        if let Some(obj) = ips.as_object_mut() {
-                            obj.insert(norm, serde_json::json!(ip));
-                            let _ = state.store.write_document(&ips_file, &ips);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     // Direct unsubscribe links by token (server.js:10291-10476)
     if method == Method::GET && path.starts_with("/unsubscribe/") {
         if let Some(resp) = handle_unsubscribe(&state, &path) {

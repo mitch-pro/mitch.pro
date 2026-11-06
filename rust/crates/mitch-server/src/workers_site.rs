@@ -132,8 +132,14 @@ async fn premium_maintenance_worker(state: &std::sync::Arc<AppState>) -> Result<
             .to_string();
         let norm = mitch_lib::auth::normalize_email(&email);
         let stat_entry = mitch_lib::user_stats::user_stats_get(&state.store, &norm);
+        // `last_active_at` is the start of the member's last active day
+        // (user_stats::activity_day); count from the end of that day so the
+        // day-granular stamp never shortens the grace period.
         let last_active = first_num([
-            stat_entry.get("last_active_at").and_then(num),
+            stat_entry
+                .get("last_active_at")
+                .and_then(num)
+                .map(|day| day + 86_400_000.0 - 1.0),
             app.get("approved_at").and_then(num),
             app.get("submitted_at").and_then(num),
             None,

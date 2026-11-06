@@ -404,68 +404,6 @@ fn log_entry(log: &Value, key: &str) -> Value {
     log.get(key).cloned().unwrap_or_else(|| json!({}))
 }
 
-/// `Date.parse(entry.timestamp || '')` — ISO-8601 with an offset, or no zone
-/// meaning local time, like JS. `None` = NaN.
-fn js_date_parse(v: Option<&Value>) -> Option<f64> {
-    let s = jsval::str_or(v, "");
-    if s.is_empty() {
-        return None;
-    }
-    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&s) {
-        return Some(dt.timestamp_millis() as f64);
-    }
-    chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%dT%H:%M:%S%.f")
-        .ok()
-        .and_then(|nd| nd.and_local_timezone(chrono::Local).single())
-        .map(|dt| dt.timestamp_millis() as f64)
-}
-
-/// `new URL(pg, 'http://x').pathname` for the shapes session pages take:
-/// absolute or root-relative paths, query/hash stripped. Unparseable input
-/// keeps the pre-URL value in the JS (the try/catch), modeled by `None`.
-fn url_pathname(pg: &str) -> Option<String> {
-    let cut = |s: &str| -> String {
-        match s.find(['?', '#']) {
-            Some(i) => s[..i].to_string(),
-            None => s.to_string(),
-        }
-    };
-    if let Some(rest) = pg.strip_prefix('/') {
-        if let Some(rest) = rest.strip_prefix('/') {
-            // Protocol-relative "//host/path" — the authority is dropped from
-            // the pathname, like `new URL('//host/path', 'http://x')`.
-            let path = match rest.find('/') {
-                Some(i) => cut(&rest[i..]),
-                None => "/".to_string(),
-            };
-            return Some(path);
-        }
-        // Root-relative: the '/' stripped above comes back.
-        let path = cut(rest);
-        return Some(if path.is_empty() {
-            "/".to_string()
-        } else {
-            format!("/{path}")
-        });
-    }
-    if let Some(scheme_end) = pg.find("://") {
-        let rest = &pg[scheme_end + 3..];
-        let path_start = rest.find('/').map(|i| scheme_end + 3 + i);
-        let path = match path_start {
-            Some(i) => cut(&pg[i..]),
-            None => "/".to_string(),
-        };
-        return Some(path);
-    }
-    // Relative reference resolved against http://x → '/' + pg.
-    let path = cut(pg);
-    Some(if path.is_empty() {
-        "/".to_string()
-    } else {
-        format!("/{path}")
-    })
-}
-
 // ── weeklyDigestWorker (server.js:4853-4907) ─────────────────────────────────
 
 fn weekly_digest_worker(state: &Arc<AppState>) {
@@ -492,49 +430,11 @@ fn weekly_digest_impl(state: &Arc<AppState>) -> Result<(), String> {
         ((now.day() as f64) / 7.0).ceil() as u32
     );
     let mut log = load_email_log(state);
-    let logs = state
-        .store
-        .read_document(&state.data_dir().join("sessions.json"), json!([]));
-    let week_ago = (mitch_lib::school::now_millis() - 7 * 86_400_000) as f64;
-
-    // gamesByEmail — ping session-log entries carry no `page`, so today this
-    // stays empty and the digest fires for chess-ELO / cookie users only.
-    // Ported faithfully for the day the log grows a page field.
-    let mut games_by_email: std::collections::HashMap<String, indexmap::IndexMap<String, f64>> =
+    // The digest used to count each user's game visits from the per-ping
+    // session log. That log is gone (docs/privacy.md: no per-user browsing
+    // history), so the digest covers chess ELO and Cookie Clicker only.
+    let games_by_email: std::collections::HashMap<String, indexmap::IndexMap<String, f64>> =
         std::collections::HashMap::new();
-    if let Some(entries) = logs.as_array() {
-        for entry in entries {
-            let Some(ts) = js_date_parse(entry.get("timestamp")) else {
-                continue;
-            };
-            if ts < week_ago {
-                continue;
-            }
-            let mut pg = jsval::str_or(entry.get("page"), "");
-            for dom in ["https://mitch.pro", "https://mitch.dnswish.com"] {
-                if pg.starts_with(dom) {
-                    pg = pg[dom.len()..].to_string();
-                }
-            }
-            if !pg.contains("/games/") {
-                continue;
-            }
-            let uid = jsval::str_or(entry.get("id"), "");
-            let Some(email) = mitch_lib::auth::names_get_email(&state.store, &uid) else {
-                continue;
-            };
-            let email = email.to_lowercase();
-            if email.is_empty() {
-                continue;
-            }
-            // `pg = new URL(pg, 'http://x').pathname` inside try/catch.
-            let Some(pg) = url_pathname(&pg) else {
-                continue;
-            };
-            let slot = games_by_email.entry(email).or_default();
-            *slot.entry(pg).or_insert(0.0) += 1.0;
-        }
-    }
 
     let unsub = newsletter_unsub_set(state);
     for email in enrolled_users(state) {
@@ -1308,55 +1208,6 @@ mod tests {
         assert_eq!(email_slot("mitchell.fogler@student.rjuhsd.us", 6), 2);
         assert_eq!(email_slot("x", 6), 0);
         assert_eq!(email_slot("anything@anywhere.org", 1), 0);
-    }
-
-    #[test]
-    fn js_date_parse_matches_date_parse() {
-        // Z-suffixed (TZ-independent) — exact JS Date.parse values.
-        assert_eq!(
-            js_date_parse(Some(&json!("2026-09-15T12:00:00Z"))),
-            Some(1_789_473_600_000.0)
-        );
-        assert_eq!(
-            js_date_parse(Some(&json!("2026-09-15T19:00:00Z"))),
-            Some(1_789_498_800_000.0)
-        );
-        // No zone → local time (the dev/prod hosts are America/Los_Angeles,
-        // where Date.parse('2026-09-15T12:00:00') === Date.parse('...T19:00:00Z')).
-        // Asserted against chrono's own local resolution so CI in any TZ passes.
-        let naive =
-            chrono::NaiveDateTime::parse_from_str("2026-09-15T12:00:00", "%Y-%m-%dT%H:%M:%S")
-                .unwrap()
-                .and_local_timezone(chrono::Local)
-                .single()
-                .unwrap();
-        assert_eq!(
-            js_date_parse(Some(&json!("2026-09-15T12:00:00"))),
-            Some(naive.timestamp_millis() as f64)
-        );
-        // NaN shapes.
-        assert_eq!(js_date_parse(None), None); // undefined || ''
-        assert_eq!(js_date_parse(Some(&json!(""))), None);
-        assert_eq!(js_date_parse(Some(&json!("garbage"))), None);
-        // Non-string truthy values are String()-coerced first.
-        assert_eq!(js_date_parse(Some(&json!(12345))), None); // "12345" → NaN
-    }
-
-    #[test]
-    fn url_pathname_matches_new_url_base() {
-        assert_eq!(
-            url_pathname("/games/chess-bot/?a=1"),
-            Some("/games/chess-bot/".into())
-        );
-        assert_eq!(url_pathname("/games/x#frag"), Some("/games/x".into()));
-        assert_eq!(url_pathname(""), Some("/".into())); // new URL('', 'http://x')
-        assert_eq!(url_pathname("games/x"), Some("/games/x".into())); // relative
-        assert_eq!(
-            url_pathname("https://mitch.pro/games/casino"),
-            Some("/games/casino".into())
-        );
-        assert_eq!(url_pathname("https://mitch.pro"), Some("/".into()));
-        assert_eq!(url_pathname("//evil.com/x"), Some("/x".into())); // protocol-relative
     }
 
     #[test]

@@ -64,8 +64,7 @@ button.act.grey{background:rgba(255,255,255,.1)} button.act.grey:hover{backgroun
 </head>
 <body>
 <nav>
-  <button class="active" onclick="showTab('monitor',this)">Monitor</button>
-  <button onclick="showTab('suggestions',this)">Suggestions</button>
+  <button class="active" onclick="showTab('suggestions',this)">Suggestions</button>
   <button onclick="showTab('requests',this)">Requests</button>
   <button onclick="showTab('newsletter',this)">Newsletter</button>
   <button onclick="showTab('heatmap',this)">Heatmap</button>
@@ -73,10 +72,6 @@ button.act.grey{background:rgba(255,255,255,.1)} button.act.grey:hover{backgroun
 </nav>
 <div id="content">
   <div id="loading">Loading...</div>
-  <div id="monitor" style="display:none">
-    <div id="mon-panel"></div>
-    <table id="mon-table" style="display:none"><thead><tr><th></th><th>Name</th><th>Most Visited</th><th>Visits</th></tr></thead><tbody id="mon-body"></tbody></table>
-  </div>
   <div id="suggestions" style="display:none"></div>
   <div id="requests" style="display:none"></div>
   <div id="newsletter" style="display:none"></div>
@@ -95,8 +90,7 @@ button.act.grey{background:rgba(255,255,255,.1)} button.act.grey:hover{backgroun
 
 <script>
 var PW = sessionStorage.getItem('apw') || '';
-var curTab = 'monitor';
-var monSel = null;
+var curTab = 'suggestions';
 var sugSel = null;
 var refreshTimer = null;
 
@@ -104,7 +98,7 @@ function showTab(name, btn) {
   curTab = name;
   document.querySelectorAll('nav button').forEach(function(b){b.classList.remove('active')});
   btn.classList.add('active');
-  ['monitor','suggestions','requests','newsletter','heatmap','tools'].forEach(function(t){
+  ['suggestions','requests','newsletter','heatmap','tools'].forEach(function(t){
     document.getElementById(t).style.display = t === name ? '' : 'none';
   });
   load(name);
@@ -131,61 +125,6 @@ function ago(ts) {
 function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
-function dotClass(ts) {
-  if (!ts) return 'old';
-  var s = Date.now()/1000 - ts;
-  if (s < 90)   return 'online';
-  if (s < 900)  return 'recent';
-  return 'old';
-}
-
-var _monUsers = []; // last fetched merged users
-
-// ── Monitor ───────────────────────────────────────────────────────────────────
-async function loadMonitor() {
-  var d = await api('users');
-  if (!d) return;
-  _monUsers = d.users;
-  document.getElementById('loading').style.display = 'none';
-  document.getElementById('mon-table').style.display = '';
-  renderMonitorRows(_monUsers);
-}
-
-function renderMonitorRows(users) {
-  var html = '';
-  users.forEach(function(u, i) {
-    var sel = monSel === i;
-    var nameLabel = esc(u.name);
-    var page = (u.mostVisited||'').replace(/https?:\/\/mitch\.(88chan\.me|pro)/,'') || '/';
-    html += '<tr class="'+(sel?'sel':'')+'" onclick="toggleUser('+i+')">';
-    html += '<td><span class="dot '+dotClass(u.lastActive/1000)+'" id="dot-'+i+'"></span></td>';
-    html += '<td><b>'+nameLabel+'</b></td>';
-    html += '<td class="dim" id="page-'+i+'" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(page)+'</td>';
-    html += '<td>'+u.totalCount+'</td>';
-    html += '</tr>';
-  });
-  var body = document.getElementById('mon-body');
-  if (body) body.innerHTML = html;
-}
-
-function refreshMonitorLive() {
-  _monUsers.forEach(function(u, i) {
-    var dot  = document.getElementById('dot-'+i);
-    if (dot)  dot.className  = 'dot '+dotClass(u.lastActive/1000);
-  });
-}
-
-function toggleUser(i) {
-  monSel = (monSel === i) ? null : i;
-  document.querySelectorAll('#mon-body tr').forEach(function(tr, idx){
-    tr.classList.toggle('sel', idx === monSel);
-  });
-  var panel = document.getElementById('mon-panel');
-  if (monSel === null) { panel.innerHTML = ''; return; }
-  var u = _monUsers[i];
-  panel.innerHTML = '<div class="panel"><h3>'+esc(u.name)+' Stats</h3><div class="dim">User ID: '+u.uid+'</div></div>';
-}
-
 // ── Heatmap ───────────────────────────────────────────────────────────────────
 var _hmData = {};
 async function loadHeatmap() {
@@ -289,11 +228,10 @@ async function loadRequests() {
   // Access requests
   html += '<h2 style="font-size:.95rem;margin-bottom:.6rem;color:rgba(200,200,220,.7)">Access Requests</h2>';
   if (d.pending.length) {
-    html += '<table><thead><tr><th>Email</th><th>Name</th><th>IP</th><th>Requested</th><th>Actions</th></tr></thead><tbody>';
+    html += '<table><thead><tr><th>Email</th><th>Name</th><th>Requested</th><th>Actions</th></tr></thead><tbody>';
     d.pending.forEach(function(r) {
       var dt = r.created_at ? new Date(r.created_at*1000).toLocaleString() : '—';
       html += '<tr><td>'+esc(r.email)+'</td><td class="dim">'+esc(r.name||'—')+'</td>';
-      html += '<td class="dim">'+esc(r.enroll_ip||'—')+'</td>';
       html += '<td class="dim" style="white-space:nowrap">'+esc(dt)+'</td>';
       html += '<td><div class="btn-row">';
       html += '<button class="act green" onclick="doApprove(\''+esc(r.token)+'\',\''+esc(r.email)+'\')">Approve</button>';
@@ -537,15 +475,14 @@ async function genToken() {
 
 function load(tab) {
   document.getElementById('loading').style.display = '';
-  if (tab === 'monitor') loadMonitor();
-  else if (tab === 'suggestions') loadSuggestions();
+  if (tab === 'suggestions') loadSuggestions();
   else if (tab === 'requests') loadRequests();
   else if (tab === 'newsletter') loadNewsletter();
   else if (tab === 'tools') loadTools();
 }
 
 // Start
-load('monitor');
+load('suggestions');
 
 // R key = reload current tab (only when not focused on an input/textarea)
 document.addEventListener('keydown', function(e) {
@@ -555,8 +492,6 @@ document.addEventListener('keydown', function(e) {
   load(curTab);
 });
 
-// Live clock tick for dots/times only (no network)
-setInterval(refreshMonitorLive, 5000);
 </script>
 </body>
 </html>

@@ -18,7 +18,6 @@ use base64::Engine;
 use serde_json::{json, Value};
 
 use crate::errors::json_resp;
-use crate::handler::get_real_ip;
 use crate::routes::auth::resolve_login_identifier;
 use crate::routes::me::account::auth_success_response;
 use crate::routes::me::security::two_factor_config;
@@ -364,7 +363,6 @@ async fn login_verify(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[
     }
     let _ = state.store.write_document(&passkeys_file, &passkeys);
 
-    let ip = get_real_ip(headers, None);
     let twofa = two_factor_config(state, &cred_email);
     if twofa.enabled {
         let temp_token = mitch_lib::totp::create_temp_token();
@@ -390,7 +388,7 @@ async fn login_verify(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[
         if let Ok(mut map) = state.pending_two_factor.lock() {
             map.insert(temp_token.clone(), rec);
         }
-        let details = json!({ "email": cred_email, "type": twofa.type_, "ip": ip }).to_string();
+        let details = json!({ "email": cred_email, "type": twofa.type_ }).to_string();
         mitch_lib::log::append_app_log(
             &state.store,
             "info",
@@ -410,7 +408,7 @@ async fn login_verify(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[
         );
     }
 
-    let details = json!({ "email": cred_email, "ip": ip }).to_string();
+    let details = json!({ "email": cred_email }).to_string();
     mitch_lib::log::append_app_log(
         &state.store,
         "info",
@@ -691,8 +689,7 @@ async fn register_verify(
 
     let _ = state.store.write_document(&passkeys_file, &passkeys);
 
-    let ip = get_real_ip(headers, None);
-    let details = json!({ "email": norm_email, "rpId": rp.0, "ip": ip }).to_string();
+    let details = json!({ "email": norm_email, "rpId": rp.0 }).to_string();
     mitch_lib::log::append_app_log(
         &state.store,
         "info",

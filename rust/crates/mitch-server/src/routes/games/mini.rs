@@ -277,11 +277,9 @@ fn piano_payout(
     if score > 500.0 {
         mitch_lib::admin::log_cheat(
             &state.store,
-            state.data_dir(),
             &email,
             "Penny's Piano Keys",
             &format!("Suspiciously high score: {score} tiles in {ms}ms"),
-            "unknown",
         );
         return json_resp(
             400,
@@ -293,14 +291,12 @@ fn piano_payout(
         if time_per_tile < 135.0 {
             mitch_lib::admin::log_cheat(
                 &state.store,
-                state.data_dir(),
                 &email,
                 "Penny's Piano Keys",
                 &format!(
                     "Impossible speed: {score} tiles in {ms}ms ({}ms/tile)",
                     time_per_tile.round()
                 ),
-                "unknown",
             );
             return json_resp(
                 400,
@@ -324,13 +320,11 @@ fn piano_payout(
     if last_ts > 0.0 && ms > 5000.0 && actual_elapsed < ms * 0.8 {
         mitch_lib::admin::log_cheat(
             &state.store,
-            state.data_dir(),
             &email,
             "Penny's Piano Keys",
             &format!(
                 "Time-travel exploit: Claimed game duration {ms}ms, but only {actual_elapsed}ms elapsed since last submission"
             ),
-            "unknown",
         );
         return json_resp(
             400,
@@ -452,11 +446,9 @@ fn piccolo_payout(
     if score > 12000.0 {
         mitch_lib::admin::log_cheat(
             &state.store,
-            state.data_dir(),
             &email,
             "Sebastian's Piccolo",
             &format!("Suspiciously high score: {score} points in {ms}ms"),
-            "unknown",
         );
         return json_resp(
             400,
@@ -470,14 +462,12 @@ fn piccolo_payout(
         if time_per_tile < 135.0 {
             mitch_lib::admin::log_cheat(
                 &state.store,
-                state.data_dir(),
                 &email,
                 "Sebastian's Piccolo",
                 &format!(
                     "Impossible speed: {score} points in {ms}ms ({}ms/tile)",
                     time_per_tile.round()
                 ),
-                "unknown",
             );
             return json_resp(
                 400,
@@ -500,13 +490,11 @@ fn piccolo_payout(
     if last_ts > 0.0 && ms > 5000.0 && actual_elapsed < ms * 0.8 {
         mitch_lib::admin::log_cheat(
             &state.store,
-            state.data_dir(),
             &email,
             "Sebastian's Piccolo",
             &format!(
                 "Time-travel exploit: Claimed game duration {ms}ms, but only {actual_elapsed}ms elapsed since last submission"
             ),
-            "unknown",
         );
         return json_resp(
             400,

@@ -314,11 +314,20 @@ pub fn set_assigned(store: &DataStore, id: &str, staff_email: &str) -> bool {
         > 0
 }
 
+/// How long a ticket keeps the keyed hash of the IP that opened it. The hash
+/// only feeds the per-IP hourly opening limit, so a day is plenty.
+pub const IP_HASH_RETENTION_MS: i64 = 86_400_000;
+
 /// Deletes resolved tickets (with their messages and requests) untouched for
-/// [`RETENTION_MS`].
+/// [`RETENTION_MS`], and clears `ip_hash` on tickets older than
+/// [`IP_HASH_RETENTION_MS`].
 pub fn prune_old(store: &DataStore, now: i64) {
     let cutoff = now - RETENTION_MS;
     let conn = store.conn();
+    let _ = conn.execute(
+        "UPDATE support_tickets SET ip_hash = '' WHERE ip_hash != '' AND created_at < ?1",
+        rusqlite::params![now - IP_HASH_RETENTION_MS],
+    );
     for sql in [
         "DELETE FROM support_messages WHERE ticket_id IN (SELECT id FROM support_tickets WHERE status = 'resolved' AND updated_at < ?1)",
         "DELETE FROM support_email_requests WHERE ticket_id IN (SELECT id FROM support_tickets WHERE status = 'resolved' AND updated_at < ?1)",
@@ -587,6 +596,8 @@ mod tests {
         add_message(&store, &id, "staff", "mod@x.test", "hi").unwrap();
         assert_eq!(messages(&store, &id).len(), 2);
         assert_eq!(count_recent_by_ip(&store, "ip", 0), 1);
+        prune_old(&store, now_millis() + IP_HASH_RETENTION_MS + 1);
+        assert_eq!(count_recent_by_ip(&store, "ip", 0), 0);
         assert!(set_status(&store, &id, "resolved"));
         assert!(!set_status(&store, &id, "bogus"));
         assert_eq!(list_tickets(&store, Some("open"), 10).len(), 0);

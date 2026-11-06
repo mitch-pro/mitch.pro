@@ -12,16 +12,15 @@ use std::collections::HashMap;
 /// `canAccessVmRecord` (vm_security.js:15-17).
 pub type VmGrantCheck<'a> = &'a (dyn Fn(&str, &Value) -> bool + 'a);
 
-/// `canAccessVmRecord(record, actor, options)` (vm_security.js:1-22). `record`
-/// /`actor` are the camelCase JSON objects; `options` mirrors the JS call
-/// shapes the routes use — `{ isAdminEmail: fn|Set|Array }` and
-/// `{ requireAdminGrant: true, isGrantAllowed: fn }` (plus the plain
-/// `isAdminEmail` function form).
+/// Who may open a VM (desktop, power): the site owner (`actor.isOwner`), the
+/// VM's own owner, or an admin (`actor.isAdmin`) for whom `is_grant_allowed`
+/// says the VM's owner has explicitly allowed staff access
+/// (`crate::vm_access`). Nobody else — there is no blanket admin access.
+/// Owner-locked VMs are rejected before this by the server
+/// (`vm_record_allowed_for_actor`), so a grant can't open them.
 pub fn can_access_vm_record(
     record: Option<&Value>,
     actor: Option<&Value>,
-    is_admin_email: impl Fn(&str) -> bool,
-    require_admin_grant: bool,
     is_grant_allowed: Option<VmGrantCheck<'_>>,
 ) -> bool {
     let (Some(record), Some(actor)) = (record, actor) else {
@@ -37,32 +36,20 @@ pub fn can_access_vm_record(
         .trim()
         .to_lowercase();
     let status = jsval::string(&jsval::or(record.get("status"), json!("")));
-    let is_owner =
-        status != "unassigned" && !owner.is_empty() && !email.is_empty() && owner == email;
-    if is_owner {
+    if status == "unassigned" || owner.is_empty() {
+        return false;
+    }
+    if !email.is_empty() && owner == email {
         return true;
     }
     let admin = actor.get("isAdmin").map(jsval::truthy).unwrap_or(false);
-    if admin {
-        let owner_is_admin = !owner.is_empty() && is_admin_email(&owner);
-        if owner_is_admin {
-            return false;
-        }
-        if require_admin_grant {
-            return match is_grant_allowed {
-                Some(f) => f(
-                    &jsval::string(&jsval::or(record.get("id"), json!(""))),
-                    record,
-                ),
-                None => record
-                    .get("adminAccessAllowed")
-                    .map(jsval::truthy)
-                    .unwrap_or(false),
-            };
-        }
-        return true;
-    }
-    false
+    admin
+        && is_grant_allowed.is_some_and(|f| {
+            f(
+                &jsval::string(&jsval::or(record.get("id"), json!(""))),
+                record,
+            )
+        })
 }
 
 /// `validateDesktopSession(session, actor, record, now, options)`
@@ -73,8 +60,6 @@ pub fn validate_desktop_session(
     actor: Option<&Value>,
     record: Option<&Value>,
     now: f64,
-    is_admin_email: impl Fn(&str) -> bool,
-    require_admin_grant: bool,
     is_grant_allowed: Option<VmGrantCheck<'_>>,
 ) -> (bool, u16, &'static str) {
     let Some(session) = session else {
@@ -131,13 +116,7 @@ pub fn validate_desktop_session(
     {
         return (false, 403, "forbidden");
     }
-    if !can_access_vm_record(
-        Some(record),
-        Some(actor),
-        is_admin_email,
-        require_admin_grant,
-        is_grant_allowed,
-    ) {
+    if !can_access_vm_record(Some(record), Some(actor), is_grant_allowed) {
         return (false, 403, "forbidden");
     }
     (true, 101, "ok")
@@ -507,80 +486,54 @@ mod tests {
         json!({ "email": email, "isAdmin": admin, "sid": "s1" })
     }
 
-    const NOT_ADMIN: fn(&str) -> bool = |_| false;
-    const IS_ADMIN: fn(&str) -> bool = |e: &str| e == "admin@mitch.pro";
-
     #[test]
     fn access_ladder() {
-        // Owner match wins even when the owner is an admin.
+        let grant = |_id: &str, _r: &Value| true;
+        let no_grant = |_id: &str, _r: &Value| false;
+        let rec = record("a@b.pro", "assigned");
+        // The VM's own owner, admin or not.
         assert!(can_access_vm_record(
-            Some(&record("a@b.pro", "assigned")),
+            Some(&rec),
             Some(&actor("a@b.pro", true)),
-            IS_ADMIN,
-            false,
-            None,
+            None
+        ));
+        assert!(can_access_vm_record(
+            Some(&rec),
+            Some(&actor("a@b.pro", false)),
+            None
         ));
         // Unassigned records never match by email.
         assert!(!can_access_vm_record(
             Some(&record("a@b.pro", "unassigned")),
             Some(&actor("a@b.pro", false)),
-            NOT_ADMIN,
-            false,
             None,
         ));
-        // Non-owner non-admin denied.
+        // Another member: never, grant or not.
         assert!(!can_access_vm_record(
-            Some(&record("a@b.pro", "assigned")),
+            Some(&rec),
             Some(&actor("c@d.pro", false)),
-            NOT_ADMIN,
-            false,
-            None,
+            Some(&grant)
         ));
-        // Admin allowed on a normal user's record.
-        assert!(can_access_vm_record(
-            Some(&record("a@b.pro", "assigned")),
-            Some(&actor("admin@mitch.pro", true)),
-            IS_ADMIN,
-            false,
-            None,
-        ));
-        // Admin denied on an admin-owned record.
+        // An admin: only with the owner's grant.
         assert!(!can_access_vm_record(
-            Some(&record("admin@mitch.pro", "assigned")),
-            Some(&actor("admin2@mitch.pro", true)),
-            IS_ADMIN,
-            false,
-            None,
-        ));
-        // System owner allowed even on an admin-owned record.
-        let mut owner_actor = actor("owner@mitch.pro", true);
-        owner_actor["isOwner"] = json!(true);
-        assert!(can_access_vm_record(
-            Some(&record("admin@mitch.pro", "assigned")),
-            Some(&owner_actor),
-            IS_ADMIN,
-            false,
-            None,
-        ));
-        // requireAdminGrant: closure form.
-        let grant = |_id: &str, _r: &Value| true;
-        assert!(can_access_vm_record(
-            Some(&record("a@b.pro", "assigned")),
+            Some(&rec),
             Some(&actor("admin@mitch.pro", true)),
-            IS_ADMIN,
-            true,
-            Some(&grant),
+            None
         ));
-        // requireAdminGrant: falls to record.adminAccessAllowed.
-        let mut rec = record("a@b.pro", "assigned");
-        rec["adminAccessAllowed"] = json!(true);
+        assert!(!can_access_vm_record(
+            Some(&rec),
+            Some(&actor("admin@mitch.pro", true)),
+            Some(&no_grant),
+        ));
         assert!(can_access_vm_record(
             Some(&rec),
             Some(&actor("admin@mitch.pro", true)),
-            IS_ADMIN,
-            true,
-            None,
+            Some(&grant),
         ));
+        // The site owner always.
+        let mut owner_actor = actor("owner@mitch.pro", true);
+        owner_actor["isOwner"] = json!(true);
+        assert!(can_access_vm_record(Some(&rec), Some(&owner_actor), None));
     }
 
     #[test]
@@ -592,39 +545,18 @@ mod tests {
         });
         let actor_v = actor("a@b.pro", false);
         let rec = record("a@b.pro", "assigned");
-        let (ok, status, code) = validate_desktop_session(
-            Some(&session),
-            Some(&actor_v),
-            Some(&rec),
-            1000.0,
-            NOT_ADMIN,
-            false,
-            None,
-        );
+        let (ok, status, code) =
+            validate_desktop_session(Some(&session), Some(&actor_v), Some(&rec), 1000.0, None);
         assert!(ok && status == 101 && code == "ok");
 
         // Expired (and used) → 401 'expired'.
-        let (ok, status, code) = validate_desktop_session(
-            Some(&session),
-            Some(&actor_v),
-            Some(&rec),
-            5000.0,
-            NOT_ADMIN,
-            false,
-            None,
-        );
+        let (ok, status, code) =
+            validate_desktop_session(Some(&session), Some(&actor_v), Some(&rec), 5000.0, None);
         assert!(!ok && status == 401 && code == "expired");
         let mut used = session.clone();
         used["used"] = json!(true);
-        let (ok, status, _) = validate_desktop_session(
-            Some(&used),
-            Some(&actor_v),
-            Some(&rec),
-            1000.0,
-            NOT_ADMIN,
-            false,
-            None,
-        );
+        let (ok, status, _) =
+            validate_desktop_session(Some(&used), Some(&actor_v), Some(&rec), 1000.0, None);
         assert!(!ok && status == 401);
 
         // sid/email mismatch → 403.
@@ -633,8 +565,6 @@ mod tests {
             Some(&actor("other@b.pro", false)),
             Some(&rec),
             1000.0,
-            NOT_ADMIN,
-            false,
             None,
         );
         assert!(!ok && status == 403 && code == "forbidden");
@@ -646,8 +576,6 @@ mod tests {
             Some(&actor_v),
             Some(&other_record),
             1000.0,
-            NOT_ADMIN,
-            false,
             None,
         );
         assert!(!ok && status == 403);
@@ -655,15 +583,8 @@ mod tests {
         // ownerEmail present + differing → 403.
         let mut session2 = session.clone();
         session2["ownerEmail"] = json!("zz@b.pro");
-        let (ok, status, _) = validate_desktop_session(
-            Some(&session2),
-            Some(&actor_v),
-            Some(&rec),
-            1000.0,
-            NOT_ADMIN,
-            false,
-            None,
-        );
+        let (ok, status, _) =
+            validate_desktop_session(Some(&session2), Some(&actor_v), Some(&rec), 1000.0, None);
         assert!(!ok && status == 403);
 
         // authSessionKey mismatch → 403.
@@ -671,27 +592,13 @@ mod tests {
         session3["authSessionKey"] = json!("k1");
         let mut actor3 = actor_v.clone();
         actor3["authSessionKey"] = json!("k2");
-        let (ok, status, _) = validate_desktop_session(
-            Some(&session3),
-            Some(&actor3),
-            Some(&rec),
-            1000.0,
-            NOT_ADMIN,
-            false,
-            None,
-        );
+        let (ok, status, _) =
+            validate_desktop_session(Some(&session3), Some(&actor3), Some(&rec), 1000.0, None);
         assert!(!ok && status == 403);
         // Matching key passes.
         actor3["authSessionKey"] = json!("k1");
-        let (ok, _, _) = validate_desktop_session(
-            Some(&session3),
-            Some(&actor3),
-            Some(&rec),
-            1000.0,
-            NOT_ADMIN,
-            false,
-            None,
-        );
+        let (ok, _, _) =
+            validate_desktop_session(Some(&session3), Some(&actor3), Some(&rec), 1000.0, None);
         assert!(ok);
     }
 

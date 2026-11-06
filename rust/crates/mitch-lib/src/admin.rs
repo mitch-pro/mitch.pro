@@ -17,59 +17,215 @@ fn now_millis() -> i64 {
         .unwrap_or(0)
 }
 
-/// `logAdminAction(actor, action, details)` — admin_actions.json, newest
-/// first via unshift, capped at 1000.
+/// `logAdminAction(actor, action, details)` — one row in the `admin_actions`
+/// table (formerly admin_actions.json): who did what, when, with what
+/// parameters. Every moderation and admin action is kept; there is no cap.
+/// Details must not include IP addresses or user agents (docs/privacy.md).
 pub fn log_admin_action(
     store: &DataStore,
-    data_dir: &Path,
+    _data_dir: &Path,
     actor: &str,
     action: &str,
     details: Value,
 ) {
-    let file = data_dir.join("admin_actions.json");
-    let logs = store
-        .read_document(&file, json!([]))
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
-    let mut next = Vec::with_capacity(logs.len() + 1);
-    next.push(json!({
-        "id": crate::crypto::random_bytes_hex(8),
-        "ts": now_millis(),
-        "actor": if actor.is_empty() { "admin" } else { actor },
-        "action": action,
-        "details": details,
-    }));
-    next.extend(logs.into_iter().take(999));
-    let _ = store.write_document(&file, &json!(next));
+    insert_admin_action(
+        store,
+        &crate::crypto::random_bytes_hex(8),
+        now_millis(),
+        if actor.is_empty() { "admin" } else { actor },
+        action,
+        &details,
+    );
 }
 
-/// `logCheat(email, game, details, ip)` — server.js:665-679. cheat_logs.json,
-/// newest first via unshift, capped at 1000.
-pub fn log_cheat(
+fn insert_admin_action(
     store: &DataStore,
-    data_dir: &Path,
-    email: &str,
-    game: &str,
-    details: &str,
-    ip: &str,
-) {
-    let file = data_dir.join("cheat_logs.json");
-    let logs = store
-        .read_document(&file, json!([]))
-        .as_array()
-        .cloned()
+    id: &str,
+    ts: i64,
+    actor: &str,
+    action: &str,
+    details: &Value,
+) -> bool {
+    let conn = store.conn();
+    conn.execute(
+        "INSERT OR IGNORE INTO admin_actions (id, ts, actor, action, details) VALUES (?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![id, ts, actor, action, details.to_string()],
+    )
+    .unwrap_or(0)
+        > 0
+}
+
+fn admin_action_rows(store: &DataStore, sql: &str, params: &[&dyn rusqlite::ToSql]) -> Vec<Value> {
+    let conn = store.conn();
+    conn.prepare(sql)
+        .and_then(|mut stmt| {
+            stmt.query_map(params, |r| {
+                let details: String = r.get(4)?;
+                Ok(json!({
+                    "id": r.get::<_, String>(0)?,
+                    "ts": r.get::<_, i64>(1)?,
+                    "actor": r.get::<_, String>(2)?,
+                    "action": r.get::<_, String>(3)?,
+                    "details": serde_json::from_str::<Value>(&details).unwrap_or_else(|_| json!({})),
+                }))
+            })
+            .map(|rows| rows.filter_map(|r| r.ok()).collect())
+        })
+        .unwrap_or_default()
+}
+
+/// Newest staff actions first, `{id, ts, actor, action, details}`.
+pub fn admin_actions_recent(store: &DataStore, limit: i64) -> Vec<Value> {
+    admin_action_rows(
+        store,
+        "SELECT id, ts, actor, action, details FROM admin_actions ORDER BY ts DESC, rowid DESC LIMIT ?1",
+        &[&limit],
+    )
+}
+
+/// Newest staff actions whose action name starts with `prefix`.
+pub fn admin_actions_with_prefix(store: &DataStore, prefix: &str, limit: i64) -> Vec<Value> {
+    let pattern = format!("{}%", prefix.replace('%', "").replace('_', "\\_"));
+    admin_action_rows(
+        store,
+        "SELECT id, ts, actor, action, details FROM admin_actions WHERE action LIKE ?1 ESCAPE '\\'
+          ORDER BY ts DESC, rowid DESC LIMIT ?2",
+        &[&pattern, &limit],
+    )
+}
+
+/// One staff action by id.
+pub fn admin_action_by_id(store: &DataStore, id: &str) -> Option<Value> {
+    admin_action_rows(
+        store,
+        "SELECT id, ts, actor, action, details FROM admin_actions WHERE id = ?1",
+        &[&id],
+    )
+    .into_iter()
+    .next()
+}
+
+/// Startup migration: moves admin_actions.json into the `admin_actions`
+/// table, dropping the staff IP / user agent older entries carried, then
+/// deletes the document. Idempotent. Returns the number imported.
+pub fn migrate_admin_actions_from_json(store: &DataStore) -> usize {
+    let file = store.data_dir().join("admin_actions.json");
+    let legacy = store.read_document(&file, Value::Null);
+    let mut imported = 0;
+    if let Some(entries) = legacy.as_array() {
+        for e in entries {
+            let mut details = e.get("details").cloned().unwrap_or_else(|| json!({}));
+            if let Some(obj) = details.as_object_mut() {
+                obj.remove("ip");
+                obj.remove("userAgent");
+            }
+            let id = e
+                .get("id")
+                .and_then(Value::as_str)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+                .unwrap_or_else(|| crate::crypto::random_bytes_hex(8));
+            let actor = e.get("actor").and_then(Value::as_str).unwrap_or("admin");
+            let action = e
+                .get("action")
+                .and_then(Value::as_str)
+                .unwrap_or("admin_action");
+            let ts = e.get("ts").and_then(Value::as_i64).unwrap_or(0);
+            if insert_admin_action(store, &id, ts, actor, action, &details) {
+                imported += 1;
+            }
+        }
+    }
+    crate::privacy::delete_document(store, &file);
+    imported
+}
+
+/// How long anti-cheat flags are kept, and the most rows kept at once.
+pub const CHEAT_LOG_RETENTION_MS: i64 = 90 * 86_400_000;
+pub const CHEAT_LOG_MAX_ROWS: i64 = 1000;
+
+/// `logCheat(email, game, details)` — one row in the `cheat_logs` table
+/// (formerly cheat_logs.json). Records which account tripped which check and
+/// why; no IP address or device details. Rows older than
+/// [`CHEAT_LOG_RETENTION_MS`] and beyond the newest [`CHEAT_LOG_MAX_ROWS`] are
+/// deleted on every write.
+pub fn log_cheat(store: &DataStore, email: &str, game: &str, details: &str) {
+    let now = now_millis();
+    let conn = store.conn();
+    let _ = conn.execute(
+        "INSERT INTO cheat_logs (ts, email, game, details) VALUES (?1, ?2, ?3, ?4)",
+        rusqlite::params![
+            now,
+            if email.is_empty() { "unknown" } else { email },
+            if game.is_empty() { "unknown" } else { game },
+            details,
+        ],
+    );
+    prune_cheat_logs(&conn, now);
+}
+
+fn prune_cheat_logs(conn: &rusqlite::Connection, now: i64) {
+    let _ = conn.execute(
+        "DELETE FROM cheat_logs WHERE ts < ?1",
+        rusqlite::params![now - CHEAT_LOG_RETENTION_MS],
+    );
+    let _ = conn.execute(
+        "DELETE FROM cheat_logs WHERE id NOT IN (SELECT id FROM cheat_logs ORDER BY ts DESC, id DESC LIMIT ?1)",
+        rusqlite::params![CHEAT_LOG_MAX_ROWS],
+    );
+}
+
+/// Newest cheat-log rows (`{email, game, details, ts}`) and the total count.
+pub fn cheat_logs_recent(store: &DataStore, limit: i64) -> (Vec<Value>, usize) {
+    let conn = store.conn();
+    let total: i64 = conn
+        .query_row("SELECT COUNT(*) FROM cheat_logs", [], |r| r.get(0))
+        .unwrap_or(0);
+    let rows = conn
+        .prepare(
+            "SELECT ts, email, game, details FROM cheat_logs ORDER BY ts DESC, id DESC LIMIT ?1",
+        )
+        .and_then(|mut stmt| {
+            stmt.query_map(rusqlite::params![limit], |r| {
+                Ok(json!({
+                    "ts": r.get::<_, i64>(0)?,
+                    "email": r.get::<_, String>(1)?,
+                    "game": r.get::<_, String>(2)?,
+                    "details": r.get::<_, String>(3)?,
+                }))
+            })
+            .map(|rows| rows.filter_map(|r| r.ok()).collect())
+        })
         .unwrap_or_default();
-    let mut next = Vec::with_capacity(logs.len() + 1);
-    next.push(json!({
-        "email": if email.is_empty() { "unknown" } else { email },
-        "game": if game.is_empty() { "unknown" } else { game },
-        "details": if details.is_empty() { "" } else { details },
-        "ts": now_millis(),
-        "ip": if ip.is_empty() { "unknown" } else { ip },
-    }));
-    next.extend(logs.into_iter().take(999));
-    let _ = store.write_document(&file, &json!(next));
+    (rows, total.max(0) as usize)
+}
+
+/// Startup migration: moves cheat_logs.json into the `cheat_logs` table,
+/// dropping the IP addresses it held, then deletes the JSON document.
+/// Returns the number of rows imported.
+pub fn migrate_cheat_logs_from_json(store: &DataStore) -> usize {
+    let file = store.data_dir().join("cheat_logs.json");
+    let legacy = store.read_document(&file, Value::Null);
+    let mut imported = 0;
+    if let Some(entries) = legacy.as_array() {
+        let conn = store.conn();
+        for e in entries {
+            let ts = e.get("ts").and_then(Value::as_i64).unwrap_or(0);
+            let text = |k: &str| e.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+            if conn
+                .execute(
+                    "INSERT INTO cheat_logs (ts, email, game, details) VALUES (?1, ?2, ?3, ?4)",
+                    rusqlite::params![ts, text("email"), text("game"), text("details")],
+                )
+                .is_ok()
+            {
+                imported += 1;
+            }
+        }
+        prune_cheat_logs(&conn, now_millis());
+    }
+    crate::privacy::delete_document(store, &file);
+    imported
 }
 
 /// `maskEmail(email)` — server.js:1352. Despite the name this is an IDENTITY
@@ -176,27 +332,13 @@ pub fn public_profile_reports(store: &DataStore, data_dir: &Path, limit: usize) 
 
 /// `buildAdvancedAdminData()` — server.js:3180-3274, the admin dashboard
 /// payload. Pure document reads (websockets not needed for any field).
-pub fn build_advanced_admin_data(store: &DataStore, data_dir: &Path) -> Value {
+/// Admin "advanced data" payload. `active_users` is the number of accounts
+/// online right now, from the server's in-memory presence. It's a count only:
+/// staff don't get a list of who is online or what they are doing.
+pub fn build_advanced_admin_data(store: &DataStore, data_dir: &Path, active_users: usize) -> Value {
     let now = now_millis();
 
-    let admin_actions_raw = store
-        .read_document(&data_dir.join("admin_actions.json"), json!([]))
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
-    let admin_actions: Vec<Value> = admin_actions_raw
-        .iter()
-        .take(250)
-        .map(|entry| {
-            json!({
-                "id": entry.get("id").map(|v| v.as_str().unwrap_or("").to_string()).unwrap_or_default(),
-                "ts": entry.get("ts").and_then(|v| v.as_i64()).unwrap_or(0),
-                "actor": entry.get("actor").and_then(|v| v.as_str()).unwrap_or("admin"),
-                "action": entry.get("action").and_then(|v| v.as_str()).unwrap_or("admin_action"),
-                "details": entry.get("details").cloned().unwrap_or(json!({})),
-            })
-        })
-        .collect();
+    let admin_actions = admin_actions_recent(store, 250);
 
     let chat_reports_raw = store
         .read_document(&data_dir.join("chat_reports.json"), json!([]))
@@ -254,23 +396,6 @@ pub fn build_advanced_admin_data(store: &DataStore, data_dir: &Path) -> Value {
             .cmp(&a.get("ts").and_then(|v| v.as_i64()).unwrap_or(0))
     });
 
-    let user_stats = crate::user_stats::user_stats_all(store);
-    let active_users: Vec<Value> = user_stats
-        .as_object()
-        .map(|m| {
-            let mut rows: Vec<(i64, Value)> = m
-                .iter()
-                .filter_map(|(email, info)| {
-                    let last = info.get("last_active_at").and_then(|v| v.as_i64())?;
-                    (last > 0 && now - last < 2 * 60 * 1000)
-                        .then(|| (last, json!({ "email": email, "lastActiveAt": last })))
-                })
-                .collect();
-            rows.sort_by_key(|a| std::cmp::Reverse(a.0));
-            rows.into_iter().take(50).map(|(_, v)| v).collect()
-        })
-        .unwrap_or_default();
-
     let mut banned_accounts: Vec<Value> = crate::bans::blacklist_all(store);
     banned_accounts.sort_by(|a, b| {
         b.get("bannedAt")
@@ -289,16 +414,7 @@ pub fn build_advanced_admin_data(store: &DataStore, data_dir: &Path) -> Value {
         });
         sorted.into_iter().take(250).collect()
     };
-    let cheat_logs: Vec<Value> = store
-        .read_document(&data_dir.join("cheat_logs.json"), json!([]))
-        .as_array()
-        .map(|a| a.iter().take(250).cloned().collect())
-        .unwrap_or_default();
-    let cheat_logs_count = store
-        .read_document(&data_dir.join("cheat_logs.json"), json!([]))
-        .as_array()
-        .map(|a| a.len())
-        .unwrap_or(0);
+    let (cheat_logs, cheat_logs_count) = cheat_logs_recent(store, 250);
     let coin_logs = crate::coins::read_coin_log(data_dir, 250);
 
     json!({
@@ -314,8 +430,7 @@ pub fn build_advanced_admin_data(store: &DataStore, data_dir: &Path) -> Value {
             "profileReports": profile_reports.len(),
             "sentNotifications": sent_notifications.len(),
             "bannedAccounts": banned_accounts.len(),
-            "activeUsers": active_users.len(),
-            "cheatLogs": cheat_logs_count,
+                "cheatLogs": cheat_logs_count,
             "coinLogs": coin_logs.len(),
         },
         "activeUsers": active_users,
@@ -750,18 +865,30 @@ mod tests {
     }
 
     #[test]
-    fn log_admin_action_unshifts_and_caps() {
+    fn admin_actions_are_kept_in_a_table_and_migrated_from_json() {
         let (base, data, store) = temp_store("log");
-        // Seed the cap boundary directly (a 1005-iteration loop costs ~35s on
-        // a slow-disk dev box for the same assertion).
-        let seeded: Vec<Value> = (100..1100)
-            .rev()
-            .map(|i| json!({ "id": i.to_string(), "ts": i, "actor": "a", "action": "x", "details": {} }))
-            .collect();
         store
-            .write_document(&data.join("admin_actions.json"), &json!(seeded))
+            .write_document(
+                &data.join("admin_actions.json"),
+                &json!([
+                    { "id": "old1", "ts": 10, "actor": "a@x", "action": "matrix_ban_user",
+                      "details": { "target": "t", "ip": "198.51.100.3", "userAgent": "UA" } },
+                    { "id": "old2", "ts": 5, "actor": "a@x", "action": "ban_account", "details": {} }
+                ]),
+            )
             .unwrap();
-        for i in 0..5 {
+        assert_eq!(migrate_admin_actions_from_json(&store), 2);
+        assert_eq!(migrate_admin_actions_from_json(&store), 0);
+        assert!(store
+            .read_document(&data.join("admin_actions.json"), Value::Null)
+            .is_null());
+        assert_eq!(
+            admin_action_by_id(&store, "old1").unwrap()["details"],
+            json!({ "target": "t" })
+        );
+
+        // No cap: every action is kept.
+        for i in 0..1005 {
             log_admin_action(
                 &store,
                 &data,
@@ -770,25 +897,12 @@ mod tests {
                 json!({ "i": i }),
             );
         }
-        let logs = store
-            .read_document(&base.join("data/admin_actions.json"), json!([]))
-            .as_array()
-            .unwrap()
-            .clone();
-        assert_eq!(logs.len(), 1000);
-        assert_eq!(
-            logs[0]
-                .get("details")
-                .and_then(|d| d.get("i"))
-                .and_then(|v| v.as_i64()),
-            Some(4)
-        );
-        assert_eq!(
-            logs[0].get("actor").and_then(|v| v.as_str()),
-            Some("admin@mitch.pro")
-        );
-        // The five oldest seeded entries (ts 100-104) are dropped by the cap.
-        assert_eq!(logs[999].get("ts").and_then(|v| v.as_i64()), Some(105));
+        let recent = admin_actions_recent(&store, 5000);
+        assert_eq!(recent.len(), 1007);
+        assert_eq!(recent[0]["actor"], "admin@mitch.pro");
+        let matrix = admin_actions_with_prefix(&store, "matrix_", 10);
+        assert_eq!(matrix.len(), 1);
+        assert_eq!(matrix[0]["id"], "old1");
         std::fs::remove_dir_all(base).ok();
     }
 
@@ -858,7 +972,7 @@ mod tests {
             "",
         );
         crate::coins::add_coins(&store, &data, "user@mitch.pro", 10.0, 1.0, "daily login");
-        let advanced = build_advanced_admin_data(&store, &data);
+        let advanced = build_advanced_admin_data(&store, &data, 0);
         assert_eq!(
             advanced
                 .get("stats")

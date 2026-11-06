@@ -100,7 +100,7 @@ The production desktop allowlist is `PROXMOX_DESKTOP_TEMPLATES=9011,9010`, with 
 
 New user computers get a random guest password. Website authentication opens the console, the guest signs in automatically, and sudo works without a second password. Custom OS installers retain their own account setup. Repair desktop applies the same configuration to existing managed Linux computers, preserves active desktop sessions, and checks that a graphical session actually starts. It also installs missing video decoders. A failed repair remains visible and can be retried; it does not block the console. Opening or reconnecting the console does not restart or reconfigure the guest display manager.
 
-Authenticated administrators can open and manage all registered computers, including those belonging to other administrators. Owner approval and owner notifications have been removed. Administrative operations remain recorded in the internal VM audit log. Ordinary accounts can only access their assigned computers. Desktop tickets remain single-use and bound to the account, session, VM, node, and ownership; account bans close connected consoles.
+A computer can be opened (desktop, power controls) only by its owner and the site owner. Site admins and co-owners can open someone else's computer only while that owner has explicitly allowed it from their Computers page; the permission lasts 24 hours and the owner is notified when an admin opens the desktop. See [vm-access.md](vm-access.md). Admins still manage the fleet from `/admin/vms/` (assign, unassign, resources, restrictions, delete) without opening the computer. Administrative operations are recorded in the VM audit log. Desktop tickets remain single-use and bound to the account, session, VM, node, and ownership; account bans close connected consoles.
 
 To build another image, use a dedicated VM in the 9000–9999 range, apply `rust/crates/mitch-server/guest/desktop-setup.sh` with a temporary build username, verify the desktop and video playback, then run `tools/seal-managed-desktop-template.sh <vmid> <build-user>` on the Proxmox host. The sealer removes the temporary user, credentials and SSH host keys, cleans cloud-init/machine identity, and converts the stopped VM into a template. Validate a fresh clone with a different username before changing the allowlist. Do not edit a template disk used by linked clones.
 
@@ -218,7 +218,7 @@ real student. `is_vm_owner_locked` (the single shared check behind every
 "can an admin touch this VM" gate — desktop access, reassign, unassign,
 delete, resource edits) treats its VM exactly like a primary owner's own
 VM: only a real owner, or that account's own session, can touch it; no
-co-owner or other admin can, unlike every other VM on the site. It's also
+co-owner or other admin can, and an "allow admins" grant is never honored. It's also
 excluded from the leaderboard (`ranked_players`), the same way tester
 accounts are.
 

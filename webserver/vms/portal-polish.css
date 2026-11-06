@@ -207,3 +207,6 @@ body.computer-portal .computer-card:only-child {grid-column:1/-1;max-width:760px
 
 .confirm-dialog .confirm-note { width: 100%; box-sizing: border-box; margin-top: 14px; padding: 10px 12px; border: 1px solid var(--t-bd); border-radius: 9px; background: var(--t-bg); color: var(--t-fg); font: inherit; resize: vertical; }
 .confirm-dialog .confirm-note:focus-visible { outline: 2px solid var(--t-ac); outline-offset: 1px; }
+
+/* Owner-controlled admin access (docs/vm-access.md) */
+body.computer-portal .admin-access-status { margin: 6px 0 0; color: var(--t-fg2); font-size: .9rem; }

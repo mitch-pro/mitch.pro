@@ -539,8 +539,6 @@ mod tests {
             &state.id_secret,
             &normalize_email(email),
             email,
-            "",
-            "",
             false,
         );
         let mut headers = HeaderMap::new();

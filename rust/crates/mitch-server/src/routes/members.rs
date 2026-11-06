@@ -198,7 +198,16 @@ fn members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         let presence = presence_map.get(&norm).cloned().unwrap_or_default();
         let public_status = if presence.online { "online" } else { "offline" };
         member.insert("online".into(), json!(presence.online));
-        member.insert("lastActive".into(), json!(presence.last_active));
+        // Interaction recency is activity: only the member, friends and admins
+        // see it. Everyone else gets online/offline only (docs/presence.md).
+        member.insert(
+            "lastActive".into(),
+            json!(if can_view_activity {
+                presence.last_active
+            } else {
+                0
+            }),
+        );
         member.insert(
             "playing".into(),
             json!(if can_view_activity {
@@ -1168,15 +1177,8 @@ mod tests {
         let state = Arc::new(AppState::new(cfg, store));
 
         let mk_user = |email: &str| -> String {
-            let sess = auth::create_auth_session(
-                &state.store,
-                &state.id_secret,
-                email,
-                email,
-                "test",
-                "127.0.0.1",
-                false,
-            );
+            let sess =
+                auth::create_auth_session(&state.store, &state.id_secret, email, email, false);
             mitch_lib::tokens::token_set(
                 &state.store,
                 &sess.sid,
@@ -1246,6 +1248,7 @@ mod tests {
         assert_eq!(as_bob["playing"], json!(""));
         assert_eq!(as_bob["status"], json!("online"));
         assert_eq!(as_bob["lastSeen"], json!(0));
+        assert_eq!(as_bob["lastActive"], json!(0));
 
         // Friend sees page, activity, playing, and away status.
         let as_carol = parse_alice(fetch_alice_as(&carol_tok));

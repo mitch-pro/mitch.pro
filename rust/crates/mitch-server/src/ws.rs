@@ -99,11 +99,9 @@ pub fn is_user_present(state: &Arc<AppState>, email: &str, now: i64) -> bool {
     crate::presence::current(state, email, now).online
 }
 
+/// Number of accounts online, including hide-online members (count only).
 pub fn active_user_count(state: &Arc<AppState>, now: i64) -> usize {
-    crate::presence::snapshot(state, now)
-        .values()
-        .filter(|view| view.online)
-        .count()
+    crate::presence::online_count(state, now)
 }
 
 /// Invalidate People and Friends for every authenticated viewer.

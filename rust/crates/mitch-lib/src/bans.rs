@@ -7,6 +7,13 @@
 //! email try both the normalized form and the raw lowercased form, since
 //! legacy blob entries were keyed inconsistently (some normalized, some
 //! not) and existing rows are carried over as-is rather than rekeyed.
+//!
+//! IP bans are explicit network bans only. The `banned_ips.ip` column holds
+//! [`ip_ban_key`] — a keyed HMAC of the address, never the raw IP — so the
+//! table can answer "is this address banned?" without keeping a list of
+//! addresses. Rows that older code wrote alongside an account ban (non-empty
+//! `email`) were never enforced and are deleted on startup by
+//! `crate::privacy::run_startup_cleanup`, which also rehashes any raw rows.
 
 use crate::data::DataStore;
 use rusqlite::OptionalExtension;
@@ -234,77 +241,88 @@ pub fn submit_appeal(
     tx.commit()
 }
 
-/// Bans (or re-bans) one IP, optionally associated with the account whose
-/// ban triggered it.
-pub fn banned_ips_insert(store: &DataStore, ip: &str, reason: &str, banned_by: &str, email: &str) {
+/// The stored form of an IP in `banned_ips.ip`: `h:` + HMAC-SHA256 hex of the
+/// address under the server's ID secret. Equality lookups still work; the
+/// raw address cannot be read back out of the table.
+pub fn ip_ban_key(secret: &[u8], ip: &str) -> String {
+    format!(
+        "h:{}",
+        crate::crypto::hmac_sha256_hex(secret, format!("banned-ip:{}", ip.trim()).as_bytes())
+    )
+}
+
+/// Bans (or re-bans) one network address.
+pub fn banned_ips_insert(
+    store: &DataStore,
+    secret: &[u8],
+    ip: &str,
+    reason: &str,
+    banned_by: &str,
+) {
     let conn = store.conn();
     let _ = conn.execute(
-        "INSERT INTO banned_ips (ip, reason, banned_at, banned_by, email) VALUES (?1, ?2, ?3, ?4, ?5)
-         ON CONFLICT(ip) DO UPDATE SET reason = ?2, banned_at = ?3, banned_by = ?4, email = ?5",
-        rusqlite::params![ip, reason, now_millis(), banned_by, email],
+        "INSERT INTO banned_ips (ip, reason, banned_at, banned_by, email) VALUES (?1, ?2, ?3, ?4, '')
+         ON CONFLICT(ip) DO UPDATE SET reason = ?2, banned_at = ?3, banned_by = ?4, email = ''",
+        rusqlite::params![ip_ban_key(secret, ip), reason, now_millis(), banned_by],
     );
 }
 
-pub fn banned_ips_remove(store: &DataStore, ip: &str) -> bool {
+pub fn banned_ips_remove(store: &DataStore, secret: &[u8], ip: &str) -> bool {
     let conn = store.conn();
     conn.execute(
         "DELETE FROM banned_ips WHERE ip = ?1",
-        rusqlite::params![ip],
+        rusqlite::params![ip_ban_key(secret, ip)],
     )
     .unwrap_or(0)
         > 0
 }
 
-/// Remove account-linked restrictions while preserving independent network bans.
-pub fn banned_ips_remove_for_account(
-    store: &DataStore,
-    norm_email: &str,
-    raw_email: &str,
-    _last_known_ip: Option<&str>,
-) -> Vec<String> {
-    let conn = store.conn();
-    let mut stmt = match conn.prepare("SELECT ip, email FROM banned_ips") {
-        Ok(s) => s,
-        Err(_) => return Vec::new(),
-    };
-    let rows: Vec<(String, String)> =
-        match stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))) {
-            Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
-            Err(_) => return Vec::new(),
-        };
-    let to_remove: Vec<String> = rows
-        .into_iter()
-        .filter(|(_, email)| {
-            !email.is_empty()
-                && (crate::auth::normalize_email(email) == crate::auth::normalize_email(norm_email)
-                    || email == raw_email)
-        })
-        .map(|(ip, _)| ip)
-        .collect();
-    for ip in &to_remove {
-        let _ = conn.execute(
-            "DELETE FROM banned_ips WHERE ip = ?1",
-            rusqlite::params![ip],
-        );
-    }
-    to_remove
-}
-
 /// `{ "reason": ..., "by": ... }` for the given IP, or `None` if not banned.
-pub fn banned_ips_get(store: &DataStore, ip: &str) -> Option<Value> {
+pub fn banned_ips_get(store: &DataStore, secret: &[u8], ip: &str) -> Option<Value> {
     let conn = store.conn();
     conn.query_row(
-        "SELECT reason, banned_by, email FROM banned_ips WHERE ip = ?1",
-        rusqlite::params![ip],
+        "SELECT reason, banned_by FROM banned_ips WHERE ip = ?1 AND email = ''",
+        rusqlite::params![ip_ban_key(secret, ip)],
         |r| {
             Ok(json!({
                 "reason": r.get::<_, String>(0)?,
                 "by": r.get::<_, String>(1)?,
-                "email": r.get::<_, String>(2)?,
             }))
         },
     )
     .ok()
+}
+
+/// Startup migration: deletes account-linked rows (never enforced) and
+/// replaces any raw-IP keys with [`ip_ban_key`]. Idempotent. Returns
+/// `(deleted, rehashed)`.
+pub fn hash_legacy_banned_ips(store: &DataStore, secret: &[u8]) -> (usize, usize) {
+    let conn = store.conn();
+    let deleted = conn
+        .execute("DELETE FROM banned_ips WHERE email != ''", [])
+        .unwrap_or(0);
+    let raw: Vec<String> = conn
+        .prepare("SELECT ip FROM banned_ips WHERE ip NOT LIKE 'h:%'")
+        .and_then(|mut stmt| {
+            stmt.query_map([], |r| r.get::<_, String>(0))
+                .map(|rows| rows.filter_map(|r| r.ok()).collect())
+        })
+        .unwrap_or_default();
+    let mut rehashed = 0;
+    for ip in raw {
+        let key = ip_ban_key(secret, &ip);
+        // Keep an already-hashed row for the same address; drop the raw one.
+        let _ = conn.execute(
+            "UPDATE OR IGNORE banned_ips SET ip = ?1 WHERE ip = ?2",
+            rusqlite::params![key, ip],
+        );
+        let _ = conn.execute(
+            "DELETE FROM banned_ips WHERE ip = ?1",
+            rusqlite::params![ip],
+        );
+        rehashed += 1;
+    }
+    (deleted, rehashed)
 }
 
 #[cfg(test)]
@@ -483,19 +501,35 @@ mod tests {
         assert!(crate::auth::banned_info_for_email(&store, "unrelated@example.com").is_some());
     }
 
+    const SECRET: &[u8] = b"test-secret";
+
     #[test]
-    fn account_linked_ips_do_not_block_other_people_on_the_network() {
-        let store = temp_store("shared-network");
-        banned_ips_insert(
-            &store,
-            "192.0.2.1",
-            "old automatic ban",
-            "admin",
-            "person@example.com",
-        );
-        assert!(crate::auth::banned_info_for_ip(&store, "192.0.2.1").is_none());
-        banned_ips_insert(&store, "192.0.2.2", "explicit network ban", "admin", "");
-        assert!(crate::auth::banned_info_for_ip(&store, "192.0.2.2").is_some());
+    fn legacy_ip_rows_are_hashed_and_account_linked_rows_deleted() {
+        let store = temp_store("ip-migrate");
+        {
+            let conn = store.conn();
+            conn.execute(
+                "INSERT INTO banned_ips (ip, reason, banned_at, banned_by, email) VALUES
+                 ('192.0.2.1', 'old automatic ban', 1, 'admin', 'person@example.com'),
+                 ('192.0.2.2', 'explicit network ban', 1, 'admin', '')",
+                [],
+            )
+            .unwrap();
+        }
+        assert_eq!(hash_legacy_banned_ips(&store, SECRET), (1, 1));
+        assert_eq!(hash_legacy_banned_ips(&store, SECRET), (0, 0));
+        let keys: Vec<String> = store
+            .conn()
+            .prepare("SELECT ip FROM banned_ips")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+        assert_eq!(keys, vec![ip_ban_key(SECRET, "192.0.2.2")]);
+        assert!(!keys[0].contains("192.0.2"));
+        assert!(crate::auth::banned_info_for_ip(&store, SECRET, "192.0.2.2").is_some());
+        assert!(crate::auth::banned_info_for_ip(&store, SECRET, "192.0.2.1").is_none());
     }
 
     #[test]
@@ -509,34 +543,16 @@ mod tests {
     #[test]
     fn banned_ips_insert_then_get_then_remove() {
         let store = temp_store("ip-basic");
-        banned_ips_insert(
-            &store,
-            "1.2.3.4",
-            "abuse",
-            "admin@mitch.pro",
-            "person@gmail.com",
-        );
-        let entry = banned_ips_get(&store, "1.2.3.4").unwrap();
+        banned_ips_insert(&store, SECRET, "1.2.3.4", "abuse", "admin@mitch.pro");
+        let entry = banned_ips_get(&store, SECRET, "1.2.3.4").unwrap();
         assert_eq!(entry.get("reason").unwrap(), "abuse");
-        assert!(banned_ips_remove(&store, "1.2.3.4"));
-        assert!(banned_ips_get(&store, "1.2.3.4").is_none());
-    }
-
-    #[test]
-    fn account_restore_preserves_unrelated_network_bans() {
-        let store = temp_store("ip-sweep");
-        banned_ips_insert(&store, "1.1.1.1", "r1", "admin", "person@gmail.com");
-        banned_ips_insert(&store, "2.2.2.2", "r2", "admin", "");
-        banned_ips_insert(&store, "3.3.3.3", "r3", "admin", "other@gmail.com");
-        let removed = banned_ips_remove_for_account(
-            &store,
-            "person@gmail.com",
-            "person@gmail.com",
-            Some("2.2.2.2"),
-        );
-        assert_eq!(removed.len(), 1);
-        assert!(banned_ips_get(&store, "1.1.1.1").is_none());
-        assert!(banned_ips_get(&store, "2.2.2.2").is_some());
-        assert!(banned_ips_get(&store, "3.3.3.3").is_some());
+        let stored: String = store
+            .conn()
+            .query_row("SELECT ip FROM banned_ips", [], |r| r.get(0))
+            .unwrap();
+        assert!(!stored.contains("1.2.3.4"));
+        assert!(banned_ips_get(&store, b"other-secret", "1.2.3.4").is_none());
+        assert!(banned_ips_remove(&store, SECRET, "1.2.3.4"));
+        assert!(banned_ips_get(&store, SECRET, "1.2.3.4").is_none());
     }
 }

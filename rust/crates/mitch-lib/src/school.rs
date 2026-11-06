@@ -1,13 +1,9 @@
-//! School-hour helpers (server.js:25289-25387) — the Happy Hour computation
-//! over session-log history, bucketed by America/Los_Angeles wall time.
+//! School-day time helpers bucketed by America/Los_Angeles wall time.
 //!
 //! The LA offset is derived from the US Pacific DST rule (PST −8 / PDT −7),
 //! decided on the UTC timeline so both transition instants and the
 //! fall-back ambiguous hour resolve exactly as ICU does — no tz database
 //! dependency.
-
-use crate::data::DataStore;
-use serde_json::{json, Value};
 
 /// Days since 1970-01-01 for a civil date (Howard Hinnant's algorithm).
 fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
@@ -107,114 +103,6 @@ pub fn format_school_hour(hour: i64) -> String {
     format!("{start_hour}:00 {start_ampm} - {end_hour}:00 {end_ampm} PDT")
 }
 
-/// `getLeastUsedSchoolHourSevenDays(logs)` (server.js:25289-25324).
-pub fn get_least_used_school_hour_seven_days(logs: &Value, now_ms: i64) -> i64 {
-    let mut counts: [i64; 15] = [0; 15];
-    let one_week_ago = now_ms - 7 * 24 * 3600 * 1000;
-    let mut total = 0i64;
-    if let Some(arr) = logs.as_array() {
-        for log in arr {
-            let Some(ts) = log.get("timestamp").and_then(parse_js_timestamp) else {
-                continue;
-            };
-            if ts == 0 || ts < one_week_ago {
-                continue;
-            }
-            let (_, _, _, hour, wd, _) = la_local_parts(ts);
-            if (1..=5).contains(&wd) && (8..=14).contains(&hour) {
-                counts[hour as usize] += 1;
-                total += 1;
-            }
-        }
-    }
-    if total > 0 {
-        least_hour_of(&counts)
-    } else {
-        12
-    }
-}
-
-/// `getLeastUsedSchoolHour()` (server.js:25325-25378) — yesterday's LA
-/// calendar day, falling back to the 7-day window.
-pub fn get_least_used_school_hour(
-    store: &DataStore,
-    data_dir: &std::path::Path,
-    now_ms: i64,
-) -> i64 {
-    let logs = store.read_document(&data_dir.join("sessions.json"), json!([]));
-    let yesterday_start = la_local_day_start(now_ms) - 86_400_000;
-    let (yy, ym, yd, _, _, _) = la_local_parts(yesterday_start);
-
-    let mut counts: [i64; 15] = [0; 15];
-    let mut total = 0i64;
-    if let Some(arr) = logs.as_array() {
-        for log in arr {
-            let Some(ts) = log.get("timestamp").and_then(parse_js_timestamp) else {
-                continue;
-            };
-            if ts == 0 {
-                continue;
-            }
-            let (ly, lm, ld, hour, _wd, _) = la_local_parts(ts);
-            if ly == yy && lm == ym && ld == yd && (8..=14).contains(&hour) {
-                counts[hour as usize] += 1;
-                total += 1;
-            }
-        }
-    }
-    if total > 0 {
-        least_hour_of(&counts)
-    } else {
-        get_least_used_school_hour_seven_days(&logs, now_ms)
-    }
-}
-
-/// Start of the current LA calendar day, in Unix ms.
-fn la_local_day_start(now_ms: i64) -> i64 {
-    let offset_hours = if pacific_dst_active_at_ms(now_ms) {
-        7
-    } else {
-        8
-    };
-    let local = now_ms - offset_hours * 3_600_000;
-    local - local.rem_euclid(86_400_000) + offset_hours * 3_600_000
-}
-
-fn least_hour_of(counts: &[i64; 15]) -> i64 {
-    let mut least = 12i64;
-    let mut min = i64::MAX;
-    for (h, &count) in counts.iter().enumerate().skip(8).take(7) {
-        if count < min {
-            min = count;
-            least = h as i64;
-        }
-    }
-    least
-}
-
-/// `new Date(log.timestamp).getTime()` — ISO-8601 (…Z) strings as the
-/// session log stores via `new Date().toISOString()`; None on failure.
-fn parse_js_timestamp(v: &serde_json::Value) -> Option<i64> {
-    let s = v.as_str()?.trim();
-    let b = s.as_bytes();
-    if b.len() < 19 {
-        return None;
-    }
-    let y: i64 = s.get(0..4)?.parse().ok()?;
-    let mo: i64 = s.get(5..7)?.parse().ok()?;
-    let d: i64 = s.get(8..10)?.parse().ok()?;
-    let h: i64 = s.get(11..13)?.parse().ok()?;
-    let mi: i64 = s.get(14..16)?.parse().ok()?;
-    let sec: i64 = s.get(17..19)?.parse().ok()?;
-    let millis: i64 = if b.len() >= 23 && b[19] == b'.' {
-        s.get(20..23)?.parse().ok()?
-    } else {
-        0
-    };
-    let days = days_from_civil(y, mo, d);
-    Some((days * 86_400 + h * 3600 + mi * 60 + sec) * 1000 + millis)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -262,19 +150,6 @@ mod tests {
         assert_eq!(format_school_hour(8), "8:00 AM - 9:00 AM PDT");
         assert_eq!(format_school_hour(11), "11:00 AM - 12:00 PM PDT");
         assert_eq!(format_school_hour(14), "2:00 PM - 3:00 PM PDT");
-    }
-
-    #[test]
-    fn parses_iso_timestamps() {
-        assert_eq!(
-            parse_js_timestamp(&json!("2026-09-13T12:34:56.789Z")),
-            Some(1789302896789)
-        );
-        assert_eq!(
-            parse_js_timestamp(&json!("2026-09-13T12:34:56Z")).unwrap() % 1000,
-            0
-        );
-        assert_eq!(parse_js_timestamp(&json!("garbage")), None);
     }
 
     /// Values captured from `Intl.DateTimeFormat` with

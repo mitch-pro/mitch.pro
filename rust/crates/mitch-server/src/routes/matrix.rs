@@ -4586,19 +4586,8 @@ pub fn load_matrix_audit_log(
     data_dir: &std::path::Path,
     limit: usize,
 ) -> Vec<Value> {
-    let actions = store
-        .read_document(&data_dir.join("admin_actions.json"), json!([]))
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
-    actions
-        .into_iter()
-        .filter(|entry| {
-            let act = entry.get("action").and_then(|v| v.as_str()).unwrap_or("");
-            act.starts_with("matrix_")
-        })
-        .take(limit)
-        .collect()
+    let _ = data_dir;
+    mitch_lib::admin::admin_actions_with_prefix(store, "matrix_", limit as i64)
 }
 
 fn mod_audit_log_get(state: &AppState, headers: &HeaderMap) -> Response {
@@ -5492,15 +5481,6 @@ async fn mod_unban(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> 
                     &state.cfg.base_dir.join("data/shadow_bans.json"),
                     &json!(arr),
                 );
-            }
-        }
-
-        let last_known = state
-            .store
-            .read_document(&state.cfg.data_dir.join("last_known_ips.json"), json!({}));
-        if let Some(target_ip) = last_known.get(email.as_str()).and_then(|v| v.as_str()) {
-            if !mitch_lib::auth::WHITELISTED_IPS.contains(&target_ip) {
-                mitch_lib::bans::banned_ips_remove(&state.store, target_ip);
             }
         }
     }
@@ -9486,8 +9466,6 @@ mod tests {
             &state.id_secret,
             "admin@mitch.pro",
             "admin@mitch.pro",
-            "test",
-            "127.0.0.1",
             false,
         );
         let mut headers = HeaderMap::new();
@@ -9657,8 +9635,6 @@ mod tests {
             &state.id_secret,
             mod_email,
             mod_email,
-            "test",
-            "127.0.0.1",
             false,
         );
         let _ = state.store.write_document(
@@ -9706,8 +9682,6 @@ mod tests {
             &state.id_secret,
             admin_email,
             admin_email,
-            "test",
-            "127.0.0.1",
             false,
         );
         let _ = state.store.write_document(

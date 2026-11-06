@@ -9,11 +9,14 @@
 	var App=typeof App==='undefined'?0:App;
 	var PRESETMODS=[];
 	var LOCAL=(App || !window.location.hostname || window.location.hostname==='localhost' || window.location.hostname==='127.0.0.1');
+	// mitch.pro: the upstream page's ads, Facebook Pixel and cookie banner
+	// load only when this is true. Keep it false (docs/privacy.md).
+	var THIRD_PARTY=false;
 </script>
 
 <!-- external -->
 <script type="text/javascript">
-	if (!LOCAL)
+	if (!LOCAL && THIRD_PARTY)
 	{
 		window.cookieconsent_options={"message":"Unsurprisingly, this website uses cookies for ads and traffic analysis.","dismiss":"Got it!","learnMore":"Learn more","link":"//orteil.dashnet.org/cookieconsentpolicy.html","target":"_blank","theme":"//orteil.dashnet.org/cookieconsent.css","domain":"dashnet.org"};
 		
@@ -28,7 +31,7 @@
 
 <!-- Facebook Pixel Code -->
 	<script>
-	if (!LOCAL)
+	if (!LOCAL && THIRD_PARTY)
 	{
 		!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
 		n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
@@ -39,8 +42,6 @@
 		fbq('track', 'PageView');
 	}
 	</script>
-	<noscript><img height="1" width="1" style="display:none"
-	src="https://www.facebook.com/tr?id=357399801355203&ev=PageView&noscript=1"></noscript>
 <!-- end code -->
 <!-- /external -->
 
@@ -57,27 +58,18 @@ Feel free to alter this code to your liking, but please do not re-host it, do no
 <link href="style.css?v=10c" rel="stylesheet" type="text/css">
 <script src="main.js?v=13g"></script>
 
-<!-- ad -->
+<!-- ad: Google AdSense is not loaded here (no third-party trackers on site
+     pages, docs/privacy.md). The stub keeps the game's ad-slot code working. -->
 <script type="text/javascript">
-	if (LOCAL)
-	{
-		adsbygoogle=window.adsbygoogle={
-			enabled:true,
-			loaded:true,
-			push:function(){return;},
-			google_ad_client:"",
-			enable_page_level_ads:true
-		}
+	adsbygoogle=window.adsbygoogle={
+		enabled:true,
+		loaded:true,
+		push:function(){return;},
+		google_ad_client:"",
+		enable_page_level_ads:true
 	}
 </script>
 <script src="showads.js"></script><!-- this just detects adblockers so we can adjust the layout and play nice -->
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
-<script>
-     (adsbygoogle = window.adsbygoogle || []).push({
-          google_ad_client: "ca-pub-5622691057838054",
-          enable_page_level_ads: true
-     });
-</script>
 <!-- /ad -->
 
 <!--[if IE]>
@@ -238,7 +230,7 @@ Feel free to alter this code to your liking, but please do not re-host it, do no
 				</script>
 				
 				<script>
-				if (!LOCAL)
+				if (!LOCAL && THIRD_PARTY)
 				{
 					document.addEventListener('DOMContentLoaded',function(){
 						setTimeout(function(){
@@ -284,7 +276,7 @@ Feel free to alter this code to your liking, but please do not re-host it, do no
 						</script>
 				
 						<script>
-						if (!LOCAL)
+						if (!LOCAL && THIRD_PARTY)
 						{
 							document.addEventListener('DOMContentLoaded',function(){
 								setTimeout(function(){
@@ -308,7 +300,7 @@ Feel free to alter this code to your liking, but please do not re-host it, do no
 						<div id="adAQ"></div>
 						
 						<script>
-						if (!LOCAL)
+						if (!LOCAL && THIRD_PARTY)
 						{
 							document.addEventListener('DOMContentLoaded',function(){
 								<!-- Playsaurus banner -->

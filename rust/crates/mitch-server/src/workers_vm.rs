@@ -6,7 +6,8 @@
 //! - `enforceVmMaxUptimeWorker` (server.js:27874-27986) — every 15s
 //! - `cleanupVmDesktopSessions` (server.js:12169, 27863) — every 5s + on boot
 //! - Boot sequence:
-//!   1. `prune_old_vm_usage_samples(&state.store, 30)`
+//!   1. `prune_old_vm_usage_samples(&state.store, 30)` and
+//!      `prune_old_vm_audit_logs(&state.store, 180)`
 //!   2. `migrate_legacy_vm_ownership(&state)`
 //!   3. `init_portal_ssh_key(data_dir)`
 //!   4. `cleanup_all_ephemeral_vms(&state)`
@@ -603,6 +604,7 @@ async fn cleanup_all_ephemeral_vms(state: &Arc<AppState>) {
 pub fn spawn(state: Arc<AppState>) {
     // 1. Boot-time database & legacy migration
     vmlib::prune_old_vm_usage_samples(&state.store, 30.0);
+    vmlib::prune_old_vm_audit_logs(&state.store, vmlib::VM_AUDIT_RETENTION_DAYS);
     crate::routes::vm::migrate_legacy_vm_ownership(&state);
     init_portal_ssh_key(state.data_dir());
 

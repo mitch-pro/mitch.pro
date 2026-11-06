@@ -831,6 +831,21 @@ pub fn get_vm_usage_timeline(store: &DataStore, day_key: &str) -> Value {
     })
 }
 
+/// How long VM audit rows are kept. Long enough to investigate abuse
+/// reports across a semester; older rows are deleted by the daily VM worker.
+pub const VM_AUDIT_RETENTION_DAYS: f64 = 180.0;
+
+/// Deletes `vm_audit_logs` rows older than `days_to_keep` days.
+pub fn prune_old_vm_audit_logs(store: &DataStore, days_to_keep: f64) -> usize {
+    let cutoff = now_millis() as i64 - (days_to_keep.max(0.0) * 86_400_000.0) as i64;
+    let conn = store.conn();
+    conn.execute(
+        "DELETE FROM vm_audit_logs WHERE ts < ?1",
+        rusqlite::params![cutoff],
+    )
+    .unwrap_or(0)
+}
+
 /// `pruneOldVmUsageSamples(daysToKeep)` (data_store.js:471-475).
 pub fn prune_old_vm_usage_samples(store: &DataStore, days_to_keep: f64) {
     let days = if days_to_keep.is_finite() && days_to_keep >= 1.0 {
@@ -1129,6 +1144,32 @@ mod tests {
         assert_eq!(rec.cpu_cores, 96.0);
         assert_eq!(rec.memory_mb, 262144.0);
         assert_eq!(rec.disk_gb, 4096.0);
+    }
+
+    #[test]
+    fn audit_logs_older_than_retention_are_pruned() {
+        let (_dir, store) = test_store();
+        let now = now_millis() as f64;
+        for (ts, id) in [
+            (now - 200.0 * 86_400_000.0, "old"),
+            (now - 86_400_000.0, "recent"),
+        ] {
+            append_vm_audit_log(
+                &store,
+                ts,
+                "a@x.pro",
+                "o@x.pro",
+                id,
+                None,
+                "VM_STARTED",
+                true,
+                None,
+            );
+        }
+        assert_eq!(prune_old_vm_audit_logs(&store, VM_AUDIT_RETENTION_DAYS), 1);
+        let rows = list_vm_audit_logs(&store, 10.0);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].vm_record_id, "recent");
     }
 
     #[test]

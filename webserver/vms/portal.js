@@ -91,6 +91,7 @@
             ${resourceMeter('Storage', running && diskTotal ? bytes(vm.diskUsed) + ' / ' + bytes(diskTotal) : bytes(diskTotal), diskLoad, running && diskTotal > 0)}
           </div>
         </section>
+        ${adminAccessSection(vm)}
         ${vm.desktopSetup?.status === 'preparing' ? '<p class="desktop-setup-status" role="status">Preparing automatic sign-in and video support…</p>' : vm.desktopSetup?.status === 'failed' ? '<p class="desktop-setup-status failed" role="status">Desktop setup needs another try. Choose Repair desktop below.</p>' : ''}
         <div class="computer-actions">
           ${primaryAction}
@@ -103,6 +104,40 @@
         </div>
       </div>
     </article>`;
+  }
+  /** Owner-only consent for site admins to open this computer (docs/vm-access.md). */
+  function adminAccessSection(vm) {
+    const access = vm.adminAccess;
+    if (!access || !access.available) return '';
+    const until = access.allowed && access.expiresAt ? new Date(access.expiresAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
+    return `<section class="detail-section admin-access-section" aria-labelledby="admin-access-${esc(vm.id)}">
+          <div class="section-heading"><h3 id="admin-access-${esc(vm.id)}">Admin access</h3>
+          ${access.allowed
+            ? '<button type="button" class="text-button" data-action="admin-access-revoke">Turn off</button>'
+            : '<button type="button" class="text-button" data-action="admin-access-allow">Allow admins</button>'}</div>
+          <p class="admin-access-status">${access.allowed
+            ? `Site admins can open this computer until ${esc(until)}.`
+            : 'Only you can open this computer.'}</p>
+        </section>`;
+  }
+  async function setAdminAccess(id, allow) {
+    if (allow) {
+      const ok = await mitchConfirm({
+        title: 'Let site admins open this computer?',
+        body: 'For the next 24 hours, site admins will be able to open this computer\'s desktop and start, restart or shut it down. They can see and use anything on it, including open apps and saved files. You\'ll get a notification when an admin opens it, and you can turn this off at any time.',
+        confirmLabel: 'Allow for 24 hours',
+      });
+      if (!ok) return;
+    }
+    try {
+      const response = await fetch(`/api/vm/computers/${encodeURIComponent(id)}/admin-access`, { method: 'POST', credentials: 'same-origin', headers, body: JSON.stringify({ allow }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Could not change admin access.');
+      $('refresh-status').textContent = allow ? 'Site admins can open this computer for 24 hours.' : 'Admin access turned off.';
+      await load();
+    } catch (error) {
+      $('refresh-status').textContent = friendly(error);
+    }
   }
   function render() { grid.innerHTML = computers.map(card).join(''); setState(computers.length ? 'computer-grid' : 'empty-state'); }
   async function load() {
@@ -493,6 +528,10 @@
     if (!id) return;
     if (action === 'open-upgrade') {
       openUpgradeModal();
+      return;
+    }
+    if (action === 'admin-access-allow' || action === 'admin-access-revoke') {
+      setAdminAccess(id, action === 'admin-access-allow');
       return;
     }
     if (action === 'repair-desktop') {

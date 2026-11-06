@@ -22,6 +22,15 @@ Look at how `coins`, `daily_logins`, `profiles`, `tokens`, `friend_lists` were d
 4. Stop writing the blob, add a unit test with a temp `DataStore`, and update the matching doc under `docs/`.
 5. Watch for read-modify-write sequences: the point of the table is `BEGIN IMMEDIATE` on one row, not load-all/save-all.
 
+## Removed rather than migrated
+
+`sessions.json`, `last_known_ips.json` and `search_intent.json` held personal
+data the site no longer keeps; `cheat_logs.json`, `admin_actions.json` and
+`auth_sessions.json` became the `cheat_logs`, `admin_actions` and
+`auth_sessions` tables.
+`mitch_lib::privacy::run_startup_cleanup` imports and deletes them on startup
+(docs/privacy.md).
+
 ## Still blobs in `json_documents`
 
 Files and the non-test modules that read or write them. Grouped by what they hold; roughly priority order within the document (user data that grows first).
@@ -53,13 +62,10 @@ Files and the non-test modules that read or write them. Grouped by what they hol
 
 | File | Used by |
 | --- | --- |
-| `auth_sessions.json` | `auth.rs`, `vm.rs` |
-| `sessions.json` | `school.rs`, `data.rs`, `economy.rs`, `account.rs`, `proxy.rs`, `workers_email.rs` |
 | `generations.json` | `auth.rs` |
 | `invalidated.json` | `auth.rs`, `proxy.rs` |
 | `passkeys.json` | `accounts.rs`, `webauthn.rs` |
 | `signup_codes.json` | `accounts.rs`, `auth.rs` |
-| `last_known_ips.json` | `handler.rs`, `moderation.rs`, `matrix.rs` |
 | `admin_passphrase.json` | `admin.rs` |
 | `pending_security_actions.json` | `email.rs` |
 
@@ -119,8 +125,6 @@ Files and the non-test modules that read or write them. Grouped by what they hol
 | `canvas_reports.json` | `legacy.rs` |
 | `canvas_banned.json` | `legacy.rs` |
 | `byo_os_reports.json` | `byo_os.rs` |
-| `cheat_logs.json` | `admin.rs` |
-| `admin_actions.json` | `admin.rs`, `moderation.rs`, `matrix.rs` |
 | `shadow_bans.json` | `moderation.rs`, `matrix.rs` |
 | `moderator_requests.json` | `admin.rs` |
 
@@ -131,7 +135,6 @@ Files and the non-test modules that read or write them. Grouped by what they hol
 | `global_game_stats.json` | `mod.rs`, `misc.rs`, `proxy.rs` |
 | `heatmap.json` | `admin.rs`, `misc.rs` |
 | `chess_vs.json` | `chess_vs.rs`, `state.rs` |
-| `search_intent.json` | `dashboard.rs` |
 | `madlibs.json` | `madlibs.rs` |
 | `jeopardy_kids_clean.json` | `jeopardy.rs` |
 

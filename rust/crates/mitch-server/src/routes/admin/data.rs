@@ -45,8 +45,6 @@ pub async fn handle(
                     }),
             )
         }
-        "history" => Some(history(state, body)),
-        "users" => Some(users(state)),
         "suggestions" => Some(suggestions(state)),
         "requests" => Some(requests(state)),
         "revoke" => Some(revoke(state, body)),
@@ -88,93 +86,6 @@ fn check_admin_pw(state: &Arc<AppState>, body: &Value) -> bool {
     }
 }
 
-fn session_log_doc(state: &Arc<AppState>) -> Vec<Value> {
-    state
-        .store
-        .read_document(&state.cfg.data_dir.join("sessions.json"), json!([]))
-        .as_array()
-        .cloned()
-        .unwrap_or_default()
-}
-
-/// dtype `history` — session log entries for one email's sids.
-fn history(state: &Arc<AppState>, body: &Value) -> Response {
-    let name = body.get("name").and_then(|v| v.as_str()).unwrap_or("");
-    let uids: std::collections::HashSet<String> =
-        mitch_lib::auth::names_sids_for_exact_email(&state.store, name)
-            .into_iter()
-            .collect();
-    let entries: Vec<Value> = session_log_doc(state)
-        .into_iter()
-        .filter(|e| {
-            uids.contains(
-                &e.get("id")
-                    .map(|v| v.as_str().unwrap_or("").to_string())
-                    .unwrap_or_default(),
-            )
-        })
-        .map(|e| {
-            json!({
-                "page": e.get("page").and_then(|v| v.as_str()).unwrap_or(""),
-                "ts": e.get("timestamp").and_then(|v| v.as_str()).unwrap_or(""),
-                "ip": e.get("ip").and_then(|v| v.as_str()).unwrap_or(""),
-            })
-        })
-        .rev()
-        .collect();
-    json_response(200, json!({ "history": entries }))
-}
-
-/// dtype `users` — last activity per sid.
-fn users(state: &Arc<AppState>) -> Response {
-    let mut latest: std::collections::HashMap<String, (i64, String)> =
-        std::collections::HashMap::new();
-    for e in session_log_doc(state) {
-        let uid = e
-            .get("id")
-            .map(|v| v.as_str().unwrap_or("").to_string())
-            .unwrap_or_default();
-        if uid.is_empty() {
-            continue;
-        }
-        let ts = e
-            .get("timestamp")
-            .and_then(|v| v.as_str())
-            .and_then(super::economy::parse_timestamp);
-        let Some(ts) = ts else { continue };
-        let page = e
-            .get("page")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        let entry = latest.entry(uid.clone()).or_insert((0, String::new()));
-        if ts > entry.0 {
-            *entry = (ts, page);
-        }
-    }
-    let mut users: Vec<Value> = latest
-        .into_iter()
-        .map(|(uid, (logts, page))| {
-            let name = mitch_lib::auth::names_get_email(&state.store, &uid)
-                .unwrap_or_else(|| uid[..uid.len().min(20)].to_string());
-            json!({
-                "uid": uid,
-                "name": name,
-                "page": page,
-                "logts": logts,
-            })
-        })
-        .collect();
-    users.sort_by(|a, b| {
-        b.get("logts")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0)
-            .partial_cmp(&a.get("logts").and_then(|v| v.as_f64()).unwrap_or(0.0))
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-    json_response(200, json!({ "users": users }))
-}
-
 /// dtype `suggestions`: the feedback entries, in the shape this legacy endpoint
 /// always returned. The data lives in the `feedback_entries` table now; the
 /// staff page is `/moderator/feedback/` (docs/feedback.md).
@@ -211,7 +122,6 @@ fn requests(state: &Arc<AppState>) -> Response {
                         "token": tok,
                         "email": d.get("email").and_then(|v| v.as_str()).unwrap_or("?"),
                         "name": d.get("name").and_then(|v| v.as_str()).unwrap_or(""),
-                        "enroll_ip": d.get("enroll_ip").and_then(|v| v.as_str()).unwrap_or(""),
                         "created_at": d.get("created_at").and_then(|v| v.as_f64()).unwrap_or(0.0),
                     })
                 })

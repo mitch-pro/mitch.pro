@@ -70,7 +70,7 @@ pub async fn enforce_ban(
         return None;
     }
     let ip = crate::handler::get_real_ip(headers, None);
-    if let Some(ban) = mitch_lib::auth::banned_info_for_ip(&state.store, &ip) {
+    if let Some(ban) = mitch_lib::auth::banned_info_for_ip(&state.store, &state.id_secret, &ip) {
         return Some(account_response(state, headers, path, "", &ban));
     }
     let cookies = crate::routes::me::cookies_of(state, headers);
@@ -181,8 +181,6 @@ mod tests {
             &state.id_secret,
             "banned@example.com",
             "banned@example.com",
-            "fixture",
-            "127.0.0.1",
             false,
         );
         mitch_lib::bans::blacklist_insert(
