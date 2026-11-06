@@ -511,9 +511,7 @@
     .owner-account-list label:hover { background: var(--t-bg3); }
 
     /* Retired mitch.prox / arbitrary-proxy UI (APIs return 410); keep DOM nodes for JS safety */
-    #prox-tools,
-    #searchIntent-section,
-    #view option[value="searchIntent"] {
+    #prox-tools {
       display: none !important;
     }
 
@@ -1357,7 +1355,6 @@
         <option value="sentNotifications">Sent notifications</option>
         <option value="bannedAccounts">Banned accounts</option>
         <option value="activeUsers">Active users</option>
-        <option value="searchIntent" hidden disabled>Search logs (retired)</option>
         <option value="profileReports">Profile Reports</option>
         <option value="chatReports">Chat Safety Reports</option>
         <option value="cheatLogs">Anti-Cheat Monitor</option>
@@ -1407,14 +1404,11 @@
       <section id="activeUsers-section">
         <div class="section-head">
           <h2>Active Users</h2>
-          <span class="tag">seen in last 2 minutes</span>
+          <span class="tag">online now</span>
         </div>
         <div class="table-wrap"><table id="activeUsers-table"></table></div>
       </section>
 
-      <section id="searchIntent-section" hidden aria-hidden="true">
-        <div class="table-wrap"><table id="searchIntent-table"></table></div>
-      </section>
       <section id="chatReports-section">
         <div class="section-head">
           <h2>Chat Safety Reports</h2>
@@ -2575,7 +2569,7 @@
       const dateFilter = document.getElementById('auditDateFilter')?.value || 'all';
       const now = Date.now(), dayMs = 24 * 60 * 60 * 1000;
       filtered = {};
-      ['adminActions','sentNotifications','bannedAccounts','activeUsers','searchIntent','profileReports','chatReports','cheatLogs','coinLogs'].forEach(key => {
+      ['adminActions','sentNotifications','bannedAccounts','activeUsers','profileReports','chatReports','cheatLogs','coinLogs'].forEach(key => {
         filtered[key] = (rawData[key] || []).filter(row => {
           if (q && !textOf(row).toLowerCase().includes(q)) return false;
           if (key === 'adminActions') {
@@ -2589,11 +2583,6 @@
         });
         const el = document.getElementById(key + '-section');
         if (!el) return;
-        // Retired mitch.prox search UI — keep data plumbing, never show the section
-        if (key === 'searchIntent') {
-          el.style.display = 'none';
-          return;
-        }
         el.style.display = (view === 'all' || view === key) ? '' : 'none';
       });
       renderTables();
@@ -2628,12 +2617,9 @@
     }
 
     function renderTables() {
-      table('adminActions-table', ['Time', 'Actor', 'Role', 'Action', 'Parameters', 'IP / Metadata', 'Action'], filtered.adminActions, r => {
+      table('adminActions-table', ['Time', 'Actor', 'Role', 'Action', 'Parameters', 'Action'], filtered.adminActions, r => {
         const d = r.details || {};
         const role = d.role || (r.actor.includes('admin') || r.actor === 'owner' ? 'admin' : 'moderator');
-        const ip = d.ip || '';
-        const ua = d.userAgent || '';
-
         // Clean up parameters to exclude metadata
         const params = { ...d };
         delete params.role;
@@ -2643,8 +2629,6 @@
         const rolePill = role === 'moderator'
           ? '<span class="pill" style="color:#7dd3fc; border-color:rgba(56,189,248,0.25); background:rgba(56,189,248,0.08);">Mod</span>'
           : '<span class="pill" style="color:#f87171; border-color:rgba(239,68,68,0.25); background:rgba(239,68,68,0.08);">Admin</span>';
-
-        const metaStr = ip ? `<span class="pill" style="font-family:monospace; font-size:0.68rem;" title="${esc(ua)}">${esc(ip)}</span>` : '<span class="muted">-</span>';
 
         const canRevert = ['ban_account', 'unban_account', 'add_admin', 'remove_admin', 'add_co_owner', 'remove_co_owner', 'add_moderator', 'remove_moderator', 'shadow_ban', 'add_coins', 'gift_coins', 'matrix_ban_user', 'matrix_chat_ban', 'matrix_add_channel'].includes(r.action);
         const revertBtn = canRevert && r.action !== 'revert_action'
@@ -2657,7 +2641,6 @@
           '<td>' + rolePill + '</td>' +
           '<td><span class="pill ok">' + esc(r.action) + '</span></td>' +
           '<td class="muted">' + esc(JSON.stringify(params)) + '</td>' +
-          '<td>' + metaStr + '</td>' +
           '<td>' + revertBtn + '</td>' +
           '</tr>';
       });
@@ -2667,11 +2650,7 @@
         '<tr><td>' + esc(fmtTime(r.bannedAt)) + '</td><td>' + esc(r.email) + '</td><td>' + esc(r.by) + '</td><td class="muted">' + esc(r.reason) + '</td></tr>'
       );
       table('activeUsers-table', ['Last Active', 'Email'], filtered.activeUsers, r =>
-        '<tr><td>' + esc(fmtTime(r.lastActiveAt)) + '</td><td><span class="pill ok">' + esc(r.email) + '</span></td></tr>'
-      );
-
-      table('searchIntent-table', ['Query', 'User', 'Time'], filtered.searchIntent || [], r =>
-        '<tr><td><b>' + esc(r.query) + '</b></td><td>' + esc(r.user) + '</td><td>' + esc(fmtTime(r.ts)) + '</td></tr>'
+        '<tr><td>' + (r.lastActiveAt ? esc(fmtTime(r.lastActiveAt)) : '<span class="muted">-</span>') + '</td><td><span class="pill ok">' + esc(r.email) + '</span></td></tr>'
       );
 
       table('profileReports-table', ['Time', 'Target', 'Reporter', 'Reason', 'Status', 'Action'], filtered.profileReports || [], r =>
@@ -2719,8 +2698,8 @@
         return '<tr><td>' + esc(fmtTime(r.ts)) + statusBadge + '</td><td><span class="pill ok">' + esc(r.reportedBy) + '</span></td><td>' + typeBadge + esc(r.reason) + '</td><td>' + transcriptHtml + '</td><td>' + actionsHtml + '</td></tr>';
       });
 
-      table('cheatLogs-table', ['Time', 'Email', 'Game', 'Details', 'IP'], filtered.cheatLogs || [], r =>
-        '<tr><td>' + esc(fmtTime(r.ts)) + '</td><td>' + esc(r.email) + '</td><td><span class="pill warn">' + esc(r.game) + '</span></td><td><div class="chat-text">' + esc(r.details) + '</div></td><td>' + esc(r.ip) + '</td></tr>'
+      table('cheatLogs-table', ['Time', 'Email', 'Game', 'Details'], filtered.cheatLogs || [], r =>
+        '<tr><td>' + esc(fmtTime(r.ts)) + '</td><td>' + esc(r.email) + '</td><td><span class="pill warn">' + esc(r.game) + '</span></td><td><div class="chat-text">' + esc(r.details) + '</div></td></tr>'
       );
 
       table('coinLogs-table', ['Time', 'Email', 'Change', 'Before → After', 'Reason'], filtered.coinLogs || [], r => {
@@ -2757,7 +2736,7 @@
       filtered.activeUsers.forEach(r => lines.push(['activeUsers', fmtTime(r.lastActiveAt), r.email, '', '', ''].map(csvEscape).join(',')));
       (filtered.profileReports || []).forEach(r => lines.push(['profileReports', fmtTime(r.ts), r.target, r.reporter, r.reason, r.status].map(csvEscape).join(',')));
       (filtered.chatReports || []).forEach(r => lines.push(['chatReports', fmtTime(r.ts), r.reportedBy, r.reason, JSON.stringify(r.context), ''].map(csvEscape).join(',')));
-      (filtered.cheatLogs || []).forEach(r => lines.push(['cheatLogs', fmtTime(r.ts), r.email, r.game, r.details, r.ip].map(csvEscape).join(',')));
+      (filtered.cheatLogs || []).forEach(r => lines.push(['cheatLogs', fmtTime(r.ts), r.email, r.game, r.details].map(csvEscape).join(',')));
       (filtered.coinLogs || []).forEach(r => lines.push(['coinLogs', fmtTime(r.ts), r.email, (Number(r.delta) > 0 ? '+' : '') + fmtMoney(r.delta), fmtMoney(r.before) + ' -> ' + fmtMoney(r.after), r.reason].map(csvEscape).join(',')));
       download('admin-logs.csv', 'text/csv', lines.join('\n'));
     }
@@ -3856,10 +3835,6 @@
         document.getElementById('tester-card').style.display = 'block';
         loadTesters();
       }
-
-      const rLogs = await adminFetch('/api/admin/search-logs');
-      const dLogs = await rLogs.json().catch(() => ({}));
-      rawData.searchIntent = dLogs.logs || [];
 
       await loadModeratorRequests();
       document.getElementById('access-status').textContent = currentUser.isOwner

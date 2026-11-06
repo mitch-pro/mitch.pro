@@ -343,18 +343,6 @@ pub async fn ping(
         }
     }
 
-    // Session log (capped at 50000).
-    let session_file = state.data_dir().join("sessions.json");
-    let mut sessions = state.store.read_document(&session_file, json!([]));
-    if let Some(arr) = sessions.as_array_mut() {
-        arr.push(json!({ "id": id, "timestamp": now_millis_str() }));
-        if arr.len() > 50000 {
-            let excess = arr.len() - 50000;
-            arr.drain(0..excess);
-        }
-        let _ = state.store.write_document(&session_file, &sessions);
-    }
-
     // Resolve email for presence/coins (only when sid is valid).
     let email = if !id.is_empty() && mitch_lib::auth::valid_id(&id, &state.id_secret) {
         mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, &id)
@@ -390,13 +378,12 @@ pub async fn ping(
                 );
                 u.insert("last_ping_reward".into(), json!(now));
             }
-            if now
-                - u.get("last_active_at")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(0.0)
-                >= 10_000.0
-            {
-                u.insert("last_active_at".into(), json!(now));
+            // Premium inactivity expiry only needs to know which day the
+            // member was last here, so store the start of the UTC day rather
+            // than a running timestamp (docs/privacy.md).
+            let today = mitch_lib::user_stats::activity_day(now as i64);
+            if u.get("last_active_at").and_then(|v| v.as_i64()) != Some(today) {
+                u.insert("last_active_at".into(), json!(today));
             }
         }
         mitch_lib::user_stats::user_stats_set(&state.store, &norm, &user);
@@ -502,13 +489,6 @@ fn now_millis() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
-}
-
-fn now_millis_str() -> String {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis().to_string())
-        .unwrap_or_default()
 }
 
 /// `/prox` and `/prox/*` redirects and gone notice — server.js:10777-10791.

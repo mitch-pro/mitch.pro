@@ -2230,15 +2230,8 @@ mod tests {
 
         let email = "eve@student.rjuhsd.us";
         let norm = auth::normalize_email(email);
-        let session = auth::create_auth_session(
-            &state.store,
-            &state.id_secret,
-            &norm,
-            email,
-            "agent",
-            "127.0.0.1",
-            false,
-        );
+        let session =
+            auth::create_auth_session(&state.store, &state.id_secret, &norm, email, false);
 
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -2286,15 +2279,8 @@ mod tests {
 
         let email = "frank@student.rjuhsd.us";
         let norm = auth::normalize_email(email);
-        let session = auth::create_auth_session(
-            &state.store,
-            &state.id_secret,
-            &norm,
-            email,
-            "agent",
-            "127.0.0.1",
-            false,
-        );
+        let session =
+            auth::create_auth_session(&state.store, &state.id_secret, &norm, email, false);
 
         // Mark as approved premium
         let apps = json!([
@@ -2342,15 +2328,8 @@ mod tests {
 
         let email = "heidi@student.rjuhsd.us";
         let norm = auth::normalize_email(email);
-        let session = auth::create_auth_session(
-            &state.store,
-            &state.id_secret,
-            &norm,
-            email,
-            "agent",
-            "127.0.0.1",
-            false,
-        );
+        let session =
+            auth::create_auth_session(&state.store, &state.id_secret, &norm, email, false);
 
         let mut headers = HeaderMap::new();
         headers.insert(

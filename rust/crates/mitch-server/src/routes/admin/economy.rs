@@ -15,7 +15,7 @@ pub fn handle(
     state: &Arc<AppState>,
     method: &Method,
     path: &str,
-    headers: &HeaderMap,
+    _headers: &HeaderMap,
     body: &Value,
     ctx: &AdminCtx,
 ) -> Resp {
@@ -567,7 +567,6 @@ pub fn handle(
         } else {
             title
         };
-        let user_agent = header_or_unknown(headers, "user-agent");
         if all_users {
             let targets = token_email_targets(state);
             for email in &targets {
@@ -592,8 +591,6 @@ pub fn handle(
                     "count": targets.len(),
                     "title": title,
                     "batchId": batch_id,
-                    "ip": ctx.ip,
-                    "userAgent": user_agent,
                     "role": role,
                 }),
             );
@@ -623,8 +620,6 @@ pub fn handle(
                 "title": title,
                 "notificationId": notice.as_ref().and_then(|n| n.get("id")).and_then(|v| v.as_str()).unwrap_or(""),
                 "batchId": batch_id,
-                "ip": ctx.ip,
-                "userAgent": user_agent,
                 "role": role,
             }),
         );
@@ -688,8 +683,6 @@ pub fn handle(
                 "id": id,
                 "batchId": batch_id,
                 "removed": removed,
-                "ip": ctx.ip,
-                "userAgent": header_or_unknown(headers, "user-agent"),
                 "role": role,
             }),
         );
@@ -796,14 +789,6 @@ fn valid_email(email: &str) -> bool {
     let local = parts.next().unwrap_or("");
     let rest = parts.next().unwrap_or("");
     !local.is_empty() && !rest.is_empty() && rest.contains('.') && parts.next().is_none()
-}
-
-fn header_or_unknown(headers: &HeaderMap, name: &str) -> String {
-    headers
-        .get(name)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("unknown")
-        .to_string()
 }
 
 fn valid_id(sid: &str, state: &Arc<AppState>) -> bool {

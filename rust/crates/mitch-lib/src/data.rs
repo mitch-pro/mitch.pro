@@ -308,6 +308,14 @@ impl DataStore {
                         details TEXT DEFAULT '',
                         timestamp INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS cheat_logs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ts INTEGER NOT NULL,
+                        email TEXT NOT NULL,
+                        game TEXT NOT NULL,
+                        details TEXT NOT NULL DEFAULT ''
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_cheat_logs_ts ON cheat_logs (ts DESC);
                     CREATE TABLE IF NOT EXISTS app_logs (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         ts INTEGER NOT NULL,

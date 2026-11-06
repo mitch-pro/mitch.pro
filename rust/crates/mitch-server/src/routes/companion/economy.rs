@@ -198,8 +198,6 @@ mod tests {
             &state.id_secret,
             "test@mitch.pro",
             "test@mitch.pro",
-            "",
-            "",
             false,
         );
         let mut headers = HeaderMap::new();

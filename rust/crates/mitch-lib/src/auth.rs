@@ -243,10 +243,7 @@ pub fn get_cookies_from_header_value(
             sid: sid.clone(),
             gen,
             created_at: now,
-            last_seen: now,
             expires_at: now + AUTH_SESSION_TTL_MS,
-            user_agent: String::new(),
-            ip: String::new(),
             dev_superuser: true,
         };
         cookies.map.insert("studentId".into(), sid.clone());
@@ -290,14 +287,8 @@ pub struct AuthSession {
     pub gen: i64,
     #[serde(rename = "createdAt", default)]
     pub created_at: i64,
-    #[serde(rename = "lastSeen", default)]
-    pub last_seen: i64,
     #[serde(rename = "expiresAt", default)]
     pub expires_at: i64,
-    #[serde(rename = "userAgent", default)]
-    pub user_agent: String,
-    #[serde(default)]
-    pub ip: String,
     #[serde(rename = "devSuperuser", default)]
     pub dev_superuser: bool,
 }
@@ -535,13 +526,11 @@ pub fn auth_session_from_token(
         .to_string();
     let sid = issue_login_session(store, id_secret, &norm_email, &email);
     let stored_sid = rec_obj.get("sid").and_then(|v| v.as_str()).unwrap_or("");
-    let last_seen = rec_obj
-        .get("lastSeen")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0);
-    if stored_sid != sid || now - last_seen > 5 * 60 * 1000 {
+    // Only rewrite the record when the derived sid changed. Sessions used to
+    // stamp `lastSeen` here every five minutes, which kept a running record
+    // of when each account was active; expiry is fixed at creation instead.
+    if stored_sid != sid {
         rec_obj.insert("sid".into(), Value::String(sid.clone()));
-        rec_obj.insert("lastSeen".into(), Value::Number(now.into()));
         let _ = store.write_document(&sessions_path, &sessions);
     }
 
@@ -569,19 +558,13 @@ pub fn banned_info_for_sid(store: &DataStore, id_secret: &[u8], sid: &str) -> Op
     email.and_then(|e| banned_info_for_email(store, &e))
 }
 
-/// `bannedInfoForIp(ip)` — IP ban lookup (`banned_ips` table).
-pub fn banned_info_for_ip(store: &DataStore, ip: &str) -> Option<Value> {
+/// `bannedInfoForIp(ip)` — explicit network ban lookup (`banned_ips`
+/// table, keyed by `bans::ip_ban_key`).
+pub fn banned_info_for_ip(store: &DataStore, secret: &[u8], ip: &str) -> Option<Value> {
     if ip.is_empty() {
         return None;
     }
-    crate::bans::banned_ips_get(store, ip).filter(|ban| {
-        // Old account bans also recorded the school's shared IP. Account
-        // access is enforced separately; only explicit network bans belong here.
-        ban.get("email")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .is_empty()
-    })
+    crate::bans::banned_ips_get(store, secret, ip)
 }
 
 /// `emailFromSid(sid)` — names.json first, then tokens.json (incl. infinite
@@ -813,14 +796,16 @@ pub struct IssuedAuthSession {
 
 /// `createAuthSession(normEmail, originalEmail, req, options)`
 /// (server.js:2870-2898) — random 32-byte base64url token, hashed key,
-/// full session record in auth_sessions.json.
+/// session record in auth_sessions.json.
+///
+/// The record holds only what validating the session needs (identity,
+/// generation, creation and expiry). It deliberately stores no IP address,
+/// user agent or last-used time (docs/privacy.md).
 pub fn create_auth_session(
     store: &DataStore,
     id_secret: &[u8],
     norm_email: &str,
     original_email: &str,
-    user_agent: &str,
-    ip: &str,
     dev_superuser: bool,
 ) -> IssuedAuthSession {
     let norm = normalize_email(norm_email);
@@ -839,7 +824,6 @@ pub fn create_auth_session(
     let now = now_millis();
     let sessions_path = store.base_dir.join(sessions_file());
     let mut sessions = store.read_document(&sessions_path, serde_json::json!({}));
-    let ua: String = user_agent.chars().take(240).collect();
     if let Some(map) = sessions.as_object_mut() {
         map.insert(
             key,
@@ -849,10 +833,7 @@ pub fn create_auth_session(
                 "sid": sid,
                 "gen": gen,
                 "createdAt": now,
-                "lastSeen": now,
                 "expiresAt": now + AUTH_SESSION_TTL_MS,
-                "userAgent": ua,
-                "ip": ip,
                 "devSuperuser": dev_superuser && dev_test_access_enabled(),
             }),
         );

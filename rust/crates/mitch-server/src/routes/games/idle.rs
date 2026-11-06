@@ -381,7 +381,6 @@ pub fn process_adrian_sync(
     if actual_gain > max_possible_gain * 3.0 {
         mitch_lib::admin::log_cheat(
             &state.store,
-            state.data_dir(),
             email,
             "Adrian Clicker 2.0",
             &format!(
@@ -389,7 +388,6 @@ pub fn process_adrian_sync(
                 js_to_exponential(actual_gain, 2),
                 js_to_exponential(max_possible_gain, 2)
             ),
-            "unknown",
         );
         set_num(s, "points", (points + max_possible_gain).min(SAFE_CAP));
     } else {
@@ -951,7 +949,6 @@ fn richard_sync(
         if actual_gain > max_possible_gain * 3.0 && actual_gain > 100.0 {
             mitch_lib::admin::log_cheat(
                 &state.store,
-                state.data_dir(),
                 &email,
                 "Richard's Riches",
                 &format!(
@@ -959,7 +956,6 @@ fn richard_sync(
                     js_to_exponential(actual_gain, 2),
                     js_to_exponential(max_possible_gain, 2)
                 ),
-                "unknown",
             );
             set_num(&mut s, "cash", (cash + max_possible_gain).min(1e290));
         } else {

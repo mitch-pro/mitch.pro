@@ -31,3 +31,11 @@ written to `app_logs` by `mitch-server/src/app_log_layer.rs`:
 Rows older than 30 days (`APP_LOG_RETENTION_MS`) are deleted at startup and on
 every 250th write. `APP_LOG_MAX_ROWS` (1,000,000) is a backstop against
 something logging in a tight loop.
+
+## What not to log
+
+Log lines must not contain IP addresses, user agents, page paths tied to an
+account, or query strings. An email address is fine where it is the point of the
+entry (for example "passkey login successful"). Older rows that carried an `ip`
+in `details`, and the reCAPTCHA "from IP" message, are scrubbed at startup by
+`mitch_lib::privacy::run_startup_cleanup` (docs/privacy.md).

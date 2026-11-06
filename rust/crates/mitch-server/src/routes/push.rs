@@ -324,7 +324,7 @@ pub async fn verify_recaptcha(state: &Arc<AppState>, token: &str, ip: &str, sid:
         return true; // JS parity: no secret configured → fail open.
     }
     if token.is_empty() {
-        tracing::info!("[recaptcha] Blocked: empty token received (from IP: {ip})");
+        tracing::info!("[recaptcha] Blocked: empty token received");
         return false;
     }
 
@@ -347,7 +347,6 @@ pub async fn verify_recaptcha(state: &Arc<AppState>, token: &str, ip: &str, sid:
     async fn call_verify(
         verify_urls: &[String],
         token: &str,
-        ip: &str,
         secret: &str,
         threshold: f64,
     ) -> bool {
@@ -359,9 +358,8 @@ pub async fn verify_recaptcha(state: &Arc<AppState>, token: &str, ip: &str, sid:
                 let mut params = Vec::new();
                 params.push(format!("secret={}", encode_form(secret)));
                 params.push(format!("response={}", encode_form(token)));
-                if !ip.is_empty() && ip.parse::<std::net::IpAddr>().is_ok() {
-                    params.push(format!("remoteip={}", encode_form(ip)));
-                }
+                // `remoteip` is optional; the visitor's address is not
+                // forwarded to Google (docs/privacy.md).
                 // No per-request timeout: the outer 5s budget (JS's single
                 // AbortController) cancels the whole attempt on expiry.
                 let result = reqwest::Client::new()
@@ -410,7 +408,7 @@ pub async fn verify_recaptcha(state: &Arc<AppState>, token: &str, ip: &str, sid:
     // an abort leaves `verified` false.
     let attempt = async {
         for secret in &recaptcha_secrets {
-            if call_verify(&verify_urls, token, ip, secret, threshold).await {
+            if call_verify(&verify_urls, token, secret, threshold).await {
                 return true;
             }
         }

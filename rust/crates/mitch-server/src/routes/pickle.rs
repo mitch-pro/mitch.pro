@@ -342,11 +342,9 @@ async fn chat_send(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]
             if last10_all_mine {
                 log_cheat(
                     &state.store,
-                    state.data_dir(),
                     &email,
                     "chat_spam",
                     "User sent 10 consecutive messages in pickle_chat",
-                    &ip,
                 );
                 return json_response(
                     400,

@@ -1,6 +1,6 @@
 //! Admin dashboards & status — read-only endpoints:
-//! resources (10490), app-logs (10503), docker-logs (10517), search-logs
-//! (10567), live-feeds (10575), advanced-data (15736),
+//! resources (10490), app-logs (10503), docker-logs (10517),
+//! live-feeds (10575), advanced-data (15736),
 //! maintenance-status (15507), shop/catalog (15516), moderators GET +
 //! moderator-panel GET are in moderation.rs.
 
@@ -43,17 +43,6 @@ pub fn handle(
         return Some(docker_logs(search));
     }
 
-    // GET /api/admin/search-logs.
-    if path == "/api/admin/search-logs" {
-        if !ctx.is_any_admin(state) {
-            return Some(forbidden());
-        }
-        let logs = state
-            .store
-            .read_document(&state.cfg.data_dir.join("search_intent.json"), json!([]));
-        return Some(json_response(200, json!({ "logs": logs })));
-    }
-
     // GET /api/admin/live-feeds — traffic is always empty.
     if path == "/api/admin/live-feeds" {
         if !ctx.is_any_admin(state) {
@@ -82,7 +71,11 @@ pub fn handle(
         }
         return Some(json_response(
             200,
-            mitch_lib::admin::build_advanced_admin_data(&state.store, &state.cfg.data_dir),
+            mitch_lib::admin::build_advanced_admin_data(
+                &state.store,
+                &state.cfg.data_dir,
+                online_users(state),
+            ),
         ));
     }
 
@@ -352,4 +345,21 @@ fn percent_decode(s: &str) -> String {
         i += 1;
     }
     String::from_utf8_lossy(&out).into_owned()
+}
+
+/// Members currently online, from the in-memory presence snapshot. Hide-online
+/// users are already offline in the snapshot and `last_active` is zero unless
+/// the member opted in to sharing activity (docs/presence.md).
+fn online_users(state: &Arc<AppState>) -> Vec<Value> {
+    let now = mitch_lib::school::now_millis();
+    let mut rows: Vec<(i64, String)> = crate::presence::snapshot(state, now)
+        .into_iter()
+        .filter(|(_, view)| view.online)
+        .map(|(email, view)| (view.last_active, email))
+        .collect();
+    rows.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+    rows.into_iter()
+        .take(50)
+        .map(|(last, email)| json!({ "email": email, "lastActiveAt": last }))
+        .collect()
 }

@@ -909,23 +909,16 @@ fn me_root(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
 /// session and sets the four cookies (server.js:2949-2957).
 pub(crate) fn auth_success_response(
     state: &Arc<AppState>,
-    headers: &HeaderMap,
+    _headers: &HeaderMap,
     payload: Value,
     norm_email: &str,
     original_email: &str,
 ) -> Response {
-    let user_agent = headers
-        .get(axum::http::header::USER_AGENT)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-    let ip = crate::handler::get_real_ip(headers, None);
     let session = auth::create_auth_session(
         &state.store,
         &state.id_secret,
         norm_email,
         original_email,
-        user_agent,
-        &ip,
         false,
     );
     let secure_flag = std::env::var("SESSION_COOKIE_SECURE").unwrap_or_default();
@@ -1241,7 +1234,6 @@ pub(crate) fn rename_email_references(
         "public_chat.json",
         "premium_chat.json",
         "applications.json",
-        "sessions.json",
     ] {
         let path = data_file(state, file);
         let mut data = state.store.read_document(&path, json!([]));
@@ -1375,8 +1367,6 @@ mod tests {
             &state.id_secret,
             &auth::normalize_email(email),
             email,
-            "",
-            "",
             false,
         );
 
@@ -1442,8 +1432,7 @@ mod tests {
         let email = "fresh@student.rjuhsd.us";
         let norm = auth::normalize_email(email);
 
-        let sess =
-            auth::create_auth_session(&state.store, &state.id_secret, &norm, email, "", "", false);
+        let sess = auth::create_auth_session(&state.store, &state.id_secret, &norm, email, false);
 
         let cookie_header = format!("mitch_session={}; studentId={}", sess.token, sess.sid);
         let cookies = mitch_lib::auth::get_cookies_from_header_value(

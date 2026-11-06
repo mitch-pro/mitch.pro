@@ -996,18 +996,11 @@ fn dev_test_access(state: &Arc<AppState>, method: &Method, headers: &HeaderMap) 
             DEV_TEST_EMAIL,
             &json!({}),
         );
-        let user_agent = headers
-            .get(axum::http::header::USER_AGENT)
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("");
-        let ip = crate::handler::get_real_ip(headers, None);
         let session = mitch_lib::auth::create_auth_session(
             &state.store,
             &state.id_secret,
             DEV_TEST_EMAIL,
             DEV_TEST_EMAIL,
-            user_agent,
-            &ip,
             true, // dev_superuser
         );
         let secure_flag = std::env::var("SESSION_COOKIE_SECURE").unwrap_or_default();

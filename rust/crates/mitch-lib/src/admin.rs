@@ -44,32 +44,92 @@ pub fn log_admin_action(
     let _ = store.write_document(&file, &json!(next));
 }
 
-/// `logCheat(email, game, details, ip)` — server.js:665-679. cheat_logs.json,
-/// newest first via unshift, capped at 1000.
-pub fn log_cheat(
-    store: &DataStore,
-    data_dir: &Path,
-    email: &str,
-    game: &str,
-    details: &str,
-    ip: &str,
-) {
-    let file = data_dir.join("cheat_logs.json");
-    let logs = store
-        .read_document(&file, json!([]))
-        .as_array()
-        .cloned()
+/// How long anti-cheat flags are kept, and the most rows kept at once.
+pub const CHEAT_LOG_RETENTION_MS: i64 = 90 * 86_400_000;
+pub const CHEAT_LOG_MAX_ROWS: i64 = 1000;
+
+/// `logCheat(email, game, details)` — one row in the `cheat_logs` table
+/// (formerly cheat_logs.json). Records which account tripped which check and
+/// why; no IP address or device details. Rows older than
+/// [`CHEAT_LOG_RETENTION_MS`] and beyond the newest [`CHEAT_LOG_MAX_ROWS`] are
+/// deleted on every write.
+pub fn log_cheat(store: &DataStore, email: &str, game: &str, details: &str) {
+    let now = now_millis();
+    let conn = store.conn();
+    let _ = conn.execute(
+        "INSERT INTO cheat_logs (ts, email, game, details) VALUES (?1, ?2, ?3, ?4)",
+        rusqlite::params![
+            now,
+            if email.is_empty() { "unknown" } else { email },
+            if game.is_empty() { "unknown" } else { game },
+            details,
+        ],
+    );
+    prune_cheat_logs(&conn, now);
+}
+
+fn prune_cheat_logs(conn: &rusqlite::Connection, now: i64) {
+    let _ = conn.execute(
+        "DELETE FROM cheat_logs WHERE ts < ?1",
+        rusqlite::params![now - CHEAT_LOG_RETENTION_MS],
+    );
+    let _ = conn.execute(
+        "DELETE FROM cheat_logs WHERE id NOT IN (SELECT id FROM cheat_logs ORDER BY ts DESC, id DESC LIMIT ?1)",
+        rusqlite::params![CHEAT_LOG_MAX_ROWS],
+    );
+}
+
+/// Newest cheat-log rows (`{email, game, details, ts}`) and the total count.
+pub fn cheat_logs_recent(store: &DataStore, limit: i64) -> (Vec<Value>, usize) {
+    let conn = store.conn();
+    let total: i64 = conn
+        .query_row("SELECT COUNT(*) FROM cheat_logs", [], |r| r.get(0))
+        .unwrap_or(0);
+    let rows = conn
+        .prepare(
+            "SELECT ts, email, game, details FROM cheat_logs ORDER BY ts DESC, id DESC LIMIT ?1",
+        )
+        .and_then(|mut stmt| {
+            stmt.query_map(rusqlite::params![limit], |r| {
+                Ok(json!({
+                    "ts": r.get::<_, i64>(0)?,
+                    "email": r.get::<_, String>(1)?,
+                    "game": r.get::<_, String>(2)?,
+                    "details": r.get::<_, String>(3)?,
+                }))
+            })
+            .map(|rows| rows.filter_map(|r| r.ok()).collect())
+        })
         .unwrap_or_default();
-    let mut next = Vec::with_capacity(logs.len() + 1);
-    next.push(json!({
-        "email": if email.is_empty() { "unknown" } else { email },
-        "game": if game.is_empty() { "unknown" } else { game },
-        "details": if details.is_empty() { "" } else { details },
-        "ts": now_millis(),
-        "ip": if ip.is_empty() { "unknown" } else { ip },
-    }));
-    next.extend(logs.into_iter().take(999));
-    let _ = store.write_document(&file, &json!(next));
+    (rows, total.max(0) as usize)
+}
+
+/// Startup migration: moves cheat_logs.json into the `cheat_logs` table,
+/// dropping the IP addresses it held, then deletes the JSON document.
+/// Returns the number of rows imported.
+pub fn migrate_cheat_logs_from_json(store: &DataStore) -> usize {
+    let file = store.data_dir().join("cheat_logs.json");
+    let legacy = store.read_document(&file, Value::Null);
+    let mut imported = 0;
+    if let Some(entries) = legacy.as_array() {
+        let conn = store.conn();
+        for e in entries {
+            let ts = e.get("ts").and_then(Value::as_i64).unwrap_or(0);
+            let text = |k: &str| e.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+            if conn
+                .execute(
+                    "INSERT INTO cheat_logs (ts, email, game, details) VALUES (?1, ?2, ?3, ?4)",
+                    rusqlite::params![ts, text("email"), text("game"), text("details")],
+                )
+                .is_ok()
+            {
+                imported += 1;
+            }
+        }
+        prune_cheat_logs(&conn, now_millis());
+    }
+    crate::privacy::delete_document(store, &file);
+    imported
 }
 
 /// `maskEmail(email)` — server.js:1352. Despite the name this is an IDENTITY
@@ -176,7 +236,14 @@ pub fn public_profile_reports(store: &DataStore, data_dir: &Path, limit: usize) 
 
 /// `buildAdvancedAdminData()` — server.js:3180-3274, the admin dashboard
 /// payload. Pure document reads (websockets not needed for any field).
-pub fn build_advanced_admin_data(store: &DataStore, data_dir: &Path) -> Value {
+/// Admin "advanced data" payload. `active_users` comes from the server's
+/// in-memory presence (`[{email, lastActiveAt}]`, privacy settings already
+/// applied); nothing here reads a stored activity timestamp.
+pub fn build_advanced_admin_data(
+    store: &DataStore,
+    data_dir: &Path,
+    active_users: Vec<Value>,
+) -> Value {
     let now = now_millis();
 
     let admin_actions_raw = store
@@ -254,23 +321,6 @@ pub fn build_advanced_admin_data(store: &DataStore, data_dir: &Path) -> Value {
             .cmp(&a.get("ts").and_then(|v| v.as_i64()).unwrap_or(0))
     });
 
-    let user_stats = crate::user_stats::user_stats_all(store);
-    let active_users: Vec<Value> = user_stats
-        .as_object()
-        .map(|m| {
-            let mut rows: Vec<(i64, Value)> = m
-                .iter()
-                .filter_map(|(email, info)| {
-                    let last = info.get("last_active_at").and_then(|v| v.as_i64())?;
-                    (last > 0 && now - last < 2 * 60 * 1000)
-                        .then(|| (last, json!({ "email": email, "lastActiveAt": last })))
-                })
-                .collect();
-            rows.sort_by_key(|a| std::cmp::Reverse(a.0));
-            rows.into_iter().take(50).map(|(_, v)| v).collect()
-        })
-        .unwrap_or_default();
-
     let mut banned_accounts: Vec<Value> = crate::bans::blacklist_all(store);
     banned_accounts.sort_by(|a, b| {
         b.get("bannedAt")
@@ -289,16 +339,7 @@ pub fn build_advanced_admin_data(store: &DataStore, data_dir: &Path) -> Value {
         });
         sorted.into_iter().take(250).collect()
     };
-    let cheat_logs: Vec<Value> = store
-        .read_document(&data_dir.join("cheat_logs.json"), json!([]))
-        .as_array()
-        .map(|a| a.iter().take(250).cloned().collect())
-        .unwrap_or_default();
-    let cheat_logs_count = store
-        .read_document(&data_dir.join("cheat_logs.json"), json!([]))
-        .as_array()
-        .map(|a| a.len())
-        .unwrap_or(0);
+    let (cheat_logs, cheat_logs_count) = cheat_logs_recent(store, 250);
     let coin_logs = crate::coins::read_coin_log(data_dir, 250);
 
     json!({
@@ -858,7 +899,7 @@ mod tests {
             "",
         );
         crate::coins::add_coins(&store, &data, "user@mitch.pro", 10.0, 1.0, "daily login");
-        let advanced = build_advanced_admin_data(&store, &data);
+        let advanced = build_advanced_admin_data(&store, &data, Vec::new());
         assert_eq!(
             advanced
                 .get("stats")

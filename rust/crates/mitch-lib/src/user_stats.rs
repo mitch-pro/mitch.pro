@@ -19,6 +19,31 @@ fn now_millis() -> i64 {
         .unwrap_or(0)
 }
 
+const DAY_MS: i64 = 86_400_000;
+
+/// `last_active_at` is stored at day granularity: the start (UTC) of the day
+/// the member was last active. Nothing finer is kept, so the stats row is not
+/// a record of when someone uses the site.
+pub fn activity_day(ms: i64) -> i64 {
+    ms - ms.rem_euclid(DAY_MS)
+}
+
+/// Startup migration: floors every stored `last_active_at` to its day.
+/// Idempotent. Returns the number of rows changed.
+pub fn floor_last_active_to_day(store: &DataStore) -> usize {
+    let conn = store.conn();
+    conn.execute(
+        "UPDATE user_stats
+            SET data = json_set(data, '$.last_active_at',
+                (CAST(json_extract(data, '$.last_active_at') AS INTEGER) / 86400000) * 86400000)
+          WHERE json_valid(data)
+            AND json_type(data, '$.last_active_at') IN ('integer', 'real')
+            AND CAST(json_extract(data, '$.last_active_at') AS INTEGER) % 86400000 != 0",
+        [],
+    )
+    .unwrap_or(0)
+}
+
 /// The stored stats object for a user, or `{}` if they have none yet —
 /// matches the old blob's `stats[norm] || {}` access pattern.
 pub fn user_stats_get(store: &DataStore, norm_email: &str) -> Value {

@@ -72,6 +72,12 @@ async fn main() {
             .unwrap_or_else(|e| panic!("open data store at {}: {e}", cfg.data_dir.display())),
     );
     let state = Arc::new(state::AppState::new(cfg.clone(), store.clone()));
+    // Delete personal data older versions stored but this one no longer keeps
+    // (docs/privacy.md). Idempotent, so it runs on every start.
+    let cleanup = mitch_lib::privacy::run_startup_cleanup(&store, &state.id_secret);
+    if !cleanup.is_empty() {
+        tracing::info!("[privacy] startup cleanup: {cleanup:?}");
+    }
 
     app_log_layer::start_writer(store.clone());
 

@@ -41,7 +41,11 @@ a fresh document report does not claim an old page. Restoring a cached page
 resumes its document with a higher sequence number.
 
 Presence is strictly in-memory (process-local) and is never written to disk or
-SQLite. A deployment or restart resets it until clients reconnect. Already-open
+SQLite — that includes `matrix_user_last_seen` and VM page presence. Nothing
+else stands in for it on disk: login sessions don't record a last-used time,
+and `user_stats.last_active_at` holds only the day (for premium expiry). The
+admin "Active users" list reads the in-memory snapshot. See
+[privacy.md](privacy.md). A deployment or restart resets it until clients reconnect. Already-open
 tabs need one refresh to load the new tracker. Cached legacy clients retain
 compatibility, but cannot provide all the focus and ordering guarantees of the
 current tracker.
@@ -64,7 +68,8 @@ stamps or manufacture activity.
 The home rail and Friends use `people.js` to sort active, online, away, and
 offline members, with opted-in interaction recency breaking ties before names.
 `lastActive` is derived from the current in-memory document state, not a stored
-activity score. Privacy-hidden timestamps are zero. The rail displays the
+activity score. Privacy-hidden timestamps are zero, and the directory returns
+zero `lastActive`/`lastSeen` to non-friends. The rail displays the
 existing account rank (owner, admin, moderator, contributor, premium, or member)
 and friendship labels without altering equipped photos or cosmetics.
 

@@ -508,8 +508,6 @@ pub fn handle(
             "update_mirror",
             json!({
                 "url": new_url,
-                "ip": ctx.ip,
-                "userAgent": user_agent(headers),
                 "role": role,
             }),
         );
@@ -543,8 +541,6 @@ pub fn handle(
             "set_featured",
             json!({
                 "href": href,
-                "ip": ctx.ip,
-                "userAgent": user_agent(headers),
                 "role": role,
             }),
         );
@@ -1426,19 +1422,6 @@ fn now_millis() -> i64 {
         .unwrap_or(0)
 }
 
-fn user_agent(headers: &HeaderMap) -> String {
-    let raw = headers
-        .get("user-agent")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("unknown");
-    let sanitized: String = raw.chars().filter(|c| !c.is_control()).take(200).collect();
-    if sanitized.is_empty() {
-        "unknown".to_string()
-    } else {
-        sanitized
-    }
-}
-
 fn valid_email(email: &str) -> bool {
     let mut parts = email.split('@');
     let local = parts.next().unwrap_or("");
@@ -1454,7 +1437,7 @@ fn toggle_ban_set(
     state: &Arc<AppState>,
     body: &Value,
     ctx: &AdminCtx,
-    headers: &HeaderMap,
+    _headers: &HeaderMap,
     set: &std::sync::RwLock<std::collections::HashSet<String>>,
     file: &str,
     action_name: &str,
@@ -1523,11 +1506,6 @@ fn toggle_ban_set(
             "target": target,
             "reason": body.get("reason").and_then(Value::as_str).unwrap_or(""),
             "active": active,
-            "ip": ctx.ip,
-            "userAgent": headers
-                .get("user-agent")
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or("unknown"),
             "role": role,
         }),
     );
@@ -1635,9 +1613,6 @@ pub(super) fn restore_account_access(
             })?;
         *bans = updated;
     }
-    let removed_ips =
-        mitch_lib::bans::banned_ips_remove_for_account(&state.store, &target, &raw_email, None);
-    existed |= !removed_ips.is_empty();
     let matrix_user_id = crate::routes::matrix::resolve_matrix_user_id_for_email(state, &target);
     spawn_matrix_unban(
         state.id_secret.clone(),
@@ -1652,7 +1627,7 @@ fn account_action(
     state: &Arc<AppState>,
     body: &Value,
     ctx: &AdminCtx,
-    headers: &HeaderMap,
+    _headers: &HeaderMap,
     ban: bool,
 ) -> Response {
     let action = if ban { "ban_account" } else { "unban_account" };
@@ -1679,7 +1654,7 @@ fn account_action(
                 &state.cfg.data_dir,
                 &actor,
                 action,
-                json!({ "targetEmail":result["targetEmail"], "reason":result.get("reason"), "duration":result.get("duration"), "expiresAt":result.get("expiresAt"), "ip":ctx.ip, "userAgent":user_agent(headers), "role":"admin" }),
+                json!({ "targetEmail":result["targetEmail"], "reason":result.get("reason"), "duration":result.get("duration"), "expiresAt":result.get("expiresAt"), "role":"admin" }),
             );
             json_response(200, result)
         }
@@ -2464,13 +2439,6 @@ mod tests {
                 ..Default::default()
             },
         );
-        state
-            .store
-            .write_document(
-                &state.cfg.data_dir.join("last_known_ips.json"),
-                &json!({email:"192.0.2.1"}),
-            )
-            .unwrap();
         let result = apply_account_ban(
             &state,
             "First.Last+alias@student.mitch.pro",
@@ -2482,7 +2450,9 @@ mod tests {
         assert_eq!(result["reason"], "Repeated spam");
         assert!(mitch_lib::auth::banned_info_for_email(&state.store, email).is_some());
         assert_eq!(crate::ws::active_user_count(&state, now_millis()), 0);
-        assert!(mitch_lib::bans::banned_ips_get(&state.store, "192.0.2.1").is_none());
+        assert!(
+            mitch_lib::bans::banned_ips_get(&state.store, &state.id_secret, "192.0.2.1").is_none()
+        );
         state
             .shadow_bans
             .write()
@@ -2490,16 +2460,18 @@ mod tests {
             .insert("First.Last+legacy@student.mitch.pro".into());
         mitch_lib::bans::banned_ips_insert(
             &state.store,
+            &state.id_secret,
             "192.0.2.1",
-            "another account",
+            "network ban",
             "owner",
-            "other@example.com",
         );
         let restored = restore_account_access(&state, "First.Last@student.mitch.pro").unwrap();
         assert_eq!(restored["existed"], true);
         assert!(mitch_lib::auth::banned_info_for_email(&state.store, email).is_none());
         assert!(state.shadow_bans.read().unwrap().is_empty());
-        assert!(mitch_lib::bans::banned_ips_get(&state.store, "192.0.2.1").is_some());
+        assert!(
+            mitch_lib::bans::banned_ips_get(&state.store, &state.id_secret, "192.0.2.1").is_some()
+        );
         drop(state);
         std::fs::remove_dir_all(dir).unwrap();
     }
@@ -2685,17 +2657,5 @@ mod tests {
 
         let admins_after = mitch_lib::auth::admin_member_emails(&state.store);
         assert!(!admins_after.contains(&"newadmin@example.com".to_string()));
-    }
-
-    #[test]
-    fn test_user_agent_sanitization() {
-        let mut headers = axum::http::HeaderMap::new();
-        let long_ua = "a".repeat(300);
-        headers.insert(
-            "user-agent",
-            axum::http::HeaderValue::from_str(&long_ua).unwrap(),
-        );
-        let sanitized = user_agent(&headers);
-        assert_eq!(sanitized.len(), 200);
     }
 }
