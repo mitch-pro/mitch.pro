@@ -17,7 +17,6 @@ pub fn inject_page(
     path: &str,
     _html_base: &str,
     html: &mut String,
-    is_sales_page: bool,
 ) -> String {
     let cfg: &SiteConfig = &state.cfg;
     let mut raw = std::mem::take(html);
@@ -96,19 +95,6 @@ pub fn inject_page(
         && mitch_lib::auth::valid_id(page_sid, &state.id_secret)
         && !state.is_revoked_id(page_sid)
         && state.check_password_cookie(headers, Some(page_sid));
-
-    let is_rjuhsd = crate::hosts::is_rjuhsd_host(headers);
-    let is_pickle = crate::hosts::is_pickle_host(headers);
-
-    if !is_onboarding
-        && !is_sales_page
-        && !is_rjuhsd
-        && !is_pickle
-        && (!is_embedded || is_standalone_game_portal)
-        && !is_authenticated_html
-    {
-        inject_str.push_str("<script src=\"/guest-preview.js?v=1\" defer></script>\n");
-    }
 
     if is_authenticated_html && !raw.contains("/presence.js") {
         inject_str.push_str("<script src=\"/presence.js?v=1\" defer></script>\n");

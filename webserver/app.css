@@ -322,7 +322,7 @@ pre, code, .code, .terminal, .log, .console { border: 1px solid var(--t-bd); bor
 .mitch-banner-btn.decline { color: var(--t-fg); border-color: var(--t-bd); }
 
 /* --------------------------------------------------------------------------
-   Shared service-worker notification bell + guest preview (any page) —
+   Shared service-worker notification bell (any page) —
    previously community-refresh.css.
    -------------------------------------------------------------------------- */
 
@@ -332,15 +332,6 @@ pre, code, .code, .terminal, .log, .console { border: 1px solid var(--t-bd); bor
 #sw-notif-btn:has(#sw-notif-count:not([style*="none"])) { box-shadow: 0 0 0 3px var(--t-gls); }
 #sw-notif-panel { background: var(--t-bg); border: 1px solid var(--t-bd); border-radius: var(--t-radius); max-height: min(620px, calc(100dvh - 90px)); }
 
-.guest-clock { position: fixed; right: 16px; bottom: 16px; z-index: 9000; padding: 10px 15px; background: var(--t-bg2); color: var(--t-fg); border: 1px solid var(--t-bd); border-radius: 999px; font: 600 12px var(--t-font); }
-.guest-signup { box-sizing: border-box; width: min(440px, calc(100vw - 32px)); padding: 30px; border: 1px solid var(--t-bd); border-radius: var(--t-radius); background: var(--t-bg); color: var(--t-fg); font-family: inherit; }
-.guest-signup::backdrop { background: rgba(10, 8, 14, 0.5); backdrop-filter: blur(6px); }
-.guest-signup img { width: 48px; height: 48px; border-radius: 12px; }
-.guest-signup h2 { font-size: 26px; letter-spacing: -0.03em; margin: 18px 0 10px; }
-.guest-signup p { color: var(--t-fg2); line-height: 1.6; font-size: 14px; }
-.guest-signup a { display: block; padding: 13px; text-align: center; margin-top: 12px; border-radius: var(--t-radius-sm); text-decoration: none; color: var(--t-fg); border: 1px solid var(--t-bd); }
-.guest-signup a:first-of-type { background: var(--t-ac); color: var(--t-ac-ink); font-weight: 700; border-color: var(--t-ac); }
-html.guest-preview .home-account-link, html.guest-preview .app-account-link, html.guest-preview #auth-warning { display: none; }
 
 .owner-account-tools { padding: 20px; border: 1px solid var(--t-bd); border-radius: var(--t-radius); margin: 16px 0; background: var(--t-bg2); }
 .owner-account-tools p { color: var(--t-fg2); font-size: 13px; line-height: 1.6; }

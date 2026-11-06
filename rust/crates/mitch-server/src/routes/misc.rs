@@ -70,9 +70,6 @@ pub async fn handle(
     if path == "/api/verify-open" || path == "/verify-open.json" {
         return Some(verify_open(method));
     }
-    if path == "/api/guest-session" && *method == Method::GET {
-        return Some(guest_session(state, headers));
-    }
     if (path == "/api/health" || path == "/health" || path == "/healthz") && *method == Method::GET
     {
         return Some(health_check());
@@ -857,68 +854,6 @@ pub fn verify_open(method: &Method) -> Response {
             .unwrap_or_else(|_| crate::errors::err_resp(500, None, None));
     }
     crate::errors::err_resp(405, None, None)
-}
-
-/// `GET /api/guest-session` — server.js:10584-10590.
-fn guest_session(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
-    if state.check_password_cookie(headers, None) {
-        return Response::builder()
-            .status(StatusCode::OK)
-            .header("content-type", "application/json")
-            .header("cache-control", "no-store")
-            .body(axum::body::Body::from(r#"{"authenticated":true}"#))
-            .unwrap_or_else(|_| crate::errors::err_resp(500, None, None));
-    }
-
-    let cookie_header = headers
-        .get(axum::http::header::COOKIE)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-    let cookies = mitch_lib::auth::get_cookies_from_header_value(
-        cookie_header,
-        &state.store,
-        &state.id_secret,
-        false,
-    );
-    let guest_token = cookies.get("mitch_guest").unwrap_or("");
-
-    let secret = mitch_lib::crypto::hmac_sha256(&state.id_secret, b"guest-preview-v1");
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0);
-    let preview = mitch_lib::guest::guest_preview(guest_token, &secret, now);
-    let secure_flag = std::env::var("SESSION_COOKIE_SECURE").unwrap_or_default();
-    let node_env_prod = std::env::var("NODE_ENV").unwrap_or_default() == "production";
-    let cookie_hdr = mitch_lib::auth::set_cookie_header(
-        "mitch_guest",
-        &preview.token,
-        &secure_flag,
-        node_env_prod,
-        31536000,
-        true,
-    );
-
-    let body = json!({
-        "authenticated": false,
-        "expiresAt": preview.expires_at,
-        "serverNow": preview.server_now,
-    });
-
-    let mut resp = Response::builder()
-        .status(StatusCode::OK)
-        .header("content-type", "application/json")
-        .header("cache-control", "no-store")
-        .body(axum::body::Body::from(
-            serde_json::to_string(&body).unwrap_or_default(),
-        ))
-        .unwrap_or_else(|_| crate::errors::err_resp(500, None, None));
-
-    if let Ok(hv) = axum::http::HeaderValue::from_str(&cookie_hdr) {
-        resp.headers_mut()
-            .append(axum::http::header::SET_COOKIE, hv);
-    }
-    resp
 }
 
 const DEV_TEST_EMAIL: &str = "admin@mitch.pro";

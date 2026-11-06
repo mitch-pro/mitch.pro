@@ -84,7 +84,6 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/media/site-tour-v3.mp4",
     "/media/site-tour-v4.mp4",
     "/media/site-tour-poster-v3.webp",
-    "/guest-preview.js",
     "/home-friends.js",
     "/home.css",
     "/turkey-catch.js",
@@ -1717,7 +1716,6 @@ async fn handle_resolved(
         && path != "/admin.html"
         && path != "/roblox.html"
     {
-        let mut is_sales_page = false;
         let mut set_trial_cookie = false;
         let file_path: Option<std::path::PathBuf> = if path == "/" || path == "/index.html" {
             let cookie_header = headers
@@ -1747,7 +1745,6 @@ async fn handle_resolved(
                 }
                 safe_webroot_path(&webroot, "index.html")
             } else {
-                is_sales_page = true;
                 safe_webroot_path(&webroot, "index-sales.html")
             }
         } else if path.ends_with('/') {
@@ -1758,11 +1755,6 @@ async fn handle_resolved(
         } else {
             safe_webroot_path(&webroot, &path)
         };
-        if let Some(ref fp) = file_path {
-            if fp.to_string_lossy().ends_with("index-sales.html") {
-                is_sales_page = true;
-            }
-        }
         if let Some(fp) = file_path {
             if fp.exists() && std::fs::metadata(&fp).map(|m| !m.is_dir()).unwrap_or(false) {
                 if let Ok(raw) = std::fs::read(&fp) {
@@ -1793,12 +1785,7 @@ async fn handle_resolved(
                     }
                     if let Ok(mut html) = String::from_utf8(raw) {
                         let body_str = crate::pipeline::inject_page(
-                            &state,
-                            headers,
-                            &path,
-                            &html_base,
-                            &mut html,
-                            is_sales_page,
+                            &state, headers, &path, &html_base, &mut html,
                         );
                         let mut resp = html_response(body_str);
                         if set_trial_cookie {
