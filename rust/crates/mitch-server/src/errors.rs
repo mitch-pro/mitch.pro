@@ -149,7 +149,7 @@ pub fn companion_ban_response(ban: &mitch_lib::companion::CompanionBan, staff: b
     let staff_html = if staff {
         "<button id=\"lift\">Lift ban</button><p id=\"err\" hidden></p>\
 <script>document.getElementById('lift').onclick=function(){var b=this;b.disabled=true;\
-fetch('/api/companion/ban/lift',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:'{}'})\
+fetch('/api/companion/ban/lift',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-Mitch-Requested-With':'1'},body:'{}'})\
 .then(function(r){if(!r.ok)throw 0;location.reload()})\
 .catch(function(){b.disabled=false;var e=document.getElementById('err');e.hidden=false;e.textContent='Could not lift the ban.'})}</script>"
     } else {
@@ -167,4 +167,28 @@ fetch('/api/companion/ban/lift',{method:'POST',credentials:'same-origin',headers
         .header("x-content-type-options", "nosniff")
         .body(axum::body::Body::from(html))
         .expect("static response")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The staff Lift button must send the header `handler::csrf_check`
+    /// requires on mutating `/api/` requests, or the lift is rejected with
+    /// `csrf_blocked`.
+    #[tokio::test]
+    async fn companion_ban_lift_button_sends_csrf_header() {
+        let ban = mitch_lib::companion::CompanionBan {
+            character_id: "c".into(),
+            character_name: "Pal".into(),
+            banned_at: 0,
+            expires_at: 0,
+        };
+        let resp = companion_ban_response(&ban, true);
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let html = String::from_utf8(body.to_vec()).unwrap();
+        assert!(html.contains("'X-Mitch-Requested-With':'1'"));
+    }
 }
