@@ -311,8 +311,8 @@ services:
       - ./data/conduit:/var/lib/matrix-conduit
     environment:
       - CONDUIT_CONFIG=/etc/conduit.toml
-      - CONDUIT_ALLOW_FEDERATION=true
-      - CONDUIT_TRUSTED_SERVERS=["matrix.org"]
+      - CONDUIT_ALLOW_FEDERATION=false
+      - CONDUIT_TRUSTED_SERVERS=[]
 
   # LiveKit SFU for Matrix Voice & Video Calling (MSC3401 / MSC4143 MatrixRTC)
   livekit:
