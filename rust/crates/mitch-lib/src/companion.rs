@@ -753,3 +753,97 @@ mod tests {
         assert!(!set_special_ability(&store, "missing", "sandevistan"));
     }
 }
+
+// --- Companion bans -------------------------------------------------------
+//
+// A reviewed character can lock someone out of the whole site for up to a
+// day. This is deliberately NOT the account ban (`bans.rs` / `blacklist`):
+// it has no appeal flow, no Matrix purge, and no chat-history removal, and
+// site staff (admins/moderators) can lift it themselves from the ban page.
+// One row per email; a new ban replaces the old one, and expired rows are
+// ignored on read (and cleaned up lazily), so there's no job.
+
+/// Longest a companion can ban someone for: one day.
+pub const MAX_COMPANION_BAN_MINUTES: i64 = 24 * 60;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CompanionBan {
+    pub character_id: String,
+    pub character_name: String,
+    pub banned_at: i64,
+    pub expires_at: i64,
+}
+
+/// Bans `email` for `minutes` (clamped to 1..=[`MAX_COMPANION_BAN_MINUTES`]).
+/// Returns the ban as stored.
+pub fn ban_user(
+    store: &DataStore,
+    email: &str,
+    character_id: &str,
+    character_name: &str,
+    minutes: i64,
+) -> CompanionBan {
+    let now = now_millis();
+    let minutes = minutes.clamp(1, MAX_COMPANION_BAN_MINUTES);
+    let ban = CompanionBan {
+        character_id: character_id.to_string(),
+        character_name: character_name.to_string(),
+        banned_at: now,
+        expires_at: now + minutes * 60_000,
+    };
+    let _ = store.conn().execute(
+        "INSERT INTO companion_bans (email, character_id, character_name, banned_at, expires_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5) \
+         ON CONFLICT(email) DO UPDATE SET character_id = excluded.character_id, \
+         character_name = excluded.character_name, banned_at = excluded.banned_at, \
+         expires_at = excluded.expires_at",
+        rusqlite::params![
+            normalize_email(email),
+            ban.character_id,
+            ban.character_name,
+            ban.banned_at,
+            ban.expires_at
+        ],
+    );
+    ban
+}
+
+/// The ban currently in force for `email`, if any.
+pub fn active_ban(store: &DataStore, email: &str) -> Option<CompanionBan> {
+    if email.is_empty() {
+        return None;
+    }
+    let norm = normalize_email(email);
+    let now = now_millis();
+    let conn = store.conn();
+    let ban = conn
+        .query_row(
+            "SELECT character_id, character_name, banned_at, expires_at FROM companion_bans WHERE email = ?1",
+            rusqlite::params![norm],
+            |row| {
+                Ok(CompanionBan {
+                    character_id: row.get(0)?,
+                    character_name: row.get(1)?,
+                    banned_at: row.get(2)?,
+                    expires_at: row.get(3)?,
+                })
+            },
+        )
+        .ok()?;
+    if ban.expires_at <= now {
+        let _ = conn.execute(
+            "DELETE FROM companion_bans WHERE email = ?1 AND expires_at <= ?2",
+            rusqlite::params![norm, now],
+        );
+        return None;
+    }
+    Some(ban)
+}
+
+/// Removes any companion ban on `email`.
+pub fn lift_ban(store: &DataStore, email: &str) {
+    let _ = store.conn().execute(
+        "DELETE FROM companion_bans WHERE email = ?1",
+        rusqlite::params![normalize_email(email)],
+    );
+}

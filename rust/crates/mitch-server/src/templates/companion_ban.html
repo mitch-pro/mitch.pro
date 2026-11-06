@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Banned by {{name}} — mitch.pro</title>
+<style>
+:root{color-scheme:light dark;--bg:#f2f3f5;--card:#fff;--fg:#24262a;--fg2:#62666d;--bd:#d4d6d9;--ac:#303238;--acfg:#fff;font-family:"DM Sans",Arial,Helvetica,sans-serif}
+@media(prefers-color-scheme:dark){:root{--bg:#0e0e14;--card:#17171f;--fg:#e8e6e3;--fg2:#9a9aa6;--bd:#2a2a38;--ac:#e8e6e3;--acfg:#0e0e14}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--fg);padding:16px}
+main{width:min(520px,100%);background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:32px}
+h1{font-size:26px;line-height:1.2;margin:0 0 14px}
+p{font-size:15px;line-height:1.6;margin:12px 0;color:var(--fg2)}
+button{min-height:42px;padding:10px 20px;border:0;border-radius:6px;background:var(--ac);color:var(--acfg);font:inherit;font-weight:700;cursor:pointer;margin-top:10px}
+button:disabled{opacity:.6;cursor:default}
+#err{color:#d33}
+</style>
+</head>
+<body>
+<main>
+<h1>{{name}} banned you</h1>
+<p>You can use the site again after {{until}}. It lifts on its own then.</p>
+{{staff}}
+</main>
+</body>
+</html>

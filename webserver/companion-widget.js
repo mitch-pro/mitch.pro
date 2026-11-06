@@ -482,6 +482,9 @@
         }
         if (opts.showBubbleOnReply && el.bubble) el.bubble.hidden = false;
         if (el.replyEl) el.replyEl.textContent = res.data.reply;
+        // The character banned the person: show what it said for a moment,
+        // then reload into the server's ban page.
+        if (res.data.ban) setTimeout(function () { location.reload(); }, 3000);
         setMood(res.data.mood);
         if (res.data.action) playAction(res.data.action, res.data.ability || null);
         if (res.data.customJs) runCustomJs(res.data.customJs);

@@ -650,6 +650,9 @@ async fn handle_resolved(
     if let Some(response) = crate::access::enforce_ban(&state, headers, &path, &search).await {
         return response;
     }
+    if let Some(response) = crate::access::enforce_companion_ban(&state, headers, &path) {
+        return response;
+    }
 
     // A server run can pin the holiday theme (MITCH_HOLIDAY_THEME): the pin is put
     // in front of the theme script, which every page loads.

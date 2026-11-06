@@ -599,6 +599,13 @@ impl DataStore {
                         percent REAL NOT NULL DEFAULT 0,
                         PRIMARY KEY (email, character_id)
                     );
+                    CREATE TABLE IF NOT EXISTS companion_bans (
+                        email TEXT PRIMARY KEY,
+                        character_id TEXT NOT NULL,
+                        character_name TEXT NOT NULL,
+                        banned_at INTEGER NOT NULL,
+                        expires_at INTEGER NOT NULL
+                    );
                     CREATE TABLE IF NOT EXISTS companion_chat_messages (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         email TEXT NOT NULL,

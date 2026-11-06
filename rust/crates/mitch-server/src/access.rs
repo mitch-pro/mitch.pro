@@ -60,6 +60,44 @@ pub fn account_response(
     response
 }
 
+/// Blocks a person a companion has banned (`mitch_lib::companion::active_ban`).
+/// Separate from the account ban: only the logged-in session's own account is
+/// checked, and staff can lift it from the page this returns. HTML gets the
+/// ban page; API-style paths get a 403 JSON error. The lift endpoint and the
+/// service worker stay reachable.
+pub fn enforce_companion_ban(
+    state: &Arc<AppState>,
+    headers: &HeaderMap,
+    path: &str,
+) -> Option<Response> {
+    if path == "/api/companion/ban/lift" || path == "/sw.js" || path == "/favicon.ico" {
+        return None;
+    }
+    let cookies = crate::routes::me::cookies_of(state, headers);
+    let sid = cookies
+        .get("studentId")
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| cookies.get("id").unwrap_or(""));
+    let email = mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, sid)?;
+    let ban = mitch_lib::companion::active_ban(&state.store, &email)?;
+    let api = path.starts_with("/api/")
+        || path.starts_with("/_matrix/")
+        || path.starts_with("/livekit/")
+        || path.ends_with("/ws")
+        || path == "/ws";
+    if api {
+        return Some(crate::errors::json_resp(
+            403,
+            json!({
+                "error": "banned by companion", "companionBanned": true,
+                "by": ban.character_name, "expiresAt": ban.expires_at
+            }),
+        ));
+    }
+    let staff = crate::routes::companion::is_staff_email(state, &email);
+    Some(crate::errors::companion_ban_response(&ban, staff))
+}
+
 pub async fn enforce_ban(
     state: &Arc<AppState>,
     headers: &HeaderMap,
@@ -302,6 +340,51 @@ mod tests {
                 .await
                 .is_none()
         );
+        drop(state);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[tokio::test]
+    async fn companion_ban_blocks_until_expiry_or_lift() {
+        let (state, dir, token) = fixture();
+        mitch_lib::bans::blacklist_remove(&state.store, "banned@example.com", "banned@example.com")
+            .unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::COOKIE,
+            HeaderValue::from_str(&format!("mitch_session={token}")).unwrap(),
+        );
+        assert!(enforce_companion_ban(&state, &headers, "/").is_none());
+        let ban = mitch_lib::companion::ban_user(
+            &state.store,
+            "banned@example.com",
+            "c1",
+            "Test <b>",
+            99_999,
+        );
+        // Clamped to one day.
+        assert_eq!(
+            ban.expires_at - ban.banned_at,
+            mitch_lib::companion::MAX_COMPANION_BAN_MINUTES * 60_000
+        );
+        assert_eq!(
+            enforce_companion_ban(&state, &headers, "/")
+                .unwrap()
+                .status(),
+            403
+        );
+        assert_eq!(
+            enforce_companion_ban(&state, &headers, "/api/me")
+                .unwrap()
+                .status(),
+            403
+        );
+        assert!(enforce_companion_ban(&state, &headers, "/api/companion/ban/lift").is_none());
+        assert!(!crate::routes::companion::is_staff_email(
+            &state,
+            "banned@example.com"
+        ));
+        mitch_lib::companion::lift_ban(&state.store, "banned@example.com");
+        assert!(enforce_companion_ban(&state, &headers, "/").is_none());
         drop(state);
         std::fs::remove_dir_all(dir).unwrap();
     }
