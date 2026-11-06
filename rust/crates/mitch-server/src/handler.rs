@@ -49,6 +49,8 @@ pub const HTML_OPEN: &[&str] = &[
     "/larp/index",
     "/larp/rezero",
     "/larp/rezero/index",
+    "/larp/teruhashi",
+    "/larp/teruhashi/index",
     "/games",
     "/games/index",
     "/game-portal",
@@ -912,6 +914,7 @@ async fn handle_resolved(
         || clean_path == "/api/me/coins"
         || clean_path == "/larp"
         || clean_path == "/larp/rezero"
+        || clean_path == "/larp/teruhashi"
         || clean_path == "/bell"
         || clean_path == "/preferences"
         || clean_path == "/api/bell/override"
