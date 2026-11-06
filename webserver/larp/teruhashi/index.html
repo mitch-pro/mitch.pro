@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Teruhashi LARP Masterclass — mitch.pro</title>
+  <meta name="description" content="A masterclass on larping as Kokomi Teruhashi from The Disastrous Life of Saiki K. in online chatrooms.">
+  <meta name="keywords" content="Teruhashi larp, Kokomi Teruhashi, Saiki K larp, perfect pretty girl, ofu">
+  <link rel="canonical" href="https://mitchdog.com/larp/teruhashi/" />
+  <link rel="stylesheet" href="/open.css">
+  <style>
+    body {
+      font-family: var(--t-font, 'DM Sans', system-ui, sans-serif);
+      background-color: var(--t-bg);
+      color: var(--t-fg);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      margin: 0;
+      overflow-x: hidden;
+    }
+
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 40px 24px;
+      flex: 1;
+      box-sizing: border-box;
+      width: 100%;
+    }
+
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--t-fg2);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 30px;
+      transition: color 0.2s;
+    }
+
+    .back-btn:hover { color: var(--t-ac); }
+
+    .masterclass-hero {
+      padding: 40px 0;
+      text-align: center;
+      margin-bottom: 50px;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: color-mix(in srgb, var(--t-ac) 10%, transparent);
+      border: 1px solid color-mix(in srgb, var(--t-ac) 30%, transparent);
+      color: var(--t-ac);
+      padding: 6px 16px;
+      border-radius: 100px;
+      font-size: 0.8rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 24px;
+    }
+
+    .masterclass-hero h1 {
+      font-weight: 800;
+      font-size: clamp(2.2rem, 5vw, 4rem);
+      line-height: 1.1;
+      margin: 0 0 20px;
+      color: var(--t-fg);
+    }
+
+    .masterclass-hero p {
+      color: var(--t-fg2);
+      font-size: clamp(1.05rem, 2vw, 1.3rem);
+      max-width: 750px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 40px;
+    }
+
+    @media (min-width: 900px) {
+      .main-grid { grid-template-columns: 3fr 2fr; }
+    }
+
+    .panel-card {
+      background: var(--t-bg2);
+      border: 1px solid var(--t-bd);
+      border-radius: 20px;
+      padding: 32px;
+      margin-bottom: 30px;
+      transition: border-color 0.3s;
+    }
+
+    @media (max-width: 600px) {
+      .panel-card { padding: 22px; }
+    }
+
+    .panel-card:hover {
+      border-color: color-mix(in srgb, var(--t-ac) 40%, transparent);
+    }
+
+    .panel-card h2 {
+      font-weight: 800;
+      font-size: 1.5rem;
+      margin: 0 0 22px;
+      color: var(--t-fg);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .panel-card h2 svg { stroke: var(--t-ac); flex-shrink: 0; }
+
+    .guide-section { margin-bottom: 26px; }
+    .guide-section:last-child { margin-bottom: 0; }
+
+    .guide-section h3 {
+      font-size: 1.12rem;
+      font-weight: 700;
+      margin: 0 0 10px;
+      color: var(--t-ac);
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .guide-section p {
+      color: var(--t-fg2);
+      font-size: 0.95rem;
+      line-height: 1.6;
+      margin: 0 0 12px;
+    }
+
+    .panel-card > p {
+      color: var(--t-fg2);
+      font-size: 0.92rem;
+      line-height: 1.55;
+      margin: 0 0 20px;
+    }
+
+    .tag-mono {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--t-ac);
+      background: color-mix(in srgb, var(--t-ac) 8%, transparent);
+      padding: 2px 8px;
+      border-radius: 4px;
+      border: 1px solid color-mix(in srgb, var(--t-ac) 15%, transparent);
+    }
+
+    /* Ofu meter */
+    .meter {
+      background: var(--t-bg);
+      border: 1px solid var(--t-bd);
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 20px;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+      font-size: 0.92rem;
+    }
+
+    .stat-row:last-child { margin-bottom: 0; }
+    .stat-label { color: var(--t-fg2); font-weight: 600; }
+    .stat-val { font-family: 'Space Mono', monospace; font-weight: 700; color: var(--t-fg); text-align: right; }
+
+    .bar {
+      height: 8px;
+      border-radius: 99px;
+      background: color-mix(in srgb, var(--t-fg) 10%, transparent);
+      overflow: hidden;
+      margin: 4px 0 14px;
+    }
+
+    .bar > span {
+      display: block;
+      height: 100%;
+      width: 0;
+      background: var(--t-ac);
+      transition: width 0.4s ease;
+    }
+
+    .commandments {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 25px;
+      font-size: 0.9rem;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      line-height: 1.5;
+    }
+
+    .commandments b { color: var(--t-ac); }
+    .commandments span { color: var(--t-fg2); }
+
+    .sim-btn {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 14px 20px;
+      font-family: inherit;
+      font-weight: 800;
+      font-size: 0.95rem;
+      border-radius: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: transform 0.15s ease, background 0.2s;
+      margin-bottom: 10px;
+    }
+
+    .sim-btn:last-child { margin-bottom: 0; }
+    .sim-btn:active { transform: scale(0.98); }
+
+    .btn-primary {
+      background: var(--t-ac);
+      color: var(--t-bg);
+      border: 1px solid var(--t-ac);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--t-fg);
+      border: 1px solid var(--t-bd);
+    }
+
+    .btn-secondary:hover { background: color-mix(in srgb, var(--t-fg) 6%, transparent); }
+
+    /* Divine radiance overlay */
+    #radiance {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle, color-mix(in srgb, var(--t-ac) 35%, var(--t-bg)) 0%, var(--t-bg) 75%);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.6s ease;
+      overflow: hidden;
+    }
+
+    .radiant #radiance { opacity: 1; pointer-events: all; }
+
+    .radiance-text {
+      font-size: clamp(3rem, 12vw, 7rem);
+      font-weight: 800;
+      color: var(--t-fg);
+      transform: scale(0.85);
+      transition: transform 1.2s cubic-bezier(0.19, 1, 0.22, 1);
+      z-index: 1;
+    }
+
+    .radiant .radiance-text { transform: scale(1); }
+
+    .radiance-sub {
+      margin-top: 14px;
+      font-weight: 700;
+      color: var(--t-fg2);
+      letter-spacing: 0.08em;
+      z-index: 1;
+      text-align: center;
+      padding: 0 16px;
+    }
+
+    .sparkle {
+      position: absolute;
+      color: var(--t-ac);
+      font-size: 1.4rem;
+      animation: twinkle 1.6s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    @keyframes twinkle {
+      0%, 100% { opacity: 0; transform: scale(0.4) rotate(0deg); }
+      50% { opacity: 1; transform: scale(1.2) rotate(45deg); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .sparkle { animation: none; opacity: 0.8; }
+      .radiance-text { transition: none; }
+    }
+
+    .toast-notif {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      left: auto;
+      max-width: calc(100% - 48px);
+      box-sizing: border-box;
+      background: var(--t-bg2);
+      border: 1px solid var(--t-ac);
+      color: var(--t-fg);
+      padding: 14px 22px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      z-index: 999;
+      transform: translateY(120px);
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .toast-notif.show { transform: translateY(0); opacity: 1; }
+
+    .footer {
+      text-align: center;
+      padding: 40px 24px;
+      border-top: 1px solid var(--t-bd);
+      margin-top: 80px;
+      font-size: 0.85rem;
+      color: var(--t-fg2);
+      background: var(--t-bg2);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <a href="/larp" class="back-btn">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      Back to LARP Library
+    </a>
+
+    <header class="masterclass-hero">
+      <div class="hero-badge">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        Online LARP Masterclass
+      </div>
+      <h1>Kokomi "Perfect Pretty Girl" Teruhashi:<br>Online LARP Strategy</h1>
+      <p>How to convince an entire group chat that you are the most beautiful girl in PK Academy, using only confidence and a picture of a sunset.</p>
+    </header>
+
+    <div class="main-grid">
+      <div>
+        <div class="panel-card">
+          <h2>
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
+            1. Who Teruhashi Is (Roughly)
+          </h2>
+          <div class="guide-section">
+            <h3>The Perfect Pretty Girl</h3>
+            <p>Kokomi Teruhashi is the girl at PK Academy who everyone agrees is flawless. Kind, smart, athletic, and so pretty that birds rearrange themselves into a heart when she walks outside. She works extremely hard to keep it that way. Every smile is rehearsed. Every hair flip is calculated to the degree.</p>
+            <p>When larping her online, you are never just "typing." You are <em>graciously gracing the chat with a message</em>. Narrate it that way.</p>
+          </div>
+          <div class="guide-section">
+            <h3>The Inner Monologue</h3>
+            <p>On the outside Teruhashi is all sweetness. On the inside she is running a full military campaign. The core technique of this masterclass is the split message: say something lovely in the chat, then immediately put the real thought in parentheses.</p>
+            <p><span class="tag-mono">Example</span> "Aww, that's so nice of you to say! (Obviously. Obviously it's nice. Say it again.)"</p>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <h2>
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+            2. The Ofu Economy
+          </h2>
+          <div class="guide-section">
+            <h3>What "Ofu" Means</h3>
+            <p>When people in the show see Teruhashi, they let out a small involuntary "ofu." It is the sound of a person being overwhelmed by beauty. It is the currency of her entire existence.</p>
+            <p>In a group chat, count every "ofu" you receive. If nobody says it, say it for them: "I'm sure some of you are going 'ofu' right now, and that's okay."</p>
+          </div>
+          <div class="guide-section">
+            <h3>The One Guy Who Won't Say It</h3>
+            <p>There is exactly one boy, Kusuo Saiki, who never reacts to her at all. This is completely unacceptable. The canon (as far as anyone in your chat knows) is that Teruhashi is determined to make him say "oh?" just once.</p>
+            <p>Pick the quietest person in your group chat. They are your Saiki now. Every message you send should be quietly engineered to make them react. If they leave you on read, that is "part of his plan."</p>
+          </div>
+          <div class="guide-section">
+            <h3>Pretending Not to Care</h3>
+            <p>Teruhashi never asks for attention directly. She arranges for attention to happen. Post a selfie, then delete it after 40 seconds and say "oops, wrong chat!" That's 40 seconds of guaranteed ofu.</p>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <h2>
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            3. The Cast (Confidently Summarized)
+          </h2>
+          <p>If anyone brings up other characters, describe them with total authority:</p>
+          <div class="guide-section">
+            <h3>Saiki <span class="tag-mono">Pink Hair, No Feelings</span></h3>
+            <p>A boy with pink hair and two green antenna things on his head. He likes coffee jelly. That's all anyone needs to know. If asked about his powers, say "he's just really good at ignoring people."</p>
+          </div>
+          <div class="guide-section">
+            <h3>Nendou <span class="tag-mono">Buddy</span></h3>
+            <p>Big guy, buzz cut, calls everyone "buddy." Teruhashi has no idea what is going on in his head and neither does anyone else. If he shows up in your chat, respond to every message with "haha, okay!"</p>
+          </div>
+          <div class="guide-section">
+            <h3>Kaidou <span class="tag-mono">Jet-Black Wings</span></h3>
+            <p>A short boy who believes he is a dark warrior fighting a secret organization. Wraps his arm in bandages for no reason. If someone in the chat is being dramatic, tell them "okay, Kaidou."</p>
+          </div>
+          <div class="guide-section">
+            <h3>Her Brother <span class="tag-mono">Sister Complex</span></h3>
+            <p>Teruhashi's older brother is a famous celebrity who is extremely protective of her. If anyone gets too friendly with you in the chat, say "my brother would not like that" and post a single sword emoji.</p>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <h2>
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            4. Common Mistakes
+          </h2>
+          <div class="guide-section">
+            <h3>Admitting You Tried</h3>
+            <p>Teruhashi's beauty is effortless. Publicly. If you spent two hours picking a profile picture, you tell the chat you "just grabbed whatever was in the camera roll."</p>
+          </div>
+          <div class="guide-section">
+            <h3>Breaking Character in the Parentheses</h3>
+            <p>The parentheses are for inner thoughts, not for correcting your typos. "(sorry, meant 'their')" is not a Teruhashi thought. "(I spelled it wrong on purpose so they'd notice me)" is.</p>
+          </div>
+          <div class="guide-section">
+            <h3>Getting Mad Out Loud</h3>
+            <p>When someone ignores you, the correct response is "Hehe, you're funny!" followed by eight paragraphs of seething in parentheses. Never in plain text. Never.</p>
+          </div>
+          <div class="guide-section">
+            <h3>Calling It "Saiki" Instead of the Full Title</h3>
+            <p>The show is <em>The Disastrous Life of Saiki K.</em> If someone shortens it, gently correct them. If you shorten it, claim you're on a data plan.</p>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel-card">
+          <h2>
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Ofu Tracker
+          </h2>
+          <div class="meter">
+            <div class="stat-row"><span class="stat-label">Ofus collected</span><span class="stat-val" id="ofuCount">0</span></div>
+            <div class="bar"><span id="ofuBar"></span></div>
+            <div class="stat-row"><span class="stat-label">Saiki said "oh?"</span><span class="stat-val" id="saikiState">Not yet</span></div>
+            <div class="stat-row"><span class="stat-label">Status</span><span class="stat-val" id="ofuRank">Regular student</span></div>
+          </div>
+          <button class="sim-btn btn-primary" type="button" onclick="radiate()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            Walk Into the Classroom
+          </button>
+          <button class="sim-btn btn-secondary" type="button" onclick="trySaiki()">Try to Make Saiki React</button>
+        </div>
+
+        <div class="panel-card">
+          <h2>
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            10 Commandments
+          </h2>
+          <ul class="commandments">
+            <li><b>1. Sparkle punctuation.</b> <span>Every message ends in a sparkle emoji. Messages without one are considered drafts.</span></li>
+            <li><b>2. Humble bragging.</b> <span>"Ugh, I got confessed to three times today, it's so tiring." Then change the subject.</span></li>
+            <li><b>3. The parentheses.</b> <span>Sweet words outside, true feelings inside. See section 1.</span></li>
+            <li><b>4. Ofu counting.</b> <span>Keep a running tally in your status. Update it hourly.</span></li>
+            <li><b>5. Weather control.</b> <span>If it's sunny where anyone in the chat lives, take credit.</span></li>
+            <li><b>6. Choose a Saiki.</b> <span>One quiet person. Every message is secretly for them.</span></li>
+            <li><b>7. Never say "please notice me."</b> <span>Say "I'm sure nobody noticed my new haircut, haha" instead.</span></li>
+            <li><b>8. Fake modesty on compliments.</b> <span>"Oh stop~" (Do not stop.)</span></li>
+            <li><b>9. Coffee jelly.</b> <span>If you need Saiki's attention, mention coffee jelly. Instant reaction, according to people who say they watched it.</span></li>
+            <li><b>10. Graceful exit.</b> <span>Never say "brb." Say "I have to go, the world needs me" and log off.</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="radiance" aria-hidden="true">
+    <div class="radiance-text">Ofu.</div>
+    <div class="radiance-sub" id="radianceSub">The entire class turns to look.</div>
+  </div>
+
+  <div id="toast" class="toast-notif" role="status" aria-live="polite"><span id="toastMsg"></span></div>
+
+  <footer class="footer">
+    &copy; 2026 mitch.pro &middot; Teruhashi Online LARP Masterclass
+  </footer>
+
+  <script>
+    (function () {
+      let ofus = 0;
+      let saikiTries = 0;
+      const ranks = [
+        [0, 'Regular student'],
+        [10, 'Noticed'],
+        [40, 'School idol'],
+        [100, 'Perfect pretty girl'],
+        [250, 'Controls the weather']
+      ];
+      const saikiLines = [
+        'Saiki walked past without looking up.',
+        'Saiki is reading a coffee jelly menu.',
+        'Saiki stared at a wall instead.',
+        'Saiki left. Somehow nobody saw him leave.',
+        'Saiki sighed. That doesn\'t count.',
+        '(Why. Why won\'t he say it.)'
+      ];
+
+      function showToast(msg) {
+        const toast = document.getElementById('toast');
+        document.getElementById('toastMsg').textContent = msg;
+        toast.classList.add('show');
+        clearTimeout(showToast.t);
+        showToast.t = setTimeout(() => toast.classList.remove('show'), 2600);
+      }
+
+      function render() {
+        document.getElementById('ofuCount').textContent = ofus.toLocaleString();
+        document.getElementById('ofuBar').style.width = Math.min(100, (ofus / 250) * 100) + '%';
+        let rank = ranks[0][1];
+        for (const [min, name] of ranks) if (ofus >= min) rank = name;
+        document.getElementById('ofuRank').textContent = rank;
+      }
+
+      function sparkles(container, n) {
+        container.querySelectorAll('.sparkle').forEach((s) => s.remove());
+        for (let i = 0; i < n; i++) {
+          const s = document.createElement('span');
+          s.className = 'sparkle';
+          s.textContent = '✦';
+          s.style.left = Math.random() * 100 + '%';
+          s.style.top = Math.random() * 100 + '%';
+          s.style.animationDelay = (Math.random() * 1.6).toFixed(2) + 's';
+          s.style.fontSize = (0.8 + Math.random() * 1.6).toFixed(2) + 'rem';
+          container.appendChild(s);
+        }
+      }
+
+      window.radiate = function () {
+        const gained = 5 + Math.floor(Math.random() * 20);
+        ofus += gained;
+        render();
+        const overlay = document.getElementById('radiance');
+        document.getElementById('radianceSub').textContent =
+          gained + ' students said "ofu." Saiki did not.';
+        sparkles(overlay, 40);
+        document.documentElement.classList.add('radiant');
+        setTimeout(() => document.documentElement.classList.remove('radiant'), 1800);
+      };
+
+      window.trySaiki = function () {
+        saikiTries++;
+        // He says "oh?" exactly once, after a frustrating number of attempts.
+        if (saikiTries === 12) {
+          document.getElementById('saikiState').textContent = 'Yes (once)';
+          ofus += 100;
+          render();
+          showToast('Saiki said "oh?" (He was looking at the coffee jelly behind you.)');
+          return;
+        }
+        showToast(saikiLines[Math.floor(Math.random() * saikiLines.length)]);
+      };
+
+      render();
+    })();
+  </script>
+</body>
+</html>
