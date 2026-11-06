@@ -1,6 +1,22 @@
 (function () {
   'use strict';
-  if (window.top !== window.self) return; // never render inside an iframe (proxy pages, embeds)
+  // Never render inside an iframe (proxy pages, embeds) — except the stealth
+  // launcher (/ab/ and the homepage "Private window" toggle), which opens an
+  // about:blank window containing a single full-page iframe of this site. That
+  // iframe is the whole visible window, so the companion belongs in it.
+  if (window.top !== window.self && !isStealthLauncherFrame()) return;
+
+  function isStealthLauncherFrame() {
+    try {
+      if (window.parent !== window.top) return false; // direct child only
+      var t = window.top;
+      if (t.location.href !== 'about:blank') return false;
+      var frames = t.document.getElementsByTagName('iframe');
+      return frames.length === 1 && t.document.body.children.length === 1;
+    } catch (e) {
+      return false; // cross-origin parent: a real embed
+    }
+  }
 
   var state = { enabled: false, activeCharacterId: '', characters: [] };
   var el = { root: null, sprite: null, bubble: null };

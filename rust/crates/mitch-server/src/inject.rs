@@ -36,7 +36,7 @@ pub fn inject_companion(html: &str) -> String {
     if html.contains("/companion-widget.js") {
         return html.to_string();
     }
-    let block = "<script src=\"/companion-widget.js?v=4\" defer></script>\n<link rel=\"stylesheet\" href=\"/companion-widget.css?v=3\">\n</head>";
+    let block = "<script src=\"/companion-widget.js?v=5\" defer></script>\n<link rel=\"stylesheet\" href=\"/companion-widget.css?v=3\">\n</head>";
     html.replacen("</head>", block, 1)
 }
 
@@ -52,7 +52,7 @@ pub fn inject_shared_head(html: &str) -> String {
     // otherwise short-circuit this whole block and silently drop the
     // companion widget on exactly those pages.
     if !html.contains("/companion-widget.js") {
-        let block = "<script src=\"/companion-widget.js?v=4\" defer></script>\n<link rel=\"stylesheet\" href=\"/companion-widget.css?v=3\">\n</head>";
+        let block = "<script src=\"/companion-widget.js?v=5\" defer></script>\n<link rel=\"stylesheet\" href=\"/companion-widget.css?v=3\">\n</head>";
         html = html.replacen("</head>", block, 1);
     }
     if html.contains("name=\"viewport\"") {
