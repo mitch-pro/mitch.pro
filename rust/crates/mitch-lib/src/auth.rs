@@ -986,6 +986,7 @@ pub fn rate_limit_for(endpoint: &str) -> (u32, u32) {
         // but not harshly" per the feature's own cost-control requirement.
         "/api/companion/chat" => (12, 60),
         "/api/companion/settings" => (30, 60),
+        "/api/companion/ban/lift" => (10, 60),
         "/api/companion/characters" => (60, 60),
         // Falling through to __default__ (100/60) here is what actually
         // produced a wall of 429s during normal use: every character

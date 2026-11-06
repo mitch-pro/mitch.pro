@@ -28,6 +28,7 @@ const TABLES: &[(&str, &str)] = &[
     ("companion_characters", "creator_email"),
     ("companion_user_settings", "email"),
     ("companion_coin_requests", "email"),
+    ("companion_bans", "email"),
     ("companion_chat_messages", "email"),
     ("companion_memories", "email"),
     ("companion_subscriptions", "email"),

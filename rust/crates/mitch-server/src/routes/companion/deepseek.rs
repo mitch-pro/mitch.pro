@@ -89,6 +89,10 @@ pub struct ChatReply {
     /// Never applied automatically — `routes/companion/mod.rs` only ever
     /// surfaces this as a proposal the person has to explicitly accept.
     pub coin_request_percent: f64,
+    /// 0 when the character isn't banning anyone this turn; otherwise how
+    /// many minutes it bans the person from the site for, already clamped
+    /// to `MAX_COMPANION_BAN_MINUTES`. Applied server-side in `mod.rs`.
+    pub ban_minutes: i64,
 }
 
 pub struct UserContext {
@@ -115,6 +119,9 @@ pub struct Capabilities {
     /// cooldown has elapsed. No opt-in needed.
     /// Gates whether `coinRequestPercent` is even mentioned in the prompt.
     pub allow_coin_requests: bool,
+    /// True when the character is reviewed (same gate as `customJs`).
+    /// Gates whether `banMinutes` is mentioned in the prompt and honored.
+    pub allow_ban: bool,
     /// The character's special ability (`mitch_lib::companion::SPECIAL_ABILITIES`),
     /// or empty. Adds one extra preset action of the same name, offered and
     /// accepted only for this character.
@@ -178,6 +185,17 @@ pub async fn chat(
         ""
     };
 
+    let ban_instructions = if caps.allow_ban {
+        "\"banMinutes\" is optional — a whole number of minutes, 1 to 1440 (one day), if you \
+         want to ban this person from the entire mitch.pro site for that long. They are locked \
+         out immediately until it runs out, and staff can lift it. This is a drastic, rare \
+         step: only use it when your character would truly throw someone out (they have \
+         seriously crossed a line for your persona), match the length to how angry you are, \
+         and say in your reply that you are banning them. Leave it as 0 almost always. "
+    } else {
+        ""
+    };
+
     let system_prompt = format!(
         "You are {character_name}, a small desktop companion character living on the \
          mitch.pro website. Personality and backstory: {personality_prompt}\n\n\
@@ -206,7 +224,7 @@ pub async fn chat(
          \"action\" is optional — one of these exact names, spelled exactly as shown, if (and \
          only if) it fits what you're saying: {actions_list}. Leave it as an empty string most \
          turns; it's a physical reaction, not something to do every message. \
-         {special_ability_instructions}{ability_status}{custom_js_instructions}{coin_request_instructions}",
+         {special_ability_instructions}{ability_status}{custom_js_instructions}{coin_request_instructions}{ban_instructions}",
         email = user.email,
         display_name = user.display_name,
         balance = user.mitchcoin_balance,
@@ -308,6 +326,13 @@ pub async fn chat(
             } else {
                 0.0
             },
+            ban_minutes: if caps.allow_ban {
+                parsed
+                    .ban_minutes
+                    .clamp(0, mitch_lib::companion::MAX_COMPANION_BAN_MINUTES)
+            } else {
+                0
+            },
         });
     }
     Err("companion AI failed".to_string())
@@ -323,6 +348,7 @@ struct ParsedReply {
     action: String,
     custom_js: String,
     coin_request_percent: f64,
+    ban_minutes: i64,
 }
 
 /// Picks apart whatever the model actually sent, with resilient auto-repair:
@@ -398,6 +424,7 @@ fn extract_reply(text: &str, moods: &[String]) -> Option<ParsedReply> {
         action: String::new(),
         custom_js: String::new(),
         coin_request_percent: 0.0,
+        ban_minutes: 0,
     })
 }
 
@@ -447,7 +474,7 @@ static RE_REPLY_KEY: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::ne
 });
 static RE_NEXT_FIELD: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
     compile_regex(
-        r#"(?i)(?:,\s*["']?(?:mood|emotion|remember|action|custom_?js|coin_?request_?percent)["']?\s*:|\s*\}\s*$)"#,
+        r#"(?i)(?:,\s*["']?(?:mood|emotion|remember|action|custom_?js|coin_?request_?percent|ban_?minutes)["']?\s*:|\s*\}\s*$)"#,
     )
 });
 static RE_MOOD: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
@@ -464,6 +491,10 @@ static RE_CUSTOM_JS: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::ne
 });
 static RE_COIN_PERCENT: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
     compile_regex(r#"(?i)["']?(?:coin_?request_?percent)["']?\s*:\s*["']?([0-9]+(?:\.[0-9]+)?)"#)
+});
+
+static RE_BAN_MINUTES: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    compile_regex(r#"(?i)["']?(?:ban_?minutes)["']?\s*:\s*["']?([0-9]+)"#)
 });
 
 fn unescape_json_string(s: &str) -> String {
@@ -733,6 +764,16 @@ fn extract_value_to_parsed_reply(val: &Value, moods: &[String]) -> Option<Parsed
         .unwrap_or(0.0)
         .clamp(0.0, MAX_COIN_REQUEST_PERCENT);
 
+    let ban_minutes = val
+        .get("banMinutes")
+        .or_else(|| val.get("ban_minutes"))
+        .and_then(|v| {
+            v.as_i64()
+                .or_else(|| v.as_f64().map(|n| n as i64))
+                .or_else(|| v.as_str().and_then(|s| s.trim().parse::<i64>().ok()))
+        })
+        .unwrap_or(0);
+
     Some(ParsedReply {
         reply: reply.to_string(),
         mood,
@@ -740,6 +781,7 @@ fn extract_value_to_parsed_reply(val: &Value, moods: &[String]) -> Option<Parsed
         action,
         custom_js: clean_custom_js(&custom_js),
         coin_request_percent,
+        ban_minutes,
     })
 }
 
@@ -820,6 +862,12 @@ fn extract_fields_resilient(text: &str, moods: &[String]) -> Option<ParsedReply>
         .unwrap_or(0.0)
         .clamp(0.0, MAX_COIN_REQUEST_PERCENT);
 
+    let ban_minutes = RE_BAN_MINUTES
+        .captures(text)
+        .and_then(|c| c.get(1))
+        .and_then(|m| m.as_str().parse::<i64>().ok())
+        .unwrap_or(0);
+
     Some(ParsedReply {
         reply,
         mood,
@@ -827,6 +875,7 @@ fn extract_fields_resilient(text: &str, moods: &[String]) -> Option<ParsedReply>
         action,
         custom_js: clean_custom_js(&custom_js),
         coin_request_percent,
+        ban_minutes,
     })
 }
 
@@ -945,6 +994,16 @@ fn guess_mood(reply: &str, moods: &[String]) -> String {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_ban_minutes() {
+        let input = r#"{"reply": "Out.", "mood": "angry", "banMinutes": "90"}"#;
+        let parsed = extract_reply(input, &["angry".to_string()]).unwrap();
+        assert_eq!(parsed.ban_minutes, 90);
+        let input = "{ reply: \"Out.\", mood: \"angry\", banMinutes: 30 }";
+        let parsed = extract_reply(input, &["angry".to_string()]).unwrap();
+        assert_eq!(parsed.ban_minutes, 30);
+    }
 
     #[test]
     fn special_ability_action_only_for_its_character() {

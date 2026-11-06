@@ -51,6 +51,9 @@ pub async fn handle(
     {
         return economy::handle(state, method, path, headers, body_bytes).await;
     }
+    if path == "/api/companion/ban/lift" && *method == Method::POST {
+        return Some(lift_ban(state, headers));
+    }
     if path == "/api/companion/ability"
         || path == "/api/companion/ability/use"
         || path == "/api/companion/upgrades/buy"
@@ -191,6 +194,29 @@ fn set_settings(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -
     json_response(200, json!({ "ok": true }))
 }
 
+/// `POST /api/companion/ban/lift` — a site admin/moderator ends their own
+/// companion ban from the ban page. Anyone else gets 403: only staff may
+/// lift it. (Reachable while banned; `access::enforce_companion_ban`
+/// exempts this path.)
+fn lift_ban(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
+    let Some(email) = logged_in_email(state, headers) else {
+        return json_response(401, json!({ "error": "not logged in" }));
+    };
+    if !is_staff_email(state, &email) {
+        return json_response(403, json!({ "error": "staff only" }));
+    }
+    mitch_lib::companion::lift_ban(&state.store, &email);
+    json_response(200, json!({ "ok": true }))
+}
+
+/// Owners, co-owners, admins and moderators.
+pub(crate) fn is_staff_email(state: &AppState, email: &str) -> bool {
+    auth::is_owner_email(&state.store, email)
+        || auth::is_co_owner_email(&state.store, email)
+        || auth::is_admin_email(&state.store, email)
+        || auth::is_moderator_email(&state.store, email)
+}
+
 async fn chat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Response {
     let Some(email) = logged_in_email(state, headers) else {
         return json_response(401, json!({ "error": "not logged in" }));
@@ -262,6 +288,7 @@ async fn chat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> 
                 &email,
                 &character.id,
             ),
+        allow_ban: !character.needs_review,
         special_ability: character.special_ability.clone(),
         ability_status: if character.special_ability.is_empty() {
             String::new()
@@ -344,9 +371,24 @@ async fn chat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> 
                     r.coin_request_percent,
                 );
             }
+            // Same gate as customJs/coin requests: `allow_ban` was only
+            // granted to reviewed characters and `chat()` clamps the length.
+            let ban = if r.ban_minutes > 0 {
+                let b = mitch_lib::companion::ban_user(
+                    &state.store,
+                    &email,
+                    &character.id,
+                    &character.name,
+                    r.ban_minutes,
+                );
+                json!({ "expiresAt": b.expires_at })
+            } else {
+                serde_json::Value::Null
+            };
             json_response(
                 200,
                 json!({
+                    "ban": ban,
                     "reply": r.reply,
                     "mood": r.mood,
                     "action": action,

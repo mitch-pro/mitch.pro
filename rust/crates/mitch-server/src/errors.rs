@@ -137,3 +137,34 @@ pub fn json_resp_str(code: u16, body: String) -> Response {
         .body(axum::body::Body::from(body))
         .expect("static response")
 }
+
+/// Page shown to someone a companion has banned (`mitch_lib::companion::active_ban`).
+/// `staff` adds the button that lets an admin/moderator lift their own ban
+/// via `POST /api/companion/ban/lift` (the endpoint re-checks staff itself;
+/// hiding the button is only cosmetic).
+pub fn companion_ban_response(ban: &mitch_lib::companion::CompanionBan, staff: bool) -> Response {
+    let until = chrono::DateTime::from_timestamp_millis(ban.expires_at)
+        .map(|d| d.format("%B %-d, %Y at %H:%M UTC").to_string())
+        .unwrap_or_default();
+    let staff_html = if staff {
+        "<button id=\"lift\">Lift ban</button><p id=\"err\" hidden></p>\
+<script>document.getElementById('lift').onclick=function(){var b=this;b.disabled=true;\
+fetch('/api/companion/ban/lift',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:'{}'})\
+.then(function(r){if(!r.ok)throw 0;location.reload()})\
+.catch(function(){b.disabled=false;var e=document.getElementById('err');e.hidden=false;e.textContent='Could not lift the ban.'})}</script>"
+    } else {
+        ""
+    };
+    let html = include_str!("templates/companion_ban.html")
+        .replace("{{name}}", &html_esc(&ban.character_name))
+        .replace("{{until}}", &until)
+        .replace("{{staff}}", staff_html);
+    Response::builder()
+        .status(403)
+        .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
+        .header(header::CACHE_CONTROL, "private, no-store")
+        .header(header::VARY, "Cookie")
+        .header("x-content-type-options", "nosniff")
+        .body(axum::body::Body::from(html))
+        .expect("static response")
+}

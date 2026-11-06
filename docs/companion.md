@@ -219,6 +219,21 @@ subsystem — no `server.js` equivalent.
   `COIN_REQUEST_COOLDOWN_MILLIS` (6h). The deduction is applied immediately
   on the server during the chat turn as a pure sink: no creator payout,
   so a malicious prompt gains nothing from taking coins.
+- **Bans.** A reviewed character (same `!needs_review` gate as `customJs`
+  and coin requests) can ban the person from the whole site for 1 minute to
+  1 day by returning `banMinutes` (clamped server-side to
+  `MAX_COMPANION_BAN_MINUTES`; the prompt only mentions it to reviewed
+  characters). Stored in `companion_bans` (one row per email, a new ban
+  replaces the old one, expired rows are ignored on read). This is **not**
+  the account ban: no appeal, no Matrix purge, no chat removal.
+  `access::enforce_companion_ban` runs right after `enforce_ban` for the
+  session's account: HTML gets `errors::companion_ban_response` (who banned
+  you, when it ends), API/WebSocket paths get a 403 JSON with
+  `companionBanned: true`. Admins, co-owners, owners and moderators see a
+  "Lift ban" button that calls `POST /api/companion/ban/lift` (staff only,
+  403 otherwise; exempt from the ban so it's reachable). The widget reloads
+  3s after a reply that carries `ban`. Not a coin path: nothing is charged or
+  paid, and a banned user can't reach chat/settings until it ends.
 - **Throw reactions.** Releasing the character above a speed threshold
   (`THROW_SPEED_THRESHOLD` in `companion-widget.js`, derived from the
   existing drag physics' `vx`/`vy`) fires a synthetic, silent chat message
@@ -333,6 +348,8 @@ shell or add it to the untracked `.env`.
 - `companion_ability_strain` (email, character_id, strain, updated_at,
   psychosis_until) and `companion_upgrades` (email, character_id, upgrade,
   purchased_at); see Scope.
+- `companion_bans` (email PK, character_id, character_name, banned_at,
+  expires_at) — see Bans above.
 - `companion_coin_requests` (email, character_id, asked_at, percent) — at
   most one row per (email, character): the most recent offer, used both
   for the cooldown (`coin_request_cooldown_elapsed`) and to verify an
@@ -363,6 +380,7 @@ rendering, not just the owner).
   ever non-empty/non-zero when the active character is admin-reviewed
   (and, for coin requests, the caller opted in and the cooldown has
   elapsed) — see Scope and Moderation above.
+- `POST /api/companion/ban/lift` — staff lift their own companion ban.
 - `POST /api/companion/coin-request/accept` — `{characterId}` → the only
   place a coin request ever actually deducts anything. Re-validates the
   offered percent (via `consume_coin_request`) against the live balance
