@@ -13,10 +13,9 @@
     var modOk = status.isAdmin || status.isModerator;
     var testerOk = status.isTester;
     var list = [
-      { href: '/admin/', name: 'Admin dashboard', desc: 'Approvals, people, economy, moderation, VM cloud, logs', ok: adminOk },
+      { href: '/admin/', name: 'Admin dashboard', desc: 'Approvals, people, economy, moderation, logs', ok: adminOk },
       { href: '/admin/bans/', name: 'Account bans', desc: 'Review bans and restore accounts', ok: adminOk },
       { href: '/admin/updates/', name: 'Updates', desc: 'Write the homepage update log', ok: adminOk },
-      { href: '/admin/vms/', name: 'Virtual machines', desc: 'Manage computers and resources', ok: adminOk },
       { href: '/admin/email/', name: 'Email & newsletters', desc: 'Compose and send site email', ok: adminOk },
       { href: '/admin/companion/', name: 'Companion characters', desc: 'Preset characters and review queue', ok: adminOk },
       { href: '/moderator/', name: 'Moderator panel', desc: 'Reports and content review', ok: modOk },
@@ -27,7 +26,6 @@
     // Owner-only: added only for the owner, never shown as a locked card, so
     // other staff can't tell it exists.
     if (status.isOwner) {
-      list.push({ href: '/vms/desktop/?container=owner', name: 'Container 500', desc: 'Owner-only desktop', ok: true });
     }
     return list;
   }

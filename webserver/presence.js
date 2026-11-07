@@ -15,7 +15,7 @@
     shop: 'Browsing the shop', marketplace: 'Browsing the market', inventory: 'Viewing inventory',
     coins: 'Viewing MitchCoins', leaderboard: 'Viewing the leaderboard',
     preferences: 'Changing preferences', notifications: 'Viewing notifications',
-    vms: 'Managing Cloud Linux', bell: 'Viewing the bell schedule', rjuhsd: 'Viewing school schedules',
+    bell: 'Viewing the bell schedule', rjuhsd: 'Viewing school schedules',
     admin: 'Using admin tools', moderator: 'Using moderator tools', tester: 'Using tester tools',
     tabs: "Using Tyler's Tabs", canvas: 'Drawing on the canvas',
     team: 'Viewing the team', feedback: 'Viewing feedback', blog: 'Reading the blog',

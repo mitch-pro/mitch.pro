@@ -1,6 +1,6 @@
 //! Role gating for staff-only endpoints, against a real local server: owner,
 //! co-owner, admin and member fixture accounts plus a signed-out visitor.
-//! Covers the VM owner-resources endpoint and the admin account lists.
+//! Covers administrator account lists and the feedback inbox.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod common;
@@ -42,7 +42,7 @@ async fn staff_get(s: &TestServer, sid: Option<&str>, path: &str, with_pass: boo
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn owner_resources_and_account_lists_follow_roles() {
+async fn account_lists_follow_roles() {
     let admins = json!({"owners": [OWNER], "coOwners": [COOWNER], "admins": [ADMIN]}).to_string();
     let s = TestServer::start(&[("admins.json", &admins)], "/api/tester/status", 403).await;
     let owner = s.session_for(OWNER);
@@ -60,73 +60,6 @@ async fn owner_resources_and_account_lists_follow_roles() {
         .await;
         assert_eq!(r.status, 200, "{}", r.text);
     }
-
-    // Owner can raise VM resources beyond the tiers without spending coins.
-    let before = s.call(Some(&owner), "GET", "/api/vm/upgrades", None).await;
-    assert_eq!(before.status, 200, "{}", before.text);
-    assert!(before.json["ownerCustomization"].as_bool().unwrap_or(false));
-    for (category, value) in [("cpu", 96), ("ram", 262_144), ("disk", 4096)] {
-        let r = staff_post(
-            &s,
-            Some(&owner),
-            "/api/vm/owner-resources",
-            json!({"category": category, "value": value}),
-        )
-        .await;
-        assert_eq!(r.status, 200, "{}", r.text);
-    }
-    let after = s.call(Some(&owner), "GET", "/api/vm/upgrades", None).await;
-    assert_eq!(after.json["current"]["cpuCores"].as_f64(), Some(96.0));
-    assert_eq!(after.json["current"]["memoryMb"].as_f64(), Some(262_144.0));
-    assert_eq!(after.json["current"]["diskGb"].as_f64(), Some(4096.0));
-    assert_eq!(after.json["coins"], before.json["coins"], "no coins spent");
-
-    // Co-owners may customize too, but only up to 8 cores / 16 GB RAM / 128 GB
-    // disk (routes/vm.rs). Admins, members and signed-out visitors may not.
-    let cpu = |value: i64| json!({"category": "cpu", "value": value});
-    assert_eq!(
-        staff_post(&s, Some(&coowner), "/api/vm/owner-resources", cpu(8))
-            .await
-            .status,
-        200
-    );
-    assert_eq!(
-        staff_post(&s, Some(&coowner), "/api/vm/owner-resources", cpu(64))
-            .await
-            .status,
-        400,
-        "co-owners are capped below the owner"
-    );
-    for sid in [&admin, &member] {
-        assert_eq!(
-            staff_post(&s, Some(sid), "/api/vm/owner-resources", cpu(96))
-                .await
-                .status,
-            403
-        );
-    }
-    let anon = staff_post(&s, None, "/api/vm/owner-resources", cpu(96)).await;
-    assert!([401, 403].contains(&anon.status));
-    // Invalid values and cross-origin requests are rejected.
-    assert_eq!(
-        staff_post(&s, Some(&owner), "/api/vm/owner-resources", cpu(0))
-            .await
-            .status,
-        400
-    );
-    let cross = s
-        .call_with(
-            Some(&owner),
-            "POST",
-            "/api/vm/owner-resources",
-            Some(cpu(4)),
-            &[
-                ("X-Admin-Passphrase", PASS),
-                ("Origin", "https://invalid.example"),
-            ],
-        )
-        .await;
-    assert_eq!(cross.status, 403);
 
     // Account search: staff only, and only with the passphrase header.
     let path = "/api/admin/account-search?q=member";

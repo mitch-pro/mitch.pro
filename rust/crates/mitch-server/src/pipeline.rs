@@ -184,13 +184,6 @@ pub fn inject_page(
         }
     }
 
-    let hide_vm = std::env::var("HIDE_VM_FEATURES").unwrap_or_default() == "1"
-        || std::env::var("DISABLE_VM_FEATURES").unwrap_or_default() == "1"
-        || std::env::var("DISABLE_VM_FEATURES").unwrap_or_default() == "true";
-    if hide_vm && !is_embedded {
-        inject_str.push_str("<style>a[href=\"/vms/\"], .site-advert-banner, #vm-workspace-panel, #cloud-vms { display: none !important; }</style>\n");
-    }
-
     if load_recaptcha {
         inject_str.push_str("\n<!-- mitch.pro: reCAPTCHA Loader -->\n");
         inject_str.push_str(&recaptcha_loader_str(&recaptcha_host, &rc_key));

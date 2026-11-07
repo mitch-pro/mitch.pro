@@ -32,14 +32,12 @@ mod inject;
 mod manifests;
 mod pipeline;
 mod presence;
-mod proxmox_desktop;
 mod routes;
 mod state;
 mod static_files;
 mod workers;
 mod workers_email;
 mod workers_site;
-mod workers_vm;
 mod ws;
 
 #[tokio::main]
@@ -132,11 +130,6 @@ async fn get_any(
         // truncated to cap+1 zero bytes, which Conduit then stored as a
         // corrupt file that always failed to load.
         p if p.starts_with("/_matrix/media/") => 100 * 1024 * 1024,
-        // BYO-OS ISO chunks — the client slices a large file into chunks
-        // (default 16MB) specifically so no single request needs a huge
-        // cap; this just needs headroom above the server-side per-chunk
-        // ceiling in routes/byo_os.rs (MAX_CHUNK_BYTES, 24MB).
-        "/api/vm/byo-os/iso/chunk" => 25 * 1024 * 1024,
         // Save sync uploads IndexedDB game databases (base64 inside JSON), which
         // routinely exceed the 256KB default; the handler's own 1GiB quota still
         // applies, this only bounds how much one request may buffer in memory.

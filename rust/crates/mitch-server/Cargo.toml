@@ -30,14 +30,9 @@ futures-util = { version = "0.3", default-features = false, features = ["std"] }
 # WS-client bridge: /livekit/rtc → the SFU.
 tokio-tungstenite = { version = "0.29", features = ["rustls-tls-webpki-roots"] }
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
-rustls-pki-types = "1"
 # /livekit JWT base64url segments (JS Buffer.toString('base64url')).
 base64 = { workspace = true }
 reqwest = { workspace = true }
-# Streams a BYO-OS ISO from disk straight into the multipart upload to
-# Proxmox's storage API, instead of reading the whole file into memory first.
-socket2 = { version = "0.6", features = ["all"] }
-tokio-util = { version = "0.7", features = ["io"] }
 aes-gcm = { workspace = true }
 web-push = "0.10"
 rand = { workspace = true }

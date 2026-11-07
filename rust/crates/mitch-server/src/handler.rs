@@ -645,6 +645,11 @@ async fn handle_resolved(
     ws_upgrade: Option<axum::extract::ws::WebSocketUpgrade>,
 ) -> Response {
     let path = uri.path().to_string();
+    // Retired website routes must not reach authentication, proxying, static
+    // serving, or a generic admin handler, including through rotating aliases.
+    if retired_virtualization_path(&path) {
+        return json_resp(404, serde_json::json!({"error":"Not found."}));
+    }
     let search = uri.query().unwrap_or("").to_string();
 
     if let Some(response) = crate::access::enforce_ban(&state, headers, &path, &search).await {
@@ -1007,25 +1012,10 @@ async fn handle_resolved(
             410,
             serde_json::json!({ "error": "This desktop connection method is no longer available." }),
         );
-    } else if is_upgrade && path == "/api/vm/desktop/ws" {
-        if let Some(resp) =
-            crate::routes::vm::handle_desktop_ws_upgrade(&state, headers, &search, ws_upgrade)
-        {
-            return resp;
-        }
     }
 
     // 4c. API route dispatch — the ported route groups (plan Step 7+).
     if path.starts_with("/api/") {
-        // VM family (Step 13 batch 4, server.js:18849-19808).
-        if path.starts_with("/api/vm/") {
-            if let Some(resp) =
-                crate::routes::vm::handle(&state, &method, &path, headers, body_bytes, &search)
-                    .await
-            {
-                return resp;
-            }
-        }
         // Team gmail/support bridge (server.js:20094-20145, 22984-23096,
         // 23814-23867) — Bearer team-token auth, behind the password gate.
         if path.starts_with("/api/team/") {
@@ -1530,8 +1520,7 @@ async fn handle_resolved(
     }
 
     // 10. HTML auth gate — server.js:24625-24643 (merged tree: /games and
-    // /matrix are open; banned sessions get the ban page; /admin/vms needs a
-    // fully-authenticated VM actor).
+    // /matrix are open; banned sessions get the ban page).
     let mut html_base = path.clone();
     if html_base.ends_with(".html") {
         html_base = html_base[..html_base.len() - 5].to_string();
@@ -1555,7 +1544,6 @@ async fn handle_resolved(
     }
     if is_html_request
         && [
-            "/admin/vms",
             "/admin/email",
             "/admin/bans",
             "/admin/passphrase-reset",
@@ -1564,21 +1552,10 @@ async fn handle_resolved(
         .iter()
         .any(|base| html_base == *base || html_base.starts_with(&format!("{base}/")))
     {
-        match authenticated_vm_actor(&state, headers, node_env_test) {
+        match authenticated_account_actor(&state, headers, node_env_test) {
             None => return redirect("/enroll/", 302),
             Some((_, _, is_admin)) if !is_admin => {
                 return err_resp(403, Some("Admin access required."), None)
-            }
-            Some(_) => {}
-        }
-    }
-    if is_html_request
-        && (html_base == "/admin/vms/fleet" || html_base.starts_with("/admin/vms/fleet/"))
-    {
-        match authenticated_vm_actor(&state, headers, node_env_test) {
-            None => return redirect("/enroll/?next=%2Fadmin%2Fvms%2Ffleet%2F", 302),
-            Some((_, email, _)) if !mitch_lib::auth::is_owner_email(&state.store, &email) => {
-                return err_resp(403, Some("Owner access required."), None);
             }
             Some(_) => {}
         }
@@ -1761,11 +1738,7 @@ async fn handle_resolved(
         if let Some(fp) = file_path {
             if fp.exists() && std::fs::metadata(&fp).map(|m| !m.is_dir()).unwrap_or(false) {
                 if let Ok(raw) = std::fs::read(&fp) {
-                    if path == "/vms/desktop"
-                        || path == "/vms/desktop/"
-                        || path == "/vms/desktop/index.html"
-                        || path.starts_with("/matrix/public/element-call/")
-                    {
+                    if path.starts_with("/matrix/public/element-call/") {
                         return Response::builder()
                             .status(StatusCode::OK)
                             .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")
@@ -1773,18 +1746,14 @@ async fn handle_resolved(
                             .header(axum::http::header::VARY, "Cookie")
                             .body(axum::body::Body::from({
                                 let html = String::from_utf8_lossy(&raw);
-                                let html = if path.starts_with("/vms/desktop") {
-                                    crate::inject::inject_credit(&html, false)
-                                } else {
-                                    crate::inject::inject_access_guard(&html)
-                                };
+                                let html = crate::inject::inject_access_guard(&html);
                                 if crate::presence::authenticated_email(&state, headers).is_some() {
                                     crate::inject::inject_presence(&html, None)
                                 } else {
                                     html
                                 }
                             }))
-                            .expect("vm desktop response");
+                            .expect("embedded call response");
                     }
                     if let Ok(mut html) = String::from_utf8(raw) {
                         let body_str = crate::pipeline::inject_page(
@@ -1951,10 +1920,10 @@ fn html_response(html: String) -> Response {
         .expect("static response")
 }
 
-/// `authenticatedVmActor(req)` — server.js:25606. Valid non-revoked sid whose
+/// Resolve an authenticated account for administrator-only HTML pages. The
 /// password cookie matches, with a normalized email; returns (sid, email,
 /// is_admin).
-fn authenticated_vm_actor(
+fn authenticated_account_actor(
     state: &AppState,
     headers: &HeaderMap,
     node_env_test: bool,
@@ -2634,4 +2603,26 @@ mod matrix_page_tests {
             assert!(!is_matrix_client_page(asset), "{asset} should not be gated");
         }
     }
+}
+
+/// The whole route families are retired, not just the navigation links.
+fn retired_virtualization_path(path: &str) -> bool {
+    [
+        "/vms",
+        "/webvm",
+        "/novnc",
+        "/vnc",
+        "/api/vm",
+        "/api/byo-os",
+        "/api/admin/vms",
+        "/api/admin/vm-requests",
+        "/api/admin/vm-ban",
+        "/api/admin/byo-os-ban",
+        "/api/admin/owner-container",
+        "/admin/vms",
+    ]
+    .iter()
+    .any(|base| {
+        path == *base || path.starts_with(&format!("{base}/")) || path == format!("{base}.html")
+    })
 }

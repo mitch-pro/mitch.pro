@@ -1484,11 +1484,7 @@ mod tests {
         ));
 
         mitch_lib::passwords::password_set(&state.store, "user@x.test", "hash");
-        mitch_lib::vm::upsert_virtual_machine(
-            &state.store,
-            &json!({ "id": "vm1", "ownerEmail": "user@x.test", "vmid": 301, "node": "n" }),
-        )
-        .unwrap();
+
         apply_email_change(&state, "user@x.test", "new@x.test", "new@x.test")
             .await
             .unwrap_or_else(|e| panic!("apply failed: {}", e.message()));
@@ -1500,12 +1496,7 @@ mod tests {
             &state.store,
             "user@x.test"
         ));
-        assert_eq!(
-            mitch_lib::vm::get_virtual_machine_by_id(&state.store, "vm1")
-                .unwrap()
-                .owner_email,
-            "new@x.test"
-        );
+
         // The new address is taken now.
         assert!(matches!(
             apply_email_change(&state, "x@x.test", "new@x.test", "new@x.test").await,

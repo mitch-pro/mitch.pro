@@ -97,12 +97,9 @@ pub fn handle(
                 ))
             })
             .collect();
-        let vm_bans = state.vm_bans.read().unwrap_or_else(|e| e.into_inner());
-        let byo_bans = state.byo_os_bans.read().unwrap_or_else(|e| e.into_inner());
-        let restrictions:Vec<Value>=vm_bans.union(&byo_bans).map(|email|json!({"email":email,"vm":vm_bans.contains(email),"byoOs":byo_bans.contains(email)})).collect();
         return Some(json_response(
             200,
-            json!({ "bans": bans, "restrictions":restrictions, "supportsTimedBans":true,"supportsChatCleanup":true, "chatCleanup":mitch_lib::chat_cleanup::statuses(&state.store) }),
+            json!({ "bans": bans, "supportsTimedBans":true,"supportsChatCleanup":true, "chatCleanup":mitch_lib::chat_cleanup::statuses(&state.store) }),
         ));
     }
     // GET /api/admin/matrix/outside-accounts — outside (non-student) accounts
@@ -396,40 +393,6 @@ pub fn handle(
         return Some(json_response(
             410,
             json!({"error":"Shadow bans have been retired. Use account bans with a visible reason and duration."}),
-        ));
-    }
-
-    // POST /api/admin/vm-ban (toggle) — bars a user from ALL VM features,
-    // templates and BYO-OS both.
-    if path == "/api/admin/vm-ban" && *method == Method::POST {
-        if !ctx.is_any_admin(state) {
-            return Some(forbidden());
-        }
-        return Some(toggle_ban_set(
-            state,
-            body,
-            ctx,
-            headers,
-            &state.vm_bans,
-            "data/vm_bans.json",
-            "vm_ban",
-        ));
-    }
-
-    // POST /api/admin/byo-os-ban (toggle) — bars a user from the BYO-OS
-    // custom-ISO feature specifically; normal template VMs still work.
-    if path == "/api/admin/byo-os-ban" && *method == Method::POST {
-        if !ctx.is_any_admin(state) {
-            return Some(forbidden());
-        }
-        return Some(toggle_ban_set(
-            state,
-            body,
-            ctx,
-            headers,
-            &state.byo_os_bans,
-            "data/byo_os_bans.json",
-            "byo_os_ban",
         ));
     }
 
@@ -1418,89 +1381,6 @@ fn valid_email(email: &str) -> bool {
     !local.is_empty() && !rest.is_empty() && rest.contains('.') && parts.next().is_none()
 }
 
-/// `POST /api/admin/ban-account` — server.js:10627-10679.
-/// Shared toggle for a simple per-user ban `HashSet` persisted to its own
-/// JSON file — the same shape as `shadow_bans`/`restricted-mode` above, just
-/// parameterized so `vm_bans` and `byo_os_bans` don't duplicate it twice.
-fn toggle_ban_set(
-    state: &Arc<AppState>,
-    body: &Value,
-    ctx: &AdminCtx,
-    _headers: &HeaderMap,
-    set: &std::sync::RwLock<std::collections::HashSet<String>>,
-    file: &str,
-    action_name: &str,
-) -> Response {
-    if !ctx.is_admin(state) {
-        return forbidden();
-    }
-    let target = super::resolve_admin_target(
-        state,
-        body.get("email").and_then(Value::as_str).unwrap_or(""),
-    );
-    if !valid_email(&target) {
-        return json_response(
-            400,
-            json!({"error":"Choose an existing account by username or email."}),
-        );
-    }
-    if mitch_lib::auth::is_admin_email(&state.store, &target) {
-        return json_response(
-            403,
-            json!({"error":"Admins and owners cannot be restricted from this panel."}),
-        );
-    }
-    if body.get("banned").is_some_and(|v| !v.is_boolean()) {
-        return json_response(400, json!({"error":"banned must be true or false."}));
-    }
-    let active;
-    {
-        let mut bans = set.write().unwrap_or_else(|e| e.into_inner());
-        let mut updated = bans.clone();
-        active = body
-            .get("banned")
-            .and_then(Value::as_bool)
-            .unwrap_or_else(|| !bans.contains(&target));
-        if active {
-            updated.insert(target.clone());
-        } else {
-            updated.remove(&target);
-        }
-        let values: Vec<_> = updated.iter().cloned().collect();
-        if state
-            .store
-            .write_document(&state.cfg.base_dir.join(file), &json!(values))
-            .is_err()
-        {
-            return json_response(
-                500,
-                json!({"error":"Could not save the restriction. Nothing changed."}),
-            );
-        }
-        *bans = updated;
-    }
-    let actor = mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, &ctx.sid)
-        .unwrap_or_else(|| "moderator".to_string());
-    let role = if ctx.is_admin(state) {
-        "admin"
-    } else {
-        "moderator"
-    };
-    mitch_lib::admin::log_admin_action(
-        &state.store,
-        &state.cfg.data_dir,
-        &actor,
-        action_name,
-        json!({
-            "target": target,
-            "reason": body.get("reason").and_then(Value::as_str).unwrap_or(""),
-            "active": active,
-            "role": role,
-        }),
-    );
-    json_response(200, json!({ "ok": true, "active": active }))
-}
-
 fn queue_account_action(
     state: &Arc<AppState>,
     ctx: &AdminCtx,
@@ -2222,17 +2102,6 @@ pub async fn lookup_profile(state: &Arc<AppState>, search: &str) -> Response {
         .read()
         .unwrap_or_else(|e| e.into_inner())
         .contains(&norm_email);
-    let vm_banned = state
-        .vm_bans
-        .read()
-        .unwrap_or_else(|e| e.into_inner())
-        .contains(&norm_email);
-    let byo_os_banned = state
-        .byo_os_bans
-        .read()
-        .unwrap_or_else(|e| e.into_inner())
-        .contains(&norm_email);
-
     let settings_file = state.cfg.data_dir.join("matrix_room_settings.json");
     let settings_all = state.store.read_document(&settings_file, json!({}));
 
@@ -2357,8 +2226,6 @@ pub async fn lookup_profile(state: &Arc<AppState>, search: &str) -> Response {
             "banReason": ban_entry.as_ref().and_then(|e| e.get("reason")).cloned().unwrap_or(Value::Null),
             "bannedAt": ban_entry.as_ref().and_then(|e| e.get("banned_at")).cloned().unwrap_or(Value::Null),
             "shadowBanned": shadow_banned,
-            "vmBanned": vm_banned,
-            "byoOsBanned": byo_os_banned,
             "rooms": rooms_out,
         }),
     )

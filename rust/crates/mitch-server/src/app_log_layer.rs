@@ -73,7 +73,7 @@ fn now_ms() -> i64 {
         .unwrap_or(0)
 }
 
-/// `mitch_server::routes::vm` -> `vm`; `mitch_lib::auth` -> `auth`. The store
+/// `mitch_server::routes::auth` -> `auth`; `mitch_lib::auth` -> `auth`. The store
 /// normalizes the rest (lowercase, `[a-z0-9._-]`, 48 chars).
 fn category_for(target: &str) -> String {
     let t = target
@@ -133,8 +133,8 @@ mod tests {
 
     #[test]
     fn categories_drop_crate_and_routes_prefix() {
-        assert_eq!(category_for("mitch_server::routes::vm"), "vm");
-        assert_eq!(category_for("mitch_server::workers_vm"), "workers_vm");
+        assert_eq!(category_for("mitch_server::routes::auth"), "auth");
+        assert_eq!(category_for("mitch_server::workers_site"), "workers_site");
         assert_eq!(category_for("mitch_lib::auth"), "auth");
         assert_eq!(category_for("hyper::proto"), "hyper.proto");
     }

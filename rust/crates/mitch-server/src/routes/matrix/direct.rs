@@ -57,7 +57,7 @@ async fn request(
 }
 
 pub(super) async fn open(state: &AppState, headers: &HeaderMap, body: &[u8]) -> Response {
-    if !crate::routes::vm::vm_same_origin_request(headers) {
+    if !crate::hosts::same_origin_request(headers, Some(&state.cfg)) {
         return cors_json_response(403, json!({"error":"Open Chat from this website."}));
     }
     let Some(auth) = headers.get("Authorization").filter(|v| {

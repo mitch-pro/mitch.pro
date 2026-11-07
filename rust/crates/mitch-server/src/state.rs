@@ -10,7 +10,6 @@ use crate::static_files::StaticCache;
 use std::sync::Arc;
 
 pub struct AppState {
-    pub desktop_setup: std::sync::Mutex<std::collections::HashMap<String, serde_json::Value>>,
     pub cfg: SiteConfig,
     pub static_cache: StaticCache,
     /// Store handle for the shared SQLite layer.
@@ -24,12 +23,6 @@ pub struct AppState {
     pub coin_multiplier: std::sync::atomic::AtomicU64,
     /// `shadowBans` (server.js:1174) — loaded from data/shadow_bans.json.
     pub shadow_bans: std::sync::RwLock<std::collections::HashSet<String>>,
-    /// Users banned from the BYO-OS custom-ISO feature specifically (can
-    /// still use normal template VMs). Loaded from data/byo_os_bans.json.
-    pub byo_os_bans: std::sync::RwLock<std::collections::HashSet<String>>,
-    /// Users banned from VMs entirely (templates and BYO-OS both). Loaded
-    /// from data/vm_bans.json.
-    pub vm_bans: std::sync::RwLock<std::collections::HashSet<String>>,
     /// `proxBlocklist` (server.js:1179).
     pub prox_blocklist: std::sync::RwLock<std::collections::HashSet<String>>,
     /// `featuredGameHref` (server.js:1181).
@@ -144,43 +137,6 @@ pub struct AppState {
     pub cv_challenges: std::sync::Mutex<indexmap::IndexMap<String, serde_json::Value>>,
     /// `cvChats` (server.js:855) — gameId → messages; in-memory only.
     pub cv_chats: std::sync::Mutex<indexmap::IndexMap<String, serde_json::Value>>,
-    /// `activeFreeVms` (server.js:25512) — normalized email → free-VM entry
-    /// ({vmid, startedAt, lastActive, ...} as raw JSON). Written by the
-    /// Step 13 batch 3 provisioning endpoints; read by the SSH/VNC
-    /// authorization slice (`getVmConnectionIpForEmail`).
-    pub active_free_vms: std::sync::Mutex<std::collections::HashMap<String, serde_json::Value>>,
-
-    /// `vmDesktopSessions` (server.js:27083) — one-time desktop-console
-    /// tickets keyed by the random session id. Each record is the JS session
-    /// object kept verbatim (actorEmail, sid, authSessionKey, recordId,
-    /// ownerEmail, vmid, node, wsUrl, authorization, tlsOptions, expiresAt,
-    /// used). TTL 75s (VM_DESKTOP_SESSION_TTL_MS).
-    pub vm_desktop_sessions: std::sync::Mutex<std::collections::HashMap<String, serde_json::Value>>,
-    /// `vmDesktopSockets` (server.js:27084) — the live desktop-bridge sockets
-    /// (a JS Set of ws objects). Each entry carries the JS `ws.data` subset
-    /// the workers/authorization checks read plus a close channel so other
-    /// tasks can force `ws.close(1008, …)` the way the JS does.
-    pub vm_desktop_sockets:
-        std::sync::Mutex<std::collections::HashMap<u64, crate::routes::vm::VmDesktopClient>>,
-    /// Connection id allocator for `vm_desktop_sockets`.
-    pub vm_desktop_next_id: std::sync::atomic::AtomicU64,
-    /// `vmPowerRequests` (server.js:27085) — in-flight create/recreate locks
-    /// keyed `create-<norm>` / `recreate-<norm>` (the power gate is
-    /// `vm_power_gate`).
-    pub vm_power_requests: std::sync::Mutex<std::collections::HashMap<String, serde_json::Value>>,
-    /// `vmPowerGate` (server.js:27086) — one power operation per record.
-    pub vm_power_gate: std::sync::Mutex<mitch_lib::vm_security::VmOperationGate>,
-    /// `vmLeases` (server.js:27282) — recordId → lease object (raw JSON,
-    /// inserted by get_vm_lease exactly like the JS map).
-    pub vm_leases: std::sync::Mutex<std::collections::HashMap<String, serde_json::Value>>,
-    /// `vmPagePresence` (server.js:27283) — recordId → { lastSeen } (only
-    /// `lastSeen` is ever stored/read).
-    pub vm_page_presence: std::sync::Mutex<std::collections::HashMap<String, i64>>,
-    /// Record of when VM shutdown was requested (recordId/key -> timestamp ms)
-    /// Used to force-stop VMs that fail to shut off within 10 minutes.
-    pub vm_shutdown_initiated: std::sync::Mutex<std::collections::HashMap<String, i64>>,
-    /// `lastCapacityNtfy` (server.js:27095) — norm email → last ntfy ms.
-    pub last_capacity_ntfy: std::sync::Mutex<std::collections::HashMap<String, i64>>,
     /// `latestAdminBroadcast` (server.js:1334) — polling fallback for broadcasts.
     pub latest_admin_broadcast: std::sync::Mutex<Option<AdminBroadcastEvent>>,
     /// `webauthnChallenges` (server.js:5643) — in-memory WebAuthn challenge store.
@@ -299,19 +255,6 @@ impl AppState {
         });
         // Historical shadow bans are retained only for audit cleanup, never loaded as active restrictions.
         let shadow_bans = std::collections::HashSet::new();
-        let load_ban_set = |file: &str| -> std::collections::HashSet<String> {
-            store
-                .read_document(&cfg.base_dir.join(file), serde_json::json!([]))
-                .as_array()
-                .map(|a| {
-                    a.iter()
-                        .filter_map(|v| v.as_str().map(str::to_string))
-                        .collect()
-                })
-                .unwrap_or_default()
-        };
-        let byo_os_bans = load_ban_set("data/byo_os_bans.json");
-        let vm_bans = load_ban_set("data/vm_bans.json");
         let prox_blocklist: std::collections::HashSet<String> = store
             .read_document(
                 &cfg.base_dir.join("data/prox_blocklist.json"),
@@ -339,8 +282,6 @@ impl AppState {
                 mitch_lib::coins::DEFAULT_COIN_MULTIPLIER.to_bits(),
             ),
             shadow_bans: std::sync::RwLock::new(shadow_bans),
-            byo_os_bans: std::sync::RwLock::new(byo_os_bans),
-            vm_bans: std::sync::RwLock::new(vm_bans),
             prox_blocklist: std::sync::RwLock::new(prox_blocklist),
             featured_game_href: std::sync::RwLock::new(String::new()),
             pickle_presence: std::sync::Mutex::new(Vec::new()),
@@ -373,19 +314,6 @@ impl AppState {
             cv_challenges: std::sync::Mutex::new(indexmap::IndexMap::new()),
             cv_chats: std::sync::Mutex::new(indexmap::IndexMap::new()),
             matrix_user_last_seen: std::sync::Mutex::new(std::collections::HashMap::new()),
-            active_free_vms: std::sync::Mutex::new(std::collections::HashMap::new()),
-            desktop_setup: std::sync::Mutex::new(std::collections::HashMap::new()),
-            vm_desktop_sessions: std::sync::Mutex::new(std::collections::HashMap::new()),
-            vm_desktop_sockets: std::sync::Mutex::new(std::collections::HashMap::new()),
-            vm_desktop_next_id: std::sync::atomic::AtomicU64::new(1),
-            vm_power_requests: std::sync::Mutex::new(std::collections::HashMap::new()),
-            vm_power_gate: std::sync::Mutex::new(mitch_lib::vm_security::VmOperationGate::new(
-                5000,
-            )),
-            vm_leases: std::sync::Mutex::new(std::collections::HashMap::new()),
-            vm_page_presence: std::sync::Mutex::new(std::collections::HashMap::new()),
-            vm_shutdown_initiated: std::sync::Mutex::new(std::collections::HashMap::new()),
-            last_capacity_ntfy: std::sync::Mutex::new(std::collections::HashMap::new()),
             latest_admin_broadcast: std::sync::Mutex::new(None),
             webauthn_challenges: mitch_lib::webauthn::ChallengeStore::new(),
             casino_enabled: std::sync::atomic::AtomicBool::new(casino_enabled),

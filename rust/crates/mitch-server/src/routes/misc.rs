@@ -507,10 +507,6 @@ fn ranked_players(
         if mitch_lib::auth::is_tester_email(store, norm) {
             continue;
         }
-        // The owner's test-persona account isn't a real student.
-        if norm == mitch_lib::auth::OWNER_TEST_ACCOUNT_EMAIL {
-            continue;
-        }
         // Banned accounts (permanent or not yet expired) are not ranked.
         if mitch_lib::auth::banned_info_for_email(store, norm).is_some() {
             continue;

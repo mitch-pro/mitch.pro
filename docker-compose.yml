@@ -78,10 +78,7 @@ services:
       - ./mail:/app/mail
       - ./logs:/app/logs
       - ./webserver:/app/webserver
-      # Mount the host .env so PVE_SSH_KEY_PATH (and friends) actually
-      # reach the container. .env is in .dockerignore so it never gets
-      # baked into the image, and without this mount the server starts
-      # with process.env.PVE_SSH_KEY_PATH === undefined.
+      # Runtime configuration is mounted read-only and excluded from images.
       - ./.env:/app/.env:ro
     environment:
       - MITCH_BASE=/app
@@ -125,34 +122,6 @@ services:
       - MAIL_RS_HOST=mail-rs
       - NODE_ENV=production
       - SESSION_COOKIE_SECURE=1
-      # Proxmox bridge — explicit pass-through so the loader doesn't
-      # have to be the only thing standing between the var and the SSH
-      # call. If .env is missing the var, Docker still has it here.
-      - PVE_SSH_HOST
-      - PVE_SSH_USER
-      - PVE_SSH_KEY_PATH
-      - PVE_SSH_PORT
-      - PVE_URL
-      - PVE_TOKEN
-      - PVE_NODE
-      - PVE_TEMPLATE_LINUX
-      - PVE_LXC_TEMPLATE
-      - PROXMOX_HOST
-      - PROXMOX_PORT
-      - PROXMOX_NODE
-      - PROXMOX_TOKEN_ID
-      - PROXMOX_TOKEN_SECRET
-      - PROXMOX_VERIFY_TLS
-      - PROXMOX_TLS_SERVERNAME
-      - PROXMOX_DESKTOP_TEMPLATES
-      - PROXMOX_ISO_STORAGE
-      - PROXMOX_VM_STORAGE
-      - PROXMOX_VM_BRIDGE
-      - HIDE_VM_FEATURES
-      # Owner container desktop (VNC server inside the container); see docs/owner-container.md.
-      - OWNER_CONTAINER_VNC_HOST
-      - OWNER_CONTAINER_VNC_PORT
-      - OWNER_CONTAINER_VNC_PASSWORD
       # Movies proxy: leave through the movies-egress sidecar (VPN on the host).
       - MOVIES_EGRESS_PROXY=${MOVIES_EGRESS_PROXY:-http://host.docker.internal:3128}
     extra_hosts:
@@ -227,31 +196,6 @@ services:
       - MAIL_RS_HOST=mail-rs
       - NODE_ENV=production
       - SESSION_COOKIE_SECURE=1
-      - PVE_SSH_HOST
-      - PVE_SSH_USER
-      - PVE_SSH_KEY_PATH
-      - PVE_SSH_PORT
-      - PVE_URL
-      - PVE_TOKEN
-      - PVE_NODE
-      - PVE_TEMPLATE_LINUX
-      - PVE_LXC_TEMPLATE
-      - PROXMOX_HOST
-      - PROXMOX_PORT
-      - PROXMOX_NODE
-      - PROXMOX_TOKEN_ID
-      - PROXMOX_TOKEN_SECRET
-      - PROXMOX_VERIFY_TLS
-      - PROXMOX_TLS_SERVERNAME
-      - PROXMOX_DESKTOP_TEMPLATES
-      - PROXMOX_ISO_STORAGE
-      - PROXMOX_VM_STORAGE
-      - PROXMOX_VM_BRIDGE
-      - HIDE_VM_FEATURES
-      # Owner container desktop (VNC server inside the container); see docs/owner-container.md.
-      - OWNER_CONTAINER_VNC_HOST
-      - OWNER_CONTAINER_VNC_PORT
-      - OWNER_CONTAINER_VNC_PASSWORD
       # Movies proxy: leave through the movies-egress sidecar (VPN on the host).
       - MOVIES_EGRESS_PROXY=${MOVIES_EGRESS_PROXY:-http://host.docker.internal:3128}
     extra_hosts:

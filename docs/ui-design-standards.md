@@ -1,59 +1,65 @@
-# UI Design Standards
+# Tylerium design system
 
-This document establishes the UI design and frontend architectural standards for `mitchdog.com` (`mitch.pro`). All pages across the site must follow these conventions to maintain visual coherence and operational integrity.
+Reference: https://tylerium.pro, inspected 6 November 2026 in a real browser at
+1440×1000 and 390×844. The public site exposes its sign-in page; authenticated
+screens were not inspected. Its public styles also define dashboard and workspace
+layouts. Do not claim authenticated behavior was verified from these styles.
 
-## 1. Homepage & App-Shell Consistency
+## Identity
 
-Every user-facing and internal page on the site must adhere to the design language established by the homepage and shared app-shell:
+Use the existing geometric T mark and lowercase `tylerium.` wordmark. The dot is
+pale blue. The wordmark and compact metadata use JetBrains Mono; ordinary copy,
+forms, and headings use Manrope. Self-host the open-source fonts in production;
+never send visitors' requests to a font provider. Keep the upstream font licenses.
 
-1. **Shared Masthead & App Shell:**
-   - Every ordinary page must load `/app.css` and `/app-shell.js`.
-   - The body tag should use `class="app-shell"` so that the unified masthead (`#app-topbar`) is rendered consistently with the brand mark, navigation links, user profile, and MitchCoins wallet.
-   - For standalone fullscreen experiences (e.g. game or emulator players), provide an overlay or topbar that matches the site masthead instead of inventing a custom header.
+The reference uses a midnight-blue background, blue surfaces, pale-blue controls,
+thin blue-gray borders, and muted blue-gray secondary text:
 
-2. **Theme Tokens (`app.css` & `theme-tokens.css`):**
-   - Never use raw hardcoded hex colors (e.g., `#fff`, `#000`, `#222`) for core backgrounds, borders, or text.
-   - Use CSS color tokens:
-     - `--t-bg`: Primary background
-     - `--t-bg2`: Elevated card/panel background
-     - `--t-bg3`: Hover, subtle element, or input background
-     - `--t-fg`: Primary text
-     - `--t-fg2`: Secondary / muted text
-     - `--t-fg3`: Faint caption text
-     - `--t-bd`: Standard border
-     - `--t-bda`: Accentuated or hover border
-     - `--t-ac`: Accent color (brand pink/magenta or theme selection)
-     - `--t-ac-ink`: High-contrast text on accent buttons
-     - `--t-radius`: Standard card corner radius (default: 10px)
-     - `--t-radius-sm`: Input and button corner radius (default: 7px)
+| Token | Dark | Light |
+| --- | --- | --- |
+| Background | #0a101b | #f3f6fa |
+| Surface | #151f30 | #ffffff |
+| Raised surface | #21314a | #e8eef6 |
+| Text | #e0e2e8 | #172536 |
+| Secondary text | #b2bfce | #485d73 |
+| Border | #52678388 | #52678366 |
+| Accent | #9acbfa | #245c8c |
+| Text on accent | #061a2d | #ffffff |
 
-3. **Typography:**
-   - Use `var(--t-font)` (`DM Sans`, system-ui, sans-serif).
-   - Headings use bold weight (`font-weight: 700; letter-spacing: -0.03em;`).
+The light palette is an accessible companion derived from those colors; it is not
+an observed mode of the reference. Define colors once in `web/assets/app.css`.
+Use tokens everywhere. Avoid gradients, glass effects, wallpaper, or animation
+unless they solve an actual problem. The existing site's mountain wallpaper,
+Linux marks, VM labels, and service illustrations are not needed by this app.
 
-4. **Cards, Panels & Lists:**
-   - Container shells use `.app-main`, `.shell`, or `.legal-shell` with responsive max-width (`1000px` - `1200px`).
-   - Cards use `.panel`, `.card`, or semantic sections with `background: var(--t-bg2); border: 1px solid var(--t-bd); border-radius: var(--t-radius);`.
+## Layout and components
 
-## 2. No Orphan Endpoints
+The shared masthead has a maximum width of 1120px, restrained navigation, a compact
+brand, and an account menu. Ordinary pages use a 1064px content area with a 24–40px
+inset. At narrow widths navigation wraps without horizontal scrolling. Forms use
+a 430px column. Sign-in uses a two-column brand/form composition on desktop and a
+single column on mobile. Data lists, conversations, game discovery, account forms,
+and administration each use a layout suited to their function.
 
-- **Backend + Frontend Symmetry:** Any new feature, moderation tool, or settings toggle exposed by the backend or admin API must ship with its corresponding frontend UI in the same commit.
-- Leaving a note like *"there is no UI page for this yet"* is prohibited.
-- If an endpoint requires administrative or moderator action (such as the Matrix outside accounts queue), add controls to the [Moderator Panel](/moderator/) and [Admin Panel](/admin/) simultaneously.
+Use 6px control radii and 12px panel radii, 1px borders, 44px minimum touch targets,
+and a 4/8px spacing scale. Reserve panels for actual grouping. Do not wrap every
+label or statistic in a card. Body copy is 14–16px with 1.6 line-height; page
+headings are 30–38px, with normal sentence case and restrained tracking.
 
-## 3. Light and Dark Mode Verification
+All pages load the same CSS and application shell. Include a skip link, landmarks,
+visible focus, explicit field labels, live error/status regions, real empty states,
+and a working mobile navigation. Respect `prefers-reduced-motion`; no animation
+is required. Preserve uploaded avatars in every identity display. Never fetch
+third-party avatars, trackers, or game art implicitly.
 
-- Always test UI changes in both dark mode (default) and light mode (`html.theme-light`).
-- Contrast must be verified for all text, borders, buttons, and status indicators.
+## Copy and behavior
 
-## 4. MitchCoin Logo
+Use direct labels: Games, Community, People, Messages, Account Settings, Sign In.
+Do not fill space with slogans or helper copy. Errors identify the failed action
+and a useful next step, without exposing internals. Never invent activity,
+statistics, profiles, or testimonials. Every control must have a complete action.
 
-- `webserver/mitchcoin.svg` is the source for the lavender crown used in wallets, prices, VM upgrades, and game balances. Keep its purple facets fixed across themes and avoid circular clipping or color filters.
-- Use `/mitchcoin.svg?v=4` for images and CSS backgrounds. Inline images use `.mitch-coin-inline`; dynamic amounts can use `.mitch-coin-amount` so updating their text preserves the icon.
-- Keep `mitchcoin.png` and `mitchcoin.webp` as transparent 256×256 exports of the SVG. After changing the source, regenerate both exports and bump the logo, shared wallet script, and stylesheet versions together, including game pages that load the wallet directly.
-
-## 5. Full-screen pages, legal pages and the footer band
-
-- Pages with `data-shell="off"` (canvas, game portal) don't get `#app-topbar`, so `mitch-coins.js` has nowhere to put the wallet and falls back to a "← Games" bar meant for game pages. Give the page's own toolbar a `data-coin-wallet` attribute to host the wallet there instead.
-- Privacy, cookies, copyright and use agreement share `/legal.css` (hero, sticky table of contents, content column). Keep legal-page styling there, not in per-page `<style>` blocks.
-- The server-injected credit band (`inject_credit` in `rust/crates/mitch-server/src/inject.rs`) is the one place the "By using mitch.pro you agree…" line appears. The in-page `#_agree_footer` is only injected where the band doesn't carry it (school hosts, pages with their own `#site-credit`). Don't add another copy of that sentence to pages.
+Keep interface and API changes together. Server-side authorization and privacy
+rules apply to every caller, including administrators. Test desktop/mobile and
+both themes, keyboard access, loading/errors, and all shipped routes. Keep visual
+QA artifacts outside the repository. See `AGENTS.md` for mandatory standards.

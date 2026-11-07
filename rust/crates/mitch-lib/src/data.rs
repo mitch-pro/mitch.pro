@@ -329,12 +329,6 @@ impl DataStore {
                     );
                     CREATE INDEX IF NOT EXISTS idx_admin_actions_ts ON admin_actions (ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_admin_actions_action ON admin_actions (action, ts DESC);
-                    CREATE TABLE IF NOT EXISTS vm_admin_access_grants (
-                        vm_record_id TEXT PRIMARY KEY,
-                        owner_email TEXT NOT NULL,
-                        granted_at INTEGER NOT NULL,
-                        expires_at INTEGER NOT NULL
-                    );
                     CREATE TABLE IF NOT EXISTS cheat_logs (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         ts INTEGER NOT NULL,
@@ -359,51 +353,6 @@ impl DataStore {
                         decided_by TEXT NOT NULL DEFAULT ''
                     );
                     CREATE INDEX IF NOT EXISTS idx_matrix_outside_approvals_status ON matrix_outside_approvals (status, requested_at);
-                    CREATE TABLE IF NOT EXISTS virtual_machines (
-                        id TEXT PRIMARY KEY,
-                        owner_email TEXT NOT NULL,
-                        owner_user_id TEXT DEFAULT '',
-                        proxmox_vmid INTEGER NOT NULL UNIQUE,
-                        proxmox_node TEXT NOT NULL,
-                        guest_type TEXT NOT NULL DEFAULT 'qemu',
-                        friendly_name TEXT NOT NULL,
-                        hostname TEXT NOT NULL,
-                        operating_system TEXT NOT NULL,
-                        template_vmid INTEGER,
-                        cpu_cores INTEGER NOT NULL DEFAULT 4,
-                        memory_mb INTEGER NOT NULL DEFAULT 4096,
-                        disk_gb INTEGER NOT NULL DEFAULT 40,
-                        ip_address TEXT DEFAULT '',
-                        status TEXT NOT NULL DEFAULT 'assigned',
-                        keep_alive INTEGER NOT NULL DEFAULT 0,
-                        created_at INTEGER NOT NULL,
-                        updated_at INTEGER NOT NULL
-                    );
-                    CREATE TABLE IF NOT EXISTS vm_audit_logs (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        ts INTEGER NOT NULL,
-                        actor_email TEXT NOT NULL,
-                        owner_email TEXT DEFAULT '',
-                        vm_record_id TEXT DEFAULT '',
-                        proxmox_vmid INTEGER,
-                        action TEXT NOT NULL,
-                        success INTEGER NOT NULL,
-                        details TEXT DEFAULT ''
-                    );
-                    CREATE TABLE IF NOT EXISTS vm_usage_samples (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        ts INTEGER NOT NULL,
-                        day_key TEXT NOT NULL,
-                        hour INTEGER NOT NULL,
-                        minute INTEGER NOT NULL,
-                        owner_email TEXT NOT NULL,
-                        vm_record_id TEXT NOT NULL,
-                        vmid INTEGER,
-                        vm_name TEXT DEFAULT '',
-                        uptime_seconds INTEGER DEFAULT 0,
-                        active_users TEXT DEFAULT '',
-                        is_running INTEGER NOT NULL DEFAULT 1
-                    );
                     CREATE TABLE IF NOT EXISTS coins (
                         email TEXT PRIMARY KEY,
                         balance REAL NOT NULL DEFAULT 0,
@@ -656,9 +605,6 @@ impl DataStore {
                     CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs (ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_level ON app_logs (level, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_app_logs_category ON app_logs (category, ts DESC);
-                    CREATE INDEX IF NOT EXISTS idx_virtual_machines_owner ON virtual_machines (owner_email, status);
-                    CREATE INDEX IF NOT EXISTS idx_vm_audit_logs_ts ON vm_audit_logs (ts DESC);
-                    CREATE INDEX IF NOT EXISTS idx_vm_audit_logs_vm ON vm_audit_logs (vm_record_id, ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_coins_balance ON coins (balance DESC);
                     CREATE INDEX IF NOT EXISTS idx_blacklist_banned_at ON blacklist (banned_at DESC);
                     CREATE INDEX IF NOT EXISTS idx_banned_ips_email ON banned_ips (email);
@@ -702,36 +648,6 @@ impl DataStore {
         if !has_ban_expiry {
             conn.execute("ALTER TABLE blacklist ADD COLUMN expires_at INTEGER", [])?;
         }
-        let has_vm_keep_alive = conn
-            .prepare("PRAGMA table_info(virtual_machines)")?
-            .query_map([], |row| row.get::<_, String>(1))?
-            .collect::<rusqlite::Result<Vec<_>>>()?
-            .iter()
-            .any(|name| name == "keep_alive");
-        if !has_vm_keep_alive {
-            conn.execute(
-                "ALTER TABLE virtual_machines ADD COLUMN keep_alive INTEGER NOT NULL DEFAULT 0",
-                [],
-            )?;
-        }
-        let has_vm_last_active = conn
-            .prepare("PRAGMA table_info(virtual_machines)")?
-            .query_map([], |row| row.get::<_, String>(1))?
-            .collect::<rusqlite::Result<Vec<_>>>()?
-            .iter()
-            .any(|name| name == "last_active_at");
-        if !has_vm_last_active {
-            conn.execute(
-                "ALTER TABLE virtual_machines ADD COLUMN last_active_at INTEGER NOT NULL DEFAULT 0",
-                [],
-            )?;
-            // Existing computers start their 30-day inactivity clock at
-            // migration time, so deploying this never deletes anything at once.
-            conn.execute(
-                "UPDATE virtual_machines SET last_active_at = CAST(strftime('%s','now') AS INTEGER) * 1000",
-                [],
-            )?;
-        }
         let has_companion_allow_coin_requests = conn
             .prepare("PRAGMA table_info(companion_user_settings)")?
             .query_map([], |row| row.get::<_, String>(1))?
@@ -759,18 +675,6 @@ impl DataStore {
             // an admin deleting David later doesn't bring him back.
             crate::companion::seed_david_martinez(&conn)?;
         }
-
-        // Repairs rows written before upsert_values' INSERT started
-        // wrapping template_vmid in NULLIF(?, '') — a record with no
-        // template (BYO-OS) stored '' (empty TEXT) in this INTEGER column
-        // instead of real NULL, which made every row.get::<_, Option<f64>>
-        // read of that column fail, silently dropping the whole row out of
-        // every listing/lookup function while it still held its vmid via
-        // the UNIQUE constraint. Idempotent — a no-op once rows are fixed.
-        let _ = conn.execute(
-            "UPDATE virtual_machines SET template_vmid = NULL WHERE template_vmid = ''",
-            [],
-        );
 
         conn.execute(
             "INSERT OR REPLACE INTO metadata (key, value, updated_at) VALUES ('schema_version', '1', ?)",
@@ -1595,9 +1499,7 @@ impl DataStore {
         self
     }
 
-    /// Locked connection handle for crate-internal data layers (`vm.rs`).
-    /// The VM/Proxmox tables are raw SQL on both sides (lib/data_store.js
-    /// 239-478) — they never live in the JSON document store.
+    /// Locked connection handle for crate-internal data layers (domain modules).
     pub(crate) fn conn(&self) -> std::sync::MutexGuard<'_, rusqlite::Connection> {
         self.conn.lock().unwrap_or_else(|e| e.into_inner())
     }

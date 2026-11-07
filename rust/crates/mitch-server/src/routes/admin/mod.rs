@@ -30,10 +30,8 @@ pub mod feedback;
 pub mod legacy;
 pub mod moderation;
 pub mod newsletters;
-pub mod owner_container;
 pub mod support;
 pub mod updates;
-pub mod vm;
 
 pub type Resp = Option<Response>;
 
@@ -261,16 +259,6 @@ pub async fn handle(
     // Feedback inbox (/moderator/feedback/): moderators read and mark handled,
     // admins delete.
     if let Some(resp) = feedback::handle(state, method, path, search, body, &ctx) {
-        return Some(resp);
-    }
-
-    // ── Owner-only container (404s for everyone but the owner) ──
-    if let Some(resp) = owner_container::handle(state, method, path, headers, body).await {
-        return Some(resp);
-    }
-
-    // ── VM management (Step 8 wiring; Proxmox exec in Step 13) ──
-    if let Some(resp) = vm::handle(state, method, path, headers, search, body, &ctx).await {
         return Some(resp);
     }
 

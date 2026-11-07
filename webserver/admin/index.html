@@ -598,7 +598,6 @@
       <a id="newsletter-management" class="admin-shortcut newsletter-shortcut" href="/admin/email/" hidden><strong>Newsletter management</strong><span>Compose, preview, and choose recipients</span></a>
       <a class="admin-shortcut" href="/admin/bans/"><strong>Account access</strong><span>Review bans and restore accounts</span></a>
       <a class="admin-shortcut" href="/admin/updates/"><strong>Updates</strong><span>Write the homepage update log</span></a>
-      <a id="vm-management" class="admin-shortcut" href="/admin/vms/" hidden><strong>Virtual machines</strong><span>Manage computers and resources</span></a>
       <a class="admin-shortcut" href="/leaderboard/"><strong>Leaderboard</strong><span>View current rankings</span></a>
     </section>
     <div class="notice" id="policy-note">Administrative changes are recorded in the audit log.</div>
@@ -649,7 +648,6 @@
         <a href="#people-tools">People</a>
         <a href="#economy-tools">Economy</a>
         <a href="#moderation-tools">Safety</a>
-        <a href="#vm-tools">VM Cloud</a>
         <a href="#logs-tools">System Logs</a>
         <a href="#content-tools">Content</a>
         <a href="#email-tools">Email</a>
@@ -768,7 +766,6 @@
         <div id="revoke-status" class="form-status"></div>
       </form>
 
-      <!-- Removed deprecated approve/terminate VM forms -->
 
       <form class="action-card" onsubmit="sendNotification(event)">
         <h2>Send Notification</h2>
@@ -814,44 +811,6 @@
           <button type="submit" style="width:auto; margin:0;">Add</button>
         </form>
         <div id="tester-status" class="form-status"></div>
-      </div>
-    </section>
-
-    <section class="tool-group" id="vm-tools">
-      <div class="section-head">
-        <h2>VM Cloud Manager</h2>
-        <span class="tag">kvm vms, lxc containers, approvals</span>
-      </div>
-      <div class="actions-panel" style="display: grid; grid-template-columns: 1fr; gap: 14px;">
-        <div class="action-card" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
-          <div><h2 style="margin-bottom:5px">Graphical Computer Admin</h2><p style="margin:0">Create, assign, control, and open customer Linux desktops.</p></div>
-          <a href="/admin/vms/" class="quick-action-btn" style="text-decoration:none">Open Computer Admin →</a>
-        </div>
-        <!-- VM Requests & Soft-Delete Restore Actions -->
-        <div class="action-card" style="width: 100%;">
-          <h2>Active & Pending VM Requests</h2>
-          <p>Shows assigned computers, VM requests, and their operational statuses. Deleted VMs can be restored up to 7 days after soft-deletion.</p>
-          
-          <div style="overflow-x: auto; margin-top: 15px;">
-            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.82rem;">
-              <thead>
-                <tr style="border-bottom: 2px solid var(--t-bd); color: var(--t-fg2);">
-                  <th style="padding: 10px 8px;">User / Email</th>
-                  <th style="padding: 10px 8px;">Workspace Tier</th>
-                  <th style="padding: 10px 8px;">Reason / Notes</th>
-                  <th style="padding: 10px 8px;">Status / Info</th>
-                  <th style="padding: 10px 8px; text-align: right;">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="vm-requests-table-body">
-                <tr>
-                  <td colspan="5" style="padding: 20px; text-align: center; color: var(--t-fg2);">Loading workspace requests...</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div id="vm-requests-global-status" class="form-status" style="margin-top: 10px;"></div>
-        </div>
       </div>
     </section>
 
@@ -2118,8 +2077,6 @@
       const statusPills = [
         data.accountBanned ? `<span class="pill" style="color:#f87171; border-color:rgba(239,68,68,0.25); background:rgba(239,68,68,0.08);">Account banned${data.banReason ? ': ' + esc(data.banReason) : ''}</span>` : `<span class="pill" style="color:#4ade80; border-color:rgba(74,222,128,0.25); background:rgba(74,222,128,0.08);">Not banned</span>`,
         data.shadowBanned ? `<span class="pill" style="color:#f87171; border-color:rgba(239,68,68,0.25); background:rgba(239,68,68,0.08);">Shadow-banned</span>` : '',
-        data.vmBanned ? `<span class="pill" style="color:#f87171; border-color:rgba(239,68,68,0.25); background:rgba(239,68,68,0.08);">Banned from VMs</span>` : '',
-        data.byoOsBanned ? `<span class="pill" style="color:#f87171; border-color:rgba(239,68,68,0.25); background:rgba(239,68,68,0.08);">Banned from BYO-OS</span>` : '',
       ].filter(Boolean).join(' ');
       const matrixIdsStr = (data.matrixUserIds || []).join(', ') || '(no Matrix account found)';
       const rooms = data.rooms || [];
@@ -2144,8 +2101,6 @@
         </table></div>
         <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;">
           ${canRestore ? `<button type="button" class="mini warn" onclick='restoreFromModProfile(${esc(JSON.stringify(data.email))})'>Restore account (unban + unmute everywhere)</button>` : ''}
-          <button type="button" class="mini ${data.vmBanned ? 'ok' : 'warn'}" onclick='setVmRestrictionFromModProfile(${esc(JSON.stringify(data.email))}, "vm", ${!data.vmBanned})'>${data.vmBanned ? 'Unban from VMs' : 'Ban from VMs'}</button>
-          <button type="button" class="mini ${data.byoOsBanned ? 'ok' : 'warn'}" onclick='setVmRestrictionFromModProfile(${esc(JSON.stringify(data.email))}, "byoOs", ${!data.byoOsBanned})'>${data.byoOsBanned ? 'Unban from BYO-OS' : 'Ban from BYO-OS'}</button>
         </div>
       `;
     }
@@ -2158,19 +2113,6 @@
         lookupModerationProfile({ preventDefault() {} });
       } catch (err) {
         await customAlert('Restore Failed', err.message || 'Could not restore account.');
-      }
-    }
-
-    async function setVmRestrictionFromModProfile(email, kind, banned) {
-      const url = kind === 'byoOs' ? '/api/admin/byo-os-ban' : '/api/admin/vm-ban';
-      const label = kind === 'byoOs' ? 'BYO-OS' : 'VMs';
-      if (!(await customConfirm(`${banned ? 'Restrict' : 'Restore'} ${label} access`, `${banned ? 'Restrict' : 'Restore'} ${label} access for ${email}?`))) return;
-      try {
-        const d = await postAdmin(url, { email, banned });
-        await customAlert('Updated', `${email} is now ${d.active ? 'banned from' : 'unbanned from'} ${label}.`);
-        lookupModerationProfile({ preventDefault() {} });
-      } catch (err) {
-        await customAlert('Update Failed', err.message || `Could not update the ${label} ban.`);
       }
     }
 
@@ -3484,208 +3426,6 @@
       }
     }
 
-    const failedVmDeletions = new Set();
-
-    async function loadVmRequests() {
-      if (document.body.classList.contains('admin-locked')) return;
-      setStatus('vm-requests-global-status', 'Loading VM requests...', '');
-      try {
-        const res = await adminFetch('/api/admin/vm-requests');
-        const d = await res.json().catch(() => ({}));
-        if (!res.ok || d.error) throw new Error(d.error || 'Failed to load VM requests');
-        
-        const tbody = document.getElementById('vm-requests-table-body');
-        tbody.innerHTML = '';
-        
-        const requests = d.requests || {};
-        const entries = Object.entries(requests);
-        
-        if (entries.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="5" style="padding: 20px; text-align: center; color: var(--t-fg2);">No VM workspace requests found.</td></tr>`;
-          setStatus('vm-requests-global-status', '', '');
-          return;
-        }
-        
-        entries.sort((a, b) => {
-          const statusOrder = { pending: 1, approved: 2, deleted: 3, denied: 4 };
-          const sA = statusOrder[a[1].status] || 5;
-          const sB = statusOrder[b[1].status] || 5;
-          return sA - sB;
-        });
-
-        for (const [normEmail, app] of entries) {
-          const row = document.createElement('tr');
-          row.style.borderBottom = '1px solid var(--t-bd)';
-          
-          const dateStr = app.appliedAt ? new Date(app.appliedAt).toLocaleString('en-US', { hour12: true }) : 'N/A';
-          
-          let statusBadge = '';
-          if (app.status === 'pending') {
-            statusBadge = `<span style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 0.72rem;">Pending</span>`;
-          } else if (app.status === 'approved') {
-            statusBadge = `<span style="background: rgba(139,92,246, 0.15); color: #8b5cf6; border: 1px solid rgba(139,92,246,0.3); padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 0.72rem;">Approved (VMID: ${app.vmid})</span>`;
-          } else if (app.status === 'denied') {
-            statusBadge = `<span style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 0.72rem;">Denied</span>`;
-          } else if (app.status === 'deleted') {
-            const timeRemaining = 7 - (Date.now() - app.deletedAt) / (24 * 3600 * 1000);
-            const daysLeft = Math.max(0, timeRemaining.toFixed(1));
-            statusBadge = `<span style="background: rgba(249, 115, 22, 0.15); color: #f97316; border: 1px solid rgba(249,115,22,0.3); padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 0.72rem; display: inline-block;">Deleted (${daysLeft}d left to restore)</span>`;
-          } else {
-            statusBadge = `<span style="background: rgba(107, 114, 128, 0.15); color: #9ca3af; border: 1px solid rgba(107,114,128,0.3); padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 0.72rem;">${app.status}</span>`;
-          }
-          
-          let actionsHtml = '';
-          const safeEmail = app.email;
-          const hasFailed = failedVmDeletions.has(safeEmail);
-          if (app.status === 'pending') {
-            const randomVmid = Math.floor(Math.random() * 100) + 200;
-            const inputId = 'vmid-' + normEmail.replace(/[^a-z0-9]/g, '');
-            actionsHtml = `
-              <div style="display:flex; align-items:center; gap:6px; justify-content:flex-end; flex-wrap:wrap;">
-                <input id="${inputId}" type="number" min="200" max="999" placeholder="VMID" value="${randomVmid}" style="width:78px; min-width:78px; min-height:34px; margin:0; padding:4px 8px; font-size:0.78rem; text-align:center;">
-                <button onclick="approveVmRequest('${safeEmail}', '${inputId}')" class="mini" style="background:#8b5cf6; color:#fff; border-color:#8b5cf6;">Approve</button>
-                <button onclick="denyVmRequest('${safeEmail}')" class="mini" style="background:#ef4444; color:#fff; border-color:#ef4444;">Deny</button>
-              </div>
-            `;
-          } else if (app.status === 'approved') {
-            actionsHtml = `
-              <div style="text-align:right; display:flex; align-items:center; justify-content:flex-end; gap:6px;">
-                <button onclick="terminateVmRequest('${safeEmail}')" class="mini" style="background:rgba(239, 68, 68, 0.1); color:#ef4444; border-color:rgba(239,68,68,0.2);">Delete VM</button>
-                ${hasFailed ? `<button onclick="terminateVmRequest('${safeEmail}', true)" class="mini" style="background:#ef4444; color:#fff; border-color:#ef4444; font-weight:700;">⚠️ Force Delete</button>` : ''}
-              </div>
-            `;
-          } else if (app.status === 'deleted') {
-            const isRestorable = (Date.now() - app.deletedAt) < (7 * 24 * 3600 * 1000);
-            actionsHtml = `
-              <div style="text-align:right; display:flex; align-items:center; justify-content:flex-end; gap:6px;">
-                ${isRestorable ? `<button onclick="restoreVmRequest('${safeEmail}')" class="mini" style="background:rgba(139,92,246, 0.15); color:#8b5cf6; border-color:rgba(139,92,246,0.3);">Undo Delete</button>` : ''}
-                <button onclick="purgeVmRequest('${safeEmail}')" class="mini" style="background:rgba(239, 68, 68, 0.1); color:#ef4444; border-color:rgba(239,68,68,0.2);">Purge</button>
-                ${hasFailed ? `<button onclick="purgeVmRequest('${safeEmail}', true)" class="mini" style="background:#ef4444; color:#fff; border-color:#ef4444; font-weight:700;">⚠️ Force Delete</button>` : ''}
-              </div>
-            `;
-          } else {
-            actionsHtml = `&mdash;`;
-          }
-          
-          row.innerHTML = `
-            <td style="padding: 10px 8px; font-weight:700;">
-              ${app.email}
-              <div style="font-size:0.7rem; color:var(--t-fg2); font-weight:normal;">Applied: ${dateStr}</div>
-            </td>
-            <td style="padding: 10px 8px; text-transform: capitalize;">
-              ${app.tier === 'paid' ? 'Dedicated VM' : 'Linux container'}
-              ${app.priceUsd === 0 ? '<div style="margin-top:3px; color:#53e6a5; font-size:0.7rem; font-weight:800;">NO-COST ENTITLEMENT</div>' : ''}
-            </td>
-            <td style="padding: 10px 8px; max-width: 320px; white-space: normal; overflow-wrap: break-word;">${app.note || 'None'}</td>
-            <td style="padding: 10px 8px;">${statusBadge}</td>
-            <td style="padding: 10px 8px; text-align:right;">${actionsHtml}</td>
-          `;
-          tbody.appendChild(row);
-        }
-        
-        setStatus('vm-requests-global-status', '', '');
-      } catch (err) {
-        setStatus('vm-requests-global-status', 'Failed to load requests: ' + err.message, 'err');
-      }
-    }
-
-    async function approveVmRequest(email, inputId) {
-      const vmidVal = parseInt(document.getElementById(inputId).value, 10);
-      if (isNaN(vmidVal) || vmidVal < 200 || vmidVal > 999) {
-        alert('Please enter a valid VMID from 200 to 999');
-        return;
-      }
-      setStatus('vm-requests-global-status', 'Approve command sent. Cloning VM template...', '');
-      try {
-        const d = await postAdmin('/api/admin/approve-vm', { email, vmid: vmidVal });
-        setStatus('vm-requests-global-status', d.message || 'VM approved successfully.', 'ok');
-        loadVmRequests();
-      } catch (err) {
-        setStatus('vm-requests-global-status', err.message, 'err');
-      }
-    }
-
-    async function denyVmRequest(email) {
-      if (!(await customConfirm('Deny Request', 'Are you sure you want to deny this VM request?'))) return;
-      setStatus('vm-requests-global-status', 'Denying request...', '');
-      try {
-        const d = await postAdmin('/api/admin/deny-vm', { email });
-        setStatus('vm-requests-global-status', d.message || 'Request denied.', 'ok');
-        loadVmRequests();
-      } catch (err) {
-        setStatus('vm-requests-global-status', err.message, 'err');
-      }
-    }
-
-    async function terminateVmRequest(email, force = false) {
-      if (!force) {
-        if (!(await customConfirm('Delete VM', 'Are you sure you want to stop and soft-delete this student\'s VM? It can be restored within 7 days.'))) return;
-      } else {
-        if (!(await customConfirm('Force Delete VM', 'Force delete will ignore any errors from Proxmox and delete the VM from the system anyway. Proceed?'))) return;
-      }
-      setStatus('vm-requests-global-status', force ? 'Force deleting VM (ignoring Proxmox errors)...' : 'Stopping VM & marking as deleted...', '');
-      try {
-        const d = await postAdmin('/api/admin/terminate-vm', { email, force });
-        setStatus('vm-requests-global-status', d.message || (force ? 'VM force deleted.' : 'VM soft-deleted.'), 'ok');
-        failedVmDeletions.delete(email);
-        loadVmRequests();
-      } catch (err) {
-        failedVmDeletions.add(email);
-        const errorMsg = err.message || 'Failed to stop VM on Proxmox.';
-        const statusEl = document.getElementById('vm-requests-global-status');
-        if (statusEl) {
-          statusEl.className = 'form-status err';
-          statusEl.innerHTML = `
-            <span>${esc(errorMsg)}</span>
-            <button type="button" class="mini" style="margin-left: 12px; background: #ef4444; color: #fff; border: 1px solid #ef4444; border-radius: 4px; padding: 3px 8px; font-weight: 700; cursor: pointer;" onclick="terminateVmRequest('${email}', true)">
-              ⚠️ Force Delete
-            </button>
-          `;
-        }
-        loadVmRequests();
-      }
-    }
-
-    async function purgeVmRequest(email, force = false) {
-      if (!force) {
-        if (!(await customConfirm('Purge VM', 'Permanently destroy this VM and remove it completely? This cannot be undone.'))) return;
-      } else {
-        if (!(await customConfirm('Force Purge VM', 'Force delete will ignore any errors from Proxmox and permanently delete the record anyway. Proceed?'))) return;
-      }
-      setStatus('vm-requests-global-status', force ? 'Force purging VM (ignoring Proxmox errors)...' : 'Purging VM from Proxmox...', '');
-      try {
-        const d = await postAdmin('/api/admin/purge-vm', { email, force });
-        setStatus('vm-requests-global-status', d.message || 'VM permanently purged.', 'ok');
-        failedVmDeletions.delete(email);
-        loadVmRequests();
-      } catch (err) {
-        failedVmDeletions.add(email);
-        const errorMsg = err.message || 'Failed to purge VM on Proxmox.';
-        const statusEl = document.getElementById('vm-requests-global-status');
-        if (statusEl) {
-          statusEl.className = 'form-status err';
-          statusEl.innerHTML = `
-            <span>${esc(errorMsg)}</span>
-            <button type="button" class="mini" style="margin-left: 12px; background: #ef4444; color: #fff; border: 1px solid #ef4444; border-radius: 4px; padding: 3px 8px; font-weight: 700; cursor: pointer;" onclick="purgeVmRequest('${email}', true)">
-              ⚠️ Force Delete
-            </button>
-          `;
-        }
-        loadVmRequests();
-      }
-    }
-
-    async function restoreVmRequest(email) {
-      setStatus('vm-requests-global-status', 'Restoring VM & booting...', '');
-      try {
-        const d = await postAdmin('/api/admin/restore-vm', { email });
-        setStatus('vm-requests-global-status', d.message || 'VM restored.', 'ok');
-        loadVmRequests();
-      } catch (err) {
-        setStatus('vm-requests-global-status', err.message, 'err');
-      }
-    }
-
     function syncNotifMode() {
       const all = document.getElementById('notif-all').checked;
       const email = document.getElementById('notif-email');
@@ -3748,7 +3488,6 @@
       }
       currentUser = await rMe.json();
       document.getElementById('newsletter-management').hidden = !currentUser.isAdmin;
-      document.getElementById('vm-management').hidden = !currentUser.isAdmin;
       document.body.classList.toggle('owner-mode', !!currentUser.isOwner);
       const ownerSwitch = document.querySelector('.owner-switch');
       if (ownerSwitch) ownerSwitch.hidden = !currentUser.isOwner;
@@ -3761,12 +3500,6 @@
         document.getElementById('owner-operations').appendChild(document.getElementById('soft-maintenance-card'));
         document.getElementById('coowner-role-card').hidden = false;
         document.getElementById('reserved-usernames-card').hidden = false;
-        // Built here (not in the static HTML) so admins and developers never
-        // receive any mention of the owner-only container.
-        const ocCard = document.createElement('div');
-        ocCard.className = 'action-card';
-        ocCard.innerHTML = '<h2>Container 500</h2><p>Owner-only container desktop.</p><a href="/vms/desktop/?container=owner">Open</a>';
-        document.getElementById('owner-operations').appendChild(ocCard);
       }
       if (ownerOrDev) {
         document.getElementById('admin-role-card').hidden = false;
@@ -3841,9 +3574,6 @@
       }
       if (currentUser.isAdmin && location.hash === '#email-tools') {
         loadEmailTools();
-      }
-      if (location.hash === '#vm-tools') {
-        loadVmRequests();
       }
       if (location.hash === '#content-tools') {
         loadBlogDeletionLog();
@@ -4261,9 +3991,6 @@
         if ((currentUser.isOwner || currentUser.isCoOwner) && output && !output.dataset.loaded) {
           loadAppLogs();
         }
-      }
-      if (target === 'vm-tools') {
-        loadVmRequests();
       }
       if (target === 'email-tools' && currentUser.isAdmin) {
         loadEmailTools();

@@ -122,7 +122,7 @@ async fn open_ticket(state: &Arc<AppState>, headers: &HeaderMap, body: &Value) -
     }
     let ip_hash =
         mitch_lib::crypto::hmac_sha256_hex(&state.id_secret, format!("support-ip:{ip}").as_bytes());
-    let now = crate::routes::vm::now_ms();
+    let now = mitch_lib::school::now_millis();
     if db::count_recent_by_ip(&state.store, &ip_hash, now - HOUR_MS) >= MAX_TICKETS_PER_IP_PER_HOUR
         || db::count_recent(&state.store, now - HOUR_MS) >= MAX_TICKETS_PER_HOUR
     {
@@ -222,7 +222,7 @@ fn reply(state: &Arc<AppState>, body: &Value) -> Response {
     if message.is_empty() {
         return json_resp(400, json!({ "error": "Write a message first." }));
     }
-    let now = crate::routes::vm::now_ms();
+    let now = mitch_lib::school::now_millis();
     if now - db::last_message_at(&state.store, &t.id, "user") < MIN_USER_MESSAGE_GAP_MS {
         return json_resp(429, json!({ "error": "Slow down a little." }));
     }
@@ -415,11 +415,7 @@ mod tests {
     async fn approved_change_applies_only_with_the_emailed_code_and_resets_compromised_accounts() {
         let (state, dir) = test_state();
         mitch_lib::passwords::password_set(&state.store, "user@x.test", "oldhash");
-        mitch_lib::vm::upsert_virtual_machine(
-            &state.store,
-            &json!({ "id": "vm1", "ownerEmail": "user@x.test", "vmid": 302, "node": "n" }),
-        )
-        .unwrap();
+
         let passkeys = state.data_dir().join("passkeys.json");
         state
             .store
@@ -457,12 +453,7 @@ mod tests {
         );
         let keys = state.store.read_document(&passkeys, json!({}));
         assert!(keys.get("new@x.test").is_none() && keys.get("user@x.test").is_none());
-        assert_eq!(
-            mitch_lib::vm::get_virtual_machine_by_id(&state.store, "vm1")
-                .unwrap()
-                .owner_email,
-            "new@x.test"
-        );
+
         assert_eq!(db::ticket(&state.store, &id).unwrap().status, "resolved");
         // The code works once.
         assert_eq!(json_of(confirm_email(&state, &right).await).await.0, 400);

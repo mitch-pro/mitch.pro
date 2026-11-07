@@ -64,9 +64,6 @@ pub mod tester;
 pub mod tokens;
 pub mod totp;
 pub mod user_stats;
-pub mod vm;
-pub mod vm_access;
-pub mod vm_security;
 pub mod webauthn;
 
 /// Library version, matching the workspace version. Read from Cargo.toml at

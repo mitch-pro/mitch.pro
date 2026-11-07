@@ -14,7 +14,6 @@
 /// Starts every live worker task. Call once from `main` after the state build.
 pub fn spawn(state: std::sync::Arc<crate::state::AppState>) {
     crate::chat_cleanup::spawn(state.clone());
-    crate::routes::admin::owner_container::spawn_idle_shutdown();
     // saveCanvasPixels — every 60s, skipped when nothing's dirty.
     {
         let state = state.clone();
@@ -70,8 +69,6 @@ pub fn spawn(state: std::sync::Arc<crate::state::AppState>) {
     crate::workers_email::spawn(state.clone());
     // Holiday update-log entries, premium maintenance, and marketplace settlement.
     crate::workers_site::spawn(state.clone());
-    // Step 13 batch 4 — VM usage sampling, purge, prune, uptime enforcement, session cleanup.
-    crate::workers_vm::spawn(state.clone());
     // Pull current bell schedules from the district school sites.
     crate::routes::bell_sync::spawn(state.clone());
 

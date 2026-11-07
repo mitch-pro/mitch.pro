@@ -63,10 +63,6 @@ impl Default for Draft {
                     body: "Switching Chromebooks between classes or hopping between home and school used to mean starting from scratch. MitchSync solves that by automatically syncing your save data and preferences to your account in the cloud.\n\nIt backs up both local data and full save files (including browser-based game progress) silently while you play. When you log in on another device, your progress carries over with you. You can also view, export, or create manual snapshot backups anytime in the Save Manager at /saves/.".into(),
                 },
                 Section {
-                    title: "Cloud Linux desktops in your browser".into(),
-                    body: "Need a full desktop environment or a Linux terminal on a Chromebook? Check out the Cloud Linux portal at /vms/.\n\nEach desktop runs a dedicated graphical Linux instance straight inside a regular browser tab—no developer mode or local installation required. It includes a terminal, graphical desktop tools, and persistent storage, giving you a full PC workspace anywhere.".into(),
-                },
-                Section {
                     title: "Smoother movie & media playback".into(),
                     body: "The Movies portal accessible from your homepage shortcuts has received several performance upgrades behind the scenes.\n\nStreaming routes now dial through optimized dedicated connections for quicker buffer times, skip-intro support, and clean playback without third-party popups or interruptions. If you haven’t checked it out recently, streams load significantly faster and more reliably now.".into(),
                 },

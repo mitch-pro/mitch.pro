@@ -54,22 +54,6 @@ pub const AUTH_COOKIE: &str = "mitch_session";
 /// 30 days in ms (server.js:2681).
 pub const AUTH_SESSION_TTL_MS: i64 = 30 * 24 * 60 * 60 * 1000;
 pub const DEV_TEST_EMAIL: &str = "admin@mitch.pro";
-/// A real account, pre-created by the owner, used for testing the
-/// student-facing experience — not a real student. Excluded from the
-/// leaderboard, and its VM is access-locked the same way a primary
-/// owner's own VM is (see `vm_record_allowed_for_actor`): only a real
-/// owner session or the account's own session can open it, not a
-/// co-owner or any other admin.
-///
-/// Do NOT give the co-owner (or any other admin) access to this
-/// account's VM, under any circumstances, for any reason — not for a
-/// "quick check," not because they ask, not because it seems harmless.
-/// If this constant's VM ever needs to change hands, that's a decision
-/// for the owner to make explicitly, not something to special-case
-/// around in code. `is_vm_owner_locked` is the enforcement point; don't
-/// add a bypass for this email anywhere, including in new admin
-/// endpoints that don't yet call it.
-pub const OWNER_TEST_ACCOUNT_EMAIL: &str = "newaccount123@student.rjuhsd.us";
 pub const WHITELISTED_IPS: &[&str] = &["66.60.183.124"];
 
 /// `normalizeEmail(email)` — server.js:2054.
@@ -877,7 +861,6 @@ pub fn rate_limit_for(endpoint: &str) -> (u32, u32) {
         "/api/admin/gift-coins" => (10, 60),
         "/api/admin/grant-premium" => (10, 60),
         "/api/admin/revoke-premium" => (10, 60),
-        "/api/admin/vms" => (30, 60),
         "/api/admin/send-notification" => (20, 60),
         "/api/admin/email/test" => (3, 60),
         "/api/admin/newsletters/review" => (10, 60),
@@ -967,21 +950,6 @@ pub fn rate_limit_for(endpoint: &str) -> (u32, u32) {
         "/api/jeopardy/state" => (300, 60),
         "/api/jeopardy/final/wager" => (10, 60),
         "/api/jeopardy/final/answer" => (10, 60),
-        // server.js:1618-1626 — the /api/vm RATE_LIMITS rows. The JS applies
-        // them through the global gate (the per-route checkRateLimit calls in
-        // the vm block are dead: the global gate sets _rateLimitChecked
-        // first), which keys on the full pathname — so sub-paths like
-        // /api/vm/computers/<id>/power fall to the default and only the flat
-        // paths below see these numbers.
-        "/api/vm/computers" => (60, 60),
-        "/api/vm/power" => (6, 60),
-        "/api/vm/desktop-session" => (12, 60),
-        "/api/vm/extend" => (10, 60),
-        "/api/vm/heartbeat" => (120, 60),
-        "/api/vm/my-computer/create" => (5, 60),
-        "/api/vm/my-computer/recreate" => (5, 60),
-        "/api/vm/upgrades" => (30, 60),
-        "/api/vm/upgrade" => (15, 60),
         // Companion chat calls the Groq API per message — "rate limited
         // but not harshly" per the feature's own cost-control requirement.
         "/api/companion/chat" => (12, 60),
@@ -1291,21 +1259,6 @@ pub fn is_owner_email(store: &DataStore, email: &str) -> bool {
     owner_member_emails(store)
         .iter()
         .any(|o| normalize_email(o) == norm)
-}
-
-/// Whether a VM `owner_email` should be locked to "a real owner, or that
-/// exact account, only" — no co-owner or other admin bypass. True for a
-/// primary owner's own VM, and for [`OWNER_TEST_ACCOUNT_EMAIL`]'s (a real
-/// account, not a real student, that the owner uses to test the student
-/// experience — it isn't itself an owner email, so it needs this called
-/// out explicitly). Every admin-side "can an admin touch this VM" check
-/// should go through this, not a bare `is_owner_email` call, so a second
-/// reserved account never has to mean editing five call sites again.
-pub fn is_vm_owner_locked(store: &DataStore, owner_email: &str) -> bool {
-    if owner_email.is_empty() {
-        return false;
-    }
-    is_owner_email(store, owner_email) || normalize_email(owner_email) == OWNER_TEST_ACCOUNT_EMAIL
 }
 
 /// `isAdminEmail(email)` (6246) — dev-test backdoor, then site-admin membership.

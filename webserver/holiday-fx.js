@@ -22,7 +22,7 @@
     try { off = localStorage.getItem('theme_motion') === 'off' || localStorage.getItem('theme_holidayfx') === 'off'; } catch (_) {}
     var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     var path = location.pathname;
-    var excluded = path.indexOf('/vms/desktop') === 0 || path.indexOf('/game-portal') === 0 || /^\/games\/?$/.test(path);
+    var excluded = path.indexOf('/game-portal') === 0 || /^\/games\/?$/.test(path);
     return !off && !reduced && !excluded;
   }
 

@@ -17,7 +17,7 @@
 //!   The read-modify-write of one row still happens in Rust (to keep the
 //!   exact rounding/multiplier logic), but now inside a BEGIN IMMEDIATE
 //!   transaction scoped to that one row instead of a whole-document write,
-//!   the same pattern `reserve_virtual_machine` already uses for atomic
+//!   the same transaction pattern used for atomic
 //!   single-row updates.
 //! - Positive amounts also bump `lifetime_earned`, now a column on the
 //!   same row instead of a separate user_stats.json write.
@@ -115,7 +115,7 @@ pub fn add_coins(
     }
 
     // One row, one transaction: BEGIN IMMEDIATE takes the write lock
-    // up front (same pattern reserve_virtual_machine uses), so a
+    // up front (using the same transaction discipline), so a
     // concurrent add_coins for the same email can't read the same
     // "before" this one is about to overwrite — the lost-update race
     // the old whole-blob read/write had.
@@ -840,39 +840,6 @@ pub fn add_admin_notification(
         &norm,
         "admin_notice",
         batch_id,
-        data,
-    ))
-}
-
-/// `addVmAdminNotification(targetEmail, title, message, adminEmail, url)`
-/// — server.js:3309-3330. `kind: 'vm_admin_access'` rows in coin_gifts.json.
-pub fn add_vm_admin_notification(
-    store: &DataStore,
-    _data_dir: &Path,
-    target_email: &str,
-    title: &str,
-    message: &str,
-    admin_email: &str,
-    url: &str,
-) -> Option<Value> {
-    let norm = normalize_email(target_email);
-    if norm.is_empty() {
-        return None;
-    }
-    let data = json!({
-        "kind": "vm_admin_access",
-        "title": if title.is_empty() { "Computer Access Alert" } else { title },
-        "message": message,
-        "from": if admin_email.is_empty() { "admin" } else { admin_email },
-        "source": "mitchdog.com",
-        "url": if url.is_empty() { "/vms/" } else { url },
-        "batchId": "",
-    });
-    Some(insert_coin_gift_notice(
-        store,
-        &norm,
-        "vm_admin_access",
-        "",
         data,
     ))
 }
