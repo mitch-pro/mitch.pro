@@ -691,6 +691,22 @@
         </form>
         <div id="reserved-usernames-status" class="form-status" role="status"></div>
       </section>
+      <section class="action-card" id="backup-domains-card" hidden>
+        <h2>Backup domains</h2>
+        <p>Visitors whose browser can't reach the site are sent to the active backup. Only that one is ever shown to visitors; changes reach browsers within about 6 hours.</p>
+        <div id="backup-domains-list" style="font-size:.78rem;margin-bottom:10px;"></div>
+        <form onsubmit="addBackupDomain(event)" style="display:flex;gap:7px;flex-wrap:wrap;">
+          <input id="backup-domain-origin" type="text" placeholder="example.com" required maxlength="253" autocomplete="off" style="flex:1;min-width:200px">
+          <button type="submit" style="width:auto">Add</button>
+          <button type="button" id="backup-domain-rotate" onclick="changeBackupDomain('rotate')" style="width:auto">Switch to a random one</button>
+        </form>
+        <form id="site-alternate-form" onsubmit="saveSiteAlternate(event)" hidden style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px;">
+          <label for="site-alternate-url" style="flex-basis:100%">Secondary domain (the alternate link on the school site and in student emails)</label>
+          <input id="site-alternate-url" type="text" placeholder="https://example.com" required maxlength="2048" autocomplete="off" style="flex:1;min-width:200px">
+          <button type="submit" style="width:auto">Save</button>
+        </form>
+        <div id="backup-domains-status" class="form-status" role="status"></div>
+      </section>
       <section class="action-card" id="tester-self-card" hidden>
         <h2>Tester mode</h2>
         <p>Use the sandbox tester tools (unlimited test coins, test premium) on your own account.</p>
@@ -1882,6 +1898,63 @@
         renderReservedUsernames(d.reserved);
         setStatus('reserved-usernames-status', 'Removed.', 'ok');
       } catch (err) { setStatus('reserved-usernames-status', err.message, 'err'); }
+    }
+
+    function renderBackupDomains(rows, alternate) {
+      const altForm = document.getElementById('site-alternate-form');
+      if (altForm && currentUser?.isOwner) {
+        altForm.hidden = false;
+        altForm.style.display = 'flex';
+        if (alternate && document.activeElement?.id !== 'site-alternate-url') document.getElementById('site-alternate-url').value = alternate;
+      }
+      const list = document.getElementById('backup-domains-list');
+      if (!list) return;
+      list.innerHTML = (rows || []).map(r => `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;padding:7px 9px;border:1px solid var(--t-bd, rgba(255,255,255,.15));border-radius:8px;">
+          <span><strong>${esc(r.origin.replace('https://', ''))}</strong>${r.active ? ' <span class="muted">active</span>' : ''}</span>
+          <span style="display:flex;gap:6px;">
+            ${r.active ? '' : `<button type="button" onclick='changeBackupDomain("activate", ${JSON.stringify(r.origin)})' style="padding:4px 8px;font-size:11px;width:auto;">Make active</button>`}
+            <button type="button" onclick='changeBackupDomain("remove", ${JSON.stringify(r.origin)})' style="padding:4px 8px;font-size:11px;width:auto;">Remove</button>
+          </span>
+        </div>
+      `).join('') || '<div class="muted">No backup domains. Visitors fall back to the alternate domain.</div>';
+    }
+
+    async function loadBackupDomains() {
+      try {
+        const r = await fetch('/api/admin/backup-domains', { credentials: 'include', cache: 'no-store', headers: getAdminHeaders() });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || 'Could not load backup domains.');
+        renderBackupDomains(d.domains, d.alternate);
+      } catch (err) {
+        setStatus('backup-domains-status', err.message, 'err');
+      }
+    }
+
+    async function changeBackupDomain(action, origin) {
+      if (action === 'remove' && !(await customConfirm('Remove backup domain', `Remove ${origin.replace('https://', '')}?`))) return;
+      setStatus('backup-domains-status', 'Saving...', '');
+      try {
+        const d = await postAdmin('/api/admin/backup-domains', { action, origin });
+        renderBackupDomains(d.domains, d.alternate);
+        setStatus('backup-domains-status', action === 'rotate' ? 'Switched.' : 'Saved.', 'ok');
+      } catch (err) { setStatus('backup-domains-status', err.message, 'err'); }
+    }
+
+    async function saveSiteAlternate(event) {
+      event.preventDefault();
+      setStatus('backup-domains-status', 'Saving...', '');
+      try {
+        const d = await postAdmin('/api/admin/site-alternate', { url: document.getElementById('site-alternate-url').value.trim() });
+        renderBackupDomains(d.domains, d.alternate);
+        setStatus('backup-domains-status', 'Secondary domain saved.', 'ok');
+      } catch (err) { setStatus('backup-domains-status', err.message, 'err'); }
+    }
+
+    function addBackupDomain(event) {
+      event.preventDefault();
+      const input = document.getElementById('backup-domain-origin');
+      changeBackupDomain('add', input.value.trim()).then(() => { input.value = ''; });
     }
 
     async function loadTesterSelf() {
@@ -3771,6 +3844,8 @@
       if (ownerOrDev) {
         document.getElementById('admin-role-card').hidden = false;
         document.getElementById('tester-self-card').hidden = false;
+        document.getElementById('backup-domains-card').hidden = false;
+        loadBackupDomains();
         loadTesterSelf();
       }
       if (location.hash === '#owner-tools' && !ownerOrDev) activateToolGroup('approval-tools');

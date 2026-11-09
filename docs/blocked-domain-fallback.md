@@ -5,8 +5,20 @@ visited before is sent to the other domain instead of the offline page.
 
 ## How it works
 
-- `data/site.json` has `primary` and `backup` (an older file without `backup`
-  falls back to `alternate`). `GET /api/site-info` returns both.
+- Backup domains live in the SQL table `backup_domains` (module
+  `mitch_lib::site_domains`): a pool of origins, at most one active. Only the
+  active one is returned by `GET /api/site-info` (as `backup`, next to
+  `primary`); the pool is visible to admins only. With no active entry,
+  `backup` is `alternate` from `data/site.json`.
+- `data/site.json` is not tracked by git (it is per-machine; see
+  `data/site.json.example`). It supplies `primary`, `alternate` and `name`.
+  When it is missing the defaults in `site_domains.rs` apply.
+- Admins manage the pool in the "Backup domains" card on `/admin/` (full
+  admins; owner and developer see the card): add, remove, make one active, or
+  "Switch to a random one", which picks a random *other* entry. API:
+  `GET|POST /api/admin/backup-domains` with `{action: add|remove|activate|rotate, origin}`;
+  each change is written to the admin log. Origins must be plain `https://host`
+  (no path, port or credentials).
 - `webserver/sw.js` copies them into its own cache (`mitch-pro-domains`, kept
   across `CACHE_NAME` bumps) on activation and at most every 6 hours after a
   page load.
@@ -25,8 +37,10 @@ visited before is sent to the other domain instead of the offline page.
 
 - Only browsers that loaded the site after this shipped have the worker and the
   cached domain. A first visit to a blocked domain cannot be helped.
-- The two domains must both be real hosts of this site; changing the domain
-  pair means editing `data/site.json` and waiting for the cache refresh.
+- Every domain in the pool must serve this site. Browsers pick up a change on a
+  page load after their cached copy is 6 hours old, so rotating after a block
+  helps people who haven't loaded the site in the meantime only if the old
+  active domain is still reachable for them.
 
 ## Why there is no automatic login
 

@@ -231,18 +231,18 @@ fn json_response(code: u16, obj: serde_json::Value) -> Response {
     crate::errors::json_resp(code, obj)
 }
 
-/// Builds the `/api/site-info` payload from `data/site.json`.
-///
-/// `backup` is the domain the service worker (`webserver/sw.js`) caches and
-/// falls back to when this origin is blocked on a network. It defaults to
-/// `alternate` so an older site.json without the field keeps working.
-fn site_info_payload(site: &serde_json::Value) -> serde_json::Value {
+/// Builds the `/api/site-info` payload from `data/site.json` and the active
+/// backup domain. Only the one active backup is exposed; the rest of the pool
+/// (`mitch_lib::site_domains`) is admin-only. Without an active backup it falls
+/// back to `alternate`.
+fn site_info_payload(site: &serde_json::Value, active_backup: Option<String>) -> serde_json::Value {
+    use mitch_lib::site_domains::{DEFAULT_ALTERNATE, DEFAULT_PRIMARY};
     let text = |key: &str| site.get(key).and_then(|v| v.as_str());
-    let alternate = text("alternate").unwrap_or("");
+    let alternate = text("alternate").unwrap_or(DEFAULT_ALTERNATE);
     json!({
-        "primary": text("primary").unwrap_or("https://mitchdog.com"),
+        "primary": text("primary").unwrap_or(DEFAULT_PRIMARY),
         "alternate": alternate,
-        "backup": text("backup").filter(|s| !s.is_empty()).unwrap_or(alternate),
+        "backup": active_backup.unwrap_or_else(|| alternate.to_string()),
         "name": text("name").unwrap_or("mitch.pro"),
     })
 }
@@ -252,7 +252,8 @@ fn site_info(state: &Arc<AppState>) -> Response {
     let site = state
         .store
         .read_document(&state.cfg.data_dir.join("site.json"), json!({}));
-    json_response(200, site_info_payload(&site))
+    let backup = mitch_lib::site_domains::active(&state.store);
+    json_response(200, site_info_payload(&site, backup))
 }
 
 /// Homepage destination catalog. Keep the existing line-format response used
@@ -1360,11 +1361,17 @@ mod school_param_tests {
     }
 
     #[test]
-    fn site_info_backup_defaults_to_alternate() {
-        let legacy = json!({"primary": "https://mitch.pro", "alternate": "https://mitchdog.com"});
-        assert_eq!(site_info_payload(&legacy)["backup"], "https://mitchdog.com");
-        let explicit = json!({"alternate": "https://a.example", "backup": "https://b.example"});
-        assert_eq!(site_info_payload(&explicit)["backup"], "https://b.example");
-        assert_eq!(site_info_payload(&json!({}))["backup"], "");
+    fn site_info_exposes_only_the_active_backup() {
+        let site = json!({"primary": "https://mitch.pro", "alternate": "https://mitchdog.com", "backup": "https://ignored.example"});
+        assert_eq!(
+            site_info_payload(&site, None)["backup"],
+            "https://mitchdog.com"
+        );
+        let info = site_info_payload(&site, Some("https://b.example".into()));
+        assert_eq!(info["backup"], "https://b.example");
+        assert!(info.get("backups").is_none());
+        let empty = site_info_payload(&json!({}), None);
+        assert_eq!(empty["primary"], "https://mitch.pro");
+        assert_eq!(empty["backup"], "https://mitchdog.com");
     }
 }

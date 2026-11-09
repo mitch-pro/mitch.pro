@@ -285,6 +285,27 @@ pub fn handle(
         return Some(set_reserved_username(state, body, ctx));
     }
 
+    // GET|POST /api/admin/backup-domains (full admins): the backup-domain pool.
+    if path == "/api/admin/backup-domains" {
+        if !ctx.is_admin(state) {
+            return Some(forbidden());
+        }
+        if *method == Method::GET {
+            return Some(backup_domains_response(state));
+        }
+        if *method == Method::POST {
+            return Some(change_backup_domains(state, body, ctx));
+        }
+    }
+
+    // POST /api/admin/site-alternate (owner only): {url} sets the secondary domain.
+    if path == "/api/admin/site-alternate" && *method == Method::POST {
+        if !ctx.is_owner(state) {
+            return Some(forbidden());
+        }
+        return Some(set_site_alternate(state, body, ctx));
+    }
+
     // POST /api/admin/testers (admins only).
     if path == "/api/admin/testers" && *method == Method::POST {
         if !ctx.is_admin(state) {
@@ -849,6 +870,103 @@ fn set_reserved_username(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) ->
         json!({ "target": username }),
     );
     reserved_usernames_response(state)
+}
+
+fn site_alternate(state: &Arc<AppState>) -> String {
+    state
+        .store
+        .read_document(&state.cfg.data_dir.join("site.json"), json!({}))
+        .get("alternate")
+        .and_then(|v| v.as_str())
+        .unwrap_or(mitch_lib::site_domains::DEFAULT_ALTERNATE)
+        .to_string()
+}
+
+/// `POST /api/admin/site-alternate` (owner only): replaces `alternate` in
+/// `data/site.json`, the file every reader of the secondary domain uses.
+fn set_site_alternate(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response {
+    let Some(url) = mitch_lib::site_domains::normalize_alternate(
+        body.get("url").and_then(|v| v.as_str()).unwrap_or(""),
+    ) else {
+        return json_response(
+            400,
+            json!({ "error": "Enter a full http(s) address without a username or password." }),
+        );
+    };
+    let file = state.cfg.data_dir.join("site.json");
+    let mut site = state.store.read_document(&file, json!({}));
+    if !site.is_object() {
+        site = json!({});
+    }
+    site["alternate"] = json!(url);
+    if state.store.write_document(&file, &site).is_err() {
+        return json_response(500, json!({ "error": "Could not save the address." }));
+    }
+    mitch_lib::admin::log_admin_action(
+        &state.store,
+        &state.cfg.data_dir,
+        &ctx.email(state),
+        "set_site_alternate",
+        json!({ "target": url }),
+    );
+    backup_domains_response(state)
+}
+
+fn backup_domains_response(state: &Arc<AppState>) -> Response {
+    json_response(
+        200,
+        json!({
+            "ok": true,
+            "alternate": site_alternate(state),
+            "domains": mitch_lib::site_domains::list(&state.store).iter().map(|d| json!({
+                "origin": d.origin,
+                "active": d.active,
+                "addedBy": d.added_by,
+                "addedAt": d.added_at,
+            })).collect::<Vec<_>>(),
+        }),
+    )
+}
+
+/// `POST /api/admin/backup-domains` (full admins): `{action}` is `add` or
+/// `remove` (with `origin`), `activate` (with `origin`), or `rotate`, which
+/// makes a random other pool entry the active backup. Everything is audited.
+fn change_backup_domains(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response {
+    use mitch_lib::site_domains as domains;
+    let action = body.get("action").and_then(|v| v.as_str()).unwrap_or("");
+    let admin_email = ctx.email(state);
+    let origin =
+        domains::normalize_origin(body.get("origin").and_then(|v| v.as_str()).unwrap_or(""));
+    let fail = |msg: &str| json_response(400, json!({ "error": msg }));
+    let detail = match action {
+        "add" | "remove" | "activate" => {
+            let Some(origin) = origin else {
+                return fail("Enter a domain like example.com.");
+            };
+            let ok = match action {
+                "add" => domains::add(&state.store, &origin, &admin_email),
+                "remove" => domains::remove(&state.store, &origin),
+                _ => domains::set_active(&state.store, &origin),
+            };
+            if !ok {
+                return fail("That domain isn't in the list.");
+            }
+            origin
+        }
+        "rotate" => match domains::rotate(&state.store) {
+            Some(next) => next,
+            None => return fail("Add another domain first; there's nothing else to switch to."),
+        },
+        _ => return fail("unknown action"),
+    };
+    mitch_lib::admin::log_admin_action(
+        &state.store,
+        &state.cfg.data_dir,
+        &admin_email,
+        "backup_domain",
+        json!({ "action": action, "target": detail }),
+    );
+    backup_domains_response(state)
 }
 
 /// `GET|POST /api/admin/tester-self` — reports or changes whether the caller
