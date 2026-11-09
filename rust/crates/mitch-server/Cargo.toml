@@ -28,7 +28,7 @@ form_urlencoded = "1"
 multer = "3"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 # WS-client bridge: /livekit/rtc → the SFU.
-tokio-tungstenite = { version = "0.29", features = ["rustls-tls-webpki-roots"] }
+tokio-tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
 rustls-pki-types = "1"
 # /livekit JWT base64url segments (JS Buffer.toString('base64url')).
