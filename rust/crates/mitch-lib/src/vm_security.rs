@@ -208,6 +208,32 @@ pub const VM_DAILY_MAX_SECONDS: f64 = 21_600.0;
 pub const VM_EXTENSION_COOLDOWN_MS: f64 = 86_400_000.0;
 /// `VM_COOLDOWN_DURATION_MS` = 30 minutes.
 pub const VM_COOLDOWN_DURATION_MS: f64 = 1_800_000.0;
+
+/// Whether the global post-power-off VM cooldown (`VM_COOLDOWN_DURATION_MS`)
+/// is enforced. This is one site-wide switch, not per user, stored in the
+/// single-row `vm_settings` table and flipped by the owner from
+/// `/admin/vms`. Defaults to `true` (enforced) until the owner changes it.
+pub fn vm_cooldown_enabled(store: &crate::data::DataStore) -> bool {
+    store
+        .conn()
+        .query_row(
+            "SELECT cooldown_enabled FROM vm_settings WHERE id = 1",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|v| v != 0)
+        .unwrap_or(true)
+}
+
+/// Persists the global VM cooldown switch (see [`vm_cooldown_enabled`]).
+pub fn set_vm_cooldown_enabled(store: &crate::data::DataStore, enabled: bool) {
+    let _ = store.conn().execute(
+        "INSERT INTO vm_settings (id, cooldown_enabled) VALUES (1, ?1)
+         ON CONFLICT(id) DO UPDATE SET cooldown_enabled = ?1",
+        rusqlite::params![enabled as i64],
+    );
+}
+
 /// `VM_OFFPAGE_INACTIVITY_MS` = 10 minutes.
 pub const VM_OFFPAGE_INACTIVITY_MS: f64 = 600_000.0;
 /// `VM_ADMIN_OFFPAGE_INACTIVITY_MS` = 30 minutes.
@@ -477,6 +503,24 @@ fn js_number_string(v: f64) -> String {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn cooldown_switch_defaults_on_and_persists() {
+        let dir = std::env::temp_dir().join(format!(
+            "vm-cooldown-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("data")).unwrap();
+        let store = crate::data::DataStore::open(&dir, &dir.join("data")).unwrap();
+        assert!(vm_cooldown_enabled(&store));
+        set_vm_cooldown_enabled(&store, false);
+        assert!(!vm_cooldown_enabled(&store));
+        set_vm_cooldown_enabled(&store, true);
+        assert!(vm_cooldown_enabled(&store));
+    }
 
     fn record(owner: &str, status: &str) -> Value {
         json!({ "id": "vm-1", "ownerEmail": owner, "status": status, "vmid": 200.0, "node": "tartarus" })

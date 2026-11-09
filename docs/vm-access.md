@@ -45,6 +45,18 @@ unassign, edit resources, restrict VM/BYO-OS use, keep-alive, delete. The
 fleet list shows "Owner only" instead of Open/power buttons for computers they
 can't open.
 
+## Global 30-minute cooldown switch
+
+After a non-admin powers their VM off, they wait 30 minutes
+(`VM_COOLDOWN_DURATION_MS`) before starting it again. The owner (not other
+admins) can turn this off for everyone from the "VM cooldown" panel on
+`/admin/vms/`. It is one site-wide setting, stored in the single-row
+`vm_settings` table (`cooldown_enabled`, default on), changed by
+`POST /api/admin/vms/cooldown` and reported as `cooldownEnabled` in the
+overview. While off, no new cooldowns are recorded and existing ones are
+ignored (not deleted), so turning it back on restores them. Changes are
+audited as `vm_cooldown_toggle`.
+
 ## Tests
 
 `vm_security::tests::access_ladder`, `vm_access::tests`, and the

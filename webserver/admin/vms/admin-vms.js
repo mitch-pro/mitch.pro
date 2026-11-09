@@ -236,7 +236,7 @@
       overview = await api('/api/admin/vms/overview');
       $('service-state').className = `service-state ${overview.serviceAvailable ? 'online' : 'offline'}`;
       $('service-state').querySelector('span').textContent = overview.serviceAvailable ? 'Computer service online' : 'Computer service unavailable';
-      renderCapacity(); renderForms(); renderFleet(); renderAudit(); renderOwnerFleet();
+      renderCapacity(); renderForms(); renderFleet(); renderAudit(); renderOwnerFleet(); renderVmSettings();
     } catch (error) { $('service-state').className = 'service-state offline'; $('service-state').querySelector('span').textContent = error.message; }
     finally { loading = false; $('refresh-button').disabled = false; }
   }
@@ -450,6 +450,29 @@
       $('resource-dialog').close(); status('fleet-status', 'Resources updated.', 'success');
     } catch (error) { $('resource-status').textContent = error.message; }
     finally { pending.delete(id); submit.disabled = false; await load(); if (!$('resource-dialog').open) focusResourceAction(); }
+  });
+
+  function renderVmSettings() {
+    const panel = $('vm-settings-panel');
+    if (!panel) return;
+    panel.style.display = overview && overview.viewerIsOwner ? 'block' : 'none';
+    const toggle = $('cooldown-toggle');
+    if (toggle && !toggle.disabled) toggle.checked = !overview || overview.cooldownEnabled !== false;
+  }
+
+  $('cooldown-toggle')?.addEventListener('change', async event => {
+    const toggle = event.target;
+    const enabled = toggle.checked;
+    toggle.disabled = true;
+    try {
+      await api('/api/admin/vms/cooldown', { enabled });
+      status('cooldown-status', enabled ? 'Cooldown on.' : 'Cooldown off.', 'success');
+    } catch (error) {
+      toggle.checked = !enabled;
+      status('cooldown-status', error.message, 'error');
+    } finally {
+      toggle.disabled = false;
+    }
   });
 
   function renderOwnerFleet() {

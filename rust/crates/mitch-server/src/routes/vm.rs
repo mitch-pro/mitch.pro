@@ -1113,7 +1113,9 @@ pub(crate) fn record_user_extension(state: &AppState, email: &str) {
 
 /// `getVmCooldownRemaining(email, isAdmin)`.
 pub(crate) fn get_vm_cooldown_remaining(state: &AppState, email: &str, is_admin: bool) -> f64 {
-    if is_admin {
+    // Owner can switch the cooldown off site-wide; existing entries are then
+    // ignored (not deleted), so turning it back on restores them.
+    if is_admin || !mitch_lib::vm_security::vm_cooldown_enabled(&state.store) {
         return 0.0;
     }
     let norm = mitch_lib::auth::normalize_email(email);
@@ -1132,7 +1134,9 @@ pub(crate) fn trigger_vm_cooldown(state: &AppState, email: &str, reason: &str) {
         return;
     }
     let norm = mitch_lib::auth::normalize_email(email);
-    if mitch_lib::auth::is_admin_email(&state.store, &norm) {
+    if mitch_lib::auth::is_admin_email(&state.store, &norm)
+        || !mitch_lib::vm_security::vm_cooldown_enabled(&state.store)
+    {
         return;
     }
     let now = now_ms();

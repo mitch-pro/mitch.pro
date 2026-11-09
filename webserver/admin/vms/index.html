@@ -73,6 +73,18 @@
       <p class="form-status" id="owner-fleet-status" role="status" style="margin-top: 10px;"></p>
     </section>
 
+    <section id="vm-settings-panel" class="panel" style="display: none;">
+      <div class="panel-head">
+        <div><h2>VM cooldown</h2></div>
+        <span class="badge owner-badge">Owner Only</span>
+      </div>
+      <p style="color: var(--muted); font-size: 0.85rem; margin: 0 0 12px;">
+        When on, users wait 30 minutes after powering off their computer before starting it again. Applies to everyone.
+      </p>
+      <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="cooldown-toggle"> <span id="cooldown-label">30-minute cooldown</span></label>
+      <p class="form-status" id="cooldown-status" role="status" style="margin-top: 10px;"></p>
+    </section>
+
     <section class="panel fleet-panel">
       <div class="panel-head"><div><p class="eyebrow">Customers</p><h2>Assigned computers</h2></div><button id="refresh-button">Refresh</button></div>
       <div class="fleet-toolbar">
@@ -134,7 +146,7 @@
       <div class="dialog-actions"><button type="button" id="resource-cancel">Cancel</button><button type="submit" class="primary">Save resources</button></div>
     </form>
   </dialog>
-  <script src="/admin/vms/admin-vms.js?v=6" defer></script>
+  <script src="/admin/vms/admin-vms.js?v=7" defer></script>
 <script src="/admin/passphrase-help.js" defer></script>
 </body>
 </html>
