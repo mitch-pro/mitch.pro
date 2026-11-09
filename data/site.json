@@ -1,5 +1,6 @@
 {
   "primary": "https://mitch.pro",
   "alternate": "https://mitchdog.com",
+  "backup": "https://mitchdog.com",
   "name": "mitch.pro"
 }

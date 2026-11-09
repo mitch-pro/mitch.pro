@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mitch-pro-cache-v55';
+const CACHE_NAME = 'mitch-pro-cache-v56';
 const ASSETS = [
   '/favicon.ico',
   '/manifest.json',
@@ -24,12 +24,93 @@ self.addEventListener('install', (e) => {
   );
 });
 
+// Backup-domain fallback. The site's domains come from /api/site-info
+// (data/site.json) and live in their own cache so they survive CACHE_NAME
+// bumps. When a page navigation fails here, the other domain is probed and, if
+// it answers, the navigation is redirected there (see handleBlockedNavigation).
+const DOMAIN_CACHE = 'mitch-pro-domains';
+const DOMAIN_KEY = '/__site-domains';
+const DOMAIN_REFRESH_MS = 6 * 60 * 60 * 1000;
+const MOVED_PARAM = '_moved_from';
+
+async function readDomains() {
+  try {
+    const cache = await caches.open(DOMAIN_CACHE);
+    const hit = await cache.match(DOMAIN_KEY);
+    return hit ? await hit.json() : null;
+  } catch { return null; }
+}
+
+// Fetches /api/site-info and stores {primary, backup, fetchedAt}. Skipped while
+// the stored copy is fresh; never throws (it runs while online and offline).
+async function refreshDomains(force) {
+  try {
+    const known = await readDomains();
+    if (!force && known && Date.now() - (known.fetchedAt || 0) < DOMAIN_REFRESH_MS) return;
+    const res = await fetch('/api/site-info', { cache: 'no-store', credentials: 'same-origin' });
+    if (!res.ok) return;
+    const info = await res.json();
+    const cache = await caches.open(DOMAIN_CACHE);
+    await cache.put(DOMAIN_KEY, new Response(JSON.stringify({
+      primary: info.primary || '', backup: info.backup || '', fetchedAt: Date.now()
+    }), { headers: { 'Content-Type': 'application/json' } }));
+  } catch {}
+}
+
+function httpOrigin(value) {
+  try {
+    const u = new URL(value);
+    if (!['https:', 'http:'].includes(u.protocol) || u.username || u.password) return '';
+    return u.origin;
+  } catch { return ''; }
+}
+
+// The other site domain to try, or '' when none applies. rjuhsd.school shares
+// this worker but is a separate site, so it never fails over.
+async function alternateOrigin() {
+  if (/(^|\.)rjuhsd\.school$/.test(self.location.hostname)) return '';
+  const d = await readDomains();
+  if (!d) return '';
+  const candidates = [httpOrigin(d.backup), httpOrigin(d.primary)];
+  return candidates.find((o) => o && o !== self.location.origin) || '';
+}
+
+// A blocked domain fails at DNS/TLS, so a no-cors fetch of a static file
+// rejects; if the other domain is blocked too (or the device is simply
+// offline) it rejects as well and the caller falls back to the offline page.
+async function domainReachable(origin) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 5000);
+  try {
+    await fetch(origin + '/favicon.ico', { mode: 'no-cors', cache: 'no-store', signal: ctl.signal });
+    return true;
+  } catch { return false; } finally { clearTimeout(timer); }
+}
+
+// Same path on the other domain. Sessions are per-origin cookies, so the
+// visitor signs in again there; only a non-secret marker is added so the page
+// can explain the move (app-shell.js shows the notice and strips the marker).
+async function handleBlockedNavigation(request) {
+  const origin = await alternateOrigin();
+  if (origin && await domainReachable(origin)) {
+    const from = new URL(request.url);
+    const target = new URL(from.pathname + from.search, origin);
+    target.searchParams.set(MOVED_PARAM, from.hostname);
+    return Response.redirect(target.href, 302);
+  }
+  return new Response(
+    '<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline</title><body><p>Connect to the internet to load this page.</p></body></html>',
+    {status:503,headers:{'Content-Type':'text/html','Cache-Control':'no-store'}}
+  );
+}
+
 self.addEventListener('activate', (e) => {
+  e.waitUntil(refreshDomains(true));
   e.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
-          if (key !== CACHE_NAME) {
+          if (key !== CACHE_NAME && key !== DOMAIN_CACHE) {
             return caches.delete(key);
           }
         })
@@ -96,11 +177,15 @@ const isThemeJs = requestUrl.pathname === '/theme.js';
       })
     );
   } else if (isHtmlRequest(e.request)) {
-    // Page access must be checked by the server, including when offline.
-    e.respondWith(fetch(e.request, {cache:'no-store'}).catch(() => new Response(
-      '<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline</title><body><p>Connect to the internet to load this page.</p></body></html>',
-      {status:503,headers:{'Content-Type':'text/html','Cache-Control':'no-store'}}
-    )));
+    // Page access must be checked by the server, so pages are never served
+    // from cache. If the network fails, try the other site domain (the current
+    // one is probably blocked on this network) before giving up.
+    e.waitUntil(refreshDomains(false));
+    e.respondWith(fetch(e.request, {cache:'no-store'}).catch(() =>
+      e.request.mode === 'navigate'
+        ? handleBlockedNavigation(e.request)
+        : new Response('', {status:503,headers:{'Cache-Control':'no-store'}})
+    ));
   } else {
     const pathname = requestUrl.pathname;
     const isCode = /\.(css|js|mjs|json)(\?|$)/.test(pathname);

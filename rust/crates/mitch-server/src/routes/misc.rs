@@ -231,19 +231,28 @@ fn json_response(code: u16, obj: serde_json::Value) -> Response {
     crate::errors::json_resp(code, obj)
 }
 
+/// Builds the `/api/site-info` payload from `data/site.json`.
+///
+/// `backup` is the domain the service worker (`webserver/sw.js`) caches and
+/// falls back to when this origin is blocked on a network. It defaults to
+/// `alternate` so an older site.json without the field keeps working.
+fn site_info_payload(site: &serde_json::Value) -> serde_json::Value {
+    let text = |key: &str| site.get(key).and_then(|v| v.as_str());
+    let alternate = text("alternate").unwrap_or("");
+    json!({
+        "primary": text("primary").unwrap_or("https://mitchdog.com"),
+        "alternate": alternate,
+        "backup": text("backup").filter(|s| !s.is_empty()).unwrap_or(alternate),
+        "name": text("name").unwrap_or("mitch.pro"),
+    })
+}
+
 /// `GET /api/site-info` — server.js:7912-7918.
 fn site_info(state: &Arc<AppState>) -> Response {
     let site = state
         .store
         .read_document(&state.cfg.data_dir.join("site.json"), json!({}));
-    json_response(
-        200,
-        json!({
-            "primary": site.get("primary").and_then(|v| v.as_str()).unwrap_or("https://mitchdog.com"),
-            "alternate": site.get("alternate").and_then(|v| v.as_str()).unwrap_or(""),
-            "name": site.get("name").and_then(|v| v.as_str()).unwrap_or("mitch.pro"),
-        }),
-    )
+    json_response(200, site_info_payload(&site))
 }
 
 /// Homepage destination catalog. Keep the existing line-format response used
@@ -1320,7 +1329,7 @@ mod tests {
 
 #[cfg(test)]
 mod school_param_tests {
-    use super::{bell_override_response, school_param};
+    use super::{bell_override_response, school_param, site_info_payload};
     use serde_json::json;
 
     #[test]
@@ -1348,5 +1357,14 @@ mod school_param_tests {
         assert_eq!(school_param("school=roseville"), "roseville");
         assert_eq!(school_param("?school=roseville&x=1"), "roseville");
         assert_eq!(school_param(""), "");
+    }
+
+    #[test]
+    fn site_info_backup_defaults_to_alternate() {
+        let legacy = json!({"primary": "https://mitch.pro", "alternate": "https://mitchdog.com"});
+        assert_eq!(site_info_payload(&legacy)["backup"], "https://mitchdog.com");
+        let explicit = json!({"alternate": "https://a.example", "backup": "https://b.example"});
+        assert_eq!(site_info_payload(&explicit)["backup"], "https://b.example");
+        assert_eq!(site_info_payload(&json!({}))["backup"], "");
     }
 }
