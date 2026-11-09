@@ -160,6 +160,16 @@ async function syncLease() {
   } catch {}
 }
 
+// Keeps the server's page-presence timer fresh for as long as this page is
+// open, even while the desktop socket is down or reconnecting (background tab,
+// brief network drop). Without it, a dropped socket let the 10-minute off-page
+// watchdog shut the computer down mid-use.
+function sendHeartbeat() {
+  if (disposed || !id || ownerMode) return;
+  request(`/api/vm/computers/${encodeURIComponent(id)}/heartbeat`, { method: 'POST', headers, body: '{}' }).catch(() => {});
+}
+setInterval(sendHeartbeat, 60000);
+
 function connectionState(label, type = '') {
   $('machine-state').className = type;
   $('machine-state').replaceChildren(Object.assign(document.createElement('i'), { ariaHidden: 'true' }), document.createTextNode(' ' + label));

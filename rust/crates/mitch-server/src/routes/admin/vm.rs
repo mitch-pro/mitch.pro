@@ -8,6 +8,7 @@
 //! - POST /api/admin/vms/create
 //! - POST /api/admin/vms/credentials
 //! - POST /api/admin/vms/delete
+//! - POST /api/admin/vms/cooldown (owner only: global 30-minute cooldown on/off)
 
 use super::{AdminCtx, Resp};
 use crate::state::AppState;
@@ -409,6 +410,7 @@ pub async fn handle(
                 "maxRunningNonAdminLimit": mitch_lib::vm_security::VM_MAX_CONCURRENT_RUNNING,
 
                 "viewerIsOwner": is_owner,
+                "cooldownEnabled": mitch_lib::vm_security::vm_cooldown_enabled(&state.store),
             }),
         ));
     }
@@ -964,6 +966,45 @@ pub async fn handle(
                 ));
             }
         }
+    }
+
+    // POST /api/admin/vms/cooldown — owner-only global switch for the
+    // 30-minute VM cooldown after a user powers their VM off.
+    if path == "/api/admin/vms/cooldown" && *method == Method::POST {
+        if let Some((code, msg)) =
+            state.rate_limit_check(&ctx.ip, &format!("id:{}", ctx.sid), "/api/admin/vms")
+        {
+            return Some(json_response(code, json!({ "error": msg })));
+        }
+        let actor = match crate::routes::vm::authenticated_vm_actor(state, headers) {
+            Some(a) => a,
+            None => return Some(json_response(401, json!({ "error": "Sign in required." }))),
+        };
+        if !auth::is_owner_email(&state.store, &actor.email) {
+            return Some(json_response(
+                403,
+                json!({ "error": "Owner access required." }),
+            ));
+        }
+        let Some(enabled) = body.get("enabled").and_then(Value::as_bool) else {
+            return Some(json_response(
+                400,
+                json!({ "error": "enabled must be true or false." }),
+            ));
+        };
+        mitch_lib::vm_security::set_vm_cooldown_enabled(&state.store, enabled);
+        crate::routes::vm::vm_audit(
+            state,
+            &actor.email,
+            None,
+            "vm_cooldown_toggle",
+            true,
+            Some(&json!({ "enabled": enabled })),
+        );
+        return Some(json_response(
+            200,
+            json!({ "ok": true, "cooldownEnabled": enabled }),
+        ));
     }
 
     // POST /api/admin/vms/credentials (server.js:20802-20823)

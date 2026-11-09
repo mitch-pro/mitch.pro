@@ -335,6 +335,10 @@ impl DataStore {
                         granted_at INTEGER NOT NULL,
                         expires_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS vm_settings (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        cooldown_enabled INTEGER NOT NULL DEFAULT 1
+                    );
                     CREATE TABLE IF NOT EXISTS cheat_logs (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         ts INTEGER NOT NULL,
