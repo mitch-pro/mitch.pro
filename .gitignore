@@ -18,7 +18,7 @@ caddy/Caddyfile
 data/*
 !data/games
 !data/sites
-!data/site.json
+!data/site.json.example
 !data/game_categories.json
 !data/game_categories_external.json
 !data/game_categories_local.json

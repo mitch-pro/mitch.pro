@@ -28,6 +28,46 @@
       .catch(function () {});
   }
 
+  // ── Moved-domain notice ─────────────────────────────────────────────────────
+  // sw.js sends a navigation here with ?_moved_from=<old host> when the old
+  // domain could not be reached. Explain it once, strip the marker from the
+  // address bar, and remind the visitor to update bookmarks. Logins are
+  // per-origin cookies, so they sign in again on this domain.
+  (function () {
+    var params, from;
+    try {
+      params = new URLSearchParams(location.search);
+      from = params.get('_moved_from');
+    } catch (_) { return; }
+    if (!from) return;
+    params.delete('_moved_from');
+    var qs = params.toString();
+    try { history.replaceState(history.state, '', location.pathname + (qs ? '?' + qs : '') + location.hash); } catch (_) {}
+    from = String(from).replace(/[^a-z0-9.-]/gi, '').slice(0, 80);
+    if (!from || from === location.hostname) return;
+
+    function show() {
+      var box = document.createElement('div');
+      box.setAttribute('role', 'alertdialog');
+      box.setAttribute('aria-label', 'Domain changed');
+      box.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483000;max-width:340px;padding:16px;border-radius:12px;background:var(--t-bg2,#1e1a17);color:var(--t-fg,#e8e6e3);border:1px solid var(--t-bd,#3d3a37);box-shadow:0 8px 32px rgba(0,0,0,.4);font:14px/1.5 "DM Sans",system-ui,sans-serif';
+      var title = document.createElement('strong');
+      title.textContent = from + ' was blocked';
+      title.style.display = 'block';
+      var body = document.createElement('p');
+      body.style.cssText = 'margin:6px 0 12px;color:var(--t-fg2,#bababa)';
+      body.textContent = 'You were sent to ' + location.hostname + '. Replace your bookmarks with this address and sign in again here.';
+      var ok = document.createElement('button');
+      ok.type = 'button';
+      ok.textContent = 'Got it';
+      ok.style.cssText = 'padding:6px 14px;border-radius:8px;border:1px solid var(--t-ac,#8b5cf6);background:var(--t-ac,#8b5cf6);color:#fff;font:inherit;font-weight:600;cursor:pointer';
+      ok.addEventListener('click', function () { box.remove(); });
+      box.append(title, body, ok);
+      document.body.appendChild(box);
+    }
+    if (document.body) show(); else document.addEventListener('DOMContentLoaded', show);
+  })();
+
   // rjuhsd.school shares this webroot for its sub-apps (bell, chat,
   // preferences) — its topbar gets the school brand and only links that
   // exist there (the mitch-only sections 404 under that host).
