@@ -707,8 +707,11 @@
         </form>
         <div style="margin-top:10px;">
           <button type="button" id="domain-check-btn" onclick="checkDomains()" style="width:auto">Check which domains load on this device</button>
+          <button type="button" id="domain-retire-btn" onclick="retireBlockedDomains()" hidden style="width:auto">Move blocked backups to the removed list</button>
           <div id="domain-check-results" style="font-size:.78rem;margin-top:8px;" aria-live="polite"></div>
         </div>
+        <h3 style="font-size:.85rem;margin:14px 0 6px;">Removed domains</h3>
+        <div id="removed-domains-list" style="font-size:.78rem;"></div>
         <div id="backup-domains-status" class="form-status" role="status"></div>
       </section>
       <section class="action-card" id="tester-self-card" hidden>
@@ -1919,6 +1922,27 @@
       });
     }
 
+    let blockedBackups = [];
+
+    function renderRemovedDomains(rows) {
+      const list = document.getElementById('removed-domains-list');
+      if (!list) return;
+      list.innerHTML = (rows || []).map(o => `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;padding:5px 9px;border:1px solid var(--t-bd, rgba(255,255,255,.15));border-radius:8px;">
+          <span>${esc(o.replace('https://', ''))}</span>
+          <button type="button" aria-label="Delete ${esc(o)} from this list" onclick='changeBackupDomain("forget", ${JSON.stringify(o)})' style="padding:2px 8px;font-size:12px;width:auto;">×</button>
+        </div>
+      `).join('') || '<div class="muted">Empty.</div>';
+    }
+
+    async function retireBlockedDomains() {
+      if (!blockedBackups.length) return;
+      if (!(await customConfirm('Move to removed list', `Move ${blockedBackups.length} blocked backup domain(s) off the backup list?\n\n${blockedBackups.map(o => o.replace('https://', '')).join('\n')}`))) return;
+      await changeBackupDomain('retire', undefined, { origins: blockedBackups });
+      document.getElementById('domain-retire-btn').hidden = true;
+      document.getElementById('domain-check-results').replaceChildren();
+    }
+
     async function checkDomains() {
       const btn = document.getElementById('domain-check-btn');
       const out = document.getElementById('domain-check-results');
@@ -1931,9 +1955,14 @@
           <strong style="color:${state === 'loads' ? '#22c55e' : '#ef4444'}">${esc(state)}</strong>
         </div>`).join('') || '<div class="muted">No domains to check.</div>';
       btn.disabled = false;
+      const poolOrigins = new Set(domainCheckList.filter(d => d.label.startsWith('backup')).map(d => d.origin));
+      blockedBackups = results.filter(([d, st]) => st !== 'loads' && poolOrigins.has(d.origin)).map(([d]) => d.origin);
+      const retire = document.getElementById('domain-retire-btn');
+      retire.hidden = !blockedBackups.length;
     }
 
-    function renderBackupDomains(rows, alternate, primary) {
+    function renderBackupDomains(rows, alternate, primary, removed) {
+      renderRemovedDomains(removed);
       const seen = new Set();
       domainCheckList = [];
       const add = (origin, label) => {
@@ -1969,18 +1998,18 @@
         const r = await fetch('/api/admin/backup-domains', { credentials: 'include', cache: 'no-store', headers: getAdminHeaders() });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(d.error || 'Could not load backup domains.');
-        renderBackupDomains(d.domains, d.alternate, d.primary);
+        renderBackupDomains(d.domains, d.alternate, d.primary, d.removed);
       } catch (err) {
         setStatus('backup-domains-status', err.message, 'err');
       }
     }
 
-    async function changeBackupDomain(action, origin) {
+    async function changeBackupDomain(action, origin, extra) {
       if (action === 'remove' && !(await customConfirm('Remove backup domain', `Remove ${origin.replace('https://', '')}?`))) return;
       setStatus('backup-domains-status', 'Saving...', '');
       try {
-        const d = await postAdmin('/api/admin/backup-domains', { action, origin });
-        renderBackupDomains(d.domains, d.alternate, d.primary);
+        const d = await postAdmin('/api/admin/backup-domains', { action, origin, ...(extra || {}) });
+        renderBackupDomains(d.domains, d.alternate, d.primary, d.removed);
         setStatus('backup-domains-status', action === 'rotate' ? 'Switched.' : 'Saved.', 'ok');
       } catch (err) { setStatus('backup-domains-status', err.message, 'err'); }
     }
@@ -1990,7 +2019,7 @@
       setStatus('backup-domains-status', 'Saving...', '');
       try {
         const d = await postAdmin('/api/admin/site-alternate', { url: document.getElementById('site-alternate-url').value.trim() });
-        renderBackupDomains(d.domains, d.alternate, d.primary);
+        renderBackupDomains(d.domains, d.alternate, d.primary, d.removed);
         setStatus('backup-domains-status', 'Secondary domain saved.', 'ok');
       } catch (err) { setStatus('backup-domains-status', err.message, 'err'); }
     }

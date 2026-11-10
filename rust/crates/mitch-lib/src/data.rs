@@ -302,6 +302,11 @@ impl DataStore {
                         added_by TEXT NOT NULL DEFAULT '',
                         added_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS removed_domains (
+                        origin TEXT PRIMARY KEY,
+                        removed_by TEXT NOT NULL DEFAULT '',
+                        removed_at INTEGER NOT NULL
+                    );
                     CREATE TABLE IF NOT EXISTS reserved_usernames (
                         username TEXT PRIMARY KEY,
                         holder_email TEXT NOT NULL DEFAULT '',
