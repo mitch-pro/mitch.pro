@@ -37,3 +37,14 @@ incomplete depending on who's looking at it.
 Moderators and above also get a **Support tickets** card (`/moderator/support/`), see [support.md](support.md).
 
 Admins also get an **Updates** card (`/admin/updates/`) for the homepage update log, see [site-updates.md](site-updates.md).
+
+## Mitch's Scrotum role
+
+The owner can give any account the "Mitch's Scrotum" role from the owner
+panel (Accounts & Mitch Coins, `set-scrotum` action of
+`POST /api/admin/owner-accounts`). It sets `scrotum: true` on the profile and
+forces the display name to `MITCHS-SCROTUM` (`mitch_lib::profile::SCROTUM_NAME`):
+the user's old name is stashed in `preScrotumDisplayName` and restored when the
+role is removed. Enforcement points: profile saves keep the forced name,
+`/api/me` and member lists report it, the Matrix profile is synced to it, and the
+Matrix gateway rejects display-name changes for these accounts.

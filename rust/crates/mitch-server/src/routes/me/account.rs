@@ -425,6 +425,16 @@ fn post_profile(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -
         .trim();
     let referral_source = &referral_source[..referral_source.len().min(80)];
 
+    let forced_name = mitch_lib::profile::has_scrotum_role(&existing);
+    let (display_name, nickname) = if forced_name {
+        (
+            mitch_lib::profile::SCROTUM_NAME,
+            mitch_lib::profile::SCROTUM_NAME,
+        )
+    } else {
+        (display_name, nickname)
+    };
+
     let mut record = existing.clone();
     if let Some(map) = record.as_object_mut() {
         map.insert("email".into(), json!(email));
@@ -850,13 +860,17 @@ fn me_root(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     } else {
         String::new()
     };
-    let display_name = jsval::string(&jsval::or(
-        my_profile.get("displayName").filter(|v| jsval::truthy(v)),
-        jsval::or(
-            my_profile.get("nickname").filter(|v| jsval::truthy(v)),
-            jsval::or(Some(&json!(my_username)), json!("")),
-        ),
-    ));
+    let display_name = if mitch_lib::profile::has_scrotum_role(&my_profile) {
+        mitch_lib::profile::SCROTUM_NAME.to_string()
+    } else {
+        jsval::string(&jsval::or(
+            my_profile.get("displayName").filter(|v| jsval::truthy(v)),
+            jsval::or(
+                my_profile.get("nickname").filter(|v| jsval::truthy(v)),
+                jsval::or(Some(&json!(my_username)), json!("")),
+            ),
+        ))
+    };
 
     let role = if is_co_owner {
         "developer"

@@ -14,7 +14,7 @@
       const label = document.createElement('label'); const input = document.createElement('input'); input.type = 'checkbox';
       input.checked = selected.has(account.email); input.disabled = account.protected || busy;
       input.addEventListener('change', () => { input.checked ? selected.add(account.email) : selected.delete(account.email); update(); });
-      label.append(input,document.createTextNode((account.displayName || account.username || account.email) + ' · ' + account.email + (account.protected ? ' · Protected owner' : ''))); list.append(label);
+      label.append(input,document.createTextNode((account.displayName || account.username || account.email) + ' · ' + account.email + (account.protected ? ' · Protected owner' : '') + (account.scrotum ? ' · Mitch\'s Scrotum' : ''))); list.append(label);
     }); update();
   }
   function update() { count.textContent = `${selected.size} selected. To remove them, type REMOVE ${selected.size} REGISTRATIONS below.`; }
@@ -54,6 +54,18 @@
     accounts = accounts.filter(account => !selected.has(account.email)); selected.clear(); confirmation.value = '';
     status.textContent = `${data.count} sign-in registrations removed. These email addresses can register again. Content was kept.`;
   });
+  function setScrotum(enabled) {
+    return () => run(async () => {
+      if (selected.size !== 1) throw new Error('Select exactly one account.');
+      const email = [...selected][0];
+      await call({action:'set-scrotum',email,enabled});
+      const account = accounts.find(a => a.email === email);
+      if (account) { account.scrotum = enabled; account.displayName = enabled ? 'MITCHS-SCROTUM' : account.username; }
+      status.textContent = enabled ? 'Mitch\'s Scrotum role given.' : 'Mitch\'s Scrotum role removed.';
+    });
+  }
+  panel.querySelector('[data-scrotum-give]').onclick = setScrotum(true);
+  panel.querySelector('[data-scrotum-remove]').onclick = setScrotum(false);
   panel.querySelector('[data-reset]').onclick = () => run(async () => {
     const typed = panel.querySelector('[data-coin-confirmation]');
     if (typed.value !== 'RESET ALL COINS') throw new Error('Type RESET ALL COINS in the coin confirmation field.');

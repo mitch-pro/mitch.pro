@@ -54,6 +54,42 @@ pub fn default_username_for_email(email: &str) -> String {
     }
 }
 
+/// Display name forced on accounts the owner has given the "Mitch's Scrotum" role.
+pub const SCROTUM_NAME: &str = "MITCHS-SCROTUM";
+
+/// True when the owner has assigned the Mitch's Scrotum role to this profile
+/// (`scrotum: true`). Such accounts always show `SCROTUM_NAME` as their display
+/// name, in chat and on the site, and can't change it.
+pub fn has_scrotum_role(profile: &Value) -> bool {
+    profile.get("scrotum").and_then(Value::as_bool) == Some(true)
+}
+
+/// Assigns or removes the role on a profile object. Assigning stashes the
+/// user's own `displayName` in `preScrotumDisplayName` and overwrites it, so
+/// every reader that falls back to `displayName` (leaderboards, blog, games,
+/// Matrix sync) shows the forced name without needing its own check. Removing
+/// restores the stashed name.
+pub fn set_scrotum_role(profile: &mut Value, enabled: bool) {
+    let Some(obj) = profile.as_object_mut() else {
+        return;
+    };
+    let already = obj.get("scrotum").and_then(Value::as_bool) == Some(true);
+    if enabled {
+        if !already {
+            let prev = obj.get("displayName").cloned().unwrap_or(json!(""));
+            obj.insert("preScrotumDisplayName".into(), prev);
+        }
+        obj.insert("scrotum".into(), json!(true));
+        obj.insert("displayName".into(), json!(SCROTUM_NAME));
+    } else if already {
+        obj.remove("scrotum");
+        let prev = obj
+            .remove("preScrotumDisplayName")
+            .unwrap_or_else(|| json!(""));
+        obj.insert("displayName".into(), prev);
+    }
+}
+
 /// `processMemberFields` (server.js:6147-6174). When `profile` is `None` the
 /// profiles document is loaded here, exactly like the JS lazy load.
 pub fn process_member_fields(
@@ -83,6 +119,7 @@ pub fn process_member_fields(
         .unwrap_or_else(|| default_username_for_email(&norm_target));
     // A saved display name must be visible to other members (JS comment at
     // server.js:6156) — nickname/displayName win over the generated username.
+    let forced = has_scrotum_role(&p);
     let public_name = p
         .get("displayName")
         .and_then(|v| v.as_str())
@@ -94,6 +131,11 @@ pub fn process_member_fields(
         })
         .unwrap_or(username.as_str())
         .to_string();
+    let public_name = if forced {
+        SCROTUM_NAME.to_string()
+    } else {
+        public_name
+    };
     if !viewer_can_see {
         return json!({ "displayName": public_name, "email": username });
     }
@@ -737,6 +779,20 @@ pub fn ensure_profile_defaults(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn scrotum_role_forces_and_restores_display_name() {
+        let mut p = json!({"username": "a", "displayName": "Alex"});
+        assert!(!has_scrotum_role(&p));
+        set_scrotum_role(&mut p, true);
+        assert!(has_scrotum_role(&p));
+        assert_eq!(p["displayName"], SCROTUM_NAME);
+        // Assigning twice must not overwrite the stashed original.
+        set_scrotum_role(&mut p, true);
+        set_scrotum_role(&mut p, false);
+        assert!(!has_scrotum_role(&p));
+        assert_eq!(p["displayName"], "Alex");
+    }
+
     use super::*;
 
     #[test]
