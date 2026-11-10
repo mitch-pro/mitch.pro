@@ -38,7 +38,7 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 sha1 = "0.10"
 ciborium = "0.2"
 serde_cbor = "0.11"
-p256 = { version = "0.13", features = ["ecdsa"] }
+p256 = { version = "0.14", features = ["ecdsa"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Local-time Date math for the email workers' Monday/hour/dayKey gates
 # (mitch-lib jstime carries the same clock feature).
