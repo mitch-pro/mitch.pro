@@ -141,17 +141,15 @@ pub fn inject_access_guard(html: &str) -> String {
     }
 }
 
-pub fn inject_credit(html: &str, school: bool) -> String {
+/// Adds the fixed footer band (agreement, privacy, source links) that every
+/// page on every host carries, rjuhsd.school included.
+pub fn inject_credit(html: &str) -> String {
     let guarded = inject_access_guard(html);
     let html = guarded.as_str();
     if html.contains("id=\"site-credit\"") {
         return html.to_string();
     }
-    let copy = if school {
-        "<span id=\"site-credit-copy\">Made by Tyler and Mitch.</span>".to_string()
-    } else {
-        r#"<span id="site-credit-copy"><span class="footer-agreement">By using mitch.pro you agree to the <a href="/use-agreement/" target="_blank">use agreement</a> and <a href="/privacy/" target="_blank">privacy policy</a>. </span><span class="footer-cookies">See also <a href="/cookies/" target="_blank">cookies</a> and <a href="/copyright/" target="_blank">copyright</a>. </span><span class="footer-oss"><span class="footer-oss-lead">mitch.pro is open source — </span><a href="https://github.com/mitch-pro/mitch.pro" target="_blank" rel="noopener">view the code yourself on GitHub</a></span><span class="footer-discord"> · <a href="https://discord.gg/nrBCnK7KM5" target="_blank" rel="noopener">Discord</a></span></span>"#.to_string()
-    };
+    let copy = r#"<span id="site-credit-copy"><span class="footer-agreement">By using mitch.pro you agree to the <a href="/use-agreement/" target="_blank">use agreement</a> and <a href="/privacy/" target="_blank">privacy policy</a>. </span><span class="footer-cookies">See also <a href="/cookies/" target="_blank">cookies</a> and <a href="/copyright/" target="_blank">copyright</a>. </span><span class="footer-oss"><span class="footer-oss-lead">mitch.pro is open source — </span><a href="https://github.com/mitch-pro/mitch.pro" target="_blank" rel="noopener">view the code yourself on GitHub</a></span><span class="footer-discord"> · <a href="https://discord.gg/nrBCnK7KM5" target="_blank" rel="noopener">Discord</a></span></span>"#;
     let band = format!(
         r#"<style>
 :root {{ --site-credit-height: calc(29px + env(safe-area-inset-bottom, 0px)); }}
@@ -200,15 +198,13 @@ mod tests {
     }
 
     #[test]
-    fn credits_are_idempotent_and_use_school_wording() {
+    fn credits_are_idempotent_and_the_same_on_every_host() {
         let html = "<html><body><main>Sign up</main></body></html>";
-        let main = inject_credit(html, false);
+        let main = inject_credit(html);
         assert!(main.contains("By using mitch.pro you agree"));
-        assert_eq!(main, inject_credit(&main, false));
-        let school = inject_credit(html, true);
-        assert!(school.contains("Made by Tyler and Mitch."));
-        assert!(!school.contains("By using mitch.pro"));
-        assert!(school.find("site-credit").unwrap() < school.find("</body>").unwrap());
+        assert!(!main.contains("Made by Tyler and Mitch."));
+        assert_eq!(main, inject_credit(&main));
+        assert!(main.find("site-credit").unwrap() < main.find("</body>").unwrap());
     }
 
     #[test]

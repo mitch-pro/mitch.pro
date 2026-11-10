@@ -24,13 +24,7 @@ fn appeal_or_asset(path: &str) -> bool {
     )
 }
 
-pub fn account_response(
-    state: &AppState,
-    headers: &HeaderMap,
-    path: &str,
-    email: &str,
-    ban: &Value,
-) -> Response {
+pub fn account_response(state: &AppState, path: &str, email: &str, ban: &Value) -> Response {
     let api = path.starts_with("/api/")
         || path.starts_with("/_matrix/")
         || path.starts_with("/livekit/")
@@ -46,7 +40,7 @@ pub fn account_response(
             }),
         )
     } else {
-        crate::errors::banned_response(ban, crate::hosts::is_rjuhsd_host(headers))
+        crate::errors::banned_response(ban)
     };
     if !email.is_empty() {
         let marker = mitch_lib::bans::signed_ban_marker(email, &state.id_secret);
@@ -109,7 +103,7 @@ pub async fn enforce_ban(
     }
     let ip = crate::handler::get_real_ip(headers, None);
     if let Some(ban) = mitch_lib::auth::banned_info_for_ip(&state.store, &state.id_secret, &ip) {
-        return Some(account_response(state, headers, path, "", &ban));
+        return Some(account_response(state, path, "", &ban));
     }
     let cookies = crate::routes::me::cookies_of(state, headers);
     let mut emails = Vec::new();
@@ -135,13 +129,13 @@ pub async fn enforce_ban(
     }
     for email in emails {
         if let Some(ban) = mitch_lib::auth::banned_info_for_email(&state.store, &email) {
-            return Some(account_response(state, headers, path, &email, &ban));
+            return Some(account_response(state, path, &email, &ban));
         }
     }
     if path.starts_with("/livekit") {
         if let Some(email) = crate::routes::livekit::verified_token_email(state, search) {
             if let Some(ban) = mitch_lib::auth::banned_info_for_email(&state.store, &email) {
-                return Some(account_response(state, headers, path, &email, &ban));
+                return Some(account_response(state, path, &email, &ban));
             }
         }
     }
@@ -181,13 +175,7 @@ pub async fn enforce_ban(
                     if let Some(ban) =
                         mitch_lib::auth::banned_info_for_email(&state.store, &account.norm_email)
                     {
-                        return Some(account_response(
-                            state,
-                            headers,
-                            path,
-                            &account.norm_email,
-                            &ban,
-                        ));
+                        return Some(account_response(state, path, &account.norm_email, &ban));
                     }
                 }
             }
