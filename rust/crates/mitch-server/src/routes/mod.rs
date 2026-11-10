@@ -36,6 +36,7 @@ pub mod pickle;
 pub mod portal_catalog;
 pub mod proxy;
 pub mod push;
+pub mod rjuhsd_online;
 pub mod school_menu;
 pub mod staff_hub;
 pub mod support;

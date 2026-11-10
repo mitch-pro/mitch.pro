@@ -569,6 +569,7 @@ pub const PUBLIC_API_PATHS: &[&str] = &[
     "/api/bell/published",
     "/api/site-info",
     "/api/presence/count",
+    "/api/rjuhsd/online",
     "/api/alias",
     "/api/updates",
     "/api/portal/summary",

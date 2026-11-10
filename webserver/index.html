@@ -914,10 +914,10 @@ document.addEventListener('error', function(event) {
 function renderOnlineMembers(members) {
   var wrap = document.getElementById('online-members-wrap');
   var list = document.getElementById('online-members-list');
-  var allMembers = (members || []).slice().sort(function(a, b) {
+  var online = (members || []).filter(function(m) { return m.online; }).sort(function(a, b) {
     return window.MitchPeople.compare(a, b);
   });
-  var online = allMembers.filter(function(m) { return m.online; });
+  var allMembers = online;
   var signature = JSON.stringify(allMembers.map(function(m) {
     return [m.email || '', m.displayName || '', m.pfp || '', m.badge || '', m.color || '', !!m.online, m.activity || m.playing || '', m.page || '', m.status || '', m.role || '', m.lastActive || 0];
   }));
@@ -928,7 +928,7 @@ function renderOnlineMembers(members) {
   var badgeEl = document.getElementById('collapsed-online-count');
   var pfpsEl = document.getElementById('collapsed-pfps-container');
   var liveLabel = document.getElementById('members-live-label');
-  if (liveLabel) liveLabel.textContent = online.length ? online.length + ' live' : 'All offline';
+  if (liveLabel) liveLabel.textContent = online.length ? online.length + ' online' : '';
   if (badgeEl) {
     if (online.length > 0) {
       badgeEl.textContent = online.length;
@@ -945,7 +945,7 @@ function renderOnlineMembers(members) {
   }
 
   if (!allMembers.length) {
-    list.innerHTML = '<span class="side-empty">No members to show yet</span>';
+    list.innerHTML = '<span class="side-empty">No one is online</span>';
     wrap.style.display = '';
     return;
   }
@@ -1538,7 +1538,7 @@ if (document.readyState === 'loading') {
   </div>
 
   <div id="online-members-wrap" class="side-section" style="display:none">
-    <div class="side-title side-title-presence"><span>Members</span><small id="members-live-label">Live</small></div>
+    <div class="side-title side-title-presence"><span>Online</span><small id="members-live-label"></small></div>
     <div id="online-members-list" class="side-list" aria-live="polite"></div>
   </div>
   <div id="friends-section-wrap" class="side-section">
