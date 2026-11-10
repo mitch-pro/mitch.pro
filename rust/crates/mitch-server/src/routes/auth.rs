@@ -689,7 +689,7 @@ async fn login(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) ->
     }
 
     if let Some(ban) = auth::banned_info_for_email(&state.store, &norm_email) {
-        return crate::access::account_response(state, headers, "/api/login", &norm_email, &ban);
+        return crate::access::account_response(state, "/api/login", &norm_email, &ban);
     }
 
     ensure_profile_defaults(
