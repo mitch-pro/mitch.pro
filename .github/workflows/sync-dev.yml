@@ -1,0 +1,80 @@
+name: Sync dev to master
+
+# `dev` is the testing branch, but changes often go straight to master. After
+# every push to master, reset `dev` to master so the two do not drift apart.
+# If `dev` holds commits that master does not (someone was working on it), keep
+# them on a timestamped backup branch before overwriting. If `dev` is behind
+# master or has identical content, nothing is lost and no backup is made.
+# See docs/dev-sync.md.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Never run two syncs at once; a newer master push should simply run after.
+concurrency:
+  group: sync-dev
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Reset dev to master
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: master
+          # Pushing commits that change .github/workflows needs a token with the
+          # `workflow` scope, which GITHUB_TOKEN cannot have. Set DEV_SYNC_TOKEN
+          # (a PAT) to cover that case and to make the push trigger the dev deploy.
+          token: ${{ secrets.DEV_SYNC_TOKEN || github.token }}
+
+      - name: Sync
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          MASTER=$(git rev-parse origin/master)
+
+          if ! git ls-remote --exit-code --heads origin dev >/dev/null 2>&1; then
+            echo "dev does not exist; creating it from master."
+            git push origin "$MASTER:refs/heads/dev"
+            exit 0
+          fi
+
+          git fetch origin dev
+          DEV=$(git rev-parse origin/dev)
+
+          if [ "$DEV" = "$MASTER" ]; then
+            echo "dev already matches master."
+            exit 0
+          fi
+
+          # Commits on dev that master does not have.
+          AHEAD=$(git rev-list --count "$MASTER..$DEV")
+
+          # Same content but different history (e.g. dev was squash-merged into
+          # master) is not worth a backup: nothing would be lost.
+          if [ "$AHEAD" -gt 0 ] && git diff --quiet "$MASTER" "$DEV"; then
+            echo "dev has $AHEAD commit(s) master lacks, but the content is identical; no backup."
+            AHEAD=0
+          fi
+
+          if [ "$AHEAD" -gt 0 ]; then
+            BACKUP="backup/dev-$(date -u +%Y%m%d-%H%M%S)-$(git rev-parse --short "$DEV")"
+            echo "dev is $AHEAD commit(s) ahead of master; backing up to $BACKUP."
+            git push origin "$DEV:refs/heads/$BACKUP"
+          else
+            echo "dev is behind master; overwriting without a backup."
+          fi
+
+          # Lease on the sha we inspected: if someone pushes to dev in the
+          # meantime the push fails instead of silently discarding their work.
+          git push --force-with-lease="refs/heads/dev:$DEV" origin "$MASTER:refs/heads/dev"

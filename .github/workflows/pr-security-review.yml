@@ -12,126 +12,52 @@ jobs:
   security-audit:
     name: Security & Privilege Audit
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # A newer push supersedes the previous run so the comment reflects the latest head.
+    concurrency:
+      group: pr-security-audit-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     steps:
       - name: Checkout PR
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Analyze PR Diff & Permissions
-        id: audit
+      # The screener lives in tools/ci/pr_screen.py (see docs/ci-pr-screening.md).
+      # PR-controlled values go in through env vars, never interpolated into the script.
+      - name: Analyze PR diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
           set -euo pipefail
+          python3 tools/ci/pr_screen.py pr_report.md
+          cat pr_report.md >> "$GITHUB_STEP_SUMMARY"
 
-          AUTHOR="${{ github.event.pull_request.user.login }}"
-          BASE_SHA="${{ github.event.pull_request.base.sha }}"
-          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
-
-          echo "Auditing PR by $AUTHOR ($BASE_SHA..$HEAD_SHA)..."
-
-          CHANGED_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" || true)
-          DIFF_CONTENT=$(git diff -U1 "$BASE_SHA" "$HEAD_SHA" || true)
-
-          ONLY_STATIC=true
-          TOUCHES_ADMIN=false
-          TOUCHES_WORKFLOWS=false
-          SUSPICIOUS=false
-          FINDINGS=""
-
-          while IFS= read -r file; do
-            [ -z "$file" ] && continue
-            case "$file" in
-              webserver/*.css|webserver/rjuhsd-assets/*|docs/*|*.md|LICENSE|*.txt)
-                ;;
-              data/admins.json|data/moderators.json)
-                ONLY_STATIC=false
-                TOUCHES_ADMIN=true
-                FINDINGS="${FINDINGS}\n- ⚠️ **Admin/Moderator file modified**: \`$file\` (Privilege escalation risk)"
-                ;;
-              .github/workflows/*)
-                ONLY_STATIC=false
-                TOUCHES_WORKFLOWS=true
-                FINDINGS="${FINDINGS}\n- ⚠️ **CI/CD Workflow modified**: \`$file\`"
-                ;;
-              *)
-                ONLY_STATIC=false
-                ;;
-            esac
-          done <<< "$CHANGED_FILES"
-
-          if echo "$DIFF_CONTENT" | grep -Ei '^\+.*(SITE_CO_OWNER|is_owner|eval\(|exec\(|child_process|curl.*\|.*sh|chmod \+x)' >/dev/null; then
-            SUSPICIOUS=true
-            FINDINGS="${FINDINGS}\n- ⚠️ **Privilege or Execution Pattern**: Detected addition of privileged keywords (\`is_owner\`, \`eval\`, or shell execution)."
-          fi
-
-          if echo "$DIFF_CONTENT" | grep -Ei '^\+.*(BEGIN PRIVATE KEY|admin\.key|secret_key|ghp_[A-Za-z0-9]+|CLOUDFLARE_API_TOKEN=[a-zA-Z0-9]+)' >/dev/null; then
-            SUSPICIOUS=true
-            FINDINGS="${FINDINGS}\n- 🚨 **Potential Secret or Token**: Detected possible hardcoded token or private key string."
-          fi
-
-          if echo "$DIFF_CONTENT" | grep -Ei '^\+.*(jumpscare|admin-jumpscare)' >/dev/null; then
-            SUSPICIOUS=true
-            FINDINGS="${FINDINGS}\n- ⚠️ **Jumpscare/Broadcast Alert**: Diff references jumpscare assets or broadcasts."
-          fi
-
-          {
-            echo "### 🛡️ Automated PR Security Screener Report"
-            echo ""
-            echo "| Metric | Evaluation |"
-            echo "| :--- | :--- |"
-            echo "| **PR Author** | \`$AUTHOR\` |"
-            echo "| **Static UI Only** | \`$ONLY_STATIC\` |"
-            echo "| **Privilege Risk** | \`$TOUCHES_ADMIN\` |"
-            echo "| **Workflow Risk** | \`$TOUCHES_WORKFLOWS\` |"
-            echo ""
-            if [ "$SUSPICIOUS" = "true" ] || [ "$TOUCHES_ADMIN" = "true" ]; then
-              echo "#### 🚨 Security Alert: Review Flagged"
-              echo "This PR contains changes that modify privileges, workflows, or sensitive logic:"
-              echo -e "$FINDINGS"
-              echo ""
-              echo "**Action Required:** Mitch-Fogler must thoroughly review this diff before approving."
-            elif [ "$ONLY_STATIC" = "true" ]; then
-              echo "#### ✅ Low Risk: Static Changes Only"
-              echo "This PR touches only static styles, documentation, or public assets. No backend code, execution paths, or privilege sets were modified."
-            else
-              echo "#### ℹ️ Code Review Required"
-              echo "This PR modifies application code (\`.rs\` or \`.js\`). It must be reviewed and approved by Mitch-Fogler before deployment to the server."
-            fi
-          } > pr_report.md
-
-      - name: Post PR Review Comment
+      - name: Post PR comment
         uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
-            const body = fs.readFileSync('pr_report.md', 'utf8');
+            const marker = 'Automated PR Security Screener Report';
+            const body = fs.readFileSync('pr_report.md', 'utf8').slice(0, 60000);
             const { owner, repo, number: issue_number } = context.issue;
-
-            const comments = await github.rest.issues.listComments({
-              owner,
-              repo,
-              issue_number
-            });
-
-            const botComment = comments.data.find(comment => 
-              comment.user.login === 'github-actions[bot]' && 
-              comment.body.includes('Automated PR Security Screener Report')
-            );
-
-            if (botComment) {
-              await github.rest.issues.updateComment({
-                owner,
-                repo,
-                comment_id: botComment.id,
-                body
+            try {
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner, repo, issue_number, per_page: 100,
               });
-            } else {
-              await github.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number,
-                body
-              });
+              const existing = comments.find(c =>
+                c.user.login === 'github-actions[bot]' && c.body.includes(marker));
+              if (existing) {
+                await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+              } else {
+                await github.rest.issues.createComment({ owner, repo, issue_number, body });
+              }
+            } catch (err) {
+              // PRs from forks get a read-only token and cannot be commented on;
+              // the report is still in the job summary.
+              core.warning(`Could not post the report comment: ${err.message}`);
             }
 
   ai-review:
