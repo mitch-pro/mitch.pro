@@ -21,7 +21,7 @@ pub fn html_esc(v: &str) -> String {
 }
 
 /// Shared account/network ban notice. Staff-supplied text is always escaped.
-pub fn banned_response(info: &serde_json::Value, school: bool) -> Response {
+pub fn banned_response(info: &serde_json::Value) -> Response {
     let reason = info
         .get("reason")
         .and_then(serde_json::Value::as_str)
@@ -62,7 +62,7 @@ pub fn banned_response(info: &serde_json::Value, school: bool) -> Response {
         .replace("{{review}}", &review)
         .replace("{{return}}", &return_text)
         .replace("{{reason}}", &html_esc(reason));
-    let html = crate::inject::inject_credit(&html, school);
+    let html = crate::inject::inject_credit(&html);
     Response::builder()
         .status(403)
         .header(header::CONTENT_TYPE, "text/html; charset=utf-8")

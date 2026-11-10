@@ -1,7 +1,7 @@
 //! The main HTML injection pipeline — byte-faithful port of server.js's
 //! injection block (~21176-21313) and serveStatic's HTML transform.
 
-use crate::hosts::{is_host, request_host, SiteConfig};
+use crate::hosts::{request_host, SiteConfig};
 use crate::inject::{
     inject_readability, is_embedded_game_runtime, recaptcha_loader_str, strip_broadcast,
 };
@@ -31,7 +31,7 @@ pub fn inject_page(
                 1,
             );
         }
-        raw = crate::inject::inject_credit(&raw, crate::hosts::is_rjuhsd_host(headers));
+        raw = crate::inject::inject_credit(&raw);
         *html = raw.clone();
         return raw;
     }
@@ -216,17 +216,12 @@ pub fn inject_page(
     }
 
     // Agree footer: before the LAST </body>, with the encrypt-app exception.
-    let req_host_full = request_host(headers);
-    let req_host_name = req_host_full.split(':').next().unwrap_or("");
-    let is_rjuhsd = is_host(req_host_name, "rjuhsd.school");
-    // The fixed credit band injected below already carries the same
-    // agreement sentence on non-school hosts, so the in-page footer is only
-    // needed where the band won't say it (school hosts, or pages that ship
-    // their own #site-credit). Injecting both printed the line twice.
-    let is_school_credit = is_rjuhsd || path.starts_with("/rjuhsd/");
-    let band_has_agreement = (!is_embedded || is_standalone_game_portal)
-        && !is_school_credit
-        && !raw.contains("id=\"site-credit\"");
+    // The fixed credit band injected below already carries the agreement
+    // sentence, so the in-page footer is only needed where the band won't say
+    // it (pages that ship their own #site-credit). Injecting both printed the
+    // line twice.
+    let band_has_agreement =
+        (!is_embedded || is_standalone_game_portal) && !raw.contains("id=\"site-credit\"");
     if !is_onboarding && !is_embedded && !band_has_agreement && !raw.contains("_agree_footer") {
         let agree = "<footer id=\"_agree_footer\" class=\"app-footer\">By using mitch.pro you agree to the <a href=\"/use-agreement/\">use agreement</a> and <a href=\"/privacy/\">privacy policy</a>.</footer>";
         match raw.rfind("</body>") {
@@ -235,7 +230,7 @@ pub fn inject_page(
         }
     }
     if !is_embedded || is_standalone_game_portal {
-        raw = crate::inject::inject_credit(&raw, is_rjuhsd || path.starts_with("/rjuhsd/"));
+        raw = crate::inject::inject_credit(&raw);
     }
     raw = crate::inject::inject_access_guard(&raw);
     *html = raw.clone();
@@ -263,12 +258,7 @@ pub fn serve_static_html(
         html = strip_broadcast(&html);
     }
     if !is_embedded {
-        let host = request_host(headers);
-        html = crate::inject::inject_credit(
-            &html,
-            is_host(host.split(':').next().unwrap_or(""), "rjuhsd.school")
-                || path.starts_with("/rjuhsd/"),
-        );
+        html = crate::inject::inject_credit(&html);
     }
     crate::inject::inject_access_guard(&html)
 }

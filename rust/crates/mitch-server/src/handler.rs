@@ -410,7 +410,7 @@ pub fn prepare_rjuhsd_html(
             .to_string();
     }
 
-    crate::inject::inject_credit(&html, true)
+    crate::inject::inject_credit(&html)
 }
 
 fn manifest_response(manifest: serde_json::Value) -> Response {
@@ -1602,7 +1602,7 @@ async fn handle_resolved(
         if let Some(ban) = mitch_lib::auth::banned_info_for_sid(&state.store, &state.id_secret, sid)
         {
             let email = mitch_lib::auth::names_get_email(&state.store, sid).unwrap_or_default();
-            return crate::access::account_response(&state, headers, &path, &email, &ban);
+            return crate::access::account_response(&state, &path, &email, &ban);
         }
         if !state.check_password_cookie(headers, None)
             && path != "/"
@@ -1774,7 +1774,7 @@ async fn handle_resolved(
                             .body(axum::body::Body::from({
                                 let html = String::from_utf8_lossy(&raw);
                                 let html = if path.starts_with("/vms/desktop") {
-                                    crate::inject::inject_credit(&html, false)
+                                    crate::inject::inject_credit(&html)
                                 } else {
                                     crate::inject::inject_access_guard(&html)
                                 };
@@ -1868,7 +1868,7 @@ async fn handle_resolved(
         if let Some(ban) = mitch_lib::auth::banned_info_for_sid(&state.store, &state.id_secret, sid)
         {
             let email = mitch_lib::auth::names_get_email(&state.store, sid).unwrap_or_default();
-            return crate::access::account_response(&state, headers, &path, &email, &ban);
+            return crate::access::account_response(&state, &path, &email, &ban);
         }
         return redirect("/enroll/", 302);
     }
@@ -1941,7 +1941,7 @@ fn is_matrix_client_page(path: &str) -> bool {
 }
 
 fn html_response(html: String) -> Response {
-    let html = crate::inject::inject_credit(&html, false);
+    let html = crate::inject::inject_credit(&html);
     Response::builder()
         .status(StatusCode::OK)
         .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")
