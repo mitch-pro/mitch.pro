@@ -11,7 +11,7 @@
     if (!window.__rjuhsdOnlineLoaded) {
       window.__rjuhsdOnlineLoaded = true;
       const script = document.createElement('script');
-      script.src = '/rjuhsd-assets/online.js?v=3';
+      script.src = '/rjuhsd-assets/online.js?v=4';
       document.head.appendChild(script);
     }
     return;

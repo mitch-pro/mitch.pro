@@ -12,6 +12,12 @@
 
   var API = '/api/rjuhsd/online';
   var PING_MS = 30000;
+  // A device that can't solve a proof in this long is too slow to be worth
+  // the work: it skips the ping and so isn't counted as active. After
+  // MAX_STRIKES misses in a row it stops pinging and only shows the count.
+  var SOLVE_BUDGET_MS = 4000;
+  var MAX_STRIKES = 3;
+  var VIEW_MS = 60000;
   var enc = new TextEncoder();
   var vid = '';
   try { vid = sessionStorage.getItem('rjuhsd-online-id') || ''; } catch (e) {}
@@ -31,7 +37,9 @@
     return bits;
   }
 
-  async function solve(challenge) {
+  // Resolves to the solution, or null once the time budget is spent.
+  async function solve(challenge, budgetMs) {
+    var deadline = performance.now() + budgetMs;
     var prefix = challenge.token + ':' + vid + ':';
     var BATCH = 512;
     for (var start = 0; ; start += BATCH) {
@@ -40,6 +48,7 @@
         tries.push(crypto.subtle.digest('SHA-256', enc.encode(prefix + (start + i))));
       }
       var digests = await Promise.all(tries);
+      if (performance.now() > deadline) return null;
       for (var j = 0; j < BATCH; j++) {
         if (leadingZeroBits(new Uint8Array(digests[j])) >= challenge.bits) return String(start + j);
       }
@@ -55,6 +64,8 @@
 
   var challenge = null;
   var timer = 0;
+  var strikes = 0;
+  var viewOnly = false;
 
   function schedule(ms) {
     clearTimeout(timer);
@@ -64,6 +75,12 @@
   async function tick() {
     if (document.hidden) return; // resumes on visibilitychange
     try {
+      if (viewOnly) {
+        var peek = await fetch(API, { cache: 'no-store', credentials: 'omit' });
+        if (peek.ok) show((await peek.json()).count);
+        schedule(VIEW_MS);
+        return;
+      }
       if (!challenge) {
         var first = await fetch(API, { cache: 'no-store', credentials: 'omit' });
         if (!first.ok) throw new Error('challenge');
@@ -71,7 +88,15 @@
         show(data.count);
         challenge = data.challenge;
       }
-      var n = await solve(challenge);
+      var n = await solve(challenge, SOLVE_BUDGET_MS);
+      if (n === null) {
+        challenge = null;
+        strikes++;
+        if (strikes >= MAX_STRIKES) viewOnly = true;
+        schedule(viewOnly ? VIEW_MS : PING_MS * 2);
+        return;
+      }
+      strikes = 0;
       var res = await fetch(API, {
         method: 'POST',
         cache: 'no-store',
