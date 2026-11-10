@@ -99,11 +99,13 @@ fn net_bucket(ip: &str) -> String {
     }
 }
 
-fn mac_hex(secret: &[u8], payload: &str) -> String {
-    let mut mac = <HmacSha256 as Mac>::new_from_slice(secret).expect("hmac accepts any key length");
+/// `None` only if the key were rejected, which HMAC never does; callers treat
+/// it as a failed verification rather than signing with an empty MAC.
+fn mac_hex(secret: &[u8], payload: &str) -> Option<String> {
+    let mut mac = <HmacSha256 as Mac>::new_from_slice(secret).ok()?;
     mac.update(b"rjuhsd-online-pow-v1|");
     mac.update(payload.as_bytes());
-    hex(&mac.finalize().into_bytes()[..16])
+    Some(hex(&mac.finalize().into_bytes()[..16]))
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -202,7 +204,7 @@ impl Board {
         let nonce = hex(&nonce);
         let exp = now + CHALLENGE_TTL_MS;
         let body = format!("{exp}.{bits}.{nonce}");
-        let mac = mac_hex(secret, &format!("{body}|{net}"));
+        let mac = mac_hex(secret, &format!("{body}|{net}")).ok_or(OnlineError::BadToken)?;
         Ok(Challenge {
             token: format!("{body}.{mac}"),
             bits,
@@ -230,7 +232,9 @@ impl Board {
         let [exp, bits, nonce, mac] = parts[..] else {
             return Err(OnlineError::BadToken);
         };
-        let expected = mac_hex(secret, &format!("{exp}.{bits}.{nonce}|{net}"));
+        let Some(expected) = mac_hex(secret, &format!("{exp}.{bits}.{nonce}|{net}")) else {
+            return Err(OnlineError::BadToken);
+        };
         if !constant_time_eq(expected.as_bytes(), mac.as_bytes()) {
             return Err(OnlineError::BadToken);
         }
@@ -429,11 +433,10 @@ mod tests {
         );
         // Another visitor id can't reuse this solution (overwhelmingly likely).
         let other = "ABCDEFGHIJKLMNOPQR";
-        assert_eq!(
+        assert!(
             leading_zero_bits(&Sha256::digest(
                 format!("{}:{other}:{n}", c.token).as_bytes()
-            )) >= c.bits,
-            false
+            )) < c.bits
         );
         assert_eq!(b.ping(SECRET, "1.2.3.4", VID, &c.token, &n, 0), Ok(()));
         assert_eq!(
