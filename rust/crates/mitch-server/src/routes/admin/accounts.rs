@@ -50,6 +50,7 @@ pub fn directory(state: &AppState) -> Vec<Value> {
                 "email":email,
                 "username":username,
                 "displayName":display,
+                "scrotum":profile::has_scrotum_role(p),
                 "protected":auth::is_owner_email(&state.store,&email),
                 "matrixUserId":matrix_ids.get(&email).cloned().unwrap_or_default(),
             })
@@ -231,6 +232,56 @@ fn handle_owner_accounts(
                 "accounts": accounts,
                 "coinAccounts": coin_accounts,
             }),
+        );
+    }
+
+    if action == "set-scrotum" {
+        let target =
+            auth::normalize_email(body.get("email").and_then(|v| v.as_str()).unwrap_or(""));
+        let enabled = body
+            .get("enabled")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if target.is_empty()
+            || !directory(state)
+                .iter()
+                .any(|a| a["email"] == target.as_str())
+        {
+            return json_response(404, json!({ "error": "Account not found." }));
+        }
+        let mut prof = profiles::profile_get(&state.store, &target);
+        if !prof.is_object() {
+            prof = json!({});
+        }
+        profile::set_scrotum_role(&mut prof, enabled);
+        let now = mitch_lib::school::now_millis();
+        prof["updatedAt"] = json!(now);
+        profiles::profile_set(&state.store, &target, &prof);
+        let username = prof["username"].as_str().unwrap_or("").to_string();
+        crate::ws::broadcast_profile_change(state, &username, now);
+        let name = crate::routes::matrix::matrix_display_name(&prof, &username);
+        let (state_clone, target_clone) = (Arc::clone(state), target.clone());
+        tokio::spawn(async move {
+            crate::routes::matrix::sync_profile_to_matrix(
+                &state_clone,
+                &target_clone,
+                Some(&name),
+                None,
+                None,
+                None,
+            )
+            .await;
+        });
+        mitch_lib::admin::log_admin_action(
+            &state.store,
+            state.data_dir(),
+            &actor,
+            "SCROTUM_ROLE_SET",
+            json!({ "target": target, "enabled": enabled, "success": true }),
+        );
+        return json_response(
+            200,
+            json!({ "ok": true, "email": target, "enabled": enabled }),
         );
     }
 

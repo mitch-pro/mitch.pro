@@ -2532,6 +2532,9 @@ pub fn find_profile_email_by_matrix_user_id(
 /// can't follow a username change without losing the account's rooms and
 /// history, so the display name is the part that tracks the site username.
 pub fn matrix_display_name(profile: &Value, fallback: &str) -> String {
+    if mitch_lib::profile::has_scrotum_role(profile) {
+        return mitch_lib::profile::SCROTUM_NAME.to_string();
+    }
     ["displayName", "nickname", "username"]
         .iter()
         .filter_map(|k| profile.get(*k).and_then(|v| v.as_str()))
@@ -8105,10 +8108,28 @@ pub async fn handle_matrix_gateway(
     // Reject display names containing blocked words before they reach the homeserver.
     static DISPLAYNAME_PUT_RE: OnceLock<regex::Regex> = OnceLock::new();
     let displayname_put_re = DISPLAYNAME_PUT_RE.get_or_init(|| {
-        regex::Regex::new(r"^/_matrix/client/(?:v3|r0)/profile/[^/]+/displayname/?$")
+        regex::Regex::new(r"^/_matrix/client/(?:v3|r0)/profile/([^/]+)/displayname/?$")
             .unwrap_or_else(|_| unreachable_regex())
     });
     if method == Method::PUT && displayname_put_re.is_match(path) {
+        // Accounts with the Mitch's Scrotum role keep their forced name.
+        let target = displayname_put_re
+            .captures(path)
+            .and_then(|c| c.get(1))
+            .map(|m| urlencoding_decode(m.as_str()))
+            .unwrap_or_default();
+        let forced = find_profile_email_by_matrix_user_id(state, &target)
+            .map(|norm| mitch_lib::profiles::profile_get(&state.store, &norm))
+            .is_some_and(|p| mitch_lib::profile::has_scrotum_role(&p));
+        if forced {
+            return Some(cors_json_response(
+                403,
+                json!({
+                    "errcode": "M_FORBIDDEN",
+                    "error": "Your display name can't be changed."
+                }),
+            ));
+        }
         if let Ok(payload) = serde_json::from_slice::<Value>(body_bytes) {
             if payload
                 .get("displayname")
