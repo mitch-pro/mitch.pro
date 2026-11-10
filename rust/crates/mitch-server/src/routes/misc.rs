@@ -84,6 +84,11 @@ pub async fn handle(
         let ip = crate::handler::get_real_ip(headers, None);
         return Some(cache_refresh(state, method, headers, &ip, body));
     }
+    if let Some(response) =
+        crate::routes::rjuhsd_online::handle(state, method, path, headers, body_bytes)
+    {
+        return Some(response);
+    }
     if path == "/api/weather" && *method == Method::GET {
         return Some(crate::routes::dayboard::weather().await);
     }

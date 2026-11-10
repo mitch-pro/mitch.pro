@@ -41,6 +41,8 @@ tokio-util = { version = "0.7", features = ["io"] }
 aes-gcm = { workspace = true }
 web-push = "0.10"
 rand = { workspace = true }
+hmac = { workspace = true }
+sha2 = { workspace = true }
 # /api/e2e/join mints a per-session ECDH P-256 server keypair (the JS
 # genServerKeypair uses WebCrypto); the SecretKey type lives in AppState.
 p256 = { workspace = true }

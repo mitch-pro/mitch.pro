@@ -88,3 +88,5 @@ hide flags remain enforced.
 The browser fixture sets `USERDATA_DIR` to its temporary directory so preference
 sync is exercised without reading or writing production userdata. The server
 default is `<data dir>/userdata`.
+
+The home People rail lists only people who are online; offline members are not shown there. The Friends list still shows offline friends.
