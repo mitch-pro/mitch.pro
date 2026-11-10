@@ -918,6 +918,12 @@ fn backup_domains_response(state: &Arc<AppState>) -> Response {
         json!({
             "ok": true,
             "alternate": site_alternate(state),
+            "primary": state
+                .store
+                .read_document(&state.cfg.data_dir.join("site.json"), json!({}))
+                .get("primary")
+                .and_then(|v| v.as_str())
+                .unwrap_or(mitch_lib::site_domains::DEFAULT_PRIMARY),
             "domains": mitch_lib::site_domains::list(&state.store).iter().map(|d| json!({
                 "origin": d.origin,
                 "active": d.active,

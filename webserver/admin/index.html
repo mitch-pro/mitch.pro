@@ -705,6 +705,10 @@
           <input id="site-alternate-url" type="text" placeholder="https://example.com" required maxlength="2048" autocomplete="off" style="flex:1;min-width:200px">
           <button type="submit" style="width:auto">Save</button>
         </form>
+        <div style="margin-top:10px;">
+          <button type="button" id="domain-check-btn" onclick="checkDomains()" style="width:auto">Check which domains load on this device</button>
+          <div id="domain-check-results" style="font-size:.78rem;margin-top:8px;" aria-live="polite"></div>
+        </div>
         <div id="backup-domains-status" class="form-status" role="status"></div>
       </section>
       <section class="action-card" id="tester-self-card" hidden>
@@ -1900,7 +1904,47 @@
       } catch (err) { setStatus('reserved-usernames-status', err.message, 'err'); }
     }
 
-    function renderBackupDomains(rows, alternate) {
+    let domainCheckList = [];
+
+    // Loads /favicon.ico from each domain as an image. A real image means the
+    // domain is reachable from this browser; a filter's block page or a failed
+    // connection is not a valid image, so it counts as blocked.
+    function probeDomain(origin) {
+      return new Promise(resolve => {
+        const img = new Image();
+        const timer = setTimeout(() => { img.src = ''; resolve('timed out'); }, 8000);
+        img.onload = () => { clearTimeout(timer); resolve('loads'); };
+        img.onerror = () => { clearTimeout(timer); resolve('blocked'); };
+        img.src = origin + '/favicon.ico?check=' + Date.now();
+      });
+    }
+
+    async function checkDomains() {
+      const btn = document.getElementById('domain-check-btn');
+      const out = document.getElementById('domain-check-results');
+      btn.disabled = true;
+      out.textContent = 'Checking...';
+      const results = await Promise.all(domainCheckList.map(async d => [d, await probeDomain(d.origin)]));
+      out.innerHTML = results.map(([d, state]) => `
+        <div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--t-bd, rgba(255,255,255,.15));">
+          <span>${esc(d.origin.replace(/^https?:\/\//, ''))} <span class="muted">${esc(d.label)}</span></span>
+          <strong style="color:${state === 'loads' ? '#22c55e' : '#ef4444'}">${esc(state)}</strong>
+        </div>`).join('') || '<div class="muted">No domains to check.</div>';
+      btn.disabled = false;
+    }
+
+    function renderBackupDomains(rows, alternate, primary) {
+      const seen = new Set();
+      domainCheckList = [];
+      const add = (origin, label) => {
+        try { origin = new URL(origin).origin; } catch (_) { return; }
+        if (seen.has(origin)) return;
+        seen.add(origin);
+        domainCheckList.push({ origin, label });
+      };
+      add(primary, 'primary');
+      add(alternate, 'secondary');
+      (rows || []).forEach(r => add(r.origin, r.active ? 'backup (active)' : 'backup'));
       const altForm = document.getElementById('site-alternate-form');
       if (altForm && currentUser?.isOwner) {
         altForm.hidden = false;
@@ -1925,7 +1969,7 @@
         const r = await fetch('/api/admin/backup-domains', { credentials: 'include', cache: 'no-store', headers: getAdminHeaders() });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(d.error || 'Could not load backup domains.');
-        renderBackupDomains(d.domains, d.alternate);
+        renderBackupDomains(d.domains, d.alternate, d.primary);
       } catch (err) {
         setStatus('backup-domains-status', err.message, 'err');
       }
@@ -1936,7 +1980,7 @@
       setStatus('backup-domains-status', 'Saving...', '');
       try {
         const d = await postAdmin('/api/admin/backup-domains', { action, origin });
-        renderBackupDomains(d.domains, d.alternate);
+        renderBackupDomains(d.domains, d.alternate, d.primary);
         setStatus('backup-domains-status', action === 'rotate' ? 'Switched.' : 'Saved.', 'ok');
       } catch (err) { setStatus('backup-domains-status', err.message, 'err'); }
     }
@@ -1946,7 +1990,7 @@
       setStatus('backup-domains-status', 'Saving...', '');
       try {
         const d = await postAdmin('/api/admin/site-alternate', { url: document.getElementById('site-alternate-url').value.trim() });
-        renderBackupDomains(d.domains, d.alternate);
+        renderBackupDomains(d.domains, d.alternate, d.primary);
         setStatus('backup-domains-status', 'Secondary domain saved.', 'ok');
       } catch (err) { setStatus('backup-domains-status', err.message, 'err'); }
     }

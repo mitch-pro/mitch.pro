@@ -37,6 +37,7 @@ visited before is sent to the other domain instead of the offline page.
 
 - Only browsers that loaded the site after this shipped have the worker and the
   cached domain. A first visit to a blocked domain cannot be helped.
+- "Check which domains load on this device" (admin card) loads `/favicon.ico` as an image from the primary, secondary and every pool domain and reports each as loads, blocked or timed out; run it on the network you care about, e.g. a school Chromebook. A filter block page is not a valid image, so it counts as blocked.
 - Every domain in the pool must serve this site. Browsers pick up a change on a
   page load after their cached copy is 6 hours old, so rotating after a block
   helps people who haven't loaded the site in the meantime only if the old
