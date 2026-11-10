@@ -34,21 +34,28 @@ use std::sync::{Mutex, OnceLock};
 
 /// Leading zero bits required with no load. About 65k hashes on average.
 const BASE_BITS: u32 = 16;
-/// Extra bits added as one network's live visitor count grows.
-const MAX_IP_EXTRA_BITS: u32 = 4;
-/// Extra bits added while the whole site is being hit hard.
+/// New visitors per minute from one network per +1 bit, doubling each step.
+/// Difficulty follows how fast new ids arrive, not how many are online, so a
+/// school's steady keep-alive pings stay at the base cost.
+const ADMIT_STEP: usize = 128;
+/// Most extra bits one network's new-visitor rate can add.
+const MAX_IP_EXTRA_BITS: u32 = 3;
+/// Extra bits added while the whole site is taking in new visitors this fast.
 const PRESSURE_EXTRA_BITS: u32 = 2;
-/// Challenges issued per minute, site-wide, before the pressure bits apply.
+/// New visitors per minute, site-wide, before the pressure bits apply.
 const PRESSURE_PER_MIN: usize = 3000;
-/// Challenges issued per minute to one network (a school NAT shares one IP).
-const ISSUE_PER_IP_PER_MIN: usize = 900;
+/// Challenges issued per minute to one network. A school behind one IP has
+/// thousands of visitors pinging twice a minute, so this is generous.
+const ISSUE_PER_IP_PER_MIN: usize = 12_000;
+// Every visitor a network can hold pings twice a minute; keep room for that.
+const _: () = assert!(MAX_VISITORS_PER_IP * 2 <= ISSUE_PER_IP_PER_MIN);
 const CHALLENGE_TTL_MS: i64 = 120_000;
 const VISITOR_TTL_MS: i64 = 75_000;
 /// A visitor id can only be counted once per this interval.
 const MIN_PING_GAP_MS: i64 = 20_000;
 const MAX_VISITORS: usize = 50_000;
 /// Most counted visitors one network can hold at a time.
-const MAX_VISITORS_PER_IP: usize = 500;
+const MAX_VISITORS_PER_IP: usize = 5_000;
 const PRUNE_EVERY_MS: i64 = 1_000;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -78,7 +85,10 @@ struct Board {
     /// Spent token nonces and when their token expires.
     used: HashMap<String, i64>,
     issued_net: HashMap<String, VecDeque<i64>>,
-    issued_all: VecDeque<i64>,
+    /// When new visitor ids arrived (counted or not) in the last minute,
+    /// per network and site-wide. These drive difficulty.
+    admitted_net: HashMap<String, VecDeque<i64>>,
+    admitted_all: VecDeque<i64>,
     last_prune: i64,
 }
 
@@ -157,8 +167,14 @@ impl Board {
             }
         }
         self.issued_net.retain(|_, log| !log.is_empty());
-        while self.issued_all.front().is_some_and(|t| now - t >= 60_000) {
-            self.issued_all.pop_front();
+        for log in self.admitted_net.values_mut() {
+            while log.front().is_some_and(|t| now - t >= 60_000) {
+                log.pop_front();
+            }
+        }
+        self.admitted_net.retain(|_, log| !log.is_empty());
+        while self.admitted_all.front().is_some_and(|t| now - t >= 60_000) {
+            self.admitted_all.pop_front();
         }
     }
 
@@ -178,10 +194,10 @@ impl Board {
 
     /// Difficulty for the next challenge to `net`.
     fn bits_for(&self, net: &str) -> u32 {
-        let live = self.per_net.get(net).copied().unwrap_or(0) as u32;
-        // +1 bit per doubling past 16 visitors, up to the cap.
-        let extra = (32 - (live / 16).leading_zeros()).min(MAX_IP_EXTRA_BITS);
-        let pressure = if self.issued_all.len() >= PRESSURE_PER_MIN {
+        let recent = self.admitted_net.get(net).map_or(0, VecDeque::len);
+        // +1 bit per doubling of the new-visitor rate past ADMIT_STEP a minute.
+        let extra = (usize::BITS - (recent / ADMIT_STEP).leading_zeros()).min(MAX_IP_EXTRA_BITS);
+        let pressure = if self.admitted_all.len() >= PRESSURE_PER_MIN {
             PRESSURE_EXTRA_BITS
         } else {
             0
@@ -197,7 +213,6 @@ impl Board {
             return Err(OnlineError::Limited);
         }
         log.push_back(now);
-        self.issued_all.push_back(now);
         let bits = self.bits_for(&net);
         let mut nonce = [0u8; 12];
         rand::Rng::fill(&mut rand::rng(), &mut nonce);
@@ -261,6 +276,13 @@ impl Board {
             existing.last = now;
             return Ok(());
         }
+        // A new visitor id: record it for pricing even if it ends up uncounted,
+        // so a flood keeps getting more expensive past the caps.
+        self.admitted_net
+            .entry(net.clone())
+            .or_default()
+            .push_back(now);
+        self.admitted_all.push_back(now);
         // New visitors past the caps are accepted but not counted.
         if self.visitors.len() >= MAX_VISITORS
             || self.per_net.get(&net).copied().unwrap_or(0) >= MAX_VISITORS_PER_IP
@@ -483,32 +505,86 @@ mod tests {
         assert_eq!(b.count(MIN_PING_GAP_MS), 1);
     }
 
+    fn admit(b: &mut Board, net: &str, n: usize) {
+        b.admitted_net
+            .insert(net.into(), std::iter::repeat_n(0, n).collect());
+        b.issued_net.clear();
+    }
+
     #[test]
-    fn difficulty_rises_with_visitors_from_one_network_and_is_capped() {
+    fn difficulty_follows_the_new_visitor_rate_from_one_network_and_is_capped() {
         let mut b = Board::default();
         assert_eq!(b.issue(SECRET, "1.2.3.4", 0).unwrap().bits, BASE_BITS);
-        // Fill the network directly: solving hundreds of real proofs at this
-        // difficulty is too slow for a debug-build unit test.
+        // Fill the rate directly: solving thousands of real proofs is too
+        // slow for a debug-build unit test.
         let steps = [
             (0, 0),
-            (15, 0),
-            (16, 1),
-            (32, 2),
-            (64, 3),
-            (128, 4),
-            (500, 4),
+            (ADMIT_STEP - 1, 0),
+            (ADMIT_STEP, 1),
+            (ADMIT_STEP * 2, 2),
+            (ADMIT_STEP * 4, 3),
+            (ADMIT_STEP * 100, 3),
         ];
-        for (live, extra) in steps {
-            b.per_net.insert("1.2.3.4".into(), live);
-            b.issued_net.clear();
+        for (admits, extra) in steps {
+            admit(&mut b, "1.2.3.4", admits);
             assert_eq!(
                 b.issue(SECRET, "1.2.3.4", 0).unwrap().bits,
                 BASE_BITS + extra,
-                "{live} live visitors"
+                "{admits} new visitors this minute"
             );
         }
         // A different network is unaffected.
         assert_eq!(b.issue(SECRET, "5.6.7.8", 0).unwrap().bits, BASE_BITS);
+        // The rate decays: a minute later the cost drops back.
+        assert_eq!(b.issue(SECRET, "1.2.3.4", 61_000).unwrap().bits, BASE_BITS);
+    }
+
+    #[test]
+    fn site_wide_pressure_adds_bits_for_every_network() {
+        let mut b = Board {
+            admitted_all: std::iter::repeat_n(0, PRESSURE_PER_MIN).collect(),
+            ..Board::default()
+        };
+        assert_eq!(
+            b.issue(SECRET, "5.6.7.8", 0).unwrap().bits,
+            BASE_BITS + PRESSURE_EXTRA_BITS
+        );
+    }
+
+    #[test]
+    fn a_school_sized_network_keeps_the_base_cost_for_keepalives() {
+        let mut b = Board::default();
+        // Thousands of students already online behind one IP.
+        for i in 0..MAX_VISITORS_PER_IP {
+            b.visitors.insert(
+                format!("student-{i:016}"),
+                Visitor {
+                    net: "1.2.3.4".into(),
+                    last: 0,
+                },
+            );
+        }
+        b.per_net.insert("1.2.3.4".into(), MAX_VISITORS_PER_IP);
+        assert_eq!(b.issue(SECRET, "1.2.3.4", 1_000).unwrap().bits, BASE_BITS);
+    }
+
+    #[test]
+    fn visitors_past_the_network_cap_are_accepted_but_not_counted() {
+        let mut b = Board::default();
+        for i in 0..MAX_VISITORS_PER_IP {
+            b.visitors.insert(
+                format!("student-{i:016}"),
+                Visitor {
+                    net: "1.2.3.4".into(),
+                    last: 0,
+                },
+            );
+        }
+        b.per_net.insert("1.2.3.4".into(), MAX_VISITORS_PER_IP);
+        ping_ok(&mut b, "1.2.3.4", VID, 1_000).unwrap();
+        assert_eq!(b.count(1_000), MAX_VISITORS_PER_IP);
+        // It still counted toward the flood rate that prices the next challenge.
+        assert_eq!(b.admitted_net["1.2.3.4"].len(), 1);
     }
 
     #[test]

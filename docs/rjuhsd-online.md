@@ -36,23 +36,30 @@ only spent once the proof checks out, so wrong guesses can't burn someone else's
 challenge.
 
 Difficulty starts at 16 bits (about 65k hashes, well under a second in a browser).
-It goes up by one bit for each doubling of the visitors one network already holds
-past 16 (up to +4), and by 2 while the site as a whole is issuing over 3000
-challenges a minute. Pushing the count up from one place gets steadily more
-expensive.
+It follows how fast *new* visitor ids arrive, not how many people are online: it
+goes up by one bit for each doubling of new visitors from one network past 128 a
+minute (up to +3), and by 2 while the whole site is taking in over 3000 new
+visitors a minute. Pings from people already counted stay at the base cost, so a
+school with thousands of students behind one IP isn't penalised for being large,
+while a flood of fresh ids from one place gets steadily more expensive. Ids past
+the caps below still count toward that rate.
 
 ## Other limits
 
 - A visitor id counts at most once every 20 seconds (`TooSoon`); the client pings
   every 30 seconds, and only while the tab is visible.
 - A visitor drops off 75 seconds after its last ping.
-- A network gets at most 900 challenges a minute. Networks are the IPv4 address or
-  the IPv6 /64, since a school can put many students behind one IP.
-- One network can hold at most 500 counted visitors, and the site 50,000. Pings
+- A network gets at most 12,000 challenges a minute. Networks are the IPv4 address
+  or the IPv6 /64. This is sized for a school behind one IP: 5,000 visitors pinging
+  twice a minute fit under it (a compile-time check keeps the two numbers in step).
+- One network can hold at most 5,000 counted visitors, and the site 50,000. Pings
   past a cap succeed but aren't counted.
 
-The count is approximate. Proof of work makes spam cost CPU, not impossible, and a
-large botnet could still move the number.
+No IP is whitelisted. The per-network numbers are the knobs: they have to be high
+enough for the busiest real network (the school) and so also set how far one
+machine on a shared IP can push the count. Someone on the school network can't be
+told apart from a student, so the count is approximate; proof of work makes spam
+cost CPU, not impossible, and a large botnet could still move the number.
 
 ## Privacy
 
@@ -63,6 +70,7 @@ again. No account, cookie or page location is involved.
 ## Testing
 
 `cargo test --workspace` covers the board logic: solved pings, expiry, forged and
-replayed tokens, binding to IP and visitor id, ping spacing, difficulty scaling and
-issuance limits. The widget has no browser test; check it by hand: `/rjuhsd/` on localhost, and a map of
-rjuhsd.school to 127.0.0.1 for the host check.
+replayed tokens, binding to IP and visitor id, ping spacing, difficulty scaling by
+new-visitor rate, a school-sized network staying at the base cost, the per-network
+cap, and issuance limits. The widget has no browser test; check it by hand with
+`/rjuhsd/` on localhost, and a map of rjuhsd.school to 127.0.0.1 for the host check.
