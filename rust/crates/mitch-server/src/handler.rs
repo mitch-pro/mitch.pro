@@ -113,6 +113,7 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/encrypt-galaxy.css",
     "/vendor/simplewebauthn.browser.min.js",
     "/rjuhsd-assets/app.js",
+    "/rjuhsd-assets/online.js",
     "/rjuhsd-assets/styles.css",
     "/rjuhsd-assets/reference-theme.css",
     "/rjuhsd-assets/redesign.css",
@@ -2633,5 +2634,19 @@ mod matrix_page_tests {
         ] {
             assert!(!is_matrix_client_page(asset), "{asset} should not be gated");
         }
+    }
+}
+
+#[cfg(test)]
+mod school_footer_asset_tests {
+    use super::*;
+
+    /// The footer counter on rjuhsd.school loads `online.js` for visitors who
+    /// aren't signed in. Anything missing from `PUBLIC_ASSETS` is redirected to
+    /// /enroll/ for them, which silently hides the counter.
+    #[test]
+    fn school_visitor_count_script_is_public() {
+        assert!(PUBLIC_ASSETS.contains(&"/rjuhsd-assets/online.js"));
+        assert!(PUBLIC_ASSETS.contains(&"/site-status.js"));
     }
 }
