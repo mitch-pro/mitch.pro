@@ -5,9 +5,10 @@
   'use strict';
   var host = location.hostname;
   if (!/(^|\.)rjuhsd\.school$/.test(host) && !/^(localhost|127\.0\.0\.1)$/.test(host)) return;
-  var el = document.getElementById('online-count');
-  var num = document.getElementById('online-count-num');
-  if (!el || !num || !window.crypto || !crypto.subtle) return;
+  // The footer counter (#site-active). site-status.js leaves it alone on this
+  // page because of the data-visitor-count attribute on <html>.
+  var el = document.getElementById('site-active');
+  if (!el || !window.crypto || !crypto.subtle) return;
 
   var API = '/api/rjuhsd/online';
   var PING_MS = 30000;
@@ -47,7 +48,8 @@
 
   function show(count) {
     if (typeof count !== 'number') return;
-    num.textContent = String(count);
+    el.textContent = count.toLocaleString() + ' active';
+    el.title = 'People on rjuhsd.school right now';
     el.hidden = false;
   }
 

@@ -2,6 +2,20 @@
   'use strict';
   const indicator = document.getElementById('site-active');
   if (!indicator) return;
+  // rjuhsd.school counts its visitors (online.js); every other host counts
+  // signed-in accounts. localhost can opt in with <html data-visitor-count>
+  // so the school page can be tested locally.
+  const host = location.hostname;
+  const local = host === 'localhost' || host === '127.0.0.1';
+  if (/(^|\.)rjuhsd\.school$/.test(host) || (local && document.documentElement.hasAttribute('data-visitor-count'))) {
+    if (!window.__rjuhsdOnlineLoaded) {
+      window.__rjuhsdOnlineLoaded = true;
+      const script = document.createElement('script');
+      script.src = '/rjuhsd-assets/online.js?v=3';
+      document.head.appendChild(script);
+    }
+    return;
+  }
   let pending = false;
 
   async function refresh() {

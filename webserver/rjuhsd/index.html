@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head>
+<html lang="en" data-visitor-count><head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
   <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="RJUHSD Hub">
   <meta name="application-name" content="RJUHSD Hub">
@@ -23,7 +23,7 @@
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#111215">
   <script src="/site-theme.js"></script>
-  <link rel="stylesheet" href="/theme-tokens.css"><link rel="stylesheet" href="/rjuhsd-assets/refresh.css?v=18">
+  <link rel="stylesheet" href="/theme-tokens.css"><link rel="stylesheet" href="/rjuhsd-assets/refresh.css?v=19">
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {
@@ -190,7 +190,7 @@
     ]
   }
   </script>
-  <script src="/bell/schedule.js?v=5" defer></script><script src="/rjuhsd-assets/calendar.js?v=8" defer></script><script src="/rjuhsd-assets/app.js?v=17" defer></script><script src="/pwa-install.js?v=5" defer></script><script src="/rjuhsd-assets/online.js?v=1" defer></script>
+  <script src="/bell/schedule.js?v=5" defer></script><script src="/rjuhsd-assets/calendar.js?v=8" defer></script><script src="/rjuhsd-assets/app.js?v=17" defer></script><script src="/pwa-install.js?v=5" defer></script>
 </head><body data-shell="off" class="mitch-design school-hub">
   <a class="skip-link" href="#main">Skip to dashboard</a>
   <div class="announcement-bar"><div class="announcement-inner"><span class="pulse-dot"></span><strong>RJUHSD.SCHOOL</strong><span id="announcement-text">Loading today’s campus schedule…</span><button id="pwa-install-btn" class="pwa-install-btn" type="button" style="display:none;" aria-label="Install App"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Install App</button><span class="announcement-time" id="header-clock">--:-- --</span></div></div>
@@ -199,7 +199,6 @@
     <a class="powered-by-link" id="powered-by-link" href="https://mitch.pro" target="_blank" rel="noopener"><span>by</span> <strong id="powered-by-name">mitch.pro</strong></a>
     <nav aria-label="Primary navigation"><a href="#today">Today</a><a href="#schedule-panel">Schedule</a><a href="#events">Calendar</a><a href="#school-lunch">Lunch</a><a href="#schools">Schools</a><a href="#tools">Tools</a></nav>
     <div class="header-actions">
-      <span class="online-count" id="online-count" title="People on rjuhsd.school right now" hidden><i aria-hidden="true"></i><b id="online-count-num">0</b> online</span>
       <label class="school-choice">School<select id="school-select" aria-label="Choose school"></select></label>
       <button class="icon-button" id="theme-btn" type="button" aria-label="Switch color theme"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.5 1.5m11.2 11.2 1.5 1.5M2 12h2m16 0h2M4.9 19.1l1.5-1.5M17.6 6.4l1.5-1.5"/></svg></button>
     </div>

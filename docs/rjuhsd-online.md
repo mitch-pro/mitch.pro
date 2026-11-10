@@ -1,8 +1,13 @@
 # rjuhsd.school online count
 
-The header on the school hub (`webserver/rjuhsd/index.html`) shows how many people
-are on rjuhsd.school right now. Code: `rust/crates/mitch-server/src/routes/rjuhsd_online.rs`
-(server) and `webserver/rjuhsd-assets/online.js` (client).
+The footer on every rjuhsd.school page shows "N active", the number of people on
+rjuhsd.school right now. Every other host shows the signed-in account count from
+`/api/presence/count` in the same spot. `webserver/site-status.js` (loaded by the
+footer band on every page) decides by host: on rjuhsd.school it loads `online.js`
+and never shows the account count. On localhost, `<html data-visitor-count>` (set on
+`/rjuhsd/`) opts in so the school page can be tested locally.
+Code: `rust/crates/mitch-server/src/routes/rjuhsd_online.rs` (server) and
+`webserver/rjuhsd-assets/online.js` (client).
 
 It only exists on rjuhsd.school. The server returns 404 for the endpoint on every
 other host (localhost is allowed outside production for testing), and `online.js`
@@ -59,5 +64,5 @@ again. No account, cookie or page location is involved.
 
 `cargo test --workspace` covers the board logic: solved pings, expiry, forged and
 replayed tokens, binding to IP and visitor id, ping spacing, difficulty scaling and
-issuance limits. The widget has no browser test; check it by hand on
-`/rjuhsd/` locally in both themes.
+issuance limits. The widget has no browser test; check it by hand: `/rjuhsd/` on localhost, and a map of
+rjuhsd.school to 127.0.0.1 for the host check.
