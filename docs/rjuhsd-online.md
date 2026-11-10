@@ -44,15 +44,26 @@ school with thousands of students behind one IP isn't penalised for being large,
 while a flood of fresh ids from one place gets steadily more expensive. Ids past
 the caps below still count toward that rate.
 
+## Client budget
+
+`online.js` gives itself 4 seconds to solve a proof. A device that can't do it
+(slow Chromebook, busy tab) skips that ping and so isn't counted as active. After 3
+misses in a row it stops pinging and only refreshes the number it shows once a
+minute. Solving runs in short async batches so the page stays responsive. Hashing
+uses `crypto.subtle` on the CPU; there is no GPU path, because the server's
+check doesn't care how the work was done and a GPU helps an attacker far more
+than a student's integrated graphics.
+
 ## Other limits
 
 - A visitor id counts at most once every 20 seconds (`TooSoon`); the client pings
   every 30 seconds, and only while the tab is visible.
 - A visitor drops off 75 seconds after its last ping.
-- A network gets at most 12,000 challenges a minute. Networks are the IPv4 address
-  or the IPv6 /64. This is sized for a school behind one IP: 5,000 visitors pinging
-  twice a minute fit under it (a compile-time check keeps the two numbers in step).
-- One network can hold at most 5,000 counted visitors, and the site 50,000. Pings
+- A network gets at most 2,400 challenges a minute. Networks are the IPv4 address
+  or the IPv6 /64. The school is about 2,000 people behind one IP and few are on
+  the site at once, so the limits are sized from that: 1,000 visitors pinging twice
+  a minute fit under it (a compile-time check keeps the two numbers in step).
+- One network can hold at most 1,000 counted visitors, and the site 50,000. Pings
   past a cap succeed but aren't counted.
 
 No IP is whitelisted. The per-network numbers are the knobs: they have to be high

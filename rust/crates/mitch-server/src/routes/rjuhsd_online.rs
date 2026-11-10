@@ -44,9 +44,10 @@ const MAX_IP_EXTRA_BITS: u32 = 3;
 const PRESSURE_EXTRA_BITS: u32 = 2;
 /// New visitors per minute, site-wide, before the pressure bits apply.
 const PRESSURE_PER_MIN: usize = 3000;
-/// Challenges issued per minute to one network. A school behind one IP has
-/// thousands of visitors pinging twice a minute, so this is generous.
-const ISSUE_PER_IP_PER_MIN: usize = 12_000;
+/// Challenges issued per minute to one network. The school (about 2,000
+/// people, behind one IP) pings twice a minute per visitor, so this is the
+/// per-network cap's pings plus some headroom.
+const ISSUE_PER_IP_PER_MIN: usize = 2_400;
 // Every visitor a network can hold pings twice a minute; keep room for that.
 const _: () = assert!(MAX_VISITORS_PER_IP * 2 <= ISSUE_PER_IP_PER_MIN);
 const CHALLENGE_TTL_MS: i64 = 120_000;
@@ -55,7 +56,7 @@ const VISITOR_TTL_MS: i64 = 75_000;
 const MIN_PING_GAP_MS: i64 = 20_000;
 const MAX_VISITORS: usize = 50_000;
 /// Most counted visitors one network can hold at a time.
-const MAX_VISITORS_PER_IP: usize = 5_000;
+const MAX_VISITORS_PER_IP: usize = 1_000;
 const PRUNE_EVERY_MS: i64 = 1_000;
 
 type HmacSha256 = Hmac<Sha256>;
