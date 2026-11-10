@@ -1,7 +1,9 @@
 # rjuhsd.school online count
 
-The header on the school hub (`webserver/rjuhsd/index.html`) shows how many people
-are on rjuhsd.school right now. Code: `rust/crates/mitch-server/src/routes/rjuhsd_online.rs`
+The footer on the school hub (`webserver/rjuhsd/index.html`) shows "N active", the
+number of people on rjuhsd.school right now. It is the same footer counter the rest
+of the site uses; `<html data-visitor-count>` makes `site-status.js` leave it alone
+so `online.js` can fill it in. Code: `rust/crates/mitch-server/src/routes/rjuhsd_online.rs`
 (server) and `webserver/rjuhsd-assets/online.js` (client).
 
 It only exists on rjuhsd.school. The server returns 404 for the endpoint on every
@@ -60,4 +62,4 @@ again. No account, cookie or page location is involved.
 `cargo test --workspace` covers the board logic: solved pings, expiry, forged and
 replayed tokens, binding to IP and visitor id, ping spacing, difficulty scaling and
 issuance limits. The widget has no browser test; check it by hand on
-`/rjuhsd/` locally in both themes.
+`/rjuhsd/` locally.

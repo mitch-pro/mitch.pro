@@ -417,10 +417,3 @@ body.school-hub { background: var(--paper); color: var(--ink); }
 
 /* Optional status lines collapse when there is nothing to say. */
 .hero-summary:empty, #source-status:empty, #announcement-text:empty { display: none; }
-
-/* Live visitor count in the header. */
-.online-count { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); white-space: nowrap; }
-.online-count[hidden] { display: none; }
-.online-count i { width: 7px; height: 7px; border-radius: 50%; background: #22a35a; }
-.online-count b { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
-@media (max-width: 700px) { .online-count { font-size: 11px; } }

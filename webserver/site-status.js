@@ -1,7 +1,8 @@
 (function () {
   'use strict';
   const indicator = document.getElementById('site-active');
-  if (!indicator) return;
+  // Pages that count their own visitors (rjuhsd.school) drive the indicator themselves.
+  if (!indicator || document.documentElement.hasAttribute('data-visitor-count')) return;
   let pending = false;
 
   async function refresh() {
