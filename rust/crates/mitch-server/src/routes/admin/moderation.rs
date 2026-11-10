@@ -917,7 +917,14 @@ fn backup_domains_response(state: &Arc<AppState>) -> Response {
         200,
         json!({
             "ok": true,
+            "removed": mitch_lib::site_domains::removed_list(&state.store),
             "alternate": site_alternate(state),
+            "primary": state
+                .store
+                .read_document(&state.cfg.data_dir.join("site.json"), json!({}))
+                .get("primary")
+                .and_then(|v| v.as_str())
+                .unwrap_or(mitch_lib::site_domains::DEFAULT_PRIMARY),
             "domains": mitch_lib::site_domains::list(&state.store).iter().map(|d| json!({
                 "origin": d.origin,
                 "active": d.active,
@@ -950,6 +957,31 @@ fn change_backup_domains(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) ->
             };
             if !ok {
                 return fail("That domain isn't in the list.");
+            }
+            origin
+        }
+        "retire" => {
+            let origins: Vec<String> = body
+                .get("origins")
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str())
+                        .filter_map(domains::normalize_origin)
+                        .collect()
+                })
+                .unwrap_or_default();
+            if domains::retire(&state.store, &origins, &admin_email) == 0 {
+                return fail("None of those domains are in the backup list.");
+            }
+            origins.join(", ")
+        }
+        "forget" => {
+            let Some(origin) = origin else {
+                return fail("Enter a domain like example.com.");
+            };
+            if !domains::forget_removed(&state.store, &origin) {
+                return fail("That domain isn't in the removed list.");
             }
             origin
         }

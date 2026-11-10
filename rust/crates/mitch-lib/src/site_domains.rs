@@ -92,6 +92,52 @@ pub fn remove(store: &DataStore, origin: &str) -> bool {
         > 0
 }
 
+/// Moves pool entries to the removed list (a plain record of domains that were
+/// blocked, so they can be deleted at the registrar). Origins not in the pool
+/// are ignored. Returns how many moved. If the active one moves, no backup is
+/// active until an admin picks another.
+pub fn retire(store: &DataStore, origins: &[String], removed_by: &str) -> usize {
+    let mut moved = 0;
+    for origin in origins {
+        if remove(store, origin) {
+            let _ = store.conn().execute(
+                "INSERT OR REPLACE INTO removed_domains (origin, removed_by, removed_at)
+                 VALUES (?1, ?2, ?3)",
+                rusqlite::params![origin, removed_by, now_millis()],
+            );
+            moved += 1;
+        }
+    }
+    moved
+}
+
+/// The removed list, oldest first.
+pub fn removed_list(store: &DataStore) -> Vec<String> {
+    let conn = store.conn();
+    let Ok(mut stmt) =
+        conn.prepare("SELECT origin FROM removed_domains ORDER BY removed_at, origin")
+    else {
+        return Vec::new();
+    };
+    let rows: Vec<String> = match stmt.query_map([], |r| r.get(0)) {
+        Ok(iter) => iter.filter_map(|r| r.ok()).collect(),
+        Err(_) => Vec::new(),
+    };
+    rows
+}
+
+/// Drops one entry from the removed list; true when it existed.
+pub fn forget_removed(store: &DataStore, origin: &str) -> bool {
+    store
+        .conn()
+        .execute(
+            "DELETE FROM removed_domains WHERE origin = ?1",
+            rusqlite::params![origin],
+        )
+        .unwrap_or(0)
+        > 0
+}
+
 /// Every pool entry, active one first.
 pub fn list(store: &DataStore) -> Vec<BackupDomain> {
     let conn = store.conn();
@@ -220,6 +266,26 @@ mod tests {
         ] {
             assert_eq!(normalize_alternate(bad), None, "{bad}");
         }
+    }
+
+    #[test]
+    fn retire_moves_pool_entries_to_the_removed_list() {
+        let store = temp_store("retire");
+        add(&store, "https://a.example", "x");
+        add(&store, "https://b.example", "x");
+        set_active(&store, "https://a.example");
+        let moved = retire(
+            &store,
+            &["https://a.example".into(), "https://nope.example".into()],
+            "x",
+        );
+        assert_eq!(moved, 1);
+        assert_eq!(active(&store), None);
+        assert_eq!(list(&store).len(), 1);
+        assert_eq!(removed_list(&store), vec!["https://a.example".to_string()]);
+        assert!(forget_removed(&store, "https://a.example"));
+        assert!(!forget_removed(&store, "https://a.example"));
+        assert!(removed_list(&store).is_empty());
     }
 
     #[test]
