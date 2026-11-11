@@ -1,21 +1,25 @@
 # Voice channels
 
-`/voice/` hosts audio-only voice channels (Lounge, Gaming, Study). It replaces the MatrixRTC / Element Call path in `/matrix`, which never connected and whose call UI is not wired up in the bundled client.
+`/voice/` hosts audio-only voice channels (Lounge, Gaming, Study). Audio is relayed by the site's own server over a WebSocket, so it works on every mirror domain and on any network that can load the page. There is no WebRTC, SFU or TURN involved. (The earlier LiveKit version failed with "could not establish pc connection" because only 443/80 are reachable, and TURN would have needed a subdomain on every mirror domain.)
 
 ## How it works
 
-- The page loads the vendored `livekit-client` (`webserver/voice/livekit-client.umd.js`, Apache-2.0, license alongside) and joins a LiveKit room straight from the browser. No Matrix involvement.
 - Backend: `rust/crates/mitch-server/src/routes/voice.rs`.
-  - `GET /api/voice/channels` lists the channels and who is in each (LiveKit `ListParticipants`, best effort; an unreachable SFU shows empty channels).
-  - `POST /api/voice/token` `{channel}` returns `{url, token}`.
-- Both require a signed-in, non-banned account. Tokens are scoped to one fixed room id (`voice-*`), microphone audio only, no data channel, 6 h TTL. Unlike the legacy anonymous `/livekit/get_token`, a caller can't pick an arbitrary room.
-- The client connects to `wss://<host>/livekit/rtc`, which `routes/livekit.rs` proxies to the SFU (ban checks apply while connected).
-- Channels are the `CHANNELS` constant in `voice.rs`; add a row there to add a channel.
+  - `GET /api/voice/channels` lists channels and who is in each.
+  - `GET /api/voice/ws?channel=voice-lounge` (WebSocket) joins a channel. Dispatched from `handler.rs` next to the other post-gate upgrades.
+- Wire format: 16 kHz mono signed 16-bit little-endian PCM, 20 ms (640 byte) frames.
+  - client → server: binary = one frame; text `{"muted":bool}`.
+  - server → client: text `{"type":"hello","id"}` once, then `{"type":"roster","people":[{id,name,muted}]}` on every change; binary = `u32 BE sender id` + that sender's frame.
+- The server only fans frames out to the others in the room (a `tokio::sync::broadcast` per channel); it never mixes or stores audio. A slow listener just misses frames.
+- Membership is in memory only. Nothing about who is in a channel is persisted.
+- Client (`webserver/voice/index.html`): an inline AudioWorklet downsamples the mic to 16 kHz and cuts frames; frames are sent only while loud (plus ~200 ms) and never while muted. Each remote speaker gets its own jitter-buffered player worklet, upsampled to the device rate (60 ms prebuffer, 400 ms cap).
 
-## Network requirements
+## Rules enforced server-side
 
-Signaling goes through the site on 443. Media (WebRTC) goes to the SFU directly over UDP 7882 / TCP 7881 (`docker-compose.yml`). Only 443/80 are forwarded to the host, so clients that can't reach those ports need a working TURN relay. LiveKit's `rtc.turn_servers` entries take `host`, `port`, `protocol`, `username` and `credential`; the `secret` field currently in `docker-compose.yml` is not a LiveKit option, so that relay is not in effect. If calls connect but have no audio, or fail with a peer connection error, this is the first place to look.
+- Signed-in, non-banned account (also re-checked every 2 s while connected).
+- Same-origin only (`hosts::same_origin_request`), so another site can't open the socket with a visitor's cookies.
+- One seat per account per channel: joining again (e.g. a second tab) closes the first with code 4000.
+- 12 people per channel (`MAX_PEERS`), close code 4001 when full.
+- Frames over 2048 bytes are dropped; senders are limited to 60 frames/s (50 is real time).
 
-## Updating the library
-
-`npm pack livekit-client@<version>` and copy `dist/livekit-client.umd.js` and `LICENSE` into `webserver/voice/`.
+Bandwidth is about 32 KB/s per active speaker, sent to every other listener, so keep channels small. To add a channel, add a row to `CHANNELS` in `voice.rs`.
