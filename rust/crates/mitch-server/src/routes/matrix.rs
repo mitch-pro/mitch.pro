@@ -6340,6 +6340,95 @@ async fn mod_prune_stale(state: &AppState, headers: &HeaderMap, body_bytes: &[u8
     )
 }
 
+/// `POST /keys/device_signing/upload`: publishes (or replaces) an account's
+/// cross-signing keys. Conduit demands user-interactive auth for it.
+fn is_cross_signing_upload_path(path: &str) -> bool {
+    static RE: OnceLock<regex::Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        regex::Regex::new(r"^/_matrix/client/(?:v3|r0|unstable)/keys/device_signing/upload/?$")
+            .unwrap_or_else(|_| unreachable_regex())
+    })
+    .is_match(path)
+}
+
+/// Adds password UIA to a cross-signing upload body.
+///
+/// Matrix users here never see their Matrix password (it is derived from the
+/// account email, see `get_matrix_password_for_email`), so the chat client
+/// can't answer Conduit's auth challenge on its own. Returns `None` when the
+/// body is not a JSON object or already carries an `auth` block.
+fn with_cross_signing_auth(body: &[u8], localpart: &str, password: &str) -> Option<Vec<u8>> {
+    let mut parsed: Value = serde_json::from_slice(body).ok()?;
+    let obj = parsed.as_object_mut()?;
+    if obj.contains_key("auth") {
+        return None;
+    }
+    obj.insert(
+        "auth".to_string(),
+        json!({
+            "type": "m.login.password",
+            "identifier": { "type": "m.id.user", "user": localpart },
+            "password": password,
+        }),
+    );
+    serde_json::to_vec(&parsed).ok()
+}
+
+/// Whether a `keys/query` response lists a cross-signing master key for `user_id`.
+fn keys_query_has_master_key(response: &Value, user_id: &str) -> bool {
+    response
+        .get("master_keys")
+        .and_then(|m| m.get(user_id))
+        .is_some_and(|k| k.is_object())
+}
+
+/// Completes the auth step for an account's *first* cross-signing upload.
+///
+/// This is what lets the chat client turn on encrypted-message backup without
+/// asking for a password nobody knows. It only applies when the homeserver has
+/// no master key for the account yet; replacing existing cross-signing keys
+/// (a reset) still goes through the normal prompt, where the user must enter
+/// their site password (translated by `translate_matrix_password`). Any
+/// failure here falls back to the unmodified request.
+async fn auto_auth_first_cross_signing_upload(
+    state: &AppState,
+    headers: &HeaderMap,
+    body: &[u8],
+) -> Option<Vec<u8>> {
+    let account = resolve_matrix_account(state, headers, None).await?;
+    if account.norm_email.is_empty() {
+        return None;
+    }
+    let localpart = account
+        .user_id
+        .strip_prefix('@')?
+        .split(':')
+        .next()
+        .filter(|l| !l.is_empty())?
+        .to_string();
+
+    let query =
+        serde_json::to_vec(&json!({ "device_keys": { account.user_id.clone(): [] } })).ok()?;
+    let (status, _, bytes) = call_conduit(
+        "/_matrix/client/v3/keys/query",
+        Method::POST,
+        Some(headers.clone()),
+        Some(Bytes::from(query)),
+    )
+    .await
+    .ok()?;
+    if !status.is_success() {
+        return None;
+    }
+    let response: Value = serde_json::from_slice(&bytes).ok()?;
+    if keys_query_has_master_key(&response, &account.user_id) {
+        return None;
+    }
+
+    let password = get_matrix_password_for_email(&account.norm_email, &state.id_secret);
+    with_cross_signing_auth(body, &localpart, &password)
+}
+
 async fn translate_matrix_password(
     state: &AppState,
     headers: &HeaderMap,
@@ -7873,20 +7962,6 @@ pub async fn handle_matrix_gateway(
         ));
     }
 
-    // Room keys backup version fallback
-    if method == Method::GET
-        && (path == "/_matrix/client/v3/room_keys/version"
-            || path == "/_matrix/client/v3/room_keys/version/")
-    {
-        return Some(cors_json_response(
-            404,
-            json!({
-                "errcode": "M_NOT_FOUND",
-                "error": "No current key backup version"
-            }),
-        ));
-    }
-
     // VoIP STUN/TURN Discovery
     static TURN_RE: OnceLock<regex::Regex> = OnceLock::new();
     let turn_re = TURN_RE.get_or_init(|| {
@@ -8351,11 +8426,23 @@ pub async fn handle_matrix_gateway(
         format!("{path}?{search}")
     };
 
-    let (body_changed, translated_body) = if !body_bytes.is_empty() {
+    let (mut body_changed, mut translated_body) = if !body_bytes.is_empty() {
         translate_matrix_password(state, headers, path, body_bytes).await
     } else {
         (false, Vec::new())
     };
+
+    if method == Method::POST && is_cross_signing_upload_path(path) {
+        let current = if body_changed {
+            translated_body.as_slice()
+        } else {
+            body_bytes
+        };
+        if let Some(authed) = auto_auth_first_cross_signing_upload(state, headers, current).await {
+            translated_body = authed;
+            body_changed = true;
+        }
+    }
 
     let body_opt = if body_changed {
         Some(Bytes::from(translated_body))
@@ -8991,6 +9078,49 @@ mod tests {
         assert!(!is_blocked_gif_query("cat falling off table"));
         assert!(!is_blocked_gif_query("sexy dance meme"));
         assert!(!is_blocked_gif_query(""));
+    }
+
+    #[test]
+    fn cross_signing_upload_path_matches_only_the_upload_endpoint() {
+        assert!(is_cross_signing_upload_path(
+            "/_matrix/client/v3/keys/device_signing/upload"
+        ));
+        assert!(is_cross_signing_upload_path(
+            "/_matrix/client/unstable/keys/device_signing/upload/"
+        ));
+        assert!(!is_cross_signing_upload_path(
+            "/_matrix/client/v3/keys/query"
+        ));
+        assert!(!is_cross_signing_upload_path(
+            "/_matrix/client/v3/keys/signatures/upload"
+        ));
+    }
+
+    #[test]
+    fn cross_signing_auth_is_added_once() {
+        let body = br#"{"master_key":{"keys":{"ed25519:A":"A"}}}"#;
+        let out = with_cross_signing_auth(body, "alice", "pw").expect("auth added");
+        let parsed: Value = serde_json::from_slice(&out).unwrap();
+        assert_eq!(parsed["auth"]["type"], json!("m.login.password"));
+        assert_eq!(parsed["auth"]["identifier"]["user"], json!("alice"));
+        assert_eq!(parsed["auth"]["password"], json!("pw"));
+        assert!(parsed["master_key"].is_object());
+
+        // A client-supplied auth block (a deliberate reset) is left alone.
+        assert!(with_cross_signing_auth(&out, "alice", "pw").is_none());
+        assert!(with_cross_signing_auth(b"not json", "alice", "pw").is_none());
+        assert!(with_cross_signing_auth(b"[]", "alice", "pw").is_none());
+    }
+
+    #[test]
+    fn master_key_detection_reads_keys_query_response() {
+        let with = json!({ "master_keys": { "@a:mitch.pro": { "keys": {} } } });
+        assert!(keys_query_has_master_key(&with, "@a:mitch.pro"));
+        assert!(!keys_query_has_master_key(&with, "@b:mitch.pro"));
+        assert!(!keys_query_has_master_key(
+            &json!({ "device_keys": {} }),
+            "@a:mitch.pro"
+        ));
     }
 
     #[test]

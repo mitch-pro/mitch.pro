@@ -1409,3 +1409,90 @@ button[data-variant='critical'] {
    the site. Use the normal text color; the avatar and member list still show
    roles. */
 #root b._161nxvev { color: var(--t-fg) !important; }
+
+/* ── Encrypted message backup and device transfer (e2ee-backup.js) ── */
+#mitch-e2ee-stack {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 2147483000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(360px, calc(100vw - 24px));
+  font-family: var(--t-font, 'DM Sans', system-ui, sans-serif);
+}
+.mitch-e2ee-card,
+.mitch-e2ee-modal {
+  background: var(--t-bg2);
+  color: var(--t-fg);
+  border: 1px solid var(--t-bd);
+  border-radius: 12px;
+  box-shadow: var(--mx-shadow);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.mitch-e2ee-card { padding: 12px 14px; }
+.mitch-e2ee-card p,
+.mitch-e2ee-modal p { margin: 0 0 8px; }
+.mitch-e2ee-card p:last-child { margin-bottom: 0; }
+.mitch-e2ee-title { font-weight: 600; }
+.mitch-e2ee-detail { color: var(--t-fg2); font-size: 13px; }
+.mitch-e2ee-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+  font-family: var(--t-font, 'DM Sans', system-ui, sans-serif);
+}
+.mitch-e2ee-modal { width: min(440px, 100%); padding: 20px; }
+.mitch-e2ee-modal h2 { margin: 0 0 12px; font-size: 18px; font-weight: 600; }
+.mitch-e2ee-form label { display: block; margin: 0 0 10px; color: var(--t-fg2); font-size: 13px; }
+.mitch-e2ee-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 9px 10px;
+  background: var(--t-bg);
+  color: var(--t-fg);
+  border: 1px solid var(--t-bd);
+  border-radius: 8px;
+  font: inherit;
+}
+.mitch-e2ee-input:focus-visible { outline: 2px solid var(--t-ac); outline-offset: 1px; }
+.mitch-e2ee-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.mitch-e2ee-actions.start { justify-content: flex-start; }
+.mitch-e2ee-btn {
+  padding: 7px 14px;
+  background: var(--t-bg);
+  color: var(--t-fg);
+  border: 1px solid var(--t-bd);
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+.mitch-e2ee-btn:hover:not(:disabled) { border-color: var(--t-fg3, var(--t-fg2)); }
+.mitch-e2ee-btn:focus-visible { outline: 2px solid var(--t-ac); outline-offset: 2px; }
+.mitch-e2ee-btn:disabled { opacity: 0.5; cursor: default; }
+.mitch-e2ee-btn.primary { background: var(--t-ac); border-color: var(--t-ac); color: var(--t-ac-ink, #fff); }
+.mitch-e2ee-error { color: #e5484d; font-size: 13px; min-height: 0; }
+html.theme-light .mitch-e2ee-error { color: #c4262b; }
+.mitch-e2ee-error:empty { display: none; }
+.mitch-e2ee-key {
+  display: block;
+  margin: 8px 0;
+  padding: 12px;
+  background: var(--t-bg);
+  border: 1px solid var(--t-bd);
+  border-radius: 8px;
+  font: 600 15px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-word;
+  user-select: all;
+}
+.mitch-e2ee-check { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--t-fg); }
