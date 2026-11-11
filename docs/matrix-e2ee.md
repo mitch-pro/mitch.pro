@@ -88,6 +88,14 @@ itself. If a master key already exists (a reset), nothing is injected and the
 client prompts for the site password, which `translate_matrix_password` maps to
 the Matrix password. A client-supplied `auth` block is never overwritten.
 
+## Encrypted DMs by default
+
+The new-DM dialog in the Cinny bundle (`webserver/matrix/assets/index-E2eeDm01.js`)
+starts with encryption on. The bundle is a patched build: everything under
+`/matrix/assets/` is served `immutable`, so changing it means giving it a new
+hashed filename and updating the references in `index.html` and the other
+chunks (and regenerating the `.gz` files). Private rooms still default to off.
+
 ## Related behavior
 
 - `index.html` calls `/api/matrix/devices/prune-stale` with `maxAgeDays: 30`
