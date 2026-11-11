@@ -23,7 +23,7 @@ use crate::state::AppState;
 
 // ── token generation (server.js:7866-7892) ───────────────────────────────────
 
-fn api_key() -> String {
+pub(crate) fn api_key() -> String {
     std::env::var("LIVEKIT_API_KEY").unwrap_or_else(|_| "mitchlivekit".to_string())
 }
 
@@ -47,13 +47,11 @@ fn api_secret_bytes(_id_secret: &[u8]) -> Vec<u8> {
 /// non-string truthy body value (e.g. a number) reaches the JWT payload
 /// unchanged — JSON.stringify's semantics.
 pub fn generate_livekit_token(
-    id_secret: &[u8],
+    _id_secret: &[u8],
     identity: &Value,
     name: &Value,
     room: &Value,
 ) -> String {
-    let header =
-        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(br#"{"alg":"HS256","typ":"JWT"}"#);
     let now = mitch_lib::school::now_millis() / 1000;
     let sub = jsval::or(Some(identity), json!("anonymous"));
     let name = jsval::or(Some(name), jsval::or(Some(identity), json!("Anonymous")));
@@ -73,14 +71,21 @@ pub fn generate_livekit_token(
             "canPublishData": true,
         },
     });
+    sign_jwt(&payload)
+}
+
+/// Signs `payload` as an HS256 LiveKit JWT with the server API secret.
+pub(crate) fn sign_jwt(payload: &Value) -> String {
+    let header =
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(br#"{"alg":"HS256","typ":"JWT"}"#);
     let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
-        serde_json::to_string(&payload)
+        serde_json::to_string(payload)
             .unwrap_or_default()
             .as_bytes(),
     );
     let sig =
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(mitch_lib::crypto::hmac_sha256(
-            &api_secret_bytes(id_secret),
+            &api_secret_bytes(&[]),
             format!("{header}.{payload}").as_bytes(),
         ));
     format!("{header}.{payload}.{sig}")

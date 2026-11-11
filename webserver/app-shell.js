@@ -77,6 +77,7 @@
     { href: '/', label: 'Home', icon: '⌂', match: function (p) { return p === '/' || p === '/index.html'; } },
     { href: '/vms/', label: 'VM Lab', badge: 'Free', icon: '▣', match: function (p) { return p.indexOf('/vms') === 0; } },
     { href: '/matrix/', label: 'Chat', icon: '◉', match: function (p) { return p.indexOf('/matrix') === 0; } },
+    { href: '/voice/', label: 'Voice', icon: '◍', match: function (p) { return p.indexOf('/voice') === 0; } },
     { href: '/game-portal/', label: 'Games', icon: '◆', match: function (p) { return p.indexOf('/games') === 0 || p.indexOf('/game-portal') === 0; } },
     { href: '/members/', label: 'People', icon: '●', match: function (p) { return p.indexOf('/members') === 0 || p.indexOf('/friends') === 0 || p.indexOf('/profile') === 0; } },
     { href: 'https://rjuhsd.school/', label: 'Schedule', icon: '◷', match: function () { return false; } }

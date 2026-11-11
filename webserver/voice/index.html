@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voice — mitch.pro</title>
+<link rel="stylesheet" href="/app.css">
+<script src="/api.js"></script>
+<script src="/app-shell.js" defer></script>
+<script src="/voice/livekit-client.umd.js"></script>
+<style>
+  .voice-shell { width: min(44rem, 100%); max-width: 44rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; box-sizing: border-box; }
+  .page-title {
+    margin: 0 0 1rem;
+    font-size: clamp(1.85rem, 4vw, 2.4rem);
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    color: var(--t-fg);
+  }
+  .channels { display: grid; gap: 0.75rem; }
+  .channel {
+    padding: 1rem 1.1rem;
+    border: 1px solid var(--t-bd);
+    border-radius: var(--t-radius, 10px);
+    background: var(--t-bg2);
+  }
+  .channel.live { border-color: var(--t-ac); }
+  .channel-head { display: flex; align-items: center; gap: 0.75rem; }
+  .channel-name { flex: 1; margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--t-fg); }
+  .channel-count { font-size: 0.85rem; color: var(--t-fg2); }
+  .btn {
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 0.45rem 0.95rem;
+    border-radius: var(--t-radius-sm, 7px);
+    border: 1px solid var(--t-bd);
+    background: var(--t-bg3);
+    color: var(--t-fg);
+    cursor: pointer;
+  }
+  .btn:hover:not(:disabled) { border-color: var(--t-bda); }
+  .btn:disabled { opacity: 0.5; cursor: default; }
+  .btn.primary { background: var(--t-ac); border-color: var(--t-ac); color: var(--t-ac-ink); }
+  .btn.danger { border-color: #c0392b; color: #c0392b; }
+  .people { list-style: none; margin: 0.7rem 0 0; padding: 0; display: grid; gap: 0.35rem; }
+  .people li {
+    display: flex; align-items: center; gap: 0.55rem;
+    font-size: 0.92rem; color: var(--t-fg);
+  }
+  .dot {
+    width: 0.6rem; height: 0.6rem; border-radius: 50%;
+    background: var(--t-bd); flex: none;
+  }
+  .speaking .dot { background: #2ecc71; box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.25); }
+  .muted-tag { font-size: 0.78rem; color: var(--t-fg3); }
+  .controls { display: flex; gap: 0.5rem; margin-top: 0.8rem; }
+  .status { margin: 1rem 0 0; font-size: 0.88rem; color: var(--t-fg2); min-height: 1.3em; }
+  .status.error { color: #c0392b; }
+  html.theme-light .status.error, html.theme-light .btn.danger { color: #a93226; }
+</style>
+</head>
+<body class="app-shell">
+<main class="app-main">
+  <div class="voice-shell">
+    <h1 class="page-title">Voice</h1>
+    <div id="channels" class="channels" aria-live="polite"></div>
+    <p id="status" class="status" role="status"></p>
+    <div id="audio-sink" hidden></div>
+  </div>
+</main>
+<script>
+(function () {
+  'use strict';
+  var LK = window.LivekitClient;
+  var listEl = document.getElementById('channels');
+  var statusEl = document.getElementById('status');
+  var sink = document.getElementById('audio-sink');
+  var channels = [];
+  var room = null;          // active livekit Room
+  var activeId = '';        // channel id we are in (or connecting to)
+  var muted = false;
+  var busy = false;
+
+  function setStatus(msg, isError) {
+    statusEl.textContent = msg || '';
+    statusEl.className = 'status' + (isError ? ' error' : '');
+  }
+
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+
+  // Names of people in the channel: server list when not joined, live room
+  // state (with speaking/muted) when joined.
+  function liveParticipants() {
+    if (!room) return [];
+    var all = [room.localParticipant].concat(Array.from(room.remoteParticipants.values()));
+    return all.map(function (p) {
+      return {
+        name: p.name || p.identity,
+        speaking: !!p.isSpeaking,
+        muted: !p.isMicrophoneEnabled,
+        me: p === room.localParticipant
+      };
+    });
+  }
+
+  function render() {
+    listEl.textContent = '';
+    channels.forEach(function (ch) {
+      var joined = ch.id === activeId && room && room.state === 'connected';
+      var card = el('section', 'channel' + (joined ? ' live' : ''));
+      var head = el('div', 'channel-head');
+      head.appendChild(el('h2', 'channel-name', ch.name));
+      var people = joined ? liveParticipants() : ch.participants.map(function (n) {
+        return { name: n, speaking: false, muted: false };
+      });
+      head.appendChild(el('span', 'channel-count', people.length ? people.length + ' in call' : ''));
+      if (!joined) {
+        var join = el('button', 'btn primary', 'Join');
+        join.type = 'button';
+        join.disabled = busy;
+        join.addEventListener('click', function () { joinChannel(ch.id); });
+        head.appendChild(join);
+      }
+      card.appendChild(head);
+      if (people.length) {
+        var ul = el('ul', 'people');
+        people.forEach(function (p) {
+          var li = el('li', p.speaking ? 'speaking' : '');
+          li.appendChild(el('span', 'dot'));
+          li.appendChild(el('span', '', p.name + (p.me ? ' (you)' : '')));
+          if (p.muted && joined) li.appendChild(el('span', 'muted-tag', 'muted'));
+          ul.appendChild(li);
+        });
+        card.appendChild(ul);
+      }
+      if (joined) {
+        var bar = el('div', 'controls');
+        var mute = el('button', 'btn', muted ? 'Unmute' : 'Mute');
+        mute.type = 'button';
+        mute.addEventListener('click', toggleMute);
+        var leave = el('button', 'btn danger', 'Leave');
+        leave.type = 'button';
+        leave.addEventListener('click', leaveChannel);
+        bar.appendChild(mute);
+        bar.appendChild(leave);
+        card.appendChild(bar);
+      }
+      listEl.appendChild(card);
+    });
+  }
+
+  async function refresh() {
+    if (room) return render();   // live room state is the source of truth while joined
+    try {
+      var r = await fetch('/api/voice/channels?t=' + Date.now(), { credentials: 'include' });
+      if (r.status === 401) {
+        setStatus('Sign in to use voice.', true);
+        channels = [];
+        return render();
+      }
+      var data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Could not load channels');
+      channels = data.channels || [];
+      render();
+    } catch (e) {
+      setStatus(e.message || 'Could not load channels', true);
+    }
+  }
+
+  function wire(r) {
+    var redraw = function () { render(); };
+    r.on(LK.RoomEvent.ParticipantConnected, redraw)
+     .on(LK.RoomEvent.ParticipantDisconnected, redraw)
+     .on(LK.RoomEvent.ActiveSpeakersChanged, redraw)
+     .on(LK.RoomEvent.TrackMuted, redraw)
+     .on(LK.RoomEvent.TrackUnmuted, redraw)
+     .on(LK.RoomEvent.TrackSubscribed, function (track) {
+       if (track.kind === LK.Track.Kind.Audio) sink.appendChild(track.attach());
+       redraw();
+     })
+     .on(LK.RoomEvent.TrackUnsubscribed, function (track) { track.detach().forEach(function (n) { n.remove(); }); })
+     .on(LK.RoomEvent.AudioPlaybackStatusChanged, function () {
+       if (!r.canPlaybackAudio) setStatus('Click anywhere on the page to hear others.', true);
+     })
+     .on(LK.RoomEvent.Reconnecting, function () { setStatus('Connection lost, reconnecting…', true); })
+     .on(LK.RoomEvent.Reconnected, function () { setStatus('Connected.'); })
+     .on(LK.RoomEvent.Disconnected, function (reason) {
+       if (room !== r) return;
+       cleanup();
+       setStatus('Disconnected from the call' + (reason ? ' (' + reason + ')' : '') + '.', true);
+       refresh();
+     });
+  }
+
+  function cleanup() {
+    room = null;
+    activeId = '';
+    muted = false;
+    sink.textContent = '';
+  }
+
+  async function joinChannel(id) {
+    if (busy) return;
+    busy = true;
+    if (room) await leaveChannel();
+    setStatus('Connecting…');
+    render();
+    var r = null;
+    try {
+      var tr = await fetch('/api/voice/token', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: id })
+      });
+      var t = await tr.json().catch(function () { return {}; });
+      if (!tr.ok) throw new Error(t.error || 'Could not join (' + tr.status + ')');
+      r = new LK.Room({ adaptiveStream: false, dynacast: false });
+      wire(r);
+      activeId = id;
+      room = r;
+      await r.connect(t.url, t.token, { autoSubscribe: true });
+      await r.startAudio().catch(function () {});
+      await r.localParticipant.setMicrophoneEnabled(true);
+      setStatus('Connected.');
+    } catch (e) {
+      if (r) { try { r.disconnect(); } catch (_) {} }
+      cleanup();
+      var msg = e && e.name === 'NotAllowedError'
+        ? 'Microphone access was blocked. Allow it in your browser and try again.'
+        : (e && e.name === 'NotFoundError' ? 'No microphone found.' : (e && e.message) || 'Could not connect');
+      setStatus(msg, true);
+    } finally {
+      busy = false;
+      if (room) render(); else refresh();
+    }
+  }
+
+  async function leaveChannel() {
+    var r = room;
+    cleanup();
+    if (r) { try { await r.disconnect(); } catch (_) {} }
+    setStatus('');
+    refresh();
+  }
+
+  async function toggleMute() {
+    if (!room) return;
+    muted = !muted;
+    await room.localParticipant.setMicrophoneEnabled(!muted);
+    render();
+  }
+
+  window.addEventListener('beforeunload', function () { if (room) room.disconnect(); });
+  document.addEventListener('click', function () { if (room) room.startAudio().catch(function () {}); });
+
+  if (!LK || !LK.Room) {
+    setStatus('Could not load the voice library.', true);
+  } else if (!LK.isBrowserSupported()) {
+    setStatus('This browser does not support voice calls.', true);
+  } else {
+    refresh();
+    setInterval(refresh, 10000);
+  }
+})();
+</script>
+</body>
+</html>

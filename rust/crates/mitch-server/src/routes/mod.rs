@@ -43,4 +43,5 @@ pub mod support;
 pub mod team;
 pub mod tester;
 pub mod vm;
+pub mod voice;
 pub mod webauthn;
