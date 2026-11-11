@@ -22,6 +22,7 @@
     userId: q.get('userId') || '',
     deviceId: q.get('deviceId') || '',
     notify: q.get('sendNotificationType') || '',   // "ring" | "notification" when this opens a new call
+    intent: q.get('intent') || '',                  // e.g. start_call_dm_voice; no "_voice" suffix = video call
     theme: q.get('theme') || 'dark'
   };
   var MEMBER = 'org.matrix.msc3401.call.member';
@@ -30,7 +31,9 @@
   var HEARTBEAT_MS = 20000;
   var MEMBER_EXPIRES_MS = 90000;     // re-sent every HEARTBEAT_MS; a crashed tab drops out after this
 
+  var CALL_INTENT = /_voice$/.test(P.intent) ? 'audio' : 'video';
   var statusEl = document.getElementById('status');
+  var noteEl = document.getElementById('note');
   var tilesEl = document.getElementById('tiles');
   var closeBtn = document.getElementById('close');
 
@@ -100,8 +103,11 @@
       case 'io.element.device_mute': {
         var d = m.data || {};
         if (typeof d.audio_enabled === 'boolean') setMuted(!d.audio_enabled, true);
-        reply(m, { audio_enabled: !muted, video_enabled: false });
-        reportMute();
+        var wantVideo = typeof d.video_enabled === 'boolean' ? d.video_enabled : cameraOn();
+        setVideo(wantVideo).then(function (actual) {
+          reply(m, { audio_enabled: !muted, video_enabled: actual });
+          reportMute();
+        });
         break;
       }
       case 'im.vector.hangup':
@@ -117,8 +123,16 @@
     }
   }
 
+  function cameraOn() { return !!(session && session.videoOn); }
+
+  // Turns the camera on or off; resolves to whether it is on afterwards.
+  function setVideo(on) {
+    if (!session) return Promise.resolve(false);
+    return session.setVideo(on).then(function (actual) { render(); return actual; });
+  }
+
   function reportMute() {
-    request('io.element.device_mute', { audio_enabled: !muted, video_enabled: false }).catch(function () {});
+    request('io.element.device_mute', { audio_enabled: !muted, video_enabled: cameraOn() }).catch(function () {});
   }
 
   // ── call lifecycle ────────────────────────────────────────────────────────
@@ -132,7 +146,7 @@
       created_ts: Date.now(),
       focus_active: { type: 'livekit', focus_selection: 'oldest_membership' },
       foci_preferred: [],
-      'm.call.intent': 'audio'
+      'm.call.intent': CALL_INTENT
     };
   }
   function sendMember(content) {
@@ -175,7 +189,7 @@
             'm.relates_to': { event_id: res.event_id, rel_type: 'm.reference' },
             sender_ts: Date.now(),
             lifetime: 30000,
-            'm.call.intent': 'audio'
+            'm.call.intent': CALL_INTENT
           }
         }).catch(function () {});
       }
@@ -229,22 +243,36 @@
   // ── UI ────────────────────────────────────────────────────────────────────
   function render() {
     tilesEl.textContent = '';
+    noteEl.textContent = session && session.videoError ? session.videoError : '';
+    noteEl.hidden = !noteEl.textContent;
     if (!session) return;
     session.roster.forEach(function (p) {
       var me = p.id === session.myId;
       var talking = me ? session.talking : session.isSpeaking(p.id);
       var li = document.createElement('li');
       li.className = 'tile' + (talking && !p.muted ? ' speaking' : '');
-      var av = document.createElement('div');
-      av.className = 'avatar';
-      av.textContent = (p.name || '?').trim().charAt(0).toUpperCase() || '?';
+      // Our own picture is the camera preview; others are decoded canvases.
+      var pic = me ? (session.videoOn ? session.previewEl : null) : session.videoCanvas(p.id);
+      var sub = document.createElement('div');
+      sub.className = 'sub';
+      if (pic) {
+        li.classList.add('has-video');
+        pic.classList.add('video');
+        pic.classList.toggle('mirror', me);
+        li.appendChild(pic);
+        if (me && pic.play) pic.play().catch(function () {});
+      } else {
+        var av = document.createElement('div');
+        av.className = 'avatar';
+        av.textContent = (p.name || '?').trim().charAt(0).toUpperCase() || '?';
+        li.appendChild(av);
+        if (p.video && !me && session.videoUnsupported(p.id)) sub.textContent = "can't show video here";
+      }
       var nm = document.createElement('div');
       nm.className = 'name';
       nm.textContent = p.name + (me ? ' (you)' : '');
-      var sub = document.createElement('div');
-      sub.className = 'sub';
-      sub.textContent = p.muted ? 'muted' : '';
-      li.appendChild(av); li.appendChild(nm); li.appendChild(sub);
+      if (!sub.textContent && p.muted) sub.textContent = 'muted';
+      li.appendChild(nm); li.appendChild(sub);
       tilesEl.appendChild(li);
     });
   }

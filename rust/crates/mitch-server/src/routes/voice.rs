@@ -13,12 +13,25 @@
 //!   one-time `ticket` for the socket.
 //! - `GET /api/voice/ws?channel=room:<id>&ticket=…` (WebSocket) — the call.
 //!
-//! Wire protocol (all audio is 16 kHz mono signed 16-bit little-endian):
-//! - client → server, binary: one audio frame (≤ [`MAX_FRAME_BYTES`]).
-//! - client → server, text: `{"muted": bool}`.
+//! Wire protocol. Audio is 16 kHz mono signed 16-bit little-endian PCM.
+//! Binary messages start with a type byte.
+//! - client → server, `[1][pcm]`: one audio frame (≤ [`MAX_FRAME_BYTES`]).
+//! - client → server, `[2][codec][flags][data]`: one video frame (camera
+//!   must be on, ≤ [`MAX_VIDEO_BYTES`]). `flags` bit 0 = keyframe. Codec ids
+//!   are opaque to the server (the browsers agree on them).
+//! - client → server, text: `{"muted":bool}`, `{"video":bool}` (ask to turn
+//!   the camera on/off), `{"keyframe":true}` (a decoder needs a new keyframe).
+//! - server → client, binary: `[1][u32 BE sender id][pcm]` or
+//!   `[2][u32 BE sender id][codec][flags][data]`.
 //! - server → client, text: `{"type":"hello","id":N}` once, then
-//!   `{"type":"roster","people":[{"id","name","muted"}]}` on every change.
-//! - server → client, binary: `u32 big-endian sender id` + the sender's frame.
+//!   `{"type":"roster","people":[{"id","name","muted","video"}]}` on every
+//!   change; `{"type":"video","ok":bool}` answering a `video` request (refused
+//!   when [`MAX_VIDEO_SENDERS`] cameras are already on); and
+//!   `{"type":"keyframe"}` asking a camera to send a keyframe soon.
+//!
+//! Video rides its own broadcast channel, polled after audio, so a slow
+//! listener drops video frames (and asks for a keyframe) instead of ever
+//! delaying or losing audio.
 //!
 //! Membership lives only in memory and is never written anywhere. Joining
 //! needs a signed-in, non-banned account, a same-origin request (so other
@@ -49,6 +62,16 @@ const TICKET_TTL: Duration = Duration::from_secs(60);
 pub const MAX_PEERS: usize = 16;
 /// 20 ms of 16 kHz mono 16-bit is 640 bytes; allow some slack.
 pub const MAX_FRAME_BYTES: usize = 2048;
+/// Cameras on at once in one call. Every video frame is sent to every other
+/// listener, so this bounds the room's bandwidth.
+pub const MAX_VIDEO_SENDERS: usize = 6;
+/// Largest single video frame (a keyframe at 320x240 is well under this).
+pub const MAX_VIDEO_BYTES: usize = 128 * 1024;
+/// Per-sender video budget: a 350 kbit/s stream is ~45 KB/s.
+const VIDEO_BYTES_PER_SEC: f64 = 250_000.0;
+const VIDEO_BYTES_BURST: f64 = 262_144.0;
+/// Keyframe requests (new viewer, lagging viewer) are coalesced to this.
+const KEYFRAME_COOLDOWN: Duration = Duration::from_millis(500);
 /// Sustained frames per second a client may send (50 is real-time).
 const FRAMES_PER_SEC: f64 = 60.0;
 const FRAME_BURST: f64 = 40.0;
@@ -58,6 +81,14 @@ enum Event {
     Audio { from: u32, data: Vec<u8> },
     /// Serialized roster message; the room's membership changed.
     Roster(String),
+    /// Cameras should send a keyframe soon (someone new is watching).
+    Keyframe,
+}
+
+/// A video frame as `[codec][flags][data]` from the peer with id `from`.
+struct VideoEvent {
+    from: u32,
+    data: Vec<u8>,
 }
 
 struct Peer {
@@ -65,13 +96,30 @@ struct Peer {
     email: String,
     name: String,
     muted: bool,
+    /// Camera is on (the server allowed it; see [`MAX_VIDEO_SENDERS`]).
+    video: bool,
     /// Wakes the connection's task so it can close itself.
     kick: Arc<Notify>,
 }
 
 struct Room {
+    /// Audio, roster and keyframe requests.
     tx: broadcast::Sender<Arc<Event>>,
+    /// Video frames; small so a slow listener lags (drops) quickly.
+    vtx: broadcast::Sender<Arc<VideoEvent>>,
     peers: Vec<Peer>,
+    last_keyframe_request: Instant,
+}
+
+impl Room {
+    fn new() -> Self {
+        Self {
+            tx: broadcast::channel(256).0,
+            vtx: broadcast::channel(16).0,
+            peers: Vec::new(),
+            last_keyframe_request: Instant::now() - KEYFRAME_COOLDOWN,
+        }
+    }
 }
 
 fn rooms() -> &'static Mutex<HashMap<String, Room>> {
@@ -87,7 +135,7 @@ fn roster_message(room: &Room) -> String {
     json!({
         "type": "roster",
         "people": room.peers.iter()
-            .map(|p| json!({ "id": p.id, "name": p.name, "muted": p.muted }))
+            .map(|p| json!({ "id": p.id, "name": p.name, "muted": p.muted, "video": p.video }))
             .collect::<Vec<_>>(),
     })
     .to_string()
@@ -101,7 +149,22 @@ fn announce(room: &Room) {
 struct Joined {
     id: u32,
     rx: broadcast::Receiver<Arc<Event>>,
+    vrx: broadcast::Receiver<Arc<VideoEvent>>,
     kick: Arc<Notify>,
+}
+
+/// Asks every camera for a keyframe, at most once per [`KEYFRAME_COOLDOWN`].
+fn request_keyframes_locked(room: &mut Room) {
+    if room.last_keyframe_request.elapsed() >= KEYFRAME_COOLDOWN {
+        room.last_keyframe_request = Instant::now();
+        let _ = room.tx.send(Arc::new(Event::Keyframe));
+    }
+}
+
+fn request_keyframes(room_id: &str) {
+    if let Some(room) = lock_rooms().get_mut(room_id) {
+        request_keyframes_locked(room);
+    }
 }
 
 /// Adds `email` to `room_id`, creating the backend room if it doesn't exist
@@ -114,10 +177,7 @@ fn join(room_id: &str, email: &str, name: &str) -> Result<Joined, &'static str> 
         return Err("Unknown channel");
     }
     let mut map = lock_rooms();
-    let room = map.entry(room_id.to_string()).or_insert_with(|| Room {
-        tx: broadcast::channel(256).0,
-        peers: Vec::new(),
-    });
+    let room = map.entry(room_id.to_string()).or_insert_with(Room::new);
     let (old, keep): (Vec<Peer>, Vec<Peer>) = std::mem::take(&mut room.peers)
         .into_iter()
         .partition(|p| p.email == email);
@@ -136,11 +196,15 @@ fn join(room_id: &str, email: &str, name: &str) -> Result<Joined, &'static str> 
         email: email.to_string(),
         name: name.to_string(),
         muted: false,
+        video: false,
         kick: kick.clone(),
     });
     let rx = room.tx.subscribe();
+    let vrx = room.vtx.subscribe();
     announce(room);
-    Ok(Joined { id, rx, kick })
+    // Someone new is watching: cameras that are already on need a keyframe.
+    request_keyframes_locked(room);
+    Ok(Joined { id, rx, vrx, kick })
 }
 
 /// Removes a peer; the room itself goes away with its last one.
@@ -169,6 +233,34 @@ fn set_muted(room_id: &str, id: u32, muted: bool) {
                 announce(room);
             }
         }
+    }
+}
+
+/// Turns a camera on or off. Returns false (and changes nothing) if turning
+/// it on would exceed [`MAX_VIDEO_SENDERS`].
+fn set_video(room_id: &str, id: u32, on: bool) -> bool {
+    let mut map = lock_rooms();
+    let Some(room) = map.get_mut(room_id) else {
+        return false;
+    };
+    let cameras = room.peers.iter().filter(|p| p.video).count();
+    let Some(p) = room.peers.iter_mut().find(|p| p.id == id) else {
+        return false;
+    };
+    if on && !p.video && cameras >= MAX_VIDEO_SENDERS {
+        return false;
+    }
+    if p.video != on {
+        p.video = on;
+        announce(room);
+    }
+    true
+}
+
+fn relay_video(room_id: &str, from: u32, data: Vec<u8>) {
+    let map = lock_rooms();
+    if let Some(room) = map.get(room_id) {
+        let _ = room.vtx.send(Arc::new(VideoEvent { from, data }));
     }
 }
 
@@ -358,6 +450,33 @@ impl Limiter {
     }
 }
 
+/// Token bucket in bytes, for video.
+struct ByteLimiter {
+    tokens: f64,
+    last: Instant,
+}
+
+impl ByteLimiter {
+    fn new() -> Self {
+        Self {
+            tokens: VIDEO_BYTES_BURST,
+            last: Instant::now(),
+        }
+    }
+    fn allow(&mut self, bytes: usize) -> bool {
+        let now = Instant::now();
+        let dt = now.duration_since(self.last).as_secs_f64();
+        self.last = now;
+        self.tokens = (self.tokens + dt * VIDEO_BYTES_PER_SEC).min(VIDEO_BYTES_BURST);
+        if self.tokens >= bytes as f64 {
+            self.tokens -= bytes as f64;
+            true
+        } else {
+            false
+        }
+    }
+}
+
 /// The signed-in account's normalized email, or the error response.
 #[allow(clippy::result_large_err)]
 fn signed_in_email(state: &Arc<AppState>, headers: &HeaderMap) -> Result<String, Response> {
@@ -457,7 +576,12 @@ async fn run_peer(
     name: String,
 ) {
     let room_id = room_id.as_str();
-    let Joined { id, mut rx, kick } = match join(room_id, &email, &name) {
+    let Joined {
+        id,
+        mut rx,
+        mut vrx,
+        kick,
+    } = match join(room_id, &email, &name) {
         Ok(j) => j,
         Err(reason) => {
             let _ = socket.send(close_frame(4001, reason)).await;
@@ -470,30 +594,35 @@ async fn run_peer(
         return;
     }
     let mut limiter = Limiter::new();
+    let mut video_limiter = ByteLimiter::new();
+    // This peer's camera is on (the server said yes to its request).
+    let mut my_video = false;
     let mut ban_check = tokio::time::interval(std::time::Duration::from_secs(2));
     loop {
+        // `biased`: audio/roster before video, video before the socket, so a
+        // video backlog can't hold up audio.
         tokio::select! {
+            biased;
             _ = kick.notified() => {
                 let _ = socket.send(close_frame(4000, "Joined from another tab")).await;
                 break;
-            }
-            _ = ban_check.tick() => {
-                if auth::banned_info_for_email(&state.store, &email).is_some() {
-                    let _ = socket.send(close_frame(1008, "Account banned")).await;
-                    break;
-                }
             }
             ev = rx.recv() => match ev {
                 Ok(ev) => {
                     let msg = match &*ev {
                         Event::Audio { from, .. } if *from == id => continue,
                         Event::Audio { from, data } => {
-                            let mut out = Vec::with_capacity(4 + data.len());
+                            let mut out = Vec::with_capacity(5 + data.len());
+                            out.push(1);
                             out.extend_from_slice(&from.to_be_bytes());
                             out.extend_from_slice(data);
                             Message::Binary(out.into())
                         }
                         Event::Roster(json) => Message::Text(json.clone().into()),
+                        Event::Keyframe if my_video => {
+                            Message::Text(json!({ "type": "keyframe" }).to_string().into())
+                        }
+                        Event::Keyframe => continue,
                     };
                     if socket.send(msg).await.is_err() {
                         break;
@@ -504,16 +633,66 @@ async fn run_peer(
                 Err(broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(broadcast::error::RecvError::Closed) => break,
             },
-            frame = socket.recv() => match frame {
-                Some(Ok(Message::Binary(data))) => {
-                    if data.len() <= MAX_FRAME_BYTES && !data.is_empty() && limiter.allow() {
-                        relay_audio(room_id, id, data.to_vec());
+            ev = vrx.recv() => match ev {
+                Ok(ev) if ev.from == id => {}
+                Ok(ev) => {
+                    let mut out = Vec::with_capacity(5 + ev.data.len());
+                    out.push(2);
+                    out.extend_from_slice(&ev.from.to_be_bytes());
+                    out.extend_from_slice(&ev.data);
+                    if socket.send(Message::Binary(out.into())).await.is_err() {
+                        break;
                     }
                 }
+                // Dropped frames break delta decoding until the next keyframe.
+                Err(broadcast::error::RecvError::Lagged(_)) => request_keyframes(room_id),
+                Err(broadcast::error::RecvError::Closed) => break,
+            },
+            _ = ban_check.tick() => {
+                if auth::banned_info_for_email(&state.store, &email).is_some() {
+                    let _ = socket.send(close_frame(1008, "Account banned")).await;
+                    break;
+                }
+            }
+            frame = socket.recv() => match frame {
+                Some(Ok(Message::Binary(data))) => match data.first() {
+                    Some(1) => {
+                        let pcm = &data[1..];
+                        if !pcm.is_empty() && pcm.len() <= MAX_FRAME_BYTES && limiter.allow() {
+                            relay_audio(room_id, id, pcm.to_vec());
+                        }
+                    }
+                    // [2][codec][flags][data]
+                    Some(2) => {
+                        let rest = &data[1..];
+                        if my_video
+                            && rest.len() > 2
+                            && rest.len() <= MAX_VIDEO_BYTES
+                            && video_limiter.allow(rest.len())
+                        {
+                            relay_video(room_id, id, rest.to_vec());
+                        }
+                    }
+                    _ => {}
+                },
                 Some(Ok(Message::Text(text))) => {
                     if let Ok(v) = serde_json::from_str::<Value>(&text) {
                         if let Some(m) = v.get("muted").and_then(Value::as_bool) {
                             set_muted(room_id, id, m);
+                        }
+                        if let Some(want) = v.get("video").and_then(Value::as_bool) {
+                            let ok = set_video(room_id, id, want);
+                            my_video = ok && want;
+                            let reply = json!({ "type": "video", "ok": ok, "on": my_video });
+                            if socket.send(Message::Text(reply.to_string().into())).await.is_err() {
+                                break;
+                            }
+                            if my_video {
+                                request_keyframes(room_id);
+                            }
+                        }
+                        if v.get("keyframe").and_then(Value::as_bool) == Some(true) {
+                            request_keyframes(room_id);
                         }
                     }
                 }
@@ -655,5 +834,102 @@ mod tests {
         assert!(redeem_ticket(&t, "a@x", ch));
         assert!(!redeem_ticket(&t, "a@x", ch), "reuse");
         assert!(!redeem_ticket("nonsense", "a@x", ch));
+    }
+
+    #[test]
+    fn cameras_are_capped_and_the_roster_shows_them() {
+        let _g = serial();
+        let ch = "room:!cameras:mitch.pro";
+        let ids: Vec<u32> = (0..MAX_VIDEO_SENDERS + 1)
+            .map(|i| join(ch, &format!("c{i}@x"), "C").unwrap().id)
+            .collect();
+        for id in &ids[..MAX_VIDEO_SENDERS] {
+            assert!(set_video(ch, *id, true));
+        }
+        assert!(!set_video(ch, ids[MAX_VIDEO_SENDERS], true), "over the cap");
+        // Turning one off frees a slot; turning on twice doesn't double count.
+        assert!(set_video(ch, ids[0], true));
+        assert!(set_video(ch, ids[0], false));
+        assert!(set_video(ch, ids[MAX_VIDEO_SENDERS], true));
+        let roster = {
+            let map = lock_rooms();
+            roster_message(map.get(ch).unwrap())
+        };
+        let v: Value = serde_json::from_str(&roster).unwrap();
+        let on = v["people"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|p| p["video"] == true)
+            .count();
+        assert_eq!(on, MAX_VIDEO_SENDERS);
+        for id in ids {
+            leave(ch, id);
+        }
+    }
+
+    #[test]
+    fn video_reaches_others_on_its_own_channel() {
+        let _g = serial();
+        let ch = "room:!video:mitch.pro";
+        let a = join(ch, "a@x", "Ann").unwrap();
+        let mut b = join(ch, "b@x", "Bob").unwrap();
+        relay_video(ch, a.id, vec![1, 1, 9, 9]);
+        let got = b.vrx.try_recv().expect("video frame");
+        assert_eq!(got.from, a.id);
+        assert_eq!(got.data, vec![1, 1, 9, 9]);
+        // Audio is untouched by video traffic.
+        assert!(!matches!(
+            b.rx.try_recv().ok().as_deref(),
+            Some(Event::Audio { .. })
+        ));
+        leave(ch, a.id);
+        leave(ch, b.id);
+    }
+
+    #[test]
+    fn keyframe_requests_are_coalesced() {
+        let _g = serial();
+        let ch = "room:!keyframes:mitch.pro";
+        let _a = join(ch, "a@x", "Ann").unwrap();
+        let mut b = join(ch, "b@x", "Bob").unwrap();
+        let count = |rx: &mut broadcast::Receiver<Arc<Event>>| {
+            let mut n = 0;
+            while let Ok(ev) = rx.try_recv() {
+                if matches!(&*ev, Event::Keyframe) {
+                    n += 1;
+                }
+            }
+            n
+        };
+        // Joining asked once; a burst of further requests is ignored for a moment.
+        let _ = count(&mut b.rx);
+        request_keyframes(ch);
+        request_keyframes(ch);
+        request_keyframes(ch);
+        assert!(count(&mut b.rx) <= 1);
+        std::thread::sleep(KEYFRAME_COOLDOWN + Duration::from_millis(50));
+        request_keyframes(ch);
+        assert_eq!(count(&mut b.rx), 1);
+        let ids: Vec<u32> = lock_rooms()
+            .get(ch)
+            .unwrap()
+            .peers
+            .iter()
+            .map(|p| p.id)
+            .collect();
+        for id in ids {
+            leave(ch, id);
+        }
+    }
+
+    #[test]
+    fn video_byte_budget_allows_a_normal_stream_but_not_a_flood() {
+        let mut l = ByteLimiter::new();
+        // A burst of keyframe-sized frames fits once, then runs dry.
+        let sent = (0..100).filter(|_| l.allow(30_000)).count();
+        assert!(sent >= 6 && sent <= 10, "{sent}");
+        let mut l = ByteLimiter::new();
+        assert!(!l.allow(MAX_VIDEO_BYTES * 3));
     }
 }

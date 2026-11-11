@@ -16,3 +16,6 @@ body.theme-light .status.error { color: #a93226; }
 .sub { font-size: 12px; color: var(--fg2); min-height: 1em; }
 .close { font: inherit; font-weight: 600; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--bd); background: var(--card); color: var(--fg); cursor: pointer; }
 .controls { position: absolute; left: -9999px; }
+.tile.has-video { width: 224px; padding: 8px 8px 12px; }
+.video { display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: 8px; object-fit: cover; background: #000; }
+.video.mirror { transform: scaleX(-1); }
