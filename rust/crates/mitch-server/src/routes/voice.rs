@@ -928,7 +928,7 @@ mod tests {
         let mut l = ByteLimiter::new();
         // A burst of keyframe-sized frames fits once, then runs dry.
         let sent = (0..100).filter(|_| l.allow(30_000)).count();
-        assert!(sent >= 6 && sent <= 10, "{sent}");
+        assert!((6..=10).contains(&sent), "{sent}");
         let mut l = ByteLimiter::new();
         assert!(!l.allow(MAX_VIDEO_BYTES * 3));
     }
