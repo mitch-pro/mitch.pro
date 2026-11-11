@@ -1,0 +1,21 @@
+/* Call page shown inside the chat client. The client makes the body
+   transparent; colors follow the client's light/dark theme (theme param). */
+:root { font-family: 'DM Sans', system-ui, sans-serif; }
+body { margin: 0; min-height: 100vh; }
+body.theme-dark { --fg: #f3f0ea; --fg2: #b9b2a6; --card: rgba(255,255,255,0.08); --bd: rgba(255,255,255,0.16); --ac: #e8863a; }
+body.theme-light { --fg: #2a241d; --fg2: #6f6559; --card: rgba(0,0,0,0.05); --bd: rgba(0,0,0,0.14); --ac: #b85514; }
+#stage { box-sizing: border-box; min-height: 100vh; padding: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; color: var(--fg); }
+.status { margin: 0; font-size: 15px; color: var(--fg2); text-align: center; }
+.status.error { color: #e0584a; }
+body.theme-light .status.error { color: #a93226; }
+.tiles { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; max-width: 720px; }
+.tile { width: 112px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 8px; border-radius: 12px; background: var(--card); border: 1px solid var(--bd); }
+.avatar { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; font-weight: 700; background: var(--bd); box-shadow: 0 0 0 3px transparent; transition: box-shadow 0.12s; }
+.tile.speaking .avatar { box-shadow: 0 0 0 3px #2ecc71; }
+.name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
+.sub { font-size: 12px; color: var(--fg2); min-height: 1em; }
+.close { font: inherit; font-weight: 600; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--bd); background: var(--card); color: var(--fg); cursor: pointer; }
+.controls { position: absolute; left: -9999px; }
+.tile.has-video { width: 224px; padding: 8px 8px 12px; }
+.video { display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: 8px; object-fit: cover; background: #000; }
+.video.mirror { transform: scaleX(-1); }

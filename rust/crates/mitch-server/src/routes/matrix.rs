@@ -76,7 +76,77 @@ pub const OFFICIAL_ROOMS: &[(&str, &str, &str)] = &[
         "Random",
         "Off-topic discussions, casual chat, and memes",
     ),
+    (VOICE_ROOM_ALIAS, "Voice General", "Open voice chat"),
 ];
+
+/// Alias of the built-in voice room. Created as a Matrix call room (see
+/// [`official_room_create_payload`]), so the chat client shows it as a voice
+/// room and opens its call page, which runs on the voice relay in
+/// `routes/voice.rs`. Keep in sync with `featuredCommunities.rooms` in
+/// `webserver/matrix/config.json`.
+pub const VOICE_ROOM_ALIAS: &str = "voice-general";
+
+/// Matrix room type for a call room (MSC3417).
+const CALL_ROOM_TYPE: &str = "org.matrix.msc3417.call";
+
+/// Call state events a normal member must be able to send to join a call.
+/// `sync_staff_power_levels_to_all_official_rooms` also forces these to 0 on
+/// existing rooms.
+const CALL_STATE_EVENTS: &[&str] = &[
+    "org.matrix.msc3401.call.member",
+    "org.matrix.msc3401.call",
+    "org.matrix.msc4143.rtc.member",
+];
+
+/// Body for `createRoom` for an official room. Text rooms are public and
+/// world-readable with guest access. The voice room is a call room: it is not
+/// world-readable (no history to preview), guests can't join (they can't sign
+/// in to a call), and members may send call events without a power level.
+pub fn official_room_create_payload(alias: &str, name: &str, topic: &str) -> Value {
+    if alias == VOICE_ROOM_ALIAS {
+        let events: serde_json::Map<String, Value> = CALL_STATE_EVENTS
+            .iter()
+            .map(|ev| ((*ev).to_string(), json!(0)))
+            .collect();
+        return json!({
+            "room_version": "10",
+            "name": name,
+            "topic": topic,
+            "room_alias_name": alias,
+            "visibility": "public",
+            "preset": "public_chat",
+            "creation_content": { "type": CALL_ROOM_TYPE },
+            "power_level_content_override": { "events": events },
+            "initial_state": [
+                {
+                    "type": "m.room.guest_access",
+                    "state_key": "",
+                    "content": { "guest_access": "forbidden" }
+                }
+            ]
+        });
+    }
+    json!({
+        "room_version": "10",
+        "name": name,
+        "topic": topic,
+        "room_alias_name": alias,
+        "visibility": "public",
+        "preset": "public_chat",
+        "initial_state": [
+            {
+                "type": "m.room.history_visibility",
+                "state_key": "",
+                "content": { "history_visibility": "world_readable" }
+            },
+            {
+                "type": "m.room.guest_access",
+                "state_key": "",
+                "content": { "guest_access": "can_join" }
+            }
+        ]
+    })
+}
 
 pub const CUSTOM_OFFICIAL_ROOMS_FILE: &str = "matrix_official_rooms.json";
 
@@ -825,26 +895,7 @@ pub async fn ensure_official_room(
         headers.insert("Authorization", hv);
     }
 
-    let create_payload = json!({
-        "room_version": "10",
-        "name": name,
-        "topic": topic,
-        "room_alias_name": alias,
-        "visibility": "public",
-        "preset": "public_chat",
-        "initial_state": [
-            {
-                "type": "m.room.history_visibility",
-                "state_key": "",
-                "content": { "history_visibility": "world_readable" }
-            },
-            {
-                "type": "m.room.guest_access",
-                "state_key": "",
-                "content": { "guest_access": "can_join" }
-            }
-        ]
-    });
+    let create_payload = official_room_create_payload(alias, name, topic);
 
     if let Ok((status, _, bytes)) = call_conduit(
         "/_matrix/client/v3/createRoom",
@@ -1267,11 +1318,7 @@ pub async fn sync_matrix_user_to_official_rooms(
                     pl_data["events"] = json!({});
                 }
                 let mut pl_changed = false;
-                for call_ev in &[
-                    "org.matrix.msc3401.call.member",
-                    "org.matrix.msc3401.call",
-                    "org.matrix.msc4143.rtc.member",
-                ] {
+                for call_ev in CALL_STATE_EVENTS {
                     if pl_data["events"].get(call_ev).and_then(|v| v.as_i64()) != Some(0) {
                         pl_data["events"][call_ev] = json!(0);
                         pl_changed = true;
@@ -9081,6 +9128,26 @@ mod tests {
         assert!(aliases.contains(&"python-hate"));
         assert!(aliases.contains(&"rust"));
         assert!(aliases.contains(&"memory-safe"));
+        assert!(aliases.contains(&VOICE_ROOM_ALIAS));
+    }
+
+    #[test]
+    fn voice_room_is_created_as_a_call_room() {
+        let p = official_room_create_payload(VOICE_ROOM_ALIAS, "Voice General", "t");
+        assert_eq!(p["creation_content"]["type"], CALL_ROOM_TYPE);
+        for ev in CALL_STATE_EVENTS {
+            assert_eq!(p["power_level_content_override"]["events"][*ev], 0);
+        }
+        let initial = p["initial_state"].to_string();
+        assert!(initial.contains("forbidden"));
+        assert!(!initial.contains("world_readable"));
+    }
+
+    #[test]
+    fn text_rooms_are_not_call_rooms() {
+        let p = official_room_create_payload("general", "General", "t");
+        assert!(p.get("creation_content").is_none());
+        assert!(p["initial_state"].to_string().contains("world_readable"));
     }
 
     fn test_state() -> (Arc<AppState>, std::path::PathBuf) {
