@@ -1243,6 +1243,14 @@ async fn handle_resolved(
                 return resp;
             }
         }
+        // voice channels (/voice/): LiveKit audio rooms.
+        if path.starts_with("/api/voice/") {
+            if let Some(resp) =
+                crate::routes::voice::handle(&state, &method, &path, headers, body_bytes).await
+            {
+                return resp;
+            }
+        }
         // dm group (Step 11) — wired before canvas (JS file order:
         // dm at 19452, canvas at 21634+).
         if let Some(resp) =
