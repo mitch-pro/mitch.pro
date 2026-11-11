@@ -1008,6 +1008,12 @@ async fn handle_resolved(
             410,
             serde_json::json!({ "error": "This desktop connection method is no longer available." }),
         );
+    } else if is_upgrade && path == "/api/voice/ws" {
+        if let Some(resp) =
+            crate::routes::voice::handle_ws_upgrade(&state, headers, &search, ws_upgrade)
+        {
+            return resp;
+        }
     } else if is_upgrade && path == "/api/vm/desktop/ws" {
         if let Some(resp) =
             crate::routes::vm::handle_desktop_ws_upgrade(&state, headers, &search, ws_upgrade)
@@ -1243,10 +1249,9 @@ async fn handle_resolved(
                 return resp;
             }
         }
-        // voice channels (/voice/): LiveKit audio rooms.
+        // voice channels (/voice/): channel list (the socket is below).
         if path.starts_with("/api/voice/") {
-            if let Some(resp) =
-                crate::routes::voice::handle(&state, &method, &path, headers, body_bytes).await
+            if let Some(resp) = crate::routes::voice::handle(&state, &method, &path, headers).await
             {
                 return resp;
             }
