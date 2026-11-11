@@ -1251,7 +1251,8 @@ async fn handle_resolved(
         }
         // voice channels (/voice/): channel list (the socket is below).
         if path.starts_with("/api/voice/") {
-            if let Some(resp) = crate::routes::voice::handle(&state, &method, &path, headers).await
+            if let Some(resp) =
+                crate::routes::voice::handle(&state, &method, &path, headers, body_bytes).await
             {
                 return resp;
             }

@@ -23,3 +23,14 @@
 - Frames over 2048 bytes are dropped; senders are limited to 60 frames/s (50 is real time).
 
 Bandwidth is about 32 KB/s per active speaker, sent to every other listener, so keep channels small. To add a channel, add a row to `CHANNELS` in `voice.rs`.
+
+## In the chat page (`/matrix/`)
+
+The chat client is a prebuilt bundle, so voice is added as a dock on top of it: `webserver/matrix/voice-dock.js` + `voice-dock.css`, loaded from `matrix/index.html`. It shares the audio engine (`webserver/voice/voice-client.js`) with `/voice/`.
+
+- **Voice channels:** the dock lists Lounge/Gaming/Study with who is in each and a Join button.
+- **Calling a chat:** when a room is open (the room id is read from the URL), "Call this chat" starts a call in it. A call is a channel named `dm:<room id>` that exists only while someone is in it.
+  1. `POST /api/voice/call {room_id, mx_token}`. The server uses the caller's own Matrix token (`cinny_access_token`) against Conduit: `whoami` must map (via `email_for_user_id`) to the signed-in site account, and `joined_members` must include them. Rooms with more than 8 members are refused, so the public rooms can't be called.
+  2. It records the call (members' site accounts, caller) and returns a one-time `ticket` (60 s, bound to the account and channel) that the socket requires for `dm:` channels.
+- **Ringing:** the dock polls `GET /api/voice/incoming` every 5 s while the tab is visible. A call rings for the room's other members for 45 s while someone is on the line; Answer calls `/api/voice/call` for that room, Decline calls `/api/voice/decline`. The ring tone is the chat client's own call sound.
+- A call and its ring state disappear when the last person leaves. All of this is in memory only.

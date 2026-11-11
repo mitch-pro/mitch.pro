@@ -1,0 +1,89 @@
+/* Voice dock on the chat page. Uses the site theme tokens (theme-tokens.css). */
+#mitch-voice-dock {
+  position: fixed;
+  right: 16px;
+  bottom: 88px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  font-family: var(--t-font, 'DM Sans', system-ui, sans-serif);
+  font-size: 14px;
+  color: var(--t-fg);
+}
+#mitch-voice-dock .vd-toggle {
+  font: inherit;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--t-bd);
+  background: var(--t-bg2);
+  color: var(--t-fg);
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+}
+#mitch-voice-dock.in-call .vd-toggle { border-color: var(--t-ac); color: var(--t-ac); }
+#mitch-voice-dock .vd-panel {
+  width: min(320px, calc(100vw - 32px));
+  max-height: 60vh;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--t-bd);
+  border-radius: var(--t-radius, 10px);
+  background: var(--t-bg2);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+}
+#mitch-voice-dock .vd-panel[hidden] { display: none; }
+#mitch-voice-dock .vd-btn {
+  font: inherit;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: var(--t-radius-sm, 7px);
+  border: 1px solid var(--t-bd);
+  background: var(--t-bg3);
+  color: var(--t-fg);
+  cursor: pointer;
+}
+#mitch-voice-dock .vd-btn:hover:not(:disabled) { border-color: var(--t-bda); }
+#mitch-voice-dock .vd-btn:disabled { opacity: 0.5; cursor: default; }
+#mitch-voice-dock .vd-btn.primary { background: var(--t-ac); border-color: var(--t-ac); color: var(--t-ac-ink); }
+#mitch-voice-dock .vd-btn.danger { border-color: #c0392b; color: #c0392b; }
+html.theme-light #mitch-voice-dock .vd-btn.danger { color: #a93226; }
+#mitch-voice-dock .vd-btn.wide { width: 100%; margin-bottom: 10px; padding: 9px 12px; }
+#mitch-voice-dock .vd-section {
+  margin: 4px 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--t-fg2);
+}
+#mitch-voice-dock .vd-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
+#mitch-voice-dock .vd-row-name { font-weight: 600; }
+#mitch-voice-dock .vd-row-count {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--t-fg2);
+}
+#mitch-voice-dock .vd-msg { margin: 0 0 8px; font-size: 13px; color: var(--t-fg2); }
+#mitch-voice-dock .vd-people { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 4px; }
+#mitch-voice-dock .vd-people li { display: flex; align-items: center; gap: 8px; }
+#mitch-voice-dock .vd-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--t-bd); flex: none; }
+#mitch-voice-dock .speaking .vd-dot { background: #2ecc71; box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.25); }
+#mitch-voice-dock .vd-muted { font-size: 12px; color: var(--t-fg3); }
+#mitch-voice-dock .vd-controls { display: flex; gap: 8px; margin-top: 8px; }
+#mitch-voice-dock .vd-rings { display: grid; gap: 8px; }
+#mitch-voice-dock .vd-ring {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--t-ac);
+  border-radius: var(--t-radius, 10px);
+  background: var(--t-bg2);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+}
+#mitch-voice-dock .vd-ring-text { flex: 1; font-weight: 600; }
