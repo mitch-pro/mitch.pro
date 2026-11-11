@@ -14,7 +14,26 @@
 
 ## Network requirements
 
-Signaling goes through the site on 443. Media (WebRTC) goes to the SFU directly over UDP 7882 / TCP 7881 (`docker-compose.yml`). Only 443/80 are forwarded to the host, so clients that can't reach those ports need a working TURN relay. LiveKit's `rtc.turn_servers` entries take `host`, `port`, `protocol`, `username` and `credential`; the `secret` field currently in `docker-compose.yml` is not a LiveKit option, so that relay is not in effect. If calls connect but have no audio, or fail with a peer connection error, this is the first place to look.
+Signaling goes through the site on 443. Media (WebRTC) is tried directly against the SFU on UDP 7882 / TCP 7881 first, then falls back to LiveKit's built-in TURN over TLS on 443, which is what works on school wifi. Without a working TURN path the browser reports "could not establish pc connection".
+
+TURN is configured in `docker-compose.yml` (`turn:` block, `external_tls: true`): LiveKit listens for plain TCP on container port 443 (published as host `5349`), and expects something in front of it to terminate TLS for `TURN_DOMAIN` (default `turn.mitch.pro`) and advertise it. LiveKit hands clients `turns:<TURN_DOMAIN>:443` itself.
+
+Host nginx setup (not in this repo): in the `stream` block that does SNI routing on 443, send that hostname to a TLS-terminating server that proxies to LiveKit, and get a certificate that covers it (`certbot certonly -d turn.mitch.pro`, or the existing cert if it lists the name):
+
+```nginx
+# inside the existing `map $ssl_preread_server_name $upstream { ... }`
+turn.mitch.pro  127.0.0.1:8444;
+
+# in the stream block
+server {
+    listen 127.0.0.1:8444 ssl;
+    ssl_certificate     /etc/letsencrypt/live/turn.mitch.pro/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/turn.mitch.pro/privkey.pem;
+    proxy_pass 192.168.100.15:5349;   # the docker host
+}
+```
+
+No `proxy_protocol` on this route; LiveKit's TURN doesn't expect it.
 
 ## Updating the library
 
