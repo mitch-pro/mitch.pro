@@ -45,17 +45,24 @@
     '}',
     'registerProcessor("capture", Capture);',
     'class Player extends AudioWorkletProcessor {',
-    '  constructor(){ super(); this.q = []; this.cur = null; this.ci = 0; this.queued = 0; this.playing = false;',
-    '    this.step = ' + RATE + ' / sampleRate; this.frac = 0; this.last = 0;',
-    '    this.port.onmessage = (e) => { this.q.push(e.data); this.queued += e.data.length;',
-    '      while (this.queued > ' + (RATE * 0.4) + '){ this.queued -= this.q.shift().length; } }; }',
+    '  constructor(){ super(); this.reset(); this.step = ' + RATE + ' / sampleRate;',
+    '    this.port.onmessage = (e) => {',
+    '      if (e.data === "reset") { this.reset(); return; }',
+    '      this.q.push(e.data); this.queued += e.data.length;',
+    '      while (this.queued > ' + (RATE * 0.4) + ' && this.q.length){ this.queued -= this.q.shift().length; } }; }',
+    '  reset(){ this.q = []; this.cur = null; this.ci = 0; this.queued = 0; this.playing = false; this.frac = 0; this.prev = 0; this.last = 0; }',
     '  next(){ if (!this.cur || this.ci >= this.cur.length){ this.cur = this.q.shift() || null; this.ci = 0;',
     '      if (this.cur) this.queued -= this.cur.length; } return this.cur ? this.cur[this.ci++] : null; }',
-    '  process(inputs, outputs){ var out = outputs[0][0];',
+    '  process(inputs, outputs){ var out = outputs[0] && outputs[0][0]; if (!out) return true;',
+    '    // Always write every sample: some browsers hand back the previous block',
+    '    // instead of silence, which would replay the last bit of audio forever.',
+    '    out.fill(0);',
     '    if (!this.playing){ if (this.queued < ' + (RATE * 0.06) + ') return true; this.playing = true; }',
     '    for (var k = 0; k < out.length; k++){ this.frac += this.step;',
-    '      while (this.frac >= 1){ this.frac -= 1; var s = this.next(); if (s === null){ this.playing = false; this.frac = 0; out.fill(0, k); return true; } this.prev = this.last; this.last = s; }',
-    '      var p = this.prev === undefined ? this.last : this.prev; out[k] = p + (this.last - p) * this.frac; }',
+    '      while (this.frac >= 1){ this.frac -= 1; var s = this.next();',
+    '        if (s === null){ this.playing = false; this.frac = 0; this.prev = 0; this.last = 0; return true; }',
+    '        this.prev = this.last; this.last = s; }',
+    '      out[k] = this.prev + (this.last - this.prev) * this.frac; }',
     '    return true; }',
     '}',
     'registerProcessor("player", Player);'
@@ -76,7 +83,7 @@
 
   async function connect(opts) {
     var s = {
-      myId: 0, roster: [], muted: false, talking: false, closed: false,
+      myId: 0, roster: [], inCall: null, muted: false, talking: false, closed: false,
       players: {}, speakingAt: {}, hang: 0,
       videoOn: false, videoError: '', previewEl: null, remote: {}
     };
@@ -382,8 +389,15 @@
         s.roster = m.people;
         var live = {}, cams = {};
         m.people.forEach(function (p) { live[p.id] = 1; if (p.video) cams[p.id] = 1; });
+        s.inCall = live;
         Object.keys(s.players).forEach(function (id) {
-          if (!live[id]) { s.players[id].disconnect(); delete s.players[id]; delete s.speakingAt[id]; }
+          if (!live[id]) {
+            // Empty the player before dropping it so nothing of theirs lingers.
+            try { s.players[id].port.postMessage('reset'); } catch (_) {}
+            s.players[id].disconnect();
+            delete s.players[id];
+            delete s.speakingAt[id];
+          }
         });
         Object.keys(s.remote).forEach(function (id) {
           if (!live[id]) closeRemote(s, id);
@@ -409,6 +423,9 @@
       // [1][u32 sender][pcm]
       if (dv.byteLength <= 5) return;
       var id = dv.getUint32(1);
+      // A late frame from someone who has already left must not bring their
+      // player back.
+      if (!s.inCall || !s.inCall[id]) return;
       var n = (dv.byteLength - 5) >> 1;
       var f = new Float32Array(n);
       for (var i = 0; i < n; i++) f[i] = dv.getInt16(5 + i * 2, true) / 32768;
