@@ -221,11 +221,14 @@ fn redeem_ticket(ticket: &str, email: &str, channel: &str) -> bool {
     }
 }
 
-/// A Matrix room id as the client sends it: `!opaque:server`.
+/// A Matrix room id as the client sends it. Older rooms look like
+/// `!opaque:server`; newer room versions have no server part at all
+/// (`!<url-safe base64 hash>`), so only the leading `!`, a sane length and a
+/// safe character set are required.
 fn valid_room_id(id: &str) -> bool {
-    id.len() <= 255
+    id.len() > 1
+        && id.len() <= 255
         && id.starts_with('!')
-        && id.contains(':')
         && id
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || "!:._-=/+".contains(c))
@@ -315,7 +318,10 @@ async fn call_ticket(state: &Arc<AppState>, email: &str, body: &[u8]) -> Respons
     let room_id = body.get("room_id").and_then(Value::as_str).unwrap_or("");
     let token = body.get("mx_token").and_then(Value::as_str).unwrap_or("");
     if !valid_room_id(room_id) || token.is_empty() || token.len() > 512 {
-        return json_resp(400, json!({ "error": "Open a chat room first" }));
+        return json_resp(
+            400,
+            json!({ "error": "Could not tell which chat room this call is for" }),
+        );
     }
     if let Err((code, msg)) = verify_room_member(state, email, room_id, token).await {
         return json_resp(code, json!({ "error": msg }));
@@ -618,9 +624,18 @@ mod tests {
     #[test]
     fn room_ids_are_validated() {
         assert!(valid_room_id("!abc123:mitch.pro"));
+        // Newer room versions: no server part, url-safe base64 with - and _.
+        assert!(valid_room_id(
+            "!1oIV13AJcrH-61ZyaersatED1FD3r0Q8YPmdlHteZfA"
+        ));
+        assert!(valid_room_id(
+            "!6U5_lK6nO2MjyQGLRavglmIk2VCn3LQaDNbsyY4nQ-A"
+        ));
+        assert!(!valid_room_id("!"));
         assert!(!valid_room_id("#general:mitch.pro"));
-        assert!(!valid_room_id("!no-server"));
+        assert!(!valid_room_id("abc:mitch.pro"));
         assert!(!valid_room_id("!a:b c"));
+        assert!(!valid_room_id("!a/../b?x=1"));
         assert!(!valid_room_id(&format!("!{}:x", "a".repeat(300))));
     }
 
