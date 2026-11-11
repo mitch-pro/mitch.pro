@@ -1,10 +1,21 @@
-<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="viewport-fit=cover,width=device-width,initial-scale=1,maximum-scale=1"><title>Element Call</title><script>window.global = window;</script><script defer src="/matrix/media-auth.js?v=3"></script><script>if (!Promise.withResolvers) {
-        Promise.withResolvers = function () {
-          var resolve, reject;
-          var promise = new Promise(function (a, b) {
-            resolve = a;
-            reject = b;
-          });
-          return { promise: promise, resolve: resolve, reject: reject };
-        };
-      }</script><script type="module" crossorigin src="./assets/index-Dul-9Slf.js"></script><link rel="stylesheet" crossorigin href="./assets/index-DN5nqo8R.css"></head><body class="no-theme"><div id="root"></div></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Call</title>
+<link rel="stylesheet" href="call.css?v=1">
+</head>
+<body class="theme-dark">
+  <main id="stage" aria-live="polite">
+    <p id="status" class="status">Connecting…</p>
+    <ul id="tiles" class="tiles"></ul>
+    <button id="close" class="close" type="button" hidden>Close</button>
+  </main>
+  <!-- The chat client hides the container of this button and draws its own
+       call controls; it is kept because the client looks it up by test id. -->
+  <div class="controls"><div><button type="button" data-testid="incall_leave">Leave</button></div></div>
+  <script src="voice-client.js?v=1"></script>
+  <script src="call.js?v=1"></script>
+</body>
+</html>

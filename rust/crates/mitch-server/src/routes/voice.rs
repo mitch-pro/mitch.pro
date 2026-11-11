@@ -1,21 +1,17 @@
-//! Voice channels (`/voice/`): audio-only rooms relayed over a WebSocket on
-//! the site's own origin. See `docs/voice-channels.md`.
+//! Voice for Matrix rooms: audio relayed over a same-origin WebSocket. See
+//! `docs/voice-channels.md`.
 //!
-//! No WebRTC, no SFU, no TURN: the browser sends small PCM frames over
-//! `/api/voice/ws` and this module fans them out to everyone else in the
-//! channel. Because it rides the same hostname and port as the site, it works
-//! on every mirror domain and any network that can load the page.
+//! The chat client (Cinny) starts calls by loading an embedded call page
+//! (`/matrix/public/element-call/`). That page asks this module to join the
+//! call for the Matrix room it was opened in; there are no fixed channels. A
+//! call is a `room:<matrix room id>` channel that is created the first time
+//! someone joins and removed when the last person leaves, so every voice room
+//! and DM call in the chat client gets its own backend room automatically.
 //!
-//! - `GET /api/voice/channels` — channel list with who is in each one.
-//! - `GET /api/voice/ws?channel=voice-lounge` (WebSocket) — join a channel.
-//!
-//! Matrix calls (the chat page at `/matrix/`): a call in a Matrix room is a
-//! channel named `dm:<room id>` that exists only while someone is in it.
 //! - `POST /api/voice/call {room_id, mx_token}` — checks the caller really is
-//!   in that room (using their own Matrix token), rings the other members and
-//!   returns a one-time `ticket` for the socket (`&ticket=` on the URL).
-//! - `GET /api/voice/incoming` — calls ringing for the signed-in account.
-//! - `POST /api/voice/decline {room_id}` — dismiss a ring.
+//!   in that Matrix room (using their own Matrix token) and returns a
+//!   one-time `ticket` for the socket.
+//! - `GET /api/voice/ws?channel=room:<id>&ticket=…` (WebSocket) — the call.
 //!
 //! Wire protocol (all audio is 16 kHz mono signed 16-bit little-endian):
 //! - client → server, binary: one audio frame (≤ [`MAX_FRAME_BYTES`]).
@@ -24,10 +20,10 @@
 //!   `{"type":"roster","people":[{"id","name","muted"}]}` on every change.
 //! - server → client, binary: `u32 big-endian sender id` + the sender's frame.
 //!
-//! Channel membership lives only in memory and is never written anywhere.
-//! Joining needs a signed-in, non-banned account, a same-origin request (so
-//! other sites can't open the socket with a visitor's cookies), and a free
-//! seat; frames are size- and rate-limited per connection.
+//! Membership lives only in memory and is never written anywhere. Joining
+//! needs a signed-in, non-banned account, a same-origin request (so other
+//! sites can't open the socket with a visitor's cookies), a single-use ticket
+//! and a free seat; frames are size- and rate-limited per connection.
 
 use crate::errors::json_resp;
 use crate::routes::me::{cookies_of, me_uid};
@@ -37,31 +33,20 @@ use axum::http::{HeaderMap, Method};
 use axum::response::Response;
 use mitch_lib::auth;
 use serde_json::{json, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, Notify};
 
-/// `(room id, label)`.
-pub const CHANNELS: &[(&str, &str)] = &[
-    ("voice-lounge", "Lounge"),
-    ("voice-gaming", "Gaming"),
-    ("voice-study", "Study"),
-];
-
-/// Matrix rooms with more joined members than this can't be called (the
-/// official public rooms have hundreds, and a call rings every member).
-pub const MAX_CALL_ROOM_MEMBERS: usize = 8;
-/// How long a call keeps ringing for people who haven't answered.
-const RING_SECS: u64 = 45;
+/// Backend rooms are keyed `room:<matrix room id>`.
+const ROOM_PREFIX: &str = "room:";
 /// A ticket must be used within this long of being issued.
 const TICKET_TTL: Duration = Duration::from_secs(60);
-const DM_PREFIX: &str = "dm:";
 
-/// People per channel. The relay sends every frame to every listener, so
+/// People per call. The relay sends every frame to every listener, so
 /// bandwidth grows with the square of this.
-pub const MAX_PEERS: usize = 12;
+pub const MAX_PEERS: usize = 16;
 /// 20 ms of 16 kHz mono 16-bit is 640 bytes; allow some slack.
 pub const MAX_FRAME_BYTES: usize = 2048;
 /// Sustained frames per second a client may send (50 is real-time).
@@ -91,22 +76,7 @@ struct Room {
 
 fn rooms() -> &'static Mutex<HashMap<String, Room>> {
     static ROOMS: OnceLock<Mutex<HashMap<String, Room>>> = OnceLock::new();
-    ROOMS.get_or_init(|| {
-        Mutex::new(
-            CHANNELS
-                .iter()
-                .map(|(id, _)| {
-                    (
-                        (*id).to_string(),
-                        Room {
-                            tx: broadcast::channel(256).0,
-                            peers: Vec::new(),
-                        },
-                    )
-                })
-                .collect(),
-        )
-    })
+    ROOMS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 fn lock_rooms() -> std::sync::MutexGuard<'static, HashMap<String, Room>> {
@@ -134,24 +104,20 @@ struct Joined {
     kick: Arc<Notify>,
 }
 
-/// Adds `email` to `room_id`. An account holds one seat per channel: a second
-/// join replaces (and kicks) the first, so a stale tab can't hold the seat.
-///
-/// `dm:` rooms are created on first join (callers must have passed
-/// [`redeem_ticket`] first); fixed channels always exist.
+/// Adds `email` to `room_id`, creating the backend room if it doesn't exist
+/// yet. An account holds one seat per room: a second join replaces (and
+/// kicks) the first, so a stale tab can't hold the seat. Callers must have
+/// passed [`redeem_ticket`] first.
 fn join(room_id: &str, email: &str, name: &str) -> Result<Joined, &'static str> {
     static NEXT_ID: AtomicU32 = AtomicU32::new(1);
-    let mut map = lock_rooms();
-    if room_id.starts_with(DM_PREFIX) && !map.contains_key(room_id) {
-        map.insert(
-            room_id.to_string(),
-            Room {
-                tx: broadcast::channel(256).0,
-                peers: Vec::new(),
-            },
-        );
+    if !room_id.starts_with(ROOM_PREFIX) {
+        return Err("Unknown channel");
     }
-    let room = map.get_mut(room_id).ok_or("Unknown channel")?;
+    let mut map = lock_rooms();
+    let room = map.entry(room_id.to_string()).or_insert_with(|| Room {
+        tx: broadcast::channel(256).0,
+        peers: Vec::new(),
+    });
     let (old, keep): (Vec<Peer>, Vec<Peer>) = std::mem::take(&mut room.peers)
         .into_iter()
         .partition(|p| p.email == email);
@@ -161,7 +127,7 @@ fn join(room_id: &str, email: &str, name: &str) -> Result<Joined, &'static str> 
     }
     if room.peers.len() >= MAX_PEERS {
         announce(room);
-        return Err("Channel is full");
+        return Err("This call is full");
     }
     let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
     let kick = Arc::new(Notify::new());
@@ -177,22 +143,20 @@ fn join(room_id: &str, email: &str, name: &str) -> Result<Joined, &'static str> 
     Ok(Joined { id, rx, kick })
 }
 
+/// Removes a peer; the room itself goes away with its last one.
 fn leave(room_id: &str, id: u32) {
     let mut map = lock_rooms();
-    let mut emptied_call = false;
+    let mut empty = false;
     if let Some(room) = map.get_mut(room_id) {
         let before = room.peers.len();
         room.peers.retain(|p| p.id != id);
         if room.peers.len() != before {
             announce(room);
         }
-        if room.peers.is_empty() && room_id.starts_with(DM_PREFIX) {
-            emptied_call = true;
-        }
+        empty = room.peers.is_empty();
     }
-    if emptied_call {
+    if empty {
         map.remove(room_id);
-        lock_calls().remove(room_id);
     }
 }
 
@@ -215,31 +179,7 @@ fn relay_audio(room_id: &str, from: u32, data: Vec<u8>) {
     }
 }
 
-fn names_in(room_id: &str) -> Vec<String> {
-    lock_rooms()
-        .get(room_id)
-        .map(|r| r.peers.iter().map(|p| p.name.clone()).collect())
-        .unwrap_or_default()
-}
-
 // ── Matrix calls ─────────────────────────────────────────────────────────────
-
-struct Call {
-    caller_email: String,
-    caller_name: String,
-    /// Normalized emails of everyone in the Matrix room (including the caller).
-    members: Vec<String>,
-    started: Instant,
-    declined: HashSet<String>,
-}
-
-fn lock_calls() -> std::sync::MutexGuard<'static, HashMap<String, Call>> {
-    static CALLS: OnceLock<Mutex<HashMap<String, Call>>> = OnceLock::new();
-    CALLS
-        .get_or_init(|| Mutex::new(HashMap::new()))
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-}
 
 struct Ticket {
     email: String,
@@ -291,20 +231,15 @@ fn valid_room_id(id: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || "!:._-=/+".contains(c))
 }
 
-struct RoomMember {
-    email: String,
-}
-
 /// Proves the signed-in account (`email`) is a joined member of `room_id`,
-/// using the caller's own Matrix token, and returns the room's members that
-/// have site accounts. The token must belong to the same account as the site
-/// session, so one user can't pass off another's room.
-async fn verified_room_members(
+/// using the caller's own Matrix token. The token must belong to the same
+/// account as the site session, so one user can't pass off another's room.
+async fn verify_room_member(
     state: &Arc<AppState>,
     email: &str,
     room_id: &str,
     mx_token: &str,
-) -> Result<Vec<RoomMember>, (u16, &'static str)> {
+) -> Result<(), (u16, &'static str)> {
     use crate::routes::matrix::{call_conduit, email_for_user_id};
     let mut headers = HeaderMap::new();
     let bearer = axum::http::HeaderValue::from_str(&format!("Bearer {mx_token}"))
@@ -342,23 +277,15 @@ async fn verified_room_members(
         return Err((403, "You're not in that room"));
     }
     let body: Value = serde_json::from_slice(&res.2).unwrap_or(json!({}));
-    let joined = body
+    let is_member = body
         .get("joined")
         .and_then(Value::as_object)
-        .ok_or((403, "You're not in that room"))?;
-    if joined.len() > MAX_CALL_ROOM_MEMBERS {
-        return Err((400, "Calls work in direct messages and small rooms"));
+        .is_some_and(|joined| joined.contains_key(my_user));
+    if is_member {
+        Ok(())
+    } else {
+        Err((403, "You're not in that room"))
     }
-    if !joined.contains_key(my_user) {
-        return Err((403, "You're not in that room"));
-    }
-    Ok(joined
-        .keys()
-        .filter_map(|u| email_for_user_id(state, u))
-        .map(|e| RoomMember {
-            email: auth::normalize_email(&e),
-        })
-        .collect())
 }
 
 fn display_name_for(state: &AppState, email: &str) -> String {
@@ -382,74 +309,20 @@ fn body_json(body: &[u8]) -> Value {
     serde_json::from_slice(body).unwrap_or(json!({}))
 }
 
-/// `POST /api/voice/call`: start or answer a call in a Matrix room.
-async fn start_or_answer_call(state: &Arc<AppState>, email: &str, body: &[u8]) -> Response {
+/// `POST /api/voice/call`: permission to join the call in a Matrix room.
+async fn call_ticket(state: &Arc<AppState>, email: &str, body: &[u8]) -> Response {
     let body = body_json(body);
     let room_id = body.get("room_id").and_then(Value::as_str).unwrap_or("");
     let token = body.get("mx_token").and_then(Value::as_str).unwrap_or("");
     if !valid_room_id(room_id) || token.is_empty() || token.len() > 512 {
         return json_resp(400, json!({ "error": "Open a chat room first" }));
     }
-    let members = match verified_room_members(state, email, room_id, token).await {
-        Ok(m) => m,
-        Err((code, msg)) => return json_resp(code, json!({ "error": msg })),
-    };
-    let channel = format!("{DM_PREFIX}{room_id}");
-    let live = lock_rooms()
-        .get(&channel)
-        .map(|r| !r.peers.is_empty())
-        .unwrap_or(false);
-    {
-        let mut calls = lock_calls();
-        if !live || !calls.contains_key(&channel) {
-            calls.insert(
-                channel.clone(),
-                Call {
-                    caller_email: email.to_string(),
-                    caller_name: display_name_for(state, email),
-                    members: members.into_iter().map(|m| m.email).collect(),
-                    started: Instant::now(),
-                    declined: HashSet::new(),
-                },
-            );
-        }
+    if let Err((code, msg)) = verify_room_member(state, email, room_id, token).await {
+        return json_resp(code, json!({ "error": msg }));
     }
+    let channel = format!("{ROOM_PREFIX}{room_id}");
     let ticket = issue_ticket(email, &channel);
     json_resp(200, json!({ "channel": channel, "ticket": ticket }))
-}
-
-/// Calls ringing for `email`: in a room they belong to, started by someone
-/// else, still rung recently, with someone actually on the line, and neither
-/// declined nor already joined by them.
-fn incoming_for(email: &str) -> Vec<Value> {
-    let rooms = lock_rooms();
-    let calls = lock_calls();
-    calls
-        .iter()
-        .filter(|(channel, c)| {
-            c.caller_email != email
-                && c.members.iter().any(|m| m == email)
-                && !c.declined.contains(email)
-                && c.started.elapsed() < Duration::from_secs(RING_SECS)
-                && rooms.get(*channel).is_some_and(|r| {
-                    !r.peers.is_empty() && !r.peers.iter().any(|p| p.email == email)
-                })
-        })
-        .map(|(channel, c)| {
-            json!({
-                "room_id": channel.trim_start_matches(DM_PREFIX),
-                "from": c.caller_name,
-            })
-        })
-        .collect()
-}
-
-fn decline_call(email: &str, room_id: &str) {
-    if let Some(c) = lock_calls().get_mut(&format!("{DM_PREFIX}{room_id}")) {
-        if c.members.iter().any(|m| m == email) {
-            c.declined.insert(email.to_string());
-        }
-    }
 }
 
 /// Token bucket: refills at [`FRAMES_PER_SEC`], holds up to [`FRAME_BURST`].
@@ -495,7 +368,7 @@ fn signed_in_email(state: &Arc<AppState>, headers: &HeaderMap) -> Result<String,
     }
 }
 
-/// Plain HTTP routes.
+/// `POST /api/voice/call`.
 pub async fn handle(
     state: &Arc<AppState>,
     method: &Method,
@@ -503,39 +376,16 @@ pub async fn handle(
     headers: &HeaderMap,
     body: &[u8],
 ) -> Option<Response> {
-    let is_get = *method == Method::GET;
-    let is_post = *method == Method::POST;
-    let known = (is_get && matches!(path, "/api/voice/channels" | "/api/voice/incoming"))
-        || (is_post && matches!(path, "/api/voice/call" | "/api/voice/decline"));
-    if !known {
+    if *method != Method::POST || path != "/api/voice/call" {
         return None;
     }
     let client_ip = crate::handler::get_real_ip(headers, None);
     if let Some((code, msg)) = state.rate_limit_check(&client_ip, "anon", path) {
         return Some(json_resp(code, json!({ "error": msg })));
     }
-    let email = match signed_in_email(state, headers) {
-        Ok(e) => e,
-        Err(resp) => return Some(resp),
-    };
-    Some(match path {
-        "/api/voice/channels" => {
-            let channels: Vec<Value> = CHANNELS
-                .iter()
-                .map(|(id, label)| json!({ "id": id, "name": label, "participants": names_in(id) }))
-                .collect();
-            json_resp(200, json!({ "channels": channels }))
-        }
-        "/api/voice/incoming" => json_resp(200, json!({ "calls": incoming_for(&email) })),
-        "/api/voice/decline" => {
-            let room = body_json(body);
-            decline_call(
-                &email,
-                room.get("room_id").and_then(Value::as_str).unwrap_or(""),
-            );
-            json_resp(200, json!({ "ok": true }))
-        }
-        _ => start_or_answer_call(state, &email, body).await,
+    Some(match signed_in_email(state, headers) {
+        Ok(email) => call_ticket(state, &email, body).await,
+        Err(resp) => resp,
     })
 }
 
@@ -568,16 +418,13 @@ pub fn handle_ws_upgrade(
             .into_owned()
             .collect();
     let channel = query.get("channel").cloned().unwrap_or_default();
-    let room_id = if CHANNELS.iter().any(|(r, _)| *r == channel) {
-        channel
-    } else if channel.starts_with(DM_PREFIX)
-        && valid_room_id(&channel[DM_PREFIX.len()..])
+    let room_id = if channel.starts_with(ROOM_PREFIX)
+        && valid_room_id(&channel[ROOM_PREFIX.len()..])
         && redeem_ticket(
             query.get("ticket").map(String::as_str).unwrap_or(""),
             &email,
             &channel,
-        )
-    {
+        ) {
         channel
     } else {
         return Some(json_resp(400, json!({ "error": "Unknown channel" })));
@@ -676,68 +523,74 @@ async fn run_peer(
 mod tests {
     use super::*;
 
-    // The registry is process-global; each test uses its own email prefix and
-    // checks only its own seats, and `reset` clears a room between tests that
-    // depend on its size.
-    fn reset(room: &str) {
-        let mut map = lock_rooms();
-        if let Some(r) = map.get_mut(room) {
-            r.peers.clear();
-        }
+    // The registry is process-global, so tests use their own room keys and
+    // run one at a time.
+    static SERIAL: Mutex<()> = Mutex::new(());
+    fn serial() -> std::sync::MutexGuard<'static, ()> {
+        SERIAL.lock().unwrap_or_else(|e| e.into_inner())
+    }
+    fn size(room: &str) -> usize {
+        lock_rooms().get(room).map_or(0, |r| r.peers.len())
     }
 
-    static SERIAL: Mutex<()> = Mutex::new(());
-
     #[test]
-    fn only_listed_channels_exist() {
-        assert!(join("default", "a@x", "A").is_err());
+    fn only_matrix_room_channels_can_be_joined() {
+        let _g = serial();
+        assert!(join("voice-lounge", "a@x", "A").is_err());
         assert!(join("", "a@x", "A").is_err());
     }
 
     #[test]
-    fn join_leave_updates_roster() {
-        let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
-        reset("voice-study");
-        let a = join("voice-study", "a@x", "Ann").unwrap();
-        let b = join("voice-study", "b@x", "Bob").unwrap();
-        assert_eq!(names_in("voice-study"), vec!["Ann", "Bob"]);
+    fn rooms_are_created_on_join_and_removed_with_the_last_person() {
+        let _g = serial();
+        let ch = "room:!lifecycle:mitch.pro";
+        assert_eq!(size(ch), 0);
+        let a = join(ch, "a@x", "Ann").unwrap();
+        let b = join(ch, "b@x", "Bob").unwrap();
         assert_ne!(a.id, b.id);
-        leave("voice-study", a.id);
-        assert_eq!(names_in("voice-study"), vec!["Bob"]);
-        reset("voice-study");
+        assert_eq!(size(ch), 2);
+        leave(ch, a.id);
+        assert_eq!(size(ch), 1);
+        assert!(lock_rooms().contains_key(ch));
+        leave(ch, b.id);
+        assert!(!lock_rooms().contains_key(ch));
     }
 
     #[test]
     fn second_join_replaces_the_first_seat() {
-        let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
-        reset("voice-gaming");
-        let first = join("voice-gaming", "a@x", "Ann").unwrap();
-        let second = join("voice-gaming", "a@x", "Ann").unwrap();
-        assert_eq!(names_in("voice-gaming").len(), 1);
+        let _g = serial();
+        let ch = "room:!replace:mitch.pro";
+        let first = join(ch, "a@x", "Ann").unwrap();
+        let second = join(ch, "a@x", "Ann").unwrap();
+        assert_eq!(size(ch), 1);
         assert_ne!(first.id, second.id);
-        reset("voice-gaming");
+        leave(ch, second.id);
     }
 
     #[test]
-    fn channel_full_is_rejected() {
-        let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
-        reset("voice-lounge");
+    fn a_full_call_rejects_new_people_but_not_returning_ones() {
+        let _g = serial();
+        let ch = "room:!full:mitch.pro";
+        let mut ids = Vec::new();
         for i in 0..MAX_PEERS {
-            join("voice-lounge", &format!("u{i}@x"), "U").unwrap();
+            ids.push(join(ch, &format!("u{i}@x"), "U").unwrap().id);
         }
-        assert!(join("voice-lounge", "extra@x", "X").is_err());
-        // An existing member re-joining still gets their seat.
-        assert!(join("voice-lounge", "u0@x", "U").is_ok());
-        reset("voice-lounge");
+        assert!(join(ch, "extra@x", "X").is_err());
+        let again = join(ch, "u0@x", "U").unwrap();
+        ids.push(again.id);
+        for id in ids {
+            leave(ch, id);
+        }
+        assert!(!lock_rooms().contains_key(ch));
     }
 
     #[test]
     fn audio_reaches_others_with_sender_id() {
-        let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
-        reset("voice-study");
-        let a = join("voice-study", "a@x", "Ann").unwrap();
-        let mut b = join("voice-study", "b@x", "Bob").unwrap();
-        relay_audio("voice-study", a.id, vec![1, 2, 3]);
+        let _g = serial();
+        let ch = "room:!audio:mitch.pro";
+        let a = join(ch, "a@x", "Ann").unwrap();
+        let mut b = join(ch, "b@x", "Bob").unwrap();
+        relay_audio(ch, a.id, vec![1, 2, 3]);
         let mut saw = false;
         while let Ok(ev) = b.rx.try_recv() {
             if let Event::Audio { from, data } = &*ev {
@@ -747,7 +600,8 @@ mod tests {
             }
         }
         assert!(saw);
-        reset("voice-study");
+        leave(ch, a.id);
+        leave(ch, b.id);
     }
 
     #[test]
@@ -756,7 +610,6 @@ mod tests {
         let burst = (0..1000).filter(|_| l.allow()).count();
         assert!(burst <= FRAME_BURST as usize + 2, "{burst}");
         let mut l = Limiter::new();
-        // 50 fps for a second of simulated time stays under the refill rate.
         l.tokens = 1.0;
         std::thread::sleep(std::time::Duration::from_millis(40));
         assert!(l.allow());
@@ -773,76 +626,19 @@ mod tests {
 
     #[test]
     fn tickets_are_single_use_and_bound_to_account_and_channel() {
-        let t = issue_ticket("a@x", "dm:!r:mitch.pro");
-        assert!(
-            !redeem_ticket(&t, "b@x", "dm:!r:mitch.pro"),
-            "other account"
-        );
+        let ch = "room:!r:mitch.pro";
+        let t = issue_ticket("a@x", ch);
+        assert!(!redeem_ticket(&t, "b@x", ch), "other account");
         // A failed attempt still burns the ticket.
-        assert!(!redeem_ticket(&t, "a@x", "dm:!r:mitch.pro"));
-        let t = issue_ticket("a@x", "dm:!r:mitch.pro");
+        assert!(!redeem_ticket(&t, "a@x", ch));
+        let t = issue_ticket("a@x", ch);
         assert!(
-            !redeem_ticket(&t, "a@x", "dm:!other:mitch.pro"),
+            !redeem_ticket(&t, "a@x", "room:!other:mitch.pro"),
             "other room"
         );
-        let t = issue_ticket("a@x", "dm:!r:mitch.pro");
-        assert!(redeem_ticket(&t, "a@x", "dm:!r:mitch.pro"));
-        assert!(!redeem_ticket(&t, "a@x", "dm:!r:mitch.pro"), "reuse");
-        assert!(!redeem_ticket("nonsense", "a@x", "dm:!r:mitch.pro"));
-    }
-
-    #[test]
-    fn matrix_call_rings_other_members_until_answered_or_declined() {
-        let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
-        let ch = "dm:!ringtest:mitch.pro";
-        lock_calls().insert(
-            ch.to_string(),
-            Call {
-                caller_email: "a@x".into(),
-                caller_name: "Ann".into(),
-                members: vec!["a@x".into(), "b@x".into()],
-                started: Instant::now(),
-                declined: HashSet::new(),
-            },
-        );
-        // Nobody on the line yet: not ringing.
-        assert!(incoming_for("b@x").is_empty());
-        let a = join(ch, "a@x", "Ann").unwrap();
-        let rings = incoming_for("b@x");
-        assert_eq!(rings.len(), 1);
-        assert_eq!(rings[0]["room_id"], "!ringtest:mitch.pro");
-        assert_eq!(rings[0]["from"], "Ann");
-        assert!(incoming_for("a@x").is_empty(), "caller isn't rung");
-        assert!(incoming_for("c@x").is_empty(), "non-members aren't rung");
-        decline_call("b@x", "!ringtest:mitch.pro");
-        assert!(incoming_for("b@x").is_empty());
-        // Hanging up empties the room and forgets the call.
-        leave(ch, a.id);
-        assert!(!lock_rooms().contains_key(ch));
-        assert!(!lock_calls().contains_key(ch));
-    }
-
-    #[test]
-    fn answering_removes_the_ring_for_that_person() {
-        let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
-        let ch = "dm:!answertest:mitch.pro";
-        lock_calls().insert(
-            ch.to_string(),
-            Call {
-                caller_email: "a@x".into(),
-                caller_name: "Ann".into(),
-                members: vec!["a@x".into(), "b@x".into()],
-                started: Instant::now(),
-                declined: HashSet::new(),
-            },
-        );
-        let a = join(ch, "a@x", "Ann").unwrap();
-        assert_eq!(incoming_for("b@x").len(), 1);
-        let b = join(ch, "b@x", "Bob").unwrap();
-        assert!(incoming_for("b@x").is_empty());
-        leave(ch, a.id);
-        assert!(lock_rooms().contains_key(ch), "still one person in it");
-        leave(ch, b.id);
-        assert!(!lock_rooms().contains_key(ch));
+        let t = issue_ticket("a@x", ch);
+        assert!(redeem_ticket(&t, "a@x", ch));
+        assert!(!redeem_ticket(&t, "a@x", ch), "reuse");
+        assert!(!redeem_ticket("nonsense", "a@x", ch));
     }
 }

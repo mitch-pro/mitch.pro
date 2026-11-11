@@ -1,10 +1,13 @@
-/* Shared voice client for /voice/ and the chat page (/matrix/).
+/* Voice engine for the chat client's call page (/matrix/public/element-call/).
  *
  * Audio is 16 kHz mono signed 16-bit PCM in 20 ms frames, relayed by the
  * server over a WebSocket (see docs/voice-channels.md).
  *
  *   MitchVoice.supported()
  *   MitchVoice.connect({ channel, ticket, onChange, onClose }) -> Promise<session>
+ *
+ * Remote audio is played through an <audio> element in this document, because
+ * the chat client mutes/unmutes "sound" by toggling every <audio> in the frame.
  *
  * session: { myId, roster, muted, talking, isSpeaking(id), setMuted(bool), leave() }
  * onChange() fires when the roster, mute state or who is talking changes.
@@ -55,6 +58,7 @@
   function teardownRaw(s) {
     try { if (s.ws) { s.ws.onclose = null; s.ws.close(); } } catch (_) {}
     try { if (s.stream) s.stream.getTracks().forEach(function (t) { t.stop(); }); } catch (_) {}
+    try { if (s.audioEl) { s.audioEl.srcObject = null; s.audioEl.remove(); } } catch (_) {}
     try { if (s.ctx) s.ctx.close(); } catch (_) {}
   }
 
@@ -77,10 +81,16 @@
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
       });
       s.ctx = new (global.AudioContext || global.webkitAudioContext)({ latencyHint: 'interactive' });
+      s.dest = s.ctx.createMediaStreamDestination();
+      s.audioEl = document.createElement('audio');
+      s.audioEl.autoplay = true;
+      s.audioEl.srcObject = s.dest.stream;
+      document.body.appendChild(s.audioEl);
       var url = URL.createObjectURL(new Blob([WORKLET], { type: 'text/javascript' }));
       await s.ctx.audioWorklet.addModule(url);
       URL.revokeObjectURL(url);
       await s.ctx.resume();
+      try { await s.audioEl.play(); } catch (_) {}
       var scheme = location.protocol === 'https:' ? 'wss://' : 'ws://';
       var q = '?channel=' + encodeURIComponent(opts.channel) + (opts.ticket ? '&ticket=' + encodeURIComponent(opts.ticket) : '');
       s.ws = new WebSocket(scheme + location.host + '/api/voice/ws' + q);
@@ -128,7 +138,7 @@
     var p = s.players[id];
     if (!p) {
       p = s.players[id] = new AudioWorkletNode(s.ctx, 'player', { numberOfInputs: 0, outputChannelCount: [1] });
-      p.connect(s.ctx.destination);
+      p.connect(s.dest);
     }
     return p;
   }
