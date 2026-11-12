@@ -514,6 +514,32 @@ fn bell_schedule_redirect(path: &str, method: &Method, search: &str) -> Option<R
     None
 }
 
+/// Origin the blocked rjuhsd.school domain redirects to: the active backup
+/// domain, else site.json's `alternate`, else the built-in default.
+fn rjuhsd_redirect_origin(
+    site: &serde_json::Value,
+    active_backup: Option<String>,
+) -> Option<String> {
+    let alternate = site
+        .get("alternate")
+        .and_then(|v| v.as_str())
+        .unwrap_or(mitch_lib::site_domains::DEFAULT_ALTERNATE);
+    let raw = active_backup.unwrap_or_else(|| alternate.to_string());
+    let u = raw.parse::<url::Url>().ok()?;
+    if !matches!(u.scheme(), "https" | "http") {
+        return None;
+    }
+    Some(u.origin().ascii_serialization())
+}
+
+/// Maps a rjuhsd.school path onto the `/rjuhsd/` mirror (`/` -> `/rjuhsd/`).
+fn rjuhsd_mirror_path(path: &str) -> String {
+    if path == "/rjuhsd" || path.starts_with("/rjuhsd/") {
+        return path.to_string();
+    }
+    format!("/rjuhsd{}", if path == "/" { "/" } else { path })
+}
+
 /// `getRealIp(req)` — precedence: public socket peer -> CF-Connecting-IP ->
 /// True-Client-IP -> X-Mitch-Client-IP -> first public XFF -> X-Real-IP ->
 /// X-Client-IP -> RFC 7239 Forwarded -> private fallbacks -> 127.0.0.1.
@@ -1427,6 +1453,29 @@ async fn handle_resolved(
                 .header(axum::http::header::CONTENT_TYPE, content_type)
                 .body(axum::body::Body::from(body))
                 .unwrap_or_else(|_| crate::errors::err_resp(500, None, None));
+        }
+    }
+
+    // rjuhsd.school is blocked on school networks, so its pages move to the
+    // /rjuhsd/ mirror on the domain mitch.pro itself links to (the active
+    // backup domain, else site.json's alternate). robots.txt and sitemap.xml
+    // were answered above; API calls and non-GET methods are left alone.
+    if rjuhsd_host
+        && (method == Method::GET || method == Method::HEAD)
+        && !path.starts_with("/api/")
+    {
+        let site = state
+            .store
+            .read_document(&state.cfg.data_dir.join("site.json"), serde_json::json!({}));
+        if let Some(origin) =
+            rjuhsd_redirect_origin(&site, mitch_lib::site_domains::active(&state.store))
+        {
+            let q = if search.is_empty() {
+                String::new()
+            } else {
+                format!("?{search}")
+            };
+            return redirect(&format!("{origin}{}{q}", rjuhsd_mirror_path(&path)), 302);
         }
     }
 
@@ -2753,5 +2802,31 @@ mod school_footer_asset_tests {
     fn school_visitor_count_script_is_public() {
         assert!(PUBLIC_ASSETS.contains(&"/rjuhsd-assets/online.js"));
         assert!(PUBLIC_ASSETS.contains(&"/site-status.js"));
+    }
+}
+
+#[cfg(test)]
+mod rjuhsd_redirect_tests {
+    use super::{rjuhsd_mirror_path, rjuhsd_redirect_origin};
+    use serde_json::json;
+
+    #[test]
+    fn paths_map_onto_the_mirror() {
+        assert_eq!(rjuhsd_mirror_path("/"), "/rjuhsd/");
+        assert_eq!(rjuhsd_mirror_path("/games"), "/rjuhsd/games");
+        assert_eq!(rjuhsd_mirror_path("/rjuhsd/x"), "/rjuhsd/x");
+    }
+
+    #[test]
+    fn active_backup_wins_over_alternate() {
+        let site = json!({"alternate": "https://alt.example/path"});
+        assert_eq!(
+            rjuhsd_redirect_origin(&site, Some("https://backup.example".into())).as_deref(),
+            Some("https://backup.example")
+        );
+        assert_eq!(
+            rjuhsd_redirect_origin(&site, None).as_deref(),
+            Some("https://alt.example")
+        );
     }
 }
