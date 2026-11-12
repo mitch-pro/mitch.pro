@@ -45,8 +45,9 @@ fn note_json(n: &db::Note) -> Value {
     })
 }
 
-/// Fetches one school's directory and adds anyone new. Returns a line for the
-/// staff page saying what happened.
+/// Fetches one school's directory, adds anyone new and records when it was
+/// read. Returns what happened for the staff page. Teacher names come only from
+/// the school's own site at run time; none are kept in the repository.
 async fn sync_school(
     state: &Arc<AppState>,
     client: &reqwest::Client,
@@ -102,6 +103,23 @@ async fn sync_school(
     json!({ "school": key, "found": 0, "added": 0, "error": last_error })
 }
 
+/// Reads every school whose list is due: never read, read over a day ago, or a
+/// failed read over six hours ago. Called by the site worker.
+pub async fn sync_due_schools(state: &Arc<AppState>) {
+    let now = mitch_lib::school::now_millis();
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(12))
+        .build()
+    else {
+        return;
+    };
+    for (key, entry) in RJUHSD_SCHOOLS {
+        if db::sync_due(&state.store, key, now, 86_400_000, 6 * 3_600_000) {
+            sync_school(state, &client, key, entry.url).await;
+        }
+    }
+}
+
 pub async fn handle(
     state: &Arc<AppState>,
     method: &Method,
@@ -151,7 +169,11 @@ pub async fn handle(
                 .collect();
             let schools: Vec<Value> = RJUHSD_SCHOOLS
                 .iter()
-                .map(|(k, e)| json!({ "key": k, "name": e.name, "teachers": db::count_teachers(&state.store, k) }))
+                .map(|(k, e)| {
+                    let sync = db::sync_status(&state.store, k)
+                        .map(|(at, found, error)| json!({ "at": at, "found": found, "error": error }));
+                    json!({ "key": k, "name": e.name, "teachers": db::count_teachers(&state.store, k), "sync": sync })
+                })
                 .collect();
             json_response(
                 200,

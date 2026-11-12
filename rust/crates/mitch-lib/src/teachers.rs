@@ -22,6 +22,8 @@
 //! Stars are published immediately. A note starts `pending` and is shown
 //! only after a moderator approves it.
 
+#![allow(clippy::expect_used)] // only on compile-time-constant regexes
+
 use crate::data::DataStore;
 use regex::Regex;
 
@@ -208,7 +210,7 @@ pub fn get_teacher(store: &DataStore, id: i64) -> Option<Teacher> {
 /// of the name or department.
 pub fn list_teachers(store: &DataStore, school: &str, query: &str) -> Vec<Teacher> {
     let conn = store.conn();
-    let like = format!("%{}%", query.trim().replace('%', "").replace('_', ""));
+    let like = format!("%{}%", query.trim().replace(['%', '_'], ""));
     let Ok(mut stmt) = conn.prepare(&format!(
         "SELECT {TEACHER_COLS} FROM teachers WHERE school = ?1 AND (name LIKE ?2 OR department LIKE ?2) ORDER BY name COLLATE NOCASE LIMIT 1000"
     )) else {
@@ -443,6 +445,113 @@ fn strip_tags(html: &str) -> String {
         .replace("&nbsp;", " ")
 }
 
+/// Titles of people who are not classroom teachers, so a directory that lists
+/// everyone doesn't fill the rating list with the front office.
+const NON_TEACHING: &[&str] = &[
+    "principal",
+    "counselor",
+    "secretary",
+    "clerk",
+    "custodian",
+    "nurse",
+    "aide",
+    "librarian",
+    "psychologist",
+    "coordinator",
+    "technician",
+    "registrar",
+    "administrator",
+    "director",
+    "manager",
+    "supervisor",
+    "receptionist",
+    "bookkeeper",
+    "attendance",
+    "campus",
+    "security",
+    "cafeteria",
+    "food service",
+    "maintenance",
+    "specialist",
+    "dean",
+    "athletic",
+    "assistant",
+];
+
+/// Whether a directory title belongs to someone who isn't a teacher. An empty
+/// title is kept: the page may simply not show one.
+pub fn is_non_teaching(title: &str) -> bool {
+    let t = title.to_lowercase();
+    !t.contains("teacher") && NON_TEACHING.iter().any(|w| t.contains(w))
+}
+
+/// Turns a directory title ("Teacher - Mathematics", "Science Teacher") into
+/// the subject ("Mathematics", "Science").
+pub fn subject_from_title(title: &str) -> String {
+    let generic = [
+        "teacher",
+        "instructor",
+        "faculty",
+        "staff",
+        "certificated",
+        "classroom teacher",
+    ];
+    let parts: Vec<String> = title
+        .split(['|', ',', ';', '/'])
+        .flat_map(|p| p.split(" - "))
+        .map(|p| {
+            let p = p.trim();
+            let lower = p.to_lowercase();
+            ["teacher", "instructor"]
+                .iter()
+                .find_map(|w| {
+                    lower
+                        .strip_suffix(w)
+                        .map(|rest| p[..rest.len()].trim().to_string())
+                })
+                .unwrap_or_else(|| p.to_string())
+        })
+        .filter(|p| !p.is_empty() && !generic.contains(&p.to_lowercase().as_str()))
+        .collect();
+    clean_text(&parts.join(", "), MAX_DEPARTMENT)
+}
+
+/// When a school's directory was last read: `(time, how many found, error)`.
+pub fn sync_status(store: &DataStore, school: &str) -> Option<(i64, i64, String)> {
+    store
+        .conn()
+        .query_row(
+            "SELECT last_at, found, error FROM teacher_sync_status WHERE school = ?1",
+            rusqlite::params![school],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .ok()
+}
+
+pub fn record_sync(store: &DataStore, school: &str, now_ms: i64, found: i64, error: &str) {
+    let _ = store.conn().execute(
+        "INSERT INTO teacher_sync_status (school, last_at, found, error) VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(school) DO UPDATE SET last_at = ?2, found = ?3, error = ?4",
+        rusqlite::params![school, now_ms, found, error],
+    );
+}
+
+/// Whether the automatic sync should read this school again: never read, a
+/// good read older than `ok_age_ms`, or a failed one older than `retry_ms`.
+pub fn sync_due(
+    store: &DataStore,
+    school: &str,
+    now_ms: i64,
+    ok_age_ms: i64,
+    retry_ms: i64,
+) -> bool {
+    match sync_status(store, school) {
+        None => true,
+        Some((at, _, err)) if err.is_empty() => now_ms - at >= ok_age_ms,
+        Some((at, ..)) => now_ms - at >= retry_ms,
+    }
+}
+
 /// Reads `(name, department)` pairs out of a school's Finalsite staff
 /// directory page. Each person is a block with class `fsConstituentItem`; the
 /// name is the element with class `fsFullName` and the department or title
@@ -470,10 +579,14 @@ pub fn parse_finalsite_directory(html: &str) -> Vec<(String, String)> {
         else {
             continue;
         };
-        let dept = dept_re
+        let title = dept_re
             .captures(chunk)
-            .map(|c| clean_text(&strip_tags(&c[1]), MAX_DEPARTMENT))
+            .map(|c| clean_text(&strip_tags(&c[1]), 160))
             .unwrap_or_default();
+        if is_non_teaching(&title) {
+            continue;
+        }
+        let dept = subject_from_title(&title);
         if name.chars().count() >= 3 && !out.iter().any(|(n, _)| *n == name) {
             out.push((name, dept));
         }
@@ -750,6 +863,40 @@ mod tests {
             ]
         );
         assert!(parse_finalsite_directory("<html><body>Loading…</body></html>").is_empty());
+    }
+
+    #[test]
+    fn titles_become_subjects_and_office_staff_are_skipped() {
+        assert_eq!(subject_from_title("Teacher - Mathematics"), "Mathematics");
+        assert_eq!(subject_from_title("Science Teacher"), "Science");
+        assert_eq!(subject_from_title("Teacher"), "");
+        assert_eq!(
+            subject_from_title("English Teacher, Journalism"),
+            "English, Journalism"
+        );
+        assert!(is_non_teaching("Assistant Principal"));
+        assert!(is_non_teaching("Attendance Clerk"));
+        assert!(!is_non_teaching("Math Teacher"));
+        assert!(!is_non_teaching(""));
+        let html = r#"<li class="fsConstituentItem"><h3 class="fsFullName">Sam Cho</h3><div class="fsTitle">Counselor</div></li>
+          <li class="fsConstituentItem"><h3 class="fsFullName">Lee Ann</h3><div class="fsTitle">Teacher - Art</div></li>"#;
+        assert_eq!(
+            parse_finalsite_directory(html),
+            vec![("Lee Ann".to_string(), "Art".to_string())]
+        );
+    }
+
+    #[test]
+    fn sync_is_due_when_never_read_or_stale() {
+        let store = temp_store("syncdue");
+        let (day, hr) = (86_400_000, 3_600_000);
+        assert!(sync_due(&store, "woodcreek", 10 * day, day, 6 * hr));
+        record_sync(&store, "woodcreek", 10 * day, 40, "");
+        assert!(!sync_due(&store, "woodcreek", 10 * day + hr, day, 6 * hr));
+        assert!(sync_due(&store, "woodcreek", 11 * day, day, 6 * hr));
+        record_sync(&store, "oakmont", 10 * day, 0, "nope");
+        assert!(!sync_due(&store, "oakmont", 10 * day + hr, day, 6 * hr));
+        assert!(sync_due(&store, "oakmont", 10 * day + 7 * hr, day, 6 * hr));
     }
 
     #[test]

@@ -131,6 +131,10 @@
         data.schools.forEach(function (s) { var o = el('option', '', s.name); o.value = s.key; o.dataset.name = s.name; sel.append(o); });
       }
       data.schools.forEach(function (s, i) { sel.options[i].textContent = s.name + ' (' + s.teachers + ')'; });
+      var cur = data.schools.find(function (s) { return s.key === data.school; });
+      var info = $('sync-info');
+      if (cur && cur.sync) info.textContent = 'Last read ' + new Date(cur.sync.at).toLocaleString() + ': ' + (cur.sync.error ? cur.sync.error : cur.sync.found + ' found');
+      else info.textContent = 'Not read from the school site yet.';
       state.school = data.school;
       sel.value = state.school;
       var list = $('teacher-list');

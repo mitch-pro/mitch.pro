@@ -274,6 +274,12 @@ impl DataStore {
                         source TEXT NOT NULL DEFAULT 'manual',
                         UNIQUE (school, name)
                     );
+                    CREATE TABLE IF NOT EXISTS teacher_sync_status (
+                        school TEXT PRIMARY KEY,
+                        last_at INTEGER NOT NULL,
+                        found INTEGER NOT NULL DEFAULT 0,
+                        error TEXT NOT NULL DEFAULT ''
+                    );
                     CREATE TABLE IF NOT EXISTS teacher_ratings (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         teacher_id INTEGER NOT NULL,

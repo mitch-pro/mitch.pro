@@ -47,19 +47,30 @@ Code: `mitch_lib::teachers` (read its module comment first).
 
 ## Where the teacher list comes from
 
-The list is a SQL table (`teachers`), filled by sync, paste, or one at a time.
+Teacher names are never kept in the repository. The server reads them from each
+school's own site (`RJUHSD_SCHOOLS`, e.g. `woodcreek.rjuhsd.us`) and stores them
+in the `teachers` table. Students pick their school on the page and see only
+that school's teachers.
 
-The sync (`POST /api/admin/teachers/sync`, `routes/admin/teachers.rs`) requests
-a staff directory page from each school's own domain (`RJUHSD_SCHOOLS`), trying
-`/about-us/staff-directory`, `/staff-directory`, `/about/staff-directory` and
-`/our-staff`, and pages with `?const_page=N`. It reads Finalsite directory
-markup (`fsConstituentItem` blocks with `fsFullName` and an optional
-`fsDepartment`/`fsTitle`). A page without that markup yields nothing, never
-junk, and the page reports what each school returned. **The parser was written
-against that markup from memory and has only been run on a test fixture: the
-district sites were unreachable when this was built.** If a school's directory
-loads by script or uses other markup, use paste or add instead, or extend
-`parse_finalsite_directory`.
+- **Automatic:** a worker (`workers_site.rs`) runs 30 seconds after boot and then
+  hourly. It reads a school when it was never read, last read over a day ago,
+  or failed over six hours ago (`teachers::sync_due`). `teacher_sync_status`
+  records when, how many were found, and any error.
+- **Manual:** the Teachers tab has *Sync from school sites* and shows each
+  school's last read. Pasting a list or adding one teacher also works, for a
+  school whose directory can't be read.
+- **What is read:** each school's staff directory (`/about-us/staff-directory`,
+  `/staff-directory`, `/about/staff-directory`, `/our-staff`, paged with
+  `?const_page=N`), Finalsite markup: `fsConstituentItem` blocks with
+  `fsFullName` and an optional `fsDepartment`/`fsTitle`.
+- **Subject:** taken from the title ("Teacher - Mathematics" or "Science
+  Teacher" give Mathematics / Science). People whose title is clearly not
+  teaching (principal, counselor, clerk, and similar, unless it also says
+  teacher) are skipped; a person with no title is kept.
+- A page without that markup yields nothing, never junk. **The parser was written
+  against that markup from memory and has only been run on a test fixture: the
+  district sites were unreachable when this was built.** If a school's directory
+  loads by script or uses other markup, extend `parse_finalsite_directory`.
 
 ## API
 
@@ -77,3 +88,5 @@ passphrase gate): `GET /api/admin/teachers?status=`, `GET .../list?school=`,
 
 Tests: unit tests in `mitch_lib::teachers`; `teacher_ratings_follow_student_and_staff_rules`
 in `crates/mitch-server/tests/staff_access.rs`.
+
+Before pushing, run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings` and `cargo test --workspace`; CI fails on clippy warnings.
