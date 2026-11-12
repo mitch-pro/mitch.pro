@@ -27,6 +27,7 @@
   const REQUEST_TTL_MS = 14 * 24 * 60 * 60 * 1000;
   const RESEND_AFTER_MS = 6 * 60 * 60 * 1000;
   const SETUP_SNOOZE_MS = 24 * 60 * 60 * 1000;
+  const DISMISS_MS = 7 * 24 * 60 * 60 * 1000;
   const CHUNK_BYTES = 48 * 1024;
   const MIN_PASSPHRASE = 8;
 
@@ -327,18 +328,32 @@
   // ── Banner (persistent status line on this device) ──────────────
 
   const banner = {
-    show(text, actions, id) {
-      const c = card('banner');
-      c.set([el('p', { text }), actions && actions.length ? el('div', { class: 'mitch-e2ee-actions' }, actions) : null]);
-      c.el.dataset.state = id || '';
+    /**
+     * Shows a status card with an x. `state` names what it is about; closing
+     * it hides that state on this device for a week. `slot` lets two cards
+     * (status, passphrase) be on screen at once.
+     */
+    show(text, actions, state, slot) {
+      const dismissKey = k('dismiss_' + state);
+      if (Date.now() - (Number(store.get(dismissKey)) || 0) < DISMISS_MS) return;
+      const c = card(slot || 'banner');
+      const close = el('button', {
+        type: 'button', class: 'mitch-e2ee-x', 'aria-label': 'Dismiss',
+        onclick: () => { store.set(dismissKey, String(Date.now())); c.close(); },
+        text: '\u00d7',
+      });
+      c.set([close, el('p', { text }), actions && actions.length ? el('div', { class: 'mitch-e2ee-actions' }, actions) : null]);
+      c.el.dataset.state = state || '';
     },
-    hide() { const n = stack().querySelector('[data-card="banner"]'); if (n) n.remove(); },
+    hide(slot) { const n = stack().querySelector(`[data-card="${slot || 'banner'}"]`); if (n) n.remove(); },
   };
 
   // ── Setup ───────────────────────────────────────────────────────
 
-  function openSetup() {
-    const m = modal('Back up your encrypted messages', true);
+  /** `reset` replaces an existing backup whose recovery key was lost. Old backed-up history is not recoverable. */
+  function openSetup(opts) {
+    const reset = !!(opts && opts.reset);
+    const m = modal(reset ? 'Start a new backup' : 'Back up your encrypted messages', true);
     const err = errorLine();
     const pass = el('input', { type: 'password', class: 'mitch-e2ee-input', autocomplete: 'new-password', 'aria-label': 'Passphrase', minlength: String(MIN_PASSPHRASE), required: true });
     const confirm = el('input', { type: 'password', class: 'mitch-e2ee-input', autocomplete: 'new-password', 'aria-label': 'Confirm passphrase', required: true });
@@ -351,7 +366,7 @@
       submit.disabled = true;
       submit.textContent = 'Creating…';
       try {
-        const encoded = await createBackup(pass.value);
+        const encoded = await createBackup(pass.value, reset);
         showRecoveryKey(m, encoded);
       } catch (ex) {
         console.error('[e2ee] setup failed', ex);
@@ -360,7 +375,9 @@
         submit.textContent = 'Create backup';
       }
     } }, [
-      el('p', { text: 'Choose a passphrase. You\'ll use it, or a recovery key we\'ll show you next, to read your encrypted messages on a new device when no other device is signed in.' }),
+      el('p', { text: reset
+        ? 'This replaces your current backup. Messages that are only in the old backup can\'t be restored, your other devices will need to be verified again, and you\'ll be asked for your mitch.pro password. Choose a new passphrase.'
+        : 'Choose a passphrase. You\'ll use it, or a recovery key we\'ll show you next, to read your encrypted messages on a new device when no other device is signed in.' }),
       el('label', {}, ['Passphrase', pass]),
       el('label', {}, ['Confirm passphrase', confirm]),
       err,
@@ -395,11 +412,11 @@
   }
 
   /** Creates secret storage, cross-signing keys and server-side backup. Returns the encoded recovery key. */
-  async function createBackup(passphrase) {
+  async function createBackup(passphrase, reset) {
     const api = cryptoApi();
     const recovery = await api.createRecoveryKeyFromPassphrase(passphrase);
     if (!recovery || !recovery.encodedPrivateKey) throw new Error('Couldn\'t create a recovery key.');
-    await api.bootstrapCrossSigning({ authUploadDeviceSigningKeys });
+    await api.bootstrapCrossSigning({ authUploadDeviceSigningKeys, setupNewCrossSigning: !!reset });
     await api.bootstrapSecretStorage({
       createSecretStorageKey: async () => recovery,
       setupNewSecretStorage: true,
@@ -409,6 +426,74 @@
     store.del(k('setup_snooze'));
     banner.hide();
     return recovery.encodedPrivateKey;
+  }
+
+  // ── Add a passphrase to a backup that only has a recovery key ──
+
+  /** Whether this device already holds every key needed to re-wrap secret storage. */
+  async function hasKeysLocally() {
+    const api = cryptoApi();
+    const st = await api.getCrossSigningStatus();
+    const c = st.privateKeysCachedLocally;
+    let backupKey = null;
+    try { backupKey = await api.getSessionBackupPrivateKey(); } catch (_) {}
+    return !!(c.masterKey && c.selfSigningKey && c.userSigningKey && backupKey);
+  }
+
+  /** Re-encrypts secret storage under a key derived from a new passphrase. Returns the new recovery key. */
+  async function addPassphrase(passphrase, currentKey) {
+    const api = cryptoApi();
+    if (currentKey) {
+      const { keyId, key } = await secretKeyFromInput(currentKey.trim());
+      heldKeys.set(keyId, key);
+      await api.bootstrapCrossSigning({});
+      try { await api.crossSignDevice(client.getDeviceId()); } catch (_) { /* already signed */ }
+      await api.loadSessionBackupPrivateKeyFromSecretStorage();
+    }
+    const recovery = await api.createRecoveryKeyFromPassphrase(passphrase);
+    await api.bootstrapSecretStorage({ createSecretStorageKey: async () => recovery, setupNewSecretStorage: true });
+    await api.checkKeyBackupAndEnable();
+    banner.hide('passphrase');
+    return recovery.encodedPrivateKey;
+  }
+
+  async function openAddPassphrase() {
+    const m = modal('Add a passphrase to your backup', true);
+    const err = errorLine();
+    const needsKey = !(await hasKeysLocally());
+    const current = el('input', { type: 'password', class: 'mitch-e2ee-input', autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Current recovery key', required: needsKey });
+    const pass = el('input', { type: 'password', class: 'mitch-e2ee-input', autocomplete: 'new-password', 'aria-label': 'New passphrase', minlength: String(MIN_PASSPHRASE), required: true });
+    const confirm = el('input', { type: 'password', class: 'mitch-e2ee-input', autocomplete: 'new-password', 'aria-label': 'Confirm passphrase', required: true });
+    const submit = el('button', { type: 'submit', class: 'mitch-e2ee-btn primary', text: 'Add passphrase' });
+    const reset = el('button', { type: 'button', class: 'mitch-e2ee-link', text: 'I don\'t have my recovery key', onclick: () => { m.close(); openSetup({ reset: true }); } });
+    m.body.append(el('form', { class: 'mitch-e2ee-form', onsubmit: async e => {
+      e.preventDefault();
+      err.textContent = '';
+      if (pass.value.length < MIN_PASSPHRASE) { err.textContent = `Use at least ${MIN_PASSPHRASE} characters.`; return; }
+      if (pass.value !== confirm.value) { err.textContent = 'The passphrases don\'t match.'; return; }
+      submit.disabled = true;
+      submit.textContent = 'Working…';
+      try {
+        showRecoveryKey(m, await addPassphrase(pass.value, needsKey ? current.value : ''));
+      } catch (ex) {
+        console.error('[e2ee] add passphrase failed', ex);
+        err.textContent = ex && ex.message ? ex.message : 'Couldn\'t add a passphrase.';
+        submit.disabled = false;
+        submit.textContent = 'Add passphrase';
+      }
+    } }, [
+      el('p', { text: 'Your backup only has a recovery key. Add a passphrase so you can restore your messages without it. You\'ll get a new recovery key to save.' }),
+      needsKey ? el('label', {}, ['Current recovery key', current]) : null,
+      el('label', {}, ['New passphrase', pass]),
+      el('label', {}, ['Confirm passphrase', confirm]),
+      err,
+      el('div', { class: 'mitch-e2ee-actions' }, [
+        needsKey ? reset : null,
+        button('Not now', () => { store.set(k('passphrase_snooze'), String(Date.now())); m.close(); }),
+        submit,
+      ]),
+    ]));
+    (needsKey ? current : pass).focus();
   }
 
   // ── Unlock with passphrase or recovery key ──────────────────────
@@ -648,6 +733,15 @@
 
   // ── Startup ─────────────────────────────────────────────────────
 
+  /** A backup made without a passphrase (e.g. by Cinny's own setup) gets a prompt to add one. */
+  async function checkPassphrase() {
+    const tuple = await client.secretStorage.getKey(null);
+    if (!tuple || tuple[1].passphrase) return;
+    banner.show('Your backup has no passphrase.', [button('Add one', () => openAddPassphrase())], 'no-passphrase', 'passphrase');
+    const snoozed = Number(store.get(k('passphrase_snooze'))) || 0;
+    if (Date.now() - snoozed > SETUP_SNOOZE_MS) openAddPassphrase();
+  }
+
   async function run() {
     try {
       const state = await assess();
@@ -658,6 +752,7 @@
         if (Date.now() - snoozed > SETUP_SNOOZE_MS) openSetup();
         return;
       }
+      await checkPassphrase();
       if (!state.verified) { await runNewDevice(); return; }
       store.del(k('outreq'));
       if (!state.backupVersion) {
@@ -707,5 +802,5 @@
   });
   if (existing) attach(existing);
 
-  root.mitchE2ee = { openSetup, openUnlock };
+  root.mitchE2ee = { openSetup, openUnlock, openAddPassphrase };
 })(typeof window !== 'undefined' ? window : globalThis);

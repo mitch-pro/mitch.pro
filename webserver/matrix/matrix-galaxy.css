@@ -1496,3 +1496,34 @@ html.theme-light .mitch-e2ee-error { color: #c4262b; }
   user-select: all;
 }
 .mitch-e2ee-check { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--t-fg); }
+.mitch-e2ee-card { position: relative; }
+.mitch-e2ee-x {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  color: var(--t-fg2);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.mitch-e2ee-x:hover { color: var(--t-fg); background: var(--t-bg3); }
+.mitch-e2ee-x:focus-visible { outline: 2px solid var(--t-ac); }
+.mitch-e2ee-card[data-state] > p:first-of-type { padding-right: 24px; }
+.mitch-e2ee-link {
+  margin-right: auto;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--t-fg2);
+  font: inherit;
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.mitch-e2ee-link:hover { color: var(--t-fg); }

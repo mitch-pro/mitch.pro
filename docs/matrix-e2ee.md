@@ -40,6 +40,23 @@ the encoded recovery key (copy, download, "I saved it" checkbox before Done).
 The passphrase derives the same key, so either one unlocks the backup. Neither
 is sent to the server.
 
+### Cards, dismissal and adding a passphrase
+
+Status cards have an x. Dismissing one hides that kind of card on this device
+for a week (`mitch_e2ee_dismiss_<state>_<user>` in localStorage). Request cards
+for a transfer have Decline instead.
+
+A backup made without a passphrase (for example by Cinny's own setup, which
+only produces a recovery key) is detected from the secret-storage key
+descriptor having no `passphrase`. The user gets a "Your backup has no
+passphrase" card and a dialog (once a day) to add one. It re-runs
+`bootstrapSecretStorage({ setupNewSecretStorage })` with a key derived from the
+new passphrase, which re-encrypts the cross-signing keys and backup key under it
+and needs them on the device. If this device doesn't hold them, the dialog asks
+for the current recovery key first. "I don't have my recovery key" replaces the
+backup entirely (new cross-signing keys, new backup; asks for the site password
+and warns that history only in the old backup is lost).
+
 ### Device transfer
 
 Message types (to-device, own user only):
