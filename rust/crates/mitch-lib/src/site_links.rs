@@ -68,6 +68,8 @@ pub const RETIRED_HREFS: &[&str] = &[
     "/shop/",
     "/friends/",
     "/members/",
+    // Added briefly as a 15th link, then dropped (it's already in the top bar).
+    "/preferences/",
 ];
 
 /// Links every install must have. Inserted if no row with that `href` exists.
@@ -279,6 +281,7 @@ mod tests {
             .collect();
         assert!(hrefs.contains(&"/learn/".to_string()));
         assert_eq!(hrefs.len(), 9);
+        assert!(!hrefs.contains(&"/preferences/".to_string()));
         assert!(hrefs.contains(&"/inventory/".to_string()));
         for retired in RETIRED_HREFS {
             assert!(!hrefs.contains(&retired.to_string()), "{retired}");

@@ -23,4 +23,4 @@ link is gone (`docs/casino.md`).
 Removed from the homepage list because they are reachable elsewhere (Shortcuts,
 Explore, the People rail, the mobile menu). Not deprecated: Games (`/games/`),
 Matrix chat (`/matrix/`), Invite friends (`/invite/`), The Market (`/shop/`),
-Manage Friends (`/friends/`) and Members (`/members/`).
+Manage Friends (`/friends/`), Members (`/members/`) and Preferences (`/preferences/`).
