@@ -28,9 +28,11 @@ from, in order:
    key is configured and the file is gone.
 
 The container must be given the variable. `docker-compose.yml` lists the
-environment variables each service receives, so `DATA_ENCRYPTION_KEY` (and
-`DATA_ENCRYPTION_KEY_PREVIOUS`, `INFISICAL_*` if used) must be listed for the
-web server services.
+environment variables each service receives. `DATA_ENCRYPTION_KEY`,
+`DATA_ENCRYPTION_KEY_PREVIOUS` and the `INFISICAL_*` variables are listed for
+`webserver-blue` and `webserver-green` (a bare name passes the host's value
+through, and is simply unset until the secrets manager provides it). Add them
+to any other service that starts to read encrypted data.
 
 ### Moving the key out of the data folder
 

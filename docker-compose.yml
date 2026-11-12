@@ -115,6 +115,18 @@ services:
       - GIPHY_API_KEYS
       - RECAPTCHA_SECRET_KEY
       - SECRET_KEY
+      # Master key for data at rest (docs/encryption-at-rest.md). Unset until
+      # the generated data/encryption.key is moved into the secrets manager.
+      - DATA_ENCRYPTION_KEY
+      - DATA_ENCRYPTION_KEY_PREVIOUS
+      # Optional: fetch the key from Infisical directly instead.
+      - INFISICAL_URL
+      - INFISICAL_CLIENT_ID
+      - INFISICAL_CLIENT_SECRET
+      - INFISICAL_PROJECT_ID
+      - INFISICAL_ENVIRONMENT
+      - INFISICAL_SECRET_PATH
+      - INFISICAL_SECRET_NAME
       - GOOGLE_ANALYTICS_ID
       - RECAPTCHA_SITE_KEY
       - CONDUIT_HOST=conduit
@@ -217,6 +229,18 @@ services:
       - GIPHY_API_KEYS
       - RECAPTCHA_SECRET_KEY
       - SECRET_KEY
+      # Master key for data at rest (docs/encryption-at-rest.md). Unset until
+      # the generated data/encryption.key is moved into the secrets manager.
+      - DATA_ENCRYPTION_KEY
+      - DATA_ENCRYPTION_KEY_PREVIOUS
+      # Optional: fetch the key from Infisical directly instead.
+      - INFISICAL_URL
+      - INFISICAL_CLIENT_ID
+      - INFISICAL_CLIENT_SECRET
+      - INFISICAL_PROJECT_ID
+      - INFISICAL_ENVIRONMENT
+      - INFISICAL_SECRET_PATH
+      - INFISICAL_SECRET_NAME
       - GOOGLE_ANALYTICS_ID
       - RECAPTCHA_SITE_KEY
       - CONDUIT_HOST=conduit
