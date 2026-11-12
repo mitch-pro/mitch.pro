@@ -63,7 +63,10 @@ pub const RETIRED_HREFS: &[&str] = &[
 ];
 
 /// Links every install must have. Inserted if no row with that `href` exists.
-const REQUIRED_LINKS: &[(&str, &str, &str)] = &[("url", "/learn/", "Learn About the Site")];
+const REQUIRED_LINKS: &[(&str, &str, &str)] = &[
+    ("url", "/learn/", "Learn About the Site"),
+    ("url", "/preferences/", "Preferences"),
+];
 
 /// Catalog used when there is no legacy `data/sites` to import. Entries with
 /// a leading `//` are disabled (kept for admins to re-enable by SQL).
@@ -273,6 +276,7 @@ mod tests {
             .map(|l| l.href)
             .collect();
         assert!(hrefs.contains(&"/learn/".to_string()));
+        assert_eq!(hrefs.len(), 15);
         assert!(hrefs.contains(&"/inventory/".to_string()));
         for retired in RETIRED_HREFS {
             assert!(!hrefs.contains(&retired.to_string()), "{retired}");

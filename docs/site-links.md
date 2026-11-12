@@ -21,7 +21,7 @@ readers. `data/sites` is no longer in the repository or read at runtime.
 2. Every start: rows whose `href` is in `RETIRED_HREFS` are forced to
    `visible = 0, deprecated = 1`, so an old database or old file cannot bring a
    retired link back. Add to that list to retire another page.
-3. Every start: required links (currently `/learn/`) are inserted if missing.
+3. Every start: required links (currently `/learn/` and `/preferences/`, which fill the homepage's 3×5 grid) are inserted if missing.
 
 ## Readers
 
