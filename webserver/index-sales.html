@@ -3,31 +3,31 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>mitch.pro — Site tour</title>
+  <title>mitch.pro — Games, chat, and cloud Linux for RJUHSD</title>
   <meta name="description" content="A student community for RJUHSD with games, Matrix chat, cloud Linux, profiles, MitchCoins, and school tools.">
   <link rel="canonical" href="https://mitchdog.com/">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://mitchdog.com/">
-  <meta property="og:title" content="mitch.pro — Site tour">
-  <meta property="og:description" content="Watch the 3:57 site tour, then create an account for games, chat, and a cloud computer.">
+  <meta property="og:title" content="mitch.pro">
+  <meta property="og:description" content="Games, Matrix chat, a cloud Linux desktop, and school tools for RJUHSD students. We keep almost no logs.">
   <meta property="og:image" content="https://mitchdog.com/media/site-tour-poster-v3.webp">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="mitch.pro — Site tour">
+  <meta name="twitter:title" content="mitch.pro">
   <meta name="twitter:description" content="Games, Matrix chat, cloud Linux, and school tools for RJUHSD students.">
   <meta name="twitter:image" content="https://mitchdog.com/media/site-tour-poster-v3.webp">
   <link rel="icon" href="/favicon.ico">
   <script src="/site-theme.js"></script>
   <script src="/onboarding-theme.js?v=3"></script>
-  <link rel="stylesheet" href="/onboarding.css?v=5">
+  <link rel="stylesheet" href="/onboarding.css?v=6">
   <link rel="stylesheet" href="/theme-tokens.css">
   <script src="/app-shell.js?v=18" defer></script>
-  <script src="/onboarding.js?v=5" defer></script>
+  <script src="/onboarding.js?v=6" defer></script>
 </head>
 <body class="sales-page onboarding-page mitch-design" data-shell="off">
   <a class="public-skip" href="#main">Skip to content</a>
   <header class="public-header site-width">
     <a class="public-brand" href="/" aria-label="mitch.pro home"><img src="/icon-192.png" width="28" height="28" alt=""><span>mitch<span class="brand-dot">.pro</span></span></a>
-    <nav class="public-nav" aria-label="Main navigation"><a href="#tour">Site tour</a><a href="#schools">Schools</a><a href="#help">Help</a></nav>
+    <nav class="public-nav" aria-label="Main navigation"><a href="#features">Features</a><a href="#privacy">Privacy</a><a href="#schools">Schools</a><a href="#help">Help</a></nav>
     <div class="header-actions">
       <button class="public-theme-toggle" type="button" data-theme-toggle aria-label="Switch to light mode" aria-pressed="false">◐</button>
       <a class="login-link" href="/enroll/">Log in</a>
@@ -35,34 +35,9 @@
     </div>
   </header>
   <main id="main" class="site-width">
-    <section class="tour-section" id="tour" aria-labelledby="hero-title">
-      <div class="tour-intro">
-        <div><h1 id="hero-title">mitch.pro</h1><p>Games, chat, and cloud Linux.</p></div>
-        <div class="tour-runtime"><span id="tour-duration">3:57</span><span>Site tour</span></div>
-      </div>
-      <div class="tour-stage">
-        <video class="tour-player" id="site-tour" controls playsinline preload="metadata" width="1920" height="968" poster="/media/site-tour-poster-v3.webp" aria-label="mitch.pro site tour">
-          <source src="/media/site-tour-v4.mp4" type="video/mp4">
-          <p>Your browser cannot play this video. <a href="/media/site-tour-v4.mp4">Download the video</a>.</p>
-        </video>
-        <button class="tour-play" id="tour-play" type="button" aria-label="Play site tour with sound" hidden>
-          <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M11 6 26 16 11 26Z"/></svg>
-          <span id="tour-play-label">Play tour</span><small>3:57 · Sound on</small>
-        </button>
-      </div>
-      <nav class="tour-chapters" aria-label="Video chapters">
-        <button type="button" data-tour-time="0"><span>0:00</span> Dashboard</button>
-        <button type="button" data-tour-time="8.3"><span>0:08</span> People &amp; profiles</button>
-        <button type="button" data-tour-time="24.7"><span>0:24</span> Games</button>
-        <button type="button" data-tour-time="45.5"><span>0:45</span> Bell schedule</button>
-        <button type="button" data-tour-time="59.9"><span>0:59</span> MitchCoins &amp; shop</button>
-        <button type="button" data-tour-time="90.3"><span>1:30</span> Matrix chat</button>
-        <button type="button" data-tour-time="119.9"><span>1:59</span> Cloud Linux</button>
-        <button type="button" data-tour-time="189.5"><span>3:09</span> Profile cosmetics</button>
-        <button type="button" data-tour-time="226.7"><span>3:46</span> Blooket tools</button>
-      </nav>
-      <p id="tour-status" class="tour-status" role="status" aria-live="polite"></p>
-      <div class="tour-caption"><a href="/media/site-tour-v4.mp4" download>Download video</a></div>
+    <section class="hero-section" id="top" aria-labelledby="hero-title">
+      <h1 id="hero-title">mitch.pro</h1>
+      <p class="hero-lead">A free student community for RJUHSD: games, chat, a Linux computer in your browser, and school tools, all in one place.</p>
       <div class="account-bar">
         <div><p>Free accounts for RJUHSD students.</p><a id="hero-try-it-out" href="/?trial=1">Look around</a></div>
         <div class="account-actions"><a class="public-button" href="/enroll/?mode=signup">Create account</a><a class="account-login" href="/enroll/">Log in</a></div>
@@ -75,9 +50,31 @@
         <li id="school-games"><h3>Games</h3><p>Browse the library, save favorites, and return to recently played games.</p><a data-school-games-link href="https://mitchdog.com/game-portal/">Open games</a></li>
         <li><h3>Cloud Linux</h3><p>Use a Linux desktop and terminal in your browser. Access depends on your account and available capacity.</p><a href="/vms/">Open VM Lab</a></li>
         <li><h3>Matrix chat</h3><p>Join community rooms, send direct messages, and use voice or video chat.</p><a href="/matrix/">Open chat</a></li>
+        <li><h3>School tools</h3><p>Bell schedules and period countdowns for each RJUHSD campus.</p><a href="https://rjuhsd.school/" target="_blank" rel="noopener">RJUHSD.school</a></li>
         <li><h3>Profiles and friends</h3><p>Find members, add friends, and choose your profile photo and background.</p><a href="/members/">View people</a></li>
         <li><h3>MitchCoins and shop</h3><p>Collect rewards and spend MitchCoins on name colors, badges, and profile effects.</p><a href="/shop/">Open shop</a><a href="/coins/?v=2">View MitchCoins</a></li>
       </ul>
+    </section>
+
+    <section class="info-section" id="privacy" aria-labelledby="privacy-title">
+      <h2 id="privacy-title">Privacy</h2>
+      <div class="info-body">
+        <p>We keep as little as possible. If a feature works without a piece of data, we don’t store it.</p>
+        <ul class="info-list">
+          <li>No browsing history. We don’t record which pages you open.</li>
+          <li>No IP addresses tied to your account, and none in staff or application logs.</li>
+          <li>Online status and what you’re doing live only in server memory, and are never written to disk. Sharing activity is off by default, and you can hide online status from everyone.</li>
+          <li>No analytics, ads, or third-party trackers.</li>
+        </ul>
+        <p>The full list of what is kept and for how long is on the <a href="/privacy/">privacy page</a>, and the <a href="https://github.com/mitch-pro/mitch.pro" target="_blank" rel="noopener">source code</a> is public.</p>
+      </div>
+    </section>
+
+    <section class="info-section" id="access" aria-labelledby="access-title">
+      <h2 id="access-title">Staying reachable</h2>
+      <div class="info-body">
+        <p>School filters sometimes block sites. If one of our domains gets blocked, your browser switches to another one on its own the next time you visit, as long as you’ve opened the site before. Bookmark the site while it works.</p>
+      </div>
     </section>
 
     <section class="schools-section" id="schools" aria-labelledby="schools-title">

@@ -46,35 +46,15 @@ html.theme-light body.onboarding-page {
 .public-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 11px 20px; border: 1px solid transparent; border-radius: 5px; background: var(--ob-accent); color: var(--ob-accent-ink) !important; font-size: 14px; font-weight: 600; white-space: nowrap; }
 .onboarding-page .public-button:hover { text-decoration: none; filter: brightness(1.06); }
 .public-button.button-small { min-height: 38px; padding: 8px 13px; font-size: 12px; }
-.tour-section { padding-top: 28px; scroll-margin-top: 12px; }
-.tour-intro { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 0 2px 22px; }
-.tour-intro h1 { font-size: 30px; font-weight: 650; line-height: 1.2; letter-spacing: -1.2px; }
-.tour-intro p { margin-top: 6px; color: var(--ob-muted); font-size: 14px; }
-.tour-runtime { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; color: var(--ob-muted); font-size: 11px; white-space: nowrap; }
-#tour-duration { color: var(--ob-ink); font-size: 18px; font-variant-numeric: tabular-nums; }
-.tour-stage { position: relative; overflow: hidden; aspect-ratio: 240/121; border: 1px solid var(--ob-line); border-radius: 10px; background: #080a0c; box-shadow: 0 20px 55px -35px #000b; }
-.tour-player { display: block; width: 100%; height: 100%; object-fit: contain; background: #080a0c; }
-.tour-play { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 9px; min-width: 144px; padding: 20px 24px; border: 1px solid #ffffff42; border-radius: 9px; background: #111417ed; color: #fff; box-shadow: 0 8px 30px #0007; }
-.tour-play:hover { background: #1d2025; border-color: var(--ob-accent); }
-.tour-play svg { width: 38px; height: 38px; fill: var(--ob-accent); }
-.tour-play > span { font-size: 15px; font-weight: 600; }
-.tour-play small { color: #b8bcc2; font-size: 11px; }
-.tour-chapters { display: flex; gap: 0; max-width: 100%; margin-top: 10px; overflow-x: auto; border-bottom: 1px solid var(--ob-line); scrollbar-width: thin; scrollbar-color: var(--ob-line) transparent; }
-.tour-chapters button { display: flex; flex-direction: column; align-items: flex-start; flex-shrink: 0; gap: 2px; min-height: 61px; padding: 9px 16px 12px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--ob-muted); font-size: 12px; white-space: nowrap; }
-.tour-chapters button:first-child { padding-left: 2px; }
-.tour-chapters button:hover { color: var(--ob-ink); }
-.tour-chapters button[aria-current="true"] { color: var(--ob-ink); border-bottom-color: var(--ob-accent); }
-.tour-chapters button span { color: var(--ob-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-.tour-status { margin-top: 12px !important; color: var(--ob-muted); font-size: 13px; }
-.tour-status:empty { display: none; }
-.tour-caption { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; padding: 12px 2px 0; color: var(--ob-muted); font-size: 11px; }
-.tour-caption a { flex-shrink: 0; text-decoration: underline; text-underline-offset: 3px; }
+.hero-section { padding-top: 48px; scroll-margin-top: 12px; }
+.hero-section h1 { font-size: 40px; font-weight: 650; line-height: 1.15; letter-spacing: -1.6px; }
+.hero-lead { max-width: 56ch; margin: 14px 0 32px !important; color: var(--ob-muted); font-size: 17px; line-height: 1.6; }
 .account-bar { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 24px; padding: 22px 24px; border: 1px solid var(--ob-line); border-radius: 8px; background: var(--ob-panel); }
 .account-bar p { font-size: 15px; font-weight: 500; }
 .account-bar > div > a:not(.public-button) { color: var(--ob-muted); font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
 .account-actions { display: flex; align-items: center; gap: 24px; }
 .account-actions .account-login { font-size: 13px !important; }
-.features-section, .schools-section, .help-section { margin-top: 56px; padding-top: 28px; border-top: 1px solid var(--ob-line); scroll-margin-top: 24px; }
+.features-section, .info-section, .schools-section, .help-section { margin-top: 56px; padding-top: 28px; border-top: 1px solid var(--ob-line); scroll-margin-top: 24px; }
 .feature-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 30px 48px; list-style: none; margin: 28px 0 0; padding: 0; }
 .feature-grid li { min-width: 0; scroll-margin-top: 24px; }
 .feature-grid h3 { margin-bottom: 8px; font-size: 17px; font-weight: 600; letter-spacing: -.2px; }
@@ -87,6 +67,12 @@ html.theme-light body.onboarding-page {
 .school-card { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 17px 0; border-bottom: 1px solid var(--ob-line); font-size: 13px; line-height: 1.4; }
 .school-card img { flex-shrink: 0; width: 40px; height: 40px; padding: 3px; border: 1px solid #ddd; border-radius: 5px; background: #fff; object-fit: contain; }
 .school-card small { display: block; margin-top: 3px; color: var(--ob-muted); font-size: 11px; }
+.info-section { display: grid; grid-template-columns: 1fr 2fr; gap: 48px; }
+.info-body { max-width: 68ch; color: var(--ob-muted); font-size: 14px; line-height: 1.8; }
+.info-body p + p, .info-body ul + p { margin-top: 14px; }
+.info-body a { color: var(--ob-ink); text-decoration: underline; text-underline-offset: 3px; }
+.info-list { margin: 14px 0 0; padding-left: 20px; }
+.info-list li { margin-bottom: 6px; }
 .help-section { display: grid; grid-template-columns: 1fr 2fr; gap: 48px; }
 .help-list details { padding: 18px 0; border-bottom: 1px solid var(--ob-line); }
 .help-list details:first-child { padding-top: 0; }
@@ -110,26 +96,19 @@ html.theme-light body.onboarding-page {
   .public-nav { order: 3; width: 100%; gap: 24px; }
   .header-actions { gap: 16px; }
   .header-actions .button-small { display: none; }
-  .tour-section { padding-top: 22px; }
-  .tour-intro { padding-bottom: 18px; gap: 16px; }
-  .tour-intro h1 { font-size: 26px; }
-  .tour-intro p { font-size: 13px; }
-  .tour-stage { aspect-ratio: 16/10; border-radius: 7px; }
-  .tour-play { min-width: 126px; padding: 13px 18px; gap: 6px; }
-  .tour-play svg { width: 30px; height: 30px; }
-  .tour-play > span { font-size: 14px; }
-  .tour-chapters button { min-height: 58px; padding-inline: 12px; font-size: 11px; }
-  .tour-caption { flex-direction: column; gap: 8px; padding-top: 12px; font-size: 10px; }
+  .hero-section { padding-top: 32px; }
+  .hero-section h1 { font-size: 32px; }
+  .hero-lead { font-size: 15px; }
   .account-bar { align-items: flex-start; flex-direction: column; gap: 18px; padding: 18px; }
   .account-bar p { font-size: 14px; }
   .account-actions { width: 100%; gap: 24px; }
   .account-actions .public-button { flex: 1; }
-  .features-section, .schools-section, .help-section { margin-top: 36px; padding-top: 24px; }
+  .features-section, .info-section, .schools-section, .help-section { margin-top: 36px; padding-top: 24px; }
   .feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 24px; }
   .school-grid { column-gap: 18px; }
   .school-card { gap: 9px; font-size: 12px; }
   .school-card img { width: 34px; height: 34px; }
-  .help-section { grid-template-columns: 1fr; gap: 24px; }
+  .help-section, .info-section { grid-template-columns: 1fr; gap: 16px; }
   .public-footer { margin-top: 40px; }
 }
 @media (max-width: 380px) {

@@ -1,5 +1,7 @@
 # Public intro and recorded tour
 
+> **The intro page no longer embeds the video.** `index-sales.html` is now a text overview: what the site offers, a short privacy summary (mirrors [privacy.md](privacy.md)), a brief note on the backup-domain fallback ([blocked-domain-fallback.md](blocked-domain-fallback.md)), schools, and help. Keep the privacy and fallback claims in sync with those docs. The video, poster and tooling below are retained but unused by the page.
+
 The public introduction is `webserver/index-sales.html`, styled by `webserver/onboarding.css`. Signed-out visitors see it at `/`; `/index-sales.html` also opens it directly, with or without a session. The player is the main content at the top, followed by a horizontal chapter strip, download link, account actions, site links, schools, and help.
 
 Login and account creation remain at `/enroll/`, using `webserver/public/enroll/enroll.css`. Both pages share `onboarding-theme.js` and `onboarding.js`; `data-presentation="onboarding"` keeps account-shell styles out of the public pages.
