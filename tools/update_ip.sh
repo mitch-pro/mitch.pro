@@ -20,9 +20,12 @@ fi
 IP_CACHE_FILE="$BASE_DIR/.current_public_ip"
 TEMP_IP_FILE="$BASE_DIR/.temp_public_ip_override"
 
-export DOPPLER_ENABLE_DNS_RESOLVER=true
+# Doppler by default, Infisical when INFISICAL=True is set in .env.
+# shellcheck source=tools/secrets-provider.sh
+. "$BASE_DIR/tools/secrets-provider.sh"
+secrets_init "$BASE_DIR/.env"
 
-# Helper function to fetch secret from Doppler (or .env fallback), matching deploy.sh pattern
+# Helper function to fetch a secret from Doppler/Infisical (or .env fallback), matching deploy.sh pattern
 get_secret() {
     local key="$1"
     local val=""
@@ -48,16 +51,11 @@ get_secret() {
         fi
     done
 
-    # 3. Try fetching from Doppler CLI (user or sudo context in BASE_DIR)
-    if command -v doppler &> /dev/null; then
-        val=$(cd "$BASE_DIR" 2>/dev/null && doppler secrets get "$key" --plain --no-check-version 2>/dev/null || echo "")
-        if [ -z "$val" ] && command -v sudo &> /dev/null; then
-            val=$(cd "$BASE_DIR" 2>/dev/null && sudo -n doppler secrets get "$key" --plain --no-check-version 2>/dev/null || echo "")
-        fi
-        if [ -n "$val" ]; then
-            echo "$val"
-            return 0
-        fi
+    # 3. Try fetching from the secrets CLI (user or sudo context in BASE_DIR)
+    val=$(cd "$BASE_DIR" 2>/dev/null && SECRETS_SUDO=1 secrets_get "$key" || echo "")
+    if [ -n "$val" ]; then
+        echo "$val"
+        return 0
     fi
 
     # 4. Fallback to .env file
@@ -178,7 +176,7 @@ if command -v gh &>/dev/null; then
     fi
 fi
 
-# 3. Fetch secrets from Doppler (or .env)
+# 3. Fetch secrets from the secrets manager (or .env)
 CLOUDFLARE_API_TOKEN=$(get_secret "CLOUDFLARE_API_TOKEN")
 CLOUDFLARE_RECORDS=$(get_secret "CLOUDFLARE_RECORDS")
 FREEDNS_UPDATE_URLS=$(get_secret "FREEDNS_UPDATE_URLS")

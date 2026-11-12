@@ -8,9 +8,8 @@
 //!
 //! In order:
 //!
-//! 1. `DATA_ENCRYPTION_KEY` in the environment. `doppler run` and
-//!    `infisical run` inject it, and `set_external_key` lets the server hand
-//!    over one it fetched from the Infisical API itself.
+//! 1. `DATA_ENCRYPTION_KEY` in the environment, which `doppler run` or
+//!    `infisical run` injects (see `tools/secrets-provider.sh`).
 //! 2. `<data dir>/encryption.key`, the bootstrap file.
 //! 3. Neither: a new random key is generated and written to that file
 //!    (mode 0600). The server then sends a notification, without the key in
@@ -43,7 +42,6 @@ use base64::Engine;
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -59,15 +57,6 @@ pub const KEY_ID_FILE: &str = "encryption.keyid";
 
 const MAGIC: &[u8; 6] = b"MPENC\x01";
 const HEADER_LEN: usize = MAGIC.len() + 4 + 12;
-
-static EXTERNAL_KEY: OnceLock<String> = OnceLock::new();
-
-/// Supplies a key fetched from a secrets manager API (Infisical). It is used
-/// as if it had been in `DATA_ENCRYPTION_KEY`. Only the first call has an
-/// effect, and it must happen before `KeyRing::load`.
-pub fn set_external_key(value: String) {
-    let _ = EXTERNAL_KEY.set(value);
-}
 
 /// Where the primary key came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -206,11 +195,7 @@ impl KeyRing {
     pub fn load(data_dir: &Path) -> Result<Self, KeyError> {
         std::fs::create_dir_all(data_dir)?;
         let file_path = data_dir.join(KEY_FILE);
-        let external = EXTERNAL_KEY
-            .get()
-            .cloned()
-            .or_else(|| std::env::var(KEY_ENV).ok())
-            .filter(|v| !v.trim().is_empty());
+        let external = std::env::var(KEY_ENV).ok().filter(|v| !v.trim().is_empty());
         let external = external.map(|v| parse_key(&v, KEY_ENV)).transpose()?;
         let from_file = match std::fs::read_to_string(&file_path) {
             Ok(text) => Some(parse_key(&text, KEY_FILE)?),

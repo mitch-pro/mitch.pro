@@ -60,17 +60,30 @@ main() {
         fi
     }
 
+    # Secrets come from Doppler, or from Infisical when INFISICAL=True is set in
+    # .env (tools/secrets-provider.sh). Either CLI is configured by root outside the
+    # repo. If the helper is missing, fall back to the Doppler-only behaviour.
+    if [ -f "$PROJECT_DIR/tools/secrets-provider.sh" ]; then
+        # shellcheck source=tools/secrets-provider.sh
+        . "$PROJECT_DIR/tools/secrets-provider.sh"
+    else
+        secrets_init() { export DOPPLER_ENABLE_DNS_RESOLVER=true; }
+        secrets_available() { command -v doppler &> /dev/null && doppler secrets download --format json &> /dev/null; }
+        secrets_get() { doppler secrets get "$1" --plain 2>/dev/null || echo ""; }
+        secrets_run() { doppler run -- "$@"; }
+    fi
+    secrets_init "$PROJECT_DIR/.env"
+
     # 1. Fetch NTFY_TOPIC, NTFY_USER, and NTFY_PASS for the deploy script's notifications
     NTFY_TOPIC=""
     NTFY_USER=""
     NTFY_PASS=""
-    DOPPLER_AVAILABLE=false
-    export DOPPLER_ENABLE_DNS_RESOLVER=true
-    if command -v doppler &> /dev/null && doppler secrets download --format json &> /dev/null; then
-        DOPPLER_AVAILABLE=true
-        NTFY_TOPIC=$(doppler secrets get NTFY_TOPIC --plain 2>/dev/null || echo "")
-        NTFY_USER=$(doppler secrets get NTFY_USER --plain 2>/dev/null || echo "")
-        NTFY_PASS=$(doppler secrets get NTFY_PASS --plain 2>/dev/null || echo "")
+    SECRETS_AVAILABLE=false
+    if secrets_available; then
+        SECRETS_AVAILABLE=true
+        NTFY_TOPIC=$(secrets_get NTFY_TOPIC)
+        NTFY_USER=$(secrets_get NTFY_USER)
+        NTFY_PASS=$(secrets_get NTFY_PASS)
     else
         ENV_PATH="$PROJECT_DIR/.env"
         if [ -f "$ENV_PATH" ]; then
@@ -108,7 +121,7 @@ main() {
         curl -s "${auth_args[@]}" -H "Title: $title" -H "Priority: $priority" -d "$msg" "$url" > /dev/null || true
     }
 
-    # Helper to run docker compose wrapped in doppler run (if Doppler is available), keeping secrets off disk and avoiding bash evaluation bugs.
+    # Helper to run docker compose wrapped in `doppler run` / `infisical run` (if the secrets provider is available), keeping secrets off disk and avoiding bash evaluation bugs.
     # Only (re)creating a container needs this: that's the sole point secrets
     # actually get injected into its environment (e.g. webserver-blue/green's
     # bare PIA_USER/PIA_PASS/etc. compose vars, pulled from the calling
@@ -118,8 +131,8 @@ main() {
     # network round-trip on every single call - measured at ~1.1s for just
     # the Caddy reload exec, which was almost the entire reported swap time.
     run_docker_compose() {
-        if [ "$DOPPLER_AVAILABLE" = true ]; then
-            doppler run -- docker compose "$@"
+        if [ "$SECRETS_AVAILABLE" = true ]; then
+            secrets_run docker compose "$@"
         else
             docker compose "$@"
         fi
@@ -262,8 +275,8 @@ main() {
         echo "[deploy] Fast-path: triggering static cache refresh API on running containers..."
 
         SECRET_KEY=""
-        if [ "$DOPPLER_AVAILABLE" = true ]; then
-            SECRET_KEY=$(doppler secrets get SECRET_KEY --plain 2>/dev/null || echo "")
+        if [ "$SECRETS_AVAILABLE" = true ]; then
+            SECRET_KEY=$(secrets_get SECRET_KEY)
         elif [ -f "$PROJECT_DIR/.env" ]; then
             SECRET_KEY=$(grep -E "^SECRET_KEY=" "$PROJECT_DIR/.env" | cut -d= -f2- | tr -d '"' | tr -d "'")
         fi

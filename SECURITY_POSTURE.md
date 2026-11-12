@@ -14,7 +14,7 @@ This is the public security note for the open-source tree. Detailed exploit writ
 - **Admin simulation:** Removed.
 - **Webhooks:** `/api/sms-reply` requires `SMS_WEBHOOK_SECRET`.
 - **Headers:** Caddy sets `nosniff`, framing controls, referrer policy, and a pragmatic CSP (inline scripts still used by many pages).
-- **Secrets:** Runtime credentials live in Doppler/env; not in git.
+- **Secrets:** Runtime credentials live in Doppler or Infisical (docs/secrets-providers.md) or env; not in git.
 
 ## Reporting
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tools/add_cloudflare_domain.sh - Helper to add a domain to Doppler CLOUDFLARE_RECORDS
+# tools/add_cloudflare_domain.sh - Helper to add a domain to the CLOUDFLARE_RECORDS secret
 # Usage: ./tools/add_cloudflare_domain.sh <ZONE_ID> <DOMAIN_NAME> [A|TXT]
 
 set -euo pipefail
@@ -7,7 +7,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-export DOPPLER_ENABLE_DNS_RESOLVER=true
+# Doppler by default, Infisical when INFISICAL=True is set in .env.
+# shellcheck source=tools/secrets-provider.sh
+. "$SCRIPT_DIR/secrets-provider.sh"
+secrets_init "$BASE_DIR/.env"
+export SECRETS_SUDO=1
 
 if [ "$#" -lt 2 ]; then
     echo "Usage: $0 <ZONE_ID> <DOMAIN_NAME> [TYPE: A|TXT]"
@@ -21,7 +25,7 @@ DOMAIN_NAME="$2"
 RECORD_TYPE="${3:-A}"
 RECORD_TYPE=$(echo "$RECORD_TYPE" | tr '[:lower:]' '[:upper:]')
 
-# Helper function to fetch secret from Doppler (or .env fallback)
+# Helper function to fetch a secret from Doppler/Infisical (or .env fallback)
 get_secret() {
     local key="$1"
     local val=""
@@ -29,30 +33,19 @@ get_secret() {
         echo "${!key}"
         return 0
     fi
-    if command -v doppler &> /dev/null; then
-        val=$(doppler secrets get "$key" --plain 2>/dev/null || echo "")
-        if [ -z "$val" ] && command -v sudo &> /dev/null; then
-            val=$(sudo -n doppler secrets get "$key" --plain 2>/dev/null || echo "")
-        fi
-    fi
+    val=$(secrets_get "$key")
     if [ -z "$val" ] && [ -f "$BASE_DIR/.env" ]; then
         val=$(grep -E "^${key}=" "$BASE_DIR/.env" | cut -d= -f2- | tr -d '"' | tr -d "'" || echo "")
     fi
     echo "$val"
 }
 
-# Helper function to set secret in Doppler
+# Helper function to set a secret in Doppler/Infisical
 set_secret() {
     local key="$1"
     local val="$2"
-    if command -v doppler &> /dev/null; then
-        if doppler secrets set "$key=$val" &>/dev/null; then
-            return 0
-        elif command -v sudo &> /dev/null; then
-            if sudo -n doppler secrets set "$key=$val" &>/dev/null; then
-                return 0
-            fi
-        fi
+    if secrets_set "$key" "$val"; then
+        return 0
     fi
     echo "[warning] Could not update Doppler directly. Please manually set $key=\"$val\" in Doppler."
     return 1
@@ -61,8 +54,8 @@ set_secret() {
 # 1. Fetch Cloudflare API Token
 CLOUDFLARE_API_TOKEN=$(get_secret "CLOUDFLARE_API_TOKEN")
 if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-    echo "[error] CLOUDFLARE_API_TOKEN not found in Doppler or .env."
-    echo "Please add CLOUDFLARE_API_TOKEN to Doppler first."
+    echo "[error] CLOUDFLARE_API_TOKEN not found in the secrets manager or .env."
+    echo "Please add CLOUDFLARE_API_TOKEN to Doppler/Infisical first."
     exit 1
 fi
 
@@ -125,9 +118,9 @@ else
     UPDATED_RECORDS="$NEW_ENTRY"
 fi
 
-echo "[info] Updating Doppler secret CLOUDFLARE_RECORDS..."
+echo "[info] Updating secret CLOUDFLARE_RECORDS..."
 if set_secret "CLOUDFLARE_RECORDS" "$UPDATED_RECORDS"; then
-    echo "[success] Doppler secret CLOUDFLARE_RECORDS updated successfully!"
+    echo "[success] Secret CLOUDFLARE_RECORDS updated successfully!"
     echo "New record added: $NEW_ENTRY"
     echo "Full records list: $UPDATED_RECORDS"
 else

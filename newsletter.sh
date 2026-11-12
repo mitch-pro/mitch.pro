@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
-# newsletter.sh - Wrapper script that pipes Doppler secrets into newsletter.py
+# newsletter.sh - Wrapper script that runs newsletter.py with the secrets from
+# Doppler, or from Infisical when INFISICAL=True is set in .env
+# (tools/secrets-provider.sh).
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-export DOPPLER_ENABLE_DNS_RESOLVER=true
+# shellcheck source=tools/secrets-provider.sh
+. "$SCRIPT_DIR/tools/secrets-provider.sh"
+secrets_init "$SCRIPT_DIR/.env"
 
-if command -v doppler &>/dev/null && doppler secrets &>/dev/null; then
-    exec doppler run -- ./newsletter.py "$@"
+if secrets_available; then
+    secrets_run ./newsletter.py "$@"
+    exit $?
 elif command -v sudo &>/dev/null; then
-    exec sudo doppler run -- ./newsletter.py "$@"
+    exec sudo "$(secrets_cli)" run -- ./newsletter.py "$@"
 else
     exec ./newsletter.py "$@"
 fi
