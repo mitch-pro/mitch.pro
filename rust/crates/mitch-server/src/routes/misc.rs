@@ -690,10 +690,7 @@ fn games(state: &Arc<AppState>, body: &serde_json::Value, headers: &HeaderMap) -
                     return false;
                 }
             }
-            if !q.is_empty() && !label.to_lowercase().contains(&q) {
-                return false;
-            }
-            true
+            q.is_empty() || label.to_lowercase().contains(&q)
         })
         .collect();
     let total = filtered.len();
@@ -1052,13 +1049,8 @@ fn is_authorized_cache_refresh(
         false,
     );
     let sid = cookies.auth_sid();
-    if mitch_lib::auth::valid_id(&sid, &state.id_secret)
+    mitch_lib::auth::valid_id(&sid, &state.id_secret)
         && mitch_lib::auth::is_any_admin_id(&state.store, &state.id_secret, &sid, false)
-    {
-        return true;
-    }
-
-    false
 }
 
 /// `GET|POST /api/cache/refresh` (and aliases) — server.js:10624-10655.

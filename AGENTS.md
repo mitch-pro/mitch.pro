@@ -84,6 +84,6 @@
 
 ## Verification and test discipline
 
-- Never push without local validation: autonomous agents must run `cargo test --workspace`, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings` (CI treats clippy warnings as errors, and they are a common cause of failed runs), and any relevant test suites locally before committing or pushing to `master`. No exceptions — "it's a small change" or "CI will catch it" is not a reason to skip this; a commit that hasn't been run locally has no business reaching `master`, let alone triggering a production deploy.
+- Never push without local validation: autonomous agents must run `cargo test --workspace`, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings` (CI treats clippy warnings as errors, and they are a common cause of failed runs; CI uses the current stable Rust, so run `rustup update stable` first, because a newer clippy can reject code an older one accepted), and any relevant test suites locally before committing or pushing to `master`. No exceptions — "it's a small change" or "CI will catch it" is not a reason to skip this; a commit that hasn't been run locally has no business reaching `master`, let alone triggering a production deploy.
 - Major subsystem integrations (such as cross-origin bridges, auth grant systems, or proxies) require explicit confirmation rather than direct autonomous pushes to `master`.
 - Do not commit temporary test artifacts, media assets, or fixture data to tracked webroots or the repository.
