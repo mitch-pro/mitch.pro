@@ -32,6 +32,7 @@ pub mod moderation;
 pub mod newsletters;
 pub mod owner_container;
 pub mod support;
+pub mod teachers;
 pub mod updates;
 pub mod vm;
 
@@ -261,6 +262,11 @@ pub async fn handle(
     // Feedback inbox (/moderator/feedback/): moderators read and mark handled,
     // admins delete.
     if let Some(resp) = feedback::handle(state, method, path, search, body, &ctx) {
+        return Some(resp);
+    }
+
+    // Rate My Teacher review and teacher list (/moderator/teachers/).
+    if let Some(resp) = teachers::handle(state, method, path, search, body, &ctx).await {
         return Some(resp);
     }
 

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Teacher ratings — mitch.pro</title>
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/moderator/feedback/feedback.css">
+<link rel="stylesheet" href="/moderator/teachers/teachers.css">
+<script src="/app-shell.js" defer></script>
+</head>
+<body class="app-shell">
+<main class="fb-wrap">
+  <h1>Teacher ratings</h1>
+  <p class="fb-sub" id="denied" hidden>This page is for moderators and admins.</p>
+  <div id="app" hidden>
+    <div class="fb-tabs" id="main-tabs" role="tablist" aria-label="Section">
+      <button type="button" role="tab" id="tab-notes" aria-selected="true">Notes</button>
+      <button type="button" role="tab" id="tab-teachers" aria-selected="false">Teachers</button>
+    </div>
+
+    <section id="notes-view">
+      <div class="fb-tabs" id="tabs" role="tablist" aria-label="Filter"></div>
+      <div id="list"></div>
+    </section>
+
+    <section id="teachers-view" hidden>
+      <div class="tr-bar">
+        <label class="tr-field">School <select id="school"></select></label>
+        <button type="button" class="fb-btn" id="sync">Sync from school sites</button>
+      </div>
+      <p class="fb-sub" id="sync-info"></p>
+      <form id="add-form" class="tr-bar" autocomplete="off">
+        <input id="add-name" placeholder="Teacher name" aria-label="Teacher name" required>
+        <input id="add-dept" placeholder="Department (optional)" aria-label="Department">
+        <button type="submit" class="fb-btn primary">Add</button>
+      </form>
+      <details class="tr-paste">
+        <summary>Paste a list</summary>
+        <form id="paste-form">
+          <textarea id="paste-text" rows="6" aria-label="Teacher list" placeholder="One per line: Name, or Name | Department. &quot;Last, First&quot; works too."></textarea>
+          <button type="submit" class="fb-btn primary">Import</button>
+        </form>
+      </details>
+      <div id="teacher-list"></div>
+    </section>
+
+    <p class="fb-status" id="status" role="status"></p>
+  </div>
+
+  <dialog id="pass-dialog" class="fb-dialog">
+    <form id="pass-form" autocomplete="off">
+      <h2>Admin passphrase</h2>
+      <input type="password" id="pass-input" autocomplete="current-password" aria-label="Admin passphrase" required>
+      <p class="fb-status" id="pass-status"></p>
+      <div class="fb-row"><button type="button" class="fb-btn" id="pass-cancel">Cancel</button><button type="submit" class="fb-btn primary">Unlock</button></div>
+    </form>
+  </dialog>
+</main>
+<script src="/moderator/teachers/teachers.js"></script>
+<script src="/admin/passphrase-help.js" defer></script>
+</body>
+</html>

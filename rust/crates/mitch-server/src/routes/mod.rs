@@ -40,6 +40,7 @@ pub mod rjuhsd_online;
 pub mod school_menu;
 pub mod staff_hub;
 pub mod support;
+pub mod teachers;
 pub mod team;
 pub mod tester;
 pub mod vm;

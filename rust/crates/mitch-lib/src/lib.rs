@@ -62,6 +62,7 @@ pub mod site_updates;
 pub mod sso;
 pub mod state;
 pub mod support;
+pub mod teachers;
 pub mod tester;
 pub mod tokens;
 pub mod totp;

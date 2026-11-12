@@ -38,6 +38,20 @@ pub fn spawn(state: std::sync::Arc<AppState>) {
             }
         });
     }
+    // Teacher lists for Rate My Teacher are read from each school's own site
+    // (docs/rate-my-teacher.md): shortly after boot, then checked hourly. Only
+    // schools whose list is due are fetched.
+    {
+        let state = state.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(3600));
+            loop {
+                tick.tick().await;
+                crate::routes::admin::teachers::sync_due_schools(&state).await;
+            }
+        });
+    }
     // ── Premium maintenance inside the boot block ─────────────────────────
     tokio::spawn(async move {
         // JS: setTimeout(() => { ...workers... }, 100).

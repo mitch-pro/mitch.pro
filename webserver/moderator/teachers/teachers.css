@@ -1,0 +1,10 @@
+/* Teacher ratings staff page. Builds on the feedback inbox styles. */
+.tr-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-bottom: 12px; }
+.tr-field { display: flex; flex-direction: column; gap: 5px; font-size: .78rem; font-weight: 600; color: var(--t-fg2); }
+.tr-bar input, .tr-bar select, .tr-paste textarea { font: inherit; font-size: .9rem; color: var(--t-fg); background: var(--t-bg3, var(--t-bg2)); border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm, 7px); padding: 8px 10px; box-sizing: border-box; }
+.tr-bar input { flex: 1 1 160px; }
+.tr-paste { margin-bottom: 16px; }
+.tr-paste summary { cursor: pointer; font-weight: 600; font-size: .9rem; margin-bottom: 8px; }
+.tr-paste textarea { display: block; width: 100%; margin-bottom: 8px; resize: vertical; }
+.tr-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--t-bd); font-size: .92rem; }
+.tr-row small { color: var(--t-fg2); margin-left: 8px; }
