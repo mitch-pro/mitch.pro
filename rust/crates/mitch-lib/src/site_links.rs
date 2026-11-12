@@ -65,7 +65,7 @@ pub const RETIRED_HREFS: &[&str] = &[
 /// Links every install must have. Inserted if no row with that `href` exists.
 const REQUIRED_LINKS: &[(&str, &str, &str)] = &[
     ("url", "/learn/", "Learn About the Site"),
-    ("url", "/preferences/", "Preferences"),
+    ("url", "/support/", "Support"),
 ];
 
 /// Catalog used when there is no legacy `data/sites` to import. Entries with

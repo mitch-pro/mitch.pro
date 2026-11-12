@@ -289,7 +289,7 @@ function artForDestination(label, href) {
 function categoryForLabel(label, isAdmin) {
   var l = label.toLowerCase();
   if (isAdmin) return 'Admin';
-  if (l.includes('feedback') || l.includes('learn about')) return 'Help';
+  if (l.includes('feedback') || l.includes('learn about') || l.includes('support')) return 'Help';
   if (l.includes('market') || l.includes('shop')) return 'Account & Market';
   if (l.includes('chat') || l.includes('invite') || l.includes('leaderboard') || l.includes('friends') || l.includes('members')) return 'Social & Chat';
   if (l.includes('games')) return 'Entertainment';
