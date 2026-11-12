@@ -370,24 +370,16 @@ function parseSites(text) {
     return a.localeCompare(b);
   });
 
-  for (var j = 0; j < sortedCats.length; j++) {
-    var catName = sortedCats[j];
-    if (categories[catName].length === 0) continue;
-    var catDiv = document.createElement('section');
-    catDiv.className = 'category-group' + (catName === 'Admin' ? ' admin-category' : '');
-    catDiv.dataset.category = catName.toLowerCase();
-    var catTitle = document.createElement('div');
-    catTitle.className = 'category-title';
-    catTitle.innerHTML = '<span>' + escText(catName) + '</span><small>' + categories[catName].length + ' · ' + escText(describeCategory(catName)) + '</small>';
-    catDiv.appendChild(catTitle);
-
-    var gridDiv = document.createElement('div');
-    gridDiv.className = 'category-grid';
+  // One flat grid. Categories only decide the order (see categoryForLabel).
+  var catDiv = document.createElement('section');
+  catDiv.className = 'category-group';
+  var gridDiv = document.createElement('div');
+  gridDiv.className = 'category-grid';
+  sortedCats.forEach(function(catName) {
     categories[catName].forEach(function(el) { gridDiv.appendChild(el); });
-
-    catDiv.appendChild(gridDiv);
-    container.appendChild(catDiv);
-  }
+  });
+  catDiv.appendChild(gridDiv);
+  container.appendChild(catDiv);
   filterHomeLinks();
   window.cachedEntries = entries;
 }

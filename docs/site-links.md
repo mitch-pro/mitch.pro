@@ -12,7 +12,7 @@ readers. `data/sites` is no longer in the repository or read at runtime.
 | `admin_only` | Shown only to admins (the old `admin ` prefix). |
 | `visible` | `0` hides the link without deleting it (the old `//` lines). |
 | `deprecated` | The page was retired from navigation. Always hidden. |
-| `sort_order` | Display order. The homepage groups links by label itself (`categoryForLabel` in `index.html`). |
+| `sort_order` | Display order. The homepage shows one flat grid and uses `categoryForLabel` in `index.html` only to order links (no visible category headings). |
 
 ## Startup behavior (`site_links::seed`)
 
