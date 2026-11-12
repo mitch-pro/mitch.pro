@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Privacy — mitch.pro</title>
-  <meta name="description" content="How mitch.pro collects, uses, shares, and protects account and activity information.">
-  <link rel="canonical" href="https://mitchdog.com/privacy/">
+  <meta name="description" content="What mitch.pro keeps about you, what it doesn’t, and for how long. No browsing history, no IP addresses tied to accounts, no trackers.">
+  <link rel="canonical" href="https://mitch.pro/privacy/">
   <link rel="stylesheet" href="/app.css">
   <link rel="stylesheet" href="/legal.css?v=1">
   <script src="/app-shell.js" defer></script>
@@ -14,18 +14,19 @@
   <main class="legal-shell">
     <header class="legal-hero">
       <h1>Privacy</h1>
-      <p>Last updated September 3, 2026</p>
+      <p>Last updated November 12, 2026</p>
     </header>
 
     <div class="legal-layout">
       <nav class="legal-toc" aria-label="Privacy sections">
         <a href="#overview">Overview</a>
-        <a href="#collect">What we collect</a>
+        <a href="#collect">What we keep</a>
+        <a href="#notkept">What we don’t keep</a>
         <a href="#use">How we use it</a>
         <a href="#visibility">What others see</a>
         <a href="#chat">Chat and encryption</a>
-        <a href="#sharing">Sharing</a>
-        <a href="#retention">Retention and security</a>
+        <a href="#sharing">Third parties</a>
+        <a href="#retention">Retention</a>
         <a href="#choices">Your choices</a>
         <a href="#age">Age requirements</a>
         <a href="#contact">Contact</a>
@@ -34,32 +35,46 @@
       <article class="legal-content">
         <section id="overview">
           <h2>Overview</h2>
-          <p>mitch.pro is a private student community with profiles, messaging, games, school-day tools, virtual coins, notifications, and moderation features. This policy describes information handled by the mitch.pro service. It does not cover independent websites or games that you open through the service.</p>
-          <p>We do not sell personal information. We use account and activity information to run the service, protect the community, fix problems, and provide features you choose to use.</p>
+          <p>mitch.pro is a student community with profiles, messaging, games, school-day tools, virtual coins, and moderation features. This policy covers the mitch.pro service. It does not cover independent websites or games you open through it.</p>
+          <p>We don’t sell personal information. The default is to collect less: if a feature works without a piece of data, we don’t store it, and when we stop storing something we delete what was already collected.</p>
         </section>
 
         <section id="collect">
-          <h2>Information we collect</h2>
+          <h2>What we keep</h2>
           <ul>
-            <li><strong>Account information:</strong> email address, username, display name, password hash, account role, login and verification records, and optional two-factor settings.</li>
-            <li><strong>Profile information:</strong> nickname, biography, avatar, website, graduation year, gender, referral source, profile background, and cosmetics you choose to display.</li>
-            <li><strong>Community activity:</strong> friend relationships and requests, group membership, reports, public posts, moderation actions, and virtual-coin or shop activity.</li>
-            <li><strong>Game and feature data:</strong> scores, achievements, saved progress, playtime, preferences, bell-schedule choices, and supported sync data.</li>
-            <li><strong>Technical information:</strong> IP address, browser and device information, timestamps, page requests, security events, session identifiers, error logs, and approximate online presence.</li>
-            <li><strong>Communications:</strong> support requests, feedback, newsletter choices, notification subscriptions, and the messaging data described below.</li>
+            <li><strong>Account:</strong> email address, username, display name, password hash, role, verification records, and optional two-factor settings.</li>
+            <li><strong>Profile:</strong> nickname, biography, avatar, website, graduation year, gender, referral source, background, and cosmetics you choose to display.</li>
+            <li><strong>Community activity:</strong> friends and requests, group membership, reports, public posts, moderation actions, and coin or shop activity.</li>
+            <li><strong>Games and features:</strong> scores, achievements, saved progress, playtime counts per category, preferences, and bell-schedule choices. Which games are played is also counted in total, with no account attached.</li>
+            <li><strong>Sign-in:</strong> a hashed session token with its creation and expiry time. It has no IP address, device, or last-used time.</li>
+            <li><strong>Last active day:</strong> the day (not the time) you were last active, used to end premium after seven days of inactivity.</li>
+            <li><strong>Safety records:</strong> anti-cheat flags (account, game, reason), a log of staff actions, network bans, and the consent record when you let admins open your cloud computer.</li>
+            <li><strong>Support and feedback:</strong> tickets, messages, newsletter choices, and notification subscriptions.</li>
           </ul>
+        </section>
+
+        <section id="notkept">
+          <h2>What we don’t keep</h2>
+          <ul>
+            <li><strong>Browsing history.</strong> We don’t record which pages you open, or the referrers and search terms attached to requests. Site searches aren’t logged.</li>
+            <li><strong>IP addresses tied to accounts.</strong> No IP or user agent is stored with your account, sessions, anti-cheat flags, staff logs, or application logs. Requests are rate-limited by IP in memory only; that is cleared within an hour and on every restart. Network bans and the support-ticket rate limit store a keyed hash of the address, never the address.</li>
+            <li><strong>Presence.</strong> Whether you’re online, what page you’re on, and your activity exist only in server memory, never in a database or file. After a restart everyone shows as offline.</li>
+            <li><strong>Trackers.</strong> No analytics, advertising, or social-media scripts run on our pages.</li>
+          </ul>
+          <p>Staff can’t see raw IP addresses, because none are stored anywhere a staff tool reads.</p>
         </section>
 
         <section id="use">
           <h2>How we use information</h2>
-          <p>We use information to authenticate accounts, show profiles and presence, deliver messages, sync settings and game progress, operate rewards, respond to support requests, prevent abuse, enforce community rules, investigate reports, maintain service reliability, and communicate important account or service updates.</p>
-          <p>Automated security controls may rate-limit requests, reject suspicious activity, or restrict an account. Administrators may review relevant logs and reports when investigating safety, security, or reliability issues.</p>
+          <p>To sign you in, show profiles, deliver messages, sync settings and game progress, run rewards, answer support requests, prevent abuse, enforce community rules, investigate reports, and keep the service running.</p>
+          <p>Automated controls may rate-limit requests, reject suspicious activity, or restrict an account. Administrators may review reports and the limited records listed above when investigating safety or reliability problems.</p>
         </section>
 
         <section id="visibility">
           <h2>What other members can see</h2>
-          <p>Your username, display name or nickname, avatar, biography, public profile fields, role, cosmetics, achievements, selected game statistics, friend status, and online or game presence may be visible to signed-in members. Public chat posts and shared canvas activity are visible wherever the interface identifies them as public.</p>
-          <p>Your full account email is not intended to be shown to ordinary members. Public member references use your username. Staff may receive additional account information when needed for moderation and support.</p>
+          <p>Signed-in members can see your username, display name or nickname, avatar, biography, public profile fields, role, cosmetics, achievements, selected game statistics, friend status, and whether you’re online. Public posts and shared canvas activity are visible wherever the interface marks them public.</p>
+          <p>Your current page, your activity (such as “Chatting in Matrix”), and how recently you were active are shown only to you, your friends, and admins, and only if you turn on <strong>Share activity</strong>, which is off by default. <strong>Hide online</strong> hides your status from everyone, admins included. Both settings are enforced on the server, not just in the interface. The “N online” count includes members who hide their status, and is only a number.</p>
+          <p>Your email address isn’t shown to ordinary members; public references use your username. Only you and the site owner can open your cloud computer, unless you allow admins in for 24 hours, and you’re notified each time they do.</p>
         </section>
 
         <section id="chat">
@@ -69,15 +84,30 @@
         </section>
 
         <section id="sharing">
-          <h2>When information is shared</h2>
-          <p>We may send limited information to service providers that perform hosting, email delivery, push notifications, CAPTCHA, analytics, or other infrastructure functions. These providers handle information under their own terms and privacy practices.</p>
-          <p>Embedded or linked games and websites may receive technical information directly from your browser when you open them. We may also disclose information when reasonably necessary to comply with law, protect users, investigate abuse, or defend the service and its operators.</p>
+          <h2>Third parties</h2>
+          <p>We don’t share your information for advertising. These providers handle some of it:</p>
+          <ul>
+            <li><strong>Cloudflare</strong> carries traffic to the site, so it sees connecting IP addresses under its own policy.</li>
+            <li><strong>Email delivery providers</strong> send verification codes, notices, and newsletters you’ve chosen.</li>
+            <li><strong>Google reCAPTCHA</strong> protects sign-up and some forms. We don’t pass your IP address to it, but your browser contacts Google when the check loads.</li>
+            <li><strong>Google Fonts</strong> serves fonts on some pages, and <strong>Open-Meteo</strong> serves the weather on rjuhsd.school; your browser requests these directly.</li>
+          </ul>
+          <p>Games and websites embedded or linked from the site receive technical information directly from your browser when you open them. We may disclose information when reasonably necessary to comply with law, protect users, investigate abuse, or defend the service.</p>
         </section>
 
         <section id="retention">
-          <h2>Retention and security</h2>
-          <p>Information is kept while it supports an active account or a legitimate operational, safety, backup, dispute, or legal need. Different records have different lifetimes; expired messages and old operational records may be removed automatically. Deleting an account may not immediately remove backups, reports, security logs, or content that another user has retained.</p>
-          <p>We use access controls, password hashing, session protection, rate limits, encryption features, and logging intended to protect the service. No online system is perfectly secure. Use a unique password, enable two-factor authentication when available, and do not share sensitive information through profiles or public spaces.</p>
+          <h2>Retention</h2>
+          <ul>
+            <li>Account and profile data: until you delete your account.</li>
+            <li>Login sessions: until they expire or you sign out.</li>
+            <li>Application error logs: 30 days. They contain no IP addresses.</li>
+            <li>Anti-cheat flags: 90 days, newest 1,000 kept.</li>
+            <li>Cloud computer audit log: 180 days. Usage samples: 30 days. Admin access grants: 24 hours.</li>
+            <li>Resolved support tickets: 90 days after the last activity. The hashed IP on a ticket is cleared after one day.</li>
+            <li>Staff action log and network bans: kept, bans until lifted.</li>
+          </ul>
+          <p>Deleting your account may not immediately remove backups, reports, or content another user has kept. We use access controls, password hashing, session protection, rate limits, and encryption. No online system is perfectly secure, so use a unique password and turn on two-factor authentication.</p>
+          <p>The same details, with how each is implemented, are in the <a href="https://github.com/mitch-pro/mitch.pro/blob/master/docs/privacy.md" target="_blank" rel="noopener">public source</a>.</p>
         </section>
 
         <section id="choices">

@@ -43,6 +43,14 @@ start and removes it (every step is idempotent).
 | Aggregate game plays | `global_game_stats.json` | Popular games list; counts per game, no account | Kept |
 | Per-account playtime counters | `user_stats.playtime` (count per category) | Profile stats | Until the account is deleted |
 
+## Public policy page
+
+`webserver/privacy/index.html` is the policy members read. It must say what this
+document says: when an entry in "Not kept" or "Kept, and why" changes, change the
+page in the same commit, including its "Last updated" date. It also names the
+outside services a browser or the server contacts (Cloudflare, email delivery,
+reCAPTCHA, Google Fonts, Open-Meteo); add a new one there before shipping it.
+
 ## Who can see what
 
 - Other members see whether someone is online. Current page/activity and how
