@@ -17,3 +17,10 @@ deleted in a later cleanup. The links are retired in code by
 
 Casino payouts and the coin economy are unchanged by this; only the navigation
 link is gone (`docs/casino.md`).
+
+## Unlinked but still active
+
+Removed from the homepage list because they are reachable elsewhere (Shortcuts,
+Explore, the People rail, the mobile menu). Not deprecated: Games (`/games/`),
+Matrix chat (`/matrix/`), Invite friends (`/invite/`), The Market (`/shop/`),
+Manage Friends (`/friends/`) and Members (`/members/`).

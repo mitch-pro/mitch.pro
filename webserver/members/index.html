@@ -301,7 +301,7 @@
 
   <div class="people-layout" id="people-layout"><div class="people-directory">
   <div class="toolbar panel">
-    <input id="search" type="search" aria-label="Search members" placeholder="Search members by name, handle, or role" autocomplete="off">
+    <input id="search" type="search" aria-label="Search members" placeholder="Search people by name or handle" autocomplete="off">
     <select id="roleFilter" aria-label="Filter by role">
       <option value="all">All roles</option>
       <option value="online">Online now</option>
@@ -318,7 +318,7 @@
 
   <div class="stats" id="stats"></div>
   <div class="status err" id="peopleMsg" role="alert" hidden></div>
-  <div class="grid" id="membersGrid"><div class="empty">Loading people…</div></div>
+  <div class="grid" id="membersGrid"><div class="empty">Search for someone by name or handle.</div></div>
   </div><aside class="people-staff-tools" id="people-staff-tools" aria-label="Staff tools" hidden><h2>Staff tools</h2><nav id="people-staff-links" aria-label="Your staff access"></nav></aside></div>
 </main>
 
@@ -411,15 +411,14 @@
     }
 
     function renderStats(list) {
-      const online = members.filter(m => m.online).length;
-      const friends = members.filter(m => m.friendStatus === 'friends').length;
-      document.getElementById('stats').innerHTML = [
-        '<span class="pill">' + list.length + ' shown</span>',
-        '<span class="pill">' + members.length + ' total</span>',
-        '<span class="pill">' + online + ' online</span>',
-        '<span class="pill">' + friends + ' friends</span>'
-      ].join('');
+      document.getElementById('stats').innerHTML = searchTerm().length >= MIN_SEARCH
+        ? '<span class="pill">' + list.length + ' found</span>'
+        : '';
     }
+
+    // The server never lists everyone: it only answers searches of this length.
+    const MIN_SEARCH = 2;
+    function searchTerm() { return document.getElementById('search').value.trim(); }
 
     function score(member, q) {
       if (!q) return 0;
@@ -461,6 +460,10 @@
       const list = filteredMembers();
       renderStats(list);
       const grid = document.getElementById('membersGrid');
+      if (searchTerm().length < MIN_SEARCH) {
+        grid.innerHTML = '<div class="empty">Search for someone by name or handle.</div>';
+        return;
+      }
       if (!list.length) {
         grid.innerHTML = '<div class="empty">No members match that search.</div>';
         return;
@@ -516,8 +519,14 @@
     async function reload() {
       if (document.hidden) return;
       const request = ++memberRequest;
+      const term = searchTerm();
+      if (term.length < MIN_SEARCH) {
+        members = []; lastPayload = ''; loadedOnce = true;
+        render();
+        return;
+      }
       try {
-      const res = await fetch('/api/members?t=' + Date.now(), { credentials: 'include', cache: 'no-store' });
+      const res = await fetch('/api/members?q=' + encodeURIComponent(term), { credentials: 'include', cache: 'no-store' });
       if (request !== memberRequest) return;
       if (!res.ok) {
         if (!loadedOnce) loadFailed(res.status === 401 ? 'Sign in to search members.' : 'Could not load people.', res.status !== 401);
@@ -640,7 +649,13 @@
       if (control.dataset.action === 'retry') { document.getElementById('membersGrid').innerHTML = '<div class="empty">Loading people…</div>'; reload(); }
     });
 
-    document.getElementById('search').addEventListener('input', render);
+    let searchTimer = null;
+    document.getElementById('search').addEventListener('input', () => {
+      lastPayload = '';
+      render();
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(reload, 250);
+    });
     document.getElementById('roleFilter').addEventListener('change', render);
     document.getElementById('sortMode').addEventListener('change', render);
     document.getElementById('cancelReport').addEventListener('click', closeReport);

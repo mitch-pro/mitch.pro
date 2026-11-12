@@ -35,12 +35,13 @@ pub async fn handle(
     method: &Method,
     path: &str,
     headers: &HeaderMap,
+    search: &str,
     body_bytes: &[u8],
 ) -> Option<Response> {
     match (method.as_str(), path) {
         // The JS branches check the path only — every method lands here.
         (_, "/api/userdata") => Some(userdata(state, method, headers, body_bytes)),
-        (_, "/api/members") => Some(members(state, headers)),
+        (_, "/api/members") => Some(members(state, headers, search)),
         (_, "/api/premium-members") => Some(premium_members(state, headers)),
         (_, "/api/admin-members") => Some(admin_members(state, headers)),
         (_, "/api/moderator-members") => Some(moderator_members(state, headers)),
@@ -51,8 +52,35 @@ pub async fn handle(
 
 // ── /api/members ─────────────────────────────────────────────────────────────
 
-/// `server.js:19113-19275`.
-fn members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
+/// Shortest `?q=` that searches the roster. Shorter queries match nobody, so
+/// one letter can't be used to page through everyone.
+const MEMBER_SEARCH_MIN: usize = 2;
+/// Most results one search returns.
+const MEMBER_SEARCH_MAX: usize = 25;
+
+/// `server.js:19113-19275`, narrowed so it never returns the whole roster.
+///
+/// - `?q=<text>` (at least [`MEMBER_SEARCH_MIN`] characters): accounts whose
+///   handle or display name contains the text, up to [`MEMBER_SEARCH_MAX`].
+///   Emails are never searched.
+/// - No `q`: only people the viewer already has a relationship with — self,
+///   friends, pending friend requests and existing DM partners (what the
+///   chat client and the online rail need).
+///
+/// Every other consumer must search; there is deliberately no way to list all
+/// accounts. See `docs/members.md`.
+fn members(state: &Arc<AppState>, headers: &HeaderMap, search: &str) -> Response {
+    let q = crate::handler::query(search)
+        .get("q")
+        .map(|v| v.trim().to_lowercase())
+        .unwrap_or_default();
+    if !q.is_empty() && q.chars().count() < MEMBER_SEARCH_MIN {
+        // Still require a session, then answer with nothing.
+        return match member_gate(state, headers) {
+            Some(_) => json_response(200, json!({ "members": [] })),
+            None => json_response(401, json!({ "error": "auth required" })),
+        };
+    }
     let Some((sid, viewer_email)) = member_gate(state, headers) else {
         return json_response(401, json!({ "error": "auth required" }));
     };
@@ -76,6 +104,24 @@ fn members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         .store
         .read_document(&data_file(state, "friend_requests.json"), json!([]));
     let presence_map = crate::presence::snapshot(state, now);
+    // Everyone the viewer has exchanged a direct message with (email or handle).
+    let mut dm_partners: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for m in dms.as_array().into_iter().flatten() {
+        if m.get("kind").and_then(|v| v.as_str()) == Some("group") {
+            continue;
+        }
+        let from = jsval::string(&jsval::or(m.get("from"), json!("")));
+        let to = jsval::string(&jsval::or(m.get("to"), json!("")));
+        let other = if auth::normalize_email(&from) == viewer_norm {
+            &to
+        } else if auth::normalize_email(&to) == viewer_norm {
+            &from
+        } else {
+            continue;
+        };
+        dm_partners.insert(auth::normalize_email(other));
+        dm_partners.insert(profile::normalize_username(other));
+    }
 
     let mut seen: Vec<String> = Vec::new();
     let mut out: Vec<Value> = Vec::new();
@@ -127,6 +173,29 @@ fn members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             Some(&prof),
             Some(&viewer_email),
         );
+
+        let is_self = viewer_norm == norm;
+        let is_friend = my_friends.iter().any(|f| auth::normalize_email(f) == norm);
+        let req_arr = friend_requests.as_array();
+        let incoming =
+            req_arr.is_some_and(|a| a.iter().any(|r| member_req_between(r, &norm, &viewer_norm)));
+        let outgoing =
+            req_arr.is_some_and(|a| a.iter().any(|r| member_req_between(r, &viewer_norm, &norm)));
+        let in_scope = if q.is_empty() {
+            is_self
+                || is_friend
+                || incoming
+                || outgoing
+                || dm_partners.contains(&norm)
+                || dm_partners.contains(&username)
+        } else {
+            let display =
+                jsval::string(&jsval::or(processed.get("displayName"), json!(""))).to_lowercase();
+            username.to_lowercase().contains(&q) || display.contains(&q)
+        };
+        if !in_scope {
+            continue;
+        }
 
         // Find last message and unread count (server.js:19156-19206).
         let cleared_at = jsval::number(&jsval::or(
@@ -192,8 +261,6 @@ fn members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
                 120_000,
             )),
         );
-        let is_self = viewer_norm == norm;
-        let is_friend = my_friends.iter().any(|f| auth::normalize_email(f) == norm);
         let can_view_activity = is_self || is_friend || is_admin;
         let presence = presence_map.get(&norm).cloned().unwrap_or_default();
         let public_status = if presence.online { "online" } else { "offline" };
@@ -275,11 +342,6 @@ fn members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             jsval::or(cosm.get("activeBadge"), json!(Value::Null)),
         );
 
-        let req_arr = friend_requests.as_array();
-        let incoming =
-            req_arr.is_some_and(|a| a.iter().any(|r| member_req_between(r, &norm, &viewer_norm)));
-        let outgoing =
-            req_arr.is_some_and(|a| a.iter().any(|r| member_req_between(r, &viewer_norm, &norm)));
         let friend_status = if is_self {
             "self"
         } else if is_friend {
@@ -343,6 +405,9 @@ fn members(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
             .cmp(&jsval::string(b.get("email").unwrap_or(&Value::Null)))
     });
 
+    if !q.is_empty() {
+        out.truncate(MEMBER_SEARCH_MAX);
+    }
     json_response(200, json!({ "members": out }))
 }
 
@@ -1220,7 +1285,7 @@ mod tests {
                 axum::http::header::COOKIE,
                 format!("mitch_session={tok}").parse().unwrap(),
             );
-            let resp = members(&state, &headers);
+            let resp = members(&state, &headers, "q=alice");
             futures_util::FutureExt::now_or_never(axum::body::to_bytes(
                 resp.into_body(),
                 usize::MAX,
@@ -1299,6 +1364,40 @@ mod tests {
         assert_eq!(hidden_for_admin["page"], json!(""));
         assert_eq!(hidden_for_admin["activity"], json!(""));
         assert_eq!(hidden_for_admin["playing"], json!(""));
+
+        // The roster is never listed. Without a query a user sees only
+        // themselves and people they have a relationship with; one-character
+        // queries match nobody; searches never match emails.
+        let handles = |tok: &str, search: &str| -> Vec<String> {
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                axum::http::header::COOKIE,
+                format!("mitch_session={tok}").parse().unwrap(),
+            );
+            let resp = members(&state, &headers, search);
+            let bytes = futures_util::FutureExt::now_or_never(axum::body::to_bytes(
+                resp.into_body(),
+                usize::MAX,
+            ))
+            .unwrap()
+            .unwrap();
+            let body: Value = serde_json::from_slice(&bytes).unwrap();
+            body["members"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|m| m["handle"].as_str().unwrap_or("").to_string())
+                .collect()
+        };
+        let bob_default = handles(&bob_tok, "");
+        assert_eq!(bob_default.len(), 1, "{bob_default:?}");
+        assert!(bob_default[0].contains("bob"));
+        let carol_default = handles(&carol_tok, "");
+        assert_eq!(carol_default.len(), 2, "{carol_default:?}");
+        assert!(handles(&bob_tok, "q=a").is_empty());
+        assert!(handles(&bob_tok, "q=example.test").is_empty());
+        let found = handles(&bob_tok, "q=carol");
+        assert_eq!(found.len(), 1, "{found:?}");
 
         drop(state);
         std::fs::remove_dir_all(&base).ok();

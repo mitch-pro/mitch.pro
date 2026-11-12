@@ -60,6 +60,14 @@ pub const RETIRED_HREFS: &[&str] = &[
     "/tabs/",
     "/bell/",
     "https://discord.gg/P5vZgTydXw",
+    // Still active; unlinked here because the homepage already reaches them
+    // elsewhere (Shortcuts, Explore, the People rail and the mobile menu).
+    "/games/",
+    "/matrix/",
+    "/invite/",
+    "/shop/",
+    "/friends/",
+    "/members/",
 ];
 
 /// Links every install must have. Inserted if no row with that `href` exists.
@@ -71,18 +79,12 @@ const REQUIRED_LINKS: &[(&str, &str, &str)] = &[
 /// Catalog used when there is no legacy `data/sites` to import. Entries with
 /// a leading `//` are disabled (kept for admins to re-enable by SQL).
 const DEFAULT_LINKS: &str = "\
-url /shop/ The Market
 url /inventory/ Inventory
 url /blog/ Blog
-url /members/ Members
-url /games/ Games
 url /notifications/ Notification Settings
 url /leaderboard/ Leaderboard
 url /feedback/ Feedback
-url /matrix/ Matrix Chat
 url /saves/ Save Manager
-url /invite/ Invite Friends
-url /friends/ Manage Friends
 url /companion/ Companion
 // url https://docs.google.com/document/d/1w8lZBN6pa4SlR6ZdHg93nlpGr_6YHe7amgtdBvcq6eo/edit?usp=sharing Mitch.pro Mirrors
 ";
@@ -276,7 +278,7 @@ mod tests {
             .map(|l| l.href)
             .collect();
         assert!(hrefs.contains(&"/learn/".to_string()));
-        assert_eq!(hrefs.len(), 15);
+        assert_eq!(hrefs.len(), 9);
         assert!(hrefs.contains(&"/inventory/".to_string()));
         for retired in RETIRED_HREFS {
             assert!(!hrefs.contains(&retired.to_string()), "{retired}");
