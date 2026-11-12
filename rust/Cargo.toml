@@ -25,7 +25,7 @@ indexmap = { version = "2", features = ["serde"] }
 axum = { version = "0.8", features = ["ws", "macros"] }
 # axum::extract::ws re-exports hyper's upgrade half as hyper::upgrade::OnUpgrade.
 hyper = { version = "1", features = ["http1"] }
-rusqlite = { version = "0.37", features = ["bundled"] }
+rusqlite = { version = "0.37", features = ["bundled-sqlcipher-vendored-openssl", "backup"] }
 tracing = "0.1"
 url = { version = "2", features = ["serde"] }
 rand = "0.9"

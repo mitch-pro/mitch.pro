@@ -69,6 +69,10 @@ pub struct DataStore {
     pub base_dir: PathBuf,
     data_dir: PathBuf,
     conn: Mutex<rusqlite::Connection>,
+    /// Where the database file is, and the key it is encrypted with (`None`
+    /// when plaintext). Snapshots open their own connection with these.
+    db_path: PathBuf,
+    db_key: Option<[u8; 32]>,
     /// `appLogWriteCount` from the JS — prune fires on every 250th write.
     app_log_writes: std::sync::atomic::AtomicUsize,
 }
@@ -131,12 +135,69 @@ impl DataStore {
     /// creates all core tables + indexes with the same SQLITE_BUSY retry
     /// ladder (10 retries, 100ms * attempt).
     pub fn open(base_dir: &Path, data_dir: &Path) -> Result<Self, DataError> {
+        // `DB_ENCRYPTION=1` encrypts the database (docs/database-encryption.md).
+        let ring = if crate::db_crypto::enabled() {
+            Some(crate::keyring::KeyRing::load(data_dir)?)
+        } else {
+            None
+        };
+        Self::open_with(base_dir, data_dir, ring.as_ref())
+    }
+
+    /// Where the database file is: `MITCH_DB_PATH`, else `<data dir>/mitchpro.db`.
+    pub fn db_path(data_dir: &Path) -> PathBuf {
+        resolve_db_path(std::env::var_os("MITCH_DB_PATH"), data_dir)
+    }
+
+    /// Where encrypted snapshots are kept: `DB_SNAPSHOT_DIR`, else `<data dir>/db-snapshots`.
+    pub fn snapshot_dir(data_dir: &Path) -> PathBuf {
+        std::env::var_os("DB_SNAPSHOT_DIR")
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| data_dir.join("db-snapshots"))
+    }
+
+    /// Whether the database file is encrypted.
+    pub fn is_encrypted(&self) -> bool {
+        self.db_key.is_some()
+    }
+
+    /// Writes a snapshot of the database into `dir` (encrypted when the database
+    /// is) without blocking the application's own connection.
+    pub fn write_snapshot(&self, dir: &Path) -> Result<PathBuf, DataError> {
+        Ok(crate::db_crypto::snapshot(
+            &self.db_path,
+            self.db_key.as_ref(),
+            dir,
+            now_millis(),
+        )?)
+    }
+
+    /// [`open`](Self::open) with the encryption decided by the caller: a ring
+    /// encrypts the database, `None` leaves it plaintext. When an encrypted
+    /// database file is missing (a cleared ramdisk), the newest snapshot is
+    /// restored first.
+    pub fn open_with(
+        base_dir: &Path,
+        data_dir: &Path,
+        ring: Option<&crate::keyring::KeyRing>,
+    ) -> Result<Self, DataError> {
         std::fs::create_dir_all(data_dir)?;
-        let db_path = resolve_db_path(std::env::var_os("MITCH_DB_PATH"), data_dir);
+        let db_path = Self::db_path(data_dir);
         if let Some(parent) = db_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let conn = rusqlite::Connection::open(&db_path)?;
+        if let Some(ring) = ring {
+            if let Some(from) =
+                crate::db_crypto::restore_latest(&Self::snapshot_dir(data_dir), &db_path, ring)?
+            {
+                tracing::warn!(
+                    "[db] database file was missing; restored from snapshot {}",
+                    from.display()
+                );
+            }
+        }
+        let conn = crate::db_crypto::open(&db_path, ring)?;
         conn.busy_timeout(std::time::Duration::from_millis(15_000))?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
@@ -795,6 +856,8 @@ impl DataStore {
             base_dir: base_dir.to_path_buf(),
             data_dir: data_dir.to_path_buf(),
             conn: Mutex::new(conn),
+            db_path,
+            db_key: ring.map(|r| r.derive_key(crate::db_crypto::PURPOSE)),
             app_log_writes: std::sync::atomic::AtomicUsize::new(0),
         };
         store.backfill_coins_table_from_json();

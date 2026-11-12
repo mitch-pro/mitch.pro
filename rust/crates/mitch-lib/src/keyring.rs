@@ -189,6 +189,13 @@ fn hkdf32(master: &[u8; 32], info: &[u8]) -> [u8; 32] {
     expand.finalize().into_bytes().into()
 }
 
+fn derive_raw(key: &Key, purpose: &str) -> [u8; 32] {
+    hkdf32(
+        &key.bytes,
+        &[b"mitch-raw-key-v1\0".as_slice(), purpose.as_bytes()].concat(),
+    )
+}
+
 fn derive(key: &Key, purpose: &str, context: &str) -> (Aes256Gcm, Vec<u8>) {
     let aad = [purpose.as_bytes(), b"\0", context.as_bytes()].concat();
     let sub = hkdf32(
@@ -277,6 +284,13 @@ impl KeyRing {
         }
     }
 
+    /// A ring with a primary key and one older key, for tests.
+    pub fn for_tests_with_previous(primary: [u8; 32], previous: [u8; 32]) -> Self {
+        let mut ring = Self::for_tests(primary);
+        ring.others.push(Key::from_bytes(previous));
+        ring
+    }
+
     pub fn source(&self) -> KeySource {
         self.source
     }
@@ -319,6 +333,21 @@ impl KeyRing {
                 ),
             )),
         }
+    }
+
+    /// A raw 32-byte key for `purpose`, derived from the primary key, for
+    /// things that need a key rather than sealed blobs (the database).
+    pub fn derive_key(&self, purpose: &str) -> [u8; 32] {
+        derive_raw(&self.primary, purpose)
+    }
+
+    /// [`derive_key`](Self::derive_key) for every key in the ring, primary first.
+    /// Lets the database be opened after a rotation and re-keyed to the primary.
+    pub fn derive_keys(&self, purpose: &str) -> Vec<[u8; 32]> {
+        std::iter::once(&self.primary)
+            .chain(self.others.iter())
+            .map(|k| derive_raw(k, purpose))
+            .collect()
     }
 
     /// Whether `data` was produced by [`seal`](Self::seal).

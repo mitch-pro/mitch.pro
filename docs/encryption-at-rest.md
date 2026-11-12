@@ -2,7 +2,7 @@
 
 Saves (`/api/userdata`, see [saves.md](saves.md)) are stored encrypted with a
 master key kept in the secrets manager, not in the data folder. The database is
-not encrypted yet; see "Database" below.
+encrypted separately: see [database-encryption.md](database-encryption.md).
 
 Code: `mitch_lib::keyring` (key handling, format), `mitch_lib::userdata`
 (file read/write/sweep), `mitch-server/src/secrets_manager.rs` (Infisical).
@@ -79,7 +79,6 @@ until it's moved.
 
 ## Database
 
-Not done. SQLCipher would encrypt the whole database file, but the Litestream
-sidecar (`sql-sync/`) replicates the plaintext file and Litestream v0.5 removed its
-own replica encryption, so encrypting the database changes how it is backed up.
-That decision is pending; until then the database and its replica are plaintext.
+Optional whole-database encryption with a key derived from the same master key:
+[database-encryption.md](database-encryption.md). It replaces the Litestream sidecar
+with encrypted snapshots, so read that page before turning it on.

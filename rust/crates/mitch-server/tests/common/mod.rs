@@ -33,6 +33,16 @@ impl TestServer {
     /// (e.g. `("testers.json", "[...]")`). `ready_path` is polled until it
     /// answers with `ready_status`, which shows the router is serving.
     pub async fn start(data_files: &[(&str, &str)], ready_path: &str, ready_status: u16) -> Self {
+        Self::start_with_env(data_files, ready_path, ready_status, &[]).await
+    }
+
+    /// [`start`](Self::start) with extra environment variables for the server.
+    pub async fn start_with_env(
+        data_files: &[(&str, &str)],
+        ready_path: &str,
+        ready_status: u16,
+        extra_env: &[(&str, &str)],
+    ) -> Self {
         // Tests in one binary run in parallel and the clock can be coarse, so
         // pid + time alone collided (the second server's symlink then failed
         // with "File exists"); a per-process counter keeps every dir unique.
@@ -61,6 +71,7 @@ impl TestServer {
             .unwrap()
             .port();
         let child = Command::new(env!("CARGO_BIN_EXE_mitch-server"))
+            .envs(extra_env.iter().copied())
             .current_dir(&dir)
             .env("DATA_DIR", dir.join("data"))
             .env("MITCH_BASE", &dir)

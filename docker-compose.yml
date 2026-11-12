@@ -119,6 +119,12 @@ services:
       # the generated data/encryption.key is moved into the secrets manager.
       - DATA_ENCRYPTION_KEY
       - DATA_ENCRYPTION_KEY_PREVIOUS
+      # Whole-database encryption and its snapshots (docs/database-encryption.md).
+      - DB_ENCRYPTION
+      - DB_SNAPSHOT_DIR
+      - DB_SNAPSHOT_INTERVAL_MIN
+      - DB_SNAPSHOT_KEEP
+      - DB_SNAPSHOT_DAILY_DAYS
       # Optional: fetch the key from Infisical directly instead.
       - INFISICAL_URL
       - INFISICAL_CLIENT_ID
@@ -233,6 +239,12 @@ services:
       # the generated data/encryption.key is moved into the secrets manager.
       - DATA_ENCRYPTION_KEY
       - DATA_ENCRYPTION_KEY_PREVIOUS
+      # Whole-database encryption and its snapshots (docs/database-encryption.md).
+      - DB_ENCRYPTION
+      - DB_SNAPSHOT_DIR
+      - DB_SNAPSHOT_INTERVAL_MIN
+      - DB_SNAPSHOT_KEEP
+      - DB_SNAPSHOT_DAILY_DAYS
       # Optional: fetch the key from Infisical directly instead.
       - INFISICAL_URL
       - INFISICAL_CLIENT_ID
@@ -303,6 +315,11 @@ services:
       - MITCH_SERVICE=mitch-mail
       - MITCH_BASE=/app
       - MITCH_DB_PATH=${MITCH_DB_PATH:-/app/data/mitchpro.db}
+      # mail-rs opens the same database, so it needs the same key (environment only;
+      # it does not fetch from Infisical itself, use `infisical run` for that).
+      - DB_ENCRYPTION
+      - DATA_ENCRYPTION_KEY
+      - DATA_ENCRYPTION_KEY_PREVIOUS
       - MAIL_RS_PORT=6902
       - PIA_USER
       - PIA_PASS

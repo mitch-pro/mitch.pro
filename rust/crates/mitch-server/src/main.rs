@@ -24,6 +24,7 @@ mod access;
 mod alias;
 mod app_log_layer;
 mod chat_cleanup;
+mod db_cli;
 mod env_file;
 mod errors;
 mod handler;
@@ -67,9 +68,12 @@ async fn main() {
         );
     }
 
-    let cfg = hosts::SiteConfig::load();
     // Before the key ring loads, so a key held in Infisical is found.
     secrets_manager::load_external_key().await;
+    if let Some(command) = std::env::args().nth(1) {
+        std::process::exit(db_cli::run(&command));
+    }
+    let cfg = hosts::SiteConfig::load();
     let store = Arc::new(
         mitch_lib::data::DataStore::open(&cfg.base_dir, &cfg.data_dir)
             .unwrap_or_else(|e| panic!("open data store at {}: {e}", cfg.data_dir.display())),
@@ -84,6 +88,7 @@ async fn main() {
 
     app_log_layer::start_writer(store.clone());
     spawn_encryption_upkeep(&state);
+    spawn_db_snapshots(&state);
 
     let app: Router = Router::new().fallback(get_any).with_state(state.clone());
 
@@ -179,4 +184,65 @@ fn spawn_encryption_upkeep(state: &Arc<state::AppState>) {
             }
         });
     }
+}
+
+/// While the database is encrypted, Litestream can't replicate it, so write
+/// encrypted snapshots on a timer instead (`DB_SNAPSHOT_INTERVAL_MIN`, default
+/// 15; `DB_SNAPSHOT_KEEP`, default 96; `DB_SNAPSHOT_DAILY_DAYS`, default 14). The
+/// newest one is restored automatically if the database file goes missing.
+fn spawn_db_snapshots(state: &Arc<state::AppState>) {
+    if !state.store.is_encrypted() {
+        return;
+    }
+    let env_number = |name: &str, default: i64, min: i64| {
+        std::env::var(name)
+            .ok()
+            .and_then(|v| v.trim().parse::<i64>().ok())
+            .map_or(default, |v| v.max(min))
+    };
+    let every =
+        std::time::Duration::from_secs(env_number("DB_SNAPSHOT_INTERVAL_MIN", 15, 1) as u64 * 60);
+    let keep = env_number("DB_SNAPSHOT_KEEP", 96, 2) as usize;
+    let daily_days = env_number("DB_SNAPSHOT_DAILY_DAYS", 14, 0);
+    let dir = mitch_lib::data::DataStore::snapshot_dir(&state.cfg.data_dir);
+    let state = state.clone();
+    tokio::spawn(async move {
+        let mut failing = false;
+        loop {
+            let store = state.store.clone();
+            let target = dir.clone();
+            let result = tokio::task::spawn_blocking(move || {
+                let written = store.write_snapshot(&target).map_err(|e| e.to_string())?;
+                let pruned = mitch_lib::db_crypto::prune_snapshots(
+                    &target,
+                    keep,
+                    daily_days,
+                    mitch_lib::school::now_millis(),
+                );
+                Ok::<_, String>((written, pruned))
+            })
+            .await
+            .map_err(|e| e.to_string())
+            .and_then(|r| r);
+            match result {
+                Ok((written, pruned)) => {
+                    failing = false;
+                    tracing::info!("[db] snapshot {} (pruned {pruned})", written.display());
+                }
+                Err(e) => {
+                    tracing::error!("[db] snapshot failed: {e}");
+                    if !failing {
+                        // Once per streak, not every interval.
+                        routes::push::ntfy_notify(
+                            &format!("Encrypted database snapshots are failing: {e}"),
+                            "Database backup failing",
+                            "high",
+                        );
+                    }
+                    failing = true;
+                }
+            }
+            tokio::time::sleep(every).await;
+        }
+    });
 }
