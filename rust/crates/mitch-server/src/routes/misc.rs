@@ -62,7 +62,7 @@ pub async fn handle(
         return Some(response);
     }
     if path == "/api/site-info" && *method == Method::GET {
-        return Some(site_info(state));
+        return Some(site_info(state, headers));
     }
     if path == "/api/pass" && *method == Method::POST {
         return Some(session_probe(state, headers));
@@ -251,13 +251,58 @@ fn site_info_payload(site: &serde_json::Value, active_backup: Option<String>) ->
     })
 }
 
-/// `GET /api/site-info` — server.js:7912-7918.
-fn site_info(state: &Arc<AppState>) -> Response {
+/// Where a visitor on `host` should be sent because the owner marked that
+/// domain as soon to be blocked: the active backup, then the other backups, the
+/// secondary and the primary, skipping the current host and any other marked
+/// one. `None` when `host` isn't marked or nothing else is available.
+fn redirect_target(
+    store: &mitch_lib::data::DataStore,
+    site: &serde_json::Value,
+    host: &str,
+) -> Option<String> {
+    use mitch_lib::site_domains as domains;
+    if !domains::is_redirecting(store, host) {
+        return None;
+    }
+    let text = |key: &str, default: &str| {
+        site.get(key)
+            .and_then(|v| v.as_str())
+            .unwrap_or(default)
+            .to_string()
+    };
+    let mut candidates: Vec<String> = Vec::new();
+    candidates.extend(domains::active(store));
+    candidates.extend(domains::list(store).into_iter().map(|d| d.origin));
+    candidates.push(text("alternate", domains::DEFAULT_ALTERNATE));
+    candidates.push(text("primary", domains::DEFAULT_PRIMARY));
+    let candidates: Vec<String> = candidates
+        .iter()
+        .filter_map(|c| c.parse::<url::Url>().ok())
+        .map(|u| u.origin().ascii_serialization())
+        .collect();
+    domains::pick_next(host, &candidates, &domains::redirecting_hosts(store))
+}
+
+/// `GET /api/site-info` — server.js:7912-7918. `redirectTo` is set only when
+/// the requesting domain is marked as soon to be blocked; `app-shell.js` then
+/// moves signed-in visitors there (the redirect is client-side on purpose).
+fn site_info(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     let site = state
         .store
         .read_document(&state.cfg.data_dir.join("site.json"), json!({}));
     let backup = mitch_lib::site_domains::active(&state.store);
-    json_response(200, site_info_payload(&site, backup))
+    let mut payload = site_info_payload(&site, backup);
+    payload["redirectTo"] = json!(redirect_target(
+        &state.store,
+        &site,
+        &crate::hosts::request_host(headers)
+    ));
+    let mut response = json_response(200, payload);
+    response.headers_mut().insert(
+        axum::http::header::CACHE_CONTROL,
+        axum::http::HeaderValue::from_static("no-store"),
+    );
+    response
 }
 
 /// `POST /api/pass` — the homepage's session probe: `success` is whether the
@@ -1300,6 +1345,31 @@ mod school_param_tests {
         assert_eq!(school_param("school=roseville"), "roseville");
         assert_eq!(school_param("?school=roseville&x=1"), "roseville");
         assert_eq!(school_param(""), "");
+    }
+
+    #[test]
+    fn redirect_target_only_for_marked_hosts() {
+        let dir = std::env::temp_dir().join(format!(
+            "mitch-redirect-target-{}",
+            mitch_lib::crypto::random_bytes_hex(8)
+        ));
+        std::fs::create_dir_all(dir.join("data")).unwrap();
+        let store = mitch_lib::data::DataStore::open(&dir, &dir.join("data")).unwrap();
+        let site = serde_json::json!({"primary": "https://old.example", "alternate": "https://alt.example"});
+        assert_eq!(super::redirect_target(&store, &site, "old.example"), None);
+        mitch_lib::site_domains::set_redirecting(&store, "old.example", true, "t");
+        assert_eq!(
+            super::redirect_target(&store, &site, "old.example:443").as_deref(),
+            Some("https://alt.example")
+        );
+        mitch_lib::site_domains::add(&store, "https://next.example", "t");
+        mitch_lib::site_domains::set_active(&store, "https://next.example");
+        assert_eq!(
+            super::redirect_target(&store, &site, "old.example").as_deref(),
+            Some("https://next.example")
+        );
+        assert_eq!(super::redirect_target(&store, &site, "next.example"), None);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

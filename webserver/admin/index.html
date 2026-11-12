@@ -710,6 +710,11 @@
           <button type="button" id="domain-retire-btn" onclick="retireBlockedDomains()" hidden style="width:auto">Move blocked backups to the removed list</button>
           <div id="domain-check-results" style="font-size:.78rem;margin-top:8px;" aria-live="polite"></div>
         </div>
+        <div id="domain-redirect-section" hidden style="margin-top:14px;">
+          <h3 style="font-size:.85rem;margin:0 0 6px;">Soon to be blocked</h3>
+          <p style="font-size:.78rem;margin:0 0 8px;">Turn this on for a domain that is about to be blocked. Signed-in visitors on it are moved to the next domain (active backup first) when a page loads, with a notice about the move. Signed-out visitors stay put.</p>
+          <div id="domain-redirect-list" style="font-size:.78rem;"></div>
+        </div>
         <h3 style="font-size:.85rem;margin:14px 0 6px;">Removed domains</h3>
         <div id="removed-domains-list" style="font-size:.78rem;"></div>
         <div id="backup-domains-status" class="form-status" role="status"></div>
@@ -1959,7 +1964,7 @@
       retire.hidden = !blockedBackups.length;
     }
 
-    function renderBackupDomains(rows, alternate, primary, removed) {
+    function renderBackupDomains(rows, alternate, primary, removed, redirecting) {
       renderRemovedDomains(removed);
       const seen = new Set();
       domainCheckList = [];
@@ -1972,6 +1977,7 @@
       add(primary, 'primary');
       add(alternate, 'secondary');
       (rows || []).forEach(r => add(r.origin, r.active ? 'backup (active)' : 'backup'));
+      renderDomainRedirects(redirecting || []);
       const altForm = document.getElementById('site-alternate-form');
       if (altForm && currentUser?.isOwner) {
         altForm.hidden = false;
@@ -1991,12 +1997,30 @@
       `).join('') || '<div class="muted">No backup domains. Visitors fall back to the alternate domain.</div>';
     }
 
+    function renderDomainRedirects(redirecting) {
+      const section = document.getElementById('domain-redirect-section');
+      const box = document.getElementById('domain-redirect-list');
+      if (!section || !box) return;
+      if (!currentUser?.isOwner) { section.hidden = true; return; }
+      section.hidden = false;
+      const marked = new Set((redirecting || []).map(h => String(h).toLowerCase()));
+      box.innerHTML = domainCheckList.map(d => {
+        const host = new URL(d.origin).hostname;
+        const on = marked.has(host);
+        return `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;padding:7px 9px;border:1px solid var(--t-bd, rgba(255,255,255,.15));border-radius:8px;">
+          <span><strong>${esc(host)}</strong> <span class="muted">${esc(d.label)}${on ? ' · redirecting' : ''}</span></span>
+          <button type="button" onclick='changeBackupDomain(${JSON.stringify(on ? 'redirect_off' : 'redirect_on')}, ${JSON.stringify(d.origin)})' style="padding:4px 8px;font-size:11px;width:auto;">${on ? 'Stop redirecting' : 'Start redirecting'}</button>
+        </div>`;
+      }).join('');
+    }
+
     async function loadBackupDomains() {
       try {
         const r = await fetch('/api/admin/backup-domains', { credentials: 'include', cache: 'no-store', headers: getAdminHeaders() });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(d.error || 'Could not load backup domains.');
-        renderBackupDomains(d.domains, d.alternate, d.primary, d.removed);
+        renderBackupDomains(d.domains, d.alternate, d.primary, d.removed, d.redirecting);
       } catch (err) {
         setStatus('backup-domains-status', err.message, 'err');
       }
@@ -2007,8 +2031,8 @@
       setStatus('backup-domains-status', 'Saving...', '');
       try {
         const d = await postAdmin('/api/admin/backup-domains', { action, origin, ...(extra || {}) });
-        renderBackupDomains(d.domains, d.alternate, d.primary, d.removed);
-        setStatus('backup-domains-status', action === 'rotate' ? 'Switched.' : 'Saved.', 'ok');
+        renderBackupDomains(d.domains, d.alternate, d.primary, d.removed, d.redirecting);
+        setStatus('backup-domains-status', action === 'rotate' ? 'Switched.' : action === 'redirect_on' ? 'Redirecting.' : action === 'redirect_off' ? 'Stopped redirecting.' : 'Saved.', 'ok');
       } catch (err) { setStatus('backup-domains-status', err.message, 'err'); }
     }
 
@@ -2017,7 +2041,7 @@
       setStatus('backup-domains-status', 'Saving...', '');
       try {
         const d = await postAdmin('/api/admin/site-alternate', { url: document.getElementById('site-alternate-url').value.trim() });
-        renderBackupDomains(d.domains, d.alternate, d.primary, d.removed);
+        renderBackupDomains(d.domains, d.alternate, d.primary, d.removed, d.redirecting);
         setStatus('backup-domains-status', 'Secondary domain saved.', 'ok');
       } catch (err) { setStatus('backup-domains-status', err.message, 'err'); }
     }

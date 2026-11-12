@@ -28,31 +28,74 @@
       .catch(function () {});
   }
 
-  // ── Moved-domain notice ─────────────────────────────────────────────────────
-  // sw.js sends a navigation here with ?_moved_from=<old host> when the old
-  // domain could not be reached. Explain it once, strip the marker from the
-  // address bar, and remind the visitor to update bookmarks. Logins are
-  // per-origin cookies, so they sign in again on this domain.
+  // ── Soon-to-be-blocked domain ───────────────────────────────────────────────
+  // The owner can mark a domain as about to be blocked (admin → Backup
+  // domains). /api/site-info then reports where this domain should send people
+  // (`redirectTo`, only for a marked domain). Only signed-in visitors are moved:
+  // sessions are per-origin, so they sign in again on the new domain and the
+  // moved notice below explains why. Everyone else stays put.
   (function () {
-    var params, from;
+    if (window.top !== window) return;
+    fetch('/api/site-info', { cache: 'no-store', credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (info) {
+        var to = info && info.redirectTo;
+        if (!to || typeof to !== 'string') return null;
+        return fetch('/api/pass', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
+          body: '{}'
+        }).then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (pass) {
+            if (!pass || !pass.success) return;
+            var target = new URL(to);
+            if (target.hostname === location.hostname) return;
+            var params = new URLSearchParams(location.search);
+            params.set('_moved_from', location.hostname);
+            location.replace(target.origin + location.pathname + '?' + params.toString() + location.hash);
+          });
+      })
+      .catch(function () {});
+  })();
+
+  // ── Moved-domain notice ─────────────────────────────────────────────────────
+  // sw.js (network failure) or the server (a domain the owner marked as soon to
+  // be blocked) sends a navigation here with ?_moved_from=<old host>. Explain
+  // it, strip the marker from the address bar, and remind the visitor to update
+  // bookmarks. Logins are per-origin cookies, so they sign in again here.
+  // The marker is kept in sessionStorage until the visitor dismisses the
+  // notice: on a first visit to a new domain the service worker installs and
+  // this page reloads once (see above), and that reload no longer has the
+  // marker in its URL.
+  (function () {
+    var KEY = 'moved-from';
+    var from = '';
     try {
-      params = new URLSearchParams(location.search);
-      from = params.get('_moved_from');
+      var params = new URLSearchParams(location.search);
+      var marker = params.get('_moved_from');
+      if (marker) {
+        params.delete('_moved_from');
+        var qs = params.toString();
+        try { history.replaceState(history.state, '', location.pathname + (qs ? '?' + qs : '') + location.hash); } catch (_) {}
+        try { sessionStorage.setItem(KEY, marker); } catch (_) {}
+        from = marker;
+      } else {
+        try { from = sessionStorage.getItem(KEY) || ''; } catch (_) {}
+      }
     } catch (_) { return; }
-    if (!from) return;
-    params.delete('_moved_from');
-    var qs = params.toString();
-    try { history.replaceState(history.state, '', location.pathname + (qs ? '?' + qs : '') + location.hash); } catch (_) {}
     from = String(from).replace(/[^a-z0-9.-]/gi, '').slice(0, 80);
     if (!from || from === location.hostname) return;
 
     function show() {
+      if (document.getElementById('moved-domain-notice')) return;
       var box = document.createElement('div');
+      box.id = 'moved-domain-notice';
       box.setAttribute('role', 'alertdialog');
       box.setAttribute('aria-label', 'Domain changed');
       box.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483000;max-width:340px;padding:16px;border-radius:12px;background:var(--t-bg2,#1e1a17);color:var(--t-fg,#e8e6e3);border:1px solid var(--t-bd,#3d3a37);box-shadow:0 8px 32px rgba(0,0,0,.4);font:14px/1.5 "DM Sans",system-ui,sans-serif';
       var title = document.createElement('strong');
-      title.textContent = from + ' was blocked';
+      title.textContent = from + ' has moved';
       title.style.display = 'block';
       var body = document.createElement('p');
       body.style.cssText = 'margin:6px 0 12px;color:var(--t-fg2,#bababa)';
@@ -61,7 +104,10 @@
       ok.type = 'button';
       ok.textContent = 'Got it';
       ok.style.cssText = 'padding:6px 14px;border-radius:8px;border:1px solid var(--t-ac,#8b5cf6);background:var(--t-ac,#8b5cf6);color:#fff;font:inherit;font-weight:600;cursor:pointer';
-      ok.addEventListener('click', function () { box.remove(); });
+      ok.addEventListener('click', function () {
+        try { sessionStorage.removeItem(KEY); } catch (_) {}
+        box.remove();
+      });
       box.append(title, body, ok);
       document.body.appendChild(box);
     }
