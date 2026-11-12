@@ -6994,11 +6994,7 @@ fn check_user_is_mentioned(member_id: &str, member_norm: &str, parsed: Option<&V
     }
 
     let email_local = member_norm.split('@').next().unwrap_or("").to_lowercase();
-    if !email_local.is_empty() && full_text.contains(&format!("@{email_local}")) {
-        return true;
-    }
-
-    false
+    !email_local.is_empty() && full_text.contains(&format!("@{email_local}"))
 }
 
 async fn dispatch_matrix_message_notifications(
