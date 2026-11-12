@@ -740,11 +740,7 @@ pub(crate) fn userdata_path(
     id_val: &str,
 ) -> Option<std::path::PathBuf> {
     let hex = crypto::sha256_hex(id_val.as_bytes());
-    let root = std::env::var_os("USERDATA_DIR")
-        .filter(|value| !value.is_empty())
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| data_dir.join("userdata"));
-    let dir = root.join(&hex[..32]);
+    let dir = mitch_lib::userdata::root(data_dir).join(&hex[..32]);
     std::fs::create_dir_all(&dir).ok()?;
     Some(dir.join("data.json"))
 }
@@ -763,10 +759,10 @@ fn userdata(
         return json_response(401, json!({ "error": "Not authenticated" }));
     }
     if *method == Method::DELETE {
-        return userdata_delete(&state.cfg.data_dir, &uid, body_bytes);
+        return userdata_delete(state, &uid, body_bytes);
     }
     if *method == Method::GET {
-        return userdata_get(&state.cfg.data_dir, &uid);
+        return userdata_get(state, &uid);
     }
     let Some(body) = parse_body_strict(body_bytes) else {
         return json_response(400, json!({ "error": "Bad JSON" }));
@@ -780,10 +776,12 @@ fn userdata(
     let Some(fpath) = userdata_path(&state.cfg.data_dir, &uid) else {
         return json_response(503, json!({ "error": "Storage unavailable" }));
     };
-    let mut existing: Value = std::fs::read_to_string(&fpath)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(|| json!({}));
+    let _guard = mitch_lib::userdata::lock();
+    let mut existing: Value = match mitch_lib::userdata::read(&state.keyring, &fpath) {
+        Ok(v) => v.unwrap_or_else(|| json!({})),
+        // Never treat an undecryptable file as empty: the save below would erase it.
+        Err(_) => return json_response(503, json!({ "error": "Storage unavailable" })),
+    };
     let mut body = body;
     strip_sensitive_snapshot_keys(&mut body);
     if let Value::Object(map) = &mut existing {
@@ -826,7 +824,9 @@ fn userdata(
             }),
         );
     }
-    let _ = std::fs::write(&fpath, new_json.as_bytes());
+    if mitch_lib::userdata::write(&state.keyring, &fpath, &new_json).is_err() {
+        return json_response(500, json!({ "error": "Storage unavailable" }));
+    }
     json_response(200, json!({ "ok": true }))
 }
 
@@ -891,18 +891,22 @@ fn strip_sensitive_snapshot_keys(blob: &mut Value) -> bool {
 
 /// `GET /api/userdata` — the caller's stored blob with a `_quota` summary
 /// (`used` bytes of serialized JSON, `limit`). A missing file is an empty blob.
-fn userdata_get(data_dir: &std::path::Path, uid: &str) -> Response {
-    let Some(fpath) = userdata_path(data_dir, uid) else {
+fn userdata_get(state: &AppState, uid: &str) -> Response {
+    let Some(fpath) = userdata_path(&state.cfg.data_dir, uid) else {
         return json_response(503, json!({ "error": "Storage unavailable" }));
     };
-    let mut blob: Value = std::fs::read_to_string(&fpath)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .filter(Value::is_object)
-        .unwrap_or_else(|| json!({}));
+    let _guard = mitch_lib::userdata::lock();
+    let mut blob: Value = match mitch_lib::userdata::read(&state.keyring, &fpath) {
+        Ok(v) => v.filter(Value::is_object).unwrap_or_else(|| json!({})),
+        Err(_) => return json_response(503, json!({ "error": "Storage unavailable" })),
+    };
     // Scrub anything sensitive an older client already uploaded.
     if strip_sensitive_snapshot_keys(&mut blob) {
-        let _ = std::fs::write(&fpath, serde_json::to_string(&blob).unwrap_or_default());
+        let _ = mitch_lib::userdata::write(
+            &state.keyring,
+            &fpath,
+            &serde_json::to_string(&blob).unwrap_or_default(),
+        );
     }
     let used = serde_json::to_string(&blob).map(|s| s.len()).unwrap_or(0);
     if let Some(map) = blob.as_object_mut() {
@@ -918,13 +922,14 @@ fn userdata_get(data_dir: &std::path::Path, uid: &str) -> Response {
 /// removes the whole stored blob; `{"keys": [...]}` removes those top-level
 /// keys (internal `_updated` is never removable). Only ever touches the
 /// caller's own file, which is derived from their session id.
-fn userdata_delete(data_dir: &std::path::Path, uid: &str, body_bytes: &[u8]) -> Response {
+fn userdata_delete(state: &AppState, uid: &str, body_bytes: &[u8]) -> Response {
     let Some(body) = parse_body_strict(body_bytes) else {
         return json_response(400, json!({ "error": "Bad JSON" }));
     };
-    let Some(fpath) = userdata_path(data_dir, uid) else {
+    let Some(fpath) = userdata_path(&state.cfg.data_dir, uid) else {
         return json_response(503, json!({ "error": "Storage unavailable" }));
     };
+    let _guard = mitch_lib::userdata::lock();
     if body.get("all").and_then(Value::as_bool) == Some(true) {
         let _ = std::fs::remove_file(&fpath);
         return json_response(200, json!({ "ok": true, "removed": "all" }));
@@ -935,10 +940,10 @@ fn userdata_delete(data_dir: &std::path::Path, uid: &str, body_bytes: &[u8]) -> 
             json!({ "error": "Expected {\"all\":true} or {\"keys\":[...]}" }),
         );
     };
-    let mut existing: Value = std::fs::read_to_string(&fpath)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(|| json!({}));
+    let mut existing: Value = match mitch_lib::userdata::read(&state.keyring, &fpath) {
+        Ok(v) => v.unwrap_or_else(|| json!({})),
+        Err(_) => return json_response(503, json!({ "error": "Storage unavailable" })),
+    };
     let mut removed = 0;
     if let Some(map) = existing.as_object_mut() {
         for key in keys.iter().filter_map(Value::as_str) {
@@ -950,7 +955,11 @@ fn userdata_delete(data_dir: &std::path::Path, uid: &str, body_bytes: &[u8]) -> 
             "_updated".into(),
             json!(mitch_lib::school::now_millis() as f64 / 1000.0),
         );
-        let _ = std::fs::write(&fpath, serde_json::to_string(&existing).unwrap_or_default());
+        let _ = mitch_lib::userdata::write(
+            &state.keyring,
+            &fpath,
+            &serde_json::to_string(&existing).unwrap_or_default(),
+        );
     }
     json_response(200, json!({ "ok": true, "removed": removed }))
 }

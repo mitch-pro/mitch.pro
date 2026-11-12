@@ -17,6 +17,9 @@ pub struct AppState {
     pub store: Arc<mitch_lib::data::DataStore>,
     /// ID_SECRET — raw bytes from data/id_secret.key.
     pub id_secret: Vec<u8>,
+    /// Master key for data at rest (saves). Loaded or generated at start; see
+    /// `mitch_lib::keyring`.
+    pub keyring: Arc<mitch_lib::keyring::KeyRing>,
     /// In-memory rate limiter (rlLog + timing tables).
     pub rate_limiter: mitch_lib::auth::RateLimiter,
     /// `globalCoinMultiplier` (server.js:1159) — admin-settable process state.
@@ -297,6 +300,11 @@ impl AppState {
             tracing::warn!("id_secret load failed: {e}");
             vec![0u8; 32]
         });
+        // Refusing to start beats generating a new key that orphans encrypted data.
+        let keyring = Arc::new(
+            mitch_lib::keyring::KeyRing::load(&cfg.data_dir)
+                .unwrap_or_else(|e| panic!("encryption key: {e}")),
+        );
         // Historical shadow bans are retained only for audit cleanup, never loaded as active restrictions.
         let shadow_bans = std::collections::HashSet::new();
         let load_ban_set = |file: &str| -> std::collections::HashSet<String> {
@@ -334,6 +342,7 @@ impl AppState {
             static_cache: StaticCache::new(),
             store,
             id_secret,
+            keyring,
             rate_limiter: mitch_lib::auth::RateLimiter::new(),
             coin_multiplier: std::sync::atomic::AtomicU64::new(
                 mitch_lib::coins::DEFAULT_COIN_MULTIPLIER.to_bits(),
