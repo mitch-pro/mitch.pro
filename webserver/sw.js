@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mitch-pro-cache-v56';
+const CACHE_NAME = 'mitch-pro-cache-v57';
 const ASSETS = [
   '/favicon.ico',
   '/manifest.json',
@@ -143,6 +143,31 @@ function isHtmlRequest(request) {
   return false;
 }
 
+// Matrix chat's build output is content-hashed (/matrix/assets/name-<hash>.ext),
+// so a given URL never changes. The crypto chunk and its .wasm are loaded lazily
+// and a single dropped connection (common on filtered school networks) would
+// otherwise surface as "Failed to fetch dynamically imported module". Serve
+// them cache-first and retry the network a few times before giving up.
+const isHashedMatrixAsset = (pathname) => /^\/matrix\/assets\/.+-[\w-]{8}\.[a-z0-9]+$/i.test(pathname);
+
+async function fetchHashedAsset(request) {
+  const cached = await caches.match(request);
+  if (cached) return cached;
+  let lastError;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, 400 * attempt));
+    try {
+      const response = await fetch(request);
+      if (response && response.status === 200 && response.type === 'basic') {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone)).catch(() => {});
+      }
+      return response;
+    } catch (err) { lastError = err; }
+  }
+  throw lastError;
+}
+
 self.addEventListener('fetch', (e) => {
   // Cache Storage only supports GET. Let POST/PUT/etc. go directly to the
   // network so form submissions and API calls can never reach cache.put().
@@ -188,6 +213,10 @@ const isThemeJs = requestUrl.pathname === '/theme.js';
     ));
   } else {
     const pathname = requestUrl.pathname;
+    if (isHashedMatrixAsset(pathname)) {
+      e.respondWith(fetchHashedAsset(e.request).catch(() => new Response('', { status: 504, statusText: 'Gateway Timeout' })));
+      return;
+    }
     const isCode = /\.(css|js|mjs|json)(\?|$)/.test(pathname);
     if (isCode) {
       // Network-first for code assets: never serve stale CSS/JS when online,
