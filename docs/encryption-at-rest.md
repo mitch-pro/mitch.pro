@@ -2,26 +2,23 @@
 
 Saves (`/api/userdata`, see [saves.md](saves.md)) are stored encrypted with a
 master key kept in the secrets manager, not in the data folder. The database is
-not encrypted yet; see "Database" below.
+not encrypted; see "Database" below.
 
 Code: `mitch_lib::keyring` (key handling, format), `mitch_lib::userdata`
-(file read/write/sweep), `mitch-server/src/secrets_manager.rs` (Infisical).
+(file read/write/sweep). Where secrets come from is a host concern:
+[secrets-providers.md](secrets-providers.md).
 
 ## The key
 
 One 32-byte master key, written as 64 hex characters or base64. Where it comes
 from, in order:
 
-1. `DATA_ENCRYPTION_KEY` in the environment. Doppler (`doppler run -- docker
-   compose ...`, as `tools/deploy.sh` already does) or `infisical run --` puts it
-   there; nothing else is needed.
-2. Infisical fetched by the server itself, when `DATA_ENCRYPTION_KEY` is unset
-   and the `INFISICAL_*` variables are set (table in `secrets_manager.rs`). Useful
-   to migrate without changing how the container starts. It uses a machine
-   identity (universal auth) and needs HTTPS access to the Infisical host from the
-   container.
-3. `data/encryption.key`, the bootstrap file.
-4. None of those: the server generates a key into `data/encryption.key`
+1. `DATA_ENCRYPTION_KEY` in the environment. The host's secrets provider
+   (Doppler, or Infisical when `INFISICAL=True` is set in `.env`) puts it there
+   when it starts the containers; the app itself knows nothing about either. See
+   [secrets-providers.md](secrets-providers.md).
+2. `data/encryption.key`, the bootstrap file.
+3. None of those: the server generates a key into `data/encryption.key`
    (mode 0600) and sends an ntfy notice (`NTFY_TOPIC`) asking you to copy the
    key into the secrets manager as `DATA_ENCRYPTION_KEY` and delete the file. The
    notice never contains the key, and repeats at start and every 12 hours until the
@@ -29,15 +26,14 @@ from, in order:
 
 The container must be given the variable. `docker-compose.yml` lists the
 environment variables each service receives. `DATA_ENCRYPTION_KEY`,
-`DATA_ENCRYPTION_KEY_PREVIOUS` and the `INFISICAL_*` variables are listed for
-`webserver-blue` and `webserver-green` (a bare name passes the host's value
+`DATA_ENCRYPTION_KEY_PREVIOUS` are listed for `webserver-blue` and `webserver-green` (a bare name passes the host's value
 through, and is simply unset until the secrets manager provides it). Add them
 to any other service that starts to read encrypted data.
 
 ### Moving the key out of the data folder
 
 1. Start the server without a key. It generates `data/encryption.key` and sends the notice.
-2. Copy the file's contents into Doppler (or Infisical) as `DATA_ENCRYPTION_KEY`.
+2. Copy the file's contents into the secrets manager as `DATA_ENCRYPTION_KEY`.
 3. Restart so the container receives it. The server then notices the file is
    redundant and says to delete it.
 4. Delete `data/encryption.key`. Keep an offline copy of the key: without it the
@@ -79,7 +75,8 @@ until it's moved.
 
 ## Database
 
-Not done. SQLCipher would encrypt the whole database file, but the Litestream
-sidecar (`sql-sync/`) replicates the plaintext file and Litestream v0.5 removed its
-own replica encryption, so encrypting the database changes how it is backed up.
-That decision is pending; until then the database and its replica are plaintext.
+Not encrypted. SQLCipher would encrypt the file, but it's unclear Litestream (the
+`sql-sync/` sidecar) can replicate an encrypted database, and when the database
+lives on the ramdisk the copies on disk are the replica and backups, not the live
+file. Encrypting where the replica is stored fits that setup better. Unresolved;
+nothing in the code encrypts the database.

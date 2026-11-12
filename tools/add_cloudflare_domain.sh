@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tools/add_cloudflare_domain.sh - Helper to add a domain to Doppler CLOUDFLARE_RECORDS
+# tools/add_cloudflare_domain.sh - Helper to add a domain to the CLOUDFLARE_RECORDS secret
 # Usage: ./tools/add_cloudflare_domain.sh <ZONE_ID> <DOMAIN_NAME> [A|TXT]
 
 set -euo pipefail
@@ -7,7 +7,79 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-export DOPPLER_ENABLE_DNS_RESOLVER=true
+# Doppler by default, Infisical when INFISICAL=True is set in .env.
+# >>> secrets-provider (the same block is in every script that has it; tests/test_secrets_provider.sh checks that)
+# Doppler by default; INFISICAL=True in .env (or the environment) selects Infisical. The
+# CLI is configured by root outside the repo (docs/secrets-providers.md). This is inline
+# on purpose: these scripts run as root, and a helper file read in from the repo
+# checkout would be one more place for code to be planted.
+# secrets_init <.env path> | secrets_cli | secrets_available | secrets_get NAME |
+# secrets_set NAME VALUE | secrets_run CMD...   (SECRETS_SUDO=1 retries with `sudo -n`)
+secrets_init() {
+    local env_file="${1:-}" flag="${INFISICAL:-}"
+    if [ -z "$flag" ] && [ -f "$env_file" ]; then
+        flag=$(grep -E '^INFISICAL=' "$env_file" | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
+    fi
+    case "$(printf '%s' "$flag" | tr '[:upper:]' '[:lower:]')" in
+        true|1|yes|on) SECRETS_PROVIDER=infisical ;;
+        *) SECRETS_PROVIDER=doppler ;;
+    esac
+    # Doppler's resolver setting, unchanged from before this file existed.
+    export DOPPLER_ENABLE_DNS_RESOLVER=true
+}
+
+# The CLI's name, for callers that need it (for example under sudo).
+secrets_cli() {
+    if [ "${SECRETS_PROVIDER:-doppler}" = infisical ]; then echo infisical; else echo doppler; fi
+}
+
+secrets_available() {
+    if [ "${SECRETS_PROVIDER:-doppler}" = infisical ]; then
+        command -v infisical &> /dev/null && infisical export --format=json &> /dev/null
+    else
+        command -v doppler &> /dev/null && doppler secrets download --format json &> /dev/null
+    fi
+}
+
+_secrets_get_once() {
+    if [ "${SECRETS_PROVIDER:-doppler}" = infisical ]; then
+        "$@" infisical secrets get "$NAME_" --plain 2>/dev/null
+    else
+        "$@" doppler secrets get "$NAME_" --plain 2>/dev/null
+    fi
+}
+
+secrets_get() {
+    local NAME_="$1" val=""
+    val=$(_secrets_get_once || echo "")
+    if [ -z "$val" ] && [ "${SECRETS_SUDO:-0}" = 1 ] && command -v sudo &> /dev/null; then
+        val=$(_secrets_get_once sudo -n || echo "")
+    fi
+    printf '%s' "$val"
+}
+
+secrets_set() {
+    local k="$1" v="$2"
+    if [ "${SECRETS_PROVIDER:-doppler}" = infisical ]; then
+        command -v infisical &> /dev/null && infisical secrets set "$k=$v" &> /dev/null && return 0
+        [ "${SECRETS_SUDO:-0}" = 1 ] && command -v sudo &> /dev/null && sudo -n infisical secrets set "$k=$v" &> /dev/null && return 0
+    else
+        command -v doppler &> /dev/null && doppler secrets set "$k=$v" &> /dev/null && return 0
+        [ "${SECRETS_SUDO:-0}" = 1 ] && command -v sudo &> /dev/null && sudo -n doppler secrets set "$k=$v" &> /dev/null && return 0
+    fi
+    return 1
+}
+
+secrets_run() {
+    if [ "${SECRETS_PROVIDER:-doppler}" = infisical ]; then
+        infisical run -- "$@"
+    else
+        doppler run -- "$@"
+    fi
+}
+# <<< secrets-provider
+secrets_init "$BASE_DIR/.env"
+export SECRETS_SUDO=1
 
 if [ "$#" -lt 2 ]; then
     echo "Usage: $0 <ZONE_ID> <DOMAIN_NAME> [TYPE: A|TXT]"
@@ -21,7 +93,7 @@ DOMAIN_NAME="$2"
 RECORD_TYPE="${3:-A}"
 RECORD_TYPE=$(echo "$RECORD_TYPE" | tr '[:lower:]' '[:upper:]')
 
-# Helper function to fetch secret from Doppler (or .env fallback)
+# Helper function to fetch a secret from Doppler/Infisical (or .env fallback)
 get_secret() {
     local key="$1"
     local val=""
@@ -29,30 +101,19 @@ get_secret() {
         echo "${!key}"
         return 0
     fi
-    if command -v doppler &> /dev/null; then
-        val=$(doppler secrets get "$key" --plain 2>/dev/null || echo "")
-        if [ -z "$val" ] && command -v sudo &> /dev/null; then
-            val=$(sudo -n doppler secrets get "$key" --plain 2>/dev/null || echo "")
-        fi
-    fi
+    val=$(secrets_get "$key")
     if [ -z "$val" ] && [ -f "$BASE_DIR/.env" ]; then
         val=$(grep -E "^${key}=" "$BASE_DIR/.env" | cut -d= -f2- | tr -d '"' | tr -d "'" || echo "")
     fi
     echo "$val"
 }
 
-# Helper function to set secret in Doppler
+# Helper function to set a secret in Doppler/Infisical
 set_secret() {
     local key="$1"
     local val="$2"
-    if command -v doppler &> /dev/null; then
-        if doppler secrets set "$key=$val" &>/dev/null; then
-            return 0
-        elif command -v sudo &> /dev/null; then
-            if sudo -n doppler secrets set "$key=$val" &>/dev/null; then
-                return 0
-            fi
-        fi
+    if secrets_set "$key" "$val"; then
+        return 0
     fi
     echo "[warning] Could not update Doppler directly. Please manually set $key=\"$val\" in Doppler."
     return 1
@@ -61,8 +122,8 @@ set_secret() {
 # 1. Fetch Cloudflare API Token
 CLOUDFLARE_API_TOKEN=$(get_secret "CLOUDFLARE_API_TOKEN")
 if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-    echo "[error] CLOUDFLARE_API_TOKEN not found in Doppler or .env."
-    echo "Please add CLOUDFLARE_API_TOKEN to Doppler first."
+    echo "[error] CLOUDFLARE_API_TOKEN not found in the secrets manager or .env."
+    echo "Please add CLOUDFLARE_API_TOKEN to Doppler/Infisical first."
     exit 1
 fi
 
@@ -125,9 +186,9 @@ else
     UPDATED_RECORDS="$NEW_ENTRY"
 fi
 
-echo "[info] Updating Doppler secret CLOUDFLARE_RECORDS..."
+echo "[info] Updating secret CLOUDFLARE_RECORDS..."
 if set_secret "CLOUDFLARE_RECORDS" "$UPDATED_RECORDS"; then
-    echo "[success] Doppler secret CLOUDFLARE_RECORDS updated successfully!"
+    echo "[success] Secret CLOUDFLARE_RECORDS updated successfully!"
     echo "New record added: $NEW_ENTRY"
     echo "Full records list: $UPDATED_RECORDS"
 else

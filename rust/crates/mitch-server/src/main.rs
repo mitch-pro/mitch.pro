@@ -34,7 +34,6 @@ mod pipeline;
 mod presence;
 mod proxmox_desktop;
 mod routes;
-mod secrets_manager;
 mod state;
 mod static_files;
 mod workers;
@@ -68,8 +67,6 @@ async fn main() {
     }
 
     let cfg = hosts::SiteConfig::load();
-    // Before the key ring loads, so a key held in Infisical is found.
-    secrets_manager::load_external_key().await;
     let store = Arc::new(
         mitch_lib::data::DataStore::open(&cfg.base_dir, &cfg.data_dir)
             .unwrap_or_else(|e| panic!("open data store at {}: {e}", cfg.data_dir.display())),
