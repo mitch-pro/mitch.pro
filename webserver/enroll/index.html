@@ -1143,6 +1143,7 @@ async function claimToken(mode) {
 (function() {
   const params = new URLSearchParams(window.location.search);
   if (params.get('mode') === 'signup') switchTab('invite');
+  if (params.get('mode') === 'reset') switchTab('reset');
   const code = params.get('code') || params.get('token') || params.get('claim') || params.get('reset') || '';
   if (code) {
     if (params.get('reset')) {

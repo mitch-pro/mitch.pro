@@ -54,7 +54,7 @@ passphrase" card and a dialog (once a day) to add one. It re-runs
 new passphrase, which re-encrypts the cross-signing keys and backup key under it
 and needs them on the device. If this device doesn't hold them, the dialog asks
 for the current recovery key first. "I don't have my recovery key" replaces the
-backup entirely (new cross-signing keys, new backup, no password prompt; warns that
+backup entirely (new cross-signing keys, new backup; asks for the site password and warns that
 history only in the old backup is lost).
 
 ### Device transfer
@@ -96,16 +96,17 @@ cross-signing keys, the device is cross-signed, and the session backup is
 downloaded with `restoreKeyBackup`. The derived key is held in memory for the
 page load only.
 
-## Server: cross-signing upload auth
+## Server: first cross-signing upload
 
 Conduit requires password UIA on `POST /keys/device_signing/upload`, and users
-don't know their Matrix password (and often forget their site password). For any
-such upload that carries no `auth` block, the gateway adds the derived-password
-block itself (`auto_auth_cross_signing_upload`), for first-time setup and for
-resets alike. The request is still authenticated by the user's own Matrix access
-token. A client-supplied `auth` block is never overwritten. Consequence: anyone
-holding a user's access token can replace that account's cross-signing keys,
-which the password prompt used to prevent.
+don't know their Matrix password. When the account has **no** master key on the
+homeserver yet (`keys/query`), the gateway adds the derived-password `auth` block
+itself (`auto_auth_first_cross_signing_upload`). If a master key already exists
+(a reset), nothing is injected: the client shows a "Confirm your password" dialog
+with a "Forgot your password?" link to `/enroll/?mode=reset`, and the site
+password is translated to the Matrix password by `translate_matrix_password`.
+A client-supplied `auth` block is never overwritten. This keeps a stolen chat
+access token from replacing an account's cross-signing keys.
 
 ## Encrypted DMs by default
 
@@ -126,6 +127,7 @@ chunks (and regenerating the `.gz` files). Private rooms still default to off.
 
 - `tests/test_e2ee_backup.mjs`: recovery-key encoding, request validation,
   chunking (`node tests/test_e2ee_backup.mjs`).
-- `routes::matrix::tests`: upload path matching and `auth` injection.
+- `routes::matrix::tests`: upload path matching, `auth` injection, master-key
+  detection.
 - The dialogs and transfer flow have no automated end-to-end test; check them on
   the dev server with two browsers signed in to the same account.

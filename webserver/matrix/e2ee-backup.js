@@ -276,9 +276,35 @@
     cb.__mitchWrapped = true;
   }
 
-  /** The server completes the upload's password check (see routes/matrix.rs), so no prompt. */
   async function authUploadDeviceSigningKeys(makeRequest) {
-    await makeRequest(null);
+    // First upload is authorised by the server (see routes/matrix.rs). A reset
+    // of existing keys needs the site password.
+    try {
+      await makeRequest(null);
+    } catch (e) {
+      if (!(e && e.httpStatus === 401 && e.data && e.data.session)) throw e;
+      const password = await askSitePassword();
+      const localpart = client.getUserId().slice(1).split(':')[0];
+      await makeRequest({ type: 'm.login.password', identifier: { type: 'm.id.user', user: localpart }, password, session: e.data.session });
+    }
+  }
+
+  function askSitePassword() {
+    return new Promise((resolve, reject) => {
+      const m = modal('Confirm your password', true);
+      const input = el('input', { type: 'password', autocomplete: 'current-password', class: 'mitch-e2ee-input', 'aria-label': 'Site password' });
+      const form = el('form', { class: 'mitch-e2ee-form', onsubmit: e => { e.preventDefault(); m.close(); resolve(input.value); } }, [
+        el('p', { text: 'Enter your mitch.pro password to replace your existing encryption keys.' }),
+        input,
+        el('a', { class: 'mitch-e2ee-link-a', href: '/enroll/?mode=reset', target: '_blank', rel: 'noopener', text: 'Forgot your password?' }),
+        el('div', { class: 'mitch-e2ee-actions' }, [
+          button('Cancel', () => { m.close(); reject(new Error('Cancelled')); }),
+          el('button', { type: 'submit', class: 'mitch-e2ee-btn primary', text: 'Continue' }),
+        ]),
+      ]);
+      m.body.append(form);
+      input.focus();
+    });
   }
 
   // ── State ───────────────────────────────────────────────────────
@@ -356,7 +382,7 @@
       }
     } }, [
       el('p', { text: reset
-        ? 'This replaces your current backup. Messages that are only in the old backup can\'t be restored, and your other devices will need to be verified again. Choose a new passphrase.'
+        ? 'This replaces your current backup. Messages that are only in the old backup can\'t be restored, your other devices will need to be verified again, and you\'ll be asked for your mitch.pro password. Choose a new passphrase.'
         : 'Choose a passphrase. You\'ll use it, or a recovery key we\'ll show you next, to read your encrypted messages on a new device when no other device is signed in.' }),
       el('label', {}, ['Passphrase', pass]),
       el('label', {}, ['Confirm passphrase', confirm]),

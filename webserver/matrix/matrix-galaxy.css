@@ -1527,3 +1527,5 @@ html.theme-light .mitch-e2ee-error { color: #c4262b; }
   cursor: pointer;
 }
 .mitch-e2ee-link:hover { color: var(--t-fg); }
+
+.mitch-e2ee-link-a { color: var(--t-ac); font-size: 13px; }

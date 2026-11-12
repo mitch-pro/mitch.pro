@@ -6374,15 +6374,23 @@ fn with_cross_signing_auth(body: &[u8], localpart: &str, password: &str) -> Opti
     serde_json::to_vec(&parsed).ok()
 }
 
-/// Completes the auth step for a cross-signing upload, first-time or reset.
+/// Whether a `keys/query` response lists a cross-signing master key for `user_id`.
+fn keys_query_has_master_key(response: &Value, user_id: &str) -> bool {
+    response
+        .get("master_keys")
+        .and_then(|m| m.get(user_id))
+        .is_some_and(|k| k.is_object())
+}
+
+/// Completes the auth step for an account's *first* cross-signing upload.
 ///
-/// Chat users never see their Matrix password (it is derived from the account
-/// email), and people forget the site password, so the chat client can't be
-/// made to answer Conduit's auth challenge itself. The request is already
-/// authenticated by the user's own Matrix access token; this fills in the
-/// derived password on their behalf. A client-supplied `auth` block is never
-/// overwritten, and any failure falls back to the unmodified request.
-async fn auto_auth_cross_signing_upload(
+/// This is what lets the chat client turn on encrypted-message backup without
+/// asking for a password nobody knows. It only applies when the homeserver has
+/// no master key for the account yet; replacing existing cross-signing keys
+/// (a reset) still goes through the normal prompt, where the user must enter
+/// their site password (translated by `translate_matrix_password`). Any
+/// failure here falls back to the unmodified request.
+async fn auto_auth_first_cross_signing_upload(
     state: &AppState,
     headers: &HeaderMap,
     body: &[u8],
@@ -6398,6 +6406,25 @@ async fn auto_auth_cross_signing_upload(
         .next()
         .filter(|l| !l.is_empty())?
         .to_string();
+
+    let query =
+        serde_json::to_vec(&json!({ "device_keys": { account.user_id.clone(): [] } })).ok()?;
+    let (status, _, bytes) = call_conduit(
+        "/_matrix/client/v3/keys/query",
+        Method::POST,
+        Some(headers.clone()),
+        Some(Bytes::from(query)),
+    )
+    .await
+    .ok()?;
+    if !status.is_success() {
+        return None;
+    }
+    let response: Value = serde_json::from_slice(&bytes).ok()?;
+    if keys_query_has_master_key(&response, &account.user_id) {
+        return None;
+    }
+
     let password = get_matrix_password_for_email(&account.norm_email, &state.id_secret);
     with_cross_signing_auth(body, &localpart, &password)
 }
@@ -8411,7 +8438,7 @@ pub async fn handle_matrix_gateway(
         } else {
             body_bytes
         };
-        if let Some(authed) = auto_auth_cross_signing_upload(state, headers, current).await {
+        if let Some(authed) = auto_auth_first_cross_signing_upload(state, headers, current).await {
             translated_body = authed;
             body_changed = true;
         }
@@ -9083,6 +9110,17 @@ mod tests {
         assert!(with_cross_signing_auth(&out, "alice", "pw").is_none());
         assert!(with_cross_signing_auth(b"not json", "alice", "pw").is_none());
         assert!(with_cross_signing_auth(b"[]", "alice", "pw").is_none());
+    }
+
+    #[test]
+    fn master_key_detection_reads_keys_query_response() {
+        let with = json!({ "master_keys": { "@a:mitch.pro": { "keys": {} } } });
+        assert!(keys_query_has_master_key(&with, "@a:mitch.pro"));
+        assert!(!keys_query_has_master_key(&with, "@b:mitch.pro"));
+        assert!(!keys_query_has_master_key(
+            &json!({ "device_keys": {} }),
+            "@a:mitch.pro"
+        ));
     }
 
     #[test]
