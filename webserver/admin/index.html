@@ -1255,7 +1255,7 @@
     <section class="tool-group" id="content-tools">
       <div class="section-head">
         <h2>Content, Games & Roles</h2>
-        <span class="tag">featured, mirrors, moderators</span>
+        <span class="tag">featured, moderators</span>
       </div>
     <div class="content-panel">
       <form class="action-card" onsubmit="setFeaturedGame(event)">
@@ -1263,12 +1263,6 @@
         <input id="featured-href" type="text" placeholder="/games/example" required>
         <button type="submit">Set Featured</button>
         <div id="featured-status" class="form-status"></div>
-      </form>
-      <form class="action-card" onsubmit="updateMirrorLink(event)">
-        <h2>Mirror Manager</h2>
-        <input id="mirror-url" type="text" placeholder="Google Doc URL" required>
-        <button type="submit">Update Mirror</button>
-        <div id="mirror-status" class="form-status"></div>
       </form>
       <div class="action-card" style="grid-column:1/-1;">
         <h2>Blog Deletion Log</h2>
@@ -1534,7 +1528,6 @@
       '/api/admin/ban-account': 'ban_account',
       '/api/admin/unban-account': 'unban_account',
       '/api/admin/prox/block': 'prox_block',
-      '/api/admin/content/mirror': 'content_mirror',
       '/api/admin/content/featured': 'content_featured',
       '/api/admin/moderators': 'moderator_role',
       '/api/admin/moderator-panel': 'moderator_panel',
@@ -2395,20 +2388,6 @@
         else e.target.reset();
       } catch (err) {
         setStatus('block-status', err.message, 'err');
-      }
-    }
-
-
-    async function updateMirrorLink(e) {
-      e.preventDefault();
-      const url = document.getElementById('mirror-url').value;
-      setStatus('mirror-status', 'Submitting...', '');
-      try {
-        const d = await postAdmin('/api/admin/content/mirror', { url });
-        setStatus('mirror-status', d.pending ? pendingText(d) : 'Mirror link updated.', 'ok');
-        if (d.pending) loadModeratorRequests();
-      } catch (err) {
-        setStatus('mirror-status', err.message, 'err');
       }
     }
 

@@ -137,7 +137,14 @@ async fn apply_friend_action(
         } else {
             "Friend request accepted"
         };
-        send_web_push_clean(state,target,&json!({"title":title,"body":mitch_lib::admin::mask_email(email),"url":"/friends/","tag":format!("friend-request:{}",auth::normalize_email(email))})).await;
+        // Honors the "Friend requests" alert type and quiet hours.
+        if crate::routes::dm::notif_allowed(
+            state,
+            &auth::normalize_email(target),
+            "friend_requests",
+        ) {
+            send_web_push_clean(state,target,&json!({"title":title,"body":mitch_lib::admin::mask_email(email),"url":"/friends/","tag":format!("friend-request:{}",auth::normalize_email(email))})).await;
+        }
     }
     crate::ws::trigger_notification_refresh(state);
     json_response(200, json!({"ok":true,"status":status}))

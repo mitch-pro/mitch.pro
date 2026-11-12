@@ -39,7 +39,6 @@ pub const PRESERVED_DATA_FILES: &[&str] = &[
     "prox_blocklist.json",
     "shop_catalog_overrides.json",
     "site.json",
-    "sites",
     "wordle_dictionary.txt",
 ];
 

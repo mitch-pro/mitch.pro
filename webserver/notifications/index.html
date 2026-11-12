@@ -189,6 +189,39 @@
 
       <div class="toggle-row">
         <div class="toggle-label">
+          <b>Voice and video calls</b>
+          <span class="toggle-desc">When someone calls you or a room you're in.</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="t-calls" data-key="calls">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-label">
+          <b>Friend requests</b>
+          <span class="toggle-desc">New requests and accepted requests.</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="t-requests" data-key="friend_requests">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-label">
+          <b>Coin gifts</b>
+          <span class="toggle-desc">Coins sent to you. Staff notices always show.</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="t-gifts" data-key="coin_gifts">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-label">
           <b>Unread messages email digest</b>
           <span class="toggle-desc">Periodic email of unread chat messages.</span>
         </div>
@@ -259,6 +292,9 @@
       dm: document.getElementById('t-dm').checked,
       group: document.getElementById('t-group').checked,
       friends_online: document.getElementById('t-friends').checked,
+      calls: document.getElementById('t-calls').checked,
+      friend_requests: document.getElementById('t-requests').checked,
+      coin_gifts: document.getElementById('t-gifts').checked,
       digest: document.getElementById('t-digest').checked,
       quietEnabled: document.getElementById('t-quiet').checked,
       quietStart: document.getElementById('quietStart').value || '22:00',
@@ -271,6 +307,9 @@
     document.getElementById('t-dm').checked = prefs.dm !== false;
     document.getElementById('t-group').checked = prefs.group !== false;
     document.getElementById('t-friends').checked = prefs.friends_online !== false;
+    document.getElementById('t-calls').checked = prefs.calls !== false;
+    document.getElementById('t-requests').checked = prefs.friend_requests !== false;
+    document.getElementById('t-gifts').checked = prefs.coin_gifts !== false;
     document.getElementById('t-digest').checked = prefs.digest !== false;
     document.getElementById('t-quiet').checked = !!prefs.quietEnabled;
     document.getElementById('quietStart').value = String(prefs.quietStart || '22:00');
@@ -385,7 +424,7 @@
   });
 
   // Wire toggles: change → reflect dependent UI → save.
-  ['t-dm', 't-group', 't-friends', 't-digest', 't-quiet'].forEach(function (id) {
+  ['t-dm', 't-group', 't-friends', 't-calls', 't-requests', 't-gifts', 't-digest', 't-quiet'].forEach(function (id) {
     document.getElementById(id).addEventListener('change', function () {
       syncQuietInputs();
       savePrefs();

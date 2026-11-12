@@ -107,6 +107,30 @@ pub fn invite_sent_insert_if_new(
     changed > 0
 }
 
+/// How many accounts signed up through `ref_norm`'s code.
+pub fn invite_claims_count(store: &DataStore, ref_norm: &str) -> i64 {
+    store
+        .conn()
+        .query_row(
+            "SELECT COUNT(*) FROM invite_claims WHERE ref_norm = ?1",
+            rusqlite::params![ref_norm],
+            |r| r.get(0),
+        )
+        .unwrap_or(0)
+}
+
+/// How many distinct invite emails `sender_norm` has sent.
+pub fn invite_sent_count(store: &DataStore, sender_norm: &str) -> i64 {
+    store
+        .conn()
+        .query_row(
+            "SELECT COUNT(*) FROM invite_sent WHERE sender_email = ?1",
+            rusqlite::params![sender_norm],
+            |r| r.get(0),
+        )
+        .unwrap_or(0)
+}
+
 /// Moves one user's invite-system rows onto their new normalized email.
 /// Mirrors the old generic rename sweep's behavior exactly: only the
 /// renamed user's own rows move — a referral's `ref_norm` or a recipient

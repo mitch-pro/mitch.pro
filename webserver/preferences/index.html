@@ -1188,7 +1188,6 @@
     <div class="field"><label for="homeRecentToggle">Recent pages</label><div class="toggle-row"><label class="toggle-switch"><input type="checkbox" id="homeRecentToggle"><span class="toggle-slider"></span></label><span class="toggle-desc">Show pages you recently visited on this device.</span></div></div>
     <div class="field"><label for="homeLogoToggle">Logo animation</label><div class="toggle-row"><label class="toggle-switch"><input type="checkbox" id="homeLogoToggle"><span class="toggle-slider"></span></label><span class="toggle-desc">Let the Mitch logo drift beside hello. Reduced motion always takes priority.</span></div></div>
     <div class="field"><label for="homeCompactToggle">Compact layout</label><div class="toggle-row"><label class="toggle-switch"><input type="checkbox" id="homeCompactToggle"><span class="toggle-slider"></span></label><span class="toggle-desc">Use smaller cards and spacing on the homepage.</span></div></div>
-    <div class="field"><label for="homeSearchFocusToggle">Focus search</label><div class="toggle-row"><label class="toggle-switch"><input type="checkbox" id="homeSearchFocusToggle"><span class="toggle-slider"></span></label><span class="toggle-desc">Place the cursor in the page directory search when the homepage opens.</span></div></div>
   </div>
   </section>
 
@@ -2161,8 +2160,7 @@ function saveAll() {
       showMemberRail: document.getElementById('homeMembersToggle').checked,
       showRecent: document.getElementById('homeRecentToggle').checked,
       animateLogo: document.getElementById('homeLogoToggle').checked,
-      compactHome: document.getElementById('homeCompactToggle').checked,
-      focusSearch: document.getElementById('homeSearchFocusToggle').checked
+      compactHome: document.getElementById('homeCompactToggle').checked
     })));
     localStorage.setItem(DISPLAY_CONFIG_KEY, JSON.stringify(Object.assign(load(DISPLAY_CONFIG_KEY, {}), {
       gameLaunch: activeLaunch
@@ -2424,7 +2422,6 @@ async function deleteAccount() {
   document.getElementById('homeRecentToggle').checked = hc.showRecent !== false;
   document.getElementById('homeLogoToggle').checked = hc.animateLogo !== false;
   document.getElementById('homeCompactToggle').checked = !!hc.compactHome;
-  document.getElementById('homeSearchFocusToggle').checked = !!hc.focusSearch;
 
   var dc = load(DISPLAY_CONFIG_KEY, { gameLaunch: 'default' });
   activeLaunch = dc.gameLaunch || 'default';
@@ -2453,7 +2450,7 @@ async function deleteAccount() {
   }
 
   ['privHideOnlineToggle','privHideLocationToggle','privStealthToggle','privNoHistoryToggle','privNewsletterToggle','privBlockProfileToggle',
-   'syncToggle','syncNoticeToggle','homeQuickToggle','homeMembersToggle','homeRecentToggle','homeLogoToggle','homeCompactToggle','homeSearchFocusToggle',
+   'syncToggle','syncNoticeToggle','homeQuickToggle','homeMembersToggle','homeRecentToggle','homeLogoToggle','homeCompactToggle',
    'prefCanvasLock','prefQuickAccess','prefDailyBonus'].forEach(function(id) {
     document.getElementById(id).addEventListener('change', saveAll);
   });

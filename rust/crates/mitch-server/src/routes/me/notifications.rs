@@ -77,6 +77,9 @@ pub(crate) fn notif_pref_defaults() -> Value {
         "dm": true,
         "group": true,
         "friends_online": true,
+        "friend_requests": true,
+        "calls": true,
+        "coin_gifts": true,
         "digest": true,
         "quietEnabled": false,
         "quietStart": "22:00",
@@ -137,7 +140,16 @@ fn me_notif_prefs_post(
     };
     let norm = auth::normalize_email(&email);
 
-    const NOTIF_BOOL_KEYS: &[&str] = &["dm", "group", "friends_online", "digest", "quietEnabled"];
+    const NOTIF_BOOL_KEYS: &[&str] = &[
+        "dm",
+        "group",
+        "friends_online",
+        "friend_requests",
+        "calls",
+        "coin_gifts",
+        "digest",
+        "quietEnabled",
+    ];
     let incoming_obj = body.as_object().filter(|_| !body.is_array());
     let mut next = get_notif_prefs(state, &norm);
     if let Some(incoming) = incoming_obj {
@@ -227,9 +239,12 @@ fn me_coin_gifts(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         return json_response(401, json!({ "error": "email not found" }));
     };
     let norm = auth::normalize_email(&email);
+    let gifts_on = get_notif_prefs(state, &norm).get("coin_gifts") != Some(&Value::Bool(false));
     let notices: Vec<Value> = mitch_lib::coins::coin_gift_notices_for(&state.store, &norm)
         .into_iter()
         .filter(|g| !g.get("read").and_then(|v| v.as_bool()).unwrap_or(false))
+        // The "Coin gifts" alert type only mutes gifts; staff notices still arrive.
+        .filter(|g| gifts_on || g.get("kind").and_then(|v| v.as_str()) == Some("admin_notice"))
         .take(10)
         .collect();
     json_response(200, json!({ "notices": notices }))
@@ -279,6 +294,7 @@ fn me_notifications(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
     };
     let norm = auth::normalize_email(&email);
 
+    let gifts_on = get_notif_prefs(state, &norm).get("coin_gifts") != Some(&Value::Bool(false));
     let mut notices: Vec<Value> = Vec::new();
     for g in mitch_lib::coins::coin_gift_notices_for(&state.store, &norm) {
         if g.get("read").and_then(|v| v.as_bool()).unwrap_or(false) {
@@ -294,6 +310,9 @@ fn me_notifications(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
                 "ts": jsval::or(g.get("ts"), json!(0)),
                 "url": jsval::or(g.get("url"), json!(notification_url("/"))),
             }));
+            continue;
+        }
+        if !gifts_on {
             continue;
         }
         let amount = g.get("amount").and_then(jsval::number).unwrap_or(0.0);

@@ -125,6 +125,9 @@ pub async fn handle(
     if path == "/api/newsletter/unsubscribe-direct" && *method == Method::POST {
         return Some(newsletter_unsubscribe_direct(state, headers, body_bytes));
     }
+    if path == "/api/invite/my-code" && *method == Method::GET {
+        return Some(invite_my_code(state, headers));
+    }
     if path == "/api/invite/set-code" && *method == Method::POST {
         return Some(invite_set_code(state, headers, body_bytes));
     }
@@ -1331,6 +1334,71 @@ fn newsletter_unsubscribe_direct(
 }
 
 /// `POST /api/invite/set-code` (server.js:16412-16436).
+/// `GET /api/invite/my-code` — the signed-in user's invite code (generated and
+/// stored on first request, same scheme as `invite_send`), plus how many
+/// people signed up with it and how many invite emails they have sent. Read
+/// by `webserver/invite/index.html`.
+fn invite_my_code(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
+    let cookies = auth::get_cookies_from_header_value(
+        headers
+            .get(axum::http::header::COOKIE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or(""),
+        &state.store,
+        &state.id_secret,
+        false,
+    );
+    let sid = cookies
+        .get("studentId")
+        .filter(|s| !s.is_empty())
+        .or_else(|| cookies.get("id"))
+        .unwrap_or("");
+    if !auth::valid_id(sid, &state.id_secret) {
+        return json_resp(401, json!({ "success": false, "error": "auth required" }));
+    }
+    let Some(email) = auth::email_from_sid(&state.store, &state.id_secret, sid) else {
+        return json_resp(
+            401,
+            json!({ "success": false, "error": "identity missing" }),
+        );
+    };
+    let norm = auth::normalize_email(&email);
+    let code = match mitch_lib::invites::invite_code_get(&state.store, &norm) {
+        Some(c) => c,
+        None => {
+            let prefix: String = email
+                .split('@')
+                .next()
+                .unwrap_or("USER")
+                .chars()
+                .filter(|c| c.is_ascii_alphanumeric())
+                .take(12)
+                .collect::<String>()
+                .to_uppercase();
+            let suffix = format!("{:03}", (rand::random::<u32>() % 900) + 100);
+            let generated = format!("{prefix}{suffix}");
+            if !mitch_lib::invites::invite_code_set(&state.store, &norm, &generated) {
+                return json_resp(
+                    500,
+                    json!({ "success": false, "error": "code_unavailable" }),
+                );
+            }
+            generated
+        }
+    };
+    json_resp(
+        200,
+        json!({
+            "success": true,
+            "code": code,
+            "email": email,
+            "signups": mitch_lib::invites::invite_claims_count(&state.store, &norm),
+            "sent": mitch_lib::invites::invite_sent_count(&state.store, &norm),
+            "isPremium": is_premium_email(state, &email),
+        }),
+    )
+}
+
 fn invite_set_code(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Response {
     let cookies = auth::get_cookies_from_header_value(
         headers

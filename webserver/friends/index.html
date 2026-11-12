@@ -427,25 +427,33 @@ function friendInitials(value) {
   }).join('') || '?').toUpperCase();
 }
 
-async function fetchAllMembers() {
-  try {
-    const r = await fetch('/api/members?t=' + Date.now(), { credentials: 'include' });
-    if (r.ok) {
+// The server only answers searches (2+ characters), never the whole roster.
+let memberSearchTimer = null, memberSearchSeq = 0;
+function fetchMembersFor(q) {
+  clearTimeout(memberSearchTimer);
+  const seq = ++memberSearchSeq;
+  memberSearchTimer = setTimeout(async function() {
+    try {
+      const r = await fetch('/api/members?q=' + encodeURIComponent(q), { credentials: 'include', cache: 'no-store' });
+      if (!r.ok || seq !== memberSearchSeq) return;
       const d = await r.json();
       allMembers = d.members || [];
-    }
-  } catch(e) {}
+      onSearchInput(true);
+    } catch(e) {}
+  }, 250);
 }
 
-function onSearchInput() {
+function onSearchInput(fromFetch) {
   const input = document.getElementById('friendEmailInput');
   const listEl = document.getElementById('autocomplete-list');
   if (!input || !listEl) return;
   const q = input.value.trim().toLowerCase();
-  if (!q) {
+  if (q.length < 2) {
+    allMembers = [];
     listEl.style.display = 'none';
     return;
   }
+  if (fromFetch !== true) { fetchMembersFor(q); return; }
 
   // De-duplicate members, preferring those with display names
   const sortedMembers = [...allMembers].sort((a, b) => {
@@ -708,7 +716,6 @@ function sendHeartbeat() { window.MitchPresence?.send(); }
 function init() {
   loadFriends();
   loadPending();
-  fetchAllMembers();
   sendHeartbeat();
   let presenceRefresh;
   window.addEventListener('ws-broadcast-message', event => {
