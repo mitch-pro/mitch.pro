@@ -1343,6 +1343,13 @@ async fn handle_resolved(
         {
             return resp;
         }
+        // Rate My Teacher (student side).
+        if let Some(resp) =
+            crate::routes::teachers::handle(&state, &method, &path, headers, body_bytes, &search)
+                .await
+        {
+            return resp;
+        }
         // Unmatched /api/ paths fall through to static 404 (same as bun).
     }
 

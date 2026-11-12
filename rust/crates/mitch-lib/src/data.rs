@@ -266,6 +266,38 @@ impl DataStore {
                         UNIQUE (created_at, kind, text)
                     );
                     CREATE INDEX IF NOT EXISTS idx_feedback_status ON feedback_entries (status, created_at DESC);
+                    CREATE TABLE IF NOT EXISTS teachers (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        school TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        department TEXT NOT NULL DEFAULT '',
+                        source TEXT NOT NULL DEFAULT 'manual',
+                        UNIQUE (school, name)
+                    );
+                    CREATE TABLE IF NOT EXISTS teacher_ratings (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        teacher_id INTEGER NOT NULL,
+                        overall INTEGER NOT NULL,
+                        homework INTEGER,
+                        teaching INTEGER,
+                        chill INTEGER,
+                        day INTEGER NOT NULL
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_teacher_ratings_teacher ON teacher_ratings (teacher_id);
+                    CREATE TABLE IF NOT EXISTS teacher_rating_marks (
+                        mark TEXT PRIMARY KEY
+                    ) WITHOUT ROWID;
+                    CREATE TABLE IF NOT EXISTS teacher_comments (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        teacher_id INTEGER NOT NULL,
+                        text TEXT NOT NULL,
+                        day INTEGER NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'pending',
+                        reviewed_by TEXT NOT NULL DEFAULT '',
+                        reviewed_at INTEGER
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_teacher_comments_teacher ON teacher_comments (teacher_id, status);
+                    CREATE INDEX IF NOT EXISTS idx_teacher_comments_status ON teacher_comments (status, id);
                     CREATE TABLE IF NOT EXISTS site_updates (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         title TEXT NOT NULL,

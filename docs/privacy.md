@@ -21,6 +21,9 @@ start and removes it (every step is idempotent).
 - **Login activity times.** Login sessions (`auth_sessions` table) store
   creation and expiry only, not a last-used time, IP or user agent.
 - **Search queries.** The old search log and its admin endpoint are removed.
+- **Who rated a teacher.** Teacher ratings and notes store no account, session or
+  exact time, only a keyed hash per (account, teacher) to stop repeats. See
+  [rate-my-teacher.md](rate-my-teacher.md).
 - **Third-party trackers.** No analytics, ad or social scripts on site pages.
   The vendored Cookie Clicker page ships with its upstream AdSense, Facebook
   Pixel, Playsaurus ads and cookie banner switched off (`THIRD_PARTY=false`).

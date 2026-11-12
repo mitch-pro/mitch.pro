@@ -1,0 +1,43 @@
+/* Rate My Teacher. Colours come from the site theme tokens (app.css). */
+.rt-wrap { max-width: 820px; margin: 0 auto; padding: 28px 16px 56px; }
+.rt-wrap h1 { margin: 0 0 14px; font-size: 1.7rem; font-weight: 700; letter-spacing: -0.03em; }
+.rt-sub { color: var(--t-fg2); margin: 0 0 12px; }
+.rt-controls { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.rt-field { display: flex; flex-direction: column; gap: 5px; font-size: .78rem; font-weight: 600; color: var(--t-fg2); }
+.rt-grow { flex: 1 1 200px; }
+.rt-field select, .rt-field input, .rt-field textarea { font: inherit; font-weight: 400; font-size: .95rem; color: var(--t-fg); background: var(--t-bg3, var(--t-bg2)); border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm, 7px); padding: 9px 11px; box-sizing: border-box; width: 100%; }
+.rt-field textarea { resize: vertical; }
+.rt-list { display: grid; gap: 8px; }
+.rt-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 12px 14px; text-align: left; font: inherit; color: var(--t-fg); background: var(--t-bg2); border: 1px solid var(--t-bd); border-radius: var(--t-radius, 10px); cursor: pointer; }
+.rt-row:hover { border-color: var(--t-bda, var(--t-fg2)); }
+.rt-row strong { display: block; font-size: .98rem; }
+.rt-row small { color: var(--t-fg2); font-size: .8rem; }
+.rt-score { display: flex; align-items: center; gap: 8px; flex: none; font-size: .82rem; color: var(--t-fg2); white-space: nowrap; }
+.rt-tag { padding: 2px 8px; border: 1px solid var(--t-bd); border-radius: 99px; font-size: .72rem; font-weight: 600; color: var(--t-fg2); }
+.rt-stars { position: relative; display: inline-block; font-size: 1.05rem; letter-spacing: 1px; line-height: 1; color: var(--t-bd); }
+.rt-stars::before { content: "★★★★★"; }
+.rt-stars > i { position: absolute; inset: 0 auto 0 0; overflow: hidden; white-space: nowrap; color: var(--t-ac); font-style: normal; }
+.rt-stars > i::before { content: "★★★★★"; }
+.rt-dialog { width: min(520px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; border: 1px solid var(--t-bd); border-radius: var(--t-radius, 10px); background: var(--t-bg2); color: var(--t-fg); padding: 20px; }
+.rt-dialog::backdrop { background: rgba(0, 0, 0, .5); }
+.rt-dialog h2 { margin: 0 0 2px; font-size: 1.25rem; }
+.rt-dialog h3 { margin: 18px 0 8px; font-size: .95rem; }
+.rt-close-row { float: right; margin: 0 0 0 8px; }
+.rt-summary { display: grid; gap: 6px; margin: 12px 0; }
+.rt-sumrow { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: .9rem; }
+.rt-notes blockquote { margin: 8px 0; padding: 8px 12px; border-left: 3px solid var(--t-bd); color: var(--t-fg); font-size: .92rem; overflow-wrap: anywhere; white-space: pre-wrap; }
+.rt-pick { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 6px 0; font-size: .9rem; }
+.rt-pick small { color: var(--t-fg2); display: block; font-size: .75rem; }
+.rt-star-group { display: flex; gap: 2px; flex: none; }
+.rt-star-group button { padding: 2px 3px; font-size: 1.5rem; line-height: 1; background: none; border: 0; cursor: pointer; color: var(--t-bd); }
+.rt-star-group button.on { color: var(--t-ac); }
+.rt-star-group button:focus-visible { outline: 2px solid var(--t-ac); border-radius: 4px; }
+.rt-btn { padding: 8px 14px; font: inherit; font-weight: 600; font-size: .85rem; cursor: pointer; color: var(--t-fg); background: transparent; border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm, 7px); }
+.rt-btn:hover { border-color: var(--t-bda, var(--t-fg2)); }
+.rt-btn.primary { color: var(--t-ac-ink, #fff); background: var(--t-ac); border-color: var(--t-ac); }
+.rt-btn:disabled { opacity: .5; cursor: default; }
+.rt-status { min-height: 1.3em; margin: 8px 0 0; color: var(--t-fg2); font-size: .85rem; }
+.rt-status.err { color: #c2354c; }
+html[data-theme=dark] .rt-status.err { color: #ff9aa9; }
+@media (prefers-color-scheme: dark) { html:not([data-theme=light]) .rt-status.err { color: #ff9aa9; } }
+@media (max-width: 480px) { .rt-score .rt-tag { display: none; } }

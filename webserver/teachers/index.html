@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Rate My Teacher — mitch.pro</title>
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/teachers/teachers.css">
+<script src="/app-shell.js" defer></script>
+</head>
+<body class="app-shell">
+<main class="rt-wrap">
+  <h1>Rate my teacher</h1>
+  <p class="rt-sub" id="denied" hidden></p>
+  <div id="app" hidden>
+    <div class="rt-controls">
+      <label class="rt-field">School
+        <select id="school"></select>
+      </label>
+      <label class="rt-field rt-grow">Search
+        <input type="search" id="q" placeholder="Name or department" autocomplete="off">
+      </label>
+    </div>
+    <div id="list" class="rt-list"></div>
+    <p class="rt-status" id="status" role="status"></p>
+  </div>
+
+  <dialog id="teacher-dialog" class="rt-dialog">
+    <form method="dialog" class="rt-close-row"><button class="rt-btn" aria-label="Close">Close</button></form>
+    <h2 id="d-name"></h2>
+    <p class="rt-sub" id="d-meta"></p>
+    <div id="d-summary" class="rt-summary"></div>
+    <section id="d-notes" class="rt-notes"></section>
+    <form id="rate-form" class="rt-form" hidden>
+      <h3>Your rating</h3>
+      <div id="rate-rows"></div>
+      <label class="rt-field">Note (optional)
+        <textarea id="note" maxlength="500" rows="3" placeholder="A few words. A moderator reads it before it shows."></textarea>
+      </label>
+      <p class="rt-status" id="rate-status" role="status"></p>
+      <button type="submit" class="rt-btn primary" id="submit">Submit rating</button>
+    </form>
+    <p class="rt-sub" id="d-done" hidden></p>
+  </dialog>
+</main>
+<script src="/teachers/teachers.js"></script>
+</body>
+</html>

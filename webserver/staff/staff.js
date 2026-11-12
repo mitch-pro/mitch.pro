@@ -21,6 +21,7 @@
       { href: '/admin/companion/', name: 'Companion characters', desc: 'Preset characters and review queue', ok: adminOk },
       { href: '/moderator/', name: 'Moderator panel', desc: 'Reports and content review', ok: modOk },
       { href: '/moderator/feedback/', name: 'Feedback', desc: 'Read what people send from the feedback page', ok: modOk },
+      { href: '/moderator/teachers/', name: 'Teacher ratings', desc: 'Review teacher notes and manage the teacher list', ok: modOk },
       { href: '/moderator/support/', name: 'Support tickets', desc: 'Help people who are locked out; request email changes', ok: modOk },
       { href: '/tester/', name: 'Beta tester hub', desc: 'Tester tools and cooldown bypasses', ok: testerOk },
     ];

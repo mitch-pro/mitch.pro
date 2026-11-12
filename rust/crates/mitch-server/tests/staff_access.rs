@@ -252,3 +252,186 @@ async fn feedback_inbox_is_routed_and_follows_roles() {
             .status
     ));
 }
+
+/// Rate My Teacher: only student accounts can rate, each account rates a
+/// teacher once, notes stay hidden until a moderator approves them, and
+/// moderators manage the list while only admins remove teachers.
+#[tokio::test(flavor = "multi_thread")]
+async fn teacher_ratings_follow_student_and_staff_rules() {
+    const MODERATOR: &str = "moderator@example.com";
+    const STUDENT: &str = "kid@student.rjuhsd.us";
+    const STUDENT2: &str = "kid2@student.rjuhsd.us";
+    let admins = json!({"owners": [OWNER], "admins": [ADMIN]}).to_string();
+    let moderators = json!([MODERATOR]).to_string();
+    let s = TestServer::start(
+        &[("admins.json", &admins), ("moderators.json", &moderators)],
+        "/api/tester/status",
+        403,
+    )
+    .await;
+    let admin = s.session_for(ADMIN);
+    let moderator = s.session_for(MODERATOR);
+    let member = s.session_for(MEMBER);
+    let student = s.session_for(STUDENT);
+    let student2 = s.session_for(STUDENT2);
+    let r = staff_post(
+        &s,
+        Some(&admin),
+        "/api/admin/passphrase-status",
+        json!({"passphrase": PASS}),
+    )
+    .await;
+    assert_eq!(r.status, 200, "{}", r.text);
+
+    // A moderator builds the list.
+    let added = staff_post(
+        &s,
+        Some(&moderator),
+        "/api/admin/teachers/import",
+        json!({"school": "woodcreek", "text": "Smith, Jane | Math\nRaj Patel"}),
+    )
+    .await;
+    assert_eq!(added.status, 200, "{}", added.text);
+    assert_eq!(added.json["added"], 2);
+    let bad_school = staff_post(
+        &s,
+        Some(&moderator),
+        "/api/admin/teachers/add",
+        json!({"school": "nowhere", "name": "Nobody"}),
+    )
+    .await;
+    assert_eq!(bad_school.status, 400);
+
+    // Students see the list; other accounts and visitors do not.
+    let list = s
+        .call(
+            Some(&student),
+            "GET",
+            "/api/teachers?school=woodcreek",
+            None,
+        )
+        .await;
+    assert_eq!(list.status, 200, "{}", list.text);
+    assert_eq!(list.json["canRate"], true);
+    let teachers = list.json["teachers"].as_array().unwrap();
+    assert_eq!(teachers.len(), 2);
+    let jane = teachers.iter().find(|t| t["name"] == "Jane Smith").unwrap()["id"]
+        .as_i64()
+        .unwrap();
+    let member_list = s.call(Some(&member), "GET", "/api/teachers", None).await;
+    assert_eq!(member_list.status, 403, "{}", member_list.text);
+    assert!([401, 403].contains(&s.call(None, "GET", "/api/teachers", None).await.status));
+
+    // Rating: students only, once each, stars 1 to 5.
+    let rate = |sid: &str, body: serde_json::Value| {
+        let sid = sid.to_string();
+        let s = &s;
+        async move {
+            s.call_with(
+                Some(&sid),
+                "POST",
+                "/api/teachers/rate",
+                Some(body),
+                &[("Origin", &s.url)],
+            )
+            .await
+        }
+    };
+    let body = json!({"teacherId": jane, "overall": 4, "chill": 5, "note": "Fair grader"});
+    assert_eq!(rate(&member, body.clone()).await.status, 403);
+    assert_eq!(
+        rate(&moderator, body.clone()).await.status,
+        403,
+        "staff read but do not rate"
+    );
+    assert_eq!(
+        rate(&student, json!({"teacherId": jane, "overall": 9}))
+            .await
+            .status,
+        400
+    );
+    let first = rate(&student, body.clone()).await;
+    assert_eq!(first.status, 200, "{}", first.text);
+    assert_eq!(first.json["noteQueued"], true);
+    assert_eq!(first.json["ratings"]["overall"].as_f64(), Some(4.0));
+    assert_eq!(rate(&student, body.clone()).await.status, 409);
+    assert_eq!(
+        rate(&student2, json!({"teacherId": jane, "overall": 2}))
+            .await
+            .status,
+        200
+    );
+    let one = s
+        .call(
+            Some(&student),
+            "GET",
+            &format!("/api/teachers/one?id={jane}"),
+            None,
+        )
+        .await;
+    assert_eq!(one.json["ratings"]["count"], 2);
+    assert_eq!(one.json["rated"], true);
+    assert_eq!(
+        one.json["notes"].as_array().map(Vec::len),
+        Some(0),
+        "note not approved yet"
+    );
+
+    // The moderator approves the note, and it shows. The queue never names the writer.
+    let queue = staff_get(
+        &s,
+        Some(&moderator),
+        "/api/admin/teachers?status=pending",
+        false,
+    )
+    .await;
+    assert_eq!(queue.status, 200, "{}", queue.text);
+    assert_eq!(queue.json["notes"][0]["text"], "Fair grader");
+    assert!(!queue.text.contains("student.rjuhsd.us"));
+    let note_id = queue.json["notes"][0]["id"].as_i64().unwrap();
+    let ok = staff_post(
+        &s,
+        Some(&moderator),
+        "/api/admin/teachers/note-status",
+        json!({"id": note_id, "status": "approved"}),
+    )
+    .await;
+    assert_eq!(ok.status, 200, "{}", ok.text);
+    let one = s
+        .call(
+            Some(&student2),
+            "GET",
+            &format!("/api/teachers/one?id={jane}"),
+            None,
+        )
+        .await;
+    assert_eq!(one.json["notes"][0]["text"], "Fair grader");
+
+    // Removing a teacher is admin-only; students and members cannot reach the staff API.
+    let denied = staff_post(
+        &s,
+        Some(&moderator),
+        "/api/admin/teachers/remove",
+        json!({"id": jane}),
+    )
+    .await;
+    assert_eq!(denied.status, 403);
+    assert!([401, 403].contains(
+        &staff_get(&s, Some(&student), "/api/admin/teachers", true)
+            .await
+            .status
+    ));
+    assert!([401, 403].contains(
+        &staff_get(&s, None, "/api/admin/teachers", true)
+            .await
+            .status
+    ));
+    let removed = staff_post(
+        &s,
+        Some(&admin),
+        "/api/admin/teachers/remove",
+        json!({"id": jane}),
+    )
+    .await;
+    assert_eq!(removed.status, 200, "{}", removed.text);
+}
