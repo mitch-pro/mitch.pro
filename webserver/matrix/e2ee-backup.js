@@ -422,12 +422,17 @@
     const api = cryptoApi();
     const recovery = await api.createRecoveryKeyFromPassphrase(passphrase);
     if (!recovery || !recovery.encodedPrivateKey) throw new Error('Couldn\'t create a recovery key.');
-    await api.bootstrapCrossSigning({ authUploadDeviceSigningKeys, setupNewCrossSigning: !!reset });
+    // Order matters. Replace secret storage first so it has a key we hold; the
+    // SDK stores new cross-signing keys into the *default* key, and when an old
+    // key exists (a reset) it would ask for that key, which may be lost.
     await api.bootstrapSecretStorage({
       createSecretStorageKey: async () => recovery,
       setupNewSecretStorage: true,
       setupNewKeyBackup: true,
     });
+    await api.bootstrapCrossSigning({ authUploadDeviceSigningKeys, setupNewCrossSigning: !!reset });
+    // Make sure the (new) cross-signing keys and the backup key are in secret storage.
+    await api.bootstrapSecretStorage({});
     await api.checkKeyBackupAndEnable();
     store.del(k('setup_snooze'));
     banner.hide();
