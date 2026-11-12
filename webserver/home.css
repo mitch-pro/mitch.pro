@@ -644,10 +644,3 @@ body.members-rail-open #people-edge-trigger {display:none}
 .break-chip { margin: 8px 0 0; font-size: .82rem; font-weight: 600; color: var(--t-fg2); }
 .break-chip[hidden] { display: none; }
 
-/* Dismissible notice under the masthead (see docs/tylerium-statement.md) */
-.statement-banner { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 10px 16px; background: var(--t-bg2); border-bottom: 1px solid var(--t-bd); color: var(--t-fg); font-size: 13px; }
-.statement-banner[hidden] { display: none; }
-.statement-banner p { margin: 0; text-align: center; }
-.statement-banner a { color: var(--t-ac); font-weight: 600; text-decoration: underline; }
-body.home .statement-banner-close { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; flex: 0 0 28px; width: 28px; min-width: 28px; height: 28px; min-height: 28px; padding: 0; border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm, 7px); background: transparent; color: var(--t-fg2); font-size: 18px; line-height: 1; cursor: pointer; }
-body.home .statement-banner-close:hover { color: var(--t-fg); border-color: var(--t-bda); background: transparent; }
