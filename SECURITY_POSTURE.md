@@ -8,7 +8,7 @@ This is the public security note for the open-source tree. Detailed exploit writ
 
 - **Session auth:** HttpOnly `mitch_session` is the only authentication bearer. Visible `studentId` is display-only.
 - **CSRF:** Mutating `/api/*` requires same-origin `Origin`/`Referer` and `X-Mitch-Requested-With: 1` (see `webserver/api.js`).
-- **Client IP:** Caddy sets `X-Mitch-Client-IP` from Cloudflare connecting IP or the peer address; client-supplied copies are stripped.
+- **Client IP:** Caddy sets `X-Mitch-Client-IP` from the upstream nginx (`X-Mitch-Client-IP`, then `X-Real-IP`) or the peer address; client-supplied copies are stripped. The `CF-Connecting-IP` fallback in the Caddyfile is left over from when traffic came through a Cloudflare tunnel (see [Network path](#network-path)).
 - **Proxies:** Arbitrary-site `/prox/` and ultra/bare stacks are removed. Fixed game host reverse proxies (e.g. `/proxy/gamemonetize/`) remain.
 - **Admin SSH:** The web SSH terminal and its `ssh-gateway` container are removed.
 - **Admin simulation:** Removed.
@@ -25,5 +25,9 @@ See [SECURITY.md](SECURITY.md).
 1. `SESSION_COOKIE_SECURE=1` and `NODE_ENV=production`
 2. `ENABLE_ADMIN_KEY_HEADER=0`, `ENABLE_CLIENT_CHESS_REWARDS=0`
 3. Set `SMS_WEBHOOK_SECRET` if SMS inbound is enabled
-4. Confirm Caddy/Cloudflare IP header path matches your edge topology
+4. Confirm the Caddy/nginx IP header path matches your edge topology
 5. If publishing publicly, start from a history cut that excludes old secret-bearing commits
+
+## Network path
+
+Visitors reach an upstream nginx, which proxies to Caddy and then the app. Cloudflare is used for DNS only: there is no Cloudflare tunnel or proxy in front of the site, and Cloudflare never sees visitor traffic. Headers or code that mention Cloudflare (`CF-Connecting-IP`, bot-detection scripts in vendored pages) are leftovers from a tunnel the site used about a year ago, before this repository.

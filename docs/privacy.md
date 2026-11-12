@@ -48,7 +48,7 @@ start and removes it (every step is idempotent).
 `webserver/privacy/index.html` is the policy members read. It must say what this
 document says: when an entry in "Not kept" or "Kept, and why" changes, change the
 page in the same commit, including its "Last updated" date. It also names the
-outside services a browser or the server contacts (Cloudflare, email delivery,
+outside services a browser or the server contacts (email delivery,
 reCAPTCHA, Google Fonts, Open-Meteo); add a new one there before shipping it.
 
 ## Who can see what

@@ -41,6 +41,10 @@
 - Unless the user explicitly tells them to focus on the next commit and ignore CI, they must check CI status.
 - The git repository is public, so the `gh` CLI is not required (e.g., status can be checked via public GitHub Actions API requests or `gh run list`).
 
+## Network path
+
+- Cloudflare is DNS only. There is no Cloudflare tunnel or proxy in front of the site; traffic arrives through an upstream nginx. Do not assume otherwise, and do not describe Cloudflare as handling traffic (for example in the privacy policy). Details in `SECURITY_POSTURE.md`.
+
 ## Privacy and telemetry
 
 - Default to strict privacy: never track, aggregate, or expose user actions, current URLs, open tabs, or viewing habits to other users or staff without explicit user opt-in.
