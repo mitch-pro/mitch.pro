@@ -88,9 +88,10 @@
   .not-found h1 { font-size: 1.6rem; margin-bottom: 8px; }
   .not-found p { font-size: 14px; color: var(--t-fg2); margin-bottom: 12px; }
 
-  .facts { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--t-bd); }
-  .fact-val { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; color: var(--t-fg); }
-  .fact-lbl { font-size: 13px; color: var(--t-fg2); margin-top: 2px; }
+  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 22px; }
+  .fact { background: var(--t-bg); border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm); padding: 18px 20px; }
+  .fact-val { display: flex; align-items: center; gap: 8px; min-height: 2.6rem; font-size: 1.9rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; color: var(--t-fg); }
+  .fact-lbl { font-size: 13px; color: var(--t-fg2); margin-top: 6px; }
   .achs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
   .ach-badge { font-size: 12px; background: var(--t-bg3); border: 1px solid var(--t-bd); padding: 4px 10px; border-radius: 999px; color: var(--t-fg2); }
 
@@ -246,8 +247,8 @@ async function load(forceNetwork) {
       </div>
     </div>
     <div class="facts">
-      <div><div class="fact-val mitch-coin-amount">${esc(coinText)}</div><div class="fact-lbl">MitchCoins</div></div>
-      <div><div class="fact-val">${esc(calculatePlaytime(stats))}</div><div class="fact-lbl">Time spent</div></div>
+      <div class="fact"><div class="fact-val mitch-coin-amount">${esc(coinText)}</div><div class="fact-lbl">MitchCoins</div></div>
+      <div class="fact"><div class="fact-val">${esc(calculatePlaytime(stats))}</div><div class="fact-lbl">Time spent</div></div>
     </div>
     ${achs.length ? `<div class="achs">${achs.map(a => `<span class="ach-badge">🏆 ${esc(String(a).replace(/_/g, ' '))}</span>`).join('')}</div>` : ''}`;
 
