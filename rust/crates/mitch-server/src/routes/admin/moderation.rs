@@ -495,26 +495,14 @@ pub fn handle(
             return Some(forbidden());
         }
         let new_url = body.get("url").cloned().unwrap_or(Value::Null);
-        let sites_path = state.cfg.base_dir.join("data/sites");
-        let Ok(contents) = std::fs::read_to_string(&sites_path) else {
-            return Some(json_response(500, json!({ "error": "internal_error" })));
-        };
-        static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
-        let re = RE.get_or_init(|| {
-            regex::Regex::new(r"url https://docs\.google\.com/document/d/[^\s]+ Mitch\.pro Mirrors")
-                .unwrap_or_else(|e| {
-                    tracing::error!("mirror regex failed: {e}");
-                    regex::Regex::new("$^").unwrap_or_else(|_| {
-                        regex::Regex::new("$^").unwrap_or_else(|e| {
-                            tracing::error!("fallback regex failed: {e}");
-                            regex::Regex::new("$^").unwrap_or_else(|_| unreachable!())
-                        })
-                    })
-                })
-        });
-        let new_line = format!("url {new_url} Mitch.pro Mirrors");
-        let updated = re.replace(&contents, new_line.as_str()).to_string();
-        let _ = std::fs::write(&sites_path, &updated);
+        let new_url_str = new_url.as_str().unwrap_or("");
+        if !(new_url_str.starts_with("https://") || new_url_str.starts_with("http://")) {
+            return Some(json_response(
+                400,
+                json!({ "error": "valid mirror URL required" }),
+            ));
+        }
+        mitch_lib::site_links::set_mirror_url(&state.store, new_url_str);
         let actor = mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, &ctx.sid)
             .unwrap_or_else(|| "moderator".to_string());
         let role = if ctx.is_admin(state) {
@@ -2150,29 +2138,7 @@ pub fn execute_moderator_approved_action(
             if !ok {
                 return Err((400, "valid mirror URL required".into()));
             }
-            let sites_path = state.cfg.base_dir.join("data/sites");
-            let Ok(contents) = std::fs::read_to_string(&sites_path) else {
-                return Err((500, "internal_error".into()));
-            };
-            static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
-            let re = RE.get_or_init(|| {
-                regex::Regex::new(
-                    r"url https://docs\.google\.com/document/d/[^\s]+ Mitch\.pro Mirrors",
-                )
-                .unwrap_or_else(|e| {
-                    tracing::error!("mirror regex failed: {e}");
-                    regex::Regex::new("$^").unwrap_or_else(|_| {
-                        regex::Regex::new("$^").unwrap_or_else(|e| {
-                            tracing::error!("fallback regex failed: {e}");
-                            regex::Regex::new("$^").unwrap_or_else(|_| unreachable!())
-                        })
-                    })
-                })
-            });
-            let updated = re
-                .replace(&contents, format!("url {new_url} Mitch.pro Mirrors"))
-                .to_string();
-            let _ = std::fs::write(&sites_path, &updated);
+            mitch_lib::site_links::set_mirror_url(&state.store, &new_url);
             mitch_lib::admin::log_admin_action(
                 &state.store,
                 &state.cfg.data_dir,

@@ -39,7 +39,6 @@ pub const PRESERVED_DATA_FILES: &[&str] = &[
     "prox_blocklist.json",
     "shop_catalog_overrides.json",
     "site.json",
-    "sites",
     "wordle_dictionary.txt",
 ];
 
@@ -792,12 +791,15 @@ impl DataStore {
             rusqlite::params![now_millis()],
         )?;
 
+        conn.execute_batch(crate::site_links::SCHEMA)?;
+
         let store = Self {
             base_dir: base_dir.to_path_buf(),
             data_dir: data_dir.to_path_buf(),
             conn: Mutex::new(conn),
             app_log_writes: std::sync::atomic::AtomicUsize::new(0),
         };
+        crate::site_links::seed(&store, data_dir);
         store.backfill_coins_table_from_json();
         if import_legacy_bans {
             store.backfill_blacklist_table_from_json()?;

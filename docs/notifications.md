@@ -46,3 +46,17 @@ still apply account-ban chat-cleanup filtering before commit.
 The first atomic edit imports an existing on-disk legacy document if SQLite has
 no row yet. Corrupt/unreadable input fails without replacing it with an empty
 inbox. Subsequent edits use the committed database row.
+
+## Alert types (`/notifications/`)
+
+Per-account preferences in `notif_prefs` (`GET/POST /api/me/notif-prefs`), all
+default on; only an explicit `false` blocks, and quiet hours mute every type.
+
+| Key | Gates |
+| --- | --- |
+| `dm`, `group` | Chat message pushes (Matrix and Secure Chat) |
+| `calls` | Matrix voice/video call alerts (also requires `dm`/`group`) |
+| `friends_online` | "Friend came online" pushes |
+| `friend_requests` | Push for new and accepted friend requests |
+| `coin_gifts` | Coin-gift entries in the bell. Staff notices are never muted. |
+| `digest` | The unread-messages email digest |

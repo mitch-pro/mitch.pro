@@ -280,8 +280,8 @@ function renderRecentVisits() {
 
 function artForDestination(label, href) {
   var text = (String(label || '') + ' ' + String(href || '')).toLowerCase();
-  if (/game|canvas|pixel|chess|battle|jeopardy|clicker|movie|arcade/.test(text)) return 'games';
-  if (/chat|friend|member|invite|feedback|newsletter|leaderboard|profile|team/.test(text)) return 'social';
+  if (/game|chess|movie|arcade/.test(text)) return 'games';
+  if (/chat|friend|member|invite|feedback|newsletter|leaderboard|profile|team|learn/.test(text)) return 'social';
   if (/market|shop|premium|inventory|coin|account|claim/.test(text)) return 'market';
   return 'tools';
 }
@@ -289,22 +289,21 @@ function artForDestination(label, href) {
 function categoryForLabel(label, isAdmin) {
   var l = label.toLowerCase();
   if (isAdmin) return 'Admin';
-  if (l.includes('adrian clicker') || l.includes("kody") || l.includes("lillian") || l.includes("richard") || l.includes("riches") || l.includes("penny") || l.includes("sebastian") || l.includes("piccolo") || l.includes("chess vs") || l.includes("battleship") || l.includes("jeopardy")) return 'MitchCoin Games';
-  if (l.includes('market') || l.includes('shop') || l.includes('team') || l.includes('premium')) return 'Account & Market';
-  if (l.includes('chat') || l.includes('feedback') || l.includes('newsletter') || l.includes('invite') || l.includes('leaderboard') || l.includes('friends') || l.includes('members')) return 'Social & Chat';
-  if (l.includes('profile') || l.includes('preferences') || l.includes('account')) return 'Account & Market';
-  if (l.includes('games') || l.includes('pixelplace') || l.includes('canvas') || l.includes('movies') || l.includes('subtitle')) return 'Entertainment';
+  if (l.includes('feedback') || l.includes('learn about')) return 'Help';
+  if (l.includes('market') || l.includes('shop')) return 'Account & Market';
+  if (l.includes('chat') || l.includes('invite') || l.includes('leaderboard') || l.includes('friends') || l.includes('members')) return 'Social & Chat';
+  if (l.includes('games')) return 'Entertainment';
   return 'Utilities';
 }
 
 function describeCategory(cat) {
   return ({
     'Admin': 'Private controls and advanced tools',
-    'MitchCoin Games': 'Play and earn verified MitchCoins',
-    'Entertainment': 'Games, canvas, media, and fun stuff',
-    'Social & Chat': 'Profiles, chat, feedback, and community pages',
-    'Account & Market': 'Coins, premium, shop, team, and account options',
-    'Utilities': 'Helpful links and site tools'
+    'Entertainment': 'Games and fun stuff',
+    'Social & Chat': 'Chat, friends, and community pages',
+    'Account & Market': 'Coins, shop, and cosmetics',
+    'Help': 'Learn the site and send feedback',
+    'Utilities': 'Inventory, saves, notifications, and more'
   })[cat] || '';
 }
 
@@ -314,10 +313,10 @@ function parseSites(text) {
   container.innerHTML = '';
 
   var categories = {
-    'MitchCoin Games': [],
     'Entertainment': [],
     'Social & Chat': [],
     'Account & Market': [],
+    'Help': [],
     'Utilities': [],
     'Admin': []
   };
@@ -359,8 +358,8 @@ function parseSites(text) {
   var categoryPriority = {
     'Social & Chat': 0,
     'Account & Market': 1,
-    'MitchCoin Games': 2,
-    'Entertainment': 3,
+    'Entertainment': 2,
+    'Help': 3,
     'Utilities': 4,
     'Admin': 5
   };
@@ -512,10 +511,10 @@ function getIconFor(label) {
   else if (l.includes('leaderboard')) glyph = '<path d="M8 4h8v4c0 3-1.5 5-4 5S8 11 8 8z"/><path d="M8 6H4c0 3 1.5 4.5 4.5 4.5M16 6h4c0 3-1.5 4.5-4.5 4.5M12 13v4m-4 3h8"/>';
   else if (l.includes('sanctum') || l.includes('premium')) glyph = '<path d="m12 3 6 6-6 12L6 9z"/><path d="M6 9h12M9 9l3-6 3 6-3 12z"/>';
   else if (l.includes('games') || l.includes('battle') || l.includes('jeopardy') || l.includes('chess')) glyph = '<path d="M8 8h8c3 0 5 2.5 5 6s-2 6-4.5 6c-2 0-2.5-2.5-4.5-2.5S9.5 20 7.5 20C5 20 3 17.5 3 14s2-6 5-6Z"/><path d="M7 12v4m-2-2h4m7-1h.01m2 3h.01"/>';
+  else if (l.includes('learn')) glyph = '<path d="M4 5.5C6.5 4 9.5 4 12 5.5c2.5-1.5 5.5-1.5 8 0V19c-2.5-1.5-5.5-1.5-8 0-2.5-1.5-5.5-1.5-8 0z"/><path d="M12 5.5V19"/>';
   else if (l.includes('feedback') || l.includes('add a page')) glyph = '<path d="M9 18h6M10 22h4"/><path d="M8 14c-1.3-1.1-2-2.6-2-4.5a6 6 0 1 1 12 0c0 1.9-.7 3.4-2 4.5-.8.7-1 1.3-1 2H9c0-.7-.2-1.3-1-2Z"/>';
   else if (l.includes('chat') || l.includes('diffie')) glyph = '<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/>';
   else if (l.includes('export')) glyph = '<path d="M12 3v12m-4-4 4 4 4-4"/><path d="M5 15v5h14v-5"/>';
-  else if (l.includes('pixelplace') || l.includes('canvas')) glyph = '<path d="M4 17 15 6l3 3L7 20H4z"/><path d="m13 8 3 3M16 5l1-1 3 3-2 2"/>';
   else if (l.includes('newsletter')) glyph = '<rect x="4" y="5" width="16" height="14" rx="2"/><path d="m5 7 7 6 7-6"/>';
   else if (l.includes('invite')) glyph = '<rect x="4" y="9" width="16" height="11" rx="2"/><path d="M12 9v11M3 9h18V6H3zM12 6c-2-4-6-3-4 0m4 0c2-4 6-3 4 0"/>';
   else if (l.includes('shell') || l.includes('simulation') || l.includes('admin') || l.includes('settings') || l.includes('preferences')) glyph = '<path d="M5 6h14M5 12h14M5 18h14"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="10" cy="18" r="2"/>';
@@ -1632,10 +1631,10 @@ if (document.readyState === 'loading') {
 
       <div class="home-section-heading home-tools-heading"><h2>Explore</h2></div>
       <nav class="home-actions" aria-label="Quick actions">
-        <button type="button" class="hub-action" id="hub-friends-btn" onclick="openMembersRail(event)"><span class="action-logo"><svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="3"/><circle cx="16.5" cy="10" r="2.3"/><path d="M3.5 19c.5-3.3 2.2-5 5.5-5s5 1.7 5.5 5M14 15c3.5-.5 5.5.8 6 3.5"/></svg></span><span class="action-copy"><b>People</b><small>See who's here</small></span></button>
-        <a class="hub-action" href="/profile/" onclick="openHomeHref(event, '/profile/');"><span class="action-logo"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M5 20c.6-4.2 2.9-6.3 7-6.3s6.4 2.1 7 6.3"/></svg></span><span class="action-copy"><b>Account</b><small>Your profile and activity</small></span></a>
+        <button type="button" class="hub-action" id="hub-friends-btn" onclick="openMembersRail(event)"><span class="action-logo"><svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="3"/><circle cx="16.5" cy="10" r="2.3"/><path d="M3.5 19c.5-3.3 2.2-5 5.5-5s5 1.7 5.5 5M14 15c3.5-.5 5.5.8 6 3.5"/></svg></span><span class="action-copy"><b>People</b><small>See who's online</small></span></button>
+        <a class="hub-action" href="/invite/" onclick="openHomeHref(event, '/invite/');"><span class="action-logo"><svg viewBox="0 0 24 24"><rect x="4" y="9" width="16" height="11" rx="2"/><path d="M12 9v11M3 9h18V6H3zM12 6c-2-4-6-3-4 0m4 0c2-4 6-3 4 0"/></svg></span><span class="action-copy"><b>Invite friends</b><small>Earn 2,000 coins per signup</small></span></a>
         <a class="hub-action" href="/shop/" onclick="openHomeHref(event, '/shop/');"><span class="action-logo"><svg viewBox="0 0 24 24"><path d="m12 3 6 6-6 12L6 9z"/><path d="M6 9h12M9 9l3-6 3 6-3 12z"/></svg></span><span class="action-copy"><b>Market</b><small>Cosmetics and upgrades</small></span></a>
-        <a class="hub-action hub-action-casino" href="/casino/" onclick="openHomeHref(event, '/casino/');"><span class="action-logo"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1"/><circle cx="16" cy="8" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="8" cy="16" r="1"/><circle cx="16" cy="16" r="1"/></svg></span><span class="action-copy"><b>Casino</b><small>MitchCoins only</small></span></a>
+        <a class="hub-action" href="/learn/" onclick="openHomeHref(event, '/learn/');"><span class="action-logo"><svg viewBox="0 0 24 24"><path d="M4 5.5C6.5 4 9.5 4 12 5.5c2.5-1.5 5.5-1.5 8 0V19c-2.5-1.5-5.5-1.5-8 0-2.5-1.5-5.5-1.5-8 0z"/><path d="M12 5.5V19"/></svg></span><span class="action-copy"><b>Learn the site</b><small>What's here and how to use it</small></span></a>
         <button type="button" class="hub-action hub-daily mitch-coin-amount" id="hub-daily-chip" hidden>Daily claim</button>
       </nav>
 

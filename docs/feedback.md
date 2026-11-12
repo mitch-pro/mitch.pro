@@ -8,6 +8,11 @@ requests, ideas) and where staff read it.
   2000 characters), the sender's account email when signed in (never the raw
   session id), time and status. Nothing writes to the old `data/suggestions.json`
   any more.
+- **Page:** `/feedback/` has two tabs. *Send feedback* is a type picker and a
+  message box. *Join the team* (`/feedback/#team`) is the application form that
+  used to live at `/apply/` (`POST /api/apply`, unchanged); `/apply/` now just
+  redirects there. The mobile menu and the homepage "All pages" list link to
+  Feedback.
 - **Reading:** `/moderator/feedback/`, linked from the staff page (`/staff/`).
   Moderators and admins can read it and mark entries handled or reopen them; only
   full admins can delete (recorded in the admin log). Admins unlock with their

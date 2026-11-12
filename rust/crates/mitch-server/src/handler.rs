@@ -602,7 +602,7 @@ pub async fn handle(
     let real = crate::alias::rewrite(
         &state.id_secret,
         &state.cfg.webroot,
-        &state.cfg.data_dir,
+        &state.store,
         mitch_lib::school::now_millis(),
         uri,
     );
