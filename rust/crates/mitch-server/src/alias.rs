@@ -56,11 +56,9 @@ fn looks_like_uuid(s: &str) -> bool {
 }
 
 /// Paths that get their own section UUID: the webroot's top-level
-/// directories, `proxy/movies`, and every local link in `data/sites` (the
-/// homepage's page list) cut back to its directory, e.g. `games/adrian-clicker`.
-/// A section is one or more path segments. Hidden directories and `api` are
+/// directories and `proxy/movies`. A section is one or more path segments. Hidden directories and `api` are
 /// never listed.
-pub fn sections(webroot: &std::path::Path, data_dir: &std::path::Path) -> Vec<String> {
+pub fn sections(webroot: &std::path::Path) -> Vec<String> {
     let mut out: Vec<String> = std::fs::read_dir(webroot)
         .into_iter()
         .flatten()
@@ -71,40 +69,17 @@ pub fn sections(webroot: &std::path::Path, data_dir: &std::path::Path) -> Vec<St
         .collect();
     out.push("proxy".to_string());
     out.push("proxy/movies".to_string());
-    if let Ok(list) = std::fs::read_to_string(data_dir.join("sites")) {
-        for line in list.lines().filter(|l| !l.trim_start().starts_with("//")) {
-            for word in line.split_whitespace().filter(|w| w.starts_with('/')) {
-                let path = word.split(['?', '#']).next().unwrap_or("");
-                let path = path.trim_matches('/');
-                let valid = !path.is_empty()
-                    && path.split('/').count() <= 3
-                    && !path.starts_with("api/")
-                    && !path
-                        .split('/')
-                        .any(|seg| seg.is_empty() || seg.starts_with('.'))
-                    && !path.contains('.');
-                if valid {
-                    out.push(path.to_string());
-                }
-            }
-        }
-    }
     out.sort();
     out.dedup();
     out
 }
 
 /// Today's root UUID and the section UUIDs, for `GET /api/alias`.
-pub fn today(
-    secret: &[u8],
-    webroot: &std::path::Path,
-    data_dir: &std::path::Path,
-    now_ms: i64,
-) -> serde_json::Value {
+pub fn today(secret: &[u8], webroot: &std::path::Path, now_ms: i64) -> serde_json::Value {
     let day = day_number(now_ms);
     // Matrix chat can't run under a prefix (its client and homeserver URLs are
     // fixed to /matrix/), so it is never handed out; see `is_matrix`.
-    let map: BTreeMap<String, String> = sections(webroot, data_dir)
+    let map: BTreeMap<String, String> = sections(webroot)
         .into_iter()
         .filter(|s| s != "matrix")
         .map(|s| {
@@ -119,7 +94,6 @@ pub fn today(
 pub fn resolve(
     secret: &[u8],
     webroot: &std::path::Path,
-    data_dir: &std::path::Path,
     now_ms: i64,
     path: &str,
 ) -> Option<String> {
@@ -141,7 +115,7 @@ pub fn resolve(
         None => (tail, None),
     };
     if looks_like_uuid(second) {
-        let section = sections(webroot, data_dir)
+        let section = sections(webroot)
             .into_iter()
             .find(|s| section_token(secret, day, s) == second)?;
         return Some(match after {
@@ -185,14 +159,8 @@ pub fn add_security_headers(response: &mut Response, real_path: &str) {
 }
 
 /// Rewrite `uri` to its real path (query kept) when it is an alias.
-pub fn rewrite(
-    secret: &[u8],
-    webroot: &std::path::Path,
-    data_dir: &std::path::Path,
-    now_ms: i64,
-    uri: &Uri,
-) -> Option<Uri> {
-    let real = resolve(secret, webroot, data_dir, now_ms, uri.path())?;
+pub fn rewrite(secret: &[u8], webroot: &std::path::Path, now_ms: i64, uri: &Uri) -> Option<Uri> {
+    let real = resolve(secret, webroot, now_ms, uri.path())?;
     let full = match uri.query() {
         Some(q) => format!("{real}?{q}"),
         None => real,
@@ -223,7 +191,7 @@ mod tests {
         let root = root_token(key, day);
         let gp = section_token(key, day, "game-portal");
         let games = section_token(key, day, "games");
-        let r = |p: &str| resolve(key, &dir, &dir, NOW, p);
+        let r = |p: &str| resolve(key, &dir, NOW, p);
         assert_eq!(r(&format!("/{root}/{gp}/")).unwrap(), "/game-portal/");
         assert_eq!(
             r(&format!("/{root}/{games}/run-3/index.html")).unwrap(),
@@ -239,9 +207,7 @@ mod tests {
         let mx = section_token(key, day, "matrix");
         assert_eq!(r(&format!("/{root}/{mx}/")).unwrap(), "/matrix/");
         assert!(is_matrix("/matrix/") && is_matrix("/matrix") && !is_matrix("/matrixx"));
-        assert!(today(key, &dir, &dir, NOW)["sections"]
-            .get("matrix")
-            .is_none());
+        assert!(today(key, &dir, NOW)["sections"].get("matrix").is_none());
         assert!(r(&format!("/{}/{gp}/", root_token(b"other", day))).is_none());
         // A section UUID from another day does not match this root.
         assert!(r(&format!(
@@ -253,37 +219,12 @@ mod tests {
     }
 
     #[test]
-    fn multi_segment_sections_come_from_the_sites_list() {
-        let (key, dir) = (b"k".as_slice(), webroot());
-        std::fs::write(
-            dir.join("sites"),
-            "// comment /hidden/\nurl /games/run-3/ Run 3\nurl https://x.test/a Off\nurl /preferences/#account Prefs\n",
-        )
-        .unwrap();
-        let day = day_number(NOW);
-        let root = root_token(key, day);
-        let movies = section_token(key, day, "proxy/movies");
-        let run3 = section_token(key, day, "games/run-3");
-        let r = |p: &str| resolve(key, &dir, &dir, NOW, p);
-        assert_eq!(r(&format!("/{root}/{movies}/")).unwrap(), "/proxy/movies/");
-        assert_eq!(
-            r(&format!("/{root}/{run3}/index.html")).unwrap(),
-            "/games/run-3/index.html"
-        );
-        assert!(r(&format!("/{root}/{}/", section_token(key, day, "hidden"))).is_none());
-        let today = today(key, &dir, &dir, NOW);
-        assert!(today["sections"].get("preferences").is_some());
-        assert!(today["sections"].get("games/run-3").is_some());
-        std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
     fn aliases_last_a_year_then_expire() {
         let (key, dir) = (b"k".as_slice(), webroot());
         let issued = day_number(NOW);
         let root = root_token(key, issued);
         let day_ms = 86_400_000;
-        let at = |days: i64| resolve(key, &dir, &dir, NOW + days * day_ms, &format!("/{root}/x"));
+        let at = |days: i64| resolve(key, &dir, NOW + days * day_ms, &format!("/{root}/x"));
         assert!(at(0).is_some());
         assert!(at(VALID_DAYS - 1).is_some());
         assert!(at(VALID_DAYS).is_none());
@@ -330,7 +271,7 @@ mod tests {
         )
         .parse()
         .unwrap();
-        assert_eq!(rewrite(key, &dir, &dir, NOW, &uri).unwrap(), "/games/?a=1");
+        assert_eq!(rewrite(key, &dir, NOW, &uri).unwrap(), "/games/?a=1");
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

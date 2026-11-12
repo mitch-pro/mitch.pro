@@ -19,7 +19,6 @@ caddy/Caddyfile
 # Local State & Databases (mapped via Docker volumes)
 data/*
 !data/games
-!data/sites
 !data/site.json.example
 !data/game_categories.json
 !data/game_categories_external.json

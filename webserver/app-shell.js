@@ -156,7 +156,7 @@
     menu.setAttribute('aria-labelledby', 'mobile-menu-title');
     menu.innerHTML = '<header><h2 id="mobile-menu-title">mitch.pro</h2><button type="button" aria-label="Close menu">×</button></header><nav aria-label="All sections"></nav>';
     var links = menu.querySelector('nav');
-    [['/profile/', 'My profile'], ['/preferences/', 'Customizer'], ['/friends/', 'Friends'], ['/coins/?v=2', 'MitchCoins'], ['/shop/', 'Shop'], ['/casino/', 'Casino'], ['/marketplace/', 'Marketplace'], ['/inventory/', 'Inventory'], ['/leaderboard/', 'Leaderboard'], ['https://rjuhsd.school/', 'Bell schedule'], ['/canvas/', 'Canvas'], ['/vms/', 'VM Lab'], ['/notifications/', 'Notifications'], ['/blog/', 'Blog'], ['/invite/', 'Invite friends'], ['/feedback/', 'Feedback'], ['/support/', 'Help']].forEach(function (item) {
+    [['/profile/', 'My profile'], ['/preferences/', 'Customizer'], ['/friends/', 'Friends'], ['/coins/?v=2', 'MitchCoins'], ['/shop/', 'Shop'], ['/casino/', 'Casino'], ['/inventory/', 'Inventory'], ['/leaderboard/', 'Leaderboard'], ['https://rjuhsd.school/', 'Bell schedule'], ['/vms/', 'VM Lab'], ['/notifications/', 'Notifications'], ['/blog/', 'Blog'], ['/invite/', 'Invite friends'], ['/learn/', 'Learn about the site'], ['/feedback/', 'Feedback'], ['/support/', 'Help']].forEach(function (item) {
       var link = document.createElement('a'); link.href = item[0]; link.textContent = item[1];
       if (item[0].charAt(0) === '/' && currentPath() === item[0].split('?')[0].replace(/\/$/, '')) link.setAttribute('aria-current', 'page');
       links.appendChild(link);

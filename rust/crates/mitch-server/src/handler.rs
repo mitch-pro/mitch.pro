@@ -636,7 +636,6 @@ pub async fn handle(
     let real = crate::alias::rewrite(
         &state.id_secret,
         &state.cfg.webroot,
-        &state.cfg.data_dir,
         mitch_lib::school::now_millis(),
         uri,
     );
@@ -1270,7 +1269,8 @@ async fn handle_resolved(
         }
         // members + userdata group (Step 9 batch 6).
         if let Some(resp) =
-            crate::routes::members::handle(&state, &method, &path, headers, body_bytes).await
+            crate::routes::members::handle(&state, &method, &path, headers, &search, body_bytes)
+                .await
         {
             return resp;
         }

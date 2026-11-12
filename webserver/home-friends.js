@@ -21,7 +21,7 @@
     section.classList.toggle('is-empty',!friends.length);
     if (!friends.length) {
       const empty = document.createElement('div'); empty.className = 'home-friends-empty';
-      empty.innerHTML = '<a class="home-friend-add" href="/friends/" aria-label="Add friends"><span aria-hidden="true">+</span></a><div><strong>Find friends</strong><small></small></div>';
+      empty.innerHTML = '<a class="home-friend-add" href="/members/" aria-label="Add friends"><span aria-hidden="true">+</span></a><div><strong>Find friends</strong><small></small></div>';
       list.append(empty); return;
     }
     friends.sort(window.MitchPeople?.compare || ((a,b) => Number(b.online)-Number(a.online))).forEach(friend => {

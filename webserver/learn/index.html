@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learn About the Site — mitch.pro</title>
+<meta name="description" content="What's on mitch.pro and how to use each feature.">
+<link rel="stylesheet" href="/app.css">
+<script src="/api.js"></script>
+<script src="/app-shell.js" defer></script>
+<style>
+  .learn-shell { max-width: 62rem; }
+  .page-head { margin-bottom: 1.25rem; }
+  .page-head h1 { margin: 0; font-size: clamp(1.85rem, 4vw, 2.55rem); font-weight: 800; letter-spacing: -0.035em; }
+  .page-sub { margin: 0.5rem 0 0; color: var(--t-fg2); font-size: 0.92rem; line-height: 1.55; }
+  .jump { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 1.5rem; }
+  .jump a {
+    padding: 0.35rem 0.75rem; border: 1px solid var(--t-bd); border-radius: 999px;
+    font-size: 0.8rem; font-weight: 600; color: var(--t-fg2); text-decoration: none; background: var(--t-bg2);
+  }
+  .jump a:hover { border-color: var(--t-bda, var(--t-ac)); color: var(--t-fg); }
+  .group { margin: 0 0 2rem; scroll-margin-top: 4.5rem; }
+  .group > h2 { margin: 0 0 0.75rem; font-size: 1.15rem; letter-spacing: -0.02em; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); gap: 0.75rem; }
+  .feature { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
+  .feature h3 { margin: 0; font-size: 1rem; }
+  .feature h3 a { color: inherit; text-decoration: none; }
+  .feature h3 a:hover { color: var(--t-ac); }
+  .feature p { margin: 0; color: var(--t-fg2); font-size: 0.86rem; line-height: 1.5; }
+  .feature ol { margin: 0; padding-left: 1.15rem; color: var(--t-fg); font-size: 0.85rem; line-height: 1.55; }
+  .feature ol li + li { margin-top: 0.15rem; }
+  .open { margin-top: auto; padding-top: 0.25rem; font-size: 0.82rem; font-weight: 700; color: var(--t-ac); text-decoration: none; }
+  .open:hover { text-decoration: underline; }
+</style>
+</head>
+<body class="app-shell">
+<main class="app-main learn-shell">
+  <header class="page-head">
+    <h1>Learn about the site</h1>
+    <p class="page-sub">What each part of mitch.pro does and how to use it.</p>
+  </header>
+
+  <nav class="jump" aria-label="Sections">
+    <a href="#talk">Talk to people</a>
+    <a href="#play">Play and watch</a>
+    <a href="#coins">Coins and cosmetics</a>
+    <a href="#tools">Tools</a>
+    <a href="#account">Your account</a>
+    <a href="#help">Help</a>
+  </nav>
+
+  <section class="group" id="talk">
+    <h2>Talk to people</h2>
+    <div class="grid">
+      <article class="panel feature">
+        <h3><a href="/matrix/">Matrix chat</a></h3>
+        <p>Rooms and private conversations.</p>
+        <ol>
+          <li>Open Matrix chat and sign in with your site account.</li>
+          <li>Join a room from the room list, or start a direct message from someone's profile.</li>
+          <li>Use the call button in a room or DM for voice or video.</li>
+        </ol>
+        <a class="open" href="/matrix/">Open Matrix chat</a>
+      </article>
+      <article class="panel feature">
+        <h3><a href="/friends/">Friends and people</a></h3>
+        <p>See who is online and keep a friends list.</p>
+        <ol>
+          <li>Open the People panel on the homepage to see who is online.</li>
+          <li>Send a friend request from <a href="/members/">Members</a>.</li>
+          <li>Accept or remove friends on the Friends page.</li>
+        </ol>
+        <a class="open" href="/friends/">Manage friends</a>
+      </article>
+      <article class="panel feature">
+        <h3><a href="/invite/">Invite friends</a></h3>
+        <p>Bring friends in with your own link and earn coins when they sign up.</p>
+        <ol>
+          <li>Copy your invite link or code, or share it from your phone.</li>
+          <li>Or email an invite straight from the page.</li>
+          <li>You each get 2,000 MitchCoins once they sign up and verify their email.</li>
+        </ol>
+        <a class="open" href="/invite/">Get your link</a>
+      </article>
+    </div>
+  </section>
+
+  <section class="group" id="play">
+    <h2>Play and watch</h2>
+    <div class="grid">
+      <article class="panel feature">
+        <h3><a href="/game-portal/">Games</a></h3>
+        <p>A library of browser games.</p>
+        <ol>
+          <li>Browse or search the game list.</li>
+          <li>Open a game to play it. Progress is saved on this device.</li>
+          <li>Back up your saves in the Save Manager to keep them across devices.</li>
+        </ol>
+        <a class="open" href="/game-portal/">Browse games</a>
+      </article>
+      <article class="panel feature">
+        <h3><a href="/proxy/movies/">Movies</a></h3>
+        <p>Search for a movie or show and watch it in the page.</p>
+        <ol>
+          <li>Open Movies and search by title.</li>
+          <li>Pick a result to start playing.</li>
+        </ol>
+        <a class="open" href="/proxy/movies/">Open Movies</a>
+      </article>
+      <article class="panel feature">
+        <h3><a href="/vms/">Cloud Linux</a></h3>
+        <p>Your own Linux desktop in the browser, with files and apps that stay between visits.</p>
+        <ol>
+          <li>Open Cloud Linux and create your computer if you don't have one.</li>
+          <li>Start it and open the desktop.</li>
+          <li>Check its status and resources from the same page.</li>
+        </ol>
+        <a class="open" href="/vms/">Open Cloud Linux</a>
+      </article>
+      <article class="panel feature">
+        <h3><a href="/leaderboard/">Leaderboard</a></h3>
+        <p>See how your progress compares with other players.</p>
+        <a class="open" href="/leaderboard/">View the leaderboard</a>
+      </article>
+    </div>
+  </section>
+
+  <section class="group" id="coins">
+    <h2>Coins and cosmetics</h2>
+    <div class="grid">
+      <article class="panel feature">
+        <h3><a href="/coins/">MitchCoins</a></h3>
+        <p>The site's currency. Your balance shows in the top bar.</p>
+        <ol>
+          <li>Claim your daily coins from the homepage. Consecutive days build a streak.</li>
+          <li>Earn more from supported games and by inviting friends.</li>
+        </ol>
+        <a class="open" href="/coins/">Open your wallet</a>
+      </article>
+      <article class="panel feature">
+        <h3><a href="/shop/">The Market</a></h3>
+        <p>Spend coins on name colors, badges, and profile effects.</p>
+        <ol>
+          <li>Browse the catalog and buy an item.</li>
+          <li>Equip it from your inventory.</li>
+        </ol>
+        <a class="open" href="/shop/">Open the Market</a>
+      </article>
+      <article class="panel feature">
+        <h3><a href="/inventory/">Inventory</a></h3>
+        <p>Everything you own, and what you currently have equipped.</p>
+        <ol>
+          <li>Select an item to equip or unequip it.</li>
+          <li>Equipped items show on your profile and next to your name.</li>
+        </ol>
+        <a class="open" href="/inventory/">Open inventory</a>
+      </article>
+    </div>
+  </section>
+
+  <section class="group" id="tools">
+    <h2>Tools</h2>
+    <div class="grid">
+      <article class="panel feature">
+        <h3><a href="/companion/">Companion</a></h3>
+        <p>A character you can chat with and drag around the screen on any page.</p>
+        <ol>
+          <li>Open Companion and pick a character.</li>
+          <li>Turn it on. It then appears across the site.</li>
+          <li>Click it to chat, or drag it where you want it.</li>
+        </ol>
+        <a class="open" href="/companion/">Set up Companion</a>
+      </article>
+      <article class="panel feature">
+        <h3><a href="/saves/">Save Manager</a></h3>
+        <p>Back up and restore your game saves and settings.</p>
+        <ol>
+          <li>Sync runs in the background while you're signed in.</li>
+          <li>On a new device, open Save Manager and restore your latest save.</li>
+        </ol>
+        <a class="open" href="/saves/">Open Save Manager</a>
+      </article>
+      <article class="panel feature">
+        <h3><a href="/blog/">Blog</a></h3>
+        <p>Site news and write-ups.</p>
+        <a class="open" href="/blog/">Read the blog</a>
+      </article>
+      <article class="panel feature">
+        <h3>Private window</h3>
+        <p>Open links from the homepage in an about:blank tab.</p>
+        <ol>
+          <li>Turn on the Private window switch at the top of the homepage.</li>
+          <li>Pages and games you open will launch in a blank tab.</li>
+        </ol>
+        <a class="open" href="/">Go to the homepage</a>
+      </article>
+    </div>
+  </section>
+
+  <section class="group" id="account">
+    <h2>Your account</h2>
+    <div class="grid">
+      <article class="panel feature">
+        <h3><a href="/preferences/">Preferences</a></h3>
+        <p>Themes, privacy, sync, and account settings in one place.</p>
+        <ol>
+          <li>Pick a theme and background.</li>
+          <li>Choose what other people can see, such as your online status.</li>
+          <li>Update your account details and security.</li>
+        </ol>
+        <a class="open" href="/preferences/">Open Preferences</a>
+      </article>
+      <article class="panel feature">
+        <h3><a href="/notifications/">Notification settings</a></h3>
+        <p>Choose which alerts you get and when.</p>
+        <ol>
+          <li>Turn alert types on or off: messages, calls, friend requests, coin gifts, and more.</li>
+          <li>Set quiet hours.</li>
+          <li>Turn push alerts on for this device.</li>
+        </ol>
+        <a class="open" href="/notifications/">Open notification settings</a>
+      </article>
+      <article class="panel feature">
+        <h3><a href="/profile/">Profile</a></h3>
+        <p>Your public page: photo, name, badges, and activity.</p>
+        <a class="open" href="/profile/">View your profile</a>
+      </article>
+    </div>
+  </section>
+
+  <section class="group" id="help">
+    <h2>Help</h2>
+    <div class="grid">
+      <article class="panel feature">
+        <h3><a href="/feedback/">Feedback</a></h3>
+        <p>Report something broken, suggest a page or game, or apply to join the team.</p>
+        <a class="open" href="/feedback/">Send feedback</a>
+      </article>
+      <article class="panel feature">
+        <h3><a href="/support/">Support</a></h3>
+        <p>Open a ticket if you need help with your account.</p>
+        <a class="open" href="/support/">Get help</a>
+      </article>
+    </div>
+  </section>
+</main>
+<script src="/cookie-consent.js" defer></script>
+</body>
+</html>

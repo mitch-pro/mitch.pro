@@ -1161,9 +1161,7 @@
     var links = [
       { h:'/', i:'🏠', t:'Home' },
       { h:'/games/', i:'🎮', t:'Games' },
-      { h:'/preferences/#account', i:'👤', t:'Account' },
       { h:'/matrix/', i:'💬', t:'Chat' },
-      { h:'/canvas/', i:'🎨', t:'Canvas' },
       { h:'/shop/', i:'🛒', t:'Market' },
       { h:'/inventory/', i:'🎒', t:'Inventory' },
       { h:'/preferences/', i:'⚙️', t:'Settings' }

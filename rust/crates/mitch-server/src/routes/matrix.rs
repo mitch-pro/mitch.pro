@@ -7303,7 +7303,8 @@ async fn dispatch_matrix_call_notifications(
             state,
             &member_norm,
             if is_direct { "dm" } else { "group" },
-        ) {
+        ) || !crate::routes::dm::notif_allowed(state, &member_norm, "calls")
+        {
             continue;
         }
 

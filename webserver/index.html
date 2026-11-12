@@ -42,7 +42,8 @@
 </style>
 <!-- AUTH_INJECT_END -->
 <style>#_ab{position:fixed;bottom:55px;left:12px;z-index:2147483630;width:38px;height:38px;border-radius:50%;border:none;cursor:pointer;background:#8b5cf6;color:#fff;font-size:.65rem;font-weight:700;letter-spacing:.02em;line-height:1;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 14px rgba(0,0,0,.45);transition:transform .15s,box-shadow .15s;font-family:system-ui,sans-serif;}#_ab:hover{transform:scale(1.1);box-shadow:0 4px 20px rgba(0,0,0,.55);}#_ap{position:fixed;bottom:103px;left:12px;z-index:2147483629;width:310px;max-height:440px;display:flex;flex-direction:column;background:#1e1a17;border:1px solid #3d3a37;border-radius:14px;box-shadow:0 8px 40px rgba(0,0,0,.65);overflow:hidden;transform:translateY(10px) scale(.97);opacity:0;pointer-events:none;transition:transform .18s ease,opacity .18s ease;}#_ap.vis{transform:none;opacity:1;pointer-events:all;}#_ah{display:flex;align-items:center;padding:9px 13px;border-bottom:1px solid #3d3a37;font-family:system-ui,sans-serif;font-size:.8rem;font-weight:700;color:#e8e6e3;gap:6px;}#_ah .logo{color:#8b5cf6;font-size:.75rem;font-weight:900;}#_ah .title{flex:1;}#_ahx{background:none;border:none;color:#555;cursor:pointer;font-size:.9rem;padding:2px 5px;border-radius:4px;line-height:1;}#_ahx:hover{color:#e8e6e3;}#_am{flex:1;overflow-y:auto;padding:9px 11px;display:flex;flex-direction:column;gap:7px;font-family:system-ui,sans-serif;font-size:.79rem;line-height:1.55;min-height:60px;}._mb{max-width:88%;padding:6px 10px;border-radius:10px;word-break:break-word;}._mu{background:#302e2b;color:#e8e6e3;align-self:flex-end;border-radius:10px 10px 2px 10px;white-space:pre-wrap;}._ma{background:#272522;color:#bababa;align-self:flex-start;border-radius:10px 10px 10px 2px;}._ma p{margin:0 0 .4em;}._ma p:last-child{margin:0;}._ma strong{color:#e8e6e3;font-weight:700;}._ma em{font-style:italic;}._ma code{background:#1a1815;color:#8b5cf6;padding:1px 4px;border-radius:3px;font-size:.88em;font-family:monospace;}._ma pre{background:#1a1815;padding:7px 9px;border-radius:6px;overflow-x:auto;margin:.3em 0;}._ma pre code{background:none;padding:0;color:#c8c5c0;font-size:.85em;}._ma ul,._ma ol{margin:.2em 0 .2em 1.2em;padding:0;}._ma li{margin:.1em 0;}._ma h1,._ma h2,._ma h3{color:#e8e6e3;font-weight:700;margin:.3em 0 .15em;line-height:1.2;}._ma h1{font-size:1em;}._ma h2{font-size:.95em;}._ma h3{font-size:.9em;}._ma a{color:#8b5cf6;text-decoration:underline;}._ma hr{border:none;border-top:1px solid #3d3a37;margin:.4em 0;}._merr{color:#e57373;font-size:.73rem;align-self:center;padding:3px 8px;background:rgba(192,57,43,.12);border-radius:6px;}._mnotice{color:#f0c040;font-size:.69rem;align-self:center;padding:3px 8px;background:rgba(240,192,64,.08);border-radius:6px;}#_ai{display:flex;gap:6px;padding:8px 10px;border-top:1px solid #3d3a37;align-items:flex-end;}#_at{flex:1;resize:none;background:#272522;border:1px solid #3d3a37;color:#e8e6e3;border-radius:8px;padding:6px 8px;font-size:.79rem;font-family:system-ui,sans-serif;outline:none;line-height:1.4;max-height:80px;overflow-y:auto;}#_at:focus{border-color:#8b5cf6;}#_as{background:#8b5cf6;color:#fff;border:none;border-radius:8px;padding:6px 11px;font-size:.79rem;font-weight:700;cursor:pointer;flex-shrink:0;}#_as:disabled{opacity:.35;cursor:default;}</style><script>
-async function loadSites() {
+// Session probe: only used to show the banned screen. The page list is static (HOME_LINKS).
+async function checkAccess() {
   try {
     const request = await fetch('/api/pass', {
       method: 'POST',
@@ -52,21 +53,12 @@ async function loadSites() {
     });
     if (!request.ok) {
       try { await request.text(); } catch (_) {}
-      throw new Error('Network error');
+      return;
     }
     const data = await request.json();
-    if (data && data.banned) {
-      showBannedPopup(data.reason || 'This account is banned from the website.');
-      return;
-    }
-    if (!data.success) {
-      document.getElementById('links').innerHTML = '<a class="home-schedule-button" href="/game-portal/">Play games </a>';
-      return;
-    }
-    parseSites(data.content || '');
+    if (data && data.banned) showBannedPopup(data.reason || 'This account is banned from the website.');
   } catch (e) {
-    console.error('[mitch.pro] failed to load sites:', e);
-    document.getElementById('links').innerHTML = '<div style="padding:40px;text-align:center;color:var(--t-fg2);opacity:0.5;">Unable to connect to the server.</div>';
+    console.error('[mitch.pro] access check failed:', e);
   }
 }
 
@@ -280,117 +272,34 @@ function renderRecentVisits() {
 
 function artForDestination(label, href) {
   var text = (String(label || '') + ' ' + String(href || '')).toLowerCase();
-  if (/game|canvas|pixel|chess|battle|jeopardy|clicker|movie|arcade/.test(text)) return 'games';
-  if (/chat|friend|member|invite|feedback|newsletter|leaderboard|profile|team/.test(text)) return 'social';
+  if (/game|chess|movie|arcade/.test(text)) return 'games';
+  if (/chat|friend|member|invite|feedback|newsletter|leaderboard|profile|team|learn/.test(text)) return 'social';
   if (/market|shop|premium|inventory|coin|account|claim/.test(text)) return 'market';
   return 'tools';
 }
 
-function categoryForLabel(label, isAdmin) {
-  var l = label.toLowerCase();
-  if (isAdmin) return 'Admin';
-  if (l.includes('adrian clicker') || l.includes("kody") || l.includes("lillian") || l.includes("richard") || l.includes("riches") || l.includes("penny") || l.includes("sebastian") || l.includes("piccolo") || l.includes("chess vs") || l.includes("battleship") || l.includes("jeopardy")) return 'MitchCoin Games';
-  if (l.includes('market') || l.includes('shop') || l.includes('team') || l.includes('premium')) return 'Account & Market';
-  if (l.includes('chat') || l.includes('feedback') || l.includes('newsletter') || l.includes('invite') || l.includes('leaderboard') || l.includes('friends') || l.includes('members')) return 'Social & Chat';
-  if (l.includes('profile') || l.includes('preferences') || l.includes('account')) return 'Account & Market';
-  if (l.includes('games') || l.includes('pixelplace') || l.includes('canvas') || l.includes('movies') || l.includes('subtitle')) return 'Entertainment';
-  return 'Utilities';
-}
+// The homepage page list. Static on purpose: changing it is a code change.
+// Retired pages are listed in docs/deprecated-pages.md.
+var HOME_LINKS = [
+  { href: '/inventory/', label: 'Inventory' },
+  { href: '/companion/', label: 'Companion' },
+  { href: '/saves/', label: 'Save Manager' },
+  { href: '/notifications/', label: 'Notification Settings' },
+  { href: '/blog/', label: 'Blog' },
+  { href: '/leaderboard/', label: 'Leaderboard' },
+  { href: '/learn/', label: 'Learn About the Site' },
+  { href: '/feedback/', label: 'Feedback' },
+  { href: '/support/', label: 'Support' }
+];
 
-function describeCategory(cat) {
-  return ({
-    'Admin': 'Private controls and advanced tools',
-    'MitchCoin Games': 'Play and earn verified MitchCoins',
-    'Entertainment': 'Games, canvas, media, and fun stuff',
-    'Social & Chat': 'Profiles, chat, feedback, and community pages',
-    'Account & Market': 'Coins, premium, shop, team, and account options',
-    'Utilities': 'Helpful links and site tools'
-  })[cat] || '';
-}
-
-function parseSites(text) {
-  var lines = text.split('\n');
+function renderHomeLinks() {
   var container = document.getElementById('links');
-  container.innerHTML = '';
-
-  var categories = {
-    'MitchCoin Games': [],
-    'Entertainment': [],
-    'Social & Chat': [],
-    'Account & Market': [],
-    'Utilities': [],
-    'Admin': []
-  };
-  var entries = [];
-
-  for (var i = 0; i < lines.length; i++) {
-    var line = lines[i].trim();
-    if (!line) continue;
-    var parts = line.split(' ');
-    if (parts.length < 2) continue;
-
-    var isAdmin = false;
-    if (parts[0] === 'admin') {
-      isAdmin = true;
-      parts.shift();
-    }
-
-    var type = parts[0];
-    var href = parts[1];
-    var label = parts.slice(2).join(' ');
-    if (!label) continue;
-    try {
-      var destination = new URL(href, location.href);
-      if (/^\/(?:rjuhsd\/)?bell(?:\.html?|\/(?:index(?:\.html?)?\/?)?)?$/i.test(destination.pathname) || /bell\s+schedules?/i.test(label)) {
-        href = 'https://rjuhsd.school/' + destination.search;
-        type = 'url';
-      }
-    } catch (e) {}
-
-    var cat = categoryForLabel(label, isAdmin);
-    var entry = { type: type, href: href, label: label, isAdmin: isAdmin, category: cat };
-    entries.push(entry);
-    if (!categories[cat]) categories[cat] = [];
-    categories[cat].push(makeSiteLink(type, href, label, isAdmin ? 'admin-site-link' : ''));
-  }
-
-  window.cachedEntries = entries;
-
-  var categoryPriority = {
-    'Social & Chat': 0,
-    'Account & Market': 1,
-    'MitchCoin Games': 2,
-    'Entertainment': 3,
-    'Utilities': 4,
-    'Admin': 5
-  };
-  var sortedCats = Object.keys(categories).sort(function(a, b) {
-    var priorityA = Object.prototype.hasOwnProperty.call(categoryPriority, a) ? categoryPriority[a] : 99;
-    var priorityB = Object.prototype.hasOwnProperty.call(categoryPriority, b) ? categoryPriority[b] : 99;
-    if (priorityA !== priorityB) return priorityA - priorityB;
-    return a.localeCompare(b);
+  if (!container) return;
+  container.replaceChildren();
+  HOME_LINKS.forEach(function(link) {
+    container.appendChild(makeSiteLink('url', link.href, link.label));
   });
-
-  for (var j = 0; j < sortedCats.length; j++) {
-    var catName = sortedCats[j];
-    if (categories[catName].length === 0) continue;
-    var catDiv = document.createElement('section');
-    catDiv.className = 'category-group' + (catName === 'Admin' ? ' admin-category' : '');
-    catDiv.dataset.category = catName.toLowerCase();
-    var catTitle = document.createElement('div');
-    catTitle.className = 'category-title';
-    catTitle.innerHTML = '<span>' + escText(catName) + '</span><small>' + categories[catName].length + ' · ' + escText(describeCategory(catName)) + '</small>';
-    catDiv.appendChild(catTitle);
-
-    var gridDiv = document.createElement('div');
-    gridDiv.className = 'category-grid';
-    categories[catName].forEach(function(el) { gridDiv.appendChild(el); });
-
-    catDiv.appendChild(gridDiv);
-    container.appendChild(catDiv);
-  }
-  filterHomeLinks();
-  window.cachedEntries = entries;
+  window.cachedEntries = HOME_LINKS.map(function(l) { return { type: 'url', href: l.href, label: l.label }; });
 }
 
 function openMembersRail(event) {
@@ -462,46 +371,6 @@ function syncStreakBadge(state) {
   badge.hidden = false;
 }
 
-function setupHomeSearch() {
-  var input = document.getElementById('home-search');
-  var clear = document.getElementById('home-search-clear');
-  if (!input) return;
-  input.oninput = filterHomeLinks;
-  if (clear) {
-    clear.style.display = input.value.trim() ? '' : 'none';
-    clear.onclick = function() {
-      input.value = '';
-      filterHomeLinks();
-      input.focus();
-    };
-  }
-}
-
-function filterHomeLinks() {
-  var input = document.getElementById('home-search');
-  var empty = document.getElementById('links-empty');
-  var clear = document.getElementById('home-search-clear');
-  var results = document.getElementById('home-search-results');
-  if (!input) return;
-  var q = input.value.trim().toLowerCase();
-  if (clear) {
-    clear.style.display = q ? '' : 'none';
-  }
-  if (results) results.hidden = false;
-  var visibleCount = 0;
-  document.querySelectorAll('.category-group').forEach(function(group) {
-    var groupVisible = 0;
-    group.querySelectorAll('a.site-link').forEach(function(link) {
-      var visible = !q || (link.dataset.search || '').includes(q);
-      link.classList.toggle('is-filter-hidden', !visible);
-      if (visible) groupVisible++;
-    });
-    group.style.display = groupVisible ? '' : 'none';
-    visibleCount += groupVisible;
-  });
-  if (empty) empty.style.display = visibleCount ? 'none' : '';
-}
-
 function getIconFor(label) {
   const l = label.toLowerCase();
   var glyph = '<path d="M8.5 8.5h7v7h-7z"/><path d="M5 12a7 7 0 0 1 7-7m7 7a7 7 0 0 1-7 7"/>';
@@ -512,10 +381,10 @@ function getIconFor(label) {
   else if (l.includes('leaderboard')) glyph = '<path d="M8 4h8v4c0 3-1.5 5-4 5S8 11 8 8z"/><path d="M8 6H4c0 3 1.5 4.5 4.5 4.5M16 6h4c0 3-1.5 4.5-4.5 4.5M12 13v4m-4 3h8"/>';
   else if (l.includes('sanctum') || l.includes('premium')) glyph = '<path d="m12 3 6 6-6 12L6 9z"/><path d="M6 9h12M9 9l3-6 3 6-3 12z"/>';
   else if (l.includes('games') || l.includes('battle') || l.includes('jeopardy') || l.includes('chess')) glyph = '<path d="M8 8h8c3 0 5 2.5 5 6s-2 6-4.5 6c-2 0-2.5-2.5-4.5-2.5S9.5 20 7.5 20C5 20 3 17.5 3 14s2-6 5-6Z"/><path d="M7 12v4m-2-2h4m7-1h.01m2 3h.01"/>';
+  else if (l.includes('learn')) glyph = '<path d="M4 5.5C6.5 4 9.5 4 12 5.5c2.5-1.5 5.5-1.5 8 0V19c-2.5-1.5-5.5-1.5-8 0-2.5-1.5-5.5-1.5-8 0z"/><path d="M12 5.5V19"/>';
   else if (l.includes('feedback') || l.includes('add a page')) glyph = '<path d="M9 18h6M10 22h4"/><path d="M8 14c-1.3-1.1-2-2.6-2-4.5a6 6 0 1 1 12 0c0 1.9-.7 3.4-2 4.5-.8.7-1 1.3-1 2H9c0-.7-.2-1.3-1-2Z"/>';
   else if (l.includes('chat') || l.includes('diffie')) glyph = '<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/>';
   else if (l.includes('export')) glyph = '<path d="M12 3v12m-4-4 4 4 4-4"/><path d="M5 15v5h14v-5"/>';
-  else if (l.includes('pixelplace') || l.includes('canvas')) glyph = '<path d="M4 17 15 6l3 3L7 20H4z"/><path d="m13 8 3 3M16 5l1-1 3 3-2 2"/>';
   else if (l.includes('newsletter')) glyph = '<rect x="4" y="5" width="16" height="14" rx="2"/><path d="m5 7 7 6 7-6"/>';
   else if (l.includes('invite')) glyph = '<rect x="4" y="9" width="16" height="11" rx="2"/><path d="M12 9v11M3 9h18V6H3zM12 6c-2-4-6-3-4 0m4 0c2-4 6-3 4 0"/>';
   else if (l.includes('shell') || l.includes('simulation') || l.includes('admin') || l.includes('settings') || l.includes('preferences')) glyph = '<path d="M5 6h14M5 12h14M5 18h14"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="10" cy="18" r="2"/>';
@@ -636,12 +505,6 @@ function applyHomepagePrefs() {
 
   var ab = document.getElementById('abToggle');
   if (ab) ab.checked = !!displayPref.abAutoLaunch;
-  if (homePref.focusSearch) {
-    setTimeout(function() {
-      var search = document.getElementById('home-search');
-      if (search) search.focus();
-    }, 600);
-  }
 }
 
 // The old control stored a transparency value here; drop it so it can't be
@@ -1467,11 +1330,11 @@ async function initHome() {
   loadUpdates();
   loadLinkAliases();
     /* TASK4 */ optimizeForDevice();
-  setupHomeSearch();
   setupAboutBlankToggle();
   applyHomepagePrefs();
   try { if (JSON.parse(localStorage.getItem('_prefHomepage') || '{}').showRecent !== false) renderRecentVisits(); } catch (_) {}
-  loadSites();
+  renderHomeLinks();
+  checkAccess();
   loadGreeting();
   loadDailyLoginState();
   setupAdminNotificationMode();
@@ -1632,24 +1495,16 @@ if (document.readyState === 'loading') {
 
       <div class="home-section-heading home-tools-heading"><h2>Explore</h2></div>
       <nav class="home-actions" aria-label="Quick actions">
-        <button type="button" class="hub-action" id="hub-friends-btn" onclick="openMembersRail(event)"><span class="action-logo"><svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="3"/><circle cx="16.5" cy="10" r="2.3"/><path d="M3.5 19c.5-3.3 2.2-5 5.5-5s5 1.7 5.5 5M14 15c3.5-.5 5.5.8 6 3.5"/></svg></span><span class="action-copy"><b>People</b><small>See who's here</small></span></button>
-        <a class="hub-action" href="/profile/" onclick="openHomeHref(event, '/profile/');"><span class="action-logo"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M5 20c.6-4.2 2.9-6.3 7-6.3s6.4 2.1 7 6.3"/></svg></span><span class="action-copy"><b>Account</b><small>Your profile and activity</small></span></a>
+        <button type="button" class="hub-action" id="hub-friends-btn" onclick="openMembersRail(event)"><span class="action-logo"><svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="3"/><circle cx="16.5" cy="10" r="2.3"/><path d="M3.5 19c.5-3.3 2.2-5 5.5-5s5 1.7 5.5 5M14 15c3.5-.5 5.5.8 6 3.5"/></svg></span><span class="action-copy"><b>People</b><small>See who's online</small></span></button>
+        <a class="hub-action" href="/invite/" onclick="openHomeHref(event, '/invite/');"><span class="action-logo"><svg viewBox="0 0 24 24"><rect x="4" y="9" width="16" height="11" rx="2"/><path d="M12 9v11M3 9h18V6H3zM12 6c-2-4-6-3-4 0m4 0c2-4 6-3 4 0"/></svg></span><span class="action-copy"><b>Invite friends</b><small>Earn 2,000 coins per signup</small></span></a>
         <a class="hub-action" href="/shop/" onclick="openHomeHref(event, '/shop/');"><span class="action-logo"><svg viewBox="0 0 24 24"><path d="m12 3 6 6-6 12L6 9z"/><path d="M6 9h12M9 9l3-6 3 6-3 12z"/></svg></span><span class="action-copy"><b>Market</b><small>Cosmetics and upgrades</small></span></a>
-        <a class="hub-action hub-action-casino" href="/casino/" onclick="openHomeHref(event, '/casino/');"><span class="action-logo"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1"/><circle cx="16" cy="8" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="8" cy="16" r="1"/><circle cx="16" cy="16" r="1"/></svg></span><span class="action-copy"><b>Casino</b><small>MitchCoins only</small></span></a>
+        <a class="hub-action" href="/learn/" onclick="openHomeHref(event, '/learn/');"><span class="action-logo"><svg viewBox="0 0 24 24"><path d="M4 5.5C6.5 4 9.5 4 12 5.5c2.5-1.5 5.5-1.5 8 0V19c-2.5-1.5-5.5-1.5-8 0-2.5-1.5-5.5-1.5-8 0z"/><path d="M12 5.5V19"/></svg></span><span class="action-copy"><b>Learn the site</b><small>What's here and how to use it</small></span></a>
         <button type="button" class="hub-action hub-daily mitch-coin-amount" id="hub-daily-chip" hidden>Daily claim</button>
       </nav>
 
   <section class="home-directory" aria-labelledby="directory-title">
-  <div class="directory-heading"><div><h2 id="directory-title">All pages</h2><p>Games, tools, and places around the site.</p></div>
-  <div class="home-search-box home-page-search"><input id="home-search" aria-label="Search pages" type="search" placeholder="Search pages" autocomplete="off"><button id="home-search-clear" type="button">Clear</button></div>
-
-  </div>
-  <div id="home-search-results" class="home-search-results">
-        <div id="links">
-          <div class="quick-empty">Loading pages…</div>
-        </div>
-        <div id="links-empty" style="display:none;">No matching pages.</div>
-      </div>
+    <div class="directory-heading"><h2 id="directory-title">Pages</h2></div>
+    <div class="category-grid" id="links"></div>
   </section>
   <section class="home-controls" aria-label="Your settings">
     <a id="vm-status-chip" class="home-control-card" href="/vms/" hidden><div><h2>Your computer</h2><p>Open your desktop or manage its resources.</p></div><span class="control-status"><span class="status-dot" id="vm-status-dot"></span><span id="vm-status-text">Computer</span></span></a>

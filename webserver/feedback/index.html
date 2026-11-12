@@ -96,11 +96,22 @@
     box-shadow: 0 0 0 3px var(--t-gls, transparent);
   }
 
-  .row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.75rem;
+  .tabs { display: flex; gap: 0.4rem; margin-bottom: 1rem; border-bottom: 1px solid var(--t-bd); }
+  .tab {
+    appearance: none; background: none; border: 0; border-bottom: 2px solid transparent;
+    margin-bottom: -1px; padding: 0.55rem 0.9rem; font: inherit; font-size: 0.9rem; font-weight: 700;
+    color: var(--t-fg2); cursor: pointer;
   }
+  .tab:hover { color: var(--t-fg); }
+  .tab[aria-selected="true"] { color: var(--t-fg); border-bottom-color: var(--t-ac); }
+  .tab:focus-visible { outline: 2px solid var(--t-ac); outline-offset: 2px; }
+  .intro { margin: 0 0 1rem; color: var(--t-fg2); font-size: 0.88rem; line-height: 1.55; }
+  select { width: 100%; background: var(--t-bg2); color: var(--t-fg); border: 1px solid var(--t-bd); border-radius: var(--t-radius); padding: 0.7rem 0.85rem; font-family: inherit; font-size: 0.92rem; }
+  textarea.short { min-height: 5rem; }
+  textarea.mid { min-height: 7rem; }
+  .success-state { display: none; text-align: center; padding: 1rem 0; }
+  .success-state h2 { margin: 0 0 0.4rem; font-size: 1.2rem; }
+  .success-state p { margin: 0; color: var(--t-fg2); font-size: 0.88rem; }
 
   .actions {
     display: flex;
@@ -110,7 +121,7 @@
     flex-wrap: wrap;
   }
 
-  #submitBtn {
+  #submitBtn, #applyBtn {
     min-height: 2.5rem;
     border-radius: var(--t-radius);
     border: 1px solid var(--t-bda, transparent);
@@ -127,36 +138,36 @@
       transform 0.12s ease;
   }
 
-  #submitBtn:hover {
+  #submitBtn:hover, #applyBtn:hover {
     background: var(--t-ac);
     box-shadow: 0 0 0 3px var(--t-gls, transparent);
   }
 
-  #submitBtn:active { transform: scale(0.97); }
-  #submitBtn:disabled { opacity: 0.5; cursor: default; transform: none; box-shadow: none; }
+  #submitBtn:active, #applyBtn:active { transform: scale(0.97); }
+  #submitBtn:disabled, #applyBtn:disabled { opacity: 0.5; cursor: default; transform: none; box-shadow: none; }
 
-  #status {
+  #status, #applyStatus {
     color: var(--t-fg2);
     font-size: 0.82rem;
     min-height: 1.3em;
   }
 
-  #status.ok { color: var(--t-ac); }
-  #status.err { color: #f87171; }
-  html.theme-light #status.err { color: #b91c1c; }
+  #status.ok, #applyStatus.ok { color: var(--t-ac); }
+  #status.err, #applyStatus.err { color: #f87171; }
+  html.theme-light #status.err, html.theme-light #applyStatus.err { color: #b91c1c; }
 
   .recaptcha-wrap { margin-top: 0.75rem; transform-origin: left top; }
 
   @media (max-width: 860px) {
-    .row, .chips { grid-template-columns: 1fr; }
+    .chips { grid-template-columns: 1fr; }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .chip, #submitBtn { transition: none !important; }
+    .chip, #submitBtn, #applyBtn { transition: none !important; }
   }
 
     .theme-no-motion .chip,
-  .theme-no-motion #submitBtn {
+  .theme-no-motion #submitBtn, .theme-no-motion #applyBtn {
     animation: none !important;
     transition: none !important;
   }
@@ -165,40 +176,70 @@
 <body class="app-shell">
 <main class="app-main feedback-shell">
   <h1>Feedback</h1>
-    <section class="panel">
-      <form id="feedbackForm">
-        <div class="field">
-          <label id="typeLabel">Type</label>
-          <div class="chips" id="typeChips" role="group" aria-labelledby="typeLabel">
-            <button class="chip active" type="button" aria-pressed="true" data-type="feedback">General feedback</button>
-            <button class="chip" type="button" aria-pressed="false" data-type="broken_game">Something is broken</button>
-            <button class="chip" type="button" aria-pressed="false" data-type="add_page">Add a page/game</button>
-            <button class="chip" type="button" aria-pressed="false" data-type="general">Other idea</button>
-          </div>
-        </div>
+  <div class="tabs" role="tablist" aria-label="Feedback sections">
+    <button class="tab" role="tab" id="tab-feedback" aria-controls="pane-feedback" aria-selected="true" data-pane="feedback">Send feedback</button>
+    <button class="tab" role="tab" id="tab-team" aria-controls="pane-team" aria-selected="false" data-pane="team">Join the team</button>
+  </div>
 
-        <div class="row">
-          <div class="field">
-            <label for="pageField">Page <span>optional</span></label>
-            <input id="pageField" placeholder="/matrix/ or homepage">
-          </div>
-          <div class="field">
-            <label for="moodField">Mood <span>optional</span></label>
-            <input id="moodField" placeholder="bug, idea, urgent, nice">
-          </div>
+  <section class="panel" id="pane-feedback" role="tabpanel" aria-labelledby="tab-feedback">
+    <form id="feedbackForm">
+      <div class="field">
+        <label id="typeLabel">What is this about?</label>
+        <div class="chips" id="typeChips" role="group" aria-labelledby="typeLabel">
+          <button class="chip active" type="button" aria-pressed="true" data-type="feedback">General feedback</button>
+          <button class="chip" type="button" aria-pressed="false" data-type="broken_game">Something is broken</button>
+          <button class="chip" type="button" aria-pressed="false" data-type="add_page">Add a page or game</button>
+          <button class="chip" type="button" aria-pressed="false" data-type="general">Other idea</button>
         </div>
+      </div>
+      <div class="field">
+        <label for="site">Message <span id="count">0 / 2000</span></label>
+        <textarea id="site" maxlength="2000" placeholder="Include the page and what you expected if something is broken."></textarea>
+      </div>
+      <div class="actions">
+        <button id="submitBtn" type="submit">Send</button>
+        <div id="status" role="status" aria-live="polite"></div>
+      </div>
+    </form>
+  </section>
 
-        <div class="field">
-          <label for="site">Message <span id="count">0 / 2000</span></label>
-          <textarea id="site" maxlength="2000" placeholder="What should we fix or build? Add details like device, browser, page, and what you expected."></textarea>
-        </div>
-
-        <div class="actions">
-          <button id="submitBtn" type="submit">Send feedback</button>
-          <div id="status" role="status" aria-live="polite"></div>
-        </div>
-      </form>
-    </section>
+  <section class="panel" id="pane-team" role="tabpanel" aria-labelledby="tab-team" hidden>
+    <form id="applyForm">
+      <div class="field">
+        <label for="role">Role</label>
+        <select id="role">
+          <option value="tester">Beta tester: test games and VMs, report bugs</option>
+          <option value="moderator">Moderator: keep Matrix chat safe, review reports</option>
+          <option value="developer">Developer: web apps, games, backend, tooling</option>
+          <option value="designer">Designer: art, badges, themes, UI</option>
+        </select>
+      </div>
+      <div class="field"><label for="name">Name</label><input id="name" type="text" autocomplete="name" required></div>
+      <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email" required></div>
+      <div class="field"><label for="discord">Discord or Matrix username</label><input id="discord" type="text" required></div>
+      <div class="field">
+        <label for="availability">Availability</label>
+        <select id="availability">
+          <option value="1-3 hours/week">1–3 hours / week</option>
+          <option value="3-5 hours/week" selected>3–5 hours / week</option>
+          <option value="5-10 hours/week">5–10 hours / week</option>
+          <option value="10+ hours/week">10+ hours / week</option>
+        </select>
+      </div>
+      <div class="field"><label for="why">Why do you want to join?</label><textarea id="why" class="mid" required></textarea></div>
+      <div class="field"><label for="skills">Skills and experience</label><textarea id="skills" class="short" required></textarea></div>
+      <div class="field"><label for="portfolio">Links <span>optional</span></label><input id="portfolio" type="text"></div>
+      <div class="field"><label for="extra">Anything else <span>optional</span></label><textarea id="extra" class="short"></textarea></div>
+      <div class="actions">
+        <button id="applyBtn" type="submit">Submit application</button>
+        <div id="applyStatus" role="status" aria-live="polite"></div>
+      </div>
+    </form>
+    <div class="success-state" id="applySuccess">
+      <h2>Application received</h2>
+      <p>We'll contact you by email or Discord/Matrix.</p>
+    </div>
+  </section>
 </main>
 
 <script>
@@ -247,17 +288,13 @@ document.getElementById('feedbackForm').addEventListener('submit', submitSite);
 async function submitSite(e) {
   e.preventDefault();
   var text = document.getElementById('site').value.trim();
-  var page = document.getElementById('pageField').value.trim();
-  var mood = document.getElementById('moodField').value.trim();
-  if (!text) { setStatus('Write a little feedback first.', 'err'); document.getElementById('site').focus(); return; }
+  if (!text) { setStatus('Write a message first.', 'err'); document.getElementById('site').focus(); return; }
   if (_sugSpam()) return setStatus('Slow down a little before sending more.', 'err');
   var btn = document.getElementById('submitBtn');
   btn.disabled = true;
   btn.textContent = 'Sending…';
   setStatus('', '');
   var details = text;
-  if (page) details += '\n\nPage: ' + page;
-  if (mood) details += '\nMood: ' + mood;
 
   var recaptcha_token = '';
   if (window.getCaptchaToken) {
@@ -279,8 +316,6 @@ async function submitSite(e) {
     if (r.success) {
       setStatus('Submitted. Thank you.', 'ok');
       document.getElementById('site').value = '';
-      document.getElementById('pageField').value = '';
-      document.getElementById('moodField').value = '';
       document.getElementById('count').textContent = '0 / 2000';
     } else {
       setStatus(r.message || (resp.status === 429 ? 'Too many submissions. Wait a minute and try again.' : 'Could not send feedback. Your message is still here; try again.'), 'err');
@@ -289,8 +324,50 @@ async function submitSite(e) {
     setStatus('Could not reach the server. Your message is still here; try again.', 'err');
   }
   btn.disabled = false;
-  btn.textContent = 'Send feedback';
+  btn.textContent = 'Send';
 }
+
+function showPane(name) {
+  document.querySelectorAll('.tab').forEach(function(t) { t.setAttribute('aria-selected', t.dataset.pane === name ? 'true' : 'false'); });
+  document.getElementById('pane-feedback').hidden = name !== 'feedback';
+  document.getElementById('pane-team').hidden = name !== 'team';
+  document.title = (name === 'team' ? 'Join the team' : 'Feedback') + ' — mitch.pro';
+  if (location.hash.slice(1) !== (name === 'team' ? 'team' : '')) history.replaceState(null, '', name === 'team' ? '#team' : location.pathname);
+}
+document.querySelectorAll('.tab').forEach(function(t) { t.addEventListener('click', function() { showPane(t.dataset.pane); }); });
+showPane(location.hash === '#team' ? 'team' : 'feedback');
+window.addEventListener('hashchange', function() { showPane(location.hash === '#team' ? 'team' : 'feedback'); });
+
+function setApplyStatus(text, cls) {
+  var el = document.getElementById('applyStatus');
+  el.textContent = text || '';
+  el.className = cls || '';
+}
+document.getElementById('applyForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  var btn = document.getElementById('applyBtn');
+  var v = function(id) { return document.getElementById(id).value.trim(); };
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
+  setApplyStatus('', '');
+  var payload = {
+    role: document.getElementById('role').value, name: v('name'), email: v('email'), discord: v('discord'),
+    availability: document.getElementById('availability').value, why: v('why'), skills: v('skills'),
+    portfolio: v('portfolio'), extra: v('extra'), recaptcha_token: ''
+  };
+  try {
+    if (window.getCaptchaToken) payload.recaptcha_token = await window.getCaptchaToken('submit_application') || '';
+    var r = await fetch('/api/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    var d = await r.json().catch(function() { return {}; });
+    if (!r.ok) throw new Error(d.error || d.message || 'Could not submit. Your answers are still here; try again.');
+    document.getElementById('applyForm').style.display = 'none';
+    document.getElementById('applySuccess').style.display = 'block';
+  } catch (err) {
+    setApplyStatus(err instanceof TypeError ? 'Could not reach the server. Your answers are still here; try again.' : err.message, 'err');
+    btn.disabled = false;
+    btn.textContent = 'Submit application';
+  }
+});
 </script>
 <script src="/cookie-consent.js" defer></script>
 </body>

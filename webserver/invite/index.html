@@ -290,6 +290,10 @@
             <div class="stat-num" id="stat-coins">—</div>
             <div class="stat-label">Coins earned</div>
           </div>
+          <div class="stat-box">
+            <div class="stat-num" id="stat-sent">—</div>
+            <div class="stat-label">Emails sent</div>
+          </div>
         </div>
 
         <label for="code-text">Invite code</label>
@@ -302,6 +306,7 @@
           <span class="link-text" id="link-text">Loading your invite link…</span>
           <button class="copy-btn" id="copy-link-btn" onclick="copyLink()">Copy</button>
         </div>
+        <button class="btn btn-primary" id="share-btn" onclick="shareLink()" hidden>Share link</button>
       </div>
 
       <div class="card" id="custom-code-card">
@@ -350,6 +355,7 @@
 
         document.getElementById('code-text').textContent = d.code;
         document.getElementById('stat-signups').textContent = d.signups;
+        document.getElementById('stat-sent').textContent = d.sent || 0;
         document.getElementById('stat-coins').textContent = (d.signups * 2000).toLocaleString();
 
         const baseLink = `https://mitchdog.com/enroll?ref=${encodeURIComponent(d.code)}`;
@@ -380,6 +386,13 @@
       if (!text || !navigator.clipboard) { flashCopy(btn, 'Copy failed'); return; }
       navigator.clipboard.writeText(text).then(() => flashCopy(btn, 'Copied!'), () => flashCopy(btn, 'Copy failed'));
     }
+
+    function shareLink() {
+      const url = document.getElementById('link-text').textContent;
+      if (!myCode || !navigator.share) return;
+      navigator.share({ title: 'Join me on mitch.pro', url: url }).catch(() => {});
+    }
+    if (navigator.share) document.getElementById('share-btn').hidden = false;
 
     function copyCode() { copyText(myCode, document.getElementById('copy-code-btn')); }
 
