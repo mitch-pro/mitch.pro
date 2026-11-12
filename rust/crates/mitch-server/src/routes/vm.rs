@@ -514,11 +514,7 @@ pub(crate) fn vm_same_origin_request(headers: &HeaderMap) -> bool {
             || h.is_empty()
     };
 
-    if is_trusted_host(&origin_host) && is_trusted_host(&req_host_bare) {
-        return true;
-    }
-
-    false
+    is_trusted_host(&origin_host) && is_trusted_host(&req_host_bare)
 }
 
 /// Whether `actor` may open this VM (desktop, power, status). The one access
