@@ -638,5 +638,5 @@ body.members-rail-open #people-edge-trigger {display:none}
 .statement-banner[hidden] { display: none; }
 .statement-banner p { margin: 0; text-align: center; }
 .statement-banner a { color: var(--t-ac); font-weight: 600; text-decoration: underline; }
-.statement-banner-close { flex-shrink: 0; width: 28px; height: 28px; border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm, 7px); background: transparent; color: var(--t-fg2); font-size: 18px; line-height: 1; cursor: pointer; }
-.statement-banner-close:hover { color: var(--t-fg); border-color: var(--t-bda); }
+body.home .statement-banner-close { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; flex: 0 0 28px; width: 28px; min-width: 28px; height: 28px; min-height: 28px; padding: 0; border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm, 7px); background: transparent; color: var(--t-fg2); font-size: 18px; line-height: 1; cursor: pointer; }
+body.home .statement-banner-close:hover { color: var(--t-fg); border-color: var(--t-bda); background: transparent; }
