@@ -73,8 +73,9 @@
     <!-- Cinny Stylesheet & Mitch.pro chat overrides -->
     <link rel="stylesheet" crossorigin href="/matrix/assets/index-DmaX6Xe5.css" />
     <link rel="stylesheet" href="/theme-tokens.css" />
-    <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=11" />
+    <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=14" />
     <script defer src="/matrix/media-auth.js?v=3"></script>
+    <script src="/matrix/e2ee-backup.js?v=5"></script>
   </head>
   <body id="appBody">
     <header id="matrix-site-bar">
@@ -580,7 +581,7 @@
           const script = document.createElement("script");
           script.type = "module";
           script.crossOrigin = "anonymous";
-          script.src = "/matrix/assets/index-BVlPv2dR.js";
+          script.src = "/matrix/assets/index-E2eeDm01.js";
           document.head.appendChild(script);
         }
 
@@ -961,7 +962,7 @@
                 'X-Matrix-Device-Id': currentDeviceId || ''
               },
               credentials: 'same-origin',
-              body: JSON.stringify({ currentDeviceId, maxAgeDays: 7 })
+              body: JSON.stringify({ currentDeviceId, maxAgeDays: 30 })
             });
             if (res.ok) {
               localStorage.setItem('mitch_matrix_last_prune', String(Date.now()));
