@@ -112,11 +112,21 @@ access token from replacing an account's cross-signing keys.
 
 ## Encrypted DMs by default
 
-The new-DM dialog in the Cinny bundle (`webserver/matrix/assets/index-E2eeDm01.js`)
+The new-DM dialog in the Cinny bundle (`webserver/matrix/assets/index-fhqY9EyR.js`)
 starts with encryption on. The bundle is a patched build: everything under
 `/matrix/assets/` is served `immutable`, so changing it means giving it a new
 hashed filename and updating the references in `index.html` and the other
 chunks (and regenerating the `.gz` files). Private rooms still default to off.
+
+## Call button always shown
+
+Calls run through LiveKit, not the browser's WebRTC API, but the client only
+showed the call button when `RTCPeerConnection` (or a prefixed variant) existed
+in `window`. Locked-down school Chromebooks that disable WebRTC lost the
+button. The bundle's `_3` check (the WebRTC test used by the call buttons and
+the incoming-call prompt) is patched to always return true. The server-side
+check (`rtc_foci` in the homeserver's well-known) still decides whether calls
+are offered at all.
 
 ## Related behavior
 

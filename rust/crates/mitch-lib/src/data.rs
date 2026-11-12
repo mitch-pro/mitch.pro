@@ -339,6 +339,11 @@ impl DataStore {
                         added_by TEXT NOT NULL DEFAULT '',
                         added_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS redirecting_domains (
+                        host TEXT PRIMARY KEY,
+                        marked_by TEXT NOT NULL DEFAULT '',
+                        marked_at INTEGER NOT NULL
+                    );
                     CREATE TABLE IF NOT EXISTS removed_domains (
                         origin TEXT PRIMARY KEY,
                         removed_by TEXT NOT NULL DEFAULT '',

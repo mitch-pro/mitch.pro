@@ -872,6 +872,7 @@ fn backup_domains_response(state: &Arc<AppState>) -> Response {
         json!({
             "ok": true,
             "removed": mitch_lib::site_domains::removed_list(&state.store),
+            "redirecting": mitch_lib::site_domains::redirecting_hosts(&state.store),
             "alternate": site_alternate(state),
             "primary": state
                 .store
@@ -890,8 +891,9 @@ fn backup_domains_response(state: &Arc<AppState>) -> Response {
 }
 
 /// `POST /api/admin/backup-domains` (full admins): `{action}` is `add` or
-/// `remove` (with `origin`), `activate` (with `origin`), or `rotate`, which
-/// makes a random other pool entry the active backup. Everything is audited.
+/// `remove` (with `origin`), `activate` (with `origin`), `redirect_on` /
+/// `redirect_off` (owner only; with `origin`), or `rotate`, which makes a
+/// random other pool entry the active backup. Everything is audited.
 fn change_backup_domains(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response {
     use mitch_lib::site_domains as domains;
     let action = body.get("action").and_then(|v| v.as_str()).unwrap_or("");
@@ -936,6 +938,29 @@ fn change_backup_domains(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) ->
             };
             if !domains::forget_removed(&state.store, &origin) {
                 return fail("That domain isn't in the removed list.");
+            }
+            origin
+        }
+        // Owner only: mark a domain as soon to be blocked (or clear it).
+        // While marked, page visits to it are redirected to the next domain.
+        "redirect_on" | "redirect_off" => {
+            if !ctx.is_owner(state) {
+                return json_response(403, json!({ "error": "Only the owner can do this." }));
+            }
+            let Some(origin) = body
+                .get("origin")
+                .and_then(|v| v.as_str())
+                .and_then(domains::normalize_origin)
+            else {
+                return fail("Enter a domain like example.com.");
+            };
+            if !domains::set_redirecting(
+                &state.store,
+                &origin,
+                action == "redirect_on",
+                &admin_email,
+            ) {
+                return fail("Could not save that.");
             }
             origin
         }

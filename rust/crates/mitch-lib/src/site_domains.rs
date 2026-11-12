@@ -207,6 +207,84 @@ pub fn rotate(store: &DataStore) -> Option<String> {
     set_active(store, &pick).then_some(pick)
 }
 
+/// Lowercased hostname (no scheme, port or path) of an origin or host string,
+/// the key used by the `redirecting_domains` table.
+pub fn host_of(raw: &str) -> String {
+    let t = raw.trim().to_lowercase();
+    let t = t.split("://").last().unwrap_or("");
+    t.split(['/', '?', '#'])
+        .next()
+        .unwrap_or("")
+        .split(':')
+        .next()
+        .unwrap_or("")
+        .to_string()
+}
+
+/// Marks (or unmarks) a domain as soon to be blocked. While marked, page
+/// visits to it are redirected to the next domain (see [`pick_next`]).
+pub fn set_redirecting(store: &DataStore, host: &str, on: bool, by: &str) -> bool {
+    let host = host_of(host);
+    if host.is_empty() {
+        return false;
+    }
+    let conn = store.conn();
+    if on {
+        conn.execute(
+            "INSERT OR IGNORE INTO redirecting_domains (host, marked_by, marked_at)
+             VALUES (?1, ?2, ?3)",
+            rusqlite::params![host, by, now_millis()],
+        )
+        .is_ok()
+    } else {
+        conn.execute(
+            "DELETE FROM redirecting_domains WHERE host = ?1",
+            rusqlite::params![host],
+        )
+        .is_ok()
+    }
+}
+
+/// Every domain currently marked as soon to be blocked.
+pub fn redirecting_hosts(store: &DataStore) -> Vec<String> {
+    let conn = store.conn();
+    let Ok(mut stmt) = conn.prepare("SELECT host FROM redirecting_domains ORDER BY host") else {
+        return Vec::new();
+    };
+    let rows: Vec<String> = match stmt.query_map([], |r| r.get(0)) {
+        Ok(iter) => iter.filter_map(|r| r.ok()).collect(),
+        Err(_) => Vec::new(),
+    };
+    rows
+}
+
+/// True when `host` is marked as soon to be blocked.
+pub fn is_redirecting(store: &DataStore, host: &str) -> bool {
+    store
+        .conn()
+        .query_row(
+            "SELECT 1 FROM redirecting_domains WHERE host = ?1",
+            rusqlite::params![host_of(host)],
+            |_| Ok(()),
+        )
+        .is_ok()
+}
+
+/// The origin a visitor on `host` is sent to: the first of `candidates` (in
+/// priority order: active backup, other backups, secondary, primary) that is a
+/// different host and is not itself marked. `None` when nothing qualifies, in
+/// which case the visitor just stays where they are.
+pub fn pick_next(host: &str, candidates: &[String], marked: &[String]) -> Option<String> {
+    let here = host_of(host);
+    candidates
+        .iter()
+        .find(|c| {
+            let h = host_of(c);
+            !h.is_empty() && h != here && !marked.iter().any(|m| host_of(m) == h)
+        })
+        .cloned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -312,5 +390,39 @@ mod tests {
         assert!(remove(&store, &active(&store).unwrap()));
         assert_eq!(active(&store), None);
         assert!(!set_active(&store, "https://gone.example"));
+    }
+
+    #[test]
+    fn next_domain_skips_current_and_marked_hosts() {
+        let c = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let cands = c(&[
+            "https://b.example",
+            "https://c.example",
+            "https://a.example",
+        ]);
+        assert_eq!(
+            pick_next("a.example:443", &cands, &c(&[])).as_deref(),
+            Some("https://b.example")
+        );
+        assert_eq!(
+            pick_next("a.example", &cands, &c(&["b.example"])).as_deref(),
+            Some("https://c.example")
+        );
+        assert_eq!(
+            pick_next("a.example", &c(&["https://a.example"]), &c(&[])),
+            None
+        );
+    }
+
+    #[test]
+    fn redirecting_marks_round_trip() {
+        let store = temp_store("redirecting");
+        assert!(!is_redirecting(&store, "a.example"));
+        assert!(set_redirecting(&store, "https://A.example/", true, "owner"));
+        assert!(is_redirecting(&store, "a.example:443"));
+        assert_eq!(redirecting_hosts(&store), vec!["a.example".to_string()]);
+        assert!(set_redirecting(&store, "a.example", false, "owner"));
+        assert!(!is_redirecting(&store, "a.example"));
+        assert!(!set_redirecting(&store, "", true, "owner"));
     }
 }

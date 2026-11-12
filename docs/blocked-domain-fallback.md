@@ -30,6 +30,21 @@ visited before is sent to the other domain instead of the offline page.
 - `webserver/app-shell.js` sees `_moved_from`, removes it from the address bar
   and shows a dialog: the old domain was blocked, replace bookmarks, sign in
   again.
+- **Soon to be blocked (owner only).** In the "Soon to be blocked" list of the
+  same admin card, the owner can mark any listed domain (primary, secondary or
+  a backup). Marks live in the SQL table `redirecting_domains` (API actions
+  `redirect_on` / `redirect_off` on `/api/admin/backup-domains`, audited).
+  `GET /api/site-info` then returns `redirectTo` for requests made on a marked
+  domain: the active backup, else the other backups, the secondary, the
+  primary, skipping the current host and any other marked one (`null`
+  otherwise; the pool itself is never exposed). The redirect is client-side:
+  `app-shell.js` asks `/api/pass` and only moves visitors with a valid session,
+  sending them to the same path on the next domain with `?_moved_from=<old host>`.
+  Signed-out visitors are not moved.
+- The moved notice keeps the old host in `sessionStorage` until the visitor
+  clicks "Got it". It has to: on a first visit to a new domain the page reloads
+  once when the service worker takes control, and that reload no longer has
+  `_moved_from` in its URL.
 - `rjuhsd.school` shares the worker but is a separate site, so it never fails
   over.
 
