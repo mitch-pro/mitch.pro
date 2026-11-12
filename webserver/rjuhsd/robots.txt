@@ -1,0 +1,9 @@
+# rjuhsd.school: bell schedules for every RJUHSD high school.
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /preferences/
+Disallow: /enroll/
+Disallow: /appeal/
+
+Sitemap: https://rjuhsd.school/sitemap.xml

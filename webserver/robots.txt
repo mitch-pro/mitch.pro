@@ -1,56 +1,32 @@
+# mitch.pro
 User-agent: *
 
-# High priority: Allow crawling and indexing of RJUHSD high school bell schedules.
-# Woodcreek lives at the bare "/" (the site's default) — no separate
-# /woodcreek/ path to list, it 301s to "/".
-Allow: /bell/
-Allow: /bell/index.html
-Allow: /rjuhsd/
-Allow: /roseville/
-Allow: /granitebay/
-Allow: /antelope/
-Allow: /westpark/
-Allow: /oakmont/
-# Legacy URL — now 301s to "/" (woodcreek) or the matching /<school>/ path
-# above. Still crawlable (not disallowed) so that redirect gets followed
-# and indexed link equity consolidates onto the new canonical instead of
-# being lost.
-Allow: /?school=*
-Allow: /sitemap.xml
-
-# Allow indexing of other public resources
-Allow: /enroll/
-Allow: /enroll/index.html
-Allow: /faq/
-Allow: /faq/index.html
-Allow: /use-agreement/
-Allow: /use-agreement/index.html
-Allow: /privacy/
-Allow: /privacy/index.html
-Allow: /unsubscribe/
-Allow: /unsubscribe/index.html
-Allow: /appeal/
-Allow: /appeal/index.html
-Allow: /claim/
-Allow: /claim/index.html
-Allow: /team/
-Allow: /team/index.html
-Allow: /index-sales.html
+# Public pages
 Allow: /
+Allow: /enroll/
+Allow: /faq/
+Allow: /game-portal/
+Allow: /privacy/
+Allow: /use-agreement/
+Allow: /cookies/
+Allow: /copyright/
+Allow: /team/
+Allow: /appeal/
+Allow: /claim/
+Allow: /unsubscribe/
 
-# Disallow private user/game resources and stateful APIs
+# Everything behind sign-in, plus stateful endpoints
+Disallow: /api/
+Disallow: /admin/
+Disallow: /moderator/
 Disallow: /preferences/
 Disallow: /profile/
 Disallow: /shop/
 Disallow: /games/
-Disallow: /api/
-Disallow: /admin/
-Disallow: /moderator/
-Disallow: /sync.js
-Disallow: /auth.js
-Disallow: /cookie-consent.js
-Disallow: /assistant.js
-Disallow: /broadcast.js
- 
-Sitemap: https://rjuhsd.school/sitemap.xml
-Sitemap: https://mitchdog.com/sitemap.xml
+Disallow: /vms/
+Disallow: /matrix/
+
+# /bell/ duplicates the school site and points its canonical there, so it
+# stays crawlable and is not disallowed.
+
+Sitemap: https://mitch.pro/sitemap.xml
