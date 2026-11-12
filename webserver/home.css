@@ -569,7 +569,13 @@ body.members-rail-open #people-edge-trigger {display:none}
 .directory-heading h2,.home-control-card h2 { margin:0; font-size:1.1rem; font-weight:600; letter-spacing:-.02em; }
 .directory-heading p,.home-control-card p { margin:5px 0 0; font-size:.8rem; color:var(--t-fg2); }
 .directory-heading .home-page-search { flex:0 1 340px; margin:0; }
-.home-directory .category-grid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+/* Six columns, three links per row at two columns each. A short last row
+   fills the width: one link spans the row, two links share it. */
+.home-directory .category-grid { grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px; }
+.home-directory .site-link { grid-column:span 2; }
+.home-directory .site-link:last-child:nth-child(3n+1) { grid-column:span 6; }
+.home-directory .site-link:last-child:nth-child(3n+2),
+.home-directory .site-link:nth-last-child(2):nth-child(3n+1) { grid-column:span 3; }
 .home-directory .site-link { padding:13px; border:1px solid transparent; border-radius:10px; background:color-mix(in srgb,var(--t-fg) 3%,transparent); }
 .home-directory .site-link:hover { border-color:var(--t-bda); background:var(--t-bg3); }
 .home-directory .site-link .lbl { white-space:normal; }
@@ -584,11 +590,16 @@ body.members-rail-open #people-edge-trigger {display:none}
   .directory-heading { flex-direction:column; align-items:stretch; gap:16px; }
   .directory-heading .home-page-search { flex:auto; max-width:none; }
   .home-directory .category-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .home-directory .site-link,
+  .home-directory .site-link:last-child:nth-child(3n+1),
+  .home-directory .site-link:last-child:nth-child(3n+2),
+  .home-directory .site-link:nth-last-child(2):nth-child(3n+1) { grid-column:auto; }
+  .home-directory .site-link:last-child:nth-child(odd) { grid-column:span 2; }
   .home-controls { grid-template-columns:1fr; }
   .home-control-card { flex-direction:row; align-items:center; gap:16px; }
   .home-actions { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
-@media(max-width:380px) { .home-directory .category-grid { grid-template-columns:1fr; } }
+@media(max-width:380px) { .home-directory .category-grid { grid-template-columns:1fr; } .home-directory .site-link:last-child:nth-child(odd) { grid-column:auto; } }
 
 .home-controls{grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr))}
 

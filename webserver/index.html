@@ -287,7 +287,7 @@ var HOME_LINKS = [
   { href: '/notifications/', label: 'Notification Settings' },
   { href: '/blog/', label: 'Blog' },
   { href: '/leaderboard/', label: 'Leaderboard' },
-  { href: '/teachers/', label: 'Rate My Teacher' },
+  { href: '/shop/', label: 'Market' },
   { href: '/learn/', label: 'Learn About the Site' },
   { href: '/feedback/', label: 'Feedback' },
   { href: '/support/', label: 'Support' }
@@ -375,7 +375,8 @@ function syncStreakBadge(state) {
 function getIconFor(label) {
   const l = label.toLowerCase();
   var glyph = '<path d="M8.5 8.5h7v7h-7z"/><path d="M5 12a7 7 0 0 1 7-7m7 7a7 7 0 0 1-7 7"/>';
-  if (l.includes('market') || l.includes('shop') || l.includes('inventory')) glyph = '<path d="M5 7h14l-1.5 7.5h-11z"/><path d="M8 7l1.5-3h5L16 7"/><circle cx="9" cy="18" r="1"/><circle cx="16" cy="18" r="1"/>';
+  if (l.includes('teacher')) glyph = '<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8L3.5 9.7l5.9-.9z"/>';
+  else if (l.includes('market') || l.includes('shop') || l.includes('inventory')) glyph = '<path d="M5 7h14l-1.5 7.5h-11z"/><path d="M8 7l1.5-3h5L16 7"/><circle cx="9" cy="18" r="1"/><circle cx="16" cy="18" r="1"/>';
   else if (l.includes('prox') || l.includes('vm')) glyph = '<path d="M13 2 5.5 13H11l-1 9 8.5-12H13z"/>';
   else if (l.includes('team') || l.includes('members') || l.includes('friends')) glyph = '<circle cx="9" cy="9" r="3"/><circle cx="16.5" cy="10" r="2.3"/><path d="M3.5 19c.5-3.3 2.2-5 5.5-5s5 1.7 5.5 5M14 15c3.5-.5 5.5.8 6 3.5"/>';
   else if (l.includes('profile') || l.includes('account')) glyph = '<circle cx="12" cy="8" r="4"/><path d="M4.5 20c.7-4.4 3.2-6.5 7.5-6.5s6.8 2.1 7.5 6.5"/>';
@@ -1520,7 +1521,7 @@ if (document.readyState === 'loading') {
       <nav class="home-actions" aria-label="Quick actions">
         <button type="button" class="hub-action" id="hub-friends-btn" onclick="openMembersRail(event)"><span class="action-logo"><svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="3"/><circle cx="16.5" cy="10" r="2.3"/><path d="M3.5 19c.5-3.3 2.2-5 5.5-5s5 1.7 5.5 5M14 15c3.5-.5 5.5.8 6 3.5"/></svg></span><span class="action-copy"><b>People</b><small>See who's online</small></span></button>
         <a class="hub-action" href="/invite/" onclick="openHomeHref(event, '/invite/');"><span class="action-logo"><svg viewBox="0 0 24 24"><rect x="4" y="9" width="16" height="11" rx="2"/><path d="M12 9v11M3 9h18V6H3zM12 6c-2-4-6-3-4 0m4 0c2-4 6-3 4 0"/></svg></span><span class="action-copy"><b>Invite friends</b><small>Earn 2,000 coins per signup</small></span></a>
-        <a class="hub-action" href="/shop/" onclick="openHomeHref(event, '/shop/');"><span class="action-logo"><svg viewBox="0 0 24 24"><path d="m12 3 6 6-6 12L6 9z"/><path d="M6 9h12M9 9l3-6 3 6-3 12z"/></svg></span><span class="action-copy"><b>Market</b><small>Cosmetics and upgrades</small></span></a>
+        <a class="hub-action" href="/teachers/" onclick="openHomeHref(event, '/teachers/');"><span class="action-logo"><svg viewBox="0 0 24 24"><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8L3.5 9.7l5.9-.9z"/></svg></span><span class="action-copy"><b>Rate my teacher</b><small>Rate your teachers</small></span></a>
         <a class="hub-action" href="/learn/" onclick="openHomeHref(event, '/learn/');"><span class="action-logo"><svg viewBox="0 0 24 24"><path d="M4 5.5C6.5 4 9.5 4 12 5.5c2.5-1.5 5.5-1.5 8 0V19c-2.5-1.5-5.5-1.5-8 0-2.5-1.5-5.5-1.5-8 0z"/><path d="M12 5.5V19"/></svg></span><span class="action-copy"><b>Learn the site</b><small>What's here and how to use it</small></span></a>
         <button type="button" class="hub-action hub-daily mitch-coin-amount" id="hub-daily-chip" hidden>Daily claim</button>
       </nav>
