@@ -300,12 +300,10 @@ fn userdata_for_email(state: &AppState, email: &str) -> Value {
     let Some(fpath) = crate::routes::members::userdata_path(&state.cfg.data_dir, &uid) else {
         return json!({});
     };
-    if !fpath.exists() {
-        return json!({});
-    }
-    std::fs::read_to_string(&fpath)
+    let _guard = mitch_lib::userdata::lock();
+    mitch_lib::userdata::read(&state.keyring, &fpath)
         .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .flatten()
         .unwrap_or_else(|| json!({}))
 }
 

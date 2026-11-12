@@ -34,6 +34,7 @@ mod pipeline;
 mod presence;
 mod proxmox_desktop;
 mod routes;
+mod secrets_manager;
 mod state;
 mod static_files;
 mod workers;
@@ -67,6 +68,8 @@ async fn main() {
     }
 
     let cfg = hosts::SiteConfig::load();
+    // Before the key ring loads, so a key held in Infisical is found.
+    secrets_manager::load_external_key().await;
     let store = Arc::new(
         mitch_lib::data::DataStore::open(&cfg.base_dir, &cfg.data_dir)
             .unwrap_or_else(|e| panic!("open data store at {}: {e}", cfg.data_dir.display())),
@@ -80,6 +83,7 @@ async fn main() {
     }
 
     app_log_layer::start_writer(store.clone());
+    spawn_encryption_upkeep(&state);
 
     let app: Router = Router::new().fallback(get_any).with_state(state.clone());
 
@@ -148,4 +152,31 @@ async fn get_any(
         Err(_) => axum::body::Bytes::from(vec![0u8; cap + 1]),
     };
     handler::handle(state, method, &uri, &headers, &body_bytes, ws_upgrade).await
+}
+
+/// Encrypts saves written before encryption existed (or under an older key),
+/// and nags the operator while the key still lives in the data folder.
+fn spawn_encryption_upkeep(state: &Arc<state::AppState>) {
+    let sweep_state = state.clone();
+    tokio::task::spawn_blocking(move || {
+        let root = mitch_lib::userdata::root(&sweep_state.cfg.data_dir);
+        let report = mitch_lib::userdata::sweep(&sweep_state.keyring, &root);
+        tracing::info!(
+            "[keys] saves under key {}: {report:?}",
+            sweep_state.keyring.primary_id()
+        );
+    });
+    if state.keyring.setup_notice().is_some() {
+        let state = state.clone();
+        tokio::spawn(async move {
+            // At start and every 12 hours until the key is moved and the file deleted.
+            loop {
+                if let Some((title, body)) = state.keyring.setup_notice() {
+                    tracing::warn!("[keys] {body}");
+                    routes::push::ntfy_notify(&body, &title, "high");
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(12 * 3600)).await;
+            }
+        });
+    }
 }

@@ -4,7 +4,7 @@
 
 Each signed-in account has one JSON blob on disk at
 `<data dir>/userdata/<sha256(session id)[0..32]>/data.json` (the data dir is the `./data` mount; set `USERDATA_DIR` to put it elsewhere),
-capped at 1 GiB of serialized JSON. The background sync (`webserver/sync.js`)
+capped at 1 GiB of serialized JSON. The file is encrypted at rest ([encryption-at-rest.md](encryption-at-rest.md)); `data.json` holds ciphertext, and older plaintext files are converted at startup. The background sync (`webserver/sync.js`)
 writes the browser's localStorage there as `_snapshot` (+ `_snapshot_ts`) every
 5 minutes and on page close. It never restores on its own: when the server copy is newer
 it shows a corner notice (Restore / Keep this device / Don't show again) and pauses saving
