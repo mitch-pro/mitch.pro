@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://mitchdog.com/</loc></url>
-  <url><loc>https://mitchdog.com/game-portal/</loc></url>
-  <url><loc>https://mitchdog.com/enroll/</loc></url>
-  <url><loc>https://mitchdog.com/faq/</loc></url>
-  <url><loc>https://mitchdog.com/privacy/</loc></url>
-  <url><loc>https://mitchdog.com/use-agreement/</loc></url>
-  <url><loc>https://mitchdog.com/cookies/</loc></url>
-  <url><loc>https://mitchdog.com/copyright/</loc></url>
+  <url><loc>https://mitch.pro/</loc><lastmod>2026-11-12</lastmod></url>
+  <url><loc>https://mitch.pro/game-portal/</loc><lastmod>2026-11-05</lastmod></url>
+  <url><loc>https://mitch.pro/enroll/</loc><lastmod>2026-11-12</lastmod></url>
+  <url><loc>https://mitch.pro/faq/</loc></url>
+  <url><loc>https://mitch.pro/privacy/</loc><lastmod>2026-11-12</lastmod></url>
+  <url><loc>https://mitch.pro/use-agreement/</loc><lastmod>2026-11-05</lastmod></url>
+  <url><loc>https://mitch.pro/cookies/</loc><lastmod>2026-11-05</lastmod></url>
+  <url><loc>https://mitch.pro/copyright/</loc><lastmod>2026-11-05</lastmod></url>
 </urlset>

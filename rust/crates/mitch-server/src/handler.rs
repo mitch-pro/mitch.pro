@@ -289,18 +289,52 @@ pub fn prepare_rjuhsd_html(
         // results than a real path segment. Woodcreek is the exception:
         // it already lives at the bare "/" by default, and the bare root
         // naturally outranks a deeper path for a domain's flagship
-        // content, so "/" (not /woodcreek/) is its real canonical. Scoped
-        // to the real host: the mitch.pro preview mirror has no per-school
-        // path routed, so it keeps canonicalizing to its own bare URL.
-        let school_canonical = if is_rjuhsd {
-            if effective_school == "woodcreek" {
-                format!("https://{req_host_str}/")
-            } else {
-                format!("https://{req_host_str}/{effective_school}/")
-            }
+        // content, so "/" (not /woodcreek/) is its real canonical.
+        //
+        // The same page is also reachable at mitch.pro/rjuhsd/ (the preview
+        // mirror). A self-canonical there would index a second copy that
+        // competes with rjuhsd.school for the same queries, so the mirror
+        // points its canonical at the real site instead.
+        let school_canonical = if effective_school == "woodcreek" {
+            "https://rjuhsd.school/".to_string()
         } else {
-            format!("https://{req_host_str}{back_path}")
+            format!("https://rjuhsd.school/{effective_school}/")
         };
+
+        // The structured data in the shared page describes Woodcreek (the
+        // default school). On the other schools' URLs it would name the wrong
+        // school in the breadcrumb and organization, so retarget those
+        // entries. Each replacement touches the first match only: later
+        // entries (the district-wide school list, the FAQ) are meant to name
+        // every school.
+        if effective_school != "woodcreek" {
+            html = html
+                .replacen(
+                    "\"@id\": \"https://rjuhsd.school/#woodcreek\"",
+                    &format!("\"@id\": \"https://rjuhsd.school/#{effective_school}\""),
+                    1,
+                )
+                .replacen(
+                    "\"name\": \"Woodcreek High School\"",
+                    &format!("\"name\": \"{name}\""),
+                    1,
+                )
+                .replacen(
+                    "\"alternateName\": \"Woodcreek High School Timberwolves\"",
+                    &format!("\"alternateName\": \"{name} {mascot}\""),
+                    1,
+                )
+                .replacen(
+                    "\"url\": \"https://rjuhsd.school/\",\n        \"parentOrganization\"",
+                    &format!("\"url\": \"{school_canonical}\",\n        \"parentOrganization\""),
+                    1,
+                )
+                .replacen(
+                    "\"name\": \"Woodcreek High School Bell Schedule\"\n          }",
+                    &format!("\"name\": \"{name} Bell Schedule\"\n          }}"),
+                    1,
+                );
+        }
 
         static TITLE_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
         let title_re = TITLE_RE
@@ -1370,17 +1404,21 @@ async fn handle_resolved(
     // A sitemap's URLs must be on the same site it's served from — a
     // single shared sitemap.xml listing both rjuhsd.school and mitch.pro
     // URLs means whichever half doesn't match the host that served it is
-    // liable to be ignored. Serve a dedicated one on the real host;
-    // mitch.pro (and everything else) falls through to the static default.
-    if path == "/sitemap.xml" && rjuhsd_host {
-        if let Ok(xml) = std::fs::read_to_string(webroot.join("rjuhsd").join("sitemap.xml")) {
+    // liable to be ignored. robots.txt follows the same rule: its Sitemap
+    // line and its rules describe one site, so rjuhsd.school gets its own
+    // (webserver/rjuhsd/robots.txt). mitch.pro (and everything else) falls
+    // through to the static default.
+    if rjuhsd_host && (path == "/sitemap.xml" || path == "/robots.txt") {
+        let (file, content_type) = if path == "/sitemap.xml" {
+            ("sitemap.xml", "application/xml; charset=utf-8")
+        } else {
+            ("robots.txt", "text/plain; charset=utf-8")
+        };
+        if let Ok(body) = std::fs::read_to_string(webroot.join("rjuhsd").join(file)) {
             return Response::builder()
                 .status(StatusCode::OK)
-                .header(
-                    axum::http::header::CONTENT_TYPE,
-                    "application/xml; charset=utf-8",
-                )
-                .body(axum::body::Body::from(xml))
+                .header(axum::http::header::CONTENT_TYPE, content_type)
+                .body(axum::body::Body::from(body))
                 .unwrap_or_else(|_| crate::errors::err_resp(500, None, None));
         }
     }
@@ -2451,11 +2489,33 @@ mod rjuhsd_school_url_tests {
         assert_eq!(canonical_of(&html), "https://rjuhsd.school/roseville/");
     }
 
+    /// The shared page's structured data names Woodcreek; another school's
+    /// URL must not (checked against the real page, so a markup change that
+    /// stops the replacements matching fails here).
     #[test]
-    fn preview_mirror_keeps_its_own_bare_canonical() {
-        // The mitch.pro preview mirror has no per-school path routed, so it
-        // must keep canonicalizing to its own URL rather than a path that
-        // doesn't exist there.
+    fn structured_data_follows_the_school() {
+        let page = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../../webserver/rjuhsd/index.html"),
+        )
+        .unwrap();
+        let cfg = SiteConfig::load();
+        let html =
+            prepare_rjuhsd_html(&page, Some("rjuhsd.school"), true, "school=roseville", &cfg);
+        let start = html.find("application/ld+json").unwrap();
+        let head = &html[start..html.find("\"@type\": \"WebSite\"").unwrap()];
+        assert!(head.contains("\"name\": \"Roseville High School Bell Schedule\""));
+        assert!(head.contains("\"@id\": \"https://rjuhsd.school/#roseville\""));
+        assert!(head.contains("\"url\": \"https://rjuhsd.school/roseville/\""));
+        assert!(!head.contains("Woodcreek"));
+        let default = prepare_rjuhsd_html(&page, Some("rjuhsd.school"), true, "", &cfg);
+        assert!(default.contains("\"@id\": \"https://rjuhsd.school/#woodcreek\""));
+    }
+
+    #[test]
+    fn preview_mirror_canonicalizes_to_the_real_site() {
+        // The mitch.pro preview mirror is a duplicate of rjuhsd.school, so
+        // it must not index itself and compete for the same queries.
         let cfg = SiteConfig::load();
         let html = prepare_rjuhsd_html(
             &fixture(),
@@ -2464,7 +2524,7 @@ mod rjuhsd_school_url_tests {
             "school=roseville",
             &cfg,
         );
-        assert_eq!(canonical_of(&html), "https://mitch.pro/rjuhsd/");
+        assert_eq!(canonical_of(&html), "https://rjuhsd.school/roseville/");
     }
 }
 
@@ -2546,6 +2606,30 @@ mod host_tests {
             .and_then(|v| v.to_str().ok())
             .unwrap_or("")
             .to_string()
+    }
+
+    /// robots.txt and sitemap.xml each describe one site: rjuhsd.school serves
+    /// its own, and neither mentions another site's host.
+    #[tokio::test]
+    async fn robots_and_sitemap_are_per_host() {
+        let (state, dir) = state();
+        async fn body(resp: Response) -> String {
+            let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
+                .await
+                .unwrap();
+            String::from_utf8(bytes.to_vec()).unwrap()
+        }
+        let school_robots = body(get(&state, "rjuhsd.school", "/robots.txt").await).await;
+        assert!(school_robots.contains("Sitemap: https://rjuhsd.school/sitemap.xml"));
+        assert!(!school_robots.contains("mitch"));
+        let main_robots = body(get(&state, "mitch.pro", "/robots.txt").await).await;
+        assert!(main_robots.contains("Sitemap: https://mitch.pro/sitemap.xml"));
+        assert!(!main_robots.contains("mitchdog.com") && !main_robots.contains("rjuhsd.school"));
+        let main_map = body(get(&state, "mitch.pro", "/sitemap.xml").await).await;
+        assert!(main_map.contains("<loc>https://mitch.pro/</loc>"));
+        assert!(!main_map.contains("mitchdog.com"));
+        drop(state);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     /// The portal is public like the older game portal: a signed-out visitor
