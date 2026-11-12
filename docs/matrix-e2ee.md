@@ -34,8 +34,10 @@ On each page load, after the first sync:
 ### Setup
 
 The user picks a passphrase (8+ characters). The script calls
-`createRecoveryKeyFromPassphrase`, then `bootstrapCrossSigning` and
-`bootstrapSecretStorage({ setupNewSecretStorage, setupNewKeyBackup })`, and shows
+`createRecoveryKeyFromPassphrase`, then `bootstrapSecretStorage({ setupNewSecretStorage,
+setupNewKeyBackup })`, `bootstrapCrossSigning` and `bootstrapSecretStorage({})` (in that
+order: the SDK stores new cross-signing keys under the default secret-storage key,
+so on a reset the new key must exist first or it asks for the lost old one), and shows
 the encoded recovery key (copy, download, "I saved it" checkbox before Done).
 The passphrase derives the same key, so either one unlocks the backup. Neither
 is sent to the server.
