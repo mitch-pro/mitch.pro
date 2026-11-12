@@ -144,11 +144,12 @@ main() {
         NTFY_USER=$(secrets_get NTFY_USER)
         NTFY_PASS=$(secrets_get NTFY_PASS)
     else
+        echo "[deploy] Secrets provider ($SECRETS_PROVIDER) is not available; reading .env instead. Containers started now will not get its secrets."
         ENV_PATH="$PROJECT_DIR/.env"
         if [ -f "$ENV_PATH" ]; then
-            NTFY_TOPIC=$(grep -E "^NTFY_TOPIC=" "$ENV_PATH" | cut -d= -f2- | tr -d '"' | tr -d "'")
-            NTFY_USER=$(grep -E "^NTFY_USER=" "$ENV_PATH" | cut -d= -f2- | tr -d '"' | tr -d "'")
-            NTFY_PASS=$(grep -E "^NTFY_PASS=" "$ENV_PATH" | cut -d= -f2- | tr -d '"' | tr -d "'")
+            NTFY_TOPIC=$(grep -E "^NTFY_TOPIC=" "$ENV_PATH" | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
+            NTFY_USER=$(grep -E "^NTFY_USER=" "$ENV_PATH" | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
+            NTFY_PASS=$(grep -E "^NTFY_PASS=" "$ENV_PATH" | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
         fi
     fi
     NTFY_TOPIC="${NTFY_TOPIC:-}"
@@ -337,7 +338,7 @@ main() {
         if [ "$SECRETS_AVAILABLE" = true ]; then
             SECRET_KEY=$(secrets_get SECRET_KEY)
         elif [ -f "$PROJECT_DIR/.env" ]; then
-            SECRET_KEY=$(grep -E "^SECRET_KEY=" "$PROJECT_DIR/.env" | cut -d= -f2- | tr -d '"' | tr -d "'")
+            SECRET_KEY=$(grep -E "^SECRET_KEY=" "$PROJECT_DIR/.env" | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
         fi
 
         REFRESHED=false
