@@ -177,10 +177,14 @@ pub fn email_from_hash(store: &DataStore, id_secret: &[u8], hash: &str) -> Optio
     if let Some(map) = profiles.as_object() {
         for (email, p) in map {
             if !username.is_empty() {
-                if let Some(u) = p.get("username").and_then(|v| v.as_str()) {
-                    if normalize_username(u) == username {
-                        return Some(email.clone());
-                    }
+                // Accounts without a stored username are listed in the members
+                // directory under their default handle, so match that too.
+                let effective = match p.get("username").and_then(|v| v.as_str()) {
+                    Some(u) if !normalize_username(u).is_empty() => normalize_username(u),
+                    _ => normalize_username(&default_username_for_email(email)),
+                };
+                if effective == username {
+                    return Some(email.clone());
                 }
             }
             if get_uid_for_email(store, id_secret, email).as_deref() == Some(hash) {

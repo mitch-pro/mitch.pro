@@ -1335,6 +1335,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn public_profile_resolves_default_handle_without_stored_username() {
+        let (state, _dir) = test_state();
+        let email = "nouser@student.rjuhsd.us";
+        let norm = auth::normalize_email(email);
+        mitch_lib::profiles::profile_set(
+            &state.store,
+            &norm,
+            &json!({ "email": email, "displayName": "No User" }),
+        );
+        mitch_lib::user_stats::user_stats_set(&state.store, &norm, &json!({ "pixels": 7 }));
+        let handle = mitch_lib::profile::default_username_for_email(&norm);
+        let resp = get_public_profile(&state, &HeaderMap::new(), &handle);
+        assert_eq!(resp.status(), 200);
+        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let val: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(val["stats"]["pixels"], 7);
+    }
+
+    #[tokio::test]
     async fn public_profile_by_slug_returns_sanitized_profile() {
         let (state, _dir) = test_state();
         let email = "testuser@student.rjuhsd.us";
