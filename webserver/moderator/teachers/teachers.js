@@ -187,14 +187,20 @@
     });
   };
 
+  // One school per request: reading a whole directory takes several seconds.
   $('sync').onclick = function () {
     var b = $('sync');
     act(async function () {
-      say('Checking the school sites…');
-      var r = await api('/sync', { school: '' });
+      var schools = Array.prototype.map.call($('school').options, function (o) { return { key: o.value, name: o.dataset.name }; });
+      var lines = [], failed = 0;
+      for (var i = 0; i < schools.length; i++) {
+        say('Reading ' + schools[i].name + ' (' + (i + 1) + ' of ' + schools.length + ')…');
+        var r = (await api('/sync', { school: schools[i].key })).results[0];
+        if (r.error) failed++;
+        lines.push(schools[i].name.replace(' High School', '') + ': ' + (r.error ? r.error : r.found + ' found, ' + r.added + ' new'));
+      }
       await loadTeachers();
-      var lines = r.results.map(function (x) { return x.school + ': ' + (x.error ? x.error : x.added + ' added of ' + x.found + ' found'); });
-      say(lines.join('. '), r.results.every(function (x) { return x.error; }));
+      say(lines.join('. '), failed === schools.length);
       b.disabled = false;
     }, b);
   };

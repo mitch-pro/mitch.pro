@@ -170,7 +170,7 @@ pub fn add_teacher(
         .unwrap_or(false);
     if !added && !department.is_empty() {
         let _ = conn.execute(
-            "UPDATE teachers SET department = ?3 WHERE school = ?1 AND name = ?2 AND department = ''",
+            "UPDATE teachers SET department = ?3 WHERE school = ?1 AND name = ?2 AND (department = '' OR source = 'sync')",
             rusqlite::params![school, name, department],
         );
     }
@@ -445,75 +445,32 @@ fn strip_tags(html: &str) -> String {
         .replace("&nbsp;", " ")
 }
 
-/// Titles of people who are not classroom teachers, so a directory that lists
-/// everyone doesn't fill the rating list with the front office.
-const NON_TEACHING: &[&str] = &[
-    "principal",
-    "counselor",
-    "secretary",
-    "clerk",
-    "custodian",
-    "nurse",
-    "aide",
-    "librarian",
-    "psychologist",
-    "coordinator",
-    "technician",
-    "registrar",
-    "administrator",
-    "director",
-    "manager",
-    "supervisor",
-    "receptionist",
-    "bookkeeper",
-    "attendance",
-    "campus",
-    "security",
-    "cafeteria",
-    "food service",
-    "maintenance",
-    "specialist",
-    "dean",
-    "athletic",
-    "assistant",
-];
-
-/// Whether a directory title belongs to someone who isn't a teacher. An empty
-/// title is kept: the page may simply not show one.
+/// Whether a directory title belongs to someone who isn't a classroom teacher
+/// ("Counselor", "Paraeducator I"). The directory lists every employee, and a
+/// teacher's title says "Teacher" (also "Teacher, Coach"). A missing title is
+/// kept: the page may simply not show one.
 pub fn is_non_teaching(title: &str) -> bool {
     let t = title.to_lowercase();
-    !t.contains("teacher") && NON_TEACHING.iter().any(|w| t.contains(w))
+    !t.is_empty() && !t.contains("teacher") && !t.contains("instructor")
 }
 
-/// Turns a directory title ("Teacher - Mathematics", "Science Teacher") into
-/// the subject ("Mathematics", "Science").
-pub fn subject_from_title(title: &str) -> String {
-    let generic = [
-        "teacher",
-        "instructor",
-        "faculty",
-        "staff",
-        "certificated",
-        "classroom teacher",
-    ];
-    let parts: Vec<String> = title
-        .split(['|', ',', ';', '/'])
-        .flat_map(|p| p.split(" - "))
-        .map(|p| {
-            let p = p.trim();
-            let lower = p.to_lowercase();
-            ["teacher", "instructor"]
-                .iter()
-                .find_map(|w| {
-                    lower
-                        .strip_suffix(w)
-                        .map(|rest| p[..rest.len()].trim().to_string())
-                })
-                .unwrap_or_else(|| p.to_string())
-        })
-        .filter(|p| !p.is_empty() && !generic.contains(&p.to_lowercase().as_str()))
-        .collect();
-    clean_text(&parts.join(", "), MAX_DEPARTMENT)
+/// Directory departments that are not school subjects, so they are never
+/// shown as a teacher's subject.
+const NON_SUBJECT_DEPARTMENTS: &[&str] = &[
+    "admin",
+    "counseling",
+    "custodial",
+    "education services",
+    "food services",
+    "library",
+    "m&o",
+    "special services",
+];
+
+/// Whether a directory department name is a school subject.
+pub fn is_subject_department(name: &str) -> bool {
+    let n = name.trim().to_lowercase();
+    !n.is_empty() && !NON_SUBJECT_DEPARTMENTS.contains(&n.as_str())
 }
 
 /// When a school's directory was last read: `(time, how many found, error)`.
@@ -552,46 +509,122 @@ pub fn sync_due(
     }
 }
 
-/// Reads `(name, department)` pairs out of a school's Finalsite staff
-/// directory page. Each person is a block with class `fsConstituentItem`; the
-/// name is the element with class `fsFullName` and the department or title
-/// comes from `fsDepartment`/`fsTitle` when present. Returns nothing when the
-/// page has no such blocks (for instance when the directory loads by script),
-/// so a changed page never produces junk.
-pub fn parse_finalsite_directory(html: &str) -> Vec<(String, String)> {
+/// One page of a school's staff directory.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct DirectoryPage {
+    /// Teachers on the page as `(name, title)`. Other staff are left out.
+    pub teachers: Vec<(String, String)>,
+    /// Everyone listed on the page, teacher or not. Zero means the page held
+    /// no directory entries at all, which is how paging knows to stop.
+    pub listed: usize,
+    /// "showing 1 - 10 of 165 constituents": the 165.
+    pub total: Option<usize>,
+}
+
+/// How a school's Finalsite directory can be read. Finalsite shows 10 people
+/// per page and only the first page is in the page itself; later pages and
+/// filtered lists come from `/fs/elements/{element_id}?const_page=N`.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct DirectoryForm {
+    pub element_id: String,
+    /// The directory's own `const_search_group_ids` / `const_search_role_ids`
+    /// values, passed back so the listing matches the page.
+    pub group_ids: String,
+    pub role_ids: String,
+    /// `(id, name)` of every department in the filter, subjects or not.
+    pub departments: Vec<(String, String)>,
+}
+
+fn regex(cell: &'static std::sync::OnceLock<Regex>, pattern: &str) -> &'static Regex {
+    cell.get_or_init(|| Regex::new(pattern).expect("static regex"))
+}
+
+/// Reads the people on one Finalsite directory page (the page itself or an
+/// `/fs/elements/` fragment). Each person is a `fsConstituentItem` block with
+/// `fsFullName` and `fsTitles`; the title block's "Titles:" label is dropped.
+pub fn parse_directory_page(html: &str) -> DirectoryPage {
     static NAME: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
-    static DEPT: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
-    let name_re = NAME.get_or_init(|| {
-        Regex::new(r#"(?s)class="[^"]*\bfsFullName\b[^"]*"[^>]*>(.*?)</(?:h\d|div|span|a|p)>"#)
-            .expect("static regex")
-    });
-    let dept_re = DEPT.get_or_init(|| {
-        Regex::new(
-            r#"(?s)class="[^"]*\bfs(?:Department|Title)s?\b[^"]*"[^>]*>(.*?)</(?:div|span|p|li)>"#,
-        )
-        .expect("static regex")
-    });
-    let mut out: Vec<(String, String)> = Vec::new();
-    for chunk in html.split("fsConstituentItem").skip(1) {
+    static TITLE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    static TOTAL: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    let name_re = regex(
+        &NAME,
+        r#"(?s)class="[^"]*\bfsFullName\b[^"]*"[^>]*>(.*?)</h\d>"#,
+    );
+    let title_re = regex(
+        &TITLE,
+        r#"(?s)class="[^"]*\bfsTitles\b[^"]*"[^>]*>(.*?)</div>"#,
+    );
+    let total_re = regex(&TOTAL, r"of (\d+) constituents");
+    let mut page = DirectoryPage {
+        total: total_re.captures(html).and_then(|c| c[1].parse().ok()),
+        ..Default::default()
+    };
+    for chunk in html.split("fsConstituentItem\"").skip(1) {
         let Some(name) = name_re
             .captures(chunk)
             .map(|c| clean_name(&strip_tags(&c[1])))
         else {
             continue;
         };
-        let title = dept_re
+        if name.chars().count() < 3 {
+            continue;
+        }
+        page.listed += 1;
+        let title = title_re
             .captures(chunk)
             .map(|c| clean_text(&strip_tags(&c[1]), 160))
             .unwrap_or_default();
-        if is_non_teaching(&title) {
-            continue;
-        }
-        let dept = subject_from_title(&title);
-        if name.chars().count() >= 3 && !out.iter().any(|(n, _)| *n == name) {
-            out.push((name, dept));
+        let title = title
+            .strip_prefix("Titles:")
+            .unwrap_or(&title)
+            .trim()
+            .to_string();
+        if !is_non_teaching(&title) && !page.teachers.iter().any(|(n, _)| *n == name) {
+            page.teachers.push((name, title));
         }
     }
-    out
+    page
+}
+
+/// Finds the directory element and its department filter on a school's staff
+/// directory page. `None` when the page has no Finalsite directory.
+pub fn parse_directory_form(html: &str) -> Option<DirectoryForm> {
+    static ELEMENT: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    static OPTION: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    let element_re = regex(
+        &ELEMENT,
+        r#"class="[^"]*\bfsDirectory\b[^"]*"[^>]*\bid="fsEl_(\d+)""#,
+    );
+    let option_re = regex(&OPTION, r#"(?s)<option value="(\d+)">\s*(.*?)\s*</option>"#);
+    let element_id = element_re.captures(html)?[1].to_string();
+    let hidden = |name: &str| -> String {
+        let key = format!(r#"name="{name}" value=""#);
+        html.split_once(&key)
+            .and_then(|(_, rest)| rest.split_once('"'))
+            .map(|(v, _)| v.to_string())
+            .unwrap_or_default()
+    };
+    let departments = html
+        .split_once(r#"<select name="const_search_department">"#)
+        .and_then(|(_, rest)| rest.split_once("</select>"))
+        .map(|(options, _)| {
+            option_re
+                .captures_iter(options)
+                .map(|c| {
+                    (
+                        c[1].to_string(),
+                        clean_text(&strip_tags(&c[2]), MAX_DEPARTMENT),
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    Some(DirectoryForm {
+        element_id,
+        group_ids: hidden("const_search_group_ids"),
+        role_ids: hidden("const_search_role_ids"),
+        departments,
+    })
 }
 
 /// Reads a pasted list: one teacher per line, `Name` or `Name | Department`
@@ -843,47 +876,72 @@ mod tests {
         assert_eq!(summary(&store, id).count, 0);
     }
 
+    /// Shaped like a real Finalsite directory page, with invented people.
+    const DIRECTORY: &str = r#"
+      <form action="/about/staff-directory" method="get">
+        <input type="hidden" name="const_search_group_ids" value="235,232">
+        <input type="hidden" name="const_search_role_ids" value="1">
+        <select name="const_search_location"><option value="86">Example High School</option></select>
+        <select name="const_search_department">
+          <option value=""></option>
+          <option value="264">
+              Mathematics
+          </option>
+          <option value="328">M&amp;O</option>
+        </select>
+      </form>
+      <div class="fsElement fsConstituent fsDirectory fsThumbnailOriginal" id="fsEl_555" data-use-new="true">
+      <span class="fsPaginationLabel">showing 1 - 10 of 165 constituents</span>
+      <ul><li><div class="fsConstituentItem" data-constituent-id="1">
+        <h3 class="fsFullName"><button type="button" class="fsConstituentProfileLink">
+          Pat Example
+        </button></h3>
+        <div class="fsTitles"><strong>Titles:</strong> Teacher, Coach</div></div></li>
+      <li><div class="fsConstituentItem"><h3 class="fsFullName"><button>Casey Sample </button></h3>
+        <div class="fsTitles"><strong>Titles:</strong> Counselor</div></div></li>
+      <li><div class="fsConstituentItem"><h3 class="fsFullName"><button>Robin Demo</button></h3>
+        <div class="fsTitles"><strong>Titles:</strong> Paraeducator I</div></div></li>
+      <li><div class="fsConstituentItem"><h3 class="fsFullName"><button>Lee, Sam</button></h3>
+        <div class="fsTitles"><strong>Titles:</strong> Teacher</div></div></li></ul>"#;
+
     #[test]
-    fn finalsite_directory_blocks_are_read_and_junk_pages_give_nothing() {
-        let html = r#"<ul>
-          <li class="fsConstituentItem"><h3 class="fsFullName"><a href="/x">Smith, Jane</a></h3>
-            <div class="fsTitles"><div class="fsTitle">Mathematics &amp; Science</div></div></li>
-          <li class="fsConstituentItem"><h3 class="fsFullName">Raj Patel</h3></li>
-          <li class="fsConstituentItem"><h3 class="fsFullName">Raj Patel</h3></li>
-        </ul>"#;
-        let got = parse_finalsite_directory(html);
+    fn directory_pages_give_teachers_and_skip_other_staff() {
+        let page = parse_directory_page(DIRECTORY);
+        assert_eq!(page.total, Some(165));
+        assert_eq!(page.listed, 4);
         assert_eq!(
-            got,
+            page.teachers,
             vec![
-                (
-                    "Jane Smith".to_string(),
-                    "Mathematics & Science".to_string()
-                ),
-                ("Raj Patel".to_string(), String::new())
+                ("Pat Example".to_string(), "Teacher, Coach".to_string()),
+                ("Sam Lee".to_string(), "Teacher".to_string()),
             ]
         );
-        assert!(parse_finalsite_directory("<html><body>Loading…</body></html>").is_empty());
+        assert_eq!(
+            parse_directory_page("<html>Loading</html>"),
+            DirectoryPage::default()
+        );
+        assert!(is_non_teaching("Paraeducator I"));
+        assert!(!is_non_teaching("Teacher, Activities Director"));
+        assert!(!is_non_teaching(""));
     }
 
     #[test]
-    fn titles_become_subjects_and_office_staff_are_skipped() {
-        assert_eq!(subject_from_title("Teacher - Mathematics"), "Mathematics");
-        assert_eq!(subject_from_title("Science Teacher"), "Science");
-        assert_eq!(subject_from_title("Teacher"), "");
+    fn the_directory_form_gives_paging_and_subject_filters() {
+        let form = parse_directory_form(DIRECTORY).unwrap();
+        assert_eq!(form.element_id, "555");
+        assert_eq!(form.group_ids, "235,232");
+        assert_eq!(form.role_ids, "1");
         assert_eq!(
-            subject_from_title("English Teacher, Journalism"),
-            "English, Journalism"
+            form.departments,
+            vec![
+                ("264".to_string(), "Mathematics".to_string()),
+                ("328".to_string(), "M&O".to_string()),
+            ]
         );
-        assert!(is_non_teaching("Assistant Principal"));
-        assert!(is_non_teaching("Attendance Clerk"));
-        assert!(!is_non_teaching("Math Teacher"));
-        assert!(!is_non_teaching(""));
-        let html = r#"<li class="fsConstituentItem"><h3 class="fsFullName">Sam Cho</h3><div class="fsTitle">Counselor</div></li>
-          <li class="fsConstituentItem"><h3 class="fsFullName">Lee Ann</h3><div class="fsTitle">Teacher - Art</div></li>"#;
-        assert_eq!(
-            parse_finalsite_directory(html),
-            vec![("Lee Ann".to_string(), "Art".to_string())]
-        );
+        assert!(is_subject_department("Mathematics"));
+        assert!(!is_subject_department("M&O"));
+        assert!(!is_subject_department("Counseling"));
+        assert!(parse_directory_form("<html>nothing</html>").is_none());
     }
 
     #[test]

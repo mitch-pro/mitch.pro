@@ -20,17 +20,18 @@ use mitch_lib::teachers as db;
 
 const BASE: &str = "/api/admin/teachers";
 
-/// Where each school's staff directory may live on its Finalsite site, tried
-/// in order. The sync only ever requests these paths on the schools' own
-/// domains from `RJUHSD_SCHOOLS`.
+/// Where a school's staff directory may live on its Finalsite site, tried in
+/// order. Only these paths are requested, on the schools' own domains from
+/// `RJUHSD_SCHOOLS`.
 const DIRECTORY_PATHS: &[&str] = &[
+    "/about/staff-directory",
     "/about-us/staff-directory",
     "/staff-directory",
-    "/about/staff-directory",
     "/our-staff",
 ];
-/// Finalsite directories are paged with `const_page`; stop after this many.
-const MAX_PAGES: usize = 30;
+/// Finalsite shows 10 people per page; this is a safety stop (165 people need
+/// 17 pages).
+const MAX_PAGES: usize = 60;
 const MAX_PAGE_BYTES: usize = 3_000_000;
 
 fn note_json(n: &db::Note) -> Value {
@@ -45,10 +46,63 @@ fn note_json(n: &db::Note) -> Value {
     })
 }
 
-/// Fetches one school's directory, adds anyone new and records when it was
-/// read. Returns what happened for the staff page. Teacher names come only from
-/// the school's own site at run time; none are kept in the repository.
-async fn sync_school(
+async fn get_text(client: &reqwest::Client, url: &str) -> Result<String, String> {
+    let res = client
+        .get(url)
+        .header(reqwest::header::USER_AGENT, "mitch.pro teacher list sync")
+        .send()
+        .await
+        .map_err(|e| e.without_url().to_string())?;
+    if !res.status().is_success() {
+        return Err(format!("answered {}", res.status().as_u16()));
+    }
+    let bytes = res.bytes().await.map_err(|e| e.without_url().to_string())?;
+    if bytes.len() > MAX_PAGE_BYTES {
+        return Err("page too large".into());
+    }
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// Names of every teacher in a school's directory, optionally limited to one
+/// department. Pages come from `/fs/elements/{id}?const_page=N` (the page URL
+/// itself ignores `const_page`). Stops when the directory's own total is
+/// reached or a page has nobody on it.
+async fn read_directory(
+    client: &reqwest::Client,
+    base: &str,
+    form: &db::DirectoryForm,
+    department: Option<&str>,
+) -> Result<Vec<String>, String> {
+    let mut names: Vec<String> = Vec::new();
+    let mut listed = 0usize;
+    for page in 1..=MAX_PAGES {
+        let mut url = format!(
+            "{base}/fs/elements/{}?const_page={page}&const_search_group_ids={}&const_search_role_ids={}&is_draft=false",
+            form.element_id, form.group_ids, form.role_ids
+        );
+        if let Some(d) = department {
+            url.push_str(&format!("&const_search_department={d}"));
+        }
+        let parsed = db::parse_directory_page(&get_text(client, &url).await?);
+        if parsed.listed == 0 {
+            break;
+        }
+        listed += parsed.listed;
+        for (name, _title) in parsed.teachers {
+            if !names.contains(&name) {
+                names.push(name);
+            }
+        }
+        if parsed.total.is_some_and(|total| listed >= total) {
+            break;
+        }
+    }
+    Ok(names)
+}
+
+/// Reads a school's directory: every teacher, then each subject department to
+/// give them subjects (a teacher in two departments gets both).
+async fn read_school(
     state: &Arc<AppState>,
     client: &reqwest::Client,
     key: &str,
@@ -56,51 +110,69 @@ async fn sync_school(
 ) -> Value {
     let mut last_error = String::from("no staff directory found at the usual addresses");
     for path in DIRECTORY_PATHS {
-        let mut found: Vec<(String, String)> = Vec::new();
-        for page in 1..=MAX_PAGES {
-            let url = if page == 1 {
-                format!("{base}{path}")
-            } else {
-                format!("{base}{path}?const_page={page}")
-            };
-            let res = match client
-                .get(&url)
-                .header(reqwest::header::USER_AGENT, "mitch.pro teacher list sync")
-                .send()
-                .await
-            {
-                Ok(r) if r.status().is_success() => r,
-                Ok(r) => {
-                    last_error = format!("{path} answered {}", r.status().as_u16());
-                    break;
-                }
-                Err(e) => {
-                    last_error = format!("{path}: {}", e.without_url());
-                    break;
-                }
-            };
-            let Ok(bytes) = res.bytes().await else { break };
-            if bytes.len() > MAX_PAGE_BYTES {
-                last_error = format!("{path} was too large");
-                break;
+        let page = match get_text(client, &format!("{base}{path}")).await {
+            Ok(p) => p,
+            Err(e) => {
+                last_error = format!("{path} {e}");
+                continue;
             }
-            let people = db::parse_finalsite_directory(&String::from_utf8_lossy(&bytes));
-            let before = found.len();
-            for p in people {
-                if !found.iter().any(|(n, _)| *n == p.0) {
-                    found.push(p);
-                }
+        };
+        let Some(form) = db::parse_directory_form(&page) else {
+            last_error = format!("{path} has no staff directory");
+            continue;
+        };
+        let names = match read_directory(client, base, &form, None).await {
+            Ok(n) => n,
+            Err(e) => {
+                return json!({ "school": key, "found": 0, "added": 0, "error": format!("{path} {e}") })
             }
-            if found.len() == before {
-                break;
+        };
+        let mut subjects: std::collections::HashMap<String, Vec<String>> = Default::default();
+        for (id, subject) in form
+            .departments
+            .iter()
+            .filter(|(_, n)| db::is_subject_department(n))
+        {
+            // A failed department only means its teachers show no subject this time.
+            if let Ok(members) = read_directory(client, base, &form, Some(id)).await {
+                for member in members {
+                    subjects.entry(member).or_default().push(subject.clone());
+                }
             }
         }
-        if !found.is_empty() {
-            let added = db::add_many(&state.store, key, &found, "sync");
-            return json!({ "school": key, "found": found.len(), "added": added });
-        }
+        let list: Vec<(String, String)> = names
+            .into_iter()
+            .map(|n| {
+                let subject = subjects.remove(&n).unwrap_or_default().join(", ");
+                (n, subject)
+            })
+            .collect();
+        let added = db::add_many(&state.store, key, &list, "sync");
+        return json!({ "school": key, "found": list.len(), "added": added });
     }
     json!({ "school": key, "found": 0, "added": 0, "error": last_error })
+}
+
+/// Reads one school's directory, adds anyone new and records when it was read.
+/// Returns what happened for the staff page. Teacher names come only from the
+/// school's own site at run time; none are kept in the repository.
+pub async fn sync_school(
+    state: &Arc<AppState>,
+    client: &reqwest::Client,
+    key: &str,
+    base: &str,
+) -> Value {
+    let result = read_school(state, client, key, base).await;
+    let found = result["found"].as_i64().unwrap_or(0);
+    let error = result["error"].as_str().unwrap_or("");
+    db::record_sync(
+        &state.store,
+        key,
+        mitch_lib::school::now_millis(),
+        found,
+        error,
+    );
+    result
 }
 
 /// Reads every school whose list is due: never read, read over a day ago, or a

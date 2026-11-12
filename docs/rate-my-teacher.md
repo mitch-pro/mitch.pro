@@ -56,21 +56,32 @@ that school's teachers.
   hourly. It reads a school when it was never read, last read over a day ago,
   or failed over six hours ago (`teachers::sync_due`). `teacher_sync_status`
   records when, how many were found, and any error.
-- **Manual:** the Teachers tab has *Sync from school sites* and shows each
-  school's last read. Pasting a list or adding one teacher also works, for a
+- **Manual:** the Teachers tab has *Sync from school sites* (one school per request, since a
+  directory takes a few seconds) and shows each school's last read. Pasting a list or adding one teacher also works, for a
   school whose directory can't be read.
-- **What is read:** each school's staff directory (`/about-us/staff-directory`,
-  `/staff-directory`, `/about/staff-directory`, `/our-staff`, paged with
-  `?const_page=N`), Finalsite markup: `fsConstituentItem` blocks with
-  `fsFullName` and an optional `fsDepartment`/`fsTitle`.
-- **Subject:** taken from the title ("Teacher - Mathematics" or "Science
-  Teacher" give Mathematics / Science). People whose title is clearly not
-  teaching (principal, counselor, clerk, and similar, unless it also says
-  teacher) are skipped; a person with no title is kept.
-- A page without that markup yields nothing, never junk. **The parser was written
-  against that markup from memory and has only been run on a test fixture: the
-  district sites were unreachable when this was built.** If a school's directory
-  loads by script or uses other markup, extend `parse_finalsite_directory`.
+- **What is read:** each school's Finalsite staff directory
+  (`/about/staff-directory`, with `/about-us/staff-directory`,
+  `/staff-directory` and `/our-staff` as fallbacks). The page itself only holds
+  the first 10 people, and `?const_page=N` on it is ignored, so the sync reads
+  the directory element's own endpoint, `/fs/elements/{id}?const_page=N`, using
+  the element id and group/role ids found on the page (they differ per school).
+  It pages until the directory's "of N constituents" total is reached. This was
+  checked against all six schools' live directories (Woodcreek: 17 pages, 165
+  staff).
+- **Who counts as a teacher:** the directory lists every employee. A person is
+  kept when their title says teacher or instructor ("Teacher", "Teacher, Coach");
+  counselors, paraeducators, clerks and so on are skipped. Someone with no title
+  is kept.
+- **Subject:** the directory has a department filter. After reading everyone, the
+  sync reads each subject department (Mathematics, Science, English, Social
+  Studies, World Languages, VAPA, CTE, Physical Ed., Health, Special Ed.,
+  Technology and the like; Admin, Counseling, Custodial, Library and other
+  non-subject departments are skipped) and gives each teacher the departments
+  they appear in. A teacher in two get both ("Social Studies, VAPA"). A teacher
+  in none shows no subject. Rows added by hand keep their typed subject.
+- A page without a Finalsite directory yields an error on the staff page, never
+  junk. Teachers who leave the district stay listed (removing them would delete
+  their ratings); an admin can remove them.
 
 ## API
 
