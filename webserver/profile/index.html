@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="/app.css">
 <style>
   body.profile-page { background-size: cover; background-position: center; background-attachment: fixed; }
-  .profile-main { width: min(560px, calc(100% - 28px)); margin-inline: auto; padding: clamp(1.5rem, 3vw, 3rem) 0 4.5rem; }
+  .profile-main { width: min(640px, calc(100% - 28px)); margin-inline: auto; padding: clamp(1.5rem, 3vw, 3rem) 0 4.5rem; }
   .wrap {
     background: var(--t-bg2); color: var(--t-fg);
     padding: 28px; border-radius: var(--t-radius); border: 1px solid var(--t-bd);
@@ -88,20 +88,26 @@
   .not-found h1 { font-size: 1.6rem; margin-bottom: 8px; }
   .not-found p { font-size: 14px; color: var(--t-fg2); margin-bottom: 12px; }
 
-  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
-  .stat-card { background: var(--t-bg); border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm); padding: 12px 14px; }
-  .stat-val { font-size: 1.25rem; font-weight: 700; color: var(--t-fg); letter-spacing: -0.02em; }
-  .stat-lbl { font-size: 13px; color: var(--t-fg2); margin-top: 2px; }
-  .achs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--t-bd); }
+  .fact-val { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; color: var(--t-fg); }
+  .fact-lbl { font-size: 13px; color: var(--t-fg2); margin-top: 2px; }
+  .achs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
   .ach-badge { font-size: 12px; background: var(--t-bg3); border: 1px solid var(--t-bd); padding: 4px 10px; border-radius: 999px; color: var(--t-fg2); }
 
   @media (max-width: 600px) {
     .wrap { padding: 20px 16px; }
-    .stat-val { font-size: 1.1rem; }
+    .profile-top { flex-direction: column; }
   }
   .loading-line { color: var(--t-fg2); font-size: 14px; }
-  .profile-head { display: flex; flex-direction: column; align-items: flex-start; }
-  .wrap .stats-grid { width: 100%; }
+  .profile-top { display: flex; gap: 20px; align-items: flex-start; }
+  .profile-top .avatar { width: 96px; height: 96px; margin-bottom: 0; font-size: 2.4rem; }
+  .profile-id { min-width: 0; flex: 1; }
+  .profile-id .display-name { margin-bottom: 6px; }
+  .profile-id .badge-row { margin-bottom: 8px; }
+  .profile-id .bio { margin: 10px 0 0; }
+  .profile-id .website { margin: 8px 0 0; }
+  .profile-id .email-line { margin: 0; }
+  .wrap .link-btn { margin-top: 22px; }
   .link-btn { display: block; text-align: center; }
   .retry-btn { width: auto; padding: 8px 18px; }
   html.theme-light .badge-premium, html.theme-light .badge-shop, html[data-theme="light"] .badge-premium, html[data-theme="light"] .badge-shop { color: #92400e; }
@@ -146,13 +152,6 @@ function gradYearOptions(current) {
   var html = option('', 'None / Prefer not to say', current);
   for (var i = 0; i < 4; i++) html += option(String(start + i), `${start + i} (${labels[i]})`, current);
   return html;
-}
-function Fmt(n) {
-  if (n < 1000) return Math.floor(n);
-  const s = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'];
-  const t = Math.floor(Math.log10(n) / 3);
-  if (t < s.length) return (n / Math.pow(10, t * 3)).toFixed(1) + s[t];
-  return n.toExponential(1);
 }
 
 function calculatePlaytime(stats) {
@@ -228,40 +227,32 @@ async function load(forceNetwork) {
   const badge = badgeLabels[profile.activeBadge];
   let badgeHtml = badge ? `<span class="profile-badge ${badge.cls}" title="${esc(String(profile.activeBadge).replace(/_badge$/, '').replace(/_/g, ' '))} badge">${badge.text}</span>` : '';
 
+  const coinBalance = Number(profile.coins);
+  const coinText = Number.isFinite(coinBalance) ? coinBalance.toLocaleString(undefined, { maximumFractionDigits: 1 }) : '0';
   let html = `
-    <div class="profile-head">
+    <div class="profile-top">
       <div class="avatar">
         ${safePfp ? `<img src="${esc(safePfp)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="">` : initials}
       </div>
-      ${(profile.isPremium || profile.isAdmin) ? `<div class="badge-row">
-        ${profile.isPremium ? '<span class="badge-premium">Premium member</span>' : ''}
-        ${profile.isAdmin ? '<span class="badge-admin">Admin</span>' : ''}
-      </div>` : ''}
-      <div class="display-name ${profile.activeColor || ''}">${esc(profileName)}${badgeHtml}</div>
-      ${(!window.PUBLIC_PROFILE && profile.email && profile.email.includes('@')) ? `<div class="email-line">${esc(profile.email || '')}</div>` : ''}
-      ${profile.bio ? `<div class="bio">${esc(profile.bio)}</div>` : ''}
-      ${safeWebsite ? `<div class="website"><a href="${esc(safeWebsite)}" target="_blank" rel="noopener noreferrer">${esc(safeWebsite)}</a></div>` : ''}
-      
-      <div class="stats-grid">
-        <div class="stat-card"><div class="stat-val">${stats.pixels || 0}</div><div class="stat-lbl">Pixels</div></div>
-        <div class="stat-card"><div class="stat-val">${stats.chess_wins || 0}</div><div class="stat-lbl">Chess wins</div></div>
-        <div class="stat-card"><div class="stat-val">${stats.battleship_wins || 0}</div><div class="stat-lbl">Battleship wins</div></div>
-        <div class="stat-card"><div class="stat-val">${Fmt(stats.clicker_points || 0)}</div><div class="stat-lbl">Clicker points</div></div>
-        <div class="stat-card"><div class="stat-val">${stats.typing_races || 0}</div><div class="stat-lbl">Keyboard races</div></div>
-        <div class="stat-card"><div class="stat-val">${stats.logic_puzzles || 0}</div><div class="stat-lbl">Logic puzzles</div></div>
-        <div class="stat-card"><div class="stat-val mitch-coin-amount">${(Number(stats.clicker_coins || 0) + Number(stats.typing_coins || 0) + Number(stats.logic_coins || 0)).toFixed(1)}</div><div class="stat-lbl">Game coins earned</div></div>
-        <div class="stat-card"><div class="stat-val">${calculatePlaytime(stats)}</div><div class="stat-lbl">Time spent</div></div>
+      <div class="profile-id">
+        ${(profile.isPremium || profile.isAdmin) ? `<div class="badge-row">
+          ${profile.isPremium ? '<span class="badge-premium">Premium member</span>' : ''}
+          ${profile.isAdmin ? '<span class="badge-admin">Admin</span>' : ''}
+        </div>` : ''}
+        <div class="display-name ${esc(profile.activeColor || '')}">${esc(profileName)}${badgeHtml}</div>
+        ${(!window.PUBLIC_PROFILE && profile.email && profile.email.includes('@')) ? `<div class="email-line">${esc(profile.email || '')}</div>` : ''}
+        ${profile.bio ? `<div class="bio">${esc(profile.bio)}</div>` : ''}
+        ${safeWebsite ? `<div class="website"><a href="${esc(safeWebsite)}" target="_blank" rel="noopener noreferrer">${esc(safeWebsite)}</a></div>` : ''}
       </div>
-      
-      <div class="achs">
-        ${achs.map(a => `<span class="ach-badge">🏆 ${esc(a.replace(/_/g, ' '))}</span>`).join('')}
-      </div>
-    </div>`;
+    </div>
+    <div class="facts">
+      <div><div class="fact-val mitch-coin-amount">${esc(coinText)}</div><div class="fact-lbl">MitchCoins</div></div>
+      <div><div class="fact-val">${esc(calculatePlaytime(stats))}</div><div class="fact-lbl">Time spent</div></div>
+    </div>
+    ${achs.length ? `<div class="achs">${achs.map(a => `<span class="ach-badge">🏆 ${esc(String(a).replace(/_/g, ' '))}</span>`).join('')}</div>` : ''}`;
 
   if (isOwnProfile) {
-    html += `
-      <div class="divider"></div>
-      <a class="save-btn link-btn" href="/preferences/#account">Edit profile</a>`;
+    html += `<a class="save-btn link-btn" href="/preferences/#account">Edit profile</a>`;
   }
 
   wrap.innerHTML = html;
