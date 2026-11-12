@@ -228,6 +228,11 @@
     return el('button', { type: 'button', class: `mitch-e2ee-btn${kind ? ' ' + kind : ''}`, onclick, text: label });
   }
 
+  /** Opens the replace-backup flow for people who lost every way in. */
+  function resetButton() {
+    return button('Reset backup', () => openSetup({ reset: true }));
+  }
+
   /** A centered modal. Returns { el, body, close }. */
   function modal(title, dismissible) {
     const body = el('div', { class: 'mitch-e2ee-modal-body' });
@@ -271,34 +276,9 @@
     cb.__mitchWrapped = true;
   }
 
+  /** The server completes the upload's password check (see routes/matrix.rs), so no prompt. */
   async function authUploadDeviceSigningKeys(makeRequest) {
-    // First upload is authorised by the server (see routes/matrix.rs). A reset
-    // of existing keys needs the site password.
-    try {
-      await makeRequest(null);
-    } catch (e) {
-      if (!(e && e.httpStatus === 401 && e.data && e.data.session)) throw e;
-      const password = await askSitePassword();
-      const localpart = client.getUserId().slice(1).split(':')[0];
-      await makeRequest({ type: 'm.login.password', identifier: { type: 'm.id.user', user: localpart }, password, session: e.data.session });
-    }
-  }
-
-  function askSitePassword() {
-    return new Promise((resolve, reject) => {
-      const m = modal('Confirm your password', true);
-      const input = el('input', { type: 'password', autocomplete: 'current-password', class: 'mitch-e2ee-input', 'aria-label': 'Site password' });
-      const form = el('form', { class: 'mitch-e2ee-form', onsubmit: e => { e.preventDefault(); m.close(); resolve(input.value); } }, [
-        el('p', { text: 'Enter your mitch.pro password to replace your existing encryption keys.' }),
-        input,
-        el('div', { class: 'mitch-e2ee-actions' }, [
-          button('Cancel', () => { m.close(); reject(new Error('Cancelled')); }),
-          el('button', { type: 'submit', class: 'mitch-e2ee-btn primary', text: 'Continue' }),
-        ]),
-      ]);
-      m.body.append(form);
-      input.focus();
-    });
+    await makeRequest(null);
   }
 
   // ── State ───────────────────────────────────────────────────────
@@ -376,7 +356,7 @@
       }
     } }, [
       el('p', { text: reset
-        ? 'This replaces your current backup. Messages that are only in the old backup can\'t be restored, your other devices will need to be verified again, and you\'ll be asked for your mitch.pro password. Choose a new passphrase.'
+        ? 'This replaces your current backup. Messages that are only in the old backup can\'t be restored, and your other devices will need to be verified again. Choose a new passphrase.'
         : 'Choose a passphrase. You\'ll use it, or a recovery key we\'ll show you next, to read your encrypted messages on a new device when no other device is signed in.' }),
       el('label', {}, ['Passphrase', pass]),
       el('label', {}, ['Confirm passphrase', confirm]),
@@ -551,7 +531,11 @@
       el('p', { text: intro || 'Enter your backup passphrase or recovery key.' }),
       input,
       err,
-      el('div', { class: 'mitch-e2ee-actions' }, [button('Cancel', () => m.close()), submit]),
+      el('div', { class: 'mitch-e2ee-actions' }, [
+        el('button', { type: 'button', class: 'mitch-e2ee-link', text: 'I don\'t have either', onclick: () => { m.close(); openSetup({ reset: true }); } }),
+        button('Cancel', () => m.close()),
+        submit,
+      ]),
     ]));
     input.focus();
   }
@@ -621,14 +605,14 @@
     if (!outreq || !content || content.request_id !== outreq.request_id) return;
     if (content.status === 'declined') {
       store.del(k('outreq'));
-      banner.show('Your other device declined the transfer.', [button('Use passphrase or recovery key', () => openUnlock())], 'declined');
+      banner.show('Your other device declined the transfer.', [resetButton(), button('Use passphrase or recovery key', () => openUnlock())], 'declined');
     }
   }
 
   async function runNewDevice() {
     const others = await otherDevices();
     if (!others.length) {
-      banner.show('Enter your passphrase or recovery key to read your encrypted messages on this device.', [button('Enter it', () => openUnlock())], 'no-other');
+      banner.show('Enter your passphrase or recovery key to read your encrypted messages on this device.', [resetButton(), button('Enter it', () => openUnlock())], 'no-other');
       if (!store.get(k('unlock_prompted_' + ownIds().deviceId))) {
         store.set(k('unlock_prompted_' + ownIds().deviceId), '1');
         openUnlock('Enter your backup passphrase or recovery key to read your encrypted messages on this device.');
@@ -636,7 +620,7 @@
       return;
     }
     await requestTransfer();
-    banner.show('Waiting for your other device to approve this one.', [button('Use passphrase or recovery key instead', () => openUnlock())], 'waiting');
+    banner.show('Waiting for your other device to approve this one.', [resetButton(), button('Use passphrase or recovery key', () => openUnlock())], 'waiting');
   }
 
   // ── Existing device side ────────────────────────────────────────
