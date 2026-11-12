@@ -65,7 +65,7 @@ pub async fn handle(
         return Some(site_info(state));
     }
     if path == "/api/pass" && *method == Method::POST {
-        return Some(site_catalog(state, headers));
+        return Some(session_probe(state, headers));
     }
     if path == "/api/verify-open" || path == "/verify-open.json" {
         return Some(verify_open(method));
@@ -147,7 +147,6 @@ pub async fn handle(
             crate::alias::today(
                 &state.id_secret,
                 &state.cfg.webroot,
-                &state.store,
                 mitch_lib::school::now_millis(),
             ),
         );
@@ -261,37 +260,12 @@ fn site_info(state: &Arc<AppState>) -> Response {
     json_response(200, site_info_payload(&site, backup))
 }
 
-/// Homepage destination catalog, read from the `site_links` table. The
-/// response keeps the line format `parseSites()` in `index.html` reads.
-fn site_catalog(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
-    if !state.check_password_cookie(headers, None) {
-        return json_response(200, json!({ "success": false }));
-    }
-
-    let cookie_header = headers
-        .get(axum::http::header::COOKIE)
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or("");
-    let cookies = mitch_lib::auth::get_cookies_from_header_value(
-        cookie_header,
-        &state.store,
-        &state.id_secret,
-        std::env::var("NODE_ENV").unwrap_or_default() == "test",
-    );
-    let is_admin = mitch_lib::auth::is_admin_id(
-        &state.store,
-        &state.id_secret,
-        &cookies.auth_sid(),
-        std::env::var("NODE_ENV").unwrap_or_default() == "test",
-    );
-    json_response(
-        200,
-        json!({ "success": true, "content": visible_site_catalog(&state.store, is_admin) }),
-    )
-}
-
-fn visible_site_catalog(store: &mitch_lib::data::DataStore, is_admin: bool) -> String {
-    mitch_lib::site_links::render_lines(&mitch_lib::site_links::list_visible(store, is_admin))
+/// `POST /api/pass` — the homepage's session probe: `success` is whether the
+/// visitor has a valid session cookie. (Bans are answered earlier by
+/// `access::enforce_ban`.) The page list itself is static in `index.html`.
+fn session_probe(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
+    let ok = state.check_password_cookie(headers, None);
+    json_response(200, json!({ "success": ok }))
 }
 
 /// `GET /api/bad-passwords` — server.js:20450-20459. Raw file passthrough.

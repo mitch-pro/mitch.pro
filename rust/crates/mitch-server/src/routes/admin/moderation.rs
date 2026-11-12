@@ -489,40 +489,6 @@ pub fn handle(
         return Some(chat_report_resolve(state, body, ctx));
     }
 
-    // POST /api/admin/content/mirror.
-    if path == "/api/admin/content/mirror" {
-        if !ctx.is_any_admin(state) {
-            return Some(forbidden());
-        }
-        let new_url = body.get("url").cloned().unwrap_or(Value::Null);
-        let new_url_str = new_url.as_str().unwrap_or("");
-        if !(new_url_str.starts_with("https://") || new_url_str.starts_with("http://")) {
-            return Some(json_response(
-                400,
-                json!({ "error": "valid mirror URL required" }),
-            ));
-        }
-        mitch_lib::site_links::set_mirror_url(&state.store, new_url_str);
-        let actor = mitch_lib::auth::email_from_sid(&state.store, &state.id_secret, &ctx.sid)
-            .unwrap_or_else(|| "moderator".to_string());
-        let role = if ctx.is_admin(state) {
-            "admin"
-        } else {
-            "moderator"
-        };
-        mitch_lib::admin::log_admin_action(
-            &state.store,
-            &state.cfg.data_dir,
-            &actor,
-            "update_mirror",
-            json!({
-                "url": new_url,
-                "role": role,
-            }),
-        );
-        return Some(json_response(200, json!({ "ok": true })));
-    }
-
     // POST /api/admin/content/featured.
     if path == "/api/admin/content/featured" {
         if !ctx.is_any_admin(state) {
@@ -2130,23 +2096,6 @@ pub fn execute_moderator_approved_action(
                 json!({ "domain": domain }).merge(requested_by()),
             );
             Ok(json!({ "ok": true, "domain": domain }))
-        }
-        "content_mirror" => {
-            let new_url = s("url").as_str().unwrap_or("").to_string();
-            let ok = new_url.to_lowercase().starts_with("http://")
-                || new_url.to_lowercase().starts_with("https://");
-            if !ok {
-                return Err((400, "valid mirror URL required".into()));
-            }
-            mitch_lib::site_links::set_mirror_url(&state.store, &new_url);
-            mitch_lib::admin::log_admin_action(
-                &state.store,
-                &state.cfg.data_dir,
-                actor,
-                "update_mirror",
-                json!({ "url": new_url }).merge(requested_by()),
-            );
-            Ok(json!({ "ok": true, "url": new_url }))
         }
         "content_featured" => {
             let href = s("href").as_str().unwrap_or("").to_string();

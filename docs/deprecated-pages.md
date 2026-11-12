@@ -3,8 +3,8 @@
 These pages are **deprecated**: unlinked from the homepage list, the mobile menu
 and the other navigation, and no longer maintained. Their files and APIs still
 exist (so old bookmarks and any balances or data keep working) and may be
-deleted in a later cleanup. The links are retired in code by
-`mitch_lib::site_links::RETIRED_HREFS` (see `docs/site-links.md`).
+deleted in a later cleanup. Their links are gone from `HOME_LINKS` in
+`webserver/index.html`, the homepage's page list.
 
 | Page | Status |
 | --- | --- |

@@ -78,7 +78,7 @@ download or import a backup file, delete all server saves. Deleting from the
 server never touches localStorage. Pushes set `_sync_ts` locally so `sync.js`
 doesn't immediately offer to restore what was just uploaded.
 
-Linked from the homepage catalog (`site_links`) and Preferences → Sync.
+Linked from the homepage page list and Preferences → Sync.
 
 ## Request size
 

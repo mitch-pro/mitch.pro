@@ -15,9 +15,7 @@ of `/games/run-3/`, so a school URL filter never sees the same path twice.
 - `section` = UUID for one section on that day:
   `HMAC-SHA256(id_secret, "alias-section:<day>:<name>")`. A section UUID only
   resolves under the root of the same day. A section is a top-level webroot
-  directory, `proxy` / `proxy/movies`, or any visible local link in the
-  `site_links` table cut to its directory (`games/run-3`, up to three
-  segments). The homepage picks the longest matching section, so
+  directory, `proxy` / `proxy/movies`, or `proxy/movies`. The homepage picks the longest matching section, so
   `/proxy/movies/` becomes `/<root>/<movies uuid>/`.
 - Both are formatted as version-4 UUIDs. Nothing is stored in the database.
 - A day's UUIDs work for 365 days (`alias::VALID_DAYS`), then stop. The real

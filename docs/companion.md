@@ -7,9 +7,8 @@ subsystem — no `server.js` equivalent.
 ## Scope
 
 - Setup (enable/disable + pick a character) happens on its own page,
-  `/companion/`, linked from the homepage destination catalog (the
-  `site_links` table, see `docs/site-links.md`) — the same mechanism every
-  other feature page uses to appear there.
+  `/companion/`, linked from the homepage page list (`HOME_LINKS` in
+  `webserver/index.html`).
 - The live character itself is injected on every page by the shared
   per-page pipeline (`pipeline.rs` for ordinary pages, `inject.rs`'s
   `inject_shared_head` for rjuhsd/woodcreek-branded ones) — the same
@@ -422,7 +421,7 @@ was the explicit ask, since every call costs a real DeepSeek API charge.
   `/api/companion/settings` fetch confirms the viewer is logged in and has
   it enabled — never assume that from page context. Don't add any DOM
   before that check resolves.
-- The homepage link is a row in the `site_links` table (`docs/site-links.md`).
+- The homepage link is an entry in `HOME_LINKS` in `webserver/index.html`.
   `data/sites` no longer exists.
 - `companion_chat_messages` is not pruned — `recent_chat_messages` only
   ever reads the last 10 rows per (email, character), but every row from
