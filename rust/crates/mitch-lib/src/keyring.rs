@@ -9,7 +9,7 @@
 //! In order:
 //!
 //! 1. `DATA_ENCRYPTION_KEY` in the environment, which `doppler run` or
-//!    `infisical run` injects (see `tools/secrets-provider.sh`).
+//!    `infisical run` injects (see `docs/secrets-providers.md`).
 //! 2. `<data dir>/encryption.key`, the bootstrap file.
 //! 3. Neither: a new random key is generated and written to that file
 //!    (mode 0600). The server then sends a notification, without the key in

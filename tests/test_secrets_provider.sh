@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Checks tools/secrets-provider.sh against stand-in `doppler` and `infisical`
-# commands that record how they were called. Run: bash tests/test_secrets_provider.sh
+# Checks the secrets-provider block in the host scripts: that all copies are identical,
+# and that it works against stand-in `doppler` and `infisical` commands that record
+# how they were called. Run: bash tests/test_secrets_provider.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -24,8 +25,17 @@ export PATH="$WORK/bin:$PATH"
 fail() { echo "FAIL: $*" >&2; exit 1; }
 expect_call() { grep -qx -- "$1" "$WORK/calls" || { cat "$WORK/calls" >&2; fail "expected call: $1"; }; }
 
-# shellcheck source=tools/secrets-provider.sh
-. "$ROOT/tools/secrets-provider.sh"
+# The block is inlined in each root-run script (not sourced from a shared file).
+# Extract it from each, ignoring indentation, and require the copies to match.
+SCRIPTS=(tools/deploy.sh newsletter.sh tools/update_ip.sh tools/add_cloudflare_domain.sh)
+extract() { sed -n '/^ *# >>> secrets-provider/,/^ *# <<< secrets-provider/p' "$ROOT/$1" | sed 's/^ *//'; }
+extract "${SCRIPTS[0]}" > "$WORK/block.sh"
+[ -s "$WORK/block.sh" ] || fail "no secrets-provider block in ${SCRIPTS[0]}"
+for script in "${SCRIPTS[@]}"; do
+    extract "$script" | cmp -s - "$WORK/block.sh" || fail "secrets-provider block in $script differs from ${SCRIPTS[0]}"
+done
+# shellcheck disable=SC1091
+. "$WORK/block.sh"
 
 check_provider() {  # <flag line or empty> <expected provider>
     : > "$WORK/.env"; [ -n "$1" ] && echo "$1" > "$WORK/.env"
@@ -67,6 +77,6 @@ expect_call "infisical run -- docker compose up -d"
 ! grep -q doppler "$WORK/calls" || fail "infisical mode called doppler"
 
 # A missing CLI is "not available", not an error.
-PATH="/usr/bin:/bin" bash -c ". '$ROOT/tools/secrets-provider.sh'; INFISICAL=True secrets_init /nonexistent; ! secrets_available" || fail "missing cli"
+PATH="/usr/bin:/bin" bash -c ". '$WORK/block.sh'; INFISICAL=True secrets_init /nonexistent; ! secrets_available" || fail "missing cli"
 
 echo "secrets provider: ok"

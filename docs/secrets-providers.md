@@ -9,9 +9,14 @@ talks to a secrets manager. Two providers are supported, chosen on the host:
 | Doppler | default | `doppler run -- docker compose ...` |
 | Infisical | `INFISICAL=True` in the repo's `.env` | `infisical run -- docker compose ...` |
 
-`tools/secrets-provider.sh` implements the choice. `tools/deploy.sh`,
-`newsletter.sh`, `tools/update_ip.sh` and `tools/add_cloudflare_domain.sh` source it,
-so one flag moves them all. With the flag unset, behaviour is the same as before
+The choice is made by a small block of shell functions (`secrets_init`,
+`secrets_get`, `secrets_run`, ...) that is copied into `tools/deploy.sh`,
+`newsletter.sh`, `tools/update_ip.sh` and `tools/add_cloudflare_domain.sh`, so one
+flag moves them all. It is copied rather than sourced from a shared file on purpose:
+these scripts run as root, and a helper read in from the repo checkout would be one
+more file whose modification gives root. `tests/test_secrets_provider.sh` fails if
+the copies differ. Edit all four together (the block sits between `>>> secrets-provider`
+and `<<< secrets-provider` markers). With the flag unset, behaviour is the same as before
 Infisical support was added.
 
 ## Configuring Infisical
@@ -38,6 +43,6 @@ matters when its environment lacks the mail credentials, which compose provides.
 
 ## Testing
 
-`bash tests/test_secrets_provider.sh` runs the helper against stand-in CLIs and
-checks which commands each provider makes. It does not talk to a real Infisical or
+`bash tests/test_secrets_provider.sh` checks the four copies are identical, then runs
+the block against stand-in CLIs and checks which commands each provider makes. It does not talk to a real Infisical or
 Doppler.
