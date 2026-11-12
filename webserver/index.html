@@ -13,7 +13,7 @@
 <title>mitch.pro</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"></noscript>
 <link rel="stylesheet" href="/app.css">
-<link rel="stylesheet" href="/home.css?v=20">
+<link rel="stylesheet" href="/home.css?v=21">
 <link rel="stylesheet" href="/turkey-catch.css?v=5">
 <script src="/turkey-catch.js?v=7" defer></script>
 <script defer src="/rjuhsd-assets/calendar.js?v=8"></script>
@@ -1388,6 +1388,25 @@ if (document.readyState === 'loading') {
   <div class="home-masthead-links"><a href="/" aria-current="page">Home</a><a href="/vms/" class="nav-vm-link">VM Lab <span class="nav-pill-free">FREE</span></a><a href="/matrix/">Chat</a><a href="/game-portal/">Games</a><a href="/members/">People</a><a href="https://rjuhsd.school/">Schedule</a></div>
   <a class="home-account-link" href="/profile/">My account </a>
 </nav>
+<div id="statement-banner" class="statement-banner" role="region" aria-label="Notice" hidden>
+  <p>Tyler, a former developer of mitch.pro, has posted claims about the site on Tylerium.pro. <a href="/statement/">Read my response</a></p>
+  <button type="button" class="statement-banner-close" aria-label="Dismiss notice">&times;</button>
+</div>
+<script>
+(function () {
+  // Shown until 2026-12-12 (UTC), unless dismissed. Dismissal is remembered per browser.
+  var KEY = 'statementBannerDismissed', END = Date.UTC(2026, 11, 12);
+  var el = document.getElementById('statement-banner');
+  var dismissed = false;
+  try { dismissed = localStorage.getItem(KEY) === '1'; } catch (e) {}
+  if (!el || dismissed || Date.now() >= END) return;
+  el.hidden = false;
+  el.querySelector('button').addEventListener('click', function () {
+    el.hidden = true;
+    try { localStorage.setItem(KEY, '1'); } catch (e) {}
+  });
+})();
+</script>
 
 
 
