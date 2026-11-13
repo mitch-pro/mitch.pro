@@ -31,6 +31,7 @@ pub mod legacy;
 pub mod moderation;
 pub mod newsletters;
 pub mod owner_container;
+pub mod special_schedule;
 pub mod support;
 pub mod teachers;
 pub mod updates;
@@ -254,6 +255,9 @@ pub async fn handle(
 
     // ── Support portal staff API (moderators and above) ──
     if let Some(resp) = updates::handle(state, method, path, body, &ctx) {
+        return Some(resp);
+    }
+    if let Some(resp) = special_schedule::handle(state, method, path, body, &ctx) {
         return Some(resp);
     }
     if let Some(resp) = support::handle(state, method, path, search, body, &ctx) {
