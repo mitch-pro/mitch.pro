@@ -61,44 +61,17 @@ main() {
     }
 
     # >>> secrets-provider (the same block is in every script that has it; tests/test_secrets_provider.sh checks that)
-    # Doppler by default; INFISICAL=True in .env (or the environment) selects Infisical. The
-    # CLI is configured by root outside the repo (docs/secrets-providers.md). This is inline
-    # on purpose: these scripts run as root, and a helper file read in from the repo
+    # Infisical. The CLI is configured by root outside the repo (docs/secrets-providers.md). This
+    # is inline on purpose: these scripts run as root, and a helper file read in from the repo
     # checkout would be one more place for code to be planted.
-    # secrets_init <.env path> | secrets_cli | secrets_available | secrets_get NAME |
-    # secrets_set NAME VALUE | secrets_run CMD...   (SECRETS_SUDO=1 retries with `sudo -n`)
-    secrets_init() {
-        local env_file="${1:-}" flag="${INFISICAL:-}"
-        if [ -z "$flag" ] && [ -f "$env_file" ]; then
-            flag=$(grep -E '^INFISICAL=' "$env_file" | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
-        fi
-        case "$(printf '%s' "$flag" | tr '[:upper:]' '[:lower:]')" in
-            true|1|yes|on) SECRETS_PROVIDER=infisical ;;
-            *) SECRETS_PROVIDER=doppler ;;
-        esac
-        # Doppler's resolver setting, unchanged from before this file existed.
-        export DOPPLER_ENABLE_DNS_RESOLVER=true
-    }
-
-    # The CLI's name, for callers that need it (for example under sudo).
-    secrets_cli() {
-        if [ "${SECRETS_PROVIDER:-doppler}" = infisical ]; then echo infisical; else echo doppler; fi
-    }
-
+    # secrets_available | secrets_get NAME | secrets_set NAME VALUE | secrets_run CMD...
+    # (SECRETS_SUDO=1 retries with `sudo -n`)
     secrets_available() {
-        if [ "${SECRETS_PROVIDER:-doppler}" = infisical ]; then
-            command -v infisical &> /dev/null && infisical export --format=json &> /dev/null
-        else
-            command -v doppler &> /dev/null && doppler secrets download --format json &> /dev/null
-        fi
+        command -v infisical &> /dev/null && infisical export --format=json &> /dev/null
     }
 
     _secrets_get_once() {
-        if [ "${SECRETS_PROVIDER:-doppler}" = infisical ]; then
-            "$@" infisical secrets get "$NAME_" --plain 2>/dev/null
-        else
-            "$@" doppler secrets get "$NAME_" --plain 2>/dev/null
-        fi
+        "$@" infisical secrets get "$NAME_" --plain 2>/dev/null
     }
 
     secrets_get() {
@@ -112,26 +85,15 @@ main() {
 
     secrets_set() {
         local k="$1" v="$2"
-        if [ "${SECRETS_PROVIDER:-doppler}" = infisical ]; then
-            command -v infisical &> /dev/null && infisical secrets set "$k=$v" &> /dev/null && return 0
-            [ "${SECRETS_SUDO:-0}" = 1 ] && command -v sudo &> /dev/null && sudo -n infisical secrets set "$k=$v" &> /dev/null && return 0
-        else
-            command -v doppler &> /dev/null && doppler secrets set "$k=$v" &> /dev/null && return 0
-            [ "${SECRETS_SUDO:-0}" = 1 ] && command -v sudo &> /dev/null && sudo -n doppler secrets set "$k=$v" &> /dev/null && return 0
-        fi
+        command -v infisical &> /dev/null && infisical secrets set "$k=$v" &> /dev/null && return 0
+        [ "${SECRETS_SUDO:-0}" = 1 ] && command -v sudo &> /dev/null && sudo -n infisical secrets set "$k=$v" &> /dev/null && return 0
         return 1
     }
 
     secrets_run() {
-        if [ "${SECRETS_PROVIDER:-doppler}" = infisical ]; then
-            infisical run -- "$@"
-        else
-            doppler run -- "$@"
-        fi
+        infisical run -- "$@"
     }
     # <<< secrets-provider
-
-    secrets_init "$PROJECT_DIR/.env"
 
     # 1. Fetch NTFY_TOPIC, NTFY_USER, and NTFY_PASS for the deploy script's notifications
     NTFY_TOPIC=""
@@ -144,7 +106,7 @@ main() {
         NTFY_USER=$(secrets_get NTFY_USER)
         NTFY_PASS=$(secrets_get NTFY_PASS)
     else
-        echo "[deploy] Secrets provider ($SECRETS_PROVIDER) is not available; reading .env instead. Containers started now will not get its secrets."
+        echo "[deploy] Infisical is not available; reading .env instead. Containers started now will not get its secrets."
         ENV_PATH="$PROJECT_DIR/.env"
         if [ -f "$ENV_PATH" ]; then
             NTFY_TOPIC=$(grep -E "^NTFY_TOPIC=" "$ENV_PATH" | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
@@ -181,13 +143,13 @@ main() {
         curl -s "${auth_args[@]}" -H "Title: $title" -H "Priority: $priority" -d "$msg" "$url" > /dev/null || true
     }
 
-    # Helper to run docker compose wrapped in `doppler run` / `infisical run` (if the secrets provider is available), keeping secrets off disk and avoiding bash evaluation bugs.
+    # Helper to run docker compose wrapped in `infisical run` (if Infisical is available), keeping secrets off disk and avoiding bash evaluation bugs.
     # Only (re)creating a container needs this: that's the sole point secrets
     # actually get injected into its environment (e.g. webserver-blue/green's
     # bare PIA_USER/PIA_PASS/etc. compose vars, pulled from the calling
     # shell at `up` time). exec/restart/stop all act on an already-running
     # container that already has whatever environment it started with, so
-    # they get nothing from being wrapped except doppler run's own real
+    # they get nothing from being wrapped except infisical run's own real
     # network round-trip on every single call - measured at ~1.1s for just
     # the Caddy reload exec, which was almost the entire reported swap time.
     run_docker_compose() {

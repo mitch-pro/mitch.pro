@@ -61,7 +61,7 @@ mitch.pro/
 2. **Configure environment:**
    ```bash
    cp .env.example .env
-   # Edit .env with your environment secrets, or load via Doppler
+   # Edit .env with your environment secrets, or load via Infisical
    ```
 
 ### Running with Docker
