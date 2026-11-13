@@ -1,0 +1,27 @@
+# Email addresses PRs may add. Owner-gated via CODEOWNERS (/.github/).
+# `@domain` allows that domain and its subdomains; other entries are exact
+# addresses. Add `email-ok` to a line to skip it for one-off cases.
+
+# Project and reserved/test domains
+@mitch.pro
+@example.com
+@example.org
+@example.net
+@example.test
+@x.test
+@test
+@invalid
+@localhost
+@users.noreply.github.com
+@noreply.github.com
+@anthropic.com
+
+# Owner test account (mitch_lib::auth::OWNER_TEST_ACCOUNT_EMAIL)
+newaccount123@student.rjuhsd.us
+
+# Placeholder addresses used in existing tests
+a@gmail.com
+b@gmail.com
+old@gmail.com
+new@gmail.com
+user@email.com
