@@ -1,8 +1,8 @@
-# Every path needs approval from the owner. Branch protection on master has
-# "Require review from Code Owners" enabled, so a PR cannot be merged until the
-# owner approves it. The sensitive paths are listed explicitly so they stay
-# owner-only if the default rule is ever relaxed.
-*                       @urashil
+# Only the paths below need the owner's approval. Branch protection on master
+# has "Require review from Code Owners" enabled with 0 required general
+# approvals, so a PR touching only unlisted paths can be merged by its author,
+# while a PR touching any path below cannot merge until the owner approves it.
+# Do not add a catch-all `*` rule: it would make every PR owner-gated again.
 /.github/               @urashil
 /tools/deploy.sh        @urashil
 /AGENTS.md              @urashil

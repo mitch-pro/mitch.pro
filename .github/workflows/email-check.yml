@@ -1,0 +1,25 @@
+name: email-check
+
+# Fails a PR that adds an email address not in .github/email-allowlist.txt.
+# Only added lines are scanned, so existing addresses never fail it.
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  email-check:
+    # The job name is the status-check name branch protection matches on.
+    name: email-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Scan added lines for new email addresses
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 .github/scripts/check_new_emails.py "$BASE_SHA" "$HEAD_SHA"
