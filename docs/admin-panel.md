@@ -150,7 +150,7 @@ endpoints as a health check.
 
 ## Roles
 
-Owner > developer (stored as `coOwners` in `data/admins.json`) > admin >
+Owner > developer (stored as `coOwners` in `data/admins.json`; "Root (in an LXC)" is stored as `rootLxc`, has identical developer permissions, and only differs in the displayed role) > admin >
 moderator. Developers and admins are otherwise equal, with these additions for
 developers:
 

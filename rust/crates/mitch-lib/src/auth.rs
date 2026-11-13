@@ -1184,7 +1184,12 @@ pub fn check_rate_limit(
 pub struct AdminConfig {
     pub owners: Vec<String>,
     pub admins: Vec<String>,
+    /// Developer-level emails. Includes everyone in `root_lxc`, so every
+    /// permission check that reads `co_owners` treats them as developers.
     pub co_owners: Vec<String>,
+    /// `admins.json["rootLxc"]`: accounts shown as "Root (in an LXC)". Same
+    /// permissions as a developer; only the displayed role differs.
+    pub root_lxc: Vec<String>,
 }
 
 pub fn load_admin_config(store: &DataStore) -> AdminConfig {
@@ -1210,10 +1215,14 @@ pub fn load_admin_config(store: &DataStore) -> AdminConfig {
             })
             .unwrap_or(default)
     };
+    let root_lxc = str_list("rootLxc", Vec::new());
+    let mut co_owners = str_list("coOwners", Vec::new());
+    co_owners.extend(root_lxc.iter().cloned());
     AdminConfig {
         owners: str_list("owners", vec!["admin@mitch.pro".to_owned()]),
         admins: str_list("admins", Vec::new()),
-        co_owners: str_list("coOwners", Vec::new()),
+        co_owners,
+        root_lxc,
     }
 }
 
@@ -1262,6 +1271,19 @@ fn dedup_normalized(emails: Vec<String>) -> Vec<String> {
         out.push(norm);
     }
     out
+}
+
+/// Whether the account holds the "Root (in an LXC)" role (developer permissions,
+/// different display name).
+pub fn is_root_lxc_email(store: &DataStore, email: &str) -> bool {
+    if email.is_empty() {
+        return false;
+    }
+    let norm = normalize_email(email);
+    load_admin_config(store)
+        .root_lxc
+        .iter()
+        .any(|e| normalize_email(e) == norm)
 }
 
 /// `isCoOwnerEmail(email)` (6232).

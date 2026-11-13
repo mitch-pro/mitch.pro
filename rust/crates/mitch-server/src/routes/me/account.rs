@@ -872,7 +872,9 @@ fn me_root(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
         ))
     };
 
-    let role = if is_co_owner {
+    let role = if has_email && auth::is_root_lxc_email(&state.store, &email_str) {
+        "root_lxc"
+    } else if is_co_owner {
         "developer"
     } else if is_owner {
         "owner"

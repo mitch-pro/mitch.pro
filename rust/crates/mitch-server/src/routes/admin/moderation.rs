@@ -265,7 +265,10 @@ pub fn handle(
         }
         return Some(json_response(
             200,
-            json!({ "coOwners": mitch_lib::auth::co_owner_member_emails(&state.store) }),
+            json!({
+                "coOwners": mitch_lib::auth::co_owner_member_emails(&state.store),
+                "rootLxc": mitch_lib::auth::load_admin_config(&state.store).root_lxc,
+            }),
         ));
     }
 
@@ -1092,10 +1095,13 @@ fn set_co_owner(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response
         );
     }
     let active = body.get("active").and_then(|v| v.as_bool()) == Some(true);
+    // `rootLxc: true` edits the "Root (in an LXC)" list instead of the developer list.
+    let root_lxc = body.get("rootLxc").and_then(|v| v.as_bool()) == Some(true);
+    let list_key = if root_lxc { "rootLxc" } else { "coOwners" };
     let admins_file = state.cfg.base_dir.join("data/admins.json");
     let mut doc = state.store.read_document(&admins_file, json!({}));
     let mut co_owners: Vec<String> = doc
-        .get("coOwners")
+        .get(list_key)
         .and_then(|v| v.as_array())
         .map(|arr| {
             arr.iter()
@@ -1116,9 +1122,9 @@ fn set_co_owner(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response
     }
 
     if let Some(obj) = doc.as_object_mut() {
-        obj.insert("coOwners".to_string(), json!(co_owners));
+        obj.insert(list_key.to_string(), json!(co_owners));
     } else {
-        doc = json!({ "coOwners": co_owners });
+        doc = json!({ list_key: co_owners });
     }
 
     let _ = state.store.write_document(&admins_file, &doc);
@@ -1126,10 +1132,11 @@ fn set_co_owner(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response
         &state.store,
         &state.cfg.data_dir,
         &admin_email,
-        if active {
-            "add_co_owner"
-        } else {
-            "remove_co_owner"
+        match (root_lxc, active) {
+            (false, true) => "add_co_owner",
+            (false, false) => "remove_co_owner",
+            (true, true) => "add_root_lxc",
+            (true, false) => "remove_root_lxc",
         },
         json!({ "target": target_raw }),
     );
@@ -1138,7 +1145,7 @@ fn set_co_owner(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response
         state.store.clone(),
         state.cfg.data_dir.clone(),
     );
-    json_response(200, json!({ "ok": true, "coOwners": co_owners }))
+    json_response(200, json!({ "ok": true, list_key: co_owners }))
 }
 
 /// `POST /api/admin/audit/revert` — reverts a logged admin action from admin_actions.json.
