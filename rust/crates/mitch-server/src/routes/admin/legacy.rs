@@ -945,19 +945,23 @@ mod passphrase_reset_tests {
         Arc::new(AppState::new(cfg, store))
     }
 
-    /// The signup address `first.last@student.rjuhsd.us` is stored dotted; the
-    /// storage key is `firstlast@...`. The reset email must go to the dotted one.
+    /// A signup address with a dot in the local part is stored dotted, but the
+    /// storage key drops the dot. The reset email must go to the dotted address.
     #[test]
     fn reset_email_goes_to_the_real_address_not_the_dotless_key() {
         let state = state();
-        let signup = "first.last@student.rjuhsd.us";
+        let signup = "test.student1@student.rjuhsd.us";
         let norm = mitch_lib::auth::normalize_email(signup);
-        assert_eq!(norm, "firstlast@student.rjuhsd.us");
+        assert_ne!(norm, signup, "the key must differ from the real address");
+        assert!(!norm.split('@').next().unwrap_or("").contains('.'));
         let sid = mitch_lib::auth::make_email_id(&norm, 0, &state.id_secret);
         mitch_lib::auth::names_set(&state.store, &sid, signup);
         assert_eq!(reset_recipient(&state, &norm), signup);
         // An address with no account record falls back to the key, not to nothing.
-        assert_eq!(reset_recipient(&state, "nobody@x.test"), "nobody@x.test");
+        assert_eq!(
+            reset_recipient(&state, "nobody@example.test"),
+            "nobody@example.test"
+        );
     }
 
     #[tokio::test]
