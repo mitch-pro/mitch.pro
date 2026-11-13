@@ -811,6 +811,24 @@ fn mask_address(email: &str) -> String {
     }
 }
 
+/// The address a reset email is sent to: the account's real address, dots and
+/// all. `norm` is only a storage key (it strips dots and `+tags`), and on a
+/// domain where dots matter, such as student.rjuhsd.us, mailing the key reaches
+/// a different mailbox or none.
+fn reset_recipient(state: &Arc<AppState>, norm: &str) -> String {
+    let real = mitch_lib::profile::canonical_delivery_email(
+        &state.store,
+        &state.cfg.data_dir,
+        &state.id_secret,
+        norm,
+    );
+    if real.contains('@') {
+        real
+    } else {
+        norm.to_string()
+    }
+}
+
 /// Emails a one-time code to the admin's own address (see
 /// `mitch_lib::passphrase_reset` for the rules).
 fn passphrase_reset_request(state: &Arc<AppState>, email: &str) -> Response {
@@ -818,6 +836,7 @@ fn passphrase_reset_request(state: &Arc<AppState>, email: &str) -> Response {
     if !norm.contains('@') {
         return json_response(400, json!({ "error": "no_email" }));
     }
+    let to = reset_recipient(state, &norm);
     mitch_lib::passphrase_reset::prune(&state.store, now_millis());
     let code = mitch_lib::passphrase_reset::new_code();
     let hash = mitch_lib::passphrase_reset::code_hash(&state.id_secret, &norm, &code);
@@ -832,7 +851,7 @@ fn passphrase_reset_request(state: &Arc<AppState>, email: &str) -> Response {
     }
     crate::routes::push::send_email_bg(
         state,
-        &norm,
+        &to,
         "Reset your mitch.pro admin passphrase",
         &format!(
             "Your admin passphrase reset code is {code}. It works once and expires in 15 minutes. If you didn't ask for this, ignore this email; your passphrase hasn't changed."
@@ -845,7 +864,7 @@ fn passphrase_reset_request(state: &Arc<AppState>, email: &str) -> Response {
         "request_admin_passphrase_reset",
         json!({}),
     );
-    json_response(200, json!({ "ok": true, "sentTo": mask_address(&norm) }))
+    json_response(200, json!({ "ok": true, "sentTo": mask_address(&to) }))
 }
 
 /// Sets a new passphrase when `body.code` is the emailed code.
@@ -891,7 +910,7 @@ fn passphrase_reset_confirm(state: &Arc<AppState>, email: &str, body: &Value) ->
     );
     crate::routes::push::send_email_bg(
         state,
-        &norm,
+        &reset_recipient(state, &norm),
         "Your mitch.pro admin passphrase was reset",
         "Your admin passphrase was just changed using an emailed code. If this wasn't you, contact the owner right away.",
     );
@@ -924,6 +943,21 @@ mod passphrase_reset_tests {
         };
         let store = Arc::new(mitch_lib::data::DataStore::open(&dir, &dir.join("data")).unwrap());
         Arc::new(AppState::new(cfg, store))
+    }
+
+    /// The signup address `first.last@student.rjuhsd.us` is stored dotted; the
+    /// storage key is `firstlast@...`. The reset email must go to the dotted one.
+    #[test]
+    fn reset_email_goes_to_the_real_address_not_the_dotless_key() {
+        let state = state();
+        let signup = "first.last@student.rjuhsd.us";
+        let norm = mitch_lib::auth::normalize_email(signup);
+        assert_eq!(norm, "firstlast@student.rjuhsd.us");
+        let sid = mitch_lib::auth::make_email_id(&norm, 0, &state.id_secret);
+        mitch_lib::auth::names_set(&state.store, &sid, signup);
+        assert_eq!(reset_recipient(&state, &norm), signup);
+        // An address with no account record falls back to the key, not to nothing.
+        assert_eq!(reset_recipient(&state, "nobody@x.test"), "nobody@x.test");
     }
 
     #[tokio::test]
