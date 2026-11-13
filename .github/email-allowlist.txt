@@ -1,6 +1,6 @@
 # Email addresses PRs may add. Owner-gated via CODEOWNERS (/.github/).
 # `@domain` allows that domain and its subdomains; other entries are exact
-# addresses. Add `email-ok` to a line to skip it for one-off cases.
+# addresses. There is no inline ignore marker: add the address here instead.
 
 # Project and reserved/test domains
 @mitch.pro

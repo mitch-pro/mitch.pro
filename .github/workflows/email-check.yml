@@ -18,6 +18,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - name: Test the scanner
+        run: python3 -m unittest discover -s .github/scripts -v
       - name: Scan added lines for new email addresses
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
