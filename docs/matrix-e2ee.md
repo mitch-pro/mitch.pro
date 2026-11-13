@@ -128,6 +128,14 @@ the incoming-call prompt) is patched to always return true. The server-side
 check (`rtc_foci` in the homeserver's well-known) still decides whether calls
 are offered at all.
 
+## DOM guard
+
+`webserver/matrix/dom-guard.js` (loaded first in `index.html`) wraps
+`Node.removeChild` and `Node.insertBefore` so the client doesn't crash with
+"The node to be removed is not a child of this node" when a translation
+feature or a managed-device extension rearranges nodes React rendered. It only
+skips the call when the node is no longer where React expects it.
+
 ## Related behavior
 
 - `index.html` calls `/api/matrix/devices/prune-stale` with `maxAgeDays: 30`
