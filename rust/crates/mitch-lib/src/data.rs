@@ -745,6 +745,7 @@ impl DataStore {
         };
         init_tables(&conn)?;
         conn.execute_batch(crate::site_content::SCHEMA)?;
+        conn.execute_batch(crate::bell_overrides::SCHEMA)?;
         let has_ban_expiry = conn
             .prepare("PRAGMA table_info(blacklist)")?
             .query_map([], |row| row.get::<_, String>(1))?
@@ -858,6 +859,7 @@ impl DataStore {
         store.backfill_friends_from_json();
         store.backfill_newsletter_unsub_from_json();
         crate::site_content::seed(&store);
+        crate::bell_overrides::import_legacy(&store.conn(), &store);
         // The web SSH terminal is gone; drop the admin private keys it stored.
         {
             let conn = store.conn.lock().unwrap_or_else(|e| e.into_inner());

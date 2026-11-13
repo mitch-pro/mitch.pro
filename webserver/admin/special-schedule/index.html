@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Special schedule — mitch.pro</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/admin/special-schedule/special-schedule.css">
+  <script src="/app-shell.js" defer></script>
+  <script src="/admin/special-schedule/special-schedule.js" defer></script>
+</head>
+<body class="ss-page">
+  <main class="ss-main">
+    <header class="ss-heading">
+      <a href="/admin/">Administration</a>
+      <h1>Special schedule</h1>
+      <p>Replace one school's bell schedule for a single day.</p>
+      <p id="access-status" role="status">Checking access…</p>
+    </header>
+
+    <section class="ss-panel ss-lock" id="passphrase-lock" hidden>
+      <h2 id="lock-heading">Unlock special schedule</h2>
+      <form id="passphrase-form">
+        <label for="admin-passphrase">Admin passphrase</label>
+        <div class="ss-row"><input id="admin-passphrase" type="password" autocomplete="current-password" minlength="4" required><button type="submit" id="unlock-button">Unlock</button></div>
+        <p id="unlock-status" class="ss-status" role="status"></p>
+      </form>
+    </section>
+
+    <div id="ss-workspace" hidden>
+      <section class="ss-panel">
+        <h2>Active schedules</h2>
+        <div id="active-list" role="list"></div>
+        <p id="active-status" class="ss-status" role="status"></p>
+      </section>
+
+      <section class="ss-panel">
+        <h2>Set a schedule</h2>
+        <form id="schedule-form">
+          <div class="ss-grid">
+            <div>
+              <label for="school">School</label>
+              <select id="school" required></select>
+            </div>
+            <div>
+              <label for="preset">Start from</label>
+              <select id="preset"></select>
+            </div>
+          </div>
+
+          <label for="date">Day</label>
+          <div class="ss-row">
+            <input id="date" type="date" required>
+            <button type="button" id="day-today">Today</button>
+            <button type="button" id="day-tomorrow">Tomorrow</button>
+          </div>
+
+          <div class="ss-grid">
+            <div>
+              <label for="name">Schedule name</label>
+              <input id="name" type="text" maxlength="80" required autocomplete="off" placeholder="Rally Day">
+            </div>
+            <div>
+              <label for="event">Event notice <small>(optional)</small></label>
+              <input id="event" type="text" maxlength="200" autocomplete="off" placeholder="Assembly in gym">
+            </div>
+          </div>
+
+          <fieldset class="ss-lunch">
+            <legend>Lunch 1</legend>
+            <div id="periods-1" class="ss-periods"></div>
+            <button type="button" id="add-1">Add period</button>
+          </fieldset>
+
+          <label class="ss-check"><input id="same" type="checkbox" checked> Lunch 2 uses the same periods</label>
+
+          <fieldset class="ss-lunch" id="lunch-2" hidden>
+            <legend>Lunch 2</legend>
+            <div id="periods-2" class="ss-periods"></div>
+            <button type="button" id="add-2">Add period</button>
+          </fieldset>
+
+          <div class="ss-actions">
+            <button type="submit" id="save" class="ss-primary">Save schedule</button>
+          </div>
+          <p id="form-status" class="ss-status" role="status"></p>
+        </form>
+      </section>
+    </div>
+  </main>
+<script src="/admin/passphrase-help.js" defer></script>
+</body>
+</html>

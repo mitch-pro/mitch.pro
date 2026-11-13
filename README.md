@@ -47,7 +47,7 @@ mitch.pro/
 ### Prerequisites
 
 - [Rust](https://rustup.rs) (stable toolchain) — the server itself
-- Python 3.9+ — the bell-schedule scripts (`set_special_day.sh`, `clear_special_day.sh`)
+- Python 3.9+ — the maintenance scripts in `tools/`
 - Docker & Docker Compose (optional, for the full containerized stack)
 
 ### Running Locally

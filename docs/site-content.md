@@ -12,6 +12,7 @@ Content that used to be JSON files under `data/` lives in SQL tables. Code:
 | `game_categories` (`source` = base, local, external) | `game_categories*.json` | nothing | base/local built in; external imported from `data/game_categories_external.json` |
 | `madlibs`, `madlib_parts` | `madlibs.json` (twice) | nothing | built in |
 | `portal_catalog_groups`, `portal_catalog_games` | `portal_catalog.json` | nothing | imported from `data/portal_catalog.json` |
+| `bell_overrides`, `bell_override_periods` | `bell_overrides.json` | `/admin/special-schedule/` (see `docs/bell-overrides.md`) | imported once from `data/bell_overrides.json` |
 
 Deleted as unused (nothing read them): `logic_words.json`, `payloads.json`,
 `shop_catalog_overrides.json` (the shop reads `shop_catalog.json`, a different file).
@@ -42,7 +43,5 @@ base, then local, then external, later sources winning.
 
 ## Not migrated
 
-`bell_overrides.json` (written by the host scripts `set_special_day.py` and
-`clear_special_day.py`, which cannot write the database), `admins.json` and `site.json`
-(untracked, per-machine, read directly from disk by several crates).
+`admins.json` and `site.json` (untracked, per-machine, read directly from disk by several crates).
 See `docs/json-blobs-remaining.md` for the legacy blob documents.

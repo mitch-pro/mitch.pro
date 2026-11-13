@@ -114,9 +114,7 @@ pub async fn handle(
         return Some(crate::routes::bell_sync::published(state, &school_key).await);
     }
     if path == "/api/bell/override" && *method == Method::GET {
-        let doc = state
-            .store
-            .read_document(&state.data_dir().join("bell_overrides.json"), Value::Null);
+        let doc = mitch_lib::bell_overrides::document(&state.store);
         let school = school_param(_search);
         return Some(json_resp(200, bell_override_response(&doc, &school)));
     }
@@ -189,9 +187,9 @@ fn presence_heartbeat(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[
     json_response(200, json!({ "ok": true }))
 }
 
-/// Per-school bell overrides. `bell_overrides.json` is either
-/// `{"overrides":[{"school":"roseville","date":...,"schedule":...}, ...]}` or
-/// the older single object, which belongs to Woodcreek. `override` is the
+/// Per-school bell overrides, built from `mitch_lib::bell_overrides::document` as
+/// `{"overrides":[{"school":"roseville","date":...,"schedule":...}, ...]}`; a
+/// single object without a school still reads as Woodcreek's. `override` is the
 /// entry for the requested school (Woodcreek when none is given), so existing
 /// callers keep working; `overrides` lists every school's entry.
 fn bell_override_response(doc: &Value, school: &str) -> Value {

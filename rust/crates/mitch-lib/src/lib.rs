@@ -22,6 +22,7 @@ pub mod admin;
 pub mod auth;
 pub mod auth_sessions;
 pub mod bans;
+pub mod bell_overrides;
 pub mod bell_sync;
 pub mod blog;
 pub mod casino;

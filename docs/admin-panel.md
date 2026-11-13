@@ -54,6 +54,9 @@ address, then sets a new passphrase when the code is entered.
 - The passphrase itself is still stored in `admin_passphrase.json` (see
   `json-blobs-remaining.md`).
 
+The special bell schedule uses `/admin/special-schedule/`, open to moderators as well as
+admins; see [bell-overrides.md](bell-overrides.md).
+
 Account bans use `/admin/bans/`: searchable records, a visible reason, explicit
 duration, confirmation, expiry, restoration, and chat-cleanup status. Usernames
 and registered addresses resolve through the existing account directory. VM and
