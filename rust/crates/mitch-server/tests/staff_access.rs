@@ -435,3 +435,132 @@ async fn teacher_ratings_follow_student_and_staff_rules() {
     .await;
     assert_eq!(removed.status, 200, "{}", removed.text);
 }
+
+/// `/admin/special-schedule/`: admins and moderators set and clear a school's
+/// one-day bell schedule; members and visitors can't. The public bell pages read it
+/// from `/api/bell/override`.
+#[tokio::test(flavor = "multi_thread")]
+async fn special_schedule_is_staff_only_and_reaches_the_public_endpoint() {
+    const MODERATOR: &str = "moderator@example.com";
+    let admins = json!({"owners": [OWNER], "admins": [ADMIN]}).to_string();
+    let moderators = json!([MODERATOR]).to_string();
+    let s = TestServer::start(
+        &[("admins.json", &admins), ("moderators.json", &moderators)],
+        "/api/tester/status",
+        403,
+    )
+    .await;
+    let admin = s.session_for(ADMIN);
+    let moderator = s.session_for(MODERATOR);
+    let member = s.session_for(MEMBER);
+    let r = staff_post(
+        &s,
+        Some(&admin),
+        "/api/admin/passphrase-status",
+        json!({"passphrase": PASS}),
+    )
+    .await;
+    assert_eq!(r.status, 200, "{}", r.text);
+
+    let state = staff_get(&s, Some(&moderator), "/api/admin/special-schedule", false).await;
+    assert_eq!(
+        state.status, 200,
+        "moderators need no passphrase: {}",
+        state.text
+    );
+    let today = state.json["today"].as_str().expect("today").to_string();
+    assert!(state.json["presets"]
+        .as_array()
+        .is_some_and(|p| p.len() >= 3));
+    assert_eq!(state.json["schools"][0]["key"], "woodcreek");
+
+    let day = json!([
+        {"name": "Period 1", "start": "08:30", "end": "09:30"},
+        {"name": "Lunch", "start": "09:30", "end": "10:00"}
+    ]);
+    let body = |school: &str, date: &str| {
+        json!({"school": school, "date": date, "name": "Rally Day",
+               "specialEvent": "Assembly in gym", "lunch1": day, "lunch2": day})
+    };
+    let denied = staff_post(
+        &s,
+        Some(&member),
+        "/api/admin/special-schedule",
+        body("woodcreek", &today),
+    )
+    .await;
+    assert!([401, 403].contains(&denied.status), "{}", denied.text);
+    let visitor = staff_post(
+        &s,
+        None,
+        "/api/admin/special-schedule",
+        body("woodcreek", &today),
+    )
+    .await;
+    assert!([401, 403].contains(&visitor.status));
+
+    let past = staff_post(
+        &s,
+        Some(&moderator),
+        "/api/admin/special-schedule",
+        body("woodcreek", "2020-01-01"),
+    )
+    .await;
+    assert_eq!(past.status, 400, "{}", past.text);
+    let unknown = staff_post(
+        &s,
+        Some(&moderator),
+        "/api/admin/special-schedule",
+        body("nowhere", &today),
+    )
+    .await;
+    assert_eq!(unknown.status, 400, "{}", unknown.text);
+
+    let saved = staff_post(
+        &s,
+        Some(&moderator),
+        "/api/admin/special-schedule",
+        body("roseville", &today),
+    )
+    .await;
+    assert_eq!(saved.status, 200, "{}", saved.text);
+    assert_eq!(
+        saved.json["override"]["schedule"]["lunch1"][0]["duration"],
+        60
+    );
+
+    // The public endpoint serves it, in the shape the bell pages read.
+    let public = s
+        .call_with(
+            None,
+            "GET",
+            "/api/bell/override?school=roseville",
+            None,
+            &[],
+        )
+        .await;
+    assert_eq!(public.status, 200, "{}", public.text);
+    assert_eq!(public.json["override"]["name"], "Rally Day");
+    assert_eq!(public.json["override"]["special_event"], "Assembly in gym");
+    assert_eq!(public.json["override"]["date"], today);
+
+    let cleared = staff_post(
+        &s,
+        Some(&admin),
+        "/api/admin/special-schedule/clear",
+        json!({"school": "roseville"}),
+    )
+    .await;
+    assert_eq!(cleared.status, 200, "{}", cleared.text);
+    assert_eq!(cleared.json["removed"], 1);
+    let after = s
+        .call_with(
+            None,
+            "GET",
+            "/api/bell/override?school=roseville",
+            None,
+            &[],
+        )
+        .await;
+    assert!(after.json["override"].is_null(), "{}", after.text);
+}
