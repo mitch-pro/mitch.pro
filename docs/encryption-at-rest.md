@@ -13,8 +13,8 @@ Code: `mitch_lib::keyring` (key handling, format), `mitch_lib::userdata`
 One 32-byte master key, written as 64 hex characters or base64. Where it comes
 from, in order:
 
-1. `DATA_ENCRYPTION_KEY` in the environment. The host's secrets provider
-   (Doppler, or Infisical when `INFISICAL=True` is set in `.env`) puts it there
+1. `DATA_ENCRYPTION_KEY` in the environment. Infisical, on the host,
+   puts it there
    when it starts the containers; the app itself knows nothing about either. See
    [secrets-providers.md](secrets-providers.md).
 2. `data/encryption.key`, the bootstrap file.

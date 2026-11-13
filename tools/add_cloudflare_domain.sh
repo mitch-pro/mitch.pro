@@ -7,46 +7,18 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Doppler by default, Infisical when INFISICAL=True is set in .env.
 # >>> secrets-provider (the same block is in every script that has it; tests/test_secrets_provider.sh checks that)
-# Doppler by default; INFISICAL=True in .env (or the environment) selects Infisical. The
-# CLI is configured by root outside the repo (docs/secrets-providers.md). This is inline
-# on purpose: these scripts run as root, and a helper file read in from the repo
+# Infisical. The CLI is configured by root outside the repo (docs/secrets-providers.md). This
+# is inline on purpose: these scripts run as root, and a helper file read in from the repo
 # checkout would be one more place for code to be planted.
-# secrets_init <.env path> | secrets_cli | secrets_available | secrets_get NAME |
-# secrets_set NAME VALUE | secrets_run CMD...   (SECRETS_SUDO=1 retries with `sudo -n`)
-secrets_init() {
-    local env_file="${1:-}" flag="${INFISICAL:-}"
-    if [ -z "$flag" ] && [ -f "$env_file" ]; then
-        flag=$(grep -E '^INFISICAL=' "$env_file" | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
-    fi
-    case "$(printf '%s' "$flag" | tr '[:upper:]' '[:lower:]')" in
-        true|1|yes|on) SECRETS_PROVIDER=infisical ;;
-        *) SECRETS_PROVIDER=doppler ;;
-    esac
-    # Doppler's resolver setting, unchanged from before this file existed.
-    export DOPPLER_ENABLE_DNS_RESOLVER=true
-}
-
-# The CLI's name, for callers that need it (for example under sudo).
-secrets_cli() {
-    if [ "${SECRETS_PROVIDER:-doppler}" = infisical ]; then echo infisical; else echo doppler; fi
-}
-
+# secrets_available | secrets_get NAME | secrets_set NAME VALUE | secrets_run CMD...
+# (SECRETS_SUDO=1 retries with `sudo -n`)
 secrets_available() {
-    if [ "${SECRETS_PROVIDER:-doppler}" = infisical ]; then
-        command -v infisical &> /dev/null && infisical export --format=json &> /dev/null
-    else
-        command -v doppler &> /dev/null && doppler secrets download --format json &> /dev/null
-    fi
+    command -v infisical &> /dev/null && infisical export --format=json &> /dev/null
 }
 
 _secrets_get_once() {
-    if [ "${SECRETS_PROVIDER:-doppler}" = infisical ]; then
-        "$@" infisical secrets get "$NAME_" --plain 2>/dev/null
-    else
-        "$@" doppler secrets get "$NAME_" --plain 2>/dev/null
-    fi
+    "$@" infisical secrets get "$NAME_" --plain 2>/dev/null
 }
 
 secrets_get() {
@@ -60,25 +32,15 @@ secrets_get() {
 
 secrets_set() {
     local k="$1" v="$2"
-    if [ "${SECRETS_PROVIDER:-doppler}" = infisical ]; then
-        command -v infisical &> /dev/null && infisical secrets set "$k=$v" &> /dev/null && return 0
-        [ "${SECRETS_SUDO:-0}" = 1 ] && command -v sudo &> /dev/null && sudo -n infisical secrets set "$k=$v" &> /dev/null && return 0
-    else
-        command -v doppler &> /dev/null && doppler secrets set "$k=$v" &> /dev/null && return 0
-        [ "${SECRETS_SUDO:-0}" = 1 ] && command -v sudo &> /dev/null && sudo -n doppler secrets set "$k=$v" &> /dev/null && return 0
-    fi
+    command -v infisical &> /dev/null && infisical secrets set "$k=$v" &> /dev/null && return 0
+    [ "${SECRETS_SUDO:-0}" = 1 ] && command -v sudo &> /dev/null && sudo -n infisical secrets set "$k=$v" &> /dev/null && return 0
     return 1
 }
 
 secrets_run() {
-    if [ "${SECRETS_PROVIDER:-doppler}" = infisical ]; then
-        infisical run -- "$@"
-    else
-        doppler run -- "$@"
-    fi
+    infisical run -- "$@"
 }
 # <<< secrets-provider
-secrets_init "$BASE_DIR/.env"
 export SECRETS_SUDO=1
 
 if [ "$#" -lt 2 ]; then
@@ -93,7 +55,7 @@ DOMAIN_NAME="$2"
 RECORD_TYPE="${3:-A}"
 RECORD_TYPE=$(echo "$RECORD_TYPE" | tr '[:lower:]' '[:upper:]')
 
-# Helper function to fetch a secret from Doppler/Infisical (or .env fallback)
+# Helper function to fetch a secret from Infisical (or .env fallback)
 get_secret() {
     local key="$1"
     local val=""
@@ -108,14 +70,14 @@ get_secret() {
     echo "$val"
 }
 
-# Helper function to set a secret in Doppler/Infisical
+# Helper function to set a secret in Infisical
 set_secret() {
     local key="$1"
     local val="$2"
     if secrets_set "$key" "$val"; then
         return 0
     fi
-    echo "[warning] Could not update Doppler directly. Please manually set $key=\"$val\" in Doppler."
+    echo "[warning] Could not update Infisical directly. Please manually set $key=\"$val\" in Infisical."
     return 1
 }
 
@@ -123,7 +85,7 @@ set_secret() {
 CLOUDFLARE_API_TOKEN=$(get_secret "CLOUDFLARE_API_TOKEN")
 if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
     echo "[error] CLOUDFLARE_API_TOKEN not found in the secrets manager or .env."
-    echo "Please add CLOUDFLARE_API_TOKEN to Doppler/Infisical first."
+    echo "Please add CLOUDFLARE_API_TOKEN to Infisical first."
     exit 1
 fi
 

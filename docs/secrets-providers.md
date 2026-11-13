@@ -1,23 +1,19 @@
 # Secrets providers
 
 Secrets (API keys, `DATA_ENCRYPTION_KEY`, ntfy credentials) reach the containers
-as environment variables, injected by the host when it starts them. The app never
-talks to a secrets manager. Two providers are supported, chosen on the host:
+as environment variables, injected by the host when it starts them with
+`infisical run -- docker compose ...`. The app never talks to a secrets manager.
+Infisical is the only provider; Doppler support was removed once everything moved over,
+and there is no longer an `INFISICAL=True` switch in `.env`.
 
-| Provider | Selected by | Injects with |
-| --- | --- | --- |
-| Doppler | default | `doppler run -- docker compose ...` |
-| Infisical | `INFISICAL=True` in the repo's `.env` | `infisical run -- docker compose ...` |
-
-The choice is made by a small block of shell functions (`secrets_init`,
-`secrets_get`, `secrets_run`, ...) that is copied into `tools/deploy.sh`,
-`newsletter.sh`, `tools/update_ip.sh` and `tools/add_cloudflare_domain.sh`, so one
-flag moves them all. It is copied rather than sourced from a shared file on purpose:
-these scripts run as root, and a helper read in from the repo checkout would be one
-more file whose modification gives root. `tests/test_secrets_provider.sh` fails if
-the copies differ. Edit all four together (the block sits between `>>> secrets-provider`
-and `<<< secrets-provider` markers). With the flag unset, behaviour is the same as before
-Infisical support was added.
+The host scripts use a small block of shell functions (`secrets_available`,
+`secrets_get`, `secrets_set`, `secrets_run`) that is copied into `tools/deploy.sh`,
+`newsletter.sh`, `tools/update_ip.sh` and `tools/add_cloudflare_domain.sh`. It is copied
+rather than sourced from a shared file on purpose: these scripts run as root, and a
+helper read in from the repo checkout would be one more file whose modification gives
+root. `tests/test_secrets_provider.sh` fails if the copies differ or if any of the four
+scripts mentions Doppler. Edit all four together (the block sits between
+`>>> secrets-provider` and `<<< secrets-provider` markers).
 
 ## Configuring Infisical
 
@@ -104,18 +100,18 @@ that the token's environment matches the one you want. How the token's scope int
 with that default hasn't been confirmed, so treat it as something to check, not as
 fact.
 
-### Switching
+### If Infisical is unavailable
 
-Copy the secrets across in Infisical, add `INFISICAL=True` to `.env`, and deploy. If
-`infisical export` fails, `deploy.sh` treats the provider as unavailable and falls back
-to reading `.env` without saying so, the same as it does when Doppler is unavailable.
-Run the verify command above before relying on the switch.
+If `infisical export` fails, `deploy.sh` treats Infisical as unavailable and falls back
+to reading `.env` without saying so. Run the verify command above to check it before
+relying on a deploy.
 
 Each server needs its own CLI install and its own `/etc/infisical/env`.
 
-Not covered: `mitch-mail` still tries `doppler secrets download` as a last-resort
-fallback inside its own process (`rust/crates/mitch-mail/src/config.rs`). That only
-matters when its environment lacks the mail credentials, which compose provides.
+Not covered: `mitch-mail` (`rust/crates/mitch-mail/src/config.rs`) and `newsletter.py`
+still try `doppler secrets download` as a last-resort fallback inside their own process.
+It only runs when the environment lacks the credentials, which compose provides, and
+fails harmlessly now that Doppler is gone.
 
 ## Troubleshooting
 
@@ -142,5 +138,4 @@ verify command above.
 ## Testing
 
 `bash tests/test_secrets_provider.sh` checks the four copies are identical, then runs
-the block against stand-in CLIs and checks which commands each provider makes. It does not talk to a real Infisical or
-Doppler.
+the block against a stand-in `infisical` command and checks which commands it makes. It does not talk to a real Infisical.
