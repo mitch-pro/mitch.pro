@@ -662,12 +662,13 @@
       <div class="section-head"><h2>Site operations</h2><span class="tag">Root, root (in an LXC), and developer access</span></div>
       <div class="actions-panel" id="owner-operations"></div>
       <section class="action-card" id="coowner-role-card" hidden style="border-color:#38bdf8;background:rgba(14,165,233,.12);margin-bottom:18px;">
-        <h2>Developer Access</h2>
-        <p>Developers have elevated administrative privileges across the site, but remain subordinate to Root. Developers cannot modify Root, and only Root can add or remove developers. Developers can add and remove admins.</p>
+        <h2>Developer and Root (in an LXC) Access</h2>
+        <p>Developers have elevated administrative privileges across the site, but remain subordinate to Root. Developers cannot modify Root, and only Root can add or remove developers. Developers can add and remove admins. Root (in an LXC) has the same permissions as a developer under a different name.</p>
         <div id="coowner-role-list" style="font-size:.78rem;margin-bottom:10px;"></div>
         <form onsubmit="addCoOwner(event)" style="display:flex;gap:7px;flex-wrap:wrap;">
           <input id="coowner-role-email" type="email" placeholder="existing-user@email.com" required style="flex:1;min-width:220px">
           <button type="submit" style="width:auto;background:#0284c7;color:#fff;border-color:#0284c7;">Grant Developer</button>
+          <button type="button" onclick="addCoOwner(event, true)" style="width:auto;background:#0284c7;color:#fff;border-color:#0284c7;">Grant Root (in an LXC)</button>
         </form>
         <div id="coowner-role-status" class="form-status" role="status"></div>
       </section>
@@ -1780,37 +1781,41 @@
         const r = await fetch('/api/admin/co-owners', { credentials: 'include', cache: 'no-store', headers: getAdminHeaders() });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(d.error || 'Could not load developers.');
-        list.innerHTML = (d.coOwners || []).map(email => `
+        const lxc = new Set((d.rootLxc || []).map(e => String(e).toLowerCase()));
+        const rows = (d.coOwners || []).map(email => ({ email, lxc: lxc.has(String(email).toLowerCase()) }));
+        list.innerHTML = rows.map(({ email, lxc }) => `
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;padding:7px 9px;border:1px solid rgba(56,189,248,.3);border-radius:8px;">
-            <span>${esc(email)}</span>
-            <button type="button" data-danger onclick='removeCoOwner(${JSON.stringify(email)})' style="padding:4px 8px;font-size:11px;width:auto;">Remove Developer</button>
+            <span>${esc(email)} <small class="muted">${lxc ? 'Root (in an LXC)' : 'Developer'}</small></span>
+            <button type="button" data-danger onclick='removeCoOwner(${JSON.stringify(email)}, ${lxc})' style="padding:4px 8px;font-size:11px;width:auto;">Remove</button>
           </div>
-        `).join('') || '<div class="muted">No developers configured.</div>';
+        `).join('') || '<div class="muted">No developers or Root (in an LXC) accounts configured.</div>';
       } catch (err) {
         setStatus('coowner-role-status', err.message, 'err');
       }
     }
 
-    async function addCoOwner(event) {
+    async function addCoOwner(event, rootLxc = false) {
       event.preventDefault();
+      const roleName = rootLxc ? 'Root (in an LXC)' : 'Developer';
       const input = document.getElementById('coowner-role-email');
       const email = input.value.trim();
-      if (!email || !(await customConfirm('Grant Developer access', `${email} will receive developer administrative access across the website. Continue?`))) return;
+      if (!email || !(await customConfirm(`Grant ${roleName} access`, `${email} will receive ${roleName} administrative access across the website. Continue?`))) return;
       setStatus('coowner-role-status', 'Granting access...', '');
       try {
-        await postAdmin('/api/admin/co-owners', { email, active: true });
+        await postAdmin('/api/admin/co-owners', { email, active: true, rootLxc });
         input.value = '';
-        setStatus('coowner-role-status', 'Developer access granted immediately.', 'ok');
+        setStatus('coowner-role-status', `${roleName} access granted immediately.`, 'ok');
         await loadCoOwners();
       } catch (err) { setStatus('coowner-role-status', err.message, 'err'); }
     }
 
-    async function removeCoOwner(email) {
-      if (!(await customConfirm('Remove Developer access', `Remove developer access from ${email}?`))) return;
+    async function removeCoOwner(email, rootLxc = false) {
+      const roleName = rootLxc ? 'Root (in an LXC)' : 'Developer';
+      if (!(await customConfirm(`Remove ${roleName} access`, `Remove ${roleName} access from ${email}?`))) return;
       setStatus('coowner-role-status', 'Removing access...', '');
       try {
-        await postAdmin('/api/admin/co-owners', { email, active: false });
-        setStatus('coowner-role-status', 'Developer access removed.', 'ok');
+        await postAdmin('/api/admin/co-owners', { email, active: false, rootLxc });
+        setStatus('coowner-role-status', `${roleName} access removed.`, 'ok');
         await loadCoOwners();
       } catch (err) { setStatus('coowner-role-status', err.message, 'err'); }
     }

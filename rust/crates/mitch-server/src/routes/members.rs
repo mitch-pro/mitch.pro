@@ -420,7 +420,9 @@ fn member_req_between(req: &Value, from_norm: &str, to_norm: &str) -> bool {
 /// The role ladder (server.js:19133-19141).
 pub(crate) fn member_role(state: &Arc<AppState>, email: &str) -> &'static str {
     let norm = auth::normalize_email(email);
-    if auth::is_co_owner_email(&state.store, email) {
+    if auth::is_root_lxc_email(&state.store, email) {
+        "root_lxc"
+    } else if auth::is_co_owner_email(&state.store, email) {
         "developer"
     } else if auth::owner_member_emails(&state.store)
         .iter()
