@@ -304,7 +304,7 @@
     </header>
 
     <nav class="mod-nav" aria-label="Staff workspaces">
-      <a class="mod-nav-pill" id="mod-owner-link" href="/admin/#owner-tools" hidden>Owner tools</a>
+      <a class="mod-nav-pill" id="mod-owner-link" href="/admin/#owner-tools" hidden>Root tools</a>
       <a class="mod-nav-pill" id="mod-admin-link" href="/admin/">Admin tools</a>
       <a class="mod-nav-pill active" href="/moderator/">Moderator tools</a>
     </nav>
@@ -409,7 +409,8 @@
           if (ownerLink) ownerLink.hidden = !me.isOwner;
           const roleLabel = document.getElementById('role-label');
           if (roleLabel) {
-            if (me.isOwner) roleLabel.textContent = 'Owner';
+            if (me.isOwner) roleLabel.textContent = 'Root';
+            else if (me.isCoOwner && me.role === 'root_lxc') roleLabel.textContent = 'Root (in an LXC)';
             else if (me.isCoOwner) roleLabel.textContent = 'Developer';
             else if (me.isAdmin) roleLabel.textContent = 'Admin';
             else roleLabel.textContent = 'Moderator';

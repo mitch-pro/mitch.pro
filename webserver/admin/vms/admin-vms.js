@@ -142,7 +142,7 @@
       const activeUserLabel = inUse ? vm.activeUsers.map(u => u.actorEmail).join(', ') : '';
       const canAccess = vm.canAccess !== false;
       const openDesktopAction = !canAccess
-        ? `<span class="fleet-admin-protected" title="Only the owner can open this computer unless they allow admin access on their Computers page">🔒 Owner only</span>`
+        ? `<span class="fleet-admin-protected" title="Only the root user can open this computer unless they allow admin access on their Computers page">🔒 Root only</span>`
         : (running && vm.desktopAvailable !== false ? `<a href="/vms/desktop/?id=${encodeURIComponent(vm.id)}">Open Desktop</a>` : `<button data-power="start" ${busy || !stopped ? 'disabled' : ''}>Start</button>`);
       const powerButtons = canAccess
         ? `<button data-power="restart" ${busy || !running ? 'disabled' : ''}>Restart</button><button data-power="shutdown" ${busy || !running ? 'disabled' : ''}>Shut Down</button><button data-power="force-stop" class="danger" ${busy || !running ? 'disabled' : ''}>Force Stop</button>`
@@ -178,7 +178,7 @@
             reset.textContent = 'Updating...';
             try {
               await api('/api/admin/vms/credentials', { id: vm.id, username, password });
-              status('fleet-status', 'Desktop login updated and saved securely for owners.', 'success');
+              status('fleet-status', 'Desktop login updated and saved securely for root.', 'success');
               await load();
             } catch (error) {
               status('fleet-status', error.message, 'error');

@@ -588,7 +588,7 @@
       <div class="status"><span class="dot"></span><span id="access-status">Checking access</span></div>
     </div>
     <nav class="staff-panel-switcher" aria-label="Staff workspaces">
-      <a class="owner-switch" href="#owner-tools" hidden><span>&#9733;</span><b>Owner tools</b><small>Site operations</small></a>
+      <a class="owner-switch" href="#owner-tools" hidden><span>&#9733;</span><b>Root tools</b><small>Site operations</small></a>
       <a class="active" href="#approval-tools"><span>&#9881;</span><b>Admin tools</b><small>Administration</small></a>
       <a href="/admin/bans/"><span aria-hidden="true">&#8856;</span><b>Bans</b><small>Account access</small></a>
       <a href="/moderator/"><span>&#10003;</span><b>Moderator tools</b><small>Reports and review</small></a>
@@ -659,11 +659,11 @@
       </nav>
       <div class="tool-area">
     <section class="tool-group" id="owner-tools">
-      <div class="section-head"><h2>Site operations</h2><span class="tag">Owner and developer access</span></div>
+      <div class="section-head"><h2>Site operations</h2><span class="tag">Root, root (in an LXC), and developer access</span></div>
       <div class="actions-panel" id="owner-operations"></div>
       <section class="action-card" id="coowner-role-card" hidden style="border-color:#38bdf8;background:rgba(14,165,233,.12);margin-bottom:18px;">
         <h2>Developer Access</h2>
-        <p>Developers have elevated administrative privileges across the site, but remain subordinate to the primary Owner. Developers cannot modify the Owner, and only the Owner can add or remove developers. Developers can add and remove admins.</p>
+        <p>Developers have elevated administrative privileges across the site, but remain subordinate to Root. Developers cannot modify Root, and only Root can add or remove developers. Developers can add and remove admins.</p>
         <div id="coowner-role-list" style="font-size:.78rem;margin-bottom:10px;"></div>
         <form onsubmit="addCoOwner(event)" style="display:flex;gap:7px;flex-wrap:wrap;">
           <input id="coowner-role-email" type="email" placeholder="existing-user@email.com" required style="flex:1;min-width:220px">
@@ -726,12 +726,12 @@
         <label style="display:flex;gap:8px;align-items:center;"><input type="checkbox" id="tester-self-toggle" style="width:auto;margin:0;"> Tester on my account</label>
         <div id="tester-self-status" class="form-status" role="status"></div>
       </section>
-      <section class="owner-account-tools" id="owner-account-tools" hidden aria-label="Owner account controls">
+      <section class="owner-account-tools" id="owner-account-tools" hidden aria-label="Root account controls">
         <h3>Accounts &amp; Mitch Coins</h3>
         <p>Remove sign-in registrations so those email addresses can sign up again. This revokes website sessions, passwords, passkeys, and recovery links. Profiles, posts, chat history, and existing Matrix sessions are not deleted. Owner accounts are protected.</p>
         <button type="button" data-load>Load registered accounts</button>
         <input type="search" placeholder="Search names, usernames, or email" aria-label="Search registered accounts">
-        <button type="button" data-all>Select all non-owner accounts</button><button type="button" data-none>Deselect all</button>
+        <button type="button" data-all>Select all non-root accounts</button><button type="button" data-none>Deselect all</button>
         <div class="owner-account-list"></div>
         <p data-count>Select the accounts to remove.</p>
         <input type="text" data-confirmation autocomplete="off" aria-label="Registration removal confirmation" placeholder="REMOVE 0 REGISTRATIONS">
@@ -2912,7 +2912,7 @@
       const pending = moderatorRequests.filter(req => req.status === 'pending');
       queue.innerHTML = canResolve
         ? (pending.length ? pending.map(req => requestHtml(req, true)).join('') : '<div class="empty">No moderator requests need approval.</div>')
-        : '<div class="empty">Moderator actions you submit appear on the right until an admin or owner resolves them.</div>';
+        : '<div class="empty">Moderator actions you submit appear on the right until an admin or root resolves them.</div>';
       const recent = canResolve
         ? moderatorRequests.slice(0, 20)
         : moderatorRequests.slice(0, 20);
@@ -3920,7 +3920,7 @@
         // receive any mention of the owner-only container.
         const ocCard = document.createElement('div');
         ocCard.className = 'action-card';
-        ocCard.innerHTML = '<h2>Container 500</h2><p>Owner-only container desktop.</p><a href="/vms/desktop/?container=owner">Open</a>';
+        ocCard.innerHTML = '<h2>Container 500</h2><p>Root-only container desktop.</p><a href="/vms/desktop/?container=owner">Open</a>';
         document.getElementById('owner-operations').appendChild(ocCard);
       }
       if (ownerOrDev) {
@@ -3935,14 +3935,14 @@
       if (eyebrow && currentUser.isCoOwner) eyebrow.textContent = 'mitch.pro / developer systems';
       document.body.classList.toggle('moderator-mode', !!(currentUser.isModerator && !currentUser.isAdmin));
       document.getElementById('role-note').textContent = currentUser.isOwner
-        ? 'Owner mode: full unrestricted root control of site, accounts, developers, and administrators.'
+        ? 'Root mode: full unrestricted control of site, accounts, developers, and administrators.'
         : currentUser.isCoOwner
-        ? 'Developer mode: elevated administrative access is active. Modifying admins and developers requires primary Owner access.'
+        ? (currentUser.role === 'root_lxc' ? 'Root (in an LXC) mode' : 'Developer mode') + ': elevated administrative access is active. Modifying admins and developers requires Root access.'
         : currentUser.isAdmin
         ? 'Admin mode: changes apply immediately and every privileged action is logged.'
         : (currentUser.isModerator
-          ? 'Moderator mode: you can view the admin tools and submit changes, but state-changing actions wait for admin or owner approval.'
-          : 'This page is only for admin, owner, and moderator accounts.');
+          ? 'Moderator mode: you can view the admin tools and submit changes, but state-changing actions wait for admin or root approval.'
+          : 'This page is only for admin, root, and moderator accounts.');
 
       // --- Passphrase Verification check FIRST ---
       if (currentUser.isAdmin) {
@@ -3981,8 +3981,8 @@
 
       await loadModeratorRequests();
       document.getElementById('access-status').textContent = currentUser.isOwner
-        ? 'Owner verified'
-        : (currentUser.isCoOwner ? 'Developer verified' : (currentUser.isAdmin ? 'Admin verified' : 'Moderator review mode'));
+        ? 'Root verified'
+        : (currentUser.isCoOwner ? (currentUser.role === 'root_lxc' ? 'Root (in an LXC) verified' : 'Developer verified') : (currentUser.isAdmin ? 'Admin verified' : 'Moderator review mode'));
       renderCards();
       populateAuditFilters();
       applyFilter();

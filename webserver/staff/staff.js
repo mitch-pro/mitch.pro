@@ -28,7 +28,7 @@
     // Owner-only: added only for the owner, never shown as a locked card, so
     // other staff can't tell it exists.
     if (status.isOwner) {
-      list.push({ href: '/vms/desktop/?container=owner', name: 'Container 500', desc: 'Owner-only desktop', ok: true });
+      list.push({ href: '/vms/desktop/?container=owner', name: 'Container 500', desc: 'Root-only desktop', ok: true });
     }
     return list;
   }
