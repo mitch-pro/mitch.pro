@@ -9,7 +9,8 @@ the repo never fail it.
 
 `.github/email-allowlist.txt`. `@domain` entries allow that domain and its
 subdomains (`@example.com`, `@mitch.pro`, `@x.test`, ...). Other entries are
-exact addresses. A line containing `email-ok` is skipped, for one-off cases.
+exact addresses. There is no inline ignore marker, since anyone could use it to
+bypass the check; add the address to the allowlist (owner-approved) instead.
 
 ## Test addresses for new code
 
@@ -30,3 +31,19 @@ only by exact address.
 The script, allowlist and workflow are under `.github/`, which CODEOWNERS gates
 on the owner, so a PR cannot loosen the check without owner approval. Make
 `email-check` a required status check on `master` for it to block merges.
+
+## Known limits
+
+It is a regex scan of a PR's net diff, so it catches accidents, not deliberate
+evasion: split strings (`"a" + "@b.com"`), `[at]`/`&#64;`/base64 encodings,
+addresses inside binary files, and addresses added then removed within one PR
+(they stay in the PR branch's history until squash-merge) all pass. It also
+does not scan commit messages, PR text or branch names. GitHub secret scanning
+with custom patterns and push protection covers some of that.
+
+## Tests
+
+`.github/scripts/test_check_new_emails.py` runs in the workflow before the scan
+and has a regression test for each bypass that was found: `++ ` lines hiding
+later lines, look-alike lock-file names, `.gitattributes` `-diff`, and the
+removed `email-ok` marker.
