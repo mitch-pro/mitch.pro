@@ -17,6 +17,7 @@ import base64
 import hashlib
 import hmac
 import secrets
+import sqlite3
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone, timedelta
@@ -132,6 +133,17 @@ def ago(ts):
 def load_json(path, default=None):
     try: return json.loads(Path(path).read_text())
     except: return default if default is not None else {}
+
+def prox_blocklist_domains():
+    """Blocked proxy domains, read from the server's prox_blocklist table."""
+    try:
+        conn = sqlite3.connect('file:%s?mode=ro' % (DATA / 'mitchpro.db'), uri=True, timeout=5)
+        try:
+            return [r[0] for r in conn.execute('SELECT domain FROM prox_blocklist')]
+        finally:
+            conn.close()
+    except Exception:
+        return []
 
 def save_json(path, data):
     tmp = str(path) + '.tmp'
@@ -1134,8 +1146,7 @@ def proxy_tool(stdscr):
         list_h = h - 5
 
         if tab == 0:  # Blocklist
-            blocklist_file = DATA / 'prox_blocklist.json'
-            blocklist = load_json(blocklist_file, [])
+            blocklist = prox_blocklist_domains()
             blocklist.sort()
             
             draw_header(stdscr, f'Proxy Domain Blocklist ({len(blocklist)} domains)  [a] Block new domain')

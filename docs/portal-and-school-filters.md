@@ -62,7 +62,7 @@ page:
   (`webserver/game-portal/ui/canvas-text.js`) and uses neutral ids and classes
   (`item-grid`, not `game-grid`). Keep new attributes, ids and `data-*` values
   free of game names.
-- **Page at a time.** The catalog is `data/portal_catalog.json`, outside the web
+- **Page at a time.** The catalog is in the database (`docs/site-content.md`), outside the web
   root; the browser only gets the 48–60 titles on screen.
 - **Games by id.** `/api/portal/*` opens proxied games as `/prox/g/<id>/<file>`
   (`portal_catalog::game_dir`, `proxy::game_proxy`), so the game's name is not in

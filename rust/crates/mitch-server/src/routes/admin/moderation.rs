@@ -643,8 +643,8 @@ fn json_response(code: u16, obj: Value) -> Response {
     crate::errors::json_resp(code, obj)
 }
 
-/// `POST /api/admin/moderators` — add/remove from the bare moderators.json
-/// array (the raw email is stored, normalization is only for comparison).
+/// `POST /api/admin/moderators` — add/remove in the `moderators` table
+/// (the raw email is stored, normalization is only for comparison).
 fn set_moderator(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response {
     let admin_email = ctx.email(state);
     let target_raw = body
@@ -667,10 +667,7 @@ fn set_moderator(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Respons
     } else {
         mods.retain(|m| mitch_lib::auth::normalize_email(m) != target);
     }
-    let _ = state.store.write_document(
-        &state.cfg.base_dir.join("data/moderators.json"),
-        &json!(mods),
-    );
+    mitch_lib::site_content::set_moderators(&state.store, &mods);
     mitch_lib::admin::log_admin_action(
         &state.store,
         &state.cfg.data_dir,
@@ -2102,17 +2099,7 @@ pub fn execute_moderator_approved_action(
                 .write()
                 .unwrap_or_else(|e| e.into_inner())
                 .insert(domain.clone());
-            let arr: Vec<Value> = state
-                .prox_blocklist
-                .read()
-                .unwrap_or_else(|e| e.into_inner())
-                .iter()
-                .map(|d| json!(d))
-                .collect();
-            let _ = state.store.write_document(
-                &state.cfg.base_dir.join("data/prox_blocklist.json"),
-                &json!(arr),
-            );
+            mitch_lib::site_content::prox_block_add(&state.store, &domain);
             mitch_lib::admin::log_admin_action(
                 &state.store,
                 &state.cfg.data_dir,
@@ -2159,10 +2146,7 @@ pub fn execute_moderator_approved_action(
             } else {
                 mods.retain(|m| mitch_lib::auth::normalize_email(m) != target);
             }
-            let _ = state.store.write_document(
-                &state.cfg.base_dir.join("data/moderators.json"),
-                &json!(mods),
-            );
+            mitch_lib::site_content::set_moderators(&state.store, &mods);
             mitch_lib::admin::log_admin_action(
                 &state.store,
                 &state.cfg.data_dir,
@@ -2480,12 +2464,7 @@ mod tests {
                 &json!({ "owners":["owner@example.com"], "admins":["admin@example.com"] }),
             )
             .unwrap();
-        store
-            .write_document(
-                &cfg.data_dir.join("moderators.json"),
-                &json!(["moderator@example.com"]),
-            )
-            .unwrap();
+        mitch_lib::site_content::set_moderators(&store, &["moderator@example.com".to_string()]);
         (Arc::new(AppState::new(cfg, store)), dir)
     }
 

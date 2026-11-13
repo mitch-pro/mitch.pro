@@ -140,7 +140,7 @@ async fn startup_removes_retired_personal_data_and_keeps_network_bans() {
     let banned_ip = "198.51.100.66";
     let sessions = json!([{ "id": "sid", "timestamp": "1", "page": "/games/x/", "ip": legacy_ip }]);
     let last_known = json!({ MEMBER: legacy_ip });
-    let search = json!([{ "query": "how to", "user": MEMBER, "ts": 1 }]);
+    let search = json!([{ "query": "zq-search-probe-8472", "user": MEMBER, "ts": 1 }]);
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -179,7 +179,7 @@ async fn startup_removes_retired_personal_data_and_keeps_network_bans() {
     let stored = everything_stored(&s.dir);
     assert!(!stored.contains(legacy_ip), "legacy IP kept");
     assert!(!stored.contains(banned_ip), "banned IP stored raw");
-    assert!(!stored.contains("how to"), "search log kept");
+    assert!(!stored.contains("zq-search-probe-8472"), "search log kept");
 
     let db = rusqlite::Connection::open(s.dir.join("data/mitchpro.db")).unwrap();
     let cheat_rows: i64 = db
