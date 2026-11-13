@@ -24,20 +24,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// `lib/data_store.js` PRESERVED_DATA_FILES.
 pub const PRESERVED_DATA_FILES: &[&str] = &[
     "admins.json",
-    "bad_words.json",
     "bell_overrides.json",
     "emojis.json",
-    "game_categories.json",
     "game_categories_external.json",
-    "game_categories_local.json",
     "games",
     "games_external",
     "games_local",
-    "logic_words.json",
     "moderators.json",
-    "payloads.json",
     "prox_blocklist.json",
-    "shop_catalog_overrides.json",
     "site.json",
     "wordle_dictionary.txt",
 ];
@@ -750,6 +744,7 @@ impl DataStore {
             Ok(())
         };
         init_tables(&conn)?;
+        conn.execute_batch(crate::site_content::SCHEMA)?;
         let has_ban_expiry = conn
             .prepare("PRAGMA table_info(blacklist)")?
             .query_map([], |row| row.get::<_, String>(1))?
@@ -862,6 +857,7 @@ impl DataStore {
         store.backfill_revoked_ids_from_json();
         store.backfill_friends_from_json();
         store.backfill_newsletter_unsub_from_json();
+        crate::site_content::seed(&store);
         // The web SSH terminal is gone; drop the admin private keys it stored.
         {
             let conn = store.conn.lock().unwrap_or_else(|e| e.into_inner());

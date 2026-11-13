@@ -57,6 +57,8 @@ pub mod revoked;
 pub mod school;
 pub mod seasons;
 pub mod shop;
+pub mod site_content;
+mod site_content_seed;
 pub mod site_domains;
 pub mod site_updates;
 pub mod sso;

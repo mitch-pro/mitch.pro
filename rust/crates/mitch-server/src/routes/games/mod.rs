@@ -78,21 +78,7 @@ pub fn handle(
 /// reload; the port reads the files fresh every call, which serves identical
 /// content and matches how the /api/games port (Step 7) reads the same files.
 fn game_categories(state: &Arc<AppState>) -> axum::response::Response {
-    let mut cats = serde_json::Map::new();
-    for name in [
-        "game_categories.json",
-        "game_categories_local.json",
-        "game_categories_external.json",
-    ] {
-        let doc = state
-            .store
-            .read_document(&state.cfg.data_dir.join(name), json!({}));
-        if let Some(obj) = doc.as_object() {
-            for (k, v) in obj {
-                cats.insert(k.clone(), v.clone());
-            }
-        }
-    }
+    let cats = mitch_lib::site_content::game_categories(&state.store);
     json_resp(200, json!({ "categories": Value::Object(cats) }))
 }
 

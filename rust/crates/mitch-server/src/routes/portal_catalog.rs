@@ -1,7 +1,8 @@
 //! The entertainment portal's catalog, served a page at a time.
 //!
-//! The catalog (`data/portal_catalog.json`, about 8 MB, 25k entries) lives only
-//! on the server and is not in the web root: the browser never downloads it.
+//! The catalog (about 8 MB, 25k entries) lives only in the database
+//! (`portal_catalog_groups` / `portal_catalog_games`, see `mitch_lib::site_content`)
+//! and is not in the web root: the browser never downloads it.
 //! The portal page asks for just what is on screen: the featured row, a page of
 //! the list, the saved or recent items it has ids for, or one random item.
 //!
@@ -269,6 +270,7 @@ fn category_for(title: &str, description: &str, url: &str) -> &'static str {
 }
 
 impl Catalog {
+    #[cfg(test)]
     pub fn empty() -> Self {
         Self {
             items: Vec::new(),
@@ -375,13 +377,8 @@ impl Catalog {
         }
     }
 
-    fn load(base_dir: &std::path::Path) -> Self {
-        let path = base_dir.join("data/portal_catalog.json");
-        std::fs::read_to_string(&path)
-            .ok()
-            .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
-            .map(|data| Self::from_json(&data))
-            .unwrap_or_else(Self::empty)
+    fn load(store: &mitch_lib::data::DataStore) -> Self {
+        Self::from_json(&mitch_lib::site_content::portal_catalog(store))
     }
 
     pub fn summary(&self) -> Value {
@@ -483,7 +480,7 @@ pub fn image_uri(state: &AppState, uri: &axum::http::Uri) -> Option<axum::http::
 
 fn catalog(state: &AppState) -> &'static Catalog {
     static CATALOG: OnceLock<Catalog> = OnceLock::new();
-    CATALOG.get_or_init(|| Catalog::load(&state.cfg.base_dir))
+    CATALOG.get_or_init(|| Catalog::load(&state.store))
 }
 
 fn param(search: &str, name: &str) -> String {
@@ -706,11 +703,25 @@ mod tests {
 
     #[test]
     fn the_real_catalog_loads_and_ids_match_the_old_page() {
-        let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-        let c = Catalog::load(&base);
-        if c.items.is_empty() {
+        // Import the committed catalog into a throwaway database, the way a
+        // first boot does, then load it back from the tables.
+        let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+        let real = repo.join("data/portal_catalog.json");
+        if !real.exists() {
             return; // data file not present in this checkout
         }
+        let dir = std::env::temp_dir().join(format!(
+            "portal-catalog-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("data")).unwrap();
+        std::fs::copy(&real, dir.join("data/portal_catalog.json")).unwrap();
+        let store = mitch_lib::data::DataStore::open(&dir, &dir.join("data")).unwrap();
+        let c = Catalog::load(&store);
+        let _ = std::fs::remove_dir_all(&dir);
         assert!(c.items.len() > 20_000);
         assert!(c.featured.len() >= 10);
         assert_eq!(c.items[c.featured[0]].title, "Run 3");

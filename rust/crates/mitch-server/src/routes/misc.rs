@@ -697,28 +697,8 @@ fn games(state: &Arc<AppState>, body: &serde_json::Value, headers: &HeaderMap) -
         })
         .collect();
 
-    // Categories from the three PRESERVED files (external overrides local).
-    let mut cats = state
-        .store
-        .read_document(&state.cfg.data_dir.join("game_categories.json"), json!({}));
-    let local = state.store.read_document(
-        &state.cfg.data_dir.join("game_categories_local.json"),
-        json!({}),
-    );
-    let external = state.store.read_document(
-        &state.cfg.data_dir.join("game_categories_external.json"),
-        json!({}),
-    );
-    for source in [local, external] {
-        if let Some(map) = source.as_object() {
-            for (k, v) in map {
-                if let Some(target) = cats.as_object_mut() {
-                    target.insert(k.clone(), v.clone());
-                }
-            }
-        }
-    }
-    let cats = cats;
+    // Base, then local, then external categories (later overrides earlier).
+    let cats = Value::Object(mitch_lib::site_content::game_categories(&state.store));
 
     let filtered: Vec<&String> = all
         .iter()

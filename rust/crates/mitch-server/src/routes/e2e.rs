@@ -22,7 +22,7 @@
 //! `{success, message}`, users/messages speak `{error}`.
 
 use crate::routes::dm::{is_revoked_id, qs_get};
-use crate::routes::me::{cookies_of, data_file, json_response};
+use crate::routes::me::{cookies_of, json_response};
 use crate::state::{AppState, E2eMessage, E2eUser};
 use axum::http::{HeaderMap, Method};
 use axum::response::Response;
@@ -280,16 +280,11 @@ async fn join(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> 
 }
 
 /// `BAD_NICS` (server.js:1634) — the builtin `'awgnagae'` plus every entry of
-/// data/bad_words.json. The JS compares `nick.toLowerCase().includes(s)`
+/// the `bad_words` table. The JS compares `nick.toLowerCase().includes(s)`
 /// WITHOUT lowercasing s, so an uppercase word can never match — replicated.
 fn bad_nics(state: &AppState) -> Vec<String> {
     let mut out = vec!["awgnagae".to_string()];
-    let words: Value = state
-        .store
-        .read_document(&data_file(state, "bad_words.json"), json!([]));
-    if let Some(arr) = words.as_array() {
-        out.extend(arr.iter().filter_map(|w| w.as_str().map(str::to_string)));
-    }
+    out.extend(mitch_lib::site_content::bad_words(&state.store));
     out
 }
 
