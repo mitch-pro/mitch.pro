@@ -285,6 +285,23 @@ fn make_invite_friend_html(
 // ── Handlers ───────────────────────────────────────────────────────────────
 
 /// `POST /api/signup` (server.js:16180-16251).
+/// The account's real address, dots included, for mailing. `norm` strips dots
+/// and `+tags`, which only reaches the right mailbox on providers that ignore
+/// them (not on student.rjuhsd.us).
+fn canonical_address(state: &Arc<AppState>, norm: &str) -> String {
+    let real = mitch_lib::profile::canonical_delivery_email(
+        &state.store,
+        &state.cfg.data_dir,
+        &state.id_secret,
+        norm,
+    );
+    if real.contains('@') {
+        real
+    } else {
+        norm.to_string()
+    }
+}
+
 async fn signup(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Response {
     let Some(body) = parse_body(body_bytes) else {
         return json_resp(400, json!({ "success": false, "message": "bad json" }));
@@ -606,10 +623,11 @@ async fn verify_signup(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &
                         1.0,
                         "invite",
                     );
-                    let email_html = make_invite_award_html(state, &ref_norm);
+                    let ref_to = canonical_address(state, &ref_norm);
+                    let email_html = make_invite_award_html(state, &ref_to);
                     send_email_bg(
                         state,
-                        &ref_norm,
+                        &ref_to,
                         "mitch.pro - Referral Bonus Claimed!",
                         &email_html,
                     );
@@ -723,7 +741,12 @@ async fn login(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) ->
                 5,
                 &norm_email,
             );
-            send_email_bg(state, &norm_email, "Your mitch.pro login code", &html);
+            send_email_bg(
+                state,
+                &canonical_address(state, &norm_email),
+                "Your mitch.pro login code",
+                &html,
+            );
         }
         if let Ok(mut map) = state.pending_two_factor.lock() {
             map.insert(temp_token.clone(), rec);
