@@ -19,12 +19,28 @@
 # Owner test account (mitch_lib::auth::OWNER_TEST_ACCOUNT_EMAIL)
 newaccount123@student.rjuhsd.us
 
-# Placeholder addresses used in existing tests
+# Dedicated test addresses. New tests and fixtures should use only these.
+# Student-domain (fake accounts, not real students)
+test.student1@student.rjuhsd.us
+test.student2@student.rjuhsd.us
+test.student3@student.rjuhsd.us
+test.teacher1@student.rjuhsd.us
+# example.com (already allowed by domain above; listed for reference)
+#   test1@example.com, test2@example.com, test3@example.com
+# mitch.pro (already allowed by domain above; listed for reference)
+#   test1@mitch.pro, test2@mitch.pro, admin@mitch.pro
+
+# Legacy fixtures already in existing tests. Kept so refactors that move these
+# lines don't fail; do not use in new tests.
 a@gmail.com
 b@gmail.com
 old@gmail.com
 new@gmail.com
 user@email.com
 ab@student.rjuhsd.us
+cd@student.rjuhsd.us
+zz@student.rjuhsd.us
 nouser@student.rjuhsd.us
+kid@student.rjuhsd.us
+kid2@student.rjuhsd.us
 u@x.com
