@@ -25,6 +25,12 @@ There are no browser or Node tests. Layout and client-side JavaScript are checke
 scripts in `tools/`. `setup_ban_fixture.py` builds a local fixture for manual ban checks
 (see `docs/account-ban-cleanup.md`). Run the tests with `python3 tests/<file>.py`.
 
+## Shell tests
+
+`test_secrets_provider.sh` checks the secrets-provider block copied into the host scripts.
+`test_deploy_rollback.sh` runs `tools/deploy.sh` against stand-in commands to check the
+health-check retry and git rollback (`docs/deploy-health-check.md`). Run with `bash tests/<file>.sh`.
+
 ## CI
 
 `rust-ci.yml` runs fmt, clippy and `cargo test --workspace`. The production deploy waits

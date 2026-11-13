@@ -411,26 +411,98 @@ main() {
     # on the same Docker network Caddy uses, so this is exactly equivalent to
     # testing reachability from Caddy's own perspective, before Caddy is ever
     # told to switch.
-    echo "[deploy] Waiting for webserver-$INACTIVE_SLOT to be reachable via the internal Docker network (the path Caddy itself will use)..."
-    MAX_ATTEMPTS=30
-    ATTEMPT=0
-    HEALTHY=false
+    # The new slot gets HEALTH_WINDOW_SECS of wall-clock time per attempt (60s by
+    # default; the env override exists so tests/test_deploy_rollback.sh can run
+    # fast). A deadline is used instead of an attempt count so slow curl calls
+    # can't stretch or shrink the window. Each probe has its own curl timeout
+    # for the same reason.
+    HEALTH_WINDOW_SECS="${HEALTH_WINDOW_SECS:-60}"
 
-    while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-        HTTP_STATUS=$(docker exec "mitch-webserver-$ACTIVE_SLOT" curl -s -o /dev/null -w "%{http_code}" "http://webserver-$INACTIVE_SLOT:6800/enroll/" 2>/dev/null || echo "000")
-        if [ "$HTTP_STATUS" = "200" ]; then
-            echo "[deploy] Health check passed (HTTP 200 via webserver-$INACTIVE_SLOT:6800, the Caddy-equivalent path)!"
-            HEALTHY=true
-            break
+    wait_inactive_healthy() {
+        local deadline=$((SECONDS + HEALTH_WINDOW_SECS)) attempt=0 status
+        while [ "$SECONDS" -lt "$deadline" ]; do
+            attempt=$((attempt+1))
+            status=$(docker exec "mitch-webserver-$ACTIVE_SLOT" curl -s --connect-timeout 2 --max-time 5 -o /dev/null -w "%{http_code}" "http://webserver-$INACTIVE_SLOT:6800/enroll/" 2>/dev/null || true)
+            status="${status:-000}"
+            if [ "$status" = "200" ]; then
+                echo "[deploy] Health check passed (HTTP 200 via webserver-$INACTIVE_SLOT:6800, the Caddy-equivalent path)!"
+                return 0
+            fi
+            echo "[deploy] Container is starting... HTTP Status: $status (Attempt $attempt, $((deadline - SECONDS))s left)"
+            sleep 2
+        done
+        return 1
+    }
+
+    # Best-effort static cache refresh on the running containers. Used after a
+    # rollback so the still-serving old slot drops cached HTML from the commit
+    # that was just reverted.
+    refresh_static_cache() {
+        local key="" url status ok=1
+        if [ "$SECRETS_AVAILABLE" = true ]; then
+            key=$(secrets_get SECRET_KEY)
+        elif [ -f "$PROJECT_DIR/.env" ]; then
+            key=$(grep -E "^SECRET_KEY=" "$PROJECT_DIR/.env" | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
         fi
-        echo "[deploy] Container is starting... HTTP Status: $HTTP_STATUS (Attempt $((ATTEMPT+1))/$MAX_ATTEMPTS)"
-        sleep 2
-        ATTEMPT=$((ATTEMPT+1))
-    done
+        for url in "http://localhost:6800/api/cache/refresh" "http://localhost:6811/api/cache/refresh" "http://localhost:6812/api/cache/refresh"; do
+            status=$(curl -s --connect-timeout 3 --max-time 15 -o /dev/null -w "%{http_code}" -X POST \
+                -H "Content-Type: application/json" \
+                -H "Authorization: Bearer $key" \
+                -H "X-Internal-Refresh: 1" \
+                -H "Host: mitchdog.com" \
+                -d '{"files":[]}' "$url" || true)
+            [ "$status" = "200" ] && ok=0
+        done
+        return $ok
+    }
+
+    # Put the checkout back on the commit it was on before this deploy's pull.
+    # Without this, a failed deploy leaves the new commit checked out while the
+    # old slot keeps serving: the webroot HTML on disk no longer matches the
+    # running backend, and a reboot would start the bad code. `reset --keep`
+    # (not --hard) refuses instead of discarding local edits someone made on
+    # the server on purpose; in that case it only notifies.
+    rollback_git() {
+        if [ -z "$OLD_COMMIT" ] || [ "$OLD_COMMIT" = "$NEW_COMMIT" ]; then
+            echo "[deploy] Nothing to roll back: this deploy did not move the checkout."
+            return 0
+        fi
+        echo "[deploy] Rolling git back to ${OLD_COMMIT:0:12} (was ${NEW_COMMIT:0:12})..."
+        if run_git reset --keep "$OLD_COMMIT"; then
+            # reset restores the old Caddyfile text; point it back at the live slot.
+            sed -i -E "s/(webserver-)(blue|green)(:6800)/\1$ACTIVE_SLOT\3/g" "$CADDYFILE_PATH"
+            if [ "$(id -u)" -eq 0 ] && [ "$REPO_OWNER" != "root" ]; then
+                chown -R "$REPO_OWNER:$REPO_OWNER" "$CADDYFILE_PATH" 2>/dev/null || true
+            fi
+            refresh_static_cache || echo "[deploy] Warning: static cache refresh failed after rollback."
+            echo "[deploy] Rolled back to ${OLD_COMMIT:0:12}."
+            send_notification "Rolled git back to ${OLD_COMMIT:0:12} after the new build failed its health check. webserver-$ACTIVE_SLOT is still serving." "Deploy Rolled Back" "high"
+        else
+            echo "[deploy] Error: git rollback failed (local changes in the way?). Checkout is still on ${NEW_COMMIT:0:12}."
+            send_notification "Health check failed AND git rollback failed. The checkout is still on ${NEW_COMMIT:0:12} while webserver-$ACTIVE_SLOT serves older code. Fix manually before any reboot." "Deploy: rollback failed" "urgent"
+        fi
+    }
+
+    echo "[deploy] Waiting up to ${HEALTH_WINDOW_SECS}s for webserver-$INACTIVE_SLOT to be reachable via the internal Docker network (the path Caddy itself will use)..."
+    HEALTHY=false
+    if wait_inactive_healthy; then
+        HEALTHY=true
+    else
+        # Often just too slow or a one-off. Start the slot again if it exited
+        # (a no-op when it is running; nothing is rebuilt) and wait one more window.
+        echo "[deploy] Health check window expired; retrying once..."
+        run_docker_compose up -d "webserver-$INACTIVE_SLOT" || true
+        if wait_inactive_healthy; then
+            HEALTHY=true
+        fi
+    fi
 
     if [ "$HEALTHY" = false ]; then
-        echo "[deploy] Error: The new webserver-$INACTIVE_SLOT failed to become healthy. Aborting swap!"
-        send_notification "Error: webserver-$INACTIVE_SLOT failed health check on port $INACTIVE_PORT. Aborting swap!" "Swap Failed" "high"
+        echo "[deploy] Error: The new webserver-$INACTIVE_SLOT failed to become healthy after two attempts. Aborting swap!"
+        # Stop the failed slot so a reboot cannot bring the bad build back up.
+        docker stop "mitch-webserver-$INACTIVE_SLOT" 2>/dev/null || true
+        rollback_git
+        send_notification "Error: webserver-$INACTIVE_SLOT failed health check on port $INACTIVE_PORT (two ${HEALTH_WINDOW_SECS}s attempts). Aborting swap!" "Swap Failed" "high"
         exit 1
     fi
 
