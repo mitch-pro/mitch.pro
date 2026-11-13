@@ -1,9 +1,10 @@
 # Only the paths below need the owner's approval. Branch protection on master
 # has "Require review from Code Owners" enabled with 0 required general
 # approvals, so a PR touching only unlisted paths can be merged by its author,
-# while a PR touching any path below cannot merge until the owner approves it.
+# while a PR touching any path below cannot merge until a member of the `owners`
+# team approves it. The team needs Write access to the repo or GitHub ignores it.
 # Do not add a catch-all `*` rule: it would make every PR owner-gated again.
-/.github/               @urashil
-/tools/deploy.sh        @urashil
-/AGENTS.md              @urashil
-/rust/crates/mitch-lib/src/auth.rs @urashil
+/.github/               @mitch-pro/owners
+/tools/deploy.sh        @mitch-pro/owners
+/AGENTS.md              @mitch-pro/owners
+/rust/crates/mitch-lib/src/auth.rs @mitch-pro/owners
