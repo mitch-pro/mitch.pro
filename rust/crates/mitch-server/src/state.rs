@@ -320,18 +320,10 @@ impl AppState {
         };
         let byo_os_bans = load_ban_set("data/byo_os_bans.json");
         let vm_bans = load_ban_set("data/vm_bans.json");
-        let prox_blocklist: std::collections::HashSet<String> = store
-            .read_document(
-                &cfg.base_dir.join("data/prox_blocklist.json"),
-                serde_json::json!([]),
-            )
-            .as_array()
-            .map(|a| {
-                a.iter()
-                    .filter_map(|v| v.as_str().map(str::to_string))
-                    .collect()
-            })
-            .unwrap_or_default();
+        let prox_blocklist: std::collections::HashSet<String> =
+            mitch_lib::site_content::prox_blocklist(&store)
+                .into_iter()
+                .collect();
         let casino_enabled = mitch_lib::casino::casino_enabled(&store);
         let canvas = crate::routes::canvas::CanvasState::load(&store, &cfg.data_dir.clone());
         let logic_dictionary = Self::load_logic_dictionary(&cfg.data_dir);

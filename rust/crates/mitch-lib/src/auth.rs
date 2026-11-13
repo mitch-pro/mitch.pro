@@ -1238,17 +1238,9 @@ pub fn co_owner_member_emails(store: &DataStore) -> Vec<String> {
     )
 }
 
-/// `moderatorEmails()` (6160) — `loadJson(MODERATORS_FILE, [])`, a bare array.
+/// `moderatorEmails()` (6160) — the `moderators` table, raw emails in the order added.
 pub fn moderator_emails(store: &DataStore) -> Vec<String> {
-    store
-        .read_document(&store.base_dir.join("data/moderators.json"), json!([]))
-        .as_array()
-        .map(|a| {
-            a.iter()
-                .filter_map(|v| v.as_str().map(str::to_string))
-                .collect()
-        })
-        .unwrap_or_default()
+    crate::site_content::moderators(store)
 }
 
 /// `siteAdminEmails()` (6242) — owners ∪ co-owners ∪ admins, normalized, deduped.
@@ -1531,12 +1523,7 @@ mod tests {
                 }),
             )
             .unwrap();
-        store
-            .write_document(
-                &base.join("data/moderators.json"),
-                &json!(["mod@mitch.pro"]),
-            )
-            .unwrap();
+        crate::site_content::set_moderators(&store, &["mod@mitch.pro".to_string()]);
 
         // Co-owners get broad admin access, but true owner is strictly for owners.
         assert!(is_co_owner_email(&store, "co-owner@mitch.pro"));

@@ -63,7 +63,7 @@ after authentication.
 
 ## How the portal gets its list
 
-The catalog (`data/portal_catalog.json`, about 8 MB) is not in the web root and
+The catalog (about 8 MB, in the database; see `docs/site-content.md`) is not in the web root and
 the browser never downloads it. `routes/portal_catalog.rs` loads it once and
 serves only what the page shows: `/api/portal/summary` (total, category counts and
 the featured row), `/api/portal/list?cat=&q=&sort=&offset=&limit=` (one page of

@@ -165,7 +165,7 @@ developers:
 
 `rename_email_references` (`routes/me/account.rs`) moves an account's data to
 its new email but does **not** touch the staff lists: `data/admins.json`
-(`owners`, `coOwners`, `admins`), `data/moderators.json`, `data/testers.json`,
+(`owners`, `coOwners`, `admins`), the `moderators` table, `data/testers.json`,
 or `virtual_machines.owner_email`. Staff status is keyed by email, so changing a
 staff member's email drops their role and detaches their computers until the
 lists are updated to the new address. This is deliberate for now: migrating

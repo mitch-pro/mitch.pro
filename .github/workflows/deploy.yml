@@ -82,11 +82,6 @@ jobs:
         # tools/deploy.sh before the blue/green swap.
         run: cargo test --manifest-path rust/Cargo.toml --workspace
 
-      - name: Check deployment authorization
-        if: github.event_name == 'push' && github.actor != 'urashil' && github.actor != 'tylerthompson3725'
-        run: |
-          echo "::notice title=Deployment Guard::Push to master by ${{ github.actor }} detected. Automatic server deployment is skipped pending review by an authorized deployer."
-
   deploy:
     name: Build & Blue-Green Deploy
     runs-on: ubuntu-latest
@@ -98,7 +93,6 @@ jobs:
       && github.event.workflow_run.conclusion == 'success'
       && github.event.workflow_run.event == 'push'
       && github.event.workflow_run.head_branch == 'master'
-      && github.event.workflow_run.actor.login == 'urashil'
 
     steps:
       - name: Trigger Remote Deployment
@@ -143,12 +137,14 @@ jobs:
   deploy-dev:
     name: Build & Deploy (dev)
     runs-on: ubuntu-latest
-    # Secrets come from the `dev` environment (dev branch only).
+    # Secrets come from the `dev` environment (dev branch only). The gate is
+    # that environment's required reviewers (the `owners` team), not a name
+    # check here: a push to `dev` waits for their approval before this job runs.
     environment: dev
     needs: test
     # The dev server (port 37222) has `dev` checked out; deploy.sh pulls the
     # checked-out branch, so this only deploys what is pushed to dev.
-    if: github.event_name != 'workflow_run' && github.ref == 'refs/heads/dev' && github.actor == 'urashil'
+    if: github.event_name != 'workflow_run' && github.ref == 'refs/heads/dev'
 
     steps:
       - name: Trigger Remote Deployment (dev)

@@ -8,8 +8,6 @@ use crate::state::AppState;
 use axum::http::{header, Method, Response, StatusCode};
 use serde_json::{json, Value};
 
-const EMBEDDED_MADLIBS: &str = include_str!("madlibs.json");
-
 /// Handle `/api/madlibs`, `/api/madlibs/random`, `/api/madlibs/list`, etc.
 pub fn handle(
     state: &AppState,
@@ -119,27 +117,7 @@ fn pick_random(templates: &[Value]) -> &Value {
 }
 
 fn load_templates(state: &AppState) -> Vec<Value> {
-    // 1. Try reading from store
-    let doc = state
-        .store
-        .read_document(&state.data_dir().join("madlibs.json"), json!([]));
-    if let Some(arr) = doc.as_array() {
-        if !arr.is_empty() {
-            return arr.clone();
-        }
-    }
-
-    // 2. Try reading from disk
-    if let Ok(raw) = std::fs::read_to_string(state.data_dir().join("madlibs.json")) {
-        if let Ok(Value::Array(arr)) = serde_json::from_str(&raw) {
-            if !arr.is_empty() {
-                return arr;
-            }
-        }
-    }
-
-    // 3. Fallback to embedded compile-time templates
-    serde_json::from_str(EMBEDDED_MADLIBS).unwrap_or_default()
+    mitch_lib::site_content::madlibs(&state.store)
 }
 
 #[cfg(test)]

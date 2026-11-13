@@ -10,10 +10,11 @@ Usage:
   ./newsletter.py -u <email>        (unsubscribe email)
   ./newsletter.py -l                (list all recipients)
 """
-import json, os, subprocess, sys, time, threading
+import json, os, sqlite3, subprocess, sys, time, threading
 
 BASE          = os.path.dirname(os.path.abspath(__file__))
 LOGS_DIR      = os.path.join(BASE, 'logs', 'newsletter_logs')
+DB_PATH       = os.path.join(BASE, 'data', 'mitchpro.db')
 TOKENS_FILE   = os.path.join(BASE, 'data', 'tokens.json')
 EXTRA_FILE    = os.path.join(BASE, 'data', 'newsletter_extra.json')
 UNSUB_FILE    = os.path.join(BASE, 'data', 'newsletter_unsub.json')
@@ -58,8 +59,14 @@ def get_all_emails():
 UNSUB_FOOTER = ''  # footer is now appended by the send scripts
 
 def has_profanity(email):
+    # Words come from the bad_words table (data/mitchpro.db); a missing DB or
+    # table means nothing is filtered.
     try:
-        bad = json.load(open(os.path.join(BASE, 'data', 'bad_words.json')))
+        conn = sqlite3.connect('file:%s?mode=ro' % DB_PATH, uri=True, timeout=5)
+        try:
+            bad = [r[0] for r in conn.execute('SELECT word FROM bad_words')]
+        finally:
+            conn.close()
         local = email.split('@')[0].lower()
         return any(w.lower() in local for w in bad)
     except Exception:

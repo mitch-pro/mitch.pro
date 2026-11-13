@@ -9854,10 +9854,7 @@ mod tests {
             mod_email,
             false,
         );
-        let _ = state.store.write_document(
-            &state.data_dir().join("moderators.json"),
-            &json!([mod_email]),
-        );
+        mitch_lib::site_content::set_moderators(&state.store, &[mod_email.to_string()]);
 
         let mut mod_headers = HeaderMap::new();
         mod_headers.insert(
