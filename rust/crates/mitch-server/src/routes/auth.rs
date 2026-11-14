@@ -2338,7 +2338,7 @@ mod tests {
         mitch_lib::passwords::password_set(
             &state.store,
             &norm,
-            &crypto::argon2_hash("Password123!"),
+            &crypto::argon2_hash(&random_bytes_hex(12)),
         );
         let headers = HeaderMap::new();
 
