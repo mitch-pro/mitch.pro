@@ -67,6 +67,7 @@
 
         <button id="login-btn" class="btn-primary" type="button" onclick="login()">Log in</button>
         <button id="passkey-btn" class="btn-primary" type="button" onclick="loginWithPasskey()">Use a passkey</button>
+        <button id="magic-btn" class="btn-primary" type="button" onclick="sendMagicLink()">Email me a login link</button>
         <div id="login-msg" role="status" aria-live="polite" aria-atomic="true"></div>
         <div id="login-2fa-panel" style="display:none;">
           <label class="field-label" id="login-2fa-label" for="login-2fa-code">Verification code</label>
@@ -965,6 +966,41 @@ async function login() {
     btn.disabled = false;
     resetCaptcha();
   }
+}
+
+// One-click email login: the server mails a single-use link to the account.
+async function sendMagicLink() {
+  const msg = document.getElementById('login-msg');
+  const btn = document.getElementById('magic-btn');
+  const email = document.getElementById('login-email').value.trim();
+  if (!email) {
+    msg.className = 'err';
+    msg.textContent = 'Enter your email or username.';
+    return;
+  }
+  btn.disabled = true;
+  msg.className = '';
+  msg.textContent = 'Sending login link...';
+  const captcha = await getCaptchaResponse('magic_link');
+  try {
+    const r = await fetchWithRetry('/api/magic-link/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, recaptcha_token: captcha })
+    });
+    const d = await r.json();
+    if (d.success) {
+      msg.className = 'ok';
+      msg.textContent = 'If an account matches, a login link is on its way. Check your email.';
+    } else {
+      msg.className = 'err';
+      msg.textContent = d.message || 'Could not send the link.';
+    }
+  } catch (e) {
+    msg.className = 'err';
+    msg.textContent = 'Could not reach the server. Check your connection and try again.';
+  }
+  btn.disabled = false;
 }
 
 async function verifyLogin2fa() {

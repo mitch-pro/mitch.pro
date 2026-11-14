@@ -591,7 +591,13 @@ function loadGreeting() {
     if (edge) {
       edge.addEventListener('mouseenter', function() { if (hoverCapable.matches) { hoverTimeout = setTimeout(function() { setOpen(true); }, 180); } });
       edge.addEventListener('mouseleave', function() { if (hoverTimeout) clearTimeout(hoverTimeout); });
-      edge.addEventListener('click', function() { setOpen(true); rail.querySelector('.members-rail-close').focus(); });
+      edge.addEventListener('click', function(e) {
+        // Stop here so the click-outside handler below doesn't close the rail
+        // on the same tap (touch devices have no hover to open it instead).
+        e.stopPropagation();
+        setOpen(true);
+        rail.querySelector('.members-rail-close').focus();
+      });
     }
 
     if (handle) {

@@ -107,6 +107,12 @@ pub async fn handle(
     if path == "/api/login" && *method == Method::POST {
         return Some(login(state, headers, body_bytes).await);
     }
+    if path == "/api/magic-link/request" && *method == Method::POST {
+        return Some(magic_link_request(state, headers, body_bytes).await);
+    }
+    if path == "/api/magic-link/verify" && *method == Method::POST {
+        return Some(magic_link_verify(state, headers, body_bytes));
+    }
     if path == "/api/logout" && *method == Method::POST {
         return Some(logout(state, headers));
     }
@@ -762,6 +768,163 @@ async fn login(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) ->
         );
     }
 
+    auth_success_response(
+        state,
+        headers,
+        json!({ "success": true }),
+        &norm_email,
+        &norm_email,
+    )
+}
+
+/// How long an emailed sign-in link stays valid.
+const MAGIC_LINK_TTL_MS: i64 = 15 * 60 * 1000;
+
+/// Origin used for the emailed link. The request `Host` is attacker-controlled,
+/// so it is only echoed when it is a known site host (so the session cookie
+/// lands on the host the person signed in from); anything else falls back to
+/// the configured alternate origin. This prevents host-header poisoning of
+/// the link.
+fn magic_link_origin(state: &AppState, headers: &HeaderMap) -> String {
+    let host = crate::hosts::request_host(headers);
+    let name = host.split(':').next().unwrap_or("").to_lowercase();
+    let known = crate::hosts::is_mitch_sso_host(&state.cfg, &name)
+        || crate::hosts::is_rjuhsd_host(headers)
+        || crate::hosts::is_pickle_host(headers);
+    if known {
+        crate::hosts::request_origin(headers)
+    } else {
+        state.cfg.alternate.trim_end_matches('/').to_string()
+    }
+}
+
+/// `POST /api/magic-link/request` — emails a one-click sign-in link.
+///
+/// Always answers `{success: true}` for a well-formed request so it can't be
+/// used to discover which accounts exist. The link carries a random
+/// single-use token (stored as a `magic_login` row in `tokens`, 15 min TTL);
+/// it lands on `/magic-link/`, which POSTs the token to
+/// `/api/magic-link/verify` so mail scanners that prefetch links can't burn it.
+async fn magic_link_request(
+    state: &Arc<AppState>,
+    headers: &HeaderMap,
+    body_bytes: &[u8],
+) -> Response {
+    let Some(body) = parse_body(body_bytes) else {
+        return json_resp(400, json!({ "success": false, "message": "bad json" }));
+    };
+    let ident = body
+        .get("email")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_lowercase();
+    if ident.is_empty() {
+        return json_resp(
+            400,
+            json!({ "success": false, "message": "Enter your email or username." }),
+        );
+    }
+    let ip = get_real_ip(headers, None);
+    let recaptcha_token = body
+        .get("recaptcha_token")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    if !verify_recaptcha(state, recaptcha_token, &ip, "").await {
+        return json_resp(
+            400,
+            json!({ "success": false, "message": "reCAPTCHA failed. Please try again." }),
+        );
+    }
+    let ok = json_resp(200, json!({ "success": true }));
+
+    let Some(norm_email) = resolve_login_identifier(state, &ident) else {
+        return ok;
+    };
+    if !mitch_lib::passwords::password_exists(&state.store, &norm_email)
+        || auth::banned_info_for_email(&state.store, &norm_email).is_some()
+    {
+        return ok;
+    }
+    // A time-based authenticator is a second factor the emailed link would
+    // skip, so those accounts keep using their password.
+    let twofa = two_factor_config(state, &norm_email);
+    if twofa.enabled && twofa.type_ != "email" {
+        return ok;
+    }
+    let target = canonical_address(state, &norm_email);
+    let token = random_bytes_hex(32);
+    mitch_lib::tokens::token_set(
+        &state.store,
+        &token,
+        &json!({
+            "type": "magic_login",
+            "norm_email": norm_email,
+            "expires": now_ms() + MAGIC_LINK_TTL_MS,
+        }),
+    );
+    let link = format!("{}/magic-link/#{token}", magic_link_origin(state, headers));
+    let content = format!(
+        r#"
+    <h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 700; color: #f4f4f5; text-align: center;">Log in to mitch.pro</h2>
+    <p style="margin: 0 0 20px; text-align: center; color: #cbd5e1;">Click the button to log in. The link works once and expires in 15 minutes.</p>
+    <p style="margin: 0 0 24px; text-align: center;"><a href="{link}" style="display: inline-block; background: #a855f7; color: #ffffff; text-decoration: none; font-weight: 700; padding: 12px 28px; border-radius: 10px;">Log in</a></p>
+    <p style="margin: 0; font-size: 13px; color: #94a3b8; text-align: center;">If you didn't request this, you can safely ignore this email.</p>
+    "#
+    );
+    let html = html_base_template(state, &target, "Log in to mitch.pro", &content);
+    send_email_bg(state, &target, "Your mitch.pro login link", &html);
+    ok
+}
+
+/// `POST /api/magic-link/verify` — consumes a link token and signs in.
+fn magic_link_verify(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Response {
+    let fail = || {
+        json_resp(
+            400,
+            json!({ "success": false, "message": "This link is invalid or has expired. Request a new one." }),
+        )
+    };
+    let Some(body) = parse_body(body_bytes) else {
+        return fail();
+    };
+    let token = body
+        .get("token")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if token.is_empty() || token.len() > 128 {
+        return fail();
+    }
+    let Some(rec) = mitch_lib::tokens::token_get(&state.store, &token) else {
+        return fail();
+    };
+    if rec.get("type").and_then(|v| v.as_str()) != Some("magic_login") {
+        return fail();
+    }
+    // Single use: burn it before anything else can fail.
+    mitch_lib::tokens::token_remove(&state.store, &token);
+    let expires = rec.get("expires").and_then(|v| v.as_i64()).unwrap_or(0);
+    let norm_email = rec
+        .get("norm_email")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    if expires < now_ms() || norm_email.is_empty() {
+        return fail();
+    }
+    if let Some(ban) = auth::banned_info_for_email(&state.store, &norm_email) {
+        return crate::access::account_response(state, "/api/magic-link/verify", &norm_email, &ban);
+    }
+    ensure_profile_defaults(
+        &state.store,
+        &state.cfg.data_dir,
+        &state.id_secret,
+        &norm_email,
+        &norm_email,
+        &json!({}),
+    );
     auth_success_response(
         state,
         headers,
@@ -2165,6 +2328,49 @@ mod tests {
             Some(email.to_string()),
             "the fresh sid must resolve back to the email that just signed up"
         );
+    }
+
+    #[tokio::test]
+    async fn test_magic_link_is_single_use_and_expires() {
+        std::env::set_var("NODE_ENV", "test");
+        let (state, _dir) = test_state();
+        let norm = auth::normalize_email("carol@student.rjuhsd.us");
+        mitch_lib::passwords::password_set(
+            &state.store,
+            &norm,
+            &crypto::argon2_hash("Password123!"),
+        );
+        let headers = HeaderMap::new();
+
+        let req = json!({ "email": "carol@student.rjuhsd.us" }).to_string();
+        let resp = magic_link_request(&state, &headers, req.as_bytes()).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        // Unknown accounts get the same answer.
+        let resp = magic_link_request(&state, &headers, br#"{"email":"nobody@x.com"}"#).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let tokens = mitch_lib::tokens::token_all(&state.store);
+        let (tok, _) = tokens
+            .as_object()
+            .unwrap()
+            .iter()
+            .find(|(_, v)| v["type"] == "magic_login" && v["norm_email"] == norm.as_str())
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .expect("magic token stored");
+        let body = json!({ "token": tok }).to_string();
+        let ok = magic_link_verify(&state, &headers, body.as_bytes());
+        assert_eq!(ok.status(), StatusCode::OK);
+        assert!(ok.headers().get(axum::http::header::SET_COOKIE).is_some());
+        let again = magic_link_verify(&state, &headers, body.as_bytes());
+        assert_eq!(again.status(), StatusCode::BAD_REQUEST);
+
+        mitch_lib::tokens::token_set(
+            &state.store,
+            "expiredtok",
+            &json!({ "type": "magic_login", "norm_email": norm, "expires": 1 }),
+        );
+        let exp = magic_link_verify(&state, &headers, br#"{"token":"expiredtok"}"#);
+        assert_eq!(exp.status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]

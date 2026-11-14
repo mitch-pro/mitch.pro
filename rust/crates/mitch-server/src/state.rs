@@ -546,6 +546,8 @@ pub const PUBLIC_API_PATHS: &[&str] = &[
     "/api/verify-signup",
     "/api/claim-token",
     "/api/login",
+    "/api/magic-link/request",
+    "/api/magic-link/verify",
     "/api/dev/test-access",
     "/api/verify-2fa",
     "/api/request-access",
