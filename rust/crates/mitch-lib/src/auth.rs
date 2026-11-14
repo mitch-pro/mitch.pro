@@ -864,6 +864,8 @@ pub fn rate_limit_for(endpoint: &str) -> (u32, u32) {
         "/api/webauthn/credentials/rename" => (20, 60),
         "/api/webauthn/credentials/delete" => (10, 60),
         "/api/request-access" => (10, 600),
+        "/api/magic-link/request" => (5, 600),
+        "/api/magic-link/verify" => (20, 600),
         "/api/claim-token" => (10, 3600),
         "/api/pass" => (60, 60),
         "/api/e2e/verify-password" => (5, 60),
