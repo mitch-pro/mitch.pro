@@ -2334,7 +2334,7 @@ mod tests {
     async fn test_magic_link_is_single_use_and_expires() {
         std::env::set_var("NODE_ENV", "test");
         let (state, _dir) = test_state();
-        let norm = auth::normalize_email("carol@student.rjuhsd.us");
+        let norm = auth::normalize_email("test.student1@student.rjuhsd.us");
         mitch_lib::passwords::password_set(
             &state.store,
             &norm,
@@ -2342,11 +2342,11 @@ mod tests {
         );
         let headers = HeaderMap::new();
 
-        let req = json!({ "email": "carol@student.rjuhsd.us" }).to_string();
+        let req = json!({ "email": "test.student1@student.rjuhsd.us" }).to_string();
         let resp = magic_link_request(&state, &headers, req.as_bytes()).await;
         assert_eq!(resp.status(), StatusCode::OK);
         // Unknown accounts get the same answer.
-        let resp = magic_link_request(&state, &headers, br#"{"email":"nobody@x.com"}"#).await;
+        let resp = magic_link_request(&state, &headers, br#"{"email":"nobody@example.com"}"#).await;
         assert_eq!(resp.status(), StatusCode::OK);
 
         let tokens = mitch_lib::tokens::token_all(&state.store);
