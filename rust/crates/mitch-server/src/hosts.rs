@@ -86,8 +86,11 @@ pub fn is_host(host: &str, domain: &str) -> bool {
     h == domain || h.ends_with(&format!(".{domain}"))
 }
 
+/// rjuhsd.school itself, or one of the mirror domains admins added (see
+/// `mitch_lib::site_domains::is_school_mirror`).
 pub fn is_rjuhsd_host(headers: &axum::http::HeaderMap) -> bool {
-    is_host(&request_host(headers), "rjuhsd.school")
+    let host = request_host(headers);
+    is_host(&host, "rjuhsd.school") || mitch_lib::site_domains::is_school_mirror(&host)
 }
 
 pub fn is_pickle_host(headers: &axum::http::HeaderMap) -> bool {

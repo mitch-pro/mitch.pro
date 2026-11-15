@@ -71,6 +71,7 @@ async fn main() {
         mitch_lib::data::DataStore::open(&cfg.base_dir, &cfg.data_dir)
             .unwrap_or_else(|e| panic!("open data store at {}: {e}", cfg.data_dir.display())),
     );
+    mitch_lib::site_domains::reload_school_mirrors(&store);
     let state = Arc::new(state::AppState::new(cfg.clone(), store.clone()));
     // Delete personal data older versions stored but this one no longer keeps
     // (docs/privacy.md). Idempotent, so it runs on every start.

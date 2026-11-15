@@ -46,7 +46,17 @@ visited before is sent to the other domain instead of the offline page.
   once when the service worker takes control, and that reload no longer has
   `_moved_from` in its URL.
 - `rjuhsd.school` shares the worker but is a separate site, so it never fails
-  over.
+  over, and it no longer redirects to a mitch.pro mirror path: it serves its own
+  pages directly.
+- **rjuhsd.school mirrors.** Admins add extra domains that serve the
+  rjuhsd.school site in the "rjuhsd.school mirrors" card on `/admin/` (owner and
+  developer see it). They are stored in the SQL table `school_mirrors`
+  (`mitch_lib::site_domains`, API `GET|POST /api/admin/school-mirrors` with
+  `{action: add|remove, origin}`, audited). The host set is cached in memory
+  (reloaded at startup and on each change) and `hosts::is_rjuhsd_host` treats a
+  mirror, or a subdomain of one, like rjuhsd.school. The domain's DNS must
+  already point at this server. Browser-side host checks (online count, install
+  banner, theme) still match only `rjuhsd.school`.
 
 ## Limits
 

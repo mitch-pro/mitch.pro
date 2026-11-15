@@ -506,6 +506,7 @@ pub(crate) fn vm_same_origin_request(headers: &HeaderMap) -> bool {
             || h.ends_with(".mitch.pro")
             || h == "rjuhsd.school"
             || h.ends_with(".rjuhsd.school")
+            || mitch_lib::site_domains::is_school_mirror(h)
             || h == "sexypickleclub.com"
             || h.ends_with(".sexypickleclub.com")
             || h == "localhost"
