@@ -333,6 +333,11 @@ impl DataStore {
                         added_by TEXT NOT NULL DEFAULT '',
                         added_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS school_mirrors (
+                        host TEXT PRIMARY KEY,
+                        added_by TEXT NOT NULL DEFAULT '',
+                        added_at INTEGER NOT NULL
+                    );
                     CREATE TABLE IF NOT EXISTS redirecting_domains (
                         host TEXT PRIMARY KEY,
                         marked_by TEXT NOT NULL DEFAULT '',

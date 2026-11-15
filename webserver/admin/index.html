@@ -721,6 +721,16 @@
         <div id="removed-domains-list" style="font-size:.78rem;"></div>
         <div id="backup-domains-status" class="form-status" role="status"></div>
       </section>
+      <section class="action-card" id="school-mirrors-card" hidden>
+        <h2>rjuhsd.school mirrors</h2>
+        <p>Domains that serve the same site as rjuhsd.school. Point the domain's DNS at this server, then add it here.</p>
+        <div id="school-mirrors-list" style="font-size:.78rem;margin-bottom:10px;"></div>
+        <form onsubmit="addSchoolMirror(event)" style="display:flex;gap:7px;flex-wrap:wrap;">
+          <input id="school-mirror-origin" type="text" placeholder="example.com" required maxlength="253" autocomplete="off" style="flex:1;min-width:200px">
+          <button type="submit" style="width:auto">Add</button>
+        </form>
+        <div id="school-mirrors-status" class="form-status" role="status"></div>
+      </section>
       <section class="action-card" id="tester-self-card" hidden>
         <h2>Tester mode</h2>
         <p>Use the sandbox tester tools (unlimited test coins, test premium) on your own account.</p>
@@ -2021,6 +2031,38 @@
       }).join('');
     }
 
+    function renderSchoolMirrors(rows) {
+      document.getElementById('school-mirrors-list').innerHTML = (rows || []).map(m => `
+        <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--t-bd);">
+          <span>${esc(m.host)}</span>
+          <button type="button" onclick='changeSchoolMirror("remove", ${JSON.stringify(m.host)})' style="padding:4px 8px;font-size:11px;width:auto;">Remove</button>
+        </div>
+      `).join('') || '<div class="muted">No mirrors.</div>';
+    }
+    async function loadSchoolMirrors() {
+      try {
+        const r = await fetch('/api/admin/school-mirrors', { credentials: 'include', cache: 'no-store', headers: getAdminHeaders() });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || 'Could not load mirrors.');
+        renderSchoolMirrors(d.mirrors);
+      } catch (err) {
+        setStatus('school-mirrors-status', err.message, 'err');
+      }
+    }
+    async function changeSchoolMirror(action, origin) {
+      if (action === 'remove' && !(await customConfirm('Remove mirror', `Remove ${origin}?`))) return;
+      setStatus('school-mirrors-status', 'Saving...', '');
+      try {
+        const d = await postAdmin('/api/admin/school-mirrors', { action, origin });
+        renderSchoolMirrors(d.mirrors);
+        setStatus('school-mirrors-status', 'Saved.', 'ok');
+      } catch (err) { setStatus('school-mirrors-status', err.message, 'err'); }
+    }
+    function addSchoolMirror(event) {
+      event.preventDefault();
+      const input = document.getElementById('school-mirror-origin');
+      changeSchoolMirror('add', input.value.trim()).then(() => { input.value = ''; });
+    }
     async function loadBackupDomains() {
       try {
         const r = await fetch('/api/admin/backup-domains', { credentials: 'include', cache: 'no-store', headers: getAdminHeaders() });
@@ -3933,6 +3975,8 @@
         document.getElementById('tester-self-card').hidden = false;
         document.getElementById('backup-domains-card').hidden = false;
         loadBackupDomains();
+        document.getElementById('school-mirrors-card').hidden = false;
+        loadSchoolMirrors();
         loadTesterSelf();
       }
       if (location.hash === '#owner-tools' && !ownerOrDev) activateToolGroup('approval-tools');

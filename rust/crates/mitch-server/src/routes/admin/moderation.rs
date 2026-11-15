@@ -288,6 +288,20 @@ pub fn handle(
         return Some(set_reserved_username(state, body, ctx));
     }
 
+    // GET|POST /api/admin/school-mirrors (full admins): extra domains that
+    // serve rjuhsd.school.
+    if path == "/api/admin/school-mirrors" {
+        if !ctx.is_admin(state) {
+            return Some(forbidden());
+        }
+        if *method == Method::GET {
+            return Some(school_mirrors_response(state));
+        }
+        if *method == Method::POST {
+            return Some(change_school_mirrors(state, body, ctx));
+        }
+    }
+
     // GET|POST /api/admin/backup-domains (full admins): the backup-domain pool.
     if path == "/api/admin/backup-domains" {
         if !ctx.is_admin(state) {
@@ -888,6 +902,57 @@ fn backup_domains_response(state: &Arc<AppState>) -> Response {
             })).collect::<Vec<_>>(),
         }),
     )
+}
+
+fn school_mirrors_response(state: &Arc<AppState>) -> Response {
+    json_response(
+        200,
+        json!({
+            "ok": true,
+            "mirrors": mitch_lib::site_domains::school_mirrors(&state.store).iter().map(|m| json!({
+                "host": m.host,
+                "addedBy": m.added_by,
+                "addedAt": m.added_at,
+            })).collect::<Vec<_>>(),
+        }),
+    )
+}
+
+/// `POST /api/admin/school-mirrors` (full admins): `{action: add|remove, origin}`.
+/// A mirror is another domain pointed at this server that serves the
+/// rjuhsd.school site (same hub, sign-in and online count). Audited.
+fn change_school_mirrors(state: &Arc<AppState>, body: &Value, ctx: &AdminCtx) -> Response {
+    use mitch_lib::site_domains as domains;
+    let action = body.get("action").and_then(|v| v.as_str()).unwrap_or("");
+    let Some(origin) =
+        domains::normalize_origin(body.get("origin").and_then(|v| v.as_str()).unwrap_or(""))
+    else {
+        return json_response(400, json!({ "error": "Enter a domain like example.com." }));
+    };
+    let admin_email = ctx.email(state);
+    let ok = match action {
+        "add" => domains::add_school_mirror(&state.store, &origin, &admin_email),
+        "remove" => domains::remove_school_mirror(&state.store, &origin),
+        _ => return json_response(400, json!({ "error": "unknown action" })),
+    };
+    if !ok {
+        return json_response(
+            400,
+            json!({ "error": if action == "add" {
+                "That domain can't be added."
+            } else {
+                "That domain isn't in the list."
+            } }),
+        );
+    }
+    mitch_lib::admin::log_admin_action(
+        &state.store,
+        &state.cfg.data_dir,
+        &admin_email,
+        "school_mirror",
+        json!({ "action": action, "target": origin }),
+    );
+    school_mirrors_response(state)
 }
 
 /// `POST /api/admin/backup-domains` (full admins): `{action}` is `add` or

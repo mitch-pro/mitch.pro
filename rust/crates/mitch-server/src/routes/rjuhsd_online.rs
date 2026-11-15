@@ -310,12 +310,14 @@ fn board() -> std::sync::MutexGuard<'static, Board> {
         .unwrap_or_else(|e| e.into_inner())
 }
 
-/// rjuhsd.school only. Localhost is allowed outside production so the page
+/// rjuhsd.school and its mirrors only. Localhost is allowed outside production so the page
 /// can be tested locally.
 fn host_allowed(headers: &HeaderMap) -> bool {
     let host = crate::hosts::request_host(headers).to_lowercase();
     let name = host.split(':').next().unwrap_or("");
-    if crate::hosts::is_host(name, "rjuhsd.school") {
+    if crate::hosts::is_host(name, "rjuhsd.school")
+        || mitch_lib::site_domains::is_school_mirror(name)
+    {
         return true;
     }
     std::env::var("NODE_ENV").as_deref() != Ok("production")

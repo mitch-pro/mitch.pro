@@ -285,6 +285,94 @@ pub fn pick_next(host: &str, candidates: &[String], marked: &[String]) -> Option
         .cloned()
 }
 
+// ---------------------------------------------------------------------------
+// rjuhsd.school mirrors
+// ---------------------------------------------------------------------------
+
+/// Hosts of the `school_mirrors` table, mirrored in memory so the (synchronous)
+/// host checks on every request don't hit SQLite. Reloaded at startup and
+/// after every change made through this module.
+fn mirror_cache() -> &'static std::sync::RwLock<std::collections::HashSet<String>> {
+    static CACHE: std::sync::OnceLock<std::sync::RwLock<std::collections::HashSet<String>>> =
+        std::sync::OnceLock::new();
+    CACHE.get_or_init(Default::default)
+}
+
+/// One mirror, as listed in the admin panel.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SchoolMirror {
+    pub host: String,
+    pub added_by: String,
+    pub added_at: i64,
+}
+
+/// Every mirror domain, oldest first.
+pub fn school_mirrors(store: &DataStore) -> Vec<SchoolMirror> {
+    let conn = store.conn();
+    let Ok(mut stmt) =
+        conn.prepare("SELECT host, added_by, added_at FROM school_mirrors ORDER BY added_at, host")
+    else {
+        return Vec::new();
+    };
+    let rows = stmt.query_map([], |r| {
+        Ok(SchoolMirror {
+            host: r.get(0)?,
+            added_by: r.get(1)?,
+            added_at: r.get(2)?,
+        })
+    });
+    match rows {
+        Ok(iter) => iter.filter_map(|r| r.ok()).collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// Reloads the in-memory host set from the table.
+pub fn reload_school_mirrors(store: &DataStore) {
+    let hosts = school_mirrors(store).into_iter().map(|m| m.host).collect();
+    *mirror_cache().write().unwrap_or_else(|e| e.into_inner()) = hosts;
+}
+
+/// Adds a mirror (no-op if present). `origin` must already be normalized.
+/// False on a database error or when the host is rjuhsd.school itself.
+pub fn add_school_mirror(store: &DataStore, origin: &str, added_by: &str) -> bool {
+    let host = host_of(origin);
+    if host.is_empty() || host == "rjuhsd.school" || host.ends_with(".rjuhsd.school") {
+        return false;
+    }
+    let ok = store
+        .conn()
+        .execute(
+            "INSERT OR IGNORE INTO school_mirrors (host, added_by, added_at) VALUES (?1, ?2, ?3)",
+            rusqlite::params![host, added_by, now_millis()],
+        )
+        .is_ok();
+    reload_school_mirrors(store);
+    ok
+}
+
+/// Removes a mirror; true when it existed.
+pub fn remove_school_mirror(store: &DataStore, origin: &str) -> bool {
+    let removed = store
+        .conn()
+        .execute(
+            "DELETE FROM school_mirrors WHERE host = ?1",
+            rusqlite::params![host_of(origin)],
+        )
+        .unwrap_or(0)
+        > 0;
+    reload_school_mirrors(store);
+    removed
+}
+
+/// True when `host` (port allowed) is an admin-added mirror, or a subdomain of
+/// one. Such hosts are served exactly like rjuhsd.school.
+pub fn is_school_mirror(host: &str) -> bool {
+    let h = host_of(host);
+    let set = mirror_cache().read().unwrap_or_else(|e| e.into_inner());
+    set.iter().any(|m| h == *m || h.ends_with(&format!(".{m}")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -424,5 +512,22 @@ mod tests {
         assert!(set_redirecting(&store, "a.example", false, "owner"));
         assert!(!is_redirecting(&store, "a.example"));
         assert!(!set_redirecting(&store, "", true, "owner"));
+    }
+
+    #[test]
+    fn school_mirrors_round_trip() {
+        let store = temp_store("mirrors");
+        assert!(!is_school_mirror("mirror-rt.example"));
+        assert!(add_school_mirror(
+            &store,
+            "https://Mirror-RT.example",
+            "owner"
+        ));
+        assert!(is_school_mirror("mirror-rt.example:443"));
+        assert!(is_school_mirror("www.mirror-rt.example"));
+        assert_eq!(school_mirrors(&store).len(), 1);
+        assert!(remove_school_mirror(&store, "https://mirror-rt.example"));
+        assert!(!is_school_mirror("mirror-rt.example"));
+        assert!(!add_school_mirror(&store, "https://rjuhsd.school", "owner"));
     }
 }
