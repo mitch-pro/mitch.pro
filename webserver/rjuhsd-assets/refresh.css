@@ -290,15 +290,14 @@ footer { width: min(1280px, calc(100% - 56px)); margin: 35px auto 0; padding-bot
 #current-eyebrow, .period-range { color: var(--muted); }
 .dashboard-section, .snapshot, .district-school-card, .tool-grid > a, .day-card, .faq-item { border-radius: var(--radius); box-shadow: none; }
 .schedule-note:empty, #schedule-note:empty { display: none; }
-.powered-by-link { color: var(--t-ac-ink, #fff); background: var(--wine); border-color: var(--wine); }
-.powered-by-link:hover { filter: brightness(1.08); background: var(--wine); color: var(--t-ac-ink, #fff); }
+.powered-by-link { padding: 0; border: 0; border-radius: 0; background: none; color: var(--muted); font-size: 13px; }
 html, body { overflow-x: clip; }
 
 @media (max-width: 700px) {
   .site-header { min-height: 0; padding: 10px 16px; }
   .brand-copy { min-width: 0; }
   .brand-copy strong { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .powered-by-link { padding: 5px 12px; font-size: 12px; }
+  .powered-by-link { padding: 0; font-size: 12px; }
   .school-choice select { max-width: 120px; }
   .hero { padding: 20px 16px; }
   .hero h1 { font-size: 36px; letter-spacing: -1.2px; }
