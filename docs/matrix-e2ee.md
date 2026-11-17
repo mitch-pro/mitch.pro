@@ -112,11 +112,11 @@ access token from replacing an account's cross-signing keys.
 
 ## Encrypted DMs by default
 
-The new-DM dialog in the Cinny bundle (`webserver/matrix/assets/index-fhqY9EyS.js`)
+The new-DM dialog in the Cinny bundle (`webserver/matrix/assets/index-fhqY9EyT.js`)
 starts with encryption on. The bundle is a patched build: everything under
 `/matrix/assets/` is served `immutable`, so changing it means giving it a new
 hashed filename and updating the references in `index.html` and the other
-chunks (and regenerating the `.gz` files). Private rooms still default to off.
+chunks (and regenerating the `.gz` files). Changing a file's contents while keeping its name is not enough: browsers that already cached it keep the old copy. Rename the main bundle and every chunk that imports it together, or a stale cached chunk loads the old bundle next to the new one and the page shows two chats. Private rooms still default to off.
 
 ## Call button always shown
 
