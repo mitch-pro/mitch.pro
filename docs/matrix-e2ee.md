@@ -112,7 +112,7 @@ access token from replacing an account's cross-signing keys.
 
 ## Encrypted DMs by default
 
-The new-DM dialog in the Cinny bundle (`webserver/matrix/assets/index-fhqY9EyR.js`)
+The new-DM dialog in the Cinny bundle (`webserver/matrix/assets/index-fhqY9EyS.js`)
 starts with encryption on. The bundle is a patched build: everything under
 `/matrix/assets/` is served `immutable`, so changing it means giving it a new
 hashed filename and updating the references in `index.html` and the other
@@ -127,6 +127,12 @@ button. The bundle's `_3` check (the WebRTC test used by the call buttons and
 the incoming-call prompt) is patched to always return true. The server-side
 check (`rtc_foci` in the homeserver's well-known) still decides whether calls
 are offered at all.
+
+The client reads that well-known itself, from the browser. When the request
+fails or returns 404 (a school web filter blocking the fetch, for example), it
+used a bare `{m.homeserver}` object with no `rtc_foci`, and the button vanished.
+The bundle's discovery provider (`c_e`) now falls back to the LiveKit focus at
+`<homeserver>/livekit` whenever the fetched config has no `rtc_foci`.
 
 ## DOM guard
 
