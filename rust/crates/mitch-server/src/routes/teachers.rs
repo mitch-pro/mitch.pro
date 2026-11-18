@@ -4,6 +4,7 @@
 //!
 //! - `GET  /api/teachers?school=KEY&q=TEXT`: the teacher list for a school with
 //!   each teacher's star averages, and whether this account already rated them.
+//!   Teachers with ratings are listed first, alphabetically within each group.
 //! - `GET  /api/teachers/one?id=N`: one teacher with approved notes.
 //! - `POST /api/teachers/rate`: `{teacherId, overall, homework?, teaching?,
 //!   chill?, note?}`.
@@ -102,20 +103,29 @@ pub async fn handle(
                 RJUHSD_SCHOOLS[0].0.to_string()
             };
             let summaries = db::summaries_for_school(&state.store, &school);
-            let teachers: Vec<Value> =
+            // Teachers with at least one rating come first; the sort is stable,
+            // so each group keeps the alphabetical order from the query.
+            let mut listed: Vec<_> =
                 db::list_teachers(&state.store, &school, &query_param(search, "q"))
-                    .iter()
+                    .into_iter()
                     .map(|t| {
                         let s = summaries.get(&t.id).cloned().unwrap_or_default();
-                        json!({
-                            "id": t.id,
-                            "name": t.name,
-                            "department": t.department,
-                            "ratings": stars_json(&s),
-                            "rated": db::has_rated(&state.store, &key, &norm, t.id),
-                        })
+                        (t, s)
                     })
                     .collect();
+            listed.sort_by_key(|(_, s)| s.count == 0);
+            let teachers: Vec<Value> = listed
+                .iter()
+                .map(|(t, s)| {
+                    json!({
+                        "id": t.id,
+                        "name": t.name,
+                        "department": t.department,
+                        "ratings": stars_json(s),
+                        "rated": db::has_rated(&state.store, &key, &norm, t.id),
+                    })
+                })
+                .collect();
             json_response(
                 200,
                 json!({

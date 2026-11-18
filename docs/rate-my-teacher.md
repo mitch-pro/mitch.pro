@@ -9,7 +9,8 @@ shows only after a moderator approves it. Ratings are anonymous.
 - **What is rated:** an overall score (required) and three optional category
   scores: teaching, homework (5 is very little) and chill (5 is very relaxed).
   All are 1 to 5 stars. Teachers are listed per school (the six `RJUHSD_SCHOOLS`
-  campuses). A note is up to 500 characters.
+  campuses), teachers with at least one rating first, alphabetically within
+  each group. A note is up to 500 characters.
 - **No edits:** a rating can't be changed or withdrawn by the student.
 
 ## How anonymity and one-per-teacher work
