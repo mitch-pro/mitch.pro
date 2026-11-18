@@ -14,21 +14,39 @@ services:
 
   # RAM-disk operation is opt-in via MITCH_DB_PATH=/ramdisk/mitchpro.db after
   # a coordinated migration. The default keeps both slots on the current disk DB.
-  # Litestream sidecar: replicates mitchpro.db between the shared tmpfs
-  # ramdisk (webserver-blue/green read/write it there) and the HDD-backed
-  # ./data mount. One shared ramdisk, one replication stream - see
-  # sql-sync/entrypoint.sh for why this has to be a standalone sidecar
-  # rather than wrapping each webserver process individually.
+  # mitch-dbsync sidecar: keeps the shared tmpfs ramdisk database durable by
+  # writing an encrypted (SQLCipher) snapshot to ./data/db-snapshots every
+  # minute, restoring the newest good one if the ramdisk comes up empty, and
+  # sending an ntfy notice if a snapshot overruns its minute. Runs as root so
+  # it can hand the database to the app user (uid 1000). Healthy only after
+  # the database is restored and checked, so the webservers wait for it.
+  # Replaced Litestream, which cannot replicate an encrypted database.
+  # See docs/database-encryption.md.
   sql-sync:
-    build: ./sql-sync
+    build:
+      context: ./rust
+      dockerfile: Dockerfile
     container_name: mitch-sql-sync
     restart: unless-stopped
+    user: "0:0"
+    environment:
+      - MITCH_SERVICE=mitch-dbsync
+      - MITCH_DB_KEY
+      - MITCH_DB_PATH=${MITCH_DB_PATH:-/app/data/mitchpro.db}
+      - DBSYNC_DB_PATH=/ramdisk/mitchpro.db
+      - DBSYNC_LEGACY_DB=/legacy/mitchpro.db
+      - DBSYNC_SNAPSHOT_DIR=/snapshots
+      - DBSYNC_REPLICA_DIR=/replica
+      - NTFY_TOPIC
+      - NTFY_USER
+      - NTFY_PASS
     volumes:
       - sql_ramdisk:/ramdisk
+      - ./data/db-snapshots:/snapshots
       - ./data/litestream-replica:/replica
       - ./data:/legacy
     healthcheck:
-      test: ["CMD", "test", "-f", "/ramdisk/mitchpro.db"]
+      test: ["CMD", "test", "-f", "/ramdisk/.dbsync-ready"]
       interval: 2s
       timeout: 2s
       retries: 30
@@ -87,6 +105,7 @@ services:
       - MITCH_BASE=/app
       - MITCH_SERVICE=mitch-server
       - MITCH_DB_PATH=${MITCH_DB_PATH:-/app/data/mitchpro.db}
+      - MITCH_DB_KEY
       - PORT=6800
       - PIA_USER
       - PIA_PASS
@@ -193,6 +212,7 @@ services:
       - MITCH_BASE=/app
       - MITCH_SERVICE=mitch-server
       - MITCH_DB_PATH=${MITCH_DB_PATH:-/app/data/mitchpro.db}
+      - MITCH_DB_KEY
       - PORT=6800
       - PIA_USER
       - PIA_PASS
@@ -368,8 +388,8 @@ volumes:
   # independent per-container tmpfs, which Compose's own `tmpfs:` option
   # would give each of them - a named volume with the tmpfs driver is what
   # actually lets multiple containers share one memory-backed filesystem).
-  # sql-sync is the only thing that persists it to the HDD-backed
-  # ./data/litestream-replica directory.
+  # sql-sync is the only thing that persists it, as encrypted snapshots in
+  # ./data/db-snapshots on the HDD (plus its .dbsync-ready marker file).
   sql_ramdisk:
     driver: local
     driver_opts:

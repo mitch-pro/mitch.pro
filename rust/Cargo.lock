@@ -1656,6 +1656,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mitch-dbsync"
+version = "0.1.0"
+dependencies = [
+ "mitch-lib",
+ "reqwest",
+ "rusqlite",
+]
+
+[[package]]
 name = "mitch-lib"
 version = "0.1.0"
 dependencies = [

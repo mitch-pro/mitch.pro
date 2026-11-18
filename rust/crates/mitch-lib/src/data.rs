@@ -106,8 +106,8 @@ fn static_regex(pattern: &str) -> regex::Regex {
 /// Where the actual `mitchpro.db` SQLite file lives. `MITCH_DB_PATH`
 /// overrides this, decoupled from `data_dir` (which still holds everything
 /// else - uploads, `PRESERVED_DATA_FILES`, etc. - unchanged). Set in
-/// production to point at a shared tmpfs ramdisk a Litestream sidecar
-/// continuously replicates to disk; unset in local dev/tests, which keeps
+/// production to point at a shared tmpfs ramdisk that the `mitch-dbsync`
+/// sidecar snapshots to disk every minute; unset in local dev/tests, which keeps
 /// the plain `data_dir/mitchpro.db` behavior from before this existed.
 ///
 /// Takes the env value as a parameter rather than reading `std::env`
@@ -130,8 +130,10 @@ impl DataStore {
         if let Some(parent) = db_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let conn = rusqlite::Connection::open(&db_path)?;
-        conn.busy_timeout(std::time::Duration::from_millis(15_000))?;
+        // Keyed when MITCH_DB_KEY is set (see dbcrypt); refuses a key/file
+        // mismatch instead of opening or creating the wrong database.
+        let db_key = crate::dbcrypt::DbKey::from_env()?;
+        let conn = crate::dbcrypt::open_db(&db_path, db_key.as_ref())?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
         conn.pragma_update(None, "foreign_keys", "ON")?;

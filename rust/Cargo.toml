@@ -4,6 +4,7 @@ members = [
     "crates/mitch-lib",
     "crates/mitch-server",
     "crates/mitch-mail",
+    "crates/mitch-dbsync",
 ]
 
 [workspace.package]
@@ -25,7 +26,11 @@ indexmap = { version = "2", features = ["serde"] }
 axum = { version = "0.8", features = ["ws", "macros"] }
 # axum::extract::ws re-exports hyper's upgrade half as hyper::upgrade::OnUpgrade.
 hyper = { version = "1", features = ["http1"] }
-rusqlite = { version = "0.37", features = ["bundled"] }
+# SQLCipher (not stock SQLite), linked against the system OpenSSL (the Docker
+# builder installs openssl-dev) so mitchpro.db can be encrypted at rest; a
+# connection that never sets a key still reads/writes plain SQLite files
+# (dev and tests). See docs/database-encryption.md.
+rusqlite = { version = "0.37", features = ["bundled-sqlcipher", "backup"] }
 tracing = "0.1"
 url = { version = "2", features = ["serde"] }
 rand = "0.9"

@@ -2,7 +2,7 @@
 
 Saves (`/api/userdata`, see [saves.md](saves.md)) are stored encrypted with a
 master key kept in the secrets manager, not in the data folder. The database is
-not encrypted; see "Database" below.
+stored separately; see "Database" below.
 
 Code: `mitch_lib::keyring` (key handling, format), `mitch_lib::userdata`
 (file read/write/sweep). Where secrets come from is a host concern:
@@ -75,8 +75,5 @@ until it's moved.
 
 ## Database
 
-Not encrypted. SQLCipher would encrypt the file, but it's unclear Litestream (the
-`sql-sync/` sidecar) can replicate an encrypted database, and when the database
-lives on the ramdisk the copies on disk are the replica and backups, not the live
-file. Encrypting where the replica is stored fits that setup better. Unresolved;
-nothing in the code encrypts the database.
+Encrypted with SQLCipher, separately from saves, using `MITCH_DB_KEY`. See
+[database-encryption.md](database-encryption.md).
