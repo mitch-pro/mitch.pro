@@ -32,6 +32,7 @@ pub mod moderation;
 pub mod newsletters;
 pub mod owner_container;
 pub mod special_schedule;
+pub mod staff_dashboard;
 pub mod support;
 pub mod teachers;
 pub mod updates;
@@ -266,6 +267,12 @@ pub async fn handle(
     // Feedback inbox (/moderator/feedback/): moderators read and mark handled,
     // admins delete.
     if let Some(resp) = feedback::handle(state, method, path, search, body, &ctx) {
+        return Some(resp);
+    }
+
+    // Unified staff dashboard (/staff-dashboard/): unresolved-item summary and
+    // the Matrix report queue.
+    if let Some(resp) = staff_dashboard::handle(state, method, path, search, body, &ctx).await {
         return Some(resp);
     }
 

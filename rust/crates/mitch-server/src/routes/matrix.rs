@@ -3895,42 +3895,103 @@ fn api_report_room(state: &AppState, headers: &HeaderMap, body_bytes: &[u8]) -> 
             .to_string();
     }
 
-    let clean_id = format!("room-{}-{}", now_millis(), rand::random::<u16>());
-    let report_entry = json!({
-        "id": clean_id,
-        "reason": format!("[Matrix Room {room_name} ({room_id})] {reason}"),
-        "reportedBy": reporter,
-        "ts": now_millis(),
-        "status": "Needs review",
-        "matrixRoomId": room_id,
-        "matrixRoomName": room_name,
-        "reportedWithoutEntering": true,
-        "context": [
-            {
-                "from": "system",
-                "to": room_id,
-                "text": format!("Chat reported without opening: {reason} (Room: {room_name})"),
-                "ts": now_millis(),
-                "reported": true
-            }
-        ]
-    });
-
-    let reports_file = state.data_dir().join("chat_reports.json");
-    let mut reports = state.store.read_document(&reports_file, json!([]));
-    if let Some(arr) = reports.as_array_mut() {
-        arr.push(report_entry);
-        if arr.len() > 5000 {
-            let excess = arr.len() - 5000;
-            arr.drain(0..excess);
-        }
-        let _ = state.store.write_document(&reports_file, &reports);
-    }
+    mitch_lib::matrix_reports::add(
+        &state.store,
+        room_id,
+        room_name,
+        "",
+        reason,
+        &reporter,
+        now_millis(),
+    );
 
     cors_json_response(
         200,
         json!({ "success": true, "message": "Chat reported successfully" }),
     )
+}
+
+/// One Matrix report as the staff APIs return it.
+pub fn matrix_report_json(r: &mitch_lib::matrix_reports::Report) -> Value {
+    json!({
+        "id": r.id,
+        "roomId": r.room_id,
+        "roomName": r.room_name,
+        "eventId": r.event_id,
+        "reason": r.reason,
+        "reportedBy": r.reported_by,
+        "sender": r.sender,
+        "body": r.body,
+        "createdAt": r.created_at,
+        "status": r.status,
+        "handledBy": r.handled_by,
+        "handledAt": r.handled_at,
+        "note": r.note,
+    })
+}
+
+/// Moves Matrix reports still sitting in `chat_reports.json` into the
+/// `matrix_reports` table (see `mitch_lib::matrix_reports::import_legacy`).
+pub fn migrate_legacy_matrix_reports(state: &AppState) {
+    let file = state.data_dir().join("chat_reports.json");
+    let legacy = state.store.read_document(&file, json!([]));
+    if let Some(rest) = mitch_lib::matrix_reports::import_legacy(&state.store, &legacy) {
+        let _ = state.store.write_document(&file, &rest);
+    }
+}
+
+/// Looks up a reported message with the system admin account. Returns the
+/// sender's Matrix ID and the message text. `None` when the lookup fails (the
+/// admin account isn't in the room, the event is gone, Conduit is down).
+pub async fn fetch_event_summary(
+    secret: &[u8],
+    room_id: &str,
+    event_id: &str,
+) -> Option<(String, String)> {
+    let token = get_system_admin_matrix_token(secret).await.ok()?;
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        "Authorization",
+        HeaderValue::from_str(&format!("Bearer {token}")).ok()?,
+    );
+    let enc = |v: &str| url::form_urlencoded::byte_serialize(v.as_bytes()).collect::<String>();
+    let (status, _, bytes) = call_conduit_with_timeout(
+        &format!(
+            "/_matrix/client/v3/rooms/{}/event/{}",
+            enc(room_id),
+            enc(event_id)
+        ),
+        Method::GET,
+        Some(headers),
+        None,
+        Some(std::time::Duration::from_secs(8)),
+    )
+    .await
+    .ok()?;
+    if !status.is_success() {
+        return None;
+    }
+    let ev: Value = serde_json::from_slice(&bytes).ok()?;
+    let sender = ev.get("sender").and_then(Value::as_str)?.to_string();
+    let body = ev
+        .pointer("/content/body")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    Some((sender, body))
+}
+
+/// Fills in the sender and text of a report from the live event, if possible.
+pub async fn enrich_matrix_report(
+    secret: &[u8],
+    store: &mitch_lib::data::DataStore,
+    report_id: &str,
+    room_id: &str,
+    event_id: &str,
+) {
+    if let Some((sender, body)) = fetch_event_summary(secret, room_id, event_id).await {
+        mitch_lib::matrix_reports::set_details(store, report_id, &sender, &body);
+    }
 }
 
 fn extract_matrix_query_param(query: &str, key: &str) -> Option<String> {
@@ -4931,24 +4992,11 @@ async fn mod_overview(state: &AppState, headers: &HeaderMap) -> Response {
         b_pl.cmp(&a_pl)
     });
 
-    let reports_file = state.data_dir().join("chat_reports.json");
-    let all_reports = state.store.read_document(&reports_file, json!([]));
-    let mut matrix_reports = Vec::new();
-    if let Some(arr) = all_reports.as_array() {
-        for r in arr.iter().rev() {
-            let is_matrix = r.get("matrixRoomId").is_some()
-                || r.get("id")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.starts_with("matrix-"))
-                    .unwrap_or(false);
-            if is_matrix {
-                matrix_reports.push(r.clone());
-                if matrix_reports.len() >= 50 {
-                    break;
-                }
-            }
-        }
-    }
+    migrate_legacy_matrix_reports(state);
+    let matrix_reports: Vec<Value> = mitch_lib::matrix_reports::list(&state.store, "all", 50)
+        .iter()
+        .map(matrix_report_json)
+        .collect();
 
     let room_settings = load_matrix_room_settings(state, &room_id);
     let slowmode_seconds = room_settings
@@ -8096,41 +8144,25 @@ pub async fn handle_matrix_gateway(
                 reporter = "matrix-user".to_string();
             }
 
-            let clean_id = if !event_id.is_empty() {
-                event_id.to_string()
-            } else {
-                format!("room-{}", now_millis())
-            };
-            let report_entry = json!({
-                "id": format!("matrix-{clean_id}"),
-                "reason": format!("[Matrix Room {room_id}] {reason}"),
-                "reportedBy": reporter,
-                "ts": now_millis(),
-                "status": "Needs review",
-                "matrixRoomId": room_id,
-                "matrixEventId": event_id,
-                "matrixSender": "unknown",
-                "reportedWithoutEntering": event_id.is_empty(),
-                "context": [
-                    {
-                        "from": "unknown",
-                        "to": room_id,
-                        "text": format!("Reported: {reason}"),
-                        "ts": now_millis(),
-                        "reported": true
-                    }
-                ]
-            });
-
-            let reports_file = state.data_dir().join("chat_reports.json");
-            let mut reports = state.store.read_document(&reports_file, json!([]));
-            if let Some(arr) = reports.as_array_mut() {
-                arr.push(report_entry);
-                if arr.len() > 5000 {
-                    let excess = arr.len() - 5000;
-                    arr.drain(0..excess);
+            if let Some(report_id) = mitch_lib::matrix_reports::add(
+                &state.store,
+                room_id,
+                "",
+                event_id,
+                reason,
+                &reporter,
+                now_millis(),
+            ) {
+                if !event_id.is_empty() {
+                    // Capture who wrote the message and what it said now, in
+                    // case it is deleted before staff look at the report.
+                    let store = state.store.clone();
+                    let secret = state.id_secret.clone();
+                    let (room, event) = (room_id.to_string(), event_id.to_string());
+                    tokio::spawn(async move {
+                        enrich_matrix_report(&secret, &store, &report_id, &room, &event).await;
+                    });
                 }
-                let _ = state.store.write_document(&reports_file, &reports);
             }
 
             if event_id.is_empty() {

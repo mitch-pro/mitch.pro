@@ -401,8 +401,8 @@
     }
     enhanceMobileShell();
     enhanceInterface();
-    if (/^\/(?:admin|moderator)(?:\/|$)/.test(location.pathname) && !document.querySelector('script[src^="/admin/account-search.js"]')) {
-      var accountSearch = document.createElement('script'); accountSearch.src='/admin/account-search.js?v=1'; document.head.appendChild(accountSearch);
+    if (/^\/(?:staff-dashboard|moderator)(?:\/|$)/.test(location.pathname) && !document.querySelector('script[src^="/staff-dashboard/account-search.js"]')) {
+      var accountSearch = document.createElement('script'); accountSearch.src='/staff-dashboard/account-search.js?v=1'; document.head.appendChild(accountSearch);
     }
     if (!IS_RJUHSD && !document.querySelector('script[src^="/mitch-coins.js"]')) {
       var coins = document.createElement('script');

@@ -45,6 +45,7 @@ pub mod jsval;
 pub mod keyring;
 pub mod log;
 pub mod matrix;
+pub mod matrix_reports;
 pub mod minigames;
 pub mod newsletter_unsub;
 pub mod passphrase_reset;

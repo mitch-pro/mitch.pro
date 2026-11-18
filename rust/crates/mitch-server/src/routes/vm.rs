@@ -5699,7 +5699,7 @@ mod tests {
         headers_ref.insert(axum::http::header::HOST, "mitchdog.com".parse().unwrap());
         headers_ref.insert(
             axum::http::header::REFERER,
-            "https://mitchdog.com/admin/vms/".parse().unwrap(),
+            "https://mitchdog.com/staff-dashboard/vms/".parse().unwrap(),
         );
         assert!(vm_same_origin_request(&headers_ref));
 

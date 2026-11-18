@@ -1,5 +1,5 @@
 //! One-day replacement bell schedules, one per school (`bell_overrides` /
-//! `bell_override_periods`). Staff set them from `/admin/special-schedule/`
+//! `bell_override_periods`). Staff set them from `/staff-dashboard/special-schedule/`
 //! (`routes/admin/special_schedule.rs`); the public read side is
 //! `GET /api/bell/override` in `routes/misc.rs`. Docs: `docs/bell-overrides.md`.
 //!

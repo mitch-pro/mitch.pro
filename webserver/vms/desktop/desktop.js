@@ -9,7 +9,7 @@ const ownerMode = query.get('container') === 'owner';
 const OWNER_API = '/api/admin/owner-container';
 if (ownerMode) {
   const back = document.querySelector('.back-button');
-  if (back) { back.href = '/admin/'; back.setAttribute('aria-label', 'Back to admin'); }
+  if (back) { back.href = '/staff-dashboard/'; back.setAttribute('aria-label', 'Back to staff dashboard'); }
 }
 const screen = $('screen'), frame = $('display-frame'), cover = $('connection-cover');
 const headers = { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' };

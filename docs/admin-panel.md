@@ -1,17 +1,19 @@
 # Administration
 
-`/admin` and `/admin.html` redirect to `/admin/`, preserving the query string.
-The server checks authentication and staff roles for every admin HTML page,
-including `index.html` aliases. VM, ban, and newsletter pages require full
-administrator access; moderators retain the review workspace. Static CSS/JS
-contain no privileged data. API authorization remains independent of page access.
+There is no `/admin/` site any more. Everything lives in the staff dashboard at
+`/staff-dashboard/` (and `/moderator/`, the same app; see
+[staff-dashboard.md](staff-dashboard.md)). `/admin`, `/admin.html` and
+`/admin/<page>` redirect to `/staff-dashboard/<page>` so old links keep working.
 
-The dashboard uses `webserver/admin/admin.css` over the base page controls,
-replacing the old competing command-center styles. Its shortcuts cover
-newsletters, account bans, virtual machines, and public rankings. Newsletter and
-VM shortcuts stay hidden until `/api/me` confirms `isAdmin`. The newsletter API
-also requires full admin status; manually opening a URL cannot bypass that check.
-The newsletter uses mitch.pro branding and signature.
+Tool pages that stay separate live at `/staff-dashboard/<tool>/`: `bans`, `vms`
+(and `vms/fleet`, owner only), `email`, `updates`, `companion`,
+`special-schedule` and `passphrase-reset`. The server checks authentication and
+staff roles for each of them (`STAFF_TOOLS` in `handler.rs`); VM, ban, email,
+update and passphrase-reset pages require full administrator access, while
+`companion` and `special-schedule` are open to staff the API allows. The dashboard
+itself checks the viewer's role and only builds the tabs and tools that viewer can
+use. Static CSS/JS contain no privileged data. API authorization remains
+independent of page access.
 
 Administrative API requests use the signed account session, full role checks,
 and `X-Admin-Passphrase`. Passphrases are verified on the server and kept only in
@@ -24,20 +26,20 @@ server-side gate in `handler.rs` enforces it regardless, but a tool that
 never sends `X-Admin-Passphrase` just fails every write with
 `invalid_passphrase` for any full admin (moderators are exempt, and a
 local dev-superuser session on localhost bypasses it, both of which can
-mask a missing frontend wire-up during testing). `/admin/bans/`'s
+mask a missing frontend wire-up during testing). `/staff-dashboard/bans/`'s
 `bans.js` is the reference implementation: check
 `GET /api/admin/passphrase-status` on load, show a lock screen if unset
 or not yet entered this session, cache the entered passphrase in
 `sessionStorage`, send it as `X-Admin-Passphrase` on every request, and
 re-show the lock screen on any `invalid_passphrase`/
-`passphrase_not_configured` response. `/admin/companion/` (see
+`passphrase_not_configured` response. `/staff-dashboard/companion/` (see
 `docs/companion.md`) follows the same pattern.
 
 ## Forgotten passphrase
 
 An admin who is signed in but has forgotten their passphrase uses
-`/admin/passphrase-reset/` (every passphrase prompt links there; the link comes
-from `/admin/passphrase-help.js`). It emails a one-time code to the account's own
+`/staff-dashboard/passphrase-reset/` (every passphrase prompt links there; the link comes
+from `/staff-dashboard/passphrase-help.js`). It emails a one-time code to the account's own
 address, then sets a new passphrase when the code is entered.
 
 - `POST /api/admin/passphrase-reset/request` sends the code. `POST
@@ -54,10 +56,10 @@ address, then sets a new passphrase when the code is entered.
 - The passphrase itself is still stored in `admin_passphrase.json` (see
   `json-blobs-remaining.md`).
 
-The special bell schedule uses `/admin/special-schedule/`, open to moderators as well as
+The special bell schedule uses `/staff-dashboard/special-schedule/`, open to moderators as well as
 admins; see [bell-overrides.md](bell-overrides.md).
 
-Account bans use `/admin/bans/`: searchable records, a visible reason, explicit
+Account bans use `/staff-dashboard/bans/`: searchable records, a visible reason, explicit
 duration, confirmation, expiry, restoration, and chat-cleanup status. Usernames
 and registered addresses resolve through the existing account directory. VM and
 BYO-OS restrictions are separate from account bans. Banning an account also runs
@@ -104,7 +106,7 @@ endpoints as a health check.
   `matrix_outside_approvals` SQL table. `GET /api/admin/matrix/outside-accounts`
   lists the pending queue and `POST` with `{email, approved}` approves or denies;
   both require moderator or higher and the decision is written to the admin action
-  log. Both `/admin/#approval-tools` and `/moderator/` provide one-click approval
+  log. Both the Moderation tab and the Overview queue of `/moderator/` and `/staff-dashboard/` provide one-click approval
   and denial queues for moderators and administrators.
   The same gate (`outside_account_gate`) covers joins, `createRoom` and invites and
   fails closed if the sender can't be identified. Matrix SSO login joins accounts

@@ -10,7 +10,7 @@
 //! Moderation: by explicit choice there's no pre-publish review gate — a
 //! character is visible and purchasable the moment it's created. It's
 //! flagged `needs_review` and every admin/owner gets an `admin_notice`
-//! pointing at the existing `/admin/companion/` tool, where they can
+//! pointing at the existing `/staff-dashboard/companion/` tool, where they can
 //! inspect the prompt and delete it if it's a problem. Re-editing a
 //! character's prompt re-flags it for another look.
 
@@ -111,7 +111,7 @@ fn notify_admins_of_new_character(
             &format!("{creator_email} created \"{name}\" ({id}). Review its prompt in the companion admin tool."),
             "system",
             "",
-            "/admin/companion/",
+            "/staff-dashboard/companion/",
         );
     }
 }

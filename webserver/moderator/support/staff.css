@@ -1,4 +1,4 @@
-.staff-wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 56px; }
+.staff-wrap { width: 100%; box-sizing: border-box; max-width: 1100px; margin: 0 auto; padding: 24px 16px 56px; }
 .staff-wrap h1 { margin: 0 0 14px; font-size: 1.6rem; font-weight: 700; letter-spacing: -0.03em; }
 .staff-grid { display: grid; grid-template-columns: minmax(240px, 320px) 1fr; gap: 16px; align-items: start; }
 @media (max-width: 760px) { .staff-grid { grid-template-columns: 1fr; } }
@@ -17,3 +17,5 @@
 .staff-warn { color: #d92d20; }
 .staff-dialog { max-width: 380px; width: calc(100% - 24px); padding: 18px; border: 1px solid var(--t-bd); border-radius: var(--t-radius, 10px); background: var(--t-bg2); color: var(--t-fg); }
 .staff-dialog h2 { margin-top: 0; }
+.back-link { display: inline-block; margin-bottom: 8px; color: var(--t-fg2); text-decoration: none; font-size: .9rem; }
+.back-link:hover { color: var(--t-ac); }

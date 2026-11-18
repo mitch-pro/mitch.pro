@@ -34,7 +34,7 @@ subsystem — no `server.js` equivalent.
   Text on the accent color switches to white under `html.theme-light`,
   since near-black on the light accent fails contrast.
 - Admin-authored preset characters only: a name, a personality prompt, and
-  one image per "mood." Authored at `/admin/companion/` (any admin/owner,
+  one image per "mood." Authored at `/staff-dashboard/companion/` (any admin/owner,
   gated by the existing global `/api/admin/*` auth).
 - Per-user opt-in, set from `/companion/`: enable/disable + pick a
   character, saved to `companion_user_settings`
@@ -137,7 +137,7 @@ subsystem — no `server.js` equivalent.
 - **Special abilities.** A character can carry one admin-assigned ability
   (`companion_characters.special_ability`, one of `SPECIAL_ABILITIES` in
   `mitch_lib::companion`; set from the "Special ability" picker on
-  `/admin/companion/` via `POST /api/admin/companion/characters/special-ability`
+  `/staff-dashboard/companion/` via `POST /api/admin/companion/characters/special-ability`
   `{id, ability}`, `""` to clear). Users can't set it on their own
   characters. Each ability adds one extra preset action of the same name:
   the prompt tells only that character about it (`special_ability_prompt`
@@ -152,7 +152,7 @@ subsystem — no `server.js` equivalent.
   - **David Martinez** (`id = david-martinez`) is a free, reviewed preset
     with `sandevistan`, inserted by the same migration that adds the
     column (`seed_david_martinez`), so it runs once: deleting him on
-    `/admin/companion/` is permanent. His images are uploaded by admins
+    `/staff-dashboard/companion/` is permanent. His images are uploaded by admins
     like any other character's.
 - **Strain, blood and cyberpsychosis** (`mitch_lib::companion_chrome`,
   table `companion_ability_strain`, one row per (email, character)). Every
@@ -293,7 +293,7 @@ and unusable to everyone except its own creator and admins —
 every entry point that can reach a character
 (`GET /api/companion/characters`, `POST /api/companion/settings`,
 `POST /api/companion/characters/unlock`). An `admin_notice` still fires on
-creation (`coins::add_admin_notification`) pointing at `/admin/companion/`,
+creation (`coins::add_admin_notification`) pointing at `/staff-dashboard/companion/`,
 where an admin inspects the prompt and either calls `mark-reviewed`
 (makes it visible to everyone) or deletes it. Editing a character's name/
 prompt/price re-flags `needs_review` — new content, worth another look,
@@ -459,7 +459,7 @@ was the explicit ask, since every call costs a real DeepSeek API charge.
   `translateY(-28px)` with no x/y replaces the position entirely) for as
   long as the animation runs. The sprite carries no positioning transform
   of its own, so animating it there layers cleanly on top instead.
-- `/admin/companion/` shipped *without* the `X-Admin-Passphrase` wiring
+- `/staff-dashboard/companion/` shipped *without* the `X-Admin-Passphrase` wiring
   every other admin tool needs — documented in `docs/admin-panel.md`, not
   invented there for this writeup — and nobody caught it until a real
   admin hit `invalid_passphrase` trying to create a character in
@@ -467,7 +467,7 @@ was the explicit ask, since every call costs a real DeepSeek API charge.
   session on localhost bypasses the passphrase check entirely (see
   `admin_gate` in `handler.rs`), so testing through that path looks
   identical whether the frontend sends the header or not. Fixed by
-  porting `/admin/bans/`'s `bans.js` lock-screen pattern over verbatim
+  porting `/staff-dashboard/bans/`'s `bans.js` lock-screen pattern over verbatim
   (`companion.js`: `headers()` attaches `X-Admin-Passphrase` from
   `sessionStorage`, every request re-shows the lock screen on
   `invalid_passphrase`/`passphrase_not_configured`). If you add another

@@ -1,5 +1,9 @@
 # Staff hub
 
+> `/staff/` now redirects to the [staff dashboard](staff-dashboard.md), which lists
+> unresolved items and links to the pages below. The notes here describe the
+> role status endpoint and gating it still uses.
+
 `/staff/` — a plain directory of links to every staff-facing page (admin
 dashboard and its sub-tools, the moderator panel, the beta tester hub),
 linked from the homepage footer for admins/moderators/testers only. New
@@ -36,7 +40,7 @@ incomplete depending on who's looking at it.
 
 Moderators and above also get a **Support tickets** card (`/moderator/support/`), see [support.md](support.md).
 
-Admins also get an **Updates** card (`/admin/updates/`) for the homepage update log, see [site-updates.md](site-updates.md).
+Admins also get an **Updates** page (`/staff-dashboard/updates/`) for the homepage update log, see [site-updates.md](site-updates.md).
 
 ## Mitch's Scrotum role
 

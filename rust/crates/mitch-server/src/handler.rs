@@ -32,7 +32,7 @@ pub const HTML_OPEN: &[&str] = &[
     "/support/ticket",
     "/support/ticket/index",
     "/unsubscribe",
-    "/admin",
+    "/staff-dashboard",
     "/faq",
     "/faq/index",
     "/use-agreement",
@@ -976,7 +976,7 @@ async fn handle_resolved(
         || clean_path.starts_with("/sexypickleclub/")
         || path.starts_with("/api/puzzle/")
         || path == "/api/sms-reply"
-        || path.starts_with("/admin")
+        || path.starts_with("/staff-dashboard")
         || path.starts_with("/moderator");
     let is_asset = path.contains('.') && !path.ends_with(".html");
     if !is_exempt
@@ -1547,16 +1547,22 @@ async fn handle_resolved(
         }
     }
 
-    // Canonical admin entry points must not depend on the deployed directory overlay.
+    // The old /admin/ site moved into the staff dashboard. Bookmarks and links keep
+    // working: /admin, /admin.html and /admin/index.html go to the dashboard,
+    // /admin/<page> to /staff-dashboard/<page>. (API paths are /api/admin/*.)
     if matches!(method, Method::GET | Method::HEAD)
-        && matches!(path.as_str(), "/admin" | "/admin.html")
+        && (path == "/admin" || path == "/admin.html" || path.starts_with("/admin/"))
     {
-        let suffix = if search.is_empty() {
+        let rest = path.strip_prefix("/admin").unwrap_or("");
+        let rest = rest.strip_prefix(".html").unwrap_or(rest);
+        let rest = if rest == "/index.html" { "/" } else { rest };
+        let rest = if rest.is_empty() { "/" } else { rest };
+        let query = if search.is_empty() {
             String::new()
         } else {
             format!("?{search}")
         };
-        return redirect(&format!("/admin/{suffix}"), 302);
+        return redirect(&format!("/staff-dashboard{rest}{query}"), 302);
     }
 
     // 8. Trailing-slash redirect for directories under WEBROOT.
@@ -1590,7 +1596,7 @@ async fn handle_resolved(
     }
 
     // 10. HTML auth gate — server.js:24625-24643 (merged tree: /games and
-    // /matrix are open; banned sessions get the ban page; /admin/vms needs a
+    // /matrix are open; banned sessions get the ban page; /staff-dashboard/vms needs a
     // fully-authenticated VM actor).
     let mut html_base = path.clone();
     if html_base.ends_with(".html") {
@@ -1604,10 +1610,35 @@ async fn handle_resolved(
         && (HTML_OPEN.contains(&html_base.as_str())
             || html_base.starts_with("/games")
             || html_base.starts_with("/matrix"));
-    if is_html_request && (html_base == "/admin" || html_base.starts_with("/admin/")) {
+    // Staff tool pages under /staff-dashboard/<tool>/ need a staff session. The
+    // dashboard page itself (/staff-dashboard/) checks the viewer's role on its
+    // own so testers can reach it too.
+    const STAFF_TOOLS: [&str; 15] = [
+        "/staff-dashboard/moderation",
+        "/staff-dashboard/matrix",
+        "/staff-dashboard/people",
+        "/staff-dashboard/economy",
+        "/staff-dashboard/shop",
+        "/staff-dashboard/vm-requests",
+        "/staff-dashboard/logs",
+        "/staff-dashboard/site",
+        "/staff-dashboard/bans",
+        "/staff-dashboard/vms",
+        "/staff-dashboard/email",
+        "/staff-dashboard/companion",
+        "/staff-dashboard/updates",
+        "/staff-dashboard/special-schedule",
+        "/staff-dashboard/passphrase-reset",
+    ];
+    let is_staff_tool = |base: &str| {
+        STAFF_TOOLS
+            .iter()
+            .any(|t| base == *t || base.starts_with(&format!("{t}/")))
+    };
+    if is_html_request && is_staff_tool(&html_base) {
         let ctx = crate::routes::admin::admin_ctx(&state, headers);
         if !state.check_password_cookie(headers, None) || state.is_revoked_id(&ctx.sid) {
-            return redirect("/enroll/?next=%2Fadmin%2F", 302);
+            return redirect("/enroll/?next=%2Fstaff-dashboard%2F", 302);
         }
         if !ctx.is_any_admin(&state) {
             return err_resp(403, Some("Staff access required."), None);
@@ -1615,11 +1646,15 @@ async fn handle_resolved(
     }
     if is_html_request
         && [
-            "/admin/vms",
-            "/admin/email",
-            "/admin/bans",
-            "/admin/passphrase-reset",
-            "/admin/updates",
+            "/staff-dashboard/vms",
+            "/staff-dashboard/email",
+            "/staff-dashboard/bans",
+            "/staff-dashboard/passphrase-reset",
+            "/staff-dashboard/updates",
+            "/staff-dashboard/shop",
+            "/staff-dashboard/vm-requests",
+            "/staff-dashboard/logs",
+            "/staff-dashboard/site",
         ]
         .iter()
         .any(|base| html_base == *base || html_base.starts_with(&format!("{base}/")))
@@ -1633,10 +1668,11 @@ async fn handle_resolved(
         }
     }
     if is_html_request
-        && (html_base == "/admin/vms/fleet" || html_base.starts_with("/admin/vms/fleet/"))
+        && (html_base == "/staff-dashboard/vms/fleet"
+            || html_base.starts_with("/staff-dashboard/vms/fleet/"))
     {
         match authenticated_vm_actor(&state, headers, node_env_test) {
-            None => return redirect("/enroll/?next=%2Fadmin%2Fvms%2Ffleet%2F", 302),
+            None => return redirect("/enroll/?next=%2Fstaff-dashboard%2Fvms%2Ffleet%2F", 302),
             Some((_, email, _)) if !mitch_lib::auth::is_owner_email(&state.store, &email) => {
                 return err_resp(403, Some("Owner access required."), None);
             }
@@ -1776,7 +1812,6 @@ async fn handle_resolved(
 
     // 11. Main injection pipeline for .html / / pages.
     if (path.ends_with(".html") || path == "/" || (path.ends_with('/') && path.len() > 1))
-        && path != "/admin.html"
         && path != "/roblox.html"
     {
         let mut set_trial_cookie = false;

@@ -180,7 +180,7 @@ self.addEventListener('fetch', (e) => {
   if (requestUrl.origin !== self.location.origin) return;
 
   // Admin panel, Matrix media and sync, game proxy, and APIs carry credentials and must never enter a shared cache.
-  if (requestUrl.pathname.startsWith('/admin') || requestUrl.pathname.startsWith('/api/') || requestUrl.pathname.startsWith('/_matrix/') || requestUrl.pathname.startsWith('/proxy/') || e.request.url.startsWith('ws')) {
+  if (requestUrl.pathname.startsWith('/staff-dashboard') || requestUrl.pathname.startsWith('/moderator') || requestUrl.pathname.startsWith('/api/') || requestUrl.pathname.startsWith('/_matrix/') || requestUrl.pathname.startsWith('/proxy/') || e.request.url.startsWith('ws')) {
     return;
   }
 

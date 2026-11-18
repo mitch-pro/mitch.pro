@@ -1,6 +1,6 @@
 # System logs
 
-The admin panel's **System Logs** section (`/admin/#logs-tools`) shows the
+The admin panel's **System Logs** section (the dashboard's Logs tab (`/staff-dashboard/#logs`)) shows the
 `app_logs` SQL table and the `docker compose logs` output. Only the owner and
 developers can open it: `GET /api/admin/app-logs` and
 `GET /api/admin/docker-logs` return 403 for admins and moderators, and the

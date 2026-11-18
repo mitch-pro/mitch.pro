@@ -992,7 +992,7 @@ pub fn rate_limit_for(endpoint: &str) -> (u32, u32) {
         "/api/companion/characters" => (60, 60),
         // Falling through to __default__ (100/60) here is what actually
         // produced a wall of 429s during normal use: every character
-        // card/mood tile on /companion/ and /admin/companion/ re-fetches
+        // card/mood tile on /companion/ and /staff-dashboard/companion/ re-fetches
         // this per character shown, and before the cache-busting bug in
         // setup.js/companion.js was fixed (see their imageUrl comments),
         // every single re-render issued a fresh request per image rather

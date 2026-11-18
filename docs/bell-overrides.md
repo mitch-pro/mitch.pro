@@ -1,7 +1,7 @@
 # Bell schedule overrides
 
 A one-day replacement bell schedule for a single school. Admins and moderators set it
-at `/admin/special-schedule/` (linked from the admin dashboard and the moderator panel).
+at `/staff-dashboard/special-schedule/` (linked from the admin dashboard and the moderator panel).
 The page picks a school, a day, a name, an optional event notice and the periods for each
 lunch, starting from a preset (Non-Pack Day, Minimum Day, Finals) or a blank schedule. It
 lists the active schedules with Edit and Clear. This replaces the old

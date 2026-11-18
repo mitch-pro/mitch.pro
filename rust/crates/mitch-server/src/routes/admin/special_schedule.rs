@@ -1,5 +1,5 @@
 //! Staff side of the special bell schedule (`/api/admin/special-schedule`),
-//! used by `/admin/special-schedule/`. The public read side is
+//! used by `/staff-dashboard/special-schedule/`. The public read side is
 //! `GET /api/bell/override` in `routes/misc.rs`; the rules and storage are in
 //! `mitch_lib::bell_overrides` and `docs/bell-overrides.md`.
 //!

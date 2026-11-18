@@ -688,9 +688,9 @@
     if (!response.ok) return;
     const me = await response.json(), owner = me.isOwner || me.isCoOwner, admin = owner || me.isAdmin;
     const tools = [
-      [owner, '/admin/#owner-tools', 'Root tools', 'Site settings and operations', '<path d="m12 3 3 6 6 1-4.5 4.5 1 6.5-5.5-3-5.5 3 1-6.5L3 10l6-1z"/>'],
-      [admin, '/admin/#approval-tools', 'Admin tools', 'Accounts and requests', '<circle cx="12" cy="12" r="8"/><path d="M8 12h8m-4-4v8"/>'],
-      [admin, '/admin/bans/', 'Bans', 'Account access and appeals', '<circle cx="12" cy="12" r="8"/><path d="m6 6 12 12"/>'],
+      [owner, '/staff-dashboard/#site', 'Root tools', 'Site settings and operations', '<path d="m12 3 3 6 6 1-4.5 4.5 1 6.5-5.5-3-5.5 3 1-6.5L3 10l6-1z"/>'],
+      [admin, '/staff-dashboard/', 'Admin tools', 'Accounts and requests', '<circle cx="12" cy="12" r="8"/><path d="M8 12h8m-4-4v8"/>'],
+      [admin, '/staff-dashboard/bans/', 'Bans', 'Account access and appeals', '<circle cx="12" cy="12" r="8"/><path d="m6 6 12 12"/>'],
       [admin || me.isModerator, '/moderator/', 'Moderator tools', 'Reports and chat moderation', '<path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6z"/><path d="m8 12 3 3 5-6"/>'],
       [admin || me.isTester, '/tester/', 'Tester hub', 'Testing and feedback', '<path d="m9 3 6 0M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3M8 14h8"/>']
     ].filter(tool=>tool[0]);

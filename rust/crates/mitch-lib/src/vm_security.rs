@@ -212,7 +212,7 @@ pub const VM_COOLDOWN_DURATION_MS: f64 = 1_800_000.0;
 /// Whether the global post-power-off VM cooldown (`VM_COOLDOWN_DURATION_MS`)
 /// is enforced. This is one site-wide switch, not per user, stored in the
 /// single-row `vm_settings` table and flipped by the owner from
-/// `/admin/vms`. Defaults to `true` (enforced) until the owner changes it.
+/// `/staff-dashboard/vms`. Defaults to `true` (enforced) until the owner changes it.
 pub fn vm_cooldown_enabled(store: &crate::data::DataStore) -> bool {
     store
         .conn()
