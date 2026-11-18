@@ -13,7 +13,7 @@ import RFB from '/novnc/core/rfb.js';
     return h;
   }
 
-  // Admin passphrase gate: same flow as /admin/vms. A 403 with
+  // Admin passphrase gate: same flow as /staff-dashboard/vms. A 403 with
   // invalid_passphrase / passphrase_not_configured shows the lock box and the
   // request is retried once after the passphrase is verified server-side.
   let passphraseResolvers = [];

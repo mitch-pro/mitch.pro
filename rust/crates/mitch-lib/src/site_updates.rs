@@ -1,5 +1,5 @@
 //! The manual update log shown on the homepage ("what changed"). Entries are
-//! written by an admin on `/admin/updates/`; they are not generated from commit
+//! written by an admin on `/staff-dashboard/updates/`; they are not generated from commit
 //! messages and are not tracked by git. They live in the `site_updates` SQL
 //! table (see `docs/site-updates.md`).
 

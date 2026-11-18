@@ -7,7 +7,7 @@
       const form = input.closest('form') || input.parentElement;
       if (!form) return;
       const link = document.createElement('a');
-      link.href = '/admin/passphrase-reset/';
+      link.href = '/staff-dashboard/passphrase-reset/';
       link.textContent = 'Forgot your passphrase?';
       link.style.cssText = 'display:inline-block;margin-top:10px;font-size:13px;color:var(--t-fg2)';
       form.appendChild(link);

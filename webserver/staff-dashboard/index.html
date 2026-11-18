@@ -7,9 +7,20 @@
   <title>Staff dashboard — mitch.pro</title>
   <link rel="icon" href="/favicon.ico">
   <link rel="stylesheet" href="/app.css">
-  <link rel="stylesheet" href="/staff-dashboard/staff-dashboard.css?v=2">
+  <link rel="stylesheet" href="/staff-dashboard/staff-dashboard.css?v=3">
   <script src="/app-shell.js" defer></script>
-  <script src="/staff-dashboard/staff-dashboard.js?v=2" defer></script>
+  <script src="/staff-dashboard/sd-core.js?v=1" defer></script>
+  <script src="/staff-dashboard/overview.js?v=1" defer></script>
+  <script src="/staff-dashboard/sections/moderation.js?v=1" defer></script>
+  <script src="/staff-dashboard/sections/matrix.js?v=1" defer></script>
+  <script src="/staff-dashboard/sections/people.js?v=1" defer></script>
+  <script src="/staff-dashboard/sections/economy.js?v=1" defer></script>
+  <script src="/staff-dashboard/sections/shop.js?v=1" defer></script>
+  <script src="/staff-dashboard/sections/vms.js?v=1" defer></script>
+  <script src="/staff-dashboard/sections/logs.js?v=1" defer></script>
+  <script src="/staff-dashboard/sections/site.js?v=1" defer></script>
+  <script src="/staff-dashboard/sd-boot.js?v=1" defer></script>
+  <script src="/staff-dashboard/passphrase-help.js" defer></script>
 </head>
 <body class="app-shell">
   <main class="app-main sd-main">
@@ -21,32 +32,9 @@
         <button type="button" id="sd-refresh">Refresh</button>
       </div>
     </header>
+    <nav id="sd-nav" class="sd-nav" aria-label="Dashboard sections"></nav>
     <p id="sd-status" role="status">Loading...</p>
-    <div id="sd-app" hidden>
-      <nav id="sd-tabs" class="sd-tabs" aria-label="Queues"></nav>
-      <div id="sd-queues"></div>
-      <section id="sd-tools" class="sd-tools" aria-labelledby="sd-tools-h">
-        <h2 id="sd-tools-h">Tools</h2>
-        <div id="sd-tool-list"></div>
-      </section>
-    </div>
-
-    <dialog id="sd-pass-dialog" class="sd-dialog">
-      <form id="sd-pass-form" autocomplete="off">
-        <h2>Admin passphrase</h2>
-        <input type="password" id="sd-pass-input" class="sd-input" autocomplete="current-password" aria-label="Admin passphrase" required>
-        <p id="sd-pass-status" class="sd-err" role="status"></p>
-        <div class="sd-row"><button type="button" id="sd-pass-cancel">Cancel</button><button type="submit" class="primary">Unlock</button></div>
-      </form>
-    </dialog>
-    <dialog id="sd-note-dialog" class="sd-dialog">
-      <form id="sd-note-form" autocomplete="off">
-        <h2 id="sd-note-title">Note</h2>
-        <textarea id="sd-note-input" class="sd-input" rows="3" maxlength="500" aria-label="Note"></textarea>
-        <div class="sd-row"><button type="button" id="sd-note-cancel">Cancel</button><button type="submit" class="primary" id="sd-note-ok">Save</button></div>
-      </form>
-    </dialog>
+    <div id="sd-view"></div>
   </main>
-  <script src="/admin/passphrase-help.js" defer></script>
 </body>
 </html>

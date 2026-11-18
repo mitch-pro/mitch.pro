@@ -13,7 +13,7 @@ visited before is sent to the other domain instead of the offline page.
 - `data/site.json` is not tracked by git (it is per-machine; see
   `data/site.json.example`). It supplies `primary`, `alternate` and `name`.
   When it is missing the defaults in `site_domains.rs` apply.
-- Admins manage the pool in the "Backup domains" card on `/admin/` (full
+- Admins manage the pool in the "Backup domains" card on the dashboard Site tab (full
   admins; owner and developer see the card): add, remove, make one active, or
   "Switch to a random one", which picks a random *other* entry. API:
   `GET|POST /api/admin/backup-domains` with `{action: add|remove|activate|rotate, origin}`;
@@ -49,7 +49,7 @@ visited before is sent to the other domain instead of the offline page.
   over, and it no longer redirects to a mitch.pro mirror path: it serves its own
   pages directly.
 - **rjuhsd.school mirrors.** Admins add extra domains that serve the
-  rjuhsd.school site in the "rjuhsd.school mirrors" card on `/admin/` (owner and
+  rjuhsd.school site in the "rjuhsd.school mirrors" card on the dashboard Site tab (owner and
   developer see it). They are stored in the SQL table `school_mirrors`
   (`mitch_lib::site_domains`, API `GET|POST /api/admin/school-mirrors` with
   `{action: add|remove, origin}`, audited). The host set is cached in memory

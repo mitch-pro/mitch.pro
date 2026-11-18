@@ -235,7 +235,7 @@ mod tests {
                 "/game-portal/",
                 "/coins/",
                 "/preferences/",
-                "/admin/",
+                "/staff-dashboard/",
                 "/api/presence/count",
                 "/api/madlibs/random",
                 "/api/pass",

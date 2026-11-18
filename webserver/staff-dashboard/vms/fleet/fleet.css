@@ -600,7 +600,7 @@ button.danger:hover {
   }
 }
 
-/* Admin passphrase gate (same flow as /admin/vms) */
+/* Admin passphrase gate (same flow as /staff-dashboard/vms) */
 .passphrase-lock {
   display: none;
   margin-bottom: 16px;

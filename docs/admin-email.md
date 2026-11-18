@@ -1,6 +1,6 @@
 # Admin email tools
 
-Open `https://mitchdog.com/admin/#email-tools` as a full administrator and unlock
+Open `https://mitchdog.com/staff-dashboard/email/` as a full administrator and unlock
 the admin passphrase. `https://mitch.tylers-tools.com` redirects to this section,
 so sign-in and permissions remain on mitchdog.com.
 
@@ -9,7 +9,7 @@ which sender credentials are configured; it does not prove SMTP delivery. The
 newsletter sender waits for the service's SMTP acceptance response. Acceptance does not
 guarantee inbox delivery. Timeouts are uncertain; check the inbox before retrying.
 Verification previews never create a valid security code or change an account.
-The Send email link opens the dedicated newsletter editor at `/admin/email/`.
+The Send email link opens the dedicated newsletter editor at `/staff-dashboard/email/`.
 
 Previews call the actual Rust security and authentication template functions with
 sample code `123456`. Template changes are reviewed and deployed through this

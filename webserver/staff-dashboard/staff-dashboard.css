@@ -70,3 +70,49 @@ a.sd-tool:hover { border-color: var(--t-bda); background: var(--t-bg3); }
 .sd-input:focus { outline: none; border-color: var(--t-ac); }
 .sd-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
 .sd-err { min-height: 1.2em; margin: 8px 0 0; color: color-mix(in srgb, #dc2626 70%, var(--t-fg)); }
+
+/* ---- sections, cards and forms ---- */
+.sd-nav { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 18px; border-bottom: 1px solid var(--t-bd); }
+.sd-nav-link { padding: 8px 14px; color: var(--t-fg2); text-decoration: none; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.sd-nav-link:hover { color: var(--t-fg); }
+.sd-nav-link[aria-current="page"] { color: var(--t-fg); border-bottom-color: var(--t-ac); }
+.sd-section-head { margin: 22px 0 10px; }
+.sd-section-head:first-child { margin-top: 0; }
+.sd-section-head h2 { margin: 0; font-size: 1.1rem; font-weight: 700; letter-spacing: -0.02em; }
+.sd-desc { margin: 4px 0 10px; color: var(--t-fg2); font-size: .9rem; line-height: 1.45; }
+.sd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; align-items: start; }
+.sd-card { background: var(--t-bg2); border: 1px solid var(--t-bd); border-radius: var(--t-radius); padding: 14px; margin: 0; min-width: 0; }
+.sd-card.wide { grid-column: 1 / -1; }
+.sd-card.danger { border-color: color-mix(in srgb, #dc2626 55%, var(--t-bd)); }
+.sd-card > h3 { margin: 0 0 4px; font-size: 1rem; font-weight: 700; }
+.sd-card form.inline { margin-top: 12px; padding: 12px 0 0; border: 0; border-top: 1px solid var(--t-bd); border-radius: 0; background: none; }
+.sd-field { display: block; margin: 0 0 10px; }
+.sd-field > span { display: block; margin-bottom: 4px; font-size: .85rem; font-weight: 600; }
+.sd-field small { display: block; margin-top: 3px; color: var(--t-fg2); font-size: .8rem; }
+.sd-check { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
+.sd-form-status { min-height: 1.2em; margin: 8px 0 0; color: var(--t-fg2); font-size: .9rem; overflow-wrap: anywhere; }
+.sd-form-status.ok { color: color-mix(in srgb, #16a34a 65%, var(--t-fg)); }
+.sd-form-status.err { color: color-mix(in srgb, #dc2626 70%, var(--t-fg)); }
+.sd-card .sd-actions button.primary, .sd-dialog button.primary { background: var(--t-ac); border-color: var(--t-ac); color: var(--t-ac-ink); }
+.sd-card .sd-actions button.danger, .sd-dialog button.danger { background: #c62828; border-color: #c62828; color: #fff; }
+.sd-dialog-text { margin: 0 0 6px; color: var(--t-fg2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.sd-rows { display: flex; flex-direction: column; gap: 6px; }
+.sd-row-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 10px; background: var(--t-bg); border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm); }
+.sd-row-main { min-width: 0; overflow-wrap: anywhere; }
+.sd-row-item .sd-actions { margin: 0; }
+.sd-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.sd-stat { padding: 10px 12px; background: var(--t-bg2); border: 1px solid var(--t-bd); border-radius: var(--t-radius); }
+.sd-stat-label { display: block; font-size: .8rem; color: var(--t-fg2); }
+.sd-stat strong { font-size: 1.15rem; }
+.sd-stat.bad strong { color: color-mix(in srgb, #dc2626 70%, var(--t-fg)); }
+.sd-stat.good strong { color: color-mix(in srgb, #16a34a 65%, var(--t-fg)); }
+.sd-table-wrap { overflow-x: auto; border: 1px solid var(--t-bd); border-radius: var(--t-radius); background: var(--t-bg2); }
+.sd-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.sd-table th { text-align: left; padding: 8px 10px; color: var(--t-fg2); font-weight: 600; border-bottom: 1px solid var(--t-bd); white-space: nowrap; }
+.sd-table td { padding: 8px 10px; border-bottom: 1px solid var(--t-bd); vertical-align: top; overflow-wrap: anywhere; }
+.sd-table tr:last-child td { border-bottom: 0; }
+.sd-log { margin: 8px 0 0; padding: 10px; max-height: 26em; overflow: auto; font: .8rem/1.45 ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--t-bg); border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm); }
+.sd-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-bottom: 10px; }
+.sd-toolbar .sd-field { margin: 0; }
+.sd-flag.ok { color: color-mix(in srgb, #16a34a 65%, var(--t-fg)); border-color: currentColor; }
+.sd-queue-side { display: inline-flex; gap: 14px; }

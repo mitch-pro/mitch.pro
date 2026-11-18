@@ -66,7 +66,7 @@ pub struct Character {
 /// unlocks one extra preset action of the same name in chat
 /// (`deepseek.rs`) and a matching pre-written effect in
 /// `companion-widget.js` — still animation only, never code, and with no
-/// effect on coins. Assigned per character by admins on `/admin/companion/`.
+/// effect on coins. Assigned per character by admins on `/staff-dashboard/companion/`.
 ///
 /// - `sandevistan`: the character dashes around the screen leaving
 ///   afterimages while the rest of the page slows down for a moment.

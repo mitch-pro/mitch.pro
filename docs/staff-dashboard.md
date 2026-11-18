@@ -68,3 +68,32 @@ All require moderator or higher (and the passphrase for full admins).
 
 Code: `routes/admin/staff_dashboard.rs`, `mitch-lib/src/matrix_reports.rs`,
 frontend in `webserver/staff-dashboard/`.
+
+## Sections
+
+Each tab is a module in `webserver/staff-dashboard/sections/` registered with
+`SD.register({key, label, access, render})` (core: `sd-core.js`). A section is
+only listed, and a tool inside it only built, when the viewer has the access level
+(`mod`, `admin`, `dev` = owner or developer, `owner`). Hiding is a convenience;
+every endpoint still enforces its own role server-side.
+
+| Tab | Access | Contains |
+| --- | --- | --- |
+| Overview | staff | queues above, plus links to standalone pages |
+| Moderation | mod | account lookup, ban/restore, VM and BYO-OS bans, chat access approvals, featured game, blog deletion log |
+| Matrix chat | mod | Conduit health, slowmode, lockdown, mute/kick/ban/unban, delete message, staff roles and channels (admin), moderation log |
+| People | mod | notifications, emergency popup, roles (moderators, administrators, developers, testers, blog contributors), moderator shortcuts, owner account registrations |
+| Economy | mod (requests) / admin | wealth audit, give/set/burn/reset coins, multiplier, casino switch, premium; owner: reset all coins |
+| Shop | admin | catalog overrides and custom cosmetics |
+| Computers | admin | VM requests (approve, deny, delete, restore, purge); link to `/staff-dashboard/vms/` |
+| Logs | admin | server load, admin activity with undo, sent notifications, bans, coin and anti-cheat logs; developer: application and Docker logs |
+| Site | admin | public maintenance switch, domains and mirrors, reserved usernames, tester mode, admin passphrases |
+
+**Moderators and approvals.** Moderators can do some things directly (bans,
+notifications, chat access, report handling). For a set of economy, premium and
+role actions they see the form but it sends a request to the admins instead
+(`SD.post`, `/api/moderator/action-request`); admins approve it from the Overview
+queue "Moderator requests". Everything else is hidden from them.
+
+**Removed.** The old page's "service activity" live feed was already always empty
+and is gone, in line with the rule that staff don't see what pages people visit.

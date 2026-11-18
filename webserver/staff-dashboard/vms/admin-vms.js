@@ -531,7 +531,7 @@
       status('owner-fleet-status', 'Turning on 24 ChromeOS VMs and opening controller...');
       try {
         await api('/api/admin/vms/fleet/power', { action: 'start' });
-        location.href = '/admin/vms/fleet/';
+        location.href = '/staff-dashboard/vms/fleet/';
       } catch (err) {
         status('owner-fleet-status', err.message, 'error');
         btnControlFleet.disabled = false;

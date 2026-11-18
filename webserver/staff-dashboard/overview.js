@@ -1,107 +1,26 @@
-/* Staff dashboard: one place for everything waiting on moderators and admins.
+/* Overview section: everything waiting on staff, handled inline where possible.
    Data comes from GET /api/admin/staff-dashboard/summary; each action calls the
    existing endpoint for that kind of item. See docs/staff-dashboard.md. */
 (function () {
   'use strict';
-  var $ = function (id) { return document.getElementById(id); };
+  var h = SD.h, api = SD.api;
   var OLD_MS = 24 * 3600 * 1000;
-  var data = null;        // last summary
-  var role = {};          // /api/staff-hub/status
-  var current = 'all';    // selected tab key
+  var data = null;          // last summary
+  var current = 'all';      // selected queue tab
   var showClosedMatrix = false;
   var closedMatrix = [];
-  var customLinks = []; // moderator shortcuts from /api/moderator-panel
+  var root = null;
 
-  // ---- small helpers -------------------------------------------------------
-  function h(tag, attrs, kids) {
-    var el = document.createElement(tag);
-    Object.keys(attrs || {}).forEach(function (k) {
-      if (k === 'text') el.textContent = attrs[k];
-      else if (k === 'class') el.className = attrs[k];
-      else if (k === 'onclick') el.addEventListener('click', attrs[k]);
-      else if (attrs[k] !== false && attrs[k] != null) el.setAttribute(k, attrs[k]);
-    });
-    (kids || []).forEach(function (c) { if (c) el.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
-    return el;
-  }
-  function say(text, bad) { var s = $('sd-status'); s.className = bad ? 'err' : ''; s.textContent = text || ''; }
-  function ago(ms) {
-    if (!ms) return '';
-    var m = Math.max(0, Math.round((Date.now() - ms) / 60000));
-    if (m < 1) return 'just now';
-    if (m < 60) return m + ' min ago';
-    if (m < 2880) return Math.round(m / 60) + ' h ago';
-    return Math.round(m / 1440) + ' days ago';
-  }
+  function say(t, bad) { SD.say(t, bad); }
+  function ago(ms) { return SD.ago(ms); }
   function age(ms) { return h('span', { class: 'sd-age', title: ms ? new Date(ms).toLocaleString() : '', text: ago(ms) }); }
-  function headers(extra) {
-    var out = Object.assign({ 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' }, extra || {});
-    var pass = sessionStorage.getItem('admin_passphrase');
-    if (pass) out['X-Admin-Passphrase'] = pass;
-    return out;
-  }
-
-  // Admins unlock with their passphrase (kept in session storage, like every
-  // admin tool); moderators never reach this.
-  function askPassphrase() {
-    var dialog = $('sd-pass-dialog'), form = $('sd-pass-form'), input = $('sd-pass-input'), st = $('sd-pass-status');
-    return new Promise(function (resolve, reject) {
-      st.textContent = ''; input.value = '';
-      $('sd-pass-cancel').onclick = function () { dialog.close(); reject(new Error('Admin passphrase required.')); };
-      form.onsubmit = async function (e) {
-        e.preventDefault();
-        var pass = input.value.trim();
-        if (!pass) return;
-        try {
-          var res = await fetch('/api/admin/passphrase-status', { method: 'POST', credentials: 'same-origin', headers: headers({ 'X-Admin-Passphrase': pass }), body: JSON.stringify({ passphrase: pass }) });
-          var d = await res.json().catch(function () { return {}; });
-          if (res.ok && d.ok) { sessionStorage.setItem('admin_passphrase', pass); dialog.close(); resolve(); return; }
-        } catch (err) { /* fall through */ }
-        sessionStorage.removeItem('admin_passphrase');
-        st.textContent = 'Incorrect admin passphrase.'; input.select();
-      };
-      dialog.showModal(); input.focus();
-    });
-  }
-
-  async function api(path, body) {
-    function send() {
-      return fetch(path, Object.assign({ credentials: 'same-origin', cache: 'no-store', headers: headers() }, body ? { method: 'POST', body: JSON.stringify(body) } : {}));
-    }
-    var res = await send();
-    var d = await res.json().catch(function () { return {}; });
-    if (res.status === 403 && d.error === 'invalid_passphrase') {
-      sessionStorage.removeItem('admin_passphrase');
-      await askPassphrase();
-      res = await send();
-      d = await res.json().catch(function () { return {}; });
-    }
-    if (res.status === 403 && d.error === 'passphrase_not_configured') throw new Error('Set your admin passphrase on the admin page first.');
-    if (!res.ok || d.ok === false) throw new Error(d.error || d.message || 'Request failed (' + res.status + ').');
-    return d;
-  }
-
-  // Optional note from the staff member; resolves to null when cancelled.
-  function askNote(title, okLabel) {
-    var dialog = $('sd-note-dialog'), input = $('sd-note-input');
-    $('sd-note-title').textContent = title;
-    $('sd-note-ok').textContent = okLabel || 'Save';
-    input.value = '';
-    return new Promise(function (resolve) {
-      var done = false;
-      function finish(v) { if (done) return; done = true; dialog.close(); resolve(v); }
-      $('sd-note-cancel').onclick = function () { finish(null); };
-      dialog.oncancel = function (e) { e.preventDefault(); finish(null); };
-      $('sd-note-form').onsubmit = function (e) { e.preventDefault(); finish(input.value.trim()); };
-      dialog.showModal(); input.focus();
-    });
-  }
+  function askNote(title, okLabel) { return SD.prompt(title, okLabel); }
 
   // Runs an action for a card, then reloads; errors go to the status line.
   async function act(button, fn) {
     var buttons = button ? button.parentNode.querySelectorAll('button') : [];
     buttons.forEach(function (b) { b.disabled = true; });
-    try { await fn(); say(''); await load(true); }
+    try { await fn(); say(''); await load(); }
     catch (err) { say(err.message || 'Something went wrong.', true); buttons.forEach(function (b) { b.disabled = false; }); }
   }
   function btn(label, cls, fn) {
@@ -140,14 +59,14 @@
     var actions = [];
     if (r.eventId) {
       actions.push(btn('Delete message', 'danger', async function () {
-        if (!confirm('Delete this message from the chat? This cannot be undone.')) throw new Error('');
+        if (!await SD.confirm('Delete message','Delete this message from the chat? This cannot be undone.',{danger:true,ok:'Delete'})) throw new Error('');
         await api('/api/matrix/moderation/redact', { eventId: r.eventId, roomId: r.roomId, reason: 'Removed after a report' });
         await setMatrix(r.id, 'resolved', 'Message deleted');
       }));
     }
     if (r.sender) {
       actions.push(btn('Ban sender from chat', '', async function () {
-        if (!confirm('Ban ' + r.sender + ' from chat?')) throw new Error('');
+        if (!await SD.confirm('Ban sender','Ban ' + r.sender + ' from chat?',{danger:true,ok:'Ban'})) throw new Error('');
         await api('/api/matrix/moderation/ban', { userId: r.sender, reason: 'Banned after a report' });
         await setMatrix(r.id, 'resolved', 'Sender banned');
       }));
@@ -176,7 +95,7 @@
     ], [
       btn('Resolve', 'primary', function () { return api('/api/admin/chat-reports/resolve', { ts: r.ts, action: 'resolve' }); }),
       btn('Delete', '', async function () {
-        if (!confirm('Delete this report?')) throw new Error('');
+        if (!await SD.confirm('Delete report','Delete this report?',{danger:true,ok:'Delete'})) throw new Error('');
         await api('/api/admin/chat-reports/resolve', { ts: r.ts, action: 'delete' });
       }),
     ]);
@@ -273,7 +192,7 @@
 
   // ---- layout ------------------------------------------------------------------
   function renderTabs() {
-    var tabs = $('sd-tabs'); tabs.textContent = '';
+    var tabs = h('nav', { class: 'sd-tabs', 'aria-label': 'Queues' });
     function tab(key, label, n) {
       var b = h('button', { type: 'button', class: 'sd-tab' + (n ? ' has-items' : ''), 'aria-pressed': String(current === key) }, [label, h('span', { class: 'sd-count', text: String(n) })]);
       b.addEventListener('click', function () { current = key; render(); });
@@ -281,19 +200,17 @@
     }
     tab('all', 'Needs attention', data.total);
     visibleQueues().forEach(function (q) { tab(q.key, q.label, data.counts[q.count] || 0); });
+    return tabs;
   }
 
-  function renderQueue(q, single) {
+  function renderQueue(q) {
     var count = data.counts[q.count] || 0;
     var items = queueItems(q);
     var sec = h('section', { class: 'sd-queue', 'aria-label': q.title });
-    var title = h('h2', null, [q.title, h('span', { class: 'sd-count', text: String(count) })]);
     var side = [];
     if (q.more) side.push(h('a', { href: q.more.href, text: q.more.label }));
-    if (q.key === 'matrix') {
-      side.push(h('button', { type: 'button', class: 'sd-link', text: showClosedMatrix ? 'Hide resolved' : 'Show resolved', onclick: toggleClosedMatrix }));
-    }
-    sec.appendChild(h('div', { class: 'sd-queue-head' }, [title, h('span', null, side.length > 1 ? [side[0], '  ', side[1]] : side)]));
+    if (q.key === 'matrix') side.push(h('button', { type: 'button', class: 'sd-link', text: showClosedMatrix ? 'Hide resolved' : 'Show resolved', onclick: toggleClosedMatrix }));
+    sec.appendChild(h('div', { class: 'sd-queue-head' }, [h('h2', null, [q.title, h('span', { class: 'sd-count', text: String(count) })]), h('span', { class: 'sd-queue-side' }, side)]));
     if (!items.length) sec.appendChild(h('div', { class: 'sd-empty', text: q.empty }));
     items.forEach(function (it) { sec.appendChild(q.render(it)); });
     if (count > items.length) sec.appendChild(h('p', { class: 'sd-more', text: 'Showing the first ' + items.length + ' of ' + count + '. Handle these to see the rest.' }));
@@ -314,9 +231,41 @@
     render();
   }
 
+  // Standalone pages, listed only when the viewer can open them.
+  function pages() {
+    var P = [
+      { href: '/matrix/', name: 'Matrix chat', desc: 'Official staff and general rooms', level: 'mod', blank: true },
+      { href: '/moderator/support/', name: 'Support tickets', desc: 'Chat with people who are locked out', level: 'mod' },
+      { href: '/moderator/feedback/', name: 'Feedback', desc: 'Everything sent from the feedback page', level: 'mod' },
+      { href: '/moderator/teachers/', name: 'Teacher ratings', desc: 'Notes and the teacher list', level: 'mod' },
+      { href: '/staff-dashboard/special-schedule/', name: 'Special bell schedule', desc: 'Set a one-day schedule for a school', level: 'mod' },
+      { href: '/staff-dashboard/bans/', name: 'Account bans', desc: 'Review bans and restore accounts', level: 'admin' },
+      { href: '/staff-dashboard/email/', name: 'Email and newsletters', desc: 'Compose and send site email', level: 'admin' },
+      { href: '/staff-dashboard/updates/', name: 'Updates', desc: 'Homepage update log', level: 'admin' },
+      { href: '/staff-dashboard/companion/', name: 'Companion characters', desc: 'Preset characters and review queue', level: 'admin' },
+      { href: '/staff-dashboard/vms/', name: 'Computers', desc: 'Assign, create and control customer computers', level: 'admin' },
+      { href: '/tester/', name: 'Beta tester hub', desc: 'Tester tools and cooldown bypasses', level: 'tester' },
+      { href: '/vms/desktop/?container=owner', name: 'Container 500', desc: 'Root-only desktop', level: 'owner' },
+    ].concat((SD.customLinks || []).map(function (l) { return { href: l.href, name: l.label, desc: 'Custom shortcut', level: 'mod' }; }));
+    return P.filter(function (p) { return p.level === 'tester' ? SD.role.isTester : SD.can(p.level); });
+  }
+  function renderPages() {
+    var list = pages();
+    if (!list.length) return null;
+    var grid = h('div', { class: 'sd-tool-grid' }, list.map(function (t) {
+      return h('a', { class: 'sd-tool', href: t.href, target: t.blank ? '_blank' : false }, [h('strong', { text: t.name }), h('span', { text: t.desc })]);
+    }));
+    return h('section', { class: 'sd-tools' }, [h('h2', { text: 'Pages' }), grid]);
+  }
+
   function render() {
-    renderTabs();
-    var box = $('sd-queues'); box.textContent = '';
+    root.textContent = '';
+    if (!SD.can('mod')) {
+      SD.ui.add(root, [SD.ui.empty('The queues are for moderators and admins.'), renderPages()]);
+      return;
+    }
+    root.appendChild(renderTabs());
+    var box = h('div');
     var list = visibleQueues();
     if (current === 'all') {
       var any = false;
@@ -324,96 +273,40 @@
       if (!any) box.appendChild(h('div', { class: 'sd-empty', text: 'Nothing is waiting on staff.' }));
     } else {
       var q = list.filter(function (x) { return x.key === current; })[0];
-      if (q) box.appendChild(renderQueue(q, true)); else { current = 'all'; render(); return; }
+      if (q) box.appendChild(renderQueue(q)); else { current = 'all'; render(); return; }
     }
-    var total = $('sd-total');
+    root.appendChild(box);
+    if (current === 'all') SD.ui.add(root, [renderPages()]);
+    var total = SD.$('sd-total');
     total.hidden = false;
     total.textContent = data.total ? data.total + ' waiting' : 'All clear';
     document.title = (data.total ? '(' + data.total + ') ' : '') + 'Staff dashboard — mitch.pro';
   }
 
-  // ---- tools -----------------------------------------------------------------
-  function renderTools() {
-    var admin = !!role.isAdmin, mod = admin || !!role.isModerator;
-    var groups = [
-      { name: 'Moderation', tools: [
-        { href: '/matrix/', name: 'Matrix chat', desc: 'Official staff and general rooms', ok: mod, blank: true },
-        { href: '/admin/#moderation-tools', name: 'Safety and infractions', desc: 'Direct user reports and infractions', ok: mod },
-        { href: '/admin/#audit-tools', name: 'Activity log', desc: 'Moderation history and audit trail', ok: mod },
-        { href: '/moderator/support/', name: 'Support tickets', desc: 'Chat with people who are locked out', ok: mod },
-        { href: '/moderator/feedback/', name: 'Feedback', desc: 'Everything sent from the feedback page', ok: mod },
-        { href: '/moderator/teachers/', name: 'Teacher ratings', desc: 'Notes and the teacher list', ok: mod },
-        { href: '/admin/special-schedule/', name: 'Special bell schedule', desc: 'Set a one-day schedule for a school', ok: mod },
-      ].concat(customLinks.map(function (l) { return { href: l.href, name: l.label, desc: 'Custom shortcut', ok: mod }; })) },
-      { name: 'Administration', tools: [
-        { href: '/admin/', name: 'Admin panel', desc: 'Economy, accounts, logs and the rest', ok: admin },
-        { href: '/admin/bans/', name: 'Account bans', desc: 'Review bans and restore accounts', ok: admin },
-        { href: '/admin/vms/', name: 'Virtual machines', desc: 'Computers and resources', ok: admin },
-        { href: '/admin/email/', name: 'Email and newsletters', desc: 'Compose and send site email', ok: admin },
-        { href: '/admin/updates/', name: 'Updates', desc: 'Homepage update log', ok: admin },
-        { href: '/admin/companion/', name: 'Companion characters', desc: 'Preset characters and review queue', ok: admin },
-      ] },
-      { name: 'Testing', tools: [
-        { href: '/tester/', name: 'Beta tester hub', desc: 'Tester tools and cooldown bypasses', ok: !!role.isTester },
-      ] },
-    ];
-    if (role.isOwner) groups.push({ name: 'Owner', tools: [{ href: '/vms/desktop/?container=owner', name: 'Container 500', desc: 'Root-only desktop', ok: true }] });
-    var box = $('sd-tool-list'); box.textContent = '';
-    groups.forEach(function (g) {
-      var grid = h('div', { class: 'sd-tool-grid' });
-      g.tools.forEach(function (t) {
-        var el = h(t.ok ? 'a' : 'div', { class: 'sd-tool', href: t.ok ? t.href : false, target: t.ok && t.blank ? '_blank' : false, 'data-locked': t.ok ? false : '' }, [h('strong', { text: t.name }), h('span', { text: t.desc })]);
-        grid.appendChild(el);
-      });
-      box.appendChild(h('div', { class: 'sd-tool-group' }, [h('h3', { text: g.name }), grid]));
-    });
+  async function load() {
+    data = await api('/api/admin/staff-dashboard/summary');
+    if (showClosedMatrix) closedMatrix = (await api('/api/admin/staff-dashboard/matrix-reports?filter=closed')).reports || [];
+    render();
   }
 
-  // ---- loading -----------------------------------------------------------------
-  async function load(quiet) {
-    if (!quiet) say('Loading...');
-    try {
-      data = await api('/api/admin/staff-dashboard/summary');
-      if (showClosedMatrix) closedMatrix = (await api('/api/admin/staff-dashboard/matrix-reports?filter=closed')).reports || [];
-      $('sd-app').hidden = false;
-      if (!quiet) say('');
-      render();
-      if (!quiet) loadCustomLinks();
-    } catch (err) {
-      say(err.message || 'Could not load the dashboard.', true);
-    }
-  }
-
-  // Shortcuts admins add for moderators; optional, so failures are ignored.
-  async function loadCustomLinks() {
-    try {
-      var d = await api('/api/admin/moderator-panel');
-      customLinks = (d.links || []).filter(function (l) { return l && /^(\/|https?:\/\/)/i.test(String(l.href || '').trim()); });
-      renderTools();
-    } catch (err) { /* keep the built-in tools */ }
-  }
-
-  async function start() {
-    try {
-      var res = await fetch('/api/staff-hub/status', { credentials: 'same-origin', cache: 'no-store' });
-      if (res.status === 401) { location.href = '/enroll/?next=' + encodeURIComponent('/staff-dashboard/'); return; }
-      if (!res.ok) throw new Error('status ' + res.status);
-      role = await res.json();
-    } catch (err) {
-      say('Could not load staff status.', true);
-      return;
-    }
-    if (!role.isStaff) { say('Staff access required.', true); return; }
-    var badge = $('sd-role');
-    if (badge) badge.textContent = role.isOwner ? 'Root' : role.isAdmin ? 'Admin' : role.isModerator ? 'Moderator' : 'Tester';
-    renderToolsOnly();
-    if (!role.isAdmin && !role.isModerator) { say('The queues are for moderators and admins.'); return; }
-    await load(false);
-  }
-  function renderToolsOnly() { $('sd-app').hidden = false; renderTools(); }
-
-  $('sd-refresh').addEventListener('click', function () { load(false); });
-  document.addEventListener('visibilitychange', function () { if (!document.hidden && data) load(true); });
-  setInterval(function () { if (!document.hidden && data && !document.querySelector('dialog[open]')) load(true); }, 60000);
-  start();
+  SD.register({
+    key: 'overview', label: 'Overview', access: 'any',
+    render: async function (el) {
+      root = el;
+      if (!SD.can('mod')) { render(); return; }
+      say('Loading...');
+      await load();
+      say('');
+      // Shortcuts admins add for moderators; optional.
+      if (SD.customLinks === undefined) {
+        SD.customLinks = [];
+        try {
+          var d = await api('/api/admin/moderator-panel');
+          SD.customLinks = (d.links || []).filter(function (l) { return l && /^(\/|https?:\/\/)/i.test(String(l.href || '').trim()); });
+          render();
+        } catch (err) { /* built-in pages only */ }
+      }
+    },
+  });
+  SD.refreshOverview = function () { if (SD.current === 'overview' && SD.can('mod')) return load().catch(function () {}); };
 })();

@@ -1,6 +1,6 @@
 # Graphical computer portal
 
-The customer entry point is `/vms/`; `/vms/desktop/?id=<application-record-id>` opens the real VM display. Owners, co-owners, and administrators manage computers at `/admin/vms/`. Moderators do not have infrastructure administration access.
+The customer entry point is `/vms/`; `/vms/desktop/?id=<application-record-id>` opens the real VM display. Owners, co-owners, and administrators manage computers at `/staff-dashboard/vms/`. Moderators do not have infrastructure administration access.
 
 ## Architecture and data
 
@@ -100,7 +100,7 @@ The production desktop allowlist is `PROXMOX_DESKTOP_TEMPLATES=9011,9010`, with 
 
 New user computers get a random guest password. Website authentication opens the console, the guest signs in automatically, and sudo works without a second password. Custom OS installers retain their own account setup. Repair desktop applies the same configuration to existing managed Linux computers, preserves active desktop sessions, and checks that a graphical session actually starts. It also installs missing video decoders. A failed repair remains visible and can be retried; it does not block the console. Opening or reconnecting the console does not restart or reconfigure the guest display manager.
 
-A computer can be opened (desktop, power controls) only by its owner and the site owner. Site admins and co-owners can open someone else's computer only while that owner has explicitly allowed it from their Computers page; the permission lasts 24 hours and the owner is notified when an admin opens the desktop. See [vm-access.md](vm-access.md). Admins still manage the fleet from `/admin/vms/` (assign, unassign, resources, restrictions, delete) without opening the computer. Administrative operations are recorded in the VM audit log. Desktop tickets remain single-use and bound to the account, session, VM, node, and ownership; account bans close connected consoles.
+A computer can be opened (desktop, power controls) only by its owner and the site owner. Site admins and co-owners can open someone else's computer only while that owner has explicitly allowed it from their Computers page; the permission lasts 24 hours and the owner is notified when an admin opens the desktop. See [vm-access.md](vm-access.md). Admins still manage the fleet from `/staff-dashboard/vms/` (assign, unassign, resources, restrictions, delete) without opening the computer. Administrative operations are recorded in the VM audit log. Desktop tickets remain single-use and bound to the account, session, VM, node, and ownership; account bans close connected consoles.
 
 To build another image, use a dedicated VM in the 9000–9999 range, apply `rust/crates/mitch-server/guest/desktop-setup.sh` with a temporary build username, verify the desktop and video playback, then run `tools/seal-managed-desktop-template.sh <vmid> <build-user>` on the Proxmox host. The sealer removes the temporary user, credentials and SSH host keys, cleans cloud-init/machine identity, and converts the stopped VM into a template. Validate a fresh clone with a different username before changing the allowlist. Do not edit a template disk used by linked clones.
 
@@ -123,7 +123,7 @@ resources. For all other users—including co-owners and administrators—custom
 resources and admin resource edits are strictly capped at 8 CPU cores, 16 GB RAM
 (16384 MB), and 128 GB disk storage.
 
-`/admin/vms/` provides a resource dialog instead of three prompts. The old
+`/staff-dashboard/vms/` provides a resource dialog instead of three prompts. The old
 `downgrade-specs` URL remains a deployment compatibility alias for `resources`.
 Fleet management actions are grouped in a menu, with operational capacity and
 recent audit records kept visible. Personal usage charts are no longer collected
@@ -196,14 +196,14 @@ silently reset this back to `false`).
 
 ### Owner 24-Machine ChromeOS Fleet & Controller
 
-To support automated batch testing and owner workflows, an owner-exclusive 24-machine ChromeOS fleet can be provisioned and controlled via `/admin/vms`:
+To support automated batch testing and owner workflows, an owner-exclusive 24-machine ChromeOS fleet can be provisioned and controlled via `/staff-dashboard/vms`:
 - **Hardware Specs**: 2 CPU cores, 4 GB RAM (4096 MB), 32 GB disk, `keep_alive = 1` (exempt from inactivity shutdown), owner-locked (`is_vm_owner_locked`).
 - **VMID Allocation**: VMIDs start strictly at 300 (avoiding any collision with VMIDs below 300), checking both Proxmox's live cluster guest registry and SQLite database to allocate contiguous available IDs.
 - **Provisioning Endpoint**: `POST /api/admin/vms/fleet/create-chromeos` provisions up to 24 machines named `chromeos-fleet-01` through `24`, cloned from `PROXMOX_CHROMEOS_TEMPLATE_VMID`. Strictly owner-only.
 - **Batch Power Endpoint**: `POST /api/admin/vms/fleet/power` accepts `action: "start" | "shutdown" | "restart" | "force-stop"`, executing power transitions across all 24 machines concurrently.
 - **Fleet List Endpoint**: `GET /api/admin/vms/fleet/chromeos` returns all 24 fleet records with real-time status from Proxmox.
 - **Safe Fleet Delete Endpoint**: `POST /api/admin/vms/fleet/delete-chromeos` deletes owner fleet machines. Strictly requires that any target machine has `"chromeos"` in its name (friendlyName or hostname), is owned by the owner, is NOT the template VMID, and is NOT in the protected provisioning pool `200..=210`. Supports `{ id }` for individual deletion, `{ all: true }` for batch fleet deletion, and `{ localOnly: true }` to remove records from mitch.pro database only without contacting Proxmox.
-- **Multi-Screen Controller (`/admin/vms/fleet/`)**:
+- **Multi-Screen Controller (`/staff-dashboard/vms/fleet/`)**:
   - Gated to `is_owner_email` at both the HTML route handler and API layer.
   - Responsive grid rendering live noVNC RFB streams of all 24 machines simultaneously.
   - Interactive single-machine zoom mode to inspect or interact with any individual machine, with an instant toggle back to the 24-screen grid.

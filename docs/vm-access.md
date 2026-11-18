@@ -40,7 +40,7 @@ VM audit log. Allowing and withdrawing are logged as `ADMIN_ACCESS_ALLOWED` /
 
 ## What admins can still do without a grant
 
-Fleet management on `/admin/vms/` that doesn't open the computer: assign,
+Fleet management on `/staff-dashboard/vms/` that doesn't open the computer: assign,
 unassign, edit resources, restrict VM/BYO-OS use, keep-alive, delete. The
 fleet list shows "Owner only" instead of Open/power buttons for computers they
 can't open.
@@ -50,7 +50,7 @@ can't open.
 After a non-admin powers their VM off, they wait 30 minutes
 (`VM_COOLDOWN_DURATION_MS`) before starting it again. The owner (not other
 admins) can turn this off for everyone from the "VM cooldown" panel on
-`/admin/vms/`. It is one site-wide setting, stored in the single-row
+`/staff-dashboard/vms/`. It is one site-wide setting, stored in the single-row
 `vm_settings` table (`cooldown_enabled`, default on), changed by
 `POST /api/admin/vms/cooldown` and reported as `cooldownEnabled` in the
 overview. While off, no new cooldowns are recorded and existing ones are

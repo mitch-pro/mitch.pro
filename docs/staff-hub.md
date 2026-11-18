@@ -40,7 +40,7 @@ incomplete depending on who's looking at it.
 
 Moderators and above also get a **Support tickets** card (`/moderator/support/`), see [support.md](support.md).
 
-Admins also get an **Updates** card (`/admin/updates/`) for the homepage update log, see [site-updates.md](site-updates.md).
+Admins also get an **Updates** page (`/staff-dashboard/updates/`) for the homepage update log, see [site-updates.md](site-updates.md).
 
 ## Mitch's Scrotum role
 

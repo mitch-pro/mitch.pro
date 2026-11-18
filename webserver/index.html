@@ -1309,7 +1309,7 @@ function setupHolidayPill() {
   paint();
 }
 
-// The manual update log (written on /admin/updates/). Collapsed it is one line
+// The manual update log (written on /staff-dashboard/updates/). Collapsed it is one line
 // with the newest title; clicking it lists recent entries with their details.
 function loadUpdates() {
   fetch('/api/updates?limit=5', { cache: 'no-store' }).then(function(r) { return r.ok ? r.json() : null; }).then(function(data) {
