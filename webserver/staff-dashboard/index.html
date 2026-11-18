@@ -4,37 +4,32 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
-  <title>Staff dashboard — mitch.pro</title>
+  <title>Overview — mitch.pro</title>
   <link rel="icon" href="/favicon.ico">
   <link rel="stylesheet" href="/app.css">
-  <link rel="stylesheet" href="/staff-dashboard/staff-dashboard.css?v=3">
+  <link rel="stylesheet" href="/staff-dashboard/staff-dashboard.css?v=5">
   <script src="/app-shell.js" defer></script>
-  <script src="/staff-dashboard/sd-core.js?v=1" defer></script>
-  <script src="/staff-dashboard/overview.js?v=1" defer></script>
-  <script src="/staff-dashboard/sections/moderation.js?v=1" defer></script>
-  <script src="/staff-dashboard/sections/matrix.js?v=1" defer></script>
-  <script src="/staff-dashboard/sections/people.js?v=1" defer></script>
-  <script src="/staff-dashboard/sections/economy.js?v=1" defer></script>
-  <script src="/staff-dashboard/sections/shop.js?v=1" defer></script>
-  <script src="/staff-dashboard/sections/vms.js?v=1" defer></script>
-  <script src="/staff-dashboard/sections/logs.js?v=1" defer></script>
-  <script src="/staff-dashboard/sections/site.js?v=1" defer></script>
-  <script src="/staff-dashboard/sd-boot.js?v=1" defer></script>
+  <script src="/staff-dashboard/sd-core.js?v=3" defer></script>
+  <script src="/staff-dashboard/overview.js?v=3" defer></script>
+  <script src="/staff-dashboard/sd-boot.js?v=3" defer></script>
   <script src="/staff-dashboard/passphrase-help.js" defer></script>
 </head>
-<body class="app-shell">
+<body class="app-shell" data-section="overview">
   <main class="app-main sd-main">
-    <header class="page-head sd-head">
-      <h1>Staff dashboard</h1>
-      <span id="sd-role" class="sd-role"></span>
-      <div class="sd-head-tools">
-        <span id="sd-total" class="sd-total" hidden></span>
-        <button type="button" id="sd-refresh">Refresh</button>
+    <div class="sd-layout">
+      <nav id="sd-side" class="sd-side" aria-label="Staff dashboard"></nav>
+      <div class="sd-content">
+        <header class="sd-head">
+          <h1 id="sd-title">Overview</h1>
+          <span id="sd-role" class="sd-role"></span>
+          <span id="sd-total" class="sd-total" hidden></span>
+          <button type="button" id="sd-refresh">Refresh</button>
+          <p id="sd-sub" class="sd-head-sub"></p>
+        </header>
+        <p id="sd-status" role="status">Loading...</p>
+        <div id="sd-view"></div>
       </div>
-    </header>
-    <nav id="sd-nav" class="sd-nav" aria-label="Dashboard sections"></nav>
-    <p id="sd-status" role="status">Loading...</p>
-    <div id="sd-view"></div>
+    </div>
   </main>
 </body>
 </html>

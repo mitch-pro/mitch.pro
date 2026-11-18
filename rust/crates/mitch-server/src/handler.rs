@@ -1613,7 +1613,15 @@ async fn handle_resolved(
     // Staff tool pages under /staff-dashboard/<tool>/ need a staff session. The
     // dashboard page itself (/staff-dashboard/) checks the viewer's role on its
     // own so testers can reach it too.
-    const STAFF_TOOLS: [&str; 7] = [
+    const STAFF_TOOLS: [&str; 15] = [
+        "/staff-dashboard/moderation",
+        "/staff-dashboard/matrix",
+        "/staff-dashboard/people",
+        "/staff-dashboard/economy",
+        "/staff-dashboard/shop",
+        "/staff-dashboard/vm-requests",
+        "/staff-dashboard/logs",
+        "/staff-dashboard/site",
         "/staff-dashboard/bans",
         "/staff-dashboard/vms",
         "/staff-dashboard/email",
@@ -1643,6 +1651,10 @@ async fn handle_resolved(
             "/staff-dashboard/bans",
             "/staff-dashboard/passphrase-reset",
             "/staff-dashboard/updates",
+            "/staff-dashboard/shop",
+            "/staff-dashboard/vm-requests",
+            "/staff-dashboard/logs",
+            "/staff-dashboard/site",
         ]
         .iter()
         .any(|base| html_base == *base || html_base.starts_with(&format!("{base}/")))

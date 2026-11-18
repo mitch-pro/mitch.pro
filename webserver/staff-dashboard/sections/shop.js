@@ -4,7 +4,6 @@
   var SD = window.SD, h = SD.h, ui = SD.ui;
 
   async function render(root) {
-    ui.add(root, [ui.heading('Shop catalog', 'Edit item names, prices and descriptions. Saved overrides replace the server defaults.')]);
     var catalog = (await SD.api('/api/admin/shop/catalog')).catalog || [];
     var tableBox = h('div');
     var status = h('p', { class: 'sd-form-status', role: 'status' });
@@ -37,7 +36,7 @@
     var reset = ui.button('Reset to defaults', 'danger', async function (b) {
       if (!(await SD.confirm('Reset catalog', 'Reset every shop item to the server defaults? This clears all overrides.', { danger: true, ok: 'Reset' }))) return;
       b.disabled = true;
-      try { await SD.post('/api/admin/shop/catalog/save', { catalog: [] }); SD.show('shop'); }
+      try { await SD.post('/api/admin/shop/catalog/save', { catalog: [] }); SD.show(); }
       catch (e) { say(e.message, true); b.disabled = false; }
     });
     root.appendChild(h('div', { class: 'sd-actions' }, [save, reset]));
@@ -63,5 +62,5 @@
     })]));
   }
 
-  SD.register({ key: 'shop', label: 'Shop', access: 'admin', render: render });
+  SD.register({ key: 'shop', render: render });
 })();

@@ -69,25 +69,32 @@ All require moderator or higher (and the passphrase for full admins).
 Code: `routes/admin/staff_dashboard.rs`, `mitch-lib/src/matrix_reports.rs`,
 frontend in `webserver/staff-dashboard/`.
 
-## Sections
+## Pages
 
-Each tab is a module in `webserver/staff-dashboard/sections/` registered with
-`SD.register({key, label, access, render})` (core: `sd-core.js`). A section is
+Each dashboard page has its own URL and HTML file
+(`/staff-dashboard/<page>/`; the overview is `/staff-dashboard/` and `/moderator/`),
+loads `sd-core.js` plus one module, and shares the sidebar, which lists the pages
+and tools the viewer can open (counts of unresolved items show next to Overview on
+every page). Layout is a sidebar plus settings-style rows (title left, controls
+right) so cards never leave gaps at any desktop width; they stack on narrow screens.
+
+Each page is a module in `webserver/staff-dashboard/sections/` registered with
+`SD.register({key, label, access, render})` (core: `sd-core.js`). A page is
 only listed, and a tool inside it only built, when the viewer has the access level
 (`mod`, `admin`, `dev` = owner or developer, `owner`). Hiding is a convenience;
 every endpoint still enforces its own role server-side.
 
-| Tab | Access | Contains |
+| Page | Access | Contains |
 | --- | --- | --- |
-| Overview | staff | queues above, plus links to standalone pages |
-| Moderation | mod | account lookup, ban/restore, VM and BYO-OS bans, chat access approvals, featured game, blog deletion log |
-| Matrix chat | mod | Conduit health, slowmode, lockdown, mute/kick/ban/unban, delete message, staff roles and channels (admin), moderation log |
-| People | mod | notifications, emergency popup, roles (moderators, administrators, developers, testers, blog contributors), moderator shortcuts, owner account registrations |
-| Economy | mod (requests) / admin | wealth audit, give/set/burn/reset coins, multiplier, casino switch, premium; owner: reset all coins |
-| Shop | admin | catalog overrides and custom cosmetics |
-| Computers | admin | VM requests (approve, deny, delete, restore, purge); link to `/staff-dashboard/vms/` |
-| Logs | admin | server load, admin activity with undo, sent notifications, bans, coin and anti-cheat logs; developer: application and Docker logs |
-| Site | admin | public maintenance switch, domains and mirrors, reserved usernames, tester mode, admin passphrases |
+| Overview (`/staff-dashboard/`) | staff | queues above, plus links to standalone pages |
+| Moderation (`/moderation/`) | mod | account lookup, ban/restore, VM and BYO-OS bans, chat access approvals, featured game, blog deletion log |
+| Matrix chat (`/matrix/`) | mod | Conduit health, slowmode, lockdown, mute/kick/ban/unban, delete message, staff roles and channels (admin), moderation log |
+| People (`/people/`) | mod | notifications, emergency popup, roles (moderators, administrators, developers, testers, blog contributors), moderator shortcuts, owner account registrations |
+| Economy (`/economy/`) | mod (requests) / admin | wealth audit, give/set/burn/reset coins, multiplier, casino switch, premium; owner: reset all coins |
+| Shop (`/shop/`) | admin | catalog overrides and custom cosmetics |
+| Computer requests (`/vm-requests/`) | admin | VM requests (approve, deny, delete, restore, purge); link to `/staff-dashboard/vms/` |
+| Logs (`/logs/`) | admin | server load, admin activity with undo, sent notifications, bans, coin and anti-cheat logs; developer: application and Docker logs |
+| Site (`/site/`) | admin | public maintenance switch, domains and mirrors, reserved usernames, tester mode, admin passphrases |
 
 **Moderators and approvals.** Moderators can do some things directly (bans,
 notifications, chat access, report handling). For a set of economy, premium and

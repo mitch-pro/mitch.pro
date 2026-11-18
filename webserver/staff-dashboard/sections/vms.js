@@ -16,7 +16,6 @@
   }
 
   async function render(root) {
-    ui.add(root, [ui.heading('Computer requests', 'Requests for Linux containers and dedicated VMs.')]);
     root.appendChild(h('div', { class: 'sd-actions' }, [h('a', { class: 'sd-link', href: '/staff-dashboard/vms/', text: 'Manage computers' })]));
     var status = h('p', { class: 'sd-form-status', role: 'status' });
     function say(t, bad) { status.className = 'sd-form-status' + (bad ? ' err' : t ? ' ok' : ''); status.textContent = t || ''; }
@@ -28,7 +27,7 @@
 
     async function call(url, body, busy) {
       say(busy);
-      try { var d = await SD.api(url, body); delete failed[body.email]; SD.show('vms'); return d; }
+      try { var d = await SD.api(url, body); delete failed[body.email]; SD.show(); return d; }
       catch (e) { failed[body.email] = true; say(e.message, true); }
     }
     function run(label, danger, confirm, fn) {
@@ -65,5 +64,5 @@
     root.appendChild(ui.table(['Account', 'Type', 'Note', 'Status', ''], rows, 'No computer requests.'));
   }
 
-  SD.register({ key: 'vms', label: 'Computers', access: 'admin', render: render });
+  SD.register({ key: 'vm-requests', render: render });
 })();

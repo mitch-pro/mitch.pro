@@ -231,37 +231,10 @@
     render();
   }
 
-  // Standalone pages, listed only when the viewer can open them.
-  function pages() {
-    var P = [
-      { href: '/matrix/', name: 'Matrix chat', desc: 'Official staff and general rooms', level: 'mod', blank: true },
-      { href: '/moderator/support/', name: 'Support tickets', desc: 'Chat with people who are locked out', level: 'mod' },
-      { href: '/moderator/feedback/', name: 'Feedback', desc: 'Everything sent from the feedback page', level: 'mod' },
-      { href: '/moderator/teachers/', name: 'Teacher ratings', desc: 'Notes and the teacher list', level: 'mod' },
-      { href: '/staff-dashboard/special-schedule/', name: 'Special bell schedule', desc: 'Set a one-day schedule for a school', level: 'mod' },
-      { href: '/staff-dashboard/bans/', name: 'Account bans', desc: 'Review bans and restore accounts', level: 'admin' },
-      { href: '/staff-dashboard/email/', name: 'Email and newsletters', desc: 'Compose and send site email', level: 'admin' },
-      { href: '/staff-dashboard/updates/', name: 'Updates', desc: 'Homepage update log', level: 'admin' },
-      { href: '/staff-dashboard/companion/', name: 'Companion characters', desc: 'Preset characters and review queue', level: 'admin' },
-      { href: '/staff-dashboard/vms/', name: 'Computers', desc: 'Assign, create and control customer computers', level: 'admin' },
-      { href: '/tester/', name: 'Beta tester hub', desc: 'Tester tools and cooldown bypasses', level: 'tester' },
-      { href: '/vms/desktop/?container=owner', name: 'Container 500', desc: 'Root-only desktop', level: 'owner' },
-    ].concat((SD.customLinks || []).map(function (l) { return { href: l.href, name: l.label, desc: 'Custom shortcut', level: 'mod' }; }));
-    return P.filter(function (p) { return p.level === 'tester' ? SD.role.isTester : SD.can(p.level); });
-  }
-  function renderPages() {
-    var list = pages();
-    if (!list.length) return null;
-    var grid = h('div', { class: 'sd-tool-grid' }, list.map(function (t) {
-      return h('a', { class: 'sd-tool', href: t.href, target: t.blank ? '_blank' : false }, [h('strong', { text: t.name }), h('span', { text: t.desc })]);
-    }));
-    return h('section', { class: 'sd-tools' }, [h('h2', { text: 'Pages' }), grid]);
-  }
-
   function render() {
     root.textContent = '';
     if (!SD.can('mod')) {
-      SD.ui.add(root, [SD.ui.empty('The queues are for moderators and admins.'), renderPages()]);
+      root.appendChild(SD.ui.empty('The queues are for moderators and admins. Use the links on the left.'));
       return;
     }
     root.appendChild(renderTabs());
@@ -276,11 +249,11 @@
       if (q) box.appendChild(renderQueue(q)); else { current = 'all'; render(); return; }
     }
     root.appendChild(box);
-    if (current === 'all') SD.ui.add(root, [renderPages()]);
     var total = SD.$('sd-total');
     total.hidden = false;
     total.textContent = data.total ? data.total + ' waiting' : 'All clear';
-    document.title = (data.total ? '(' + data.total + ') ' : '') + 'Staff dashboard — mitch.pro';
+    document.title = (data.total ? '(' + data.total + ') ' : '') + 'Overview — mitch.pro';
+    SD.badge('overview', data.total);
   }
 
   async function load() {
@@ -290,23 +263,14 @@
   }
 
   SD.register({
-    key: 'overview', label: 'Overview', access: 'any',
+    key: 'overview',
     render: async function (el) {
       root = el;
       if (!SD.can('mod')) { render(); return; }
       say('Loading...');
       await load();
       say('');
-      // Shortcuts admins add for moderators; optional.
-      if (SD.customLinks === undefined) {
-        SD.customLinks = [];
-        try {
-          var d = await api('/api/admin/moderator-panel');
-          SD.customLinks = (d.links || []).filter(function (l) { return l && /^(\/|https?:\/\/)/i.test(String(l.href || '').trim()); });
-          render();
-        } catch (err) { /* built-in pages only */ }
-      }
     },
   });
-  SD.refreshOverview = function () { if (SD.current === 'overview' && SD.can('mod')) return load().catch(function () {}); };
+  SD.refreshOverview = function () { if (SD.can('mod')) return load().catch(function () {}); };
 })();

@@ -43,9 +43,8 @@
   }
 
   function render(root) {
-    ui.add(root, [ui.heading('Look up an account', 'Bans, room status and restrictions in one place.')]);
     var search = ui.form({
-      access: 'mod', submitLabel: 'Look up', keep: true,
+      access: 'mod', title: 'Account lookup', desc: 'Bans, room status and restrictions in one place.', submitLabel: 'Look up', keep: true,
       fields: [{ name: 'q', label: 'Email, username or Matrix ID', required: true }],
       submit: async function (v) { await lookup(root, v.q); return ''; },
     });
@@ -98,5 +97,5 @@
     })]));
   }
 
-  SD.register({ key: 'moderation', label: 'Moderation', access: 'mod', render: render });
+  SD.register({ key: 'moderation', render: render });
 })();

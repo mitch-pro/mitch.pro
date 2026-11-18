@@ -26,12 +26,11 @@
       title: 'Casino switch', desc: 'Close or reopen every casino game.', submitLabel: 'Toggle casino', danger: true,
       fields: [], confirm: 'Toggle the casino on or off?',
       submit: function () { return SD.post('/api/admin/casino/toggle', {}); },
-      ok: function (d) { return d.enabled ? 'Casino is now open.' : 'Casino disabled.'; }, onDone: function () { SD.show('economy'); },
+      ok: function (d) { return d.enabled ? 'Casino is now open.' : 'Casino disabled.'; }, onDone: function () { SD.show(); },
     });
   }
 
   function render(root) {
-    ui.add(root, [ui.heading('Economy', 'Balances, rewards and the casino.')]);
     if (SD.can('admin')) root.appendChild(audit());
     var coins = ui.grid([
       ui.form({
@@ -113,7 +112,7 @@
     if (owner) { root.appendChild(ui.heading('Root')); root.appendChild(ui.grid([owner])); }
   }
 
-  SD.register({ key: 'economy', label: 'Economy', access: 'mod', render: function (root) {
+  SD.register({ key: 'economy', render: function (root) {
     // Moderators only see this section when at least one tool can be requested.
     render(root);
   } });

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>People — mitch.pro</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/staff-dashboard/staff-dashboard.css?v=5">
+  <script src="/app-shell.js" defer></script>
+  <script src="/staff-dashboard/sd-core.js?v=3" defer></script>
+  <script src="/staff-dashboard/sections/people.js?v=3" defer></script>
+  <script src="/staff-dashboard/sd-boot.js?v=3" defer></script>
+  <script src="/staff-dashboard/passphrase-help.js" defer></script>
+</head>
+<body class="app-shell" data-section="people">
+  <main class="app-main sd-main">
+    <div class="sd-layout">
+      <nav id="sd-side" class="sd-side" aria-label="Staff dashboard"></nav>
+      <div class="sd-content">
+        <header class="sd-head">
+          <h1 id="sd-title">People</h1>
+          <span id="sd-role" class="sd-role"></span>
+          <span id="sd-total" class="sd-total" hidden></span>
+          <button type="button" id="sd-refresh">Refresh</button>
+          <p id="sd-sub" class="sd-head-sub"></p>
+        </header>
+        <p id="sd-status" role="status">Loading...</p>
+        <div id="sd-view"></div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

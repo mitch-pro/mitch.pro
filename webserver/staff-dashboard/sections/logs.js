@@ -22,7 +22,7 @@
     return ui.button('Undo', '', async function (b) {
       if (!(await SD.confirm('Undo action', 'Reverse this action (' + row.action + ')?'))) return;
       b.disabled = true;
-      try { var d = await SD.api('/api/admin/audit/revert', { id: row.id }); await SD.alert('Undone', d.message || 'Action reversed.'); SD.show('logs'); }
+      try { var d = await SD.api('/api/admin/audit/revert', { id: row.id }); await SD.alert('Undone', d.message || 'Action reversed.'); SD.show(); }
       catch (e) { await SD.alert('Could not undo', e.message); b.disabled = false; }
     });
   }
@@ -67,7 +67,7 @@
       return [SD.time(r.ts), r.targetEmail, r.title, r.read ? 'read' : 'unread', ui.button('Unsend', '', async function (b) {
         if (!(await SD.confirm('Unsend', r.batchId ? 'Unsend this notification batch?' : 'Unsend this notification?'))) return;
         b.disabled = true;
-        try { var d = await SD.post('/api/admin/unsend-notification', { id: r.id, batchId: r.batchId }); await SD.alert('Unsent', d.pending ? SD.pendingText(d) : 'Removed ' + (d.removed || 0) + ' record(s).'); SD.show('logs'); }
+        try { var d = await SD.post('/api/admin/unsend-notification', { id: r.id, batchId: r.batchId }); await SD.alert('Unsent', d.pending ? SD.pendingText(d) : 'Removed ' + (d.removed || 0) + ' record(s).'); SD.show(); }
         catch (e) { await SD.alert('Failed', e.message); b.disabled = false; }
       })];
     }), 'No notifications sent.'));
@@ -89,7 +89,6 @@
     }), 'Nothing flagged.'));
 
     if (SD.can('dev')) {
-      root.appendChild(ui.heading('Application logs'));
       root.appendChild(logViewer({
         title: 'Application logs', url: '/api/admin/app-logs',
         filters: [
@@ -111,5 +110,5 @@
     }
   }
 
-  SD.register({ key: 'logs', label: 'Logs', access: 'admin', render: render });
+  SD.register({ key: 'logs', render: render });
 })();

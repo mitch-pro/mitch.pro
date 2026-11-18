@@ -30,7 +30,6 @@
   }
 
   async function render(root) {
-    ui.add(root, [ui.heading('Matrix chat', 'Controls for the official chat rooms. Reports are on the Overview tab.')]);
     root.appendChild(health());
     var ov = {};
     try { ov = await SD.api(M + 'overview'); } catch (e) { SD.say(e.message, true); }
@@ -48,7 +47,7 @@
         submitLabel: ov.roomMuted ? 'Unlock room' : 'Lock down room', fields: [],
         confirm: ov.roomMuted ? 'Let regular members chat again?' : 'Stop regular members sending messages until unlocked?',
         submit: function () { return SD.api(M + 'mute-room', { muted: !ov.roomMuted }); },
-        ok: function () { return 'Updated.'; }, onDone: function () { SD.show('matrix'); },
+        ok: function () { return 'Updated.'; }, onDone: function () { SD.show(); },
       }),
       ui.form({
         access: 'mod', title: 'Clean up old sessions', desc: 'Removes abandoned chat devices older than 7 days. Fixes key-sharing and "unable to decrypt" errors.', submitLabel: 'Prune old sessions',
@@ -102,5 +101,5 @@
     } catch (e) { root.appendChild(ui.empty(e.message)); }
   }
 
-  SD.register({ key: 'matrix', label: 'Matrix chat', access: 'mod', render: render });
+  SD.register({ key: 'matrix', render: render });
 })();

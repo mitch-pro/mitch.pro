@@ -191,11 +191,10 @@
   // ---- UI builders -----------------------------------------------------------
   var ui = SD.ui = {};
 
+  // A settings-style card: title and description on the left, content on the right.
   ui.card = function (title, desc, kids, cls) {
-    return h('section', { class: 'sd-card' + (cls ? ' ' + cls : '') }, [
-      title ? h('h3', { text: title }) : null,
-      desc ? h('p', { class: 'sd-desc', text: desc }) : null,
-    ].concat(kids || []));
+    var info = h('div', { class: 'sd-card-info' }, [title ? h('h3', { text: title }) : null, desc ? h('p', { class: 'sd-desc', text: desc }) : null]);
+    return h('section', { class: 'sd-card' + (cls ? ' ' + cls : '') }, [info, ui.add(h('div', { class: 'sd-card-body' }), kids || [])]);
   };
   // Appends the non-null elements to a parent.
   ui.add = function (parent, els) { (els || []).forEach(function (e) { if (e) parent.appendChild(e); }); return parent; };
@@ -237,11 +236,12 @@
     if (f.required) input.required = true;
     if (f.autocomplete !== undefined) input.setAttribute('autocomplete', f.autocomplete);
     if (f.value != null) { if (f.type === 'checkbox') input.checked = !!f.value; else input.value = f.value; }
+    var wide = f.type === 'textarea' || f.wide;
     if (f.type === 'checkbox') {
       input.classList.remove('sd-input');
       return { el: h('label', { class: 'sd-check', for: id }, [input, f.label]), input: input };
     }
-    return { el: h('label', { class: 'sd-field', for: id }, [h('span', { text: f.label }), input, f.hint ? h('small', { text: f.hint }) : null]), input: input };
+    return { el: h('label', { class: 'sd-field' + (wide ? ' wide' : ''), for: id }, [h('span', { text: f.label }), input, f.hint ? h('small', { text: f.hint }) : null]), input: input };
   }
   function readValues(fields) {
     var v = {};
@@ -262,10 +262,13 @@
     var submitBtn = h('button', { type: 'submit', class: spec.danger ? 'danger' : 'primary', text: spec.submitLabel || 'Save' });
     var needsApproval = SD.approvalMode() && !SD.can(spec.access || 'admin');
     var form = h('form', { class: 'sd-card' + (spec.danger ? ' danger' : ''), autocomplete: 'off' }, [
-      spec.title ? h('h3', { text: spec.title }) : null,
-      spec.desc ? h('p', { class: 'sd-desc', text: spec.desc }) : null,
-      needsApproval ? h('p', { class: 'sd-desc', text: 'Moderators send this to the admins for approval.' }) : null,
-    ].concat(fields.map(function (f) { return f.el; }), [h('div', { class: 'sd-actions' }, [submitBtn]), status]));
+      h('div', { class: 'sd-card-info' }, [
+        spec.title ? h('h3', { text: spec.title }) : null,
+        spec.desc ? h('p', { class: 'sd-desc', text: spec.desc }) : null,
+        needsApproval ? h('p', { class: 'sd-desc', text: 'Moderators send this to the admins for approval.' }) : null,
+      ]),
+      ui.add(h('div', { class: 'sd-card-body sd-fields' }), fields.map(function (f) { return f.el; }).concat([h('div', { class: 'sd-actions' }, [submitBtn]), status])),
+    ]);
     function show(text, bad) { status.className = 'sd-form-status' + (bad ? ' err' : text ? ' ok' : ''); status.textContent = text || ''; }
     form.addEventListener('submit', async function (e) {
       e.preventDefault();
@@ -293,6 +296,7 @@
     var body = h('div', { class: 'sd-rows' });
     var status = h('p', { class: 'sd-form-status', role: 'status' });
     var card = ui.card(spec.title, spec.desc, [body, status]);
+    var cardBody = card.querySelector('.sd-card-body');
     function show(text, bad) { status.className = 'sd-form-status' + (bad ? ' err' : text ? ' ok' : ''); status.textContent = text || ''; }
     async function reload() {
       try {
@@ -319,36 +323,77 @@
     if (spec.add) {
       var add = Object.assign({}, spec.add, { title: spec.add.title || '', access: spec.add.access || spec.access, onDone: reload });
       var f = ui.form(add);
-      if (f) { f.classList.add('inline'); card.appendChild(f); }
+      if (f) { f.classList.add('inline'); cardBody.appendChild(f); }
     }
     card.reload = reload;
     reload();
     return card;
   };
 
-  // ---- sections & router -----------------------------------------------------
-  // section: {key, label, access, render(root)}; `access` is a SD.can level.
-  SD.register = function (s) { SD.sections.push(s); };
-  SD.visibleSections = function () { return SD.sections.filter(function (s) { return SD.can(s.access || 'any'); }); };
-
-  SD.current = null;
-  SD.show = async function (key) {
-    var list = SD.visibleSections();
-    var s = list.filter(function (x) { return x.key === key; })[0] || list[0];
-    if (!s) return;
-    SD.current = s.key;
-    if (location.hash.slice(1) !== s.key) history.replaceState(null, '', '#' + s.key);
-    var nav = SD.$('sd-nav'); nav.textContent = '';
-    list.forEach(function (x) {
-      var a = h('a', { href: '#' + x.key, class: 'sd-nav-link', 'aria-current': x.key === s.key ? 'page' : false, text: x.label });
-      a.addEventListener('click', function (e) { e.preventDefault(); SD.show(x.key); });
-      nav.appendChild(a);
-    });
-    var root = SD.$('sd-view'); root.textContent = '';
-    SD.say('');
-    try { await s.render(root); } catch (err) { SD.say(err.message || 'Could not load this section.', true); }
+  // ---- pages & navigation ----------------------------------------------------
+  // Every dashboard page is its own URL with its own module; the sidebar links to
+  // all of them. `level` is an SD.can level ('tester' = beta tester).
+  var NAV = SD.nav = [
+    { group: 'Dashboard', items: [
+      { key: 'overview', label: 'Overview', href: '/staff-dashboard/', level: 'any', desc: 'Everything waiting on staff.' },
+      { key: 'moderation', label: 'Moderation', href: '/staff-dashboard/moderation/', level: 'mod', desc: 'Look up accounts, ban or restore them, and approve chat access.' },
+      { key: 'matrix', label: 'Matrix chat', href: '/staff-dashboard/matrix/', level: 'mod', desc: 'Controls for the official chat rooms. Reports are on the overview.' },
+      { key: 'people', label: 'People', href: '/staff-dashboard/people/', level: 'mod', desc: 'Notifications, staff roles and accounts.' },
+      { key: 'economy', label: 'Economy', href: '/staff-dashboard/economy/', level: 'mod', desc: 'Balances, rewards, premium and the casino.' },
+      { key: 'shop', label: 'Shop', href: '/staff-dashboard/shop/', level: 'admin', desc: 'Edit item names, prices and descriptions. Saved overrides replace the server defaults.' },
+      { key: 'vm-requests', label: 'Computer requests', href: '/staff-dashboard/vm-requests/', level: 'admin', desc: 'Requests for Linux containers and dedicated VMs.' },
+      { key: 'logs', label: 'Logs', href: '/staff-dashboard/logs/', level: 'admin', desc: 'Server load, admin activity and audit logs.' },
+      { key: 'site', label: 'Site', href: '/staff-dashboard/site/', level: 'admin', desc: 'Public access, domains, usernames and admin passphrases.' },
+    ] },
+    { group: 'Tools', items: [
+      { href: '/moderator/support/', label: 'Support tickets', level: 'mod' },
+      { href: '/moderator/feedback/', label: 'Feedback', level: 'mod' },
+      { href: '/moderator/teachers/', label: 'Teacher ratings', level: 'mod' },
+      { href: '/staff-dashboard/special-schedule/', label: 'Bell schedule', level: 'mod' },
+      { href: '/staff-dashboard/bans/', label: 'Account bans', level: 'admin' },
+      { href: '/staff-dashboard/vms/', label: 'Computers', level: 'admin' },
+      { href: '/staff-dashboard/email/', label: 'Email', level: 'admin' },
+      { href: '/staff-dashboard/updates/', label: 'Updates', level: 'admin' },
+      { href: '/staff-dashboard/companion/', label: 'Companions', level: 'admin' },
+      { href: '/matrix/', label: 'Matrix client', level: 'mod', blank: true },
+      { href: '/tester/', label: 'Tester hub', level: 'tester' },
+      { href: '/vms/desktop/?container=owner', label: 'Container 500', level: 'owner' },
+    ] },
+  ];
+  function allowed(level) { return level === 'tester' ? !!SD.role.isTester : SD.can(level); }
+  SD.navItem = function (key) {
+    for (var g = 0; g < NAV.length; g++) for (var i = 0; i < NAV[g].items.length; i++) if (NAV[g].items[i].key === key) return NAV[g].items[i];
+    return null;
   };
-  window.addEventListener('hashchange', function () { if (SD.role.isStaff) SD.show(location.hash.slice(1)); });
+
+  SD.sections = {};
+  // A page registers its renderer; label, description and access come from NAV.
+  SD.register = function (s) { SD.sections[s.key] = s; };
+  SD.current = null;
+
+  function buildSidebar() {
+    var side = SD.$('sd-side'); side.textContent = '';
+    NAV.forEach(function (g) {
+      var items = g.items.filter(function (it) { return allowed(it.level); });
+      if (!items.length) return;
+      side.appendChild(h('div', { class: 'sd-side-group' }, [h('p', { class: 'sd-side-title', text: g.group })].concat(items.map(function (it) {
+        return h('a', { href: it.href, id: it.key ? 'sd-nav-' + it.key : false, 'aria-current': it.key && it.key === SD.current ? 'page' : false, target: it.blank ? '_blank' : false }, [it.label]);
+      }))));
+    });
+  }
+  // Shows a count next to a sidebar entry (used for the unresolved total).
+  SD.badge = function (key, n) {
+    var a = SD.$('sd-nav-' + key); if (!a) return;
+    var old = a.querySelector('.sd-count'); if (old) old.remove();
+    if (n) a.appendChild(h('span', { class: 'sd-count hot', text: String(n) }));
+  };
+
+  // Renders (or re-renders) the page's own section.
+  SD.show = async function () {
+    var s = SD.sections[SD.current], root = SD.$('sd-view');
+    root.textContent = ''; SD.say('');
+    try { await s.render(root); } catch (err) { SD.say(err.message || 'Could not load this page.', true); }
+  };
 
   // Loads the viewer's roles. Resolves to false when the viewer is signed out or not staff.
   SD.loadRole = async function () {
@@ -362,5 +407,36 @@
       SD.role.isOwner = SD.role.isOwner || !!me.isOwner;
     } catch (e) { /* roles from the status call are enough */ }
     return !!SD.role.isStaff;
+  };
+
+  // Starts the page named by <body data-section="...">.
+  SD.start = async function () {
+    SD.current = document.body.dataset.section || 'overview';
+    var item = SD.navItem(SD.current) || {};
+    SD.$('sd-title').textContent = item.label || 'Staff dashboard';
+    SD.$('sd-sub').textContent = item.desc || '';
+    document.title = (item.label || 'Staff dashboard') + ' — mitch.pro';
+    try { if (!(await SD.loadRole())) { SD.say('Staff access required.', true); return; } }
+    catch (err) { SD.say(err.message || 'Could not load staff status.', true); return; }
+    var r = SD.role;
+    SD.$('sd-role').textContent = r.isOwner ? 'Root' : r.isCoOwner ? 'Developer' : r.isAdmin ? 'Admin' : r.isModerator ? 'Moderator' : 'Tester';
+    buildSidebar();
+    SD.$('sd-refresh').addEventListener('click', function () { SD.show(); });
+    if (!allowed(item.level || 'any') || !SD.sections[SD.current]) { SD.say('You do not have access to this page.', true); return; }
+    // Unresolved total in the sidebar on every page; the overview keeps it fresh itself.
+    if (SD.can('mod') && SD.current !== 'overview') {
+      SD.api('/api/admin/staff-dashboard/summary').then(function (d) { SD.badge('overview', d.total); }).catch(function () {});
+    }
+    // Shortcuts admins add for moderators (optional).
+    if (SD.can('mod')) {
+      SD.api('/api/admin/moderator-panel').then(function (d) {
+        var links = (d.links || []).filter(function (l) { return l && /^(\/|https?:\/\/)/i.test(String(l.href || '').trim()); });
+        if (!links.length) return;
+        var tools = SD.$('sd-side').querySelectorAll('.sd-side-group');
+        var box = tools[tools.length - 1];
+        links.forEach(function (l) { box.appendChild(h('a', { href: l.href }, [l.label])); });
+      }).catch(function () {});
+    }
+    SD.show();
   };
 })();

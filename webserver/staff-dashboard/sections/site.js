@@ -109,7 +109,6 @@
   }
 
   async function render(root) {
-    ui.add(root, [ui.heading('Site')]);
     root.appendChild(ui.grid([maintenance(), testerMode(),
       ui.list({
         access: 'owner', title: 'Reserved usernames', desc: 'Names only the listed account (or nobody) can claim.', empty: 'No reserved usernames.',
@@ -147,5 +146,5 @@
     if (pass.children.length) { root.appendChild(ui.heading('Admin passphrase')); root.appendChild(pass); }
   }
 
-  SD.register({ key: 'site', label: 'Site', access: 'admin', render: render });
+  SD.register({ key: 'site', render: render });
 })();

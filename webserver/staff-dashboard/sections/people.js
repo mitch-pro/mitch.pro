@@ -36,7 +36,7 @@
           .filter(function (l) { return l.label || l.href; });
         return SD.post('/api/admin/moderator-panel', { links: links });
       },
-      ok: function (d) { SD.customLinks = undefined; return 'Saved ' + (d.links || []).length + ' link(s).'; },
+      ok: function (d) { return 'Saved ' + (d.links || []).length + ' link(s).'; },
     });
     if (f && SD.can('admin')) {
       SD.api('/api/admin/moderator-panel').then(function (d) {
@@ -158,5 +158,5 @@
     if (reg) { root.appendChild(ui.heading('Accounts')); root.appendChild(ui.grid([reg])); }
   }
 
-  SD.register({ key: 'people', label: 'People', access: 'mod', render: render });
+  SD.register({ key: 'people', render: render });
 })();
