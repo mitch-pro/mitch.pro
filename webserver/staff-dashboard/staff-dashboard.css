@@ -5,8 +5,8 @@
 @media (max-width: 860px) { .sd-layout { grid-template-columns: 1fr; gap: 14px; } }
 
 /* sidebar */
-.sd-side { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 14px; padding-top: 4px; }
-@media (max-width: 860px) { .sd-side { position: static; flex-direction: row; flex-wrap: wrap; gap: 4px 16px; } }
+.sd-side { display: flex; flex-direction: column; gap: 14px; padding-top: 4px; }
+@media (max-width: 860px) { .sd-side { flex-direction: row; flex-wrap: wrap; gap: 4px 16px; } }
 .sd-side-group { display: flex; flex-direction: column; gap: 2px; }
 @media (max-width: 860px) { .sd-side-group { flex-direction: row; flex-wrap: wrap; align-items: center; } }
 .sd-side-title { margin: 0 0 4px 10px; font-size: .75rem; font-weight: 600; color: var(--t-fg3); }
@@ -137,4 +137,3 @@
 .sd-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
 .sd-err { min-height: 1.2em; margin: 8px 0 0; color: color-mix(in srgb, #dc2626 70%, var(--t-fg)); }
 .sd-card.wide { grid-template-columns: 1fr; }
-@media (min-width: 861px) { .sd-side { max-height: calc(100vh - 90px); overflow-y: auto; padding-right: 4px; } }

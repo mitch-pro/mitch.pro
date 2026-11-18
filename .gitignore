@@ -92,3 +92,6 @@ webserver/games/*.zip
 rust/target/
 rust/.cargo/
 rust/data/
+
+# The staff dashboard Logs page is source, not a log directory.
+!webserver/staff-dashboard/logs/
