@@ -116,7 +116,7 @@ h1 { font-size: clamp(1.9rem, 3vw, 2.5rem); font-weight: 700; letter-spacing: -.
 .load-more:hover, .empty-state button:hover { border-color: var(--accent); }
 .footer { border-top: 1px solid var(--line); padding: 22px clamp(20px, 3vw, 44px); display: flex; justify-content: space-between; gap: 20px; color: var(--muted); font-size: 11px; line-height: 1.7; }
 .player { position: fixed; inset: 0 0 var(--site-credit-height, 0px) 0; z-index: 50; background: var(--bg); display: flex; flex-direction: column; }
-.player-bar { min-height: 64px; flex: none; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 16px; padding: 10px 18px; background: var(--sidebar); }
+.player-bar { min-height: 3.6rem; flex: none; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 16px; padding: 0 clamp(0.85rem, 2.5vw, 2rem); background: var(--sidebar); }
 .player-bar button, .player-bar a { color: var(--text); background: transparent; border: 0; padding: 10px 0; font-size: 12px; white-space: nowrap; }
 .player-bar button:hover, .player-bar a:hover { color: var(--accent); }
 .player-bar strong { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

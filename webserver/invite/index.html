@@ -15,14 +15,13 @@
 
     .page-head {
       margin-bottom: 1.25rem;
-      max-width: 38rem;
       animation: app-fade-in 0.45s ease both;
     }
 
     .page-head h1 {
       margin: 0;
       font-size: clamp(1.85rem, 4vw, 2.55rem);
-      font-weight: 800;
+      font-weight: 700;
       letter-spacing: -0.035em;
     }
 
@@ -50,7 +49,7 @@
     .card-title {
       font-family: inherit;
       font-size: 0.95rem;
-      font-weight: 750;
+      font-weight: 700;
       color: var(--t-fg);
       margin: 0 0 1rem;
       letter-spacing: -0.02em;
@@ -75,7 +74,7 @@
       font-family: inherit;
       font-size: 1.75rem;
       color: var(--t-ac);
-      font-weight: 800;
+      font-weight: 700;
       letter-spacing: -0.03em;
     }
 
@@ -111,7 +110,7 @@
       padding: 0.85rem 0.95rem;
       font-family: inherit;
       font-size: 1.35rem;
-      font-weight: 800;
+      font-weight: 700;
       color: var(--t-ac);
       letter-spacing: 0.1em;
     }
@@ -126,7 +125,7 @@
       padding: 0.35rem 0.75rem;
       border-radius: var(--t-radius-sm);
       font-size: 0.78rem;
-      font-weight: 700;
+      font-weight: 600;
       cursor: pointer;
       font-family: inherit;
       transition:
@@ -165,10 +164,10 @@
     input[type="text"],
     input[type="email"] {
       width: 100%;
-      background: var(--t-bg2);
+      background: var(--t-bg);
       border: 1px solid var(--t-bd);
       color: var(--t-fg);
-      border-radius: var(--t-radius);
+      border-radius: var(--t-radius-sm);
       padding: 0.7rem 0.85rem;
       font-size: 0.92rem;
       font-family: inherit;
@@ -187,7 +186,7 @@
       width: 100%;
       appearance: none;
       border: 1px solid transparent;
-      border-radius: var(--t-radius);
+      border-radius: var(--t-radius-sm);
       padding: 0.7rem 1.1rem;
       min-height: 2.55rem;
       font-weight: 700;
@@ -212,8 +211,7 @@
     }
 
     .btn-primary:hover:not(:disabled) {
-      background: var(--t-ac);
-      box-shadow: 0 0 0 3px var(--t-gls, transparent);
+      background: var(--t-ac2);
     }
 
     .btn-gold {
@@ -223,7 +221,7 @@
     }
 
     .btn-gold:hover:not(:disabled) {
-      filter: brightness(1.05);
+      background: var(--t-ac2);
     }
 
     .msg {
