@@ -1547,7 +1547,8 @@ if (document.readyState === 'loading') {
       if (status && status.isStaff) {
         var pill = document.getElementById('home-staff-pill');
         if (pill) {
-          if (status.isAdmin || status.isModerator) { pill.href = '/moderator/'; pill.textContent = 'Moderator dashboard'; }
+          if (status.isAdmin) { pill.textContent = 'Staff dashboard'; }
+          else if (status.isModerator) { pill.href = '/moderator/'; pill.textContent = 'Moderator dashboard'; }
           pill.hidden = false;
         }
       }

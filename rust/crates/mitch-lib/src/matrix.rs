@@ -322,6 +322,30 @@ pub fn outside_approvals_pending(store: &crate::data::DataStore) -> Vec<serde_js
     .unwrap_or_default()
 }
 
+/// Accounts with a decision (`status` is `approved` or `denied`), most recently
+/// decided first, so a moderator can change their mind about either.
+pub fn outside_approvals_decided(
+    store: &crate::data::DataStore,
+    status: &str,
+) -> Vec<serde_json::Value> {
+    let conn = store.conn();
+    let Ok(mut stmt) = conn.prepare(
+        "SELECT email, decided_by, decided_at FROM matrix_outside_approvals
+          WHERE status = ?1 ORDER BY decided_at DESC, email LIMIT 200",
+    ) else {
+        return Vec::new();
+    };
+    stmt.query_map([status], |row| {
+        Ok(serde_json::json!({
+            "email": row.get::<_, String>(0)?,
+            "decidedBy": row.get::<_, Option<String>>(1)?.unwrap_or_default(),
+            "decidedAt": row.get::<_, Option<i64>>(2)?.unwrap_or(0),
+        }))
+    })
+    .map(|rows| rows.flatten().collect())
+    .unwrap_or_default()
+}
+
 /// Normalizes text for word matching: lowercase, non-alphanumeric converted to
 /// spaces, whitespace collapsed and trimmed.
 pub fn normalize(text: &str) -> String {
@@ -564,6 +588,16 @@ mod tests {
             outside_approval_status(&store, matrix_user).as_deref(),
             Some("approved")
         );
+
+        // A denied account is listed so a moderator can approve it later.
+        assert!(outside_approval_decide(&store, email, false, "mod@x.test"));
+        let denied = outside_approvals_decided(&store, "denied");
+        assert_eq!(denied.len(), 1);
+        assert_eq!(denied[0]["email"], email);
+        assert_eq!(denied[0]["decidedBy"], "mod@x.test");
+        assert!(outside_approval_decide(&store, email, true, "mod@x.test"));
+        assert!(outside_approvals_decided(&store, "denied").is_empty());
+        assert_eq!(outside_approvals_decided(&store, "approved").len(), 2);
 
         assert!(is_student_email("a@student.rjuhsd.us"));
         assert!(!is_student_email("a@example.com"));

@@ -309,7 +309,7 @@
             return ui.button(a.label, a.danger ? 'danger' : '', async function (b) {
               if (a.confirm && !(await SD.confirm(a.label, typeof a.confirm === 'function' ? a.confirm(it) : a.confirm, { danger: a.danger }))) return;
               b.disabled = true;
-              try { var d = await a.run(it); show(d && d.pending ? SD.pendingText(d) : (a.done || '')); await reload(); }
+              try { var d = await a.run(it); show(d && d.pending ? SD.pendingText(d) : (a.done || '')); await reload(); if (spec.onChange) spec.onChange(); }
               catch (err) { show(err.message || 'Something went wrong.', true); b.disabled = false; }
             });
           });
@@ -321,7 +321,7 @@
       } catch (err) { body.textContent = ''; show(err.message || 'Could not load.', true); }
     }
     if (spec.add) {
-      var add = Object.assign({}, spec.add, { title: spec.add.title || '', access: spec.add.access || spec.access, onDone: reload });
+      var add = Object.assign({}, spec.add, { title: spec.add.title || '', access: spec.add.access || spec.access, onDone: function () { reload(); if (spec.onChange) spec.onChange(); } });
       var f = ui.form(add);
       if (f) { f.classList.add('inline'); cardBody.appendChild(f); }
     }
