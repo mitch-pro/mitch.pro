@@ -1222,24 +1222,38 @@ function setupHolidayGreeting() {
   el.hidden = !text;
 }
 
-// "Winter break in 17 days": the next break from the district calendar
-// (rjuhsd-assets/calendar.js), shown when it is within two months.
+// "Winter break in 17 days": days until the last school day before the next
+// break from the district calendar (rjuhsd-assets/calendar.js), shown when it
+// is within two months. Counting to the break's first closed day would be off
+// by the weekend in front of it (a Monday start means a Friday last day).
 function setupBreakChip() {
   var el = document.getElementById('break-chip');
   var cal = window.RJUHSD_CALENDAR;
   if (!el || !cal || !cal.district) return;
+  var closures = cal.district.closures;
+  function parse(iso) { var p = iso.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function iso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function closed(d) {
+    var key = iso(d);
+    return d.getDay() === 0 || d.getDay() === 6 || closures.some(function(c) { return key >= c[0] && key <= c[1]; });
+  }
   var today = new Date(); today.setHours(0, 0, 0, 0);
   var next = null;
-  cal.district.closures.forEach(function(c) {
+  closures.forEach(function(c) {
     if (!/break/i.test(c[2])) return;
-    var p = c[0].split('-');
-    var start = new Date(+p[0], +p[1] - 1, +p[2]);
+    var start = parse(c[0]);
     if (start > today && (!next || start < next.start)) next = { start: start, name: c[2] };
   });
   if (!next) return;
-  var days = Math.round((next.start - today) / 86400000);
+  // Step back from the first closed day to the last day with school.
+  var last = new Date(next.start);
+  do { last.setDate(last.getDate() - 1); } while (closed(last) && last > today);
+  if (closed(last)) return; // the weekend in front of the break: school is already out
+  var days = Math.round((last - today) / 86400000);
   if (days > 60) return;
-  el.textContent = next.name + (days === 1 ? ' starts tomorrow' : ' in ' + days + ' days');
+  el.textContent = days === 0 ? 'Last day before ' + next.name
+    : days === 1 ? 'Last day before ' + next.name + ' is tomorrow'
+    : next.name + ' in ' + days + ' days';
   el.hidden = false;
 }
 
