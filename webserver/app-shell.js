@@ -125,7 +125,7 @@
     { href: '/matrix/', label: 'Chat', icon: '◉', match: function (p) { return p.indexOf('/matrix') === 0; } },
     { href: '/game-portal/', label: 'Games', icon: '◆', match: function (p) { return p.indexOf('/games') === 0 || p.indexOf('/game-portal') === 0; } },
     { href: '/members/', label: 'People', icon: '●', match: function (p) { return p.indexOf('/members') === 0 || p.indexOf('/friends') === 0 || p.indexOf('/profile') === 0; } },
-    { href: 'https://rjuhsd.school/', label: 'Schedule', icon: '◷', match: function () { return false; } }
+    { href: '/bell/', label: 'Schedule', icon: '◷', match: function (p) { return p.indexOf('/bell') === 0; } }
   ];
 
   var NAV_RJUHSD = [

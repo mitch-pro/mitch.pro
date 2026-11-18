@@ -44,6 +44,10 @@
       root.removeAttribute('data-theme');
     }
     root.style.colorScheme = isDarkMode(mode) ? 'dark' : 'light';
+    // Page stylesheets key their light-mode fixes off html.theme-light, so
+    // keep that class in step with the effective mode (manual or OS) on every
+    // page. Pages that also load the legacy theme.js re-toggle it themselves.
+    root.classList.toggle('theme-light', !isDarkMode(mode));
     var themeColor = document.querySelector('meta[name="theme-color"]');
     if (themeColor) {
       var background = getComputedStyle(root).getPropertyValue('--t-bg').trim();
@@ -204,6 +208,17 @@
   }
 
   apply();
+
+  // Follow OS light/dark changes while the mode is "auto".
+  if (window.matchMedia) {
+    var osDark = window.matchMedia('(prefers-color-scheme: dark)');
+    var onOsChange = function () {
+      var mode = readCookie('theme');
+      if (mode !== 'light' && mode !== 'dark') applyMode(mode);
+    };
+    if (osDark.addEventListener) osDark.addEventListener('change', onOsChange);
+    else if (osDark.addListener) osDark.addListener(onOsChange);
+  }
 
   // The greeting to show now: nothing when the holiday theme is off, the
   // preview greeting when a theme is forced, else the day's own greeting.
