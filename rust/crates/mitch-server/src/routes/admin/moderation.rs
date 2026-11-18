@@ -113,7 +113,11 @@ pub fn handle(
         }
         return Some(json_response(
             200,
-            json!({ "pending": mitch_lib::matrix::outside_approvals_pending(&state.store) }),
+            json!({
+                "pending": mitch_lib::matrix::outside_approvals_pending(&state.store),
+                "denied": mitch_lib::matrix::outside_approvals_decided(&state.store, "denied"),
+                "approved": mitch_lib::matrix::outside_approvals_decided(&state.store, "approved"),
+            }),
         ));
     }
 

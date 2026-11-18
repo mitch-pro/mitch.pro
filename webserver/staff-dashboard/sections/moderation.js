@@ -68,18 +68,37 @@
       ui.card('Ban records', 'Searchable ban list, durations, appeals and cleanup status.', [h('a', { class: 'sd-link', href: '/staff-dashboard/bans/', text: 'Open the bans page' })]),
     ].filter(function (c) { return c && (SD.can('admin') || c.tagName !== 'SECTION'); })));
 
-    root.appendChild(ui.heading('Chat access', 'Accounts outside the student directory need approval before they can chat.'));
-    root.appendChild(ui.grid([ui.list({
-      access: 'mod', title: 'Waiting for approval', empty: 'Nobody is waiting.',
-      load: async function () { return (await SD.api('/api/admin/matrix/outside-accounts')).pending || []; },
-      row: function (it) { return { label: it.email, sub: 'Requested ' + SD.time(it.requestedAt) }; },
-      actions: function (it) {
-        return [
-          { label: 'Approve', run: function () { return SD.post('/api/admin/matrix/outside-accounts', { email: it.email, approved: true }); } },
-          { label: 'Deny', danger: true, confirm: 'Deny chat access for ' + it.email + '?', run: function () { return SD.post('/api/admin/matrix/outside-accounts', { email: it.email, approved: false }); } },
-        ];
-      },
-    })]));
+    root.appendChild(ui.heading('Chat access', 'Accounts outside the student directory need approval before they can chat. A decision can be changed at any time.'));
+    var outside = function (key) { return async function () { return (await SD.api('/api/admin/matrix/outside-accounts'))[key] || []; }; };
+    var decide = function (email, approved) { return SD.post('/api/admin/matrix/outside-accounts', { email: email, approved: approved }); };
+    var refresh = function () { SD.show(); };
+    var who = function (it) { return it.decidedBy ? 'Decided by ' + it.decidedBy + ' · ' + SD.time(it.decidedAt) : 'Requested ' + SD.time(it.requestedAt); };
+    root.appendChild(ui.grid([
+      ui.list({
+        access: 'mod', title: 'Waiting for approval', empty: 'Nobody is waiting.', load: outside('pending'), onChange: refresh,
+        row: function (it) { return { label: it.email, sub: who(it) }; },
+        actions: function (it) {
+          return [
+            { label: 'Approve', run: function () { return decide(it.email, true); } },
+            { label: 'Deny', danger: true, confirm: 'Deny chat access for ' + it.email + '?', run: function () { return decide(it.email, false); } },
+          ];
+        },
+      }),
+      ui.list({
+        access: 'mod', title: 'Denied', desc: 'Approving one lets the account chat and joins it to the official rooms.', empty: 'No denied accounts.', load: outside('denied'), onChange: refresh,
+        row: function (it) { return { label: it.email, sub: who(it) }; },
+        actions: function (it) { return [{ label: 'Approve', run: function () { return decide(it.email, true); } }]; },
+        add: {
+          submitLabel: 'Approve', fields: [{ name: 'email', label: 'Approve an account by email or Matrix ID', required: true }],
+          submit: function (v) { return decide(v.email, true); }, ok: function () { return 'Approved.'; },
+        },
+      }),
+      ui.list({
+        access: 'mod', title: 'Approved', empty: 'No approved outside accounts.', load: outside('approved'), onChange: refresh,
+        row: function (it) { return { label: it.email, sub: who(it) }; },
+        actions: function (it) { return [{ label: 'Revoke', danger: true, confirm: 'Take chat access away from ' + it.email + '?', run: function () { return decide(it.email, false); } }]; },
+      }),
+    ]));
 
     var content = ui.grid([
       ui.form({
