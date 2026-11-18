@@ -1353,9 +1353,9 @@ mod tests {
     #[test]
     fn coin_log_search_filters_by_person_reason_size_direction_and_time() {
         let (base, data, store) = temp_store("search-log");
-        add_coins(&store, &data, "Kid@Gmail.com", 10.0, 1.0, "daily login");
-        add_coins(&store, &data, "kid@gmail.com", -4.0, 1.0, "shop purchase");
-        add_coins(&store, &data, "other@gmail.com", 500.0, 1.0, "casino win");
+        add_coins(&store, &data, "Kid@X.test", 10.0, 1.0, "daily login");
+        add_coins(&store, &data, "kid@x.test", -4.0, 1.0, "shop purchase");
+        add_coins(&store, &data, "other@x.test", 500.0, 1.0, "casino win");
         let q = |f: &dyn Fn(&mut CoinQuery<'_>)| {
             let mut q = CoinQuery::default();
             f(&mut q);
@@ -1365,7 +1365,7 @@ mod tests {
         assert_eq!(q(&|q| q.person = "KID").1, 2);
         assert_eq!(
             q(&|q| q.reason = "casino").0[0]["email"],
-            json!("other@gmail.com")
+            json!("other@x.test")
         );
         assert_eq!(q(&|q| q.min_abs = 100.0).1, 1);
         assert_eq!(q(&|q| q.direction = "loss").0[0]["delta"], json!(-4.0));

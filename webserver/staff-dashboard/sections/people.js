@@ -116,7 +116,7 @@
         access: 'mod', title: 'Send a notification', desc: 'To one account or everyone.', submitLabel: 'Send',
         fields: [
           { name: 'allUsers', label: 'Send to all users', type: 'checkbox' },
-          { name: 'targetEmail', label: 'Account email', type: 'email', placeholder: 'user@email.com' },
+          { name: 'targetEmail', label: 'Account email', type: 'email', placeholder: 'name@example.com' },
           { name: 'title', label: 'Title', maxlength: 80 },
           { name: 'message', label: 'Message', type: 'textarea', maxlength: 1000, required: true },
         ],
