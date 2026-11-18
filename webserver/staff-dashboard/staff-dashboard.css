@@ -1,0 +1,70 @@
+/* Staff dashboard. Colors come from the shared theme tokens in app.css so it
+   follows light and dark mode; fixed colors are limited to status accents. */
+.sd-main { max-width: 1100px; }
+.sd-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.sd-head h1 { margin: 0; }
+.sd-head-tools { display: flex; align-items: center; gap: 10px; }
+.sd-total { font-weight: 700; color: var(--t-fg2); }
+#sd-status { color: var(--t-fg2); min-height: 1.3em; }
+#sd-status.err { color: color-mix(in srgb, #dc2626 70%, var(--t-fg)); }
+
+.sd-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 18px; }
+.sd-tabs:empty { display: none; }
+.sd-tab { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; font: inherit; color: var(--t-fg); background: var(--t-bg2); border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm); cursor: pointer; }
+.sd-tab:hover { border-color: var(--t-bda); }
+.sd-tab[aria-pressed="true"] { border-color: var(--t-ac); }
+.sd-count { min-width: 22px; padding: 1px 7px; text-align: center; font-size: .78rem; font-weight: 700; border-radius: 999px; background: var(--t-bg3); color: var(--t-fg2); }
+.sd-tab.has-items .sd-count { background: var(--t-ac); color: var(--t-ac-ink); }
+
+.sd-queue { margin-bottom: 26px; }
+.sd-queue-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 0 10px; }
+.sd-queue-head h2 { margin: 0; font-size: 1.1rem; font-weight: 700; letter-spacing: -0.02em; }
+.sd-queue-head .sd-count { margin-left: 8px; }
+.sd-queue-head a, .sd-link { color: var(--t-ac); background: none; border: 0; padding: 0; font: inherit; cursor: pointer; text-decoration: none; }
+.sd-queue-head a:hover, .sd-link:hover { text-decoration: underline; }
+.sd-empty { padding: 14px; color: var(--t-fg2); background: var(--t-bg2); border: 1px dashed var(--t-bd); border-radius: var(--t-radius); }
+.sd-more { color: var(--t-fg2); margin: 8px 0 0; font-size: .9rem; }
+
+.sd-item { background: var(--t-bg2); border: 1px solid var(--t-bd); border-radius: var(--t-radius); padding: 14px; margin-bottom: 10px; }
+.sd-item.old { border-left: 3px solid #d97706; }
+.sd-item-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.sd-item-title { font-weight: 700; overflow-wrap: anywhere; }
+.sd-meta { color: var(--t-fg2); font-size: .85rem; line-height: 1.5; overflow-wrap: anywhere; }
+.sd-age { color: var(--t-fg2); font-size: .85rem; white-space: nowrap; }
+.sd-item.old .sd-age { color: color-mix(in srgb, #b45309 75%, var(--t-fg)); font-weight: 600; }
+.sd-quote { margin: 8px 0; padding: 8px 10px; background: var(--t-bg); border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 14em; overflow: auto; }
+.sd-quote.missing { color: var(--t-fg2); font-style: italic; }
+.sd-ctx { margin: 8px 0; padding: 0; list-style: none; font-size: .9rem; }
+.sd-ctx li { padding: 3px 0; overflow-wrap: anywhere; }
+.sd-ctx li.reported { font-weight: 700; }
+.sd-ctx b { color: var(--t-fg2); font-weight: 600; margin-right: 6px; }
+.sd-flag { display: inline-block; padding: 1px 8px; margin-left: 6px; font-size: .75rem; font-weight: 600; border: 1px solid var(--t-bd); border-radius: 999px; color: var(--t-fg2); }
+.sd-flag.warn { color: color-mix(in srgb, #dc2626 70%, var(--t-fg)); border-color: currentColor; }
+
+.sd-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.sd-actions button, .sd-actions a { padding: 6px 12px; font: inherit; font-size: .9rem; border-radius: var(--t-radius-sm); border: 1px solid var(--t-bd); background: transparent; color: var(--t-fg); cursor: pointer; text-decoration: none; }
+.sd-actions button:hover, .sd-actions a:hover { border-color: var(--t-bda); background: var(--t-bg3); }
+.sd-actions .danger { background: #c62828; border-color: #c62828; color: #fff; }
+.sd-actions .danger:hover { background: #b71c1c; border-color: #b71c1c; }
+.sd-actions .primary { background: var(--t-ac); border-color: var(--t-ac); color: var(--t-ac-ink); }
+.sd-actions .primary:hover { background: var(--t-ac2); border-color: var(--t-ac2); }
+.sd-actions button:disabled { opacity: .5; cursor: default; }
+
+.sd-tools { margin-top: 34px; padding-top: 18px; border-top: 1px solid var(--t-bd); }
+.sd-tools h2 { margin: 0 0 12px; font-size: 1.1rem; font-weight: 700; }
+.sd-tool-group { margin-bottom: 16px; }
+.sd-tool-group h3 { margin: 0 0 8px; font-size: .9rem; color: var(--t-fg2); font-weight: 600; }
+.sd-tool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.sd-tool { display: block; padding: 12px 14px; color: var(--t-fg); text-decoration: none; background: var(--t-bg2); border: 1px solid var(--t-bd); border-radius: var(--t-radius); }
+a.sd-tool:hover { border-color: var(--t-bda); background: var(--t-bg3); }
+.sd-tool strong { display: block; font-size: .95rem; }
+.sd-tool span { display: block; margin-top: 2px; font-size: .85rem; color: var(--t-fg2); }
+.sd-tool[data-locked] { opacity: .45; }
+
+.sd-dialog { max-width: 400px; width: calc(100% - 24px); padding: 18px; color: var(--t-fg); background: var(--t-bg2); border: 1px solid var(--t-bd); border-radius: var(--t-radius); }
+.sd-dialog::backdrop { background: rgba(0, 0, 0, .45); }
+.sd-dialog h2 { margin: 0 0 10px; font-size: 1.1rem; }
+.sd-input { width: 100%; box-sizing: border-box; padding: 9px 11px; font: inherit; color: var(--t-fg); background: var(--t-bg); border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm); }
+.sd-input:focus { outline: none; border-color: var(--t-ac); }
+.sd-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+.sd-err { min-height: 1.2em; margin: 8px 0 0; color: color-mix(in srgb, #dc2626 70%, var(--t-fg)); }

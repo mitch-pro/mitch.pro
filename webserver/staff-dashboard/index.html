@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Staff dashboard — mitch.pro</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/staff-dashboard/staff-dashboard.css?v=1">
+  <script src="/app-shell.js" defer></script>
+  <script src="/staff-dashboard/staff-dashboard.js?v=1" defer></script>
+</head>
+<body class="app-shell">
+  <main class="app-main sd-main">
+    <header class="page-head sd-head">
+      <h1>Staff dashboard</h1>
+      <div class="sd-head-tools">
+        <span id="sd-total" class="sd-total" hidden></span>
+        <button type="button" id="sd-refresh">Refresh</button>
+      </div>
+    </header>
+    <p id="sd-status" role="status">Loading...</p>
+    <div id="sd-app" hidden>
+      <nav id="sd-tabs" class="sd-tabs" aria-label="Queues"></nav>
+      <div id="sd-queues"></div>
+      <section id="sd-tools" class="sd-tools" aria-labelledby="sd-tools-h">
+        <h2 id="sd-tools-h">Tools</h2>
+        <div id="sd-tool-list"></div>
+      </section>
+    </div>
+
+    <dialog id="sd-pass-dialog" class="sd-dialog">
+      <form id="sd-pass-form" autocomplete="off">
+        <h2>Admin passphrase</h2>
+        <input type="password" id="sd-pass-input" class="sd-input" autocomplete="current-password" aria-label="Admin passphrase" required>
+        <p id="sd-pass-status" class="sd-err" role="status"></p>
+        <div class="sd-row"><button type="button" id="sd-pass-cancel">Cancel</button><button type="submit" class="primary">Unlock</button></div>
+      </form>
+    </dialog>
+    <dialog id="sd-note-dialog" class="sd-dialog">
+      <form id="sd-note-form" autocomplete="off">
+        <h2 id="sd-note-title">Note</h2>
+        <textarea id="sd-note-input" class="sd-input" rows="3" maxlength="500" aria-label="Note"></textarea>
+        <div class="sd-row"><button type="button" id="sd-note-cancel">Cancel</button><button type="submit" class="primary" id="sd-note-ok">Save</button></div>
+      </form>
+    </dialog>
+  </main>
+  <script src="/admin/passphrase-help.js" defer></script>
+</body>
+</html>

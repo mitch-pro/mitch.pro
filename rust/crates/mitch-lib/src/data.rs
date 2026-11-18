@@ -260,6 +260,22 @@ impl DataStore {
                         UNIQUE (created_at, kind, text)
                     );
                     CREATE INDEX IF NOT EXISTS idx_feedback_status ON feedback_entries (status, created_at DESC);
+                    CREATE TABLE IF NOT EXISTS matrix_reports (
+                        id TEXT PRIMARY KEY,
+                        room_id TEXT NOT NULL DEFAULT '',
+                        room_name TEXT NOT NULL DEFAULT '',
+                        event_id TEXT NOT NULL DEFAULT '',
+                        reason TEXT NOT NULL DEFAULT '',
+                        reported_by TEXT NOT NULL DEFAULT '',
+                        sender TEXT NOT NULL DEFAULT '',
+                        body TEXT NOT NULL DEFAULT '',
+                        created_at INTEGER NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'open',
+                        handled_by TEXT NOT NULL DEFAULT '',
+                        handled_at INTEGER,
+                        note TEXT NOT NULL DEFAULT ''
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_matrix_reports_status ON matrix_reports (status, created_at);
                     CREATE TABLE IF NOT EXISTS teachers (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         school TEXT NOT NULL,
