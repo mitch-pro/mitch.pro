@@ -67,8 +67,8 @@ pub async fn handle(
                 return Some(forbidden());
             }
             match rest {
-                "logs/actions" => search_actions(state, search),
-                "logs/coins" => search_coins(state, search),
+                "logs/actions" => search_actions(state, search, ctx),
+                "logs/coins" => search_coins(state, search, ctx),
                 _ => other_logs(state),
             }
         }
@@ -90,9 +90,39 @@ fn limit_param(search: &str) -> usize {
         .clamp(1, 500)
 }
 
+/// Writes "<staff> looked up <person> in <log>" to the admin activity log, so
+/// looking into someone's history is itself visible. Repeats of the same lookup
+/// by the same staff member within ten minutes (paging, re-sorting) are skipped.
+fn record_lookup(state: &Arc<AppState>, ctx: &AdminCtx, log: &str, person: &str) {
+    let person = person.trim().to_lowercase();
+    if person.is_empty() {
+        return;
+    }
+    let actor = ctx.email(state);
+    let now = mitch_lib::school::now_millis();
+    let recent = mitch_lib::admin::admin_actions_with_prefix(&state.store, "log_lookup", 50)
+        .into_iter()
+        .any(|r| {
+            r["actor"].as_str() == Some(actor.as_str())
+                && r["details"]["log"].as_str() == Some(log)
+                && r["details"]["person"].as_str() == Some(person.as_str())
+                && now - r["ts"].as_i64().unwrap_or(0) < 10 * 60_000
+        });
+    if !recent {
+        mitch_lib::admin::log_admin_action(
+            &state.store,
+            &state.cfg.data_dir,
+            &actor,
+            "log_lookup",
+            json!({ "log": log, "person": person }),
+        );
+    }
+}
+
 /// `GET .../logs/actions?person=&action=&from=&to=&limit=` (`from`/`to` are epoch ms).
-fn search_actions(state: &Arc<AppState>, search: &str) -> axum::response::Response {
+fn search_actions(state: &Arc<AppState>, search: &str, ctx: &AdminCtx) -> axum::response::Response {
     let (person, action) = (query_param(search, "person"), query_param(search, "action"));
+    record_lookup(state, ctx, "activity", &person);
     let q = mitch_lib::admin::ActionQuery {
         person: &person,
         action: &action,
@@ -113,7 +143,7 @@ fn search_actions(state: &Arc<AppState>, search: &str) -> axum::response::Respon
 }
 
 /// `GET .../logs/coins?person=&reason=&from=&to=&min=&direction=&limit=`.
-fn search_coins(state: &Arc<AppState>, search: &str) -> axum::response::Response {
+fn search_coins(state: &Arc<AppState>, search: &str, ctx: &AdminCtx) -> axum::response::Response {
     let (person, reason, direction) = (
         query_param(search, "person"),
         query_param(search, "reason"),
@@ -127,6 +157,7 @@ fn search_coins(state: &Arc<AppState>, search: &str) -> axum::response::Response
         min_abs: query_param(search, "min").trim().parse().unwrap_or(0.0),
         direction: &direction,
     };
+    record_lookup(state, ctx, "coins", &person);
     let (entries, total) =
         mitch_lib::coins::search_coin_log(&state.cfg.data_dir, &q, limit_param(search));
     json_response(

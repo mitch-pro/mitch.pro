@@ -115,7 +115,7 @@
   function activityLog() {
     var picked = false;
     return searchLog({
-      title: 'Admin activity', desc: 'Everything staff did, newest first. Search by who did it or who it affected.',
+      title: 'Admin activity', desc: 'Everything staff did, newest first. Search by who did it or who it affected. Searching for a person is noted here too.',
       url: '/api/admin/staff-dashboard/logs/actions',
       fields: [
         { name: 'person', label: 'Person', placeholder: 'Staff or affected account' },
@@ -132,7 +132,7 @@
 
   function coinLog() {
     return searchLog({
-      title: 'Coin log', desc: 'Every balance change: who, how much, and why. Use the size and direction filters to look for money appearing from nowhere.',
+      title: 'Coin log', desc: 'Balance changes of 10 coins or more from the last 30 days. Smaller changes are not recorded. Searching for a person is noted in the admin activity log.',
       url: '/api/admin/staff-dashboard/logs/coins',
       fields: [
         { name: 'person', label: 'Account', placeholder: 'Email' },

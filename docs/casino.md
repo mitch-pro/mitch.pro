@@ -53,10 +53,10 @@ on top of it. Frontend is `webserver/casino/{index.html,casino.js,casino.css}`.
 `casino_settings` table — not a JSON file, per AGENTS.md's data-storage
 rule) gates every `/api/casino/*` mutating route.
 Toggle it with `POST /api/admin/casino/toggle` (full admins only) in the
-admin panel's Economy section. There's no separate casino audit log —
-every settle writes to the existing `logs/coins.log` with a
-`casino:<game>:<outcome>` reason prefix, so the admin Coin Log table's
-free-text search already filters to just casino activity.
+staff dashboard's Economy page. There's no separate casino audit log: settles
+that move 10 coins or more are written to `logs/coins.log` with a
+`casino:<game>:<outcome>` reason, so the coin log's reason search finds casino
+activity. Smaller settles are not recorded (see `docs/staff-dashboard.md`).
 
 ## Adding a game
 

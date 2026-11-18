@@ -121,6 +121,19 @@ The Logs page searches server-side, not just the newest rows:
 
 All are full-admin only. They replace `/api/admin/advanced-data` on this page, which
 returned only the newest 250 rows and logged a `view_admin_tools` entry on every
-call (most of the old activity log was those). The coin log is the audit trail for
-money bugs (every balance change with who, how much, why); it holds email, amount
-and reason only, no IP addresses or page visits, and is visible only to admins.
+call.
+
+**Searching for a person is recorded.** A search with `person` set writes a
+`log_lookup` entry (`{log: "coins"|"activity", person}`) to the admin activity log,
+so looking into someone's history is visible to other admins. Repeats of the same
+lookup by the same admin within ten minutes are not written again.
+
+**What the coin log keeps** (`mitch_lib::coins::log_coin_change`): only changes of
+10 coins or more (`ROUTINE_MAX`), with time, account, amount, balance before and
+after, and reason. Smaller changes, which include the per-minute reward for being
+on the site and the reward per DM, are not recorded at all, because together they
+would be a timeline of when each person was online and what they did. Lines older
+than 30 days (`COIN_LOG_RETENTION_DAYS`) are removed, checked at most every six
+hours on a balance change (`prune_coin_log`); the first run also removes small
+lines written before this rule. The trade-off: a bug that pays out many small
+amounts won't show here, only in balances (Economy page audit).

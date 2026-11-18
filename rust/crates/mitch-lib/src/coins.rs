@@ -21,7 +21,9 @@
 //!   single-row updates.
 //! - Positive amounts also bump `lifetime_earned`, now a column on the
 //!   same row instead of a separate user_stats.json write.
-//! - Every change appends a TSV line to logs/coins.log.
+//! - Changes of 10 coins or more are logged to logs/coins.log for spotting money
+//!   bugs and kept for 30 days. Smaller changes are not recorded at all (see
+//!   `log_coin_change`).
 //! - coin_gifts.json maps normalized email → array of notices (capped 50,
 //!   newest first via unshift). Unrelated to the balance itself — still a
 //!   JSON blob, not migrated here.
@@ -219,6 +221,7 @@ pub fn spend_coins(
         rusqlite::params![after, now_millis(), norm],
     );
     let _ = conn.execute_batch("COMMIT");
+    drop(conn);
     log_coin_change(data_dir, &norm, before, after, reason);
     Ok(after)
 }
@@ -537,9 +540,29 @@ pub fn reset_all_coins(store: &DataStore, data_dir: &Path, reason: &str) -> usiz
     count
 }
 
-/// Shared `logs/coins.log` TSV append, factored out of `add_coins`/
-/// `set_coins`/`cap_coins_above` so every balance mutation leaves the same
-/// audit trail.
+/// Changes smaller than this (in coins, either direction) are not recorded at
+/// all. Routine earnings (the per-minute reward for being on the site, the reward
+/// for each DM, small game rewards) would otherwise add up to a timeline of when
+/// each person was online and what they did.
+pub const ROUTINE_MAX: f64 = 10.0;
+/// How long coin log lines are kept.
+pub const COIN_LOG_RETENTION_DAYS: i64 = 30;
+const DAY_MS: i64 = 86_400_000;
+
+/// Serializes appends to and rewrites of `logs/coins.log` within this process.
+static COIN_LOG_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+static LAST_PRUNE: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+
+fn coin_log_path(data_dir: &Path) -> std::path::PathBuf {
+    data_dir
+        .parent()
+        .unwrap_or(data_dir)
+        .join("logs")
+        .join("coins.log")
+}
+
+/// Records one balance change of at least [`ROUTINE_MAX`] coins (shared by
+/// `add_coins`, `set_coins`, `cap_coins_above` and the casino paths).
 pub(crate) fn log_coin_change(
     data_dir: &Path,
     norm_email: &str,
@@ -547,27 +570,75 @@ pub(crate) fn log_coin_change(
     after: f64,
     reason: &str,
 ) {
-    let ts = js_iso_date();
     let delta = after - before;
-    let sign = if delta >= 0.0 { "+" } else { "" };
-    let line = format!(
-        "{ts}\t{norm_email}\t{sign}{:.4}\t{:.4} -> {:.4}\t{}\n",
-        delta,
-        before,
-        after,
-        if reason.is_empty() {
+    let now = now_millis();
+    if delta.abs() >= ROUTINE_MAX {
+        let reason = if reason.is_empty() {
             "unspecified"
         } else {
             reason
+        };
+        let ts = js_iso_date_from(now);
+        let sign = if delta >= 0.0 { "+" } else { "" };
+        let line =
+            format!("{ts}\t{norm_email}\t{sign}{delta:.4}\t{before:.4} -> {after:.4}\t{reason}\n");
+        let path = coin_log_path(data_dir);
+        let _guard = COIN_LOG_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
         }
-    );
-    let logs_dir = data_dir.parent().unwrap_or(data_dir).join("logs");
-    let _ = std::fs::create_dir_all(&logs_dir);
-    let _ = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(logs_dir.join("coins.log"))
-        .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
+        let _ = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
+    }
+    // Retention runs at most every six hours, piggybacking on balance changes.
+    let last = LAST_PRUNE.load(std::sync::atomic::Ordering::Relaxed);
+    if now - last >= 6 * 3_600_000
+        && LAST_PRUNE
+            .compare_exchange(
+                last,
+                now,
+                std::sync::atomic::Ordering::Relaxed,
+                std::sync::atomic::Ordering::Relaxed,
+            )
+            .is_ok()
+    {
+        prune_coin_log(data_dir, now);
+    }
+}
+
+/// Removes lines older than [`COIN_LOG_RETENTION_DAYS`] and any small-change
+/// lines written before small changes stopped being recorded. Safe to run
+/// repeatedly.
+pub fn prune_coin_log(data_dir: &Path, now: i64) {
+    let cutoff = js_iso_date_from(now - COIN_LOG_RETENTION_DAYS * DAY_MS);
+    let path = coin_log_path(data_dir);
+    let _guard = COIN_LOG_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        return;
+    };
+    let mut kept = String::with_capacity(content.len());
+    let mut changed = false;
+    for line in content.lines() {
+        let keep = parse_coin_line(line).is_some_and(|row| {
+            row["ts"].as_str().unwrap_or("") >= cutoff.as_str()
+                && row["delta"].as_f64().unwrap_or(0.0).abs() >= ROUTINE_MAX
+        });
+        if keep {
+            kept.push_str(line);
+            kept.push('\n');
+        } else {
+            changed = true;
+        }
+    }
+    if changed {
+        let tmp = path.with_extension("log.tmp");
+        if std::fs::write(&tmp, kept).is_ok() {
+            let _ = std::fs::rename(&tmp, &path);
+        }
+    }
 }
 
 /// Reads back the `logs/coins.log` TSV trail `log_coin_change` appends to,
@@ -615,8 +686,7 @@ pub struct CoinQuery<'a> {
 /// matched in total. A malformed or missing file just yields no rows; the `coins`
 /// table, not this log, is the source of truth for balances.
 pub fn search_coin_log(data_dir: &Path, q: &CoinQuery<'_>, limit: usize) -> (Vec<Value>, usize) {
-    let logs_dir = data_dir.parent().unwrap_or(data_dir).join("logs");
-    let Ok(content) = std::fs::read_to_string(logs_dir.join("coins.log")) else {
+    let Ok(content) = std::fs::read_to_string(coin_log_path(data_dir)) else {
         return (Vec::new(), 0);
     };
     // Timestamps are ISO strings, which sort the same as the times they name.
@@ -1353,8 +1423,8 @@ mod tests {
     #[test]
     fn coin_log_search_filters_by_person_reason_size_direction_and_time() {
         let (base, data, store) = temp_store("search-log");
-        add_coins(&store, &data, "Kid@X.test", 10.0, 1.0, "daily login");
-        add_coins(&store, &data, "kid@x.test", -4.0, 1.0, "shop purchase");
+        add_coins(&store, &data, "Kid@X.test", 20.0, 1.0, "quest");
+        add_coins(&store, &data, "kid@x.test", -15.0, 1.0, "shop purchase");
         add_coins(&store, &data, "other@x.test", 500.0, 1.0, "casino win");
         let q = |f: &dyn Fn(&mut CoinQuery<'_>)| {
             let mut q = CoinQuery::default();
@@ -1368,14 +1438,55 @@ mod tests {
             json!("other@x.test")
         );
         assert_eq!(q(&|q| q.min_abs = 100.0).1, 1);
-        assert_eq!(q(&|q| q.direction = "loss").0[0]["delta"], json!(-4.0));
+        assert_eq!(q(&|q| q.direction = "loss").0[0]["delta"], json!(-15.0));
         assert_eq!(q(&|q| q.direction = "gain").1, 2);
-        // Nothing was logged in the far future or before the epoch's first day.
         assert_eq!(q(&|q| q.from = Some(now_millis() + 86_400_000)).1, 0);
         assert_eq!(q(&|q| q.to = Some(1_000)).1, 0);
         // The cap limits rows, not the match count.
         assert_eq!(search_coin_log(&data, &CoinQuery::default(), 1).0.len(), 1);
         assert_eq!(search_coin_log(&data, &CoinQuery::default(), 1).1, 3);
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn small_changes_are_not_recorded() {
+        let (base, data, store) = temp_store("small");
+        add_coins(&store, &data, "kid@x.test", 0.25, 1.0, "");
+        add_coins(&store, &data, "kid@x.test", 2.0, 1.0, "");
+        add_coins(&store, &data, "kid@x.test", -9.0, 1.0, "shop purchase");
+        add_coins(&store, &data, "kid@x.test", 50.0, 1.0, "quest");
+        let lines = read_coin_log(&data, 10);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0]["reason"], json!("quest"));
+        // The balance still moved by every change.
+        assert_eq!(get_coins(&store, &data, "kid@x.test"), 43.25);
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn pruning_drops_old_and_small_lines() {
+        let (base, data, _store) = temp_store("prune");
+        let now = now_millis();
+        let old = js_iso_date_from(now - 40 * DAY_MS);
+        let recent = js_iso_date_from(now - DAY_MS);
+        let path = coin_log_path(&data);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            format!(
+                "{old}\told@x.test\t+500.0000\t0.0000 -> 500.0000\tquest\n\
+                 {recent}\tkid@x.test\t+0.2500\t1.0000 -> 1.2500\tunspecified\n\
+                 not a log line\n\
+                 {recent}\tkid@x.test\t+90.0000\t1.2500 -> 91.2500\tquest\n"
+            ),
+        )
+        .unwrap();
+        prune_coin_log(&data, now);
+        let lines = read_coin_log(&data, 10);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0]["delta"], json!(90.0));
+        prune_coin_log(&data, now);
+        assert_eq!(read_coin_log(&data, 10).len(), 1);
         let _ = std::fs::remove_dir_all(base);
     }
 
@@ -1387,7 +1498,7 @@ mod tests {
             &store,
             &data,
             "earner@gmail.com",
-            -4.0,
+            -40.0,
             1.0,
             "shop purchase",
         );
@@ -1407,7 +1518,7 @@ mod tests {
         assert_eq!(log[2]["delta"], json!(10.0));
         // The negative-amount entry's delta parses correctly (no leading
         // '+' for negative deltas, unlike positive ones).
-        assert_eq!(log[1]["delta"], json!(-4.0));
+        assert_eq!(log[1]["delta"], json!(-40.0));
 
         // limit caps to the most recent entries, not just truncates the
         // file in whatever order it was read.
