@@ -2,8 +2,10 @@
    follows light and dark mode; fixed colors are limited to status accents. */
 .sd-main { max-width: 1100px; }
 .sd-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.sd-head h1 { margin: 0; }
+.sd-head h1 { margin: 0; margin-right: auto; }
 .sd-head-tools { display: flex; align-items: center; gap: 10px; }
+.sd-role { padding: 3px 10px; font-size: .8rem; font-weight: 600; color: var(--t-fg2); border: 1px solid var(--t-bd); border-radius: 999px; background: var(--t-bg2); }
+.sd-role:empty { display: none; }
 .sd-total { font-weight: 700; color: var(--t-fg2); }
 #sd-status { color: var(--t-fg2); min-height: 1.3em; }
 #sd-status.err { color: color-mix(in srgb, #dc2626 70%, var(--t-fg)); }

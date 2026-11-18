@@ -1,8 +1,16 @@
 # Staff dashboard
 
-`/staff-dashboard/` is where moderators and admins start. It lists everything
-waiting on staff in one place and handles most of it inline. `/staff/` redirects
-here; the homepage pill (shown to staff only) links here.
+The dashboard is where moderators and admins start. It lists everything waiting
+on staff in one place and handles most of it inline. It is served at
+`/moderator/` (the moderator entry point, and where the homepage pill sends
+moderators and admins) and at `/staff-dashboard/` (testers and `/staff/`, which
+redirects there). Both pages share `webserver/staff-dashboard/` CSS and JS, so
+they cannot drift. The sub-pages (`/moderator/support/`, `/feedback/`,
+`/teachers/`) link back with "Dashboard".
+
+Moderator shortcuts that admins set (`/api/admin/moderator-panel`) appear in the
+Tools section. The old `/moderator/` page loaded the legacy `theme.js` and sent
+approvals without the CSRF header, so they failed; it is gone.
 
 ## Queues
 

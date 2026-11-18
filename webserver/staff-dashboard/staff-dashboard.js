@@ -10,6 +10,7 @@
   var current = 'all';    // selected tab key
   var showClosedMatrix = false;
   var closedMatrix = [];
+  var customLinks = []; // moderator shortcuts from /api/moderator-panel
 
   // ---- small helpers -------------------------------------------------------
   function h(tag, attrs, kids) {
@@ -336,12 +337,14 @@
     var admin = !!role.isAdmin, mod = admin || !!role.isModerator;
     var groups = [
       { name: 'Moderation', tools: [
-        { href: '/moderator/', name: 'Moderator panel', desc: 'Chat moderation, bans and audit tools', ok: mod },
+        { href: '/matrix/', name: 'Matrix chat', desc: 'Official staff and general rooms', ok: mod, blank: true },
+        { href: '/admin/#moderation-tools', name: 'Safety and infractions', desc: 'Direct user reports and infractions', ok: mod },
+        { href: '/admin/#audit-tools', name: 'Activity log', desc: 'Moderation history and audit trail', ok: mod },
         { href: '/moderator/support/', name: 'Support tickets', desc: 'Chat with people who are locked out', ok: mod },
         { href: '/moderator/feedback/', name: 'Feedback', desc: 'Everything sent from the feedback page', ok: mod },
         { href: '/moderator/teachers/', name: 'Teacher ratings', desc: 'Notes and the teacher list', ok: mod },
-        { href: '/admin/special-schedule/', name: 'Special bell schedule', desc: 'Override the day’s schedule', ok: mod },
-      ] },
+        { href: '/admin/special-schedule/', name: 'Special bell schedule', desc: 'Set a one-day schedule for a school', ok: mod },
+      ].concat(customLinks.map(function (l) { return { href: l.href, name: l.label, desc: 'Custom shortcut', ok: mod }; })) },
       { name: 'Administration', tools: [
         { href: '/admin/', name: 'Admin panel', desc: 'Economy, accounts, logs and the rest', ok: admin },
         { href: '/admin/bans/', name: 'Account bans', desc: 'Review bans and restore accounts', ok: admin },
@@ -359,7 +362,7 @@
     groups.forEach(function (g) {
       var grid = h('div', { class: 'sd-tool-grid' });
       g.tools.forEach(function (t) {
-        var el = h(t.ok ? 'a' : 'div', { class: 'sd-tool', href: t.ok ? t.href : false, 'data-locked': t.ok ? false : '' }, [h('strong', { text: t.name }), h('span', { text: t.desc })]);
+        var el = h(t.ok ? 'a' : 'div', { class: 'sd-tool', href: t.ok ? t.href : false, target: t.ok && t.blank ? '_blank' : false, 'data-locked': t.ok ? false : '' }, [h('strong', { text: t.name }), h('span', { text: t.desc })]);
         grid.appendChild(el);
       });
       box.appendChild(h('div', { class: 'sd-tool-group' }, [h('h3', { text: g.name }), grid]));
@@ -375,9 +378,19 @@
       $('sd-app').hidden = false;
       if (!quiet) say('');
       render();
+      if (!quiet) loadCustomLinks();
     } catch (err) {
       say(err.message || 'Could not load the dashboard.', true);
     }
+  }
+
+  // Shortcuts admins add for moderators; optional, so failures are ignored.
+  async function loadCustomLinks() {
+    try {
+      var d = await api('/api/admin/moderator-panel');
+      customLinks = (d.links || []).filter(function (l) { return l && /^(\/|https?:\/\/)/i.test(String(l.href || '').trim()); });
+      renderTools();
+    } catch (err) { /* keep the built-in tools */ }
   }
 
   async function start() {
@@ -391,6 +404,8 @@
       return;
     }
     if (!role.isStaff) { say('Staff access required.', true); return; }
+    var badge = $('sd-role');
+    if (badge) badge.textContent = role.isOwner ? 'Root' : role.isAdmin ? 'Admin' : role.isModerator ? 'Moderator' : 'Tester';
     renderToolsOnly();
     if (!role.isAdmin && !role.isModerator) { say('The queues are for moderators and admins.'); return; }
     await load(false);

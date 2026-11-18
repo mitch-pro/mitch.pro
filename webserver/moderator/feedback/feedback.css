@@ -24,3 +24,5 @@ html[data-theme=dark] .fb-status.err { color: #ff9aa9; }
 .fb-dialog input { display: block; width: 100%; box-sizing: border-box; margin: 10px 0; padding: 10px 12px; font: inherit; color: var(--t-fg); background: var(--t-bg3, var(--t-bg)); border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm, 7px); }
 .fb-dialog h2 { margin: 0; font-size: 1.1rem; }
 .fb-row { display: flex; gap: 8px; justify-content: flex-end; }
+.back-link { display: inline-block; margin-bottom: 8px; color: var(--t-fg2); text-decoration: none; font-size: .9rem; }
+.back-link:hover { color: var(--t-ac); }

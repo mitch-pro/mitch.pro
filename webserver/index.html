@@ -1546,7 +1546,10 @@ if (document.readyState === 'loading') {
     .then(function (status) {
       if (status && status.isStaff) {
         var pill = document.getElementById('home-staff-pill');
-        if (pill) pill.hidden = false;
+        if (pill) {
+          if (status.isAdmin || status.isModerator) { pill.href = '/moderator/'; pill.textContent = 'Moderator dashboard'; }
+          pill.hidden = false;
+        }
       }
     })
     .catch(function () {});
