@@ -577,34 +577,87 @@ pub(crate) fn log_coin_change(
 /// than an error, since this is a best-effort audit view, not a source of
 /// truth (the `coins` table balance is that).
 pub fn read_coin_log(data_dir: &Path, limit: usize) -> Vec<Value> {
+    search_coin_log(data_dir, &CoinQuery::default(), limit).0
+}
+
+/// One `logs/coins.log` line as a JSON row, or `None` when malformed.
+fn parse_coin_line(line: &str) -> Option<Value> {
+    let mut parts = line.splitn(5, '\t');
+    let ts = parts.next()?;
+    let email = parts.next()?;
+    let delta: f64 = parts.next()?.parse().ok()?;
+    let (before, after) = parts.next()?.split_once(" -> ")?;
+    let before: f64 = before.trim().parse().ok()?;
+    let after: f64 = after.trim().parse().ok()?;
+    let reason = parts.next().unwrap_or("unspecified");
+    Some(
+        json!({ "ts": ts, "email": email, "delta": delta, "before": before, "after": after, "reason": reason }),
+    )
+}
+
+/// Filters for [`search_coin_log`]. Empty text means "any".
+#[derive(Default)]
+pub struct CoinQuery<'a> {
+    /// Part of the account email (case-insensitive).
+    pub person: &'a str,
+    /// Part of the reason (case-insensitive).
+    pub reason: &'a str,
+    /// Inclusive bounds in epoch milliseconds.
+    pub from: Option<i64>,
+    pub to: Option<i64>,
+    /// Only changes of at least this size (absolute value).
+    pub min_abs: f64,
+    /// `gain`, `loss`, or anything else for both.
+    pub direction: &'a str,
+}
+
+/// Coin changes matching `q`, newest first (capped at `limit`), and how many
+/// matched in total. A malformed or missing file just yields no rows; the `coins`
+/// table, not this log, is the source of truth for balances.
+pub fn search_coin_log(data_dir: &Path, q: &CoinQuery<'_>, limit: usize) -> (Vec<Value>, usize) {
     let logs_dir = data_dir.parent().unwrap_or(data_dir).join("logs");
     let Ok(content) = std::fs::read_to_string(logs_dir.join("coins.log")) else {
-        return Vec::new();
+        return (Vec::new(), 0);
     };
-    let mut entries: Vec<Value> = content
-        .lines()
-        .filter_map(|line| {
-            let mut parts = line.splitn(5, '\t');
-            let ts = parts.next()?;
-            let email = parts.next()?;
-            let delta: f64 = parts.next()?.parse().ok()?;
-            let (before, after) = parts.next()?.split_once(" -> ")?;
-            let before: f64 = before.trim().parse().ok()?;
-            let after: f64 = after.trim().parse().ok()?;
-            let reason = parts.next().unwrap_or("unspecified");
-            Some(json!({
-                "ts": ts,
-                "email": email,
-                "delta": delta,
-                "before": before,
-                "after": after,
-                "reason": reason,
-            }))
-        })
-        .collect();
-    entries.reverse();
-    entries.truncate(limit);
-    entries
+    // Timestamps are ISO strings, which sort the same as the times they name.
+    let from = q.from.map(js_iso_date_from);
+    let to = q.to.map(js_iso_date_from);
+    let person = q.person.trim().to_lowercase();
+    let reason = q.reason.trim().to_lowercase();
+    let mut out = Vec::new();
+    let mut total = 0;
+    for line in content.lines().rev() {
+        let Some(row) = parse_coin_line(line) else {
+            continue;
+        };
+        let ts = row["ts"].as_str().unwrap_or("");
+        let delta = row["delta"].as_f64().unwrap_or(0.0);
+        if from.as_deref().is_some_and(|f| ts < f)
+            || to.as_deref().is_some_and(|t| ts > t)
+            || delta.abs() < q.min_abs
+            || (q.direction == "gain" && delta <= 0.0)
+            || (q.direction == "loss" && delta >= 0.0)
+            || (!person.is_empty()
+                && !row["email"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_lowercase()
+                    .contains(&person))
+            || (!reason.is_empty()
+                && !row["reason"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_lowercase()
+                    .contains(&reason))
+        {
+            continue;
+        }
+        total += 1;
+        if out.len() < limit {
+            out.push(row);
+        }
+    }
+    (out, total)
 }
 
 /// Moves a balance row to a new email key — used when a user changes their
@@ -1295,6 +1348,35 @@ mod tests {
         assert_eq!(get_coins(&store, &data, "exact@gmail.com"), 100000.0);
         assert_eq!(get_coins(&store, &data, "normal@gmail.com"), 500.0);
         std::fs::remove_dir_all(base).ok();
+    }
+
+    #[test]
+    fn coin_log_search_filters_by_person_reason_size_direction_and_time() {
+        let (base, data, store) = temp_store("search-log");
+        add_coins(&store, &data, "Kid@Gmail.com", 10.0, 1.0, "daily login");
+        add_coins(&store, &data, "kid@gmail.com", -4.0, 1.0, "shop purchase");
+        add_coins(&store, &data, "other@gmail.com", 500.0, 1.0, "casino win");
+        let q = |f: &dyn Fn(&mut CoinQuery<'_>)| {
+            let mut q = CoinQuery::default();
+            f(&mut q);
+            search_coin_log(&data, &q, 10)
+        };
+        assert_eq!(q(&|_| {}).1, 3);
+        assert_eq!(q(&|q| q.person = "KID").1, 2);
+        assert_eq!(
+            q(&|q| q.reason = "casino").0[0]["email"],
+            json!("other@gmail.com")
+        );
+        assert_eq!(q(&|q| q.min_abs = 100.0).1, 1);
+        assert_eq!(q(&|q| q.direction = "loss").0[0]["delta"], json!(-4.0));
+        assert_eq!(q(&|q| q.direction = "gain").1, 2);
+        // Nothing was logged in the far future or before the epoch's first day.
+        assert_eq!(q(&|q| q.from = Some(now_millis() + 86_400_000)).1, 0);
+        assert_eq!(q(&|q| q.to = Some(1_000)).1, 0);
+        // The cap limits rows, not the match count.
+        assert_eq!(search_coin_log(&data, &CoinQuery::default(), 1).0.len(), 1);
+        assert_eq!(search_coin_log(&data, &CoinQuery::default(), 1).1, 3);
+        let _ = std::fs::remove_dir_all(base);
     }
 
     #[test]

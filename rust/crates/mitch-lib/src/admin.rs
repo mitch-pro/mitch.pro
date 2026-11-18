@@ -83,6 +83,74 @@ pub fn admin_actions_recent(store: &DataStore, limit: i64) -> Vec<Value> {
     )
 }
 
+/// Filters for [`search_admin_actions`]. Empty text means "any". `person` matches
+/// the staff member who acted or anything in the action's details (so an affected
+/// account's email is found too); `action` matches part of the action name.
+#[derive(Default)]
+pub struct ActionQuery<'a> {
+    pub person: &'a str,
+    pub action: &'a str,
+    /// Inclusive bounds in epoch milliseconds.
+    pub from: Option<i64>,
+    pub to: Option<i64>,
+}
+
+/// `%text%` for a `LIKE ... ESCAPE '\'` clause, with `\`, `%` and `_` literal.
+fn like_contains(text: &str) -> String {
+    let mut out = String::from("%");
+    for c in text.trim().chars() {
+        if matches!(c, '\\' | '%' | '_') {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out.push('%');
+    out
+}
+
+/// Staff actions matching `q`, newest first, plus how many matched in total (the
+/// list is capped at `limit`). Backs the dashboard's activity log search.
+pub fn search_admin_actions(
+    store: &DataStore,
+    q: &ActionQuery<'_>,
+    limit: i64,
+) -> (Vec<Value>, i64) {
+    let person = like_contains(q.person);
+    let action = like_contains(q.action);
+    let from = q.from.unwrap_or(i64::MIN);
+    let to = q.to.unwrap_or(i64::MAX);
+    let filter = "(actor LIKE ?1 ESCAPE '\\' OR details LIKE ?1 ESCAPE '\\')
+                  AND action LIKE ?2 ESCAPE '\\' AND ts >= ?3 AND ts <= ?4";
+    let total: i64 = store
+        .conn()
+        .query_row(
+            &format!("SELECT COUNT(*) FROM admin_actions WHERE {filter}"),
+            rusqlite::params![person, action, from, to],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    let rows = admin_action_rows(
+        store,
+        &format!(
+            "SELECT id, ts, actor, action, details FROM admin_actions WHERE {filter}
+              ORDER BY ts DESC, rowid DESC LIMIT ?5"
+        ),
+        &[&person, &action, &from, &to, &limit],
+    );
+    (rows, total)
+}
+
+/// Distinct action names, for the search's action picker.
+pub fn admin_action_names(store: &DataStore) -> Vec<String> {
+    let conn = store.conn();
+    conn.prepare("SELECT DISTINCT action FROM admin_actions ORDER BY action")
+        .and_then(|mut stmt| {
+            stmt.query_map([], |r| r.get::<_, String>(0))
+                .map(|rows| rows.filter_map(|r| r.ok()).collect())
+        })
+        .unwrap_or_default()
+}
+
 /// Newest staff actions whose action name starts with `prefix`.
 pub fn admin_actions_with_prefix(store: &DataStore, prefix: &str, limit: i64) -> Vec<Value> {
     let pattern = format!("{}%", prefix.replace('%', "").replace('_', "\\_"));
@@ -330,6 +398,43 @@ pub fn public_profile_reports(store: &DataStore, data_dir: &Path, limit: usize) 
         .collect()
 }
 
+/// Notifications staff sent: admin_notice rows deduped on batchId+targetEmail,
+/// newest first.
+pub fn sent_notifications(store: &DataStore) -> Vec<Value> {
+    let mut sent_notifications: Vec<Value> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for (target_email, notice) in crate::coins::admin_notice_rows(store) {
+        let key = format!(
+            "{}:{}",
+            notice
+                .get("batchId")
+                .and_then(|v| v.as_str())
+                .unwrap_or_else(|| notice.get("id").and_then(|v| v.as_str()).unwrap_or("")),
+            target_email
+        );
+        if !seen.insert(key) {
+            continue;
+        }
+        sent_notifications.push(json!({
+            "id": notice.get("id").map(|v| v.as_str().unwrap_or("").to_string()).unwrap_or_default(),
+            "batchId": notice.get("batchId").map(|v| v.as_str().unwrap_or("").to_string()).unwrap_or_default(),
+            "targetEmail": target_email,
+            "title": notice.get("title").and_then(|v| v.as_str()).unwrap_or("Admin notification"),
+            "from": notice.get("from").and_then(|v| v.as_str()).unwrap_or("admin"),
+            "source": notice.get("source").and_then(|v| v.as_str()).unwrap_or("mitchdog.com"),
+            "ts": notice.get("ts").and_then(|v| v.as_i64()).unwrap_or(0),
+            "read": notice.get("read").and_then(|v| v.as_bool()).unwrap_or(false),
+        }));
+    }
+    sent_notifications.sort_by(|a, b| {
+        b.get("ts")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0)
+            .cmp(&a.get("ts").and_then(|v| v.as_i64()).unwrap_or(0))
+    });
+    sent_notifications
+}
+
 /// `buildAdvancedAdminData()` — server.js:3180-3274, the admin dashboard
 /// payload. Pure document reads (websockets not needed for any field).
 /// Admin "advanced data" payload. `active_users` is the number of accounts
@@ -362,39 +467,7 @@ pub fn build_advanced_admin_data(store: &DataStore, data_dir: &Path, active_user
         .collect();
     let profile_reports = public_profile_reports(store, data_dir, 250);
 
-    // sentNotifications: admin_notice rows, deduped on batchId+targetEmail,
-    // newest first.
-    let mut sent_notifications: Vec<Value> = Vec::new();
-    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
-    for (target_email, notice) in crate::coins::admin_notice_rows(store) {
-        let key = format!(
-            "{}:{}",
-            notice
-                .get("batchId")
-                .and_then(|v| v.as_str())
-                .unwrap_or_else(|| notice.get("id").and_then(|v| v.as_str()).unwrap_or("")),
-            target_email
-        );
-        if !seen.insert(key) {
-            continue;
-        }
-        sent_notifications.push(json!({
-            "id": notice.get("id").map(|v| v.as_str().unwrap_or("").to_string()).unwrap_or_default(),
-            "batchId": notice.get("batchId").map(|v| v.as_str().unwrap_or("").to_string()).unwrap_or_default(),
-            "targetEmail": target_email,
-            "title": notice.get("title").and_then(|v| v.as_str()).unwrap_or("Admin notification"),
-            "from": notice.get("from").and_then(|v| v.as_str()).unwrap_or("admin"),
-            "source": notice.get("source").and_then(|v| v.as_str()).unwrap_or("mitchdog.com"),
-            "ts": notice.get("ts").and_then(|v| v.as_i64()).unwrap_or(0),
-            "read": notice.get("read").and_then(|v| v.as_bool()).unwrap_or(false),
-        }));
-    }
-    sent_notifications.sort_by(|a, b| {
-        b.get("ts")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0)
-            .cmp(&a.get("ts").and_then(|v| v.as_i64()).unwrap_or(0))
-    });
+    let sent_notifications = sent_notifications(store);
 
     let mut banned_accounts: Vec<Value> = crate::bans::blacklist_all(store);
     banned_accounts.sort_by(|a, b| {
@@ -862,6 +935,67 @@ mod tests {
         let store = DataStore::open(&base, &base.join("data")).unwrap();
         // Helpers take the DATA dir; tests return both for convenience.
         (base.clone(), base.join("data"), store)
+    }
+
+    #[test]
+    fn admin_action_search_matches_actor_details_action_and_time() {
+        let (base, data, store) = temp_store("search");
+        log_admin_action(
+            &store,
+            &data,
+            "mod@x.test",
+            "ban_account",
+            json!({ "target": "kid@x.test" }),
+        );
+        log_admin_action(
+            &store,
+            &data,
+            "boss@x.test",
+            "gift_coins",
+            json!({ "targetEmail": "kid@x.test", "amount": 5 }),
+        );
+        log_admin_action(
+            &store,
+            &data,
+            "boss@x.test",
+            "add_tester",
+            json!({ "target": "100%_odd" }),
+        );
+        let run = |person: &str, action: &str| {
+            search_admin_actions(
+                &store,
+                &ActionQuery {
+                    person,
+                    action,
+                    ..Default::default()
+                },
+                10,
+            )
+        };
+        assert_eq!(run("", "").1, 3);
+        // The actor and the affected account are both found by "person".
+        assert_eq!(run("kid@x.test", "").1, 2);
+        assert_eq!(run("boss", "").1, 2);
+        assert_eq!(run("kid", "gift").0[0]["action"], json!("gift_coins"));
+        // LIKE wildcards in the search text are literal.
+        assert_eq!(run("100%_", "").1, 1);
+        assert_eq!(run("%", "").1, 1);
+        let future = ActionQuery {
+            from: Some(now_millis() + 86_400_000),
+            ..Default::default()
+        };
+        assert_eq!(search_admin_actions(&store, &future, 10).1, 0);
+        assert_eq!(
+            admin_action_names(&store),
+            ["add_tester", "ban_account", "gift_coins"]
+        );
+        assert_eq!(
+            search_admin_actions(&store, &ActionQuery::default(), 1)
+                .0
+                .len(),
+            1
+        );
+        let _ = std::fs::remove_dir_all(base);
     }
 
     #[test]

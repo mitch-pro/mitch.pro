@@ -93,7 +93,7 @@ every endpoint still enforces its own role server-side.
 | Economy (`/economy/`) | mod (requests) / admin | wealth audit, give/set/burn/reset coins, multiplier, casino switch, premium; owner: reset all coins |
 | Shop (`/shop/`) | admin | catalog overrides and custom cosmetics |
 | Computer requests (`/vm-requests/`) | admin | VM requests (approve, deny, delete, restore, purge); link to `/staff-dashboard/vms/` |
-| Logs (`/logs/`) | admin | server load, admin activity with undo, sent notifications, bans, coin and anti-cheat logs; developer: application and Docker logs |
+| Logs (`/logs/`) | admin | server load; searchable admin activity (with undo) and coin log; sent notifications, bans and anti-cheat flags; developer: application and Docker logs |
 | Site (`/site/`) | admin | public maintenance switch, domains and mirrors, reserved usernames, tester mode, admin passphrases |
 
 **Moderators and approvals.** Moderators can do some things directly (bans,
@@ -104,3 +104,23 @@ queue "Moderator requests". Everything else is hidden from them.
 
 **Removed.** The old page's "service activity" live feed was already always empty
 and is gone, in line with the rule that staff don't see what pages people visit.
+
+## Searching the logs
+
+The Logs page searches server-side, not just the newest rows:
+
+- `GET /api/admin/staff-dashboard/logs/actions?person=&action=&from=&to=&limit=`
+  searches `admin_actions`. `person` matches the staff member or anything in the
+  action's details (so the affected account is found); `action` matches part of the
+  action name. Times are epoch milliseconds, `to` is the "jump to" bound (at or
+  before). Up to 500 rows, with the total match count.
+- `GET /api/admin/staff-dashboard/logs/coins?person=&reason=&min=&direction=&from=&to=&limit=`
+  searches `logs/coins.log` (`mitch_lib::coins::search_coin_log`): account, reason,
+  minimum size and gain/loss.
+- `GET /api/admin/staff-dashboard/logs/other`: sent notifications, bans, anti-cheat.
+
+All are full-admin only. They replace `/api/admin/advanced-data` on this page, which
+returned only the newest 250 rows and logged a `view_admin_tools` entry on every
+call (most of the old activity log was those). The coin log is the audit trail for
+money bugs (every balance change with who, how much, why); it holds email, amount
+and reason only, no IP addresses or page visits, and is visible only to admins.

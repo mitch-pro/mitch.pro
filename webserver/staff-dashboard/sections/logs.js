@@ -51,19 +51,114 @@
     return ui.card(spec.title, spec.desc, [bar, status, out], 'wide');
   }
 
+  // ---- searchable logs -------------------------------------------------------
+  function ms(input) { return input.value ? String(new Date(input.value).getTime()) : ''; }
+  function stamp(d) { var p = function (n) { return String(n).padStart(2, '0'); }; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()); }
+
+  // A log with search fields. spec: {title, desc, url, fields: [{name, label, type, options, placeholder}],
+  //   columns, row(entry, filterBy) -> cells, empty, total label}. `from` and `to` (a "jump to" time:
+  //   show entries at or before it) are always offered. Fetches `spec.url` with the filters.
+  function searchLog(spec) {
+    var inputs = {}, limit = 100;
+    var fields = spec.fields.concat([
+      { name: 'from', label: 'From', type: 'datetime-local' },
+      { name: 'to', label: 'Jump to (at or before)', type: 'datetime-local' },
+    ]).map(function (f) {
+      var el = f.type === 'select' ? h('select', { class: 'sd-input' }, (f.options || []).map(function (o) { return h('option', { value: o[0], text: o[1] }); }))
+        : h('input', { class: 'sd-input', type: f.type || 'text', placeholder: f.placeholder || false, min: f.min != null ? f.min : false, step: f.step || false });
+      inputs[f.name] = el;
+      return h('label', { class: 'sd-field' }, [h('span', { text: f.label }), el]);
+    });
+    var results = h('div'), count = h('p', { class: 'sd-meta' }), status = h('p', { class: 'sd-form-status', role: 'status' });
+    function filterBy(name, value) { inputs[name].value = value; limit = 100; run(); }
+    async function run() {
+      status.className = 'sd-form-status'; status.textContent = 'Searching...';
+      var q = new URLSearchParams();
+      Object.keys(inputs).forEach(function (k) {
+        var v = (k === 'from' || k === 'to') ? ms(inputs[k]) : inputs[k].value.trim();
+        if (v) q.set(k, v);
+      });
+      q.set('limit', String(limit));
+      try {
+        var d = await SD.api(spec.url + '?' + q.toString());
+        if (spec.onData) spec.onData(d, inputs);
+        status.textContent = '';
+        results.textContent = '';
+        results.appendChild(ui.table(spec.columns, d.entries.map(function (e) { return spec.row(e, filterBy); }), spec.empty));
+        count.textContent = d.total ? 'Showing ' + d.entries.length + ' of ' + d.total + ' matching.' : '';
+        if (d.total > d.entries.length && limit < 500) {
+          results.appendChild(h('div', { class: 'sd-actions' }, [ui.button('Show more', '', function () { limit += 100; run(); })]));
+        }
+      } catch (e) { status.textContent = e.message; status.className = 'sd-form-status err'; }
+    }
+    function quick(label, hours) {
+      return ui.button(label, '', function () { inputs.from.value = stamp(new Date(Date.now() - hours * 3600000)); inputs.to.value = ''; limit = 100; run(); });
+    }
+    var form = h('form', { class: 'sd-fields' }, fields.concat([
+      h('div', { class: 'sd-actions' }, [
+        h('button', { type: 'submit', class: 'primary', text: 'Search' }),
+        ui.button('Clear', '', function () { Object.keys(inputs).forEach(function (k) { inputs[k].value = ''; }); limit = 100; run(); }),
+        quick('Last hour', 1), quick('Last 24 hours', 24), quick('Last 7 days', 168),
+      ]),
+    ]));
+    form.addEventListener('submit', function (e) { e.preventDefault(); limit = 100; run(); });
+    var card = ui.card(spec.title, spec.desc, [form, status, count, results], 'wide');
+    run();
+    return card;
+  }
+
+  function nice(d) {
+    return Object.keys(d || {}).filter(function (k) { return ['role', 'ip', 'userAgent'].indexOf(k) < 0; })
+      .map(function (k) { return k + ': ' + (typeof d[k] === 'object' ? JSON.stringify(d[k]) : d[k]); }).join(' · ');
+  }
+
+  function activityLog() {
+    var picked = false;
+    return searchLog({
+      title: 'Admin activity', desc: 'Everything staff did, newest first. Search by who did it or who it affected.',
+      url: '/api/admin/staff-dashboard/logs/actions',
+      fields: [
+        { name: 'person', label: 'Person', placeholder: 'Staff or affected account' },
+        { name: 'action', label: 'Action', placeholder: 'e.g. ban, coins, tester' },
+      ],
+      columns: ['Time', 'Who', 'Action', 'Details', ''],
+      empty: 'No matching activity.',
+      row: function (r, filterBy) {
+        return [SD.time(r.ts), ui.button(r.actor, 'sd-link', function () { filterBy('person', r.actor); }), ui.pill(r.action), nice(r.details),
+          REVERTIBLE.indexOf(r.action) >= 0 && r.action !== 'revert_action' ? undo(r) : ''];
+      },
+    });
+  }
+
+  function coinLog() {
+    return searchLog({
+      title: 'Coin log', desc: 'Every balance change: who, how much, and why. Use the size and direction filters to look for money appearing from nowhere.',
+      url: '/api/admin/staff-dashboard/logs/coins',
+      fields: [
+        { name: 'person', label: 'Account', placeholder: 'Email' },
+        { name: 'reason', label: 'Reason', placeholder: 'e.g. casino, daily' },
+        { name: 'min', label: 'At least (coins)', type: 'number', min: 0, step: 'any' },
+        { name: 'direction', label: 'Direction', type: 'select', options: [['', 'Gains and losses'], ['gain', 'Gains only'], ['loss', 'Losses only']] },
+      ],
+      columns: ['Time', 'Account', 'Change', 'Before to after', 'Reason'],
+      empty: 'No matching coin changes.',
+      row: function (r, filterBy) {
+        var delta = Number(r.delta);
+        return [SD.time(Date.parse(r.ts)), ui.button(r.email, 'sd-link', function () { filterBy('person', r.email); }),
+          (delta > 0 ? '+' : '') + SD.money(delta), SD.money(r.before) + ' to ' + SD.money(r.after), ui.button(r.reason, 'sd-link', function () { filterBy('reason', r.reason); })];
+      },
+    });
+  }
+
   async function render(root) {
     ui.add(root, [ui.heading('Server')]);
     root.appendChild(resources());
 
-    var data = await SD.api('/api/admin/advanced-data');
-    root.appendChild(ui.heading('Admin activity', 'Privileged actions, newest first.'));
-    root.appendChild(ui.table(['Time', 'Who', 'Action', 'Details', ''], (data.adminActions || []).slice(0, 100).map(function (r) {
-      var d = Object.assign({}, r.details || {}); delete d.role; delete d.ip; delete d.userAgent;
-      return [SD.time(r.ts), r.actor, ui.pill(r.action), JSON.stringify(d), REVERTIBLE.indexOf(r.action) >= 0 && r.action !== 'revert_action' ? undo(r) : ''];
-    }), 'No activity yet.'));
+    root.appendChild(ui.grid([activityLog(), coinLog()]));
 
+    var data = await SD.api('/api/admin/staff-dashboard/logs/other');
     root.appendChild(ui.heading('Sent notifications'));
-    root.appendChild(ui.table(['Time', 'To', 'Title', 'Status', ''], (data.sentNotifications || []).slice(0, 100).map(function (r) {
+    root.appendChild(ui.table(['Time', 'To', 'Title', 'Status', ''], (data.sentNotifications || []).map(function (r) {
       return [SD.time(r.ts), r.targetEmail, r.title, r.read ? 'read' : 'unread', ui.button('Unsend', '', async function (b) {
         if (!(await SD.confirm('Unsend', r.batchId ? 'Unsend this notification batch?' : 'Unsend this notification?'))) return;
         b.disabled = true;
@@ -73,18 +168,12 @@
     }), 'No notifications sent.'));
 
     root.appendChild(ui.heading('Banned accounts'));
-    root.appendChild(ui.table(['Banned', 'Account', 'By', 'Reason'], (data.bannedAccounts || []).slice(0, 100).map(function (r) {
+    root.appendChild(ui.table(['Banned', 'Account', 'By', 'Reason'], (data.bannedAccounts || []).map(function (r) {
       return [SD.time(r.bannedAt), r.email, r.by, r.reason];
     }), 'No banned accounts.'));
 
-    root.appendChild(ui.heading('Coin log'));
-    root.appendChild(ui.table(['Time', 'Account', 'Change', 'Before to after', 'Reason'], (data.coinLogs || []).slice(0, 100).map(function (r) {
-      var delta = Number(r.delta);
-      return [SD.time(r.ts), r.email, (delta > 0 ? '+' : '') + SD.money(delta), SD.money(r.before) + ' to ' + SD.money(r.after), r.reason];
-    }), 'No coin changes logged.'));
-
     root.appendChild(ui.heading('Anti-cheat'));
-    root.appendChild(ui.table(['Time', 'Account', 'Game', 'Details'], (data.cheatLogs || []).slice(0, 100).map(function (r) {
+    root.appendChild(ui.table(['Time', 'Account', 'Game', 'Details'], (data.cheatLogs || []).map(function (r) {
       return [SD.time(r.ts), r.email, r.game, r.details];
     }), 'Nothing flagged.'));
 

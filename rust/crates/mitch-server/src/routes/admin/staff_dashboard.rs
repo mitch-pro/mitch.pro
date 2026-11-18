@@ -12,6 +12,12 @@
 //!   resolve, dismiss or reopen a report. Acting on the reported message or its
 //!   author uses the existing `/api/matrix/moderation/*` endpoints.
 //!
+//! - `GET .../logs/actions`, `.../logs/coins` and `.../logs/other` (full admins):
+//!   searchable activity and coin logs, and the notification, ban and anti-cheat
+//!   lists for the Logs page. These replace `/api/admin/advanced-data` there, which
+//!   only returns the newest 250 rows and writes a "view_admin_tools" entry on
+//!   every call.
+//!
 //! Reads only; the other queues are changed through their own endpoints, so their
 //! rules (admin-only deletes, passphrase gate) stay in one place.
 
@@ -56,8 +62,94 @@ pub async fn handle(
         ("GET", "summary") => summary(state, ctx),
         ("GET", "matrix-reports") => matrix_reports(state, &query_param(search, "filter")).await,
         ("POST", "matrix-reports/status") => set_report_status(state, body, ctx),
+        ("GET", "logs/actions" | "logs/coins" | "logs/other") => {
+            if !ctx.is_admin(state) {
+                return Some(forbidden());
+            }
+            match rest {
+                "logs/actions" => search_actions(state, search),
+                "logs/coins" => search_coins(state, search),
+                _ => other_logs(state),
+            }
+        }
         _ => return None,
     })
+}
+
+/// Epoch-millisecond query parameter, if present and numeric.
+fn ms_param(search: &str, key: &str) -> Option<i64> {
+    query_param(search, key).trim().parse().ok()
+}
+
+/// Rows per search, clamped so one request stays small.
+fn limit_param(search: &str) -> usize {
+    query_param(search, "limit")
+        .trim()
+        .parse()
+        .unwrap_or(100)
+        .clamp(1, 500)
+}
+
+/// `GET .../logs/actions?person=&action=&from=&to=&limit=` (`from`/`to` are epoch ms).
+fn search_actions(state: &Arc<AppState>, search: &str) -> axum::response::Response {
+    let (person, action) = (query_param(search, "person"), query_param(search, "action"));
+    let q = mitch_lib::admin::ActionQuery {
+        person: &person,
+        action: &action,
+        from: ms_param(search, "from"),
+        to: ms_param(search, "to"),
+    };
+    let (entries, total) =
+        mitch_lib::admin::search_admin_actions(&state.store, &q, limit_param(search) as i64);
+    json_response(
+        200,
+        json!({
+            "ok": true,
+            "entries": entries,
+            "total": total,
+            "actions": mitch_lib::admin::admin_action_names(&state.store),
+        }),
+    )
+}
+
+/// `GET .../logs/coins?person=&reason=&from=&to=&min=&direction=&limit=`.
+fn search_coins(state: &Arc<AppState>, search: &str) -> axum::response::Response {
+    let (person, reason, direction) = (
+        query_param(search, "person"),
+        query_param(search, "reason"),
+        query_param(search, "direction"),
+    );
+    let q = mitch_lib::coins::CoinQuery {
+        person: &person,
+        reason: &reason,
+        from: ms_param(search, "from"),
+        to: ms_param(search, "to"),
+        min_abs: query_param(search, "min").trim().parse().unwrap_or(0.0),
+        direction: &direction,
+    };
+    let (entries, total) =
+        mitch_lib::coins::search_coin_log(&state.cfg.data_dir, &q, limit_param(search));
+    json_response(
+        200,
+        json!({ "ok": true, "entries": entries, "total": total }),
+    )
+}
+
+/// `GET .../logs/other`: sent notifications, banned accounts and anti-cheat flags.
+fn other_logs(state: &Arc<AppState>) -> axum::response::Response {
+    let store = &state.store;
+    let mut bans = mitch_lib::bans::blacklist_all(store);
+    bans.sort_by_key(|b| std::cmp::Reverse(b.get("bannedAt").and_then(Value::as_i64).unwrap_or(0)));
+    let (cheats, _) = mitch_lib::admin::cheat_logs_recent(store, 100);
+    json_response(
+        200,
+        json!({
+            "ok": true,
+            "sentNotifications": mitch_lib::admin::sent_notifications(store).into_iter().take(100).collect::<Vec<_>>(),
+            "bannedAccounts": bans.into_iter().take(100).collect::<Vec<_>>(),
+            "cheatLogs": cheats,
+        }),
+    )
 }
 
 /// True for a report/ticket status that still needs staff.
