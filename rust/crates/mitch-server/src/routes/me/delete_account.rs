@@ -310,7 +310,7 @@ mod tests {
         let other = "test.student2@student.rjuhsd.us";
         mitch_lib::passwords::password_set(
             &state.store,
-            email,
+            &auth::normalize_email(email),
             &mitch_lib::crypto::argon2_hash("hunter2hunter2"),
         );
         mitch_lib::coins::set_coins(&state.store, state.data_dir(), email, 50.0, "test");
@@ -362,7 +362,7 @@ mod tests {
         let email = "test.student3@student.rjuhsd.us";
         mitch_lib::passwords::password_set(
             &state.store,
-            email,
+            &auth::normalize_email(email),
             &mitch_lib::crypto::argon2_hash("hunter2hunter2"),
         );
         state
@@ -384,7 +384,7 @@ mod tests {
         assert!(mitch_lib::account_deletion::was_deleted(
             &state.store,
             &state.id_secret,
-            email
+            &auth::normalize_email(email)
         ));
         std::fs::remove_dir_all(dir).ok();
     }
