@@ -342,6 +342,7 @@
       { key: 'economy', label: 'Economy', href: '/staff-dashboard/economy/', level: 'mod', desc: 'Balances, rewards, premium and the casino.' },
       { key: 'shop', label: 'Shop', href: '/staff-dashboard/shop/', level: 'admin', desc: 'Edit item names, prices and descriptions. Saved overrides replace the server defaults.' },
       { key: 'vm-requests', label: 'Computer requests', href: '/staff-dashboard/vm-requests/', level: 'admin', desc: 'Requests for Linux containers and dedicated VMs.' },
+      { key: 'premium-email', label: 'Premium email', href: '/staff-dashboard/premium-email/', level: 'admin', desc: 'Requests for free @student.mitch.pro addresses.' },
       { key: 'logs', label: 'Logs', href: '/staff-dashboard/logs/', level: 'admin', desc: 'Server load, admin activity and audit logs.' },
       { key: 'site', label: 'Site', href: '/staff-dashboard/site/', level: 'admin', desc: 'Public access, domains, usernames and admin passphrases.' },
     ] },

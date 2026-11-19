@@ -95,12 +95,9 @@ html.theme-light body.enroll-page {
 .warning-alert { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 22px; padding: 12px; border-left: 2px solid var(--ob-accent); background: var(--ob-bg); color: var(--ob-muted); font-size: 12px; }
 .warning-alert svg { flex-shrink: 0; }
 .code-input { text-align: center; letter-spacing: .3em; font-family: ui-monospace, monospace !important; }
-#login-2fa-panel, #no-email-form { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--ob-line); }
-#no-email-form h3 { font-size: 15px; font-weight: 600; }
-#no-email-form p { color: var(--ob-muted); font-size: 13px; }
+#login-2fa-panel { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--ob-line); }
 #support-actions { margin-top: 20px; }
 #resend-btn { padding: 10px 12px; border: 1px solid var(--ob-line); border-radius: 5px; background: transparent; color: var(--ob-ink); font-size: 13px; }
-#no-email-link { display: none; margin-top: 12px; color: var(--ob-muted); font-size: 12px; }
 .pw-strength { display: none; margin: -10px 0 18px; }
 .pw-strength-bars { display: flex; gap: 4px; height: 3px; background: var(--ob-line); }
 .pw-strength-bars > div { flex: 1; }

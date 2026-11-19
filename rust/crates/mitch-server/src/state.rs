@@ -295,11 +295,29 @@ pub struct AdminBroadcastEvent {
 }
 
 impl AppState {
+    /// Whether the account is barred from all VM features.
+    pub fn is_vm_restricted(&self, norm_email: &str) -> bool {
+        self.vm_bans
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains(&mitch_lib::bans::restriction_key("vm", norm_email))
+    }
+
+    /// Whether the account is barred from BYO-OS.
+    pub fn is_byo_os_restricted(&self, norm_email: &str) -> bool {
+        self.byo_os_bans
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains(&mitch_lib::bans::restriction_key("byo_os", norm_email))
+    }
+
     pub fn new(cfg: SiteConfig, store: Arc<mitch_lib::data::DataStore>) -> Self {
         let id_secret = mitch_lib::crypto::load_id_secret(&cfg.data_dir).unwrap_or_else(|e| {
             tracing::warn!("id_secret load failed: {e}");
             vec![0u8; 32]
         });
+        // Ban records are stored as keyed hashes (`mitch_lib::bans`).
+        mitch_lib::bans::init_hash_secret(&id_secret);
         // Refusing to start beats generating a new key that orphans encrypted data.
         let keyring = Arc::new(
             mitch_lib::keyring::KeyRing::load(&cfg.data_dir)
@@ -318,8 +336,29 @@ impl AppState {
                 })
                 .unwrap_or_default()
         };
-        let byo_os_bans = load_ban_set("data/byo_os_bans.json");
-        let vm_bans = load_ban_set("data/vm_bans.json");
+        // Restriction sets hold keyed hashes, not addresses. Files written before
+        // that held plain addresses; hash them and save the file back.
+        let load_restrictions = |file: &str, scope: &str| {
+            let loaded = load_ban_set(file);
+            if loaded.iter().all(|entry| entry.starts_with("h:")) {
+                return loaded;
+            }
+            let hashed: std::collections::HashSet<String> = loaded
+                .into_iter()
+                .map(|entry| {
+                    if entry.starts_with("h:") {
+                        entry
+                    } else {
+                        mitch_lib::bans::restriction_key(scope, &entry)
+                    }
+                })
+                .collect();
+            let values: Vec<&String> = hashed.iter().collect();
+            let _ = store.write_document(&cfg.base_dir.join(file), &serde_json::json!(values));
+            hashed
+        };
+        let byo_os_bans = load_restrictions("data/byo_os_bans.json", "byo_os");
+        let vm_bans = load_restrictions("data/vm_bans.json", "vm");
         let prox_blocklist: std::collections::HashSet<String> =
             mitch_lib::site_content::prox_blocklist(&store)
                 .into_iter()
@@ -616,3 +655,47 @@ pub const CSRF_EXEMPT_PATHS: &[&str] = &[
     // cookie-authed) like gifs/send just above, same exemption reasoning.
     "/api/matrix/gifs/favorites",
 ];
+
+#[cfg(test)]
+mod restriction_tests {
+    use super::*;
+
+    #[test]
+    fn plaintext_vm_and_byo_restrictions_are_hashed_on_load() {
+        let dir = std::env::temp_dir().join(format!(
+            "mitch-server-restrictions-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("data")).unwrap();
+        let cfg = SiteConfig {
+            data_dir: dir.join("data"),
+            base_dir: dir.clone(),
+            ..SiteConfig::load()
+        };
+        let store = Arc::new(mitch_lib::data::DataStore::open(&dir, &dir.join("data")).unwrap());
+        store
+            .write_document(
+                &dir.join("data/vm_bans.json"),
+                &serde_json::json!(["Bad.Actor@example.com"]),
+            )
+            .unwrap();
+        store
+            .write_document(
+                &dir.join("data/byo_os_bans.json"),
+                &serde_json::json!(["other@example.com"]),
+            )
+            .unwrap();
+        let state = AppState::new(cfg, Arc::clone(&store));
+        assert!(state.is_vm_restricted("badactor@example.com"));
+        assert!(!state.is_byo_os_restricted("badactor@example.com"));
+        assert!(state.is_byo_os_restricted("other@example.com"));
+        let saved = store
+            .read_document(&dir.join("data/vm_bans.json"), serde_json::json!([]))
+            .to_string();
+        assert!(saved.contains("\"h:") && !saved.contains("example.com"));
+        std::fs::remove_dir_all(dir).ok();
+    }
+}

@@ -1,6 +1,6 @@
 # Account ban cleanup
 
-Every new account ban atomically records a permanent chat-removal cutoff alongside the blacklist entry. Existing bans are not retroactively purged. Removing or expiring a ban restores access but does not restore removed history. New messages after restoration are preserved.
+Ban records are stored as hashes (see [account-deletion.md](account-deletion.md#ban-records-are-hashed)). Every new account ban atomically records a permanent chat-removal cutoff alongside the blacklist entry. Existing bans are not retroactively purged. Removing or expiring a ban restores access but does not restore removed history. New messages after restoration are preserved.
 
 The transaction removes authored legacy DM messages, GIF favorites and encrypted-attachment index entries. A durable file-removal queue deletes the owned attachment blobs. Cutoff checks also apply to document writes so a request holding an old copy cannot restore removed messages.
 

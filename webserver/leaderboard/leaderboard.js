@@ -10,15 +10,21 @@
     neon_purple: 'Neon Purple Name', electric_blue: 'Electric Blue Name', mint_flash: 'Mint Flash Name',
     rose_spark: 'Rose Spark Name', ember_red: 'Ember Red Name', void_white: 'Void White Name',
     gold_glow: 'Golden Glow Name', rainbow_name: 'Rainbow Name',
+    sky_cyan: 'Sky Cyan Name', sunset_orange: 'Sunset Orange Name', lime_pop: 'Lime Pop Name',
+    lavender_mist: 'Lavender Mist Name', aurora_name: 'Aurora Name',
   };
   const effects = {
     profile_grid: 'Profile Grid Background', profile_stars: 'Profile Starfield',
     profile_scanlines: 'Profile Scanlines', profile_gold_frame: 'Gold Profile Frame', profile_neon_frame: 'Neon Profile Frame',
+    profile_aurora: 'Profile Aurora', profile_hearts: 'Profile Hearts', profile_dots: 'Profile Dots',
+    profile_sunset_frame: 'Sunset Profile Frame',
   };
   const badges = {
     verified_badge: ['✔', 'Verified Badge'], og_badge: ['📜', 'OG Badge'], artist_badge: ['🎨', 'Artist Badge'],
     chess_badge: ['♟', 'Chess Badge'], builder_badge: ['🛠', 'Builder Badge'], lucky_badge: ['🍀', 'Lucky Badge'],
     premium_star_badge: ['⭐', 'Premium Star Badge'], owner_fan_badge: ['👑', 'Mitch Fan Badge'],
+    gamer_badge: ['🎮', 'Gamer Badge'], music_badge: ['🎵', 'Music Badge'], rocket_badge: ['🚀', 'Rocket Badge'],
+    flame_badge: ['🔥', 'Flame Badge'], heart_badge: ['❤', 'Heart Badge'],
   };
   for (const catalog of [colors, effects, badges]) Object.setPrototypeOf(catalog, null);
   const $ = id => document.getElementById(id);

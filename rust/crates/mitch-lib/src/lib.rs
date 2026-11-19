@@ -15,7 +15,10 @@
 
 // Tests may unwrap; production code may not (Cargo.toml lints).
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+// The default shop catalog is one large `json!` literal.
+#![recursion_limit = "512"]
 
+pub mod account_deletion;
 pub mod account_email;
 pub mod achievements;
 pub mod admin;
@@ -50,6 +53,7 @@ pub mod minigames;
 pub mod newsletter_unsub;
 pub mod passphrase_reset;
 pub mod passwords;
+pub mod premium_email;
 pub mod privacy;
 pub mod profile;
 pub mod profiles;

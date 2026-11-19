@@ -18,6 +18,99 @@
 use crate::data::DataStore;
 use rusqlite::OptionalExtension;
 use serde_json::{json, Value};
+use std::sync::OnceLock;
+
+// Account bans are stored hashed. `blacklist.email` holds `h:` + an HMAC of
+// the normalized address ([`record_key`]), never the address. A signup or login
+// is checked by hashing the address it presents; staff restore an account by
+// typing its email, which is hashed and matched the same way. The consequence:
+// the ban list can show a reason, date and expiry but not whose ban it is.
+// Rows written before this change are rewritten on startup by
+// [`hash_plaintext_rows`].
+
+static HASH_SECRET: OnceLock<Vec<u8>> = OnceLock::new();
+
+/// Sets the key used to hash ban records. Called once at startup (first call
+/// wins; later calls are ignored). Without it, lookups still work within the
+/// process but under an empty key, so the server always calls this.
+pub fn init_hash_secret(secret: &[u8]) {
+    let _ = HASH_SECRET.set(secret.to_vec());
+}
+
+/// The stored key for a banned address: `h:` + HMAC-SHA256 hex of the
+/// normalized address.
+pub fn record_key(norm_email: &str) -> String {
+    let secret = HASH_SECRET.get().map(Vec::as_slice).unwrap_or(b"");
+    format!(
+        "h:{}",
+        crate::crypto::hmac_sha256_hex(
+            secret,
+            format!(
+                "account-ban-record:{}",
+                crate::auth::normalize_email(norm_email)
+            )
+            .as_bytes()
+        )
+    )
+}
+
+/// Stored form of a per-feature restriction ("vm" or "byo_os") for an address:
+/// `h:` + HMAC of the normalized address, domain-separated by feature. Same
+/// idea as [`record_key`]; the restriction sets keep these, never addresses.
+pub fn restriction_key(scope: &str, norm_email: &str) -> String {
+    let secret = HASH_SECRET.get().map(Vec::as_slice).unwrap_or(b"");
+    format!(
+        "h:{}",
+        crate::crypto::hmac_sha256_hex(
+            secret,
+            format!(
+                "account-restriction:{scope}:{}",
+                crate::auth::normalize_email(norm_email)
+            )
+            .as_bytes()
+        )
+    )
+}
+
+/// Rewrites any plaintext ban rows as hashed ones. Idempotent. Returns how
+/// many rows were rewritten.
+pub fn hash_plaintext_rows(store: &DataStore) -> usize {
+    let conn = store.conn();
+    let Ok(mut stmt) = conn.prepare("SELECT email FROM blacklist WHERE email NOT LIKE 'h:%'")
+    else {
+        return 0;
+    };
+    let plain: Vec<String> = stmt
+        .query_map([], |r| r.get::<_, String>(0))
+        .map(|rows| rows.filter_map(Result::ok).collect())
+        .unwrap_or_default();
+    drop(stmt);
+    let mut changed = 0;
+    for email in plain {
+        let key = record_key(&email);
+        // A hashed row for the same account may already exist; keep it.
+        let moved = conn
+            .execute(
+                "UPDATE OR IGNORE blacklist SET email = ?1 WHERE email = ?2",
+                rusqlite::params![key, email],
+            )
+            .unwrap_or(0);
+        let _ = conn.execute("DELETE FROM blacklist WHERE email = ?1", [&email]);
+        changed += moved.max(1);
+    }
+    changed
+}
+
+/// Whether an unexpired ban exists for the address. Takes an open connection
+/// so callers already holding the store lock can use it.
+pub fn active_ban_exists(conn: &rusqlite::Connection, norm_email: &str) -> bool {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM blacklist WHERE email IN (?1, ?2) AND (expires_at IS NULL OR expires_at > ?3))",
+        rusqlite::params![record_key(norm_email), crate::auth::normalize_email(norm_email), now_millis()],
+        |r| r.get(0),
+    )
+    .unwrap_or(false)
+}
 
 /// Signed identity marker used only to deny access, never to authenticate.
 pub fn signed_ban_marker(email: &str, secret: &[u8]) -> String {
@@ -84,7 +177,7 @@ pub fn blacklist_insert_until(
     }
     tx.execute(
         "INSERT INTO blacklist (email, reason, banned_at, banned_by, expires_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-        rusqlite::params![crate::auth::normalize_email(email), reason, now_millis(), banned_by, expires_at],
+        rusqlite::params![record_key(email), reason, now_millis(), banned_by, expires_at],
     )?;
     crate::chat_cleanup::purge_transaction(&tx, email, now_millis(), snapshots)?;
     tx.commit()
@@ -124,7 +217,11 @@ fn matching_keys(conn: &rusqlite::Connection, email: &str) -> rusqlite::Result<V
     let mut stmt = conn.prepare("SELECT email FROM blacklist")?;
     let keys = stmt.query_map([], |r| r.get::<_, String>(0))?;
     keys.filter_map(|key| match key {
-        Ok(key) if crate::auth::normalize_email(&key) == canonical => Some(Ok(key)),
+        Ok(key) if key == record_key(&canonical) => Some(Ok(key)),
+        // A plaintext row not yet rewritten by `hash_plaintext_rows`.
+        Ok(key) if !key.starts_with("h:") && crate::auth::normalize_email(&key) == canonical => {
+            Some(Ok(key))
+        }
         Ok(_) => None,
         Err(err) => Some(Err(err)),
     })
@@ -166,7 +263,8 @@ pub fn blacklist_get(store: &DataStore, norm_email: &str, raw_email: &str) -> Op
         )
         .ok()
     };
-    lookup(norm_email)
+    lookup(&record_key(norm_email))
+        .or_else(|| lookup(norm_email))
         .or_else(|| lookup(raw_email))
         .or_else(|| {
             matching_keys(&conn, norm_email)
@@ -186,8 +284,16 @@ pub fn blacklist_all(store: &DataStore) -> Vec<Value> {
         Err(_) => return Vec::new(),
     };
     let rows = stmt.query_map([now_millis()], |r| {
+        let key: String = r.get(0)?;
+        // Hashed rows carry no address; `id` tells rows apart.
+        let email = if key.starts_with("h:") {
+            String::new()
+        } else {
+            key.clone()
+        };
         Ok(json!({
-            "email": r.get::<_, String>(0)?,
+            "email": email,
+            "id": key,
             "reason": r.get::<_, String>(1)?,
             "bannedAt": r.get::<_, i64>(2)?,
             "by": r.get::<_, String>(3)?,
@@ -554,5 +660,43 @@ mod tests {
         assert!(banned_ips_get(&store, b"other-secret", "1.2.3.4").is_none());
         assert!(banned_ips_remove(&store, SECRET, "1.2.3.4"));
         assert!(banned_ips_get(&store, SECRET, "1.2.3.4").is_none());
+    }
+
+    #[test]
+    fn bans_are_stored_hashed_and_matched_by_typing_the_email() {
+        let store = temp_store("hashed-bans");
+        blacklist_insert(&store, "Some.Body+x@Example.com", "spam", "admin").unwrap();
+        let stored: String = store
+            .conn()
+            .query_row("SELECT email FROM blacklist", [], |r| r.get(0))
+            .unwrap();
+        assert!(stored.starts_with("h:") && !stored.contains("example"));
+        assert!(blacklist_get(&store, "somebody@example.com", "somebody@example.com").is_some());
+        assert!(blacklist_all(&store)[0]["email"] == "");
+        // Staff restore by typing the address; a different address matches nothing.
+        assert!(!blacklist_remove(&store, "other@example.com", "").unwrap());
+        assert!(blacklist_remove(&store, "somebody@example.com", "").unwrap());
+        assert!(blacklist_get(&store, "somebody@example.com", "somebody@example.com").is_none());
+    }
+
+    #[test]
+    fn plaintext_rows_are_rewritten_as_hashes() {
+        let store = temp_store("rewrite-bans");
+        store
+            .conn()
+            .execute(
+                "INSERT INTO blacklist (email, reason, banned_at) VALUES ('old@example.com', 'r', 1)",
+                [],
+            )
+            .unwrap();
+        assert!(blacklist_get(&store, "old@example.com", "old@example.com").is_some());
+        assert_eq!(hash_plaintext_rows(&store), 1);
+        assert_eq!(hash_plaintext_rows(&store), 0);
+        let stored: String = store
+            .conn()
+            .query_row("SELECT email FROM blacklist", [], |r| r.get(0))
+            .unwrap();
+        assert!(stored.starts_with("h:"));
+        assert!(blacklist_get(&store, "old@example.com", "old@example.com").is_some());
     }
 }

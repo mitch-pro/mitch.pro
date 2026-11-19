@@ -15,6 +15,8 @@
 
 pub(crate) mod account;
 mod cosmetics;
+mod delete_account;
+mod export;
 pub(crate) mod notifications;
 pub(crate) mod security;
 
@@ -41,6 +43,12 @@ pub async fn handle(
     }
     if let Some(resp) = security::handle(state, method, path, headers, body, body_bytes) {
         return Some(resp);
+    }
+    if path == "/api/download-information" && *method == Method::GET {
+        return Some(export::download_information(state, headers));
+    }
+    if path == "/api/delete-account" && *method == Method::POST {
+        return Some(delete_account::delete_account(state, headers, body_bytes).await);
     }
     account::handle(state, method, path, headers, body_bytes).await
 }

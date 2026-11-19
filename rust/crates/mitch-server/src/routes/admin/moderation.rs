@@ -91,18 +91,15 @@ pub fn handle(
         let mut seen = std::collections::HashSet::new();
         let bans: Vec<Value> = mitch_lib::bans::blacklist_all(&state.store)
             .into_iter()
-            .filter(|ban| {
-                seen.insert(mitch_lib::auth::normalize_email(
-                    ban["email"].as_str().unwrap_or(""),
-                ))
-            })
+            .filter(|ban| seen.insert(ban["id"].as_str().unwrap_or("").to_string()))
             .collect();
-        let vm_bans = state.vm_bans.read().unwrap_or_else(|e| e.into_inner());
-        let byo_bans = state.byo_os_bans.read().unwrap_or_else(|e| e.into_inner());
-        let restrictions:Vec<Value>=vm_bans.union(&byo_bans).map(|email|json!({"email":email,"vm":vm_bans.contains(email),"byoOs":byo_bans.contains(email)})).collect();
+        let restriction_counts = json!({
+            "vm": state.vm_bans.read().unwrap_or_else(|e| e.into_inner()).len(),
+            "byoOs": state.byo_os_bans.read().unwrap_or_else(|e| e.into_inner()).len(),
+        });
         return Some(json_response(
             200,
-            json!({ "bans": bans, "restrictions":restrictions, "supportsTimedBans":true,"supportsChatCleanup":true, "chatCleanup":mitch_lib::chat_cleanup::statuses(&state.store) }),
+            json!({ "bans": bans, "restrictionCounts":restriction_counts, "supportsTimedBans":true,"supportsChatCleanup":true, "chatCleanup":mitch_lib::chat_cleanup::statuses(&state.store) }),
         ));
     }
     // GET /api/admin/matrix/outside-accounts — outside (non-student) accounts
@@ -451,10 +448,10 @@ pub fn handle(
             state,
             body,
             ctx,
-            headers,
             &state.vm_bans,
             "data/vm_bans.json",
             "vm_ban",
+            "vm",
         ));
     }
 
@@ -468,10 +465,10 @@ pub fn handle(
             state,
             body,
             ctx,
-            headers,
             &state.byo_os_bans,
             "data/byo_os_bans.json",
             "byo_os_ban",
+            "byo_os",
         ));
     }
 
@@ -1628,10 +1625,10 @@ fn toggle_ban_set(
     state: &Arc<AppState>,
     body: &Value,
     ctx: &AdminCtx,
-    _headers: &HeaderMap,
     set: &std::sync::RwLock<std::collections::HashSet<String>>,
     file: &str,
     action_name: &str,
+    scope: &str,
 ) -> Response {
     if !ctx.is_admin(state) {
         return forbidden();
@@ -1655,6 +1652,7 @@ fn toggle_ban_set(
     if body.get("banned").is_some_and(|v| !v.is_boolean()) {
         return json_response(400, json!({"error":"banned must be true or false."}));
     }
+    let key = mitch_lib::bans::restriction_key(scope, &target);
     let active;
     {
         let mut bans = set.write().unwrap_or_else(|e| e.into_inner());
@@ -1662,11 +1660,11 @@ fn toggle_ban_set(
         active = body
             .get("banned")
             .and_then(Value::as_bool)
-            .unwrap_or_else(|| !bans.contains(&target));
+            .unwrap_or_else(|| !bans.contains(&key));
         if active {
-            updated.insert(target.clone());
+            updated.insert(key.clone());
         } else {
-            updated.remove(&target);
+            updated.remove(&key);
         }
         let values: Vec<_> = updated.iter().cloned().collect();
         if state
@@ -2372,16 +2370,8 @@ pub async fn lookup_profile(state: &Arc<AppState>, search: &str) -> Response {
         .read()
         .unwrap_or_else(|e| e.into_inner())
         .contains(&norm_email);
-    let vm_banned = state
-        .vm_bans
-        .read()
-        .unwrap_or_else(|e| e.into_inner())
-        .contains(&norm_email);
-    let byo_os_banned = state
-        .byo_os_bans
-        .read()
-        .unwrap_or_else(|e| e.into_inner())
-        .contains(&norm_email);
+    let vm_banned = state.is_vm_restricted(&norm_email);
+    let byo_os_banned = state.is_byo_os_restricted(&norm_email);
 
     let settings_file = state.cfg.data_dir.join("matrix_room_settings.json");
     let settings_all = state.store.read_document(&settings_file, json!({}));

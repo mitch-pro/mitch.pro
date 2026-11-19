@@ -102,6 +102,8 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/site-status.js",
     "/ban-guard.js",
     "/mitch-coins.js",
+    "/premium-email-prompt.js",
+    "/cosmetics.css",
     "/mitch-coins.css",
     "/mitchcoin.png",
     "/mitchcoin.webp",
@@ -1183,6 +1185,11 @@ async fn handle_resolved(
             );
             return resp;
         }
+        if let Some(resp) =
+            crate::routes::premium_email::handle(&state, &method, &path, headers, body_bytes)
+        {
+            return resp;
+        }
         // me/* group (Step 9). Runs after misc so /api/me/coins (ported in
         // the merge adaptation) keeps its existing match.
         if let Some(resp) =
@@ -1613,13 +1620,14 @@ async fn handle_resolved(
     // Staff tool pages under /staff-dashboard/<tool>/ need a staff session. The
     // dashboard page itself (/staff-dashboard/) checks the viewer's role on its
     // own so testers can reach it too.
-    const STAFF_TOOLS: [&str; 15] = [
+    const STAFF_TOOLS: [&str; 16] = [
         "/staff-dashboard/moderation",
         "/staff-dashboard/matrix",
         "/staff-dashboard/people",
         "/staff-dashboard/economy",
         "/staff-dashboard/shop",
         "/staff-dashboard/vm-requests",
+        "/staff-dashboard/premium-email",
         "/staff-dashboard/logs",
         "/staff-dashboard/site",
         "/staff-dashboard/bans",
@@ -1653,6 +1661,7 @@ async fn handle_resolved(
             "/staff-dashboard/updates",
             "/staff-dashboard/shop",
             "/staff-dashboard/vm-requests",
+            "/staff-dashboard/premium-email",
             "/staff-dashboard/logs",
             "/staff-dashboard/site",
         ]

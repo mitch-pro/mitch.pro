@@ -80,6 +80,14 @@
     root.style.setProperty('--t-ac-ink', luminance > 0.179 ? '#000000' : '#ffffff');
   }
 
+  // Accent colors of the site themes sold in the shop. The equipped theme is
+  // remembered in the shop_theme cookie (set by the shop and the chat client);
+  // a custom accent chosen in Preferences always wins.
+  var SHOP_THEMES = {
+    focus_theme: '#5fa8a0', arcade_theme: '#ff9f1a', midnight_theme: '#8b7cf6',
+    ocean_theme: '#2f9fe0', forest_theme: '#3fa65f', sunset_theme: '#f26b3a'
+  };
+
   function applyContrast(level) {
     var root = document.documentElement;
     if (level === 'high') {
@@ -200,7 +208,7 @@
   function apply() {
     applyHoliday();
     applyMode(readCookie('theme'));
-    applyAccent(readCookie('accent'));
+    applyAccent(readCookie('accent') || SHOP_THEMES[readCookie('shop_theme')] || '');
     applyContrast(readCookie('contrast'));
     applyLayout();
     // Repaint the effect once the light/dark mode is final.

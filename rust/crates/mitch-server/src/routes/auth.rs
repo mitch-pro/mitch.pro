@@ -360,7 +360,7 @@ async fn signup(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -
     if mitch_lib::bans::blacklist_get(&state.store, &norm_email, &norm_email).is_some() {
         return json_resp(
             400,
-            json!({ "success": false, "message": "Access denied." }),
+            json!({ "success": false, "message": "This account is banned, so it can't sign up." }),
         );
     }
 
@@ -606,7 +606,14 @@ async fn verify_signup(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &
     if !ref_code.is_empty() {
         let found_ref_norm = mitch_lib::invites::invite_code_find_owner(&state.store, &ref_code);
         if let Some(ref_norm) = found_ref_norm {
-            if ref_norm != norm_email {
+            // A re-registered address that was deleted before can't earn the
+            // bonus again (delete + sign up again would be a coin loop).
+            let reregistered = mitch_lib::account_deletion::was_deleted(
+                &state.store,
+                &state.id_secret,
+                &norm_email,
+            );
+            if ref_norm != norm_email && !reregistered {
                 let newly_claimed = mitch_lib::invites::invite_claim_insert_if_new(
                     &state.store,
                     &norm_email,

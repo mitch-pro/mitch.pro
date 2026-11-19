@@ -404,6 +404,12 @@
     if (/^\/(?:staff-dashboard|moderator)(?:\/|$)/.test(location.pathname) && !document.querySelector('script[src^="/staff-dashboard/account-search.js"]')) {
       var accountSearch = document.createElement('script'); accountSearch.src='/staff-dashboard/account-search.js?v=1'; document.head.appendChild(accountSearch);
     }
+    if (!IS_RJUHSD && !/^\/(?:premium-email|enroll|staff-dashboard|moderator)(?:\/|$)/.test(location.pathname) && !document.querySelector('script[src^="/premium-email-prompt.js"]')) {
+      var premiumPrompt = document.createElement('script');
+      premiumPrompt.src = '/premium-email-prompt.js?v=1';
+      premiumPrompt.defer = true;
+      document.head.appendChild(premiumPrompt);
+    }
     if (!IS_RJUHSD && !document.querySelector('script[src^="/mitch-coins.js"]')) {
       var coins = document.createElement('script');
       coins.src = '/mitch-coins.js?v=5';

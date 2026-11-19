@@ -27,7 +27,7 @@ pub fn shop_type_config(cost_type: &str) -> Option<(&'static str, &'static str)>
 /// `DEFAULT_SHOP_CATALOG` (server.js:7209-7255), verbatim.
 pub fn default_shop_catalog() -> Value {
     json!([
-      { "id": "premium", "name": "Premium", "section": "Premium", "type": "premium", "cost": 5000, "desc": "Unlock Premium Chat, 2X typing/logic coin rewards, 2X Clicker/Riches offline gains, larger canvas brushes, exclusive profile frames/badges, and the epic chance to have an arcade game named after you!" },
+      { "id": "premium", "name": "Premium", "section": "Premium", "type": "premium", "cost": 5000, "desc": "Unlock Premium Chat, premium-only profile frames, badges and shop items, and a free @student.mitch.pro email address." },
       { "id": "neon_purple", "name": "Neon Purple Name", "section": "Name Colors", "type": "cosmetic", "costType": "name_color", "cost": 500, "desc": "A bright purple username for chat, profiles, and leaderboards." },
       { "id": "electric_blue", "name": "Electric Blue Name", "section": "Name Colors", "type": "cosmetic", "costType": "name_color", "cost": 500, "desc": "A sharp electric-blue username style." },
       { "id": "mint_flash", "name": "Mint Flash Name", "section": "Name Colors", "type": "cosmetic", "costType": "name_color", "cost": 550, "desc": "A clean mint username with a fresh glow." },
@@ -59,6 +59,26 @@ pub fn default_shop_catalog() -> Value {
       { "id": "canvas_lock_pass", "name": "Canvas Lock Pass", "section": "Passes", "type": "cosmetic", "costType": "canvas_tool", "cost": 1200, "desc": "Unlocks a saved canvas-tool preference toggle." },
       { "id": "quick_access_pass", "name": "Quick Access Pass", "section": "Passes", "type": "cosmetic", "costType": "canvas_tool", "cost": 800, "desc": "Unlocks a quick-access preference toggle." },
       { "id": "daily_bonus_plus", "name": "Daily Bonus Plus", "section": "Passes", "type": "cosmetic", "costType": "canvas_tool", "cost": 1500, "premiumOnly": true, "desc": "Unlocks a premium daily-bonus preference toggle." },
+      { "id": "sky_cyan", "name": "Sky Cyan Name", "section": "Name Colors", "type": "cosmetic", "costType": "name_color", "cost": 550, "desc": "A light cyan username." },
+      { "id": "sunset_orange", "name": "Sunset Orange Name", "section": "Name Colors", "type": "cosmetic", "costType": "name_color", "cost": 650, "desc": "A warm orange username." },
+      { "id": "lime_pop", "name": "Lime Pop Name", "section": "Name Colors", "type": "cosmetic", "costType": "name_color", "cost": 550, "desc": "A bright lime-green username." },
+      { "id": "lavender_mist", "name": "Lavender Mist Name", "section": "Name Colors", "type": "cosmetic", "costType": "name_color", "cost": 550, "desc": "A soft lavender username." },
+      { "id": "aurora_name", "name": "Aurora Name", "section": "Name Colors", "type": "cosmetic", "costType": "name_color", "cost": 1800, "premiumOnly": true, "desc": "A username that shifts between green, blue and violet." },
+      { "id": "gamer_badge", "name": "Gamer Badge", "section": "Badges", "type": "cosmetic", "costType": "chat_badge", "cost": 900, "desc": "A controller badge for people who live in the games library." },
+      { "id": "music_badge", "name": "Music Badge", "section": "Badges", "type": "cosmetic", "costType": "chat_badge", "cost": 900, "desc": "A music note beside your name." },
+      { "id": "rocket_badge", "name": "Rocket Badge", "section": "Badges", "type": "cosmetic", "costType": "chat_badge", "cost": 1000, "desc": "A rocket badge." },
+      { "id": "flame_badge", "name": "Flame Badge", "section": "Badges", "type": "cosmetic", "costType": "chat_badge", "cost": 1100, "desc": "A flame badge." },
+      { "id": "heart_badge", "name": "Heart Badge", "section": "Badges", "type": "cosmetic", "costType": "chat_badge", "cost": 800, "desc": "A small heart beside your name." },
+      { "id": "chat_glitch", "name": "Glitch Chat Style", "section": "Chat Effects", "type": "cosmetic", "costType": "chat_effect", "cost": 1100, "desc": "A flickering, glitched username in chat." },
+      { "id": "chat_flame", "name": "Flame Chat Style", "section": "Chat Effects", "type": "cosmetic", "costType": "chat_effect", "cost": 1200, "desc": "A warm flickering glow behind your chat name." },
+      { "id": "chat_frost", "name": "Frost Chat Style", "section": "Chat Effects", "type": "cosmetic", "costType": "chat_effect", "cost": 1000, "desc": "A cold, icy glow on your chat name." },
+      { "id": "profile_aurora", "name": "Profile Aurora", "section": "Profile Effects", "type": "cosmetic", "costType": "profile_effect", "cost": 1300, "desc": "A soft aurora gradient behind your profile." },
+      { "id": "profile_hearts", "name": "Profile Hearts", "section": "Profile Effects", "type": "cosmetic", "costType": "profile_effect", "cost": 1000, "desc": "Small hearts drifting across your profile." },
+      { "id": "profile_dots", "name": "Profile Dots", "section": "Profile Effects", "type": "cosmetic", "costType": "profile_effect", "cost": 900, "desc": "A subtle dotted pattern behind your profile." },
+      { "id": "profile_sunset_frame", "name": "Sunset Profile Frame", "section": "Profile Effects", "type": "cosmetic", "costType": "profile_effect", "cost": 1800, "premiumOnly": true, "desc": "A premium orange-to-pink frame for your profile." },
+      { "id": "ocean_theme", "name": "Ocean Theme", "section": "Site Themes", "type": "cosmetic", "costType": "site_theme", "cost": 900, "desc": "A blue site accent." },
+      { "id": "forest_theme", "name": "Forest Theme", "section": "Site Themes", "type": "cosmetic", "costType": "site_theme", "cost": 900, "desc": "A green site accent." },
+      { "id": "sunset_theme", "name": "Sunset Theme", "section": "Site Themes", "type": "cosmetic", "costType": "site_theme", "cost": 900, "desc": "An orange site accent." },
       { "id": "streak_freeze", "name": "Streak Freeze", "section": "Utility", "type": "utility", "costType": "streak_freeze", "cost": 150, "desc": "Automatically saves your Daily Login streak if you miss a day!" }
     ])
 }
@@ -82,13 +102,40 @@ const RETIRED_CASINO_BUFF_COST_TYPES: &[&str] = &[
     "infinite_luck_charm",
 ];
 
+/// Default items added after the first release. `load_shop_catalog` appends
+/// any of these that a saved `shop_catalog.json` override does not list, so
+/// they reach sites that already have an override. Staff can still edit their
+/// price or text in the shop editor; once saved they are part of the override.
+const ADDED_DEFAULT_IDS: &[&str] = &[
+    "sky_cyan",
+    "sunset_orange",
+    "lime_pop",
+    "lavender_mist",
+    "aurora_name",
+    "gamer_badge",
+    "music_badge",
+    "rocket_badge",
+    "flame_badge",
+    "heart_badge",
+    "chat_glitch",
+    "chat_flame",
+    "chat_frost",
+    "profile_aurora",
+    "profile_hearts",
+    "profile_dots",
+    "profile_sunset_frame",
+    "ocean_theme",
+    "forest_theme",
+    "sunset_theme",
+];
+
 /// The boot-time `SHOP_CATALOG`: shop_catalog.json override (minus `og_badge`)
 /// when non-empty, else the default list. server.js:7256-7267.
 pub fn load_shop_catalog(store: &DataStore, data_dir: &Path) -> Vec<Value> {
     let loaded = store.read_document(&data_dir.join("shop_catalog.json"), Value::Null);
     if let Some(arr) = loaded.as_array() {
         if !arr.is_empty() {
-            return arr
+            let mut items: Vec<Value> = arr
                 .iter()
                 .filter(|item| {
                     item.get("id").and_then(|v| v.as_str()) != Some("og_badge")
@@ -102,6 +149,20 @@ pub fn load_shop_catalog(store: &DataStore, data_dir: &Path) -> Vec<Value> {
                 })
                 .cloned()
                 .collect();
+            // A saved override replaces the defaults wholesale, so items added to
+            // the defaults later (`ADDED_DEFAULT_IDS`) would never reach a site
+            // that already has an override. Append the missing ones.
+            for item in default_shop_catalog_vec() {
+                let id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                if ADDED_DEFAULT_IDS.contains(&id)
+                    && !items
+                        .iter()
+                        .any(|i| i.get("id").and_then(|v| v.as_str()) == Some(id))
+                {
+                    items.push(item);
+                }
+            }
+            return items;
         }
     }
     default_shop_catalog()
@@ -527,27 +588,51 @@ pub fn sanitize_cosmetics_for_email(store: &DataStore, email: &str, entry: &Valu
     user_cosm
 }
 
-/// `publicActiveColor` (server.js:6763-6767).
+/// `publicActiveColor` (server.js:6763-6767): the equipped name color if it is
+/// a real name color in the catalog (admin-only colors need an admin).
 pub fn public_active_color(store: &DataStore, email: &str, color: &Value) -> Option<String> {
     let active = color.as_str().unwrap_or("").to_string();
     if active == "rainbow_name" && !auth::is_admin_email(store, email) {
         return None;
     }
-    if !matches!(
-        active.as_str(),
-        "neon_purple"
-            | "electric_blue"
-            | "mint_flash"
-            | "rose_spark"
-            | "ember_red"
-            | "void_white"
-            | "gold_glow"
-            | "rainbow_name"
-    ) {
-        None
-    } else {
-        Some(active)
-    }
+    let is_name_color = default_shop_catalog_vec().iter().any(|item| {
+        item.get("id").and_then(|v| v.as_str()) == Some(active.as_str())
+            && item.get("costType").and_then(|v| v.as_str()) == Some("name_color")
+    });
+    is_name_color.then_some(active)
+}
+
+/// What other people see of one account in chat: the equipped name color,
+/// badge, chat effect and profile effect. A value is included only when the
+/// account owns it, so an item removed from the account (or never owned) never
+/// shows. Empty strings mean nothing equipped.
+pub fn public_loadout(store: &DataStore, norm_email: &str) -> Value {
+    let cosmetics = sanitize_cosmetics_for_email(
+        store,
+        norm_email,
+        &cosmetics_get(store, norm_email).unwrap_or_else(default_cosmetics),
+    );
+    let pick = |active_key: &str, bucket: &str| -> String {
+        let active = cosmetics
+            .get(active_key)
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let owned = cosmetics
+            .get(bucket)
+            .and_then(|v| v.as_array())
+            .is_some_and(|list| list.iter().any(|v| v.as_str() == Some(active)));
+        if owned {
+            active.to_string()
+        } else {
+            String::new()
+        }
+    };
+    json!({
+        "color": pick("activeColor", "colors"),
+        "badge": pick("activeBadge", "badges"),
+        "chatEffect": pick("activeChatEffect", "chatEffects"),
+        "profileEffect": pick("activeProfileEffect", "profileEffects"),
+    })
 }
 
 /// `buildInventory` (server.js:7448-7489): sanitized cosmetics + AI unlocks +
@@ -758,8 +843,9 @@ mod tests {
             )
             .unwrap();
         let active = load_shop_catalog(&store, &data);
-        assert_eq!(active.len(), 1);
+        assert_eq!(active.len(), 1 + ADDED_DEFAULT_IDS.len());
         assert_eq!(active[0]["id"], "neon_purple");
+        assert!(active.iter().any(|i| i["id"] == "sky_cyan"));
         assert_eq!(
             public_active_color(&store, "member@example.com", &json!("neon_purple")),
             Some("neon_purple".into())
@@ -803,5 +889,33 @@ mod tests {
         assert_eq!(out.get("colors"), Some(&json!(["a"])));
         assert_eq!(out.get("activeColor"), Some(&json!("")));
         assert_eq!(out.get("badges"), Some(&json!([])));
+    }
+
+    #[test]
+    fn loadout_only_shows_equipped_items_the_account_owns() {
+        let base = std::env::temp_dir().join(format!(
+            "mitch-lib-loadout-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(base.join("data")).unwrap();
+        let store = DataStore::open(&base, &base.join("data")).unwrap();
+        cosmetics_set(
+            &store,
+            "a@example.com",
+            &json!({
+                "colors": ["sky_cyan"], "activeColor": "sky_cyan",
+                "badges": [], "activeBadge": "gamer_badge",
+                "chatEffects": ["chat_frost"], "activeChatEffect": "chat_frost",
+            }),
+        );
+        let loadout = public_loadout(&store, "a@example.com");
+        assert_eq!(loadout["color"], "sky_cyan");
+        assert_eq!(loadout["badge"], "", "equipped but not owned");
+        assert_eq!(loadout["chatEffect"], "chat_frost");
+        assert_eq!(public_loadout(&store, "nobody@example.com")["color"], "");
+        std::fs::remove_dir_all(base).ok();
     }
 }

@@ -93,6 +93,7 @@ every endpoint still enforces its own role server-side.
 | Economy (`/economy/`) | mod (requests) / admin | wealth audit, give/set/burn/reset coins, multiplier, casino switch, premium; owner: reset all coins |
 | Shop (`/shop/`) | admin | catalog overrides and custom cosmetics |
 | Computer requests (`/vm-requests/`) | admin | VM requests (approve, deny, delete, restore, purge); link to `/staff-dashboard/vms/` |
+| Premium email (`/premium-email/`) | admin | requests for free `@student.mitch.pro` addresses: approve or deny (see [premium-email.md](premium-email.md)) |
 | Logs (`/logs/`) | admin | server load; searchable admin activity (with undo) and coin log; sent notifications, bans and anti-cheat flags; developer: application and Docker logs |
 | Site (`/site/`) | admin | public maintenance switch, domains and mirrors, reserved usernames, tester mode, admin passphrases |
 

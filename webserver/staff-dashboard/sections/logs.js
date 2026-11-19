@@ -169,7 +169,7 @@
 
     root.appendChild(ui.heading('Banned accounts'));
     root.appendChild(ui.table(['Banned', 'Account', 'By', 'Reason'], (data.bannedAccounts || []).map(function (r) {
-      return [SD.time(r.bannedAt), r.email, r.by, r.reason];
+      return [SD.time(r.bannedAt), r.email || 'Hidden account', r.by, r.reason];
     }), 'No banned accounts.'));
 
     root.appendChild(ui.heading('Anti-cheat'));

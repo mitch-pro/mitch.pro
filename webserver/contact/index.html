@@ -274,6 +274,7 @@
       <span style="font-size:2rem;color:#10b981;display:block;margin-bottom:0.5rem;">✓</span>
       <h3>Message Sent</h3>
       <p style="color:var(--t-fg2);font-size:0.9rem;margin-top:0.35rem;">Thanks for reaching out! Our team has received your message and will respond via email as soon as possible.</p>
+      <p style="margin-top:0.75rem;"><a id="ticket-link" href="#" style="display:none;">Follow this conversation</a></p>
     </div>
   </section>
 </main>
@@ -294,17 +295,23 @@ document.getElementById('contact-form').addEventListener('submit', async (e) => 
     recaptcha_token = await window.getCaptchaToken('contact_form') || '';
   }
 
+  const dept = document.getElementById('dept');
+  const email = document.getElementById('email').value.trim();
+  const name = document.getElementById('name').value.trim();
+  const subject = document.getElementById('subject').value.trim();
+  // Messages go into the support queue, the same inbox as /support/.
   const payload = {
-    department: document.getElementById('dept').value,
-    name: document.getElementById('name').value.trim(),
-    email: document.getElementById('email').value.trim(),
-    subject: document.getElementById('subject').value.trim(),
-    message: document.getElementById('message').value.trim(),
+    category: 'other',
+    account: email,
+    contactEmail: email,
+    subject: '[' + dept.options[dept.selectedIndex].text + '] ' + (subject || name),
+    message: 'From: ' + name + '\n\n' + document.getElementById('message').value.trim(),
+    website: '',
     recaptcha_token,
   };
 
   try {
-    const res = await fetch('/api/contact', {
+    const res = await fetch('/api/support/open', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -313,6 +320,11 @@ document.getElementById('contact-form').addEventListener('submit', async (e) => 
     if (!res.ok) throw new Error(data.error || 'Failed to send message.');
     document.getElementById('contact-form').style.display = 'none';
     document.getElementById('success-box').style.display = 'block';
+    if (data.id && data.token) {
+      const link = document.getElementById('ticket-link');
+      link.href = '/support/ticket/#' + data.id + '.' + data.token;
+      link.style.display = 'inline';
+    }
   } catch (err) {
     msg.className = 'err';
     msg.textContent = err.message;

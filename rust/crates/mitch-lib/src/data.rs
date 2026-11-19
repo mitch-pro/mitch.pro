@@ -152,11 +152,36 @@ impl DataStore {
                         value TEXT NOT NULL,
                         updated_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS premium_email_requests (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        email TEXT NOT NULL,
+                        address TEXT NOT NULL,
+                        full_name TEXT NOT NULL,
+                        reasons TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'pending',
+                        created_at INTEGER NOT NULL,
+                        decided_by TEXT NOT NULL DEFAULT '',
+                        decided_at INTEGER,
+                        note TEXT NOT NULL DEFAULT ''
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_premium_email_requests_email
+                        ON premium_email_requests(email);
+                    CREATE INDEX IF NOT EXISTS idx_premium_email_requests_address
+                        ON premium_email_requests(address);
+                    CREATE TABLE IF NOT EXISTS premium_email_prompt_dismissed (
+                        email TEXT PRIMARY KEY,
+                        dismissed_at INTEGER NOT NULL
+                    );
+                    CREATE TABLE IF NOT EXISTS deleted_account_marks (
+                        email_hash TEXT PRIMARY KEY,
+                        deleted_at INTEGER NOT NULL
+                    );
                     CREATE TABLE IF NOT EXISTS account_chat_removals (
                         email TEXT PRIMARY KEY,
                         cutoff INTEGER NOT NULL,
                         matrix_done INTEGER NOT NULL DEFAULT 0,
-                        last_error TEXT NOT NULL DEFAULT ''
+                        last_error TEXT NOT NULL DEFAULT '',
+                        erase INTEGER NOT NULL DEFAULT 0
                     );
                     CREATE TABLE IF NOT EXISTS account_chat_removal_ids (
                         email TEXT NOT NULL,
@@ -775,6 +800,18 @@ impl DataStore {
             .any(|name| name == "expires_at");
         if !has_ban_expiry {
             conn.execute("ALTER TABLE blacklist ADD COLUMN expires_at INTEGER", [])?;
+        }
+        let has_erase_flag = conn
+            .prepare("PRAGMA table_info(account_chat_removals)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+            .iter()
+            .any(|name| name == "erase");
+        if !has_erase_flag {
+            conn.execute(
+                "ALTER TABLE account_chat_removals ADD COLUMN erase INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
         }
         let has_vm_keep_alive = conn
             .prepare("PRAGMA table_info(virtual_machines)")?
