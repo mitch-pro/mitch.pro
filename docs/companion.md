@@ -1,8 +1,7 @@
 # Desktop companion characters
 
 A small anime-style character you can chat with (DeepSeek-backed) and
-drag around the screen, visible site-wide once you turn it on. New
-subsystem — no `server.js` equivalent.
+drag around the screen, visible site-wide once you turn it on.
 
 ## Scope
 

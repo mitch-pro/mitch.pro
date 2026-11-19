@@ -4,13 +4,13 @@ The customer entry point is `/vms/`; `/vms/desktop/?id=<application-record-id>` 
 
 ## Architecture and data
 
-The portal extends the existing Bun server, static HTML/CSS/JavaScript frontend, and website sessions. It uses the bundled noVNC client. There is no additional authentication service, ORM, frontend framework, or separately exposed console server.
+The portal is built directly into the server, static HTML/CSS/JavaScript frontend, and website sessions. It uses the bundled noVNC client. There is no additional authentication service, ORM, frontend framework, or separately exposed console server.
 
-The Rust server (`mitch-server`'s `proxmox_desktop.rs` and `mitch-lib`'s `vm_security.rs`) owns REST calls, guest-agent status, console sessions, provisioning, and ownership/session policy. The SQL data layer (`mitch-lib`'s `vm.rs`) creates additive `virtual_machines` and `vm_audit_logs` tables in the existing `data/mitchpro.db` SQLite database. Existing account and customization data remain in the same datastore. Approved legacy VM assignments migrate on startup; repeated starts do not create duplicate VM rows.
+`mitch-server` (`proxmox_desktop.rs`) and `mitch-lib` (`vm_security.rs`) own REST calls, guest-agent status, console sessions, provisioning, and ownership/session policy. The SQL data layer (`mitch-lib`'s `vm.rs`) maintains the `virtual_machines` and `vm_audit_logs` tables in `data/mitchpro.db` alongside account and customization data.
 
 VM operations resolve the application record first, then authorize the signed-in owner or administrator. Proxmox node, numeric VM ID, host, port, and upstream WebSocket URL come only from trusted server state. The normal-user API omits hypervisor connection details.
 
-An authenticated console request obtains a short-lived Proxmox VNC ticket and creates a single-use, 75-second application connection handle. The browser connects to the website's `/api/vm/desktop/ws` endpoint; Bun connects to the Proxmox `vncwebsocket` endpoint using its server-side API token. The temporary VNC password needed by the RFB protocol may be delivered to the authenticated noVNC client; it is not an API token, not a persistent login credential, and must never be cached or logged. Application restart discards pending connection handles; reconnect creates a fresh one.
+An authenticated console request obtains a short-lived Proxmox VNC ticket and creates a single-use, 75-second application connection handle. The browser connects to `/api/vm/desktop/ws`; the server connects to the Proxmox `vncwebsocket` endpoint using its server-side API token. The temporary VNC password needed by the RFB protocol may be delivered to the authenticated noVNC client; it is not an API token, not a persistent login credential, and must never be cached or logged. Application restart discards pending connection handles; reconnect creates a fresh one.
 
 Back up the SQLite database using SQLite's backup mechanism or a stopped application, together with the existing session key and data files. VM disks require separate Proxmox backups. Unassigning a computer removes customer access; it does not erase its guest disk or delete the VM.
 
