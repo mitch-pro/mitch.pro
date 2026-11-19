@@ -54,6 +54,24 @@ pub fn record_key(norm_email: &str) -> String {
     )
 }
 
+/// Stored form of a per-feature restriction ("vm" or "byo_os") for an address:
+/// `h:` + HMAC of the normalized address, domain-separated by feature. Same
+/// idea as [`record_key`]; the restriction sets keep these, never addresses.
+pub fn restriction_key(scope: &str, norm_email: &str) -> String {
+    let secret = HASH_SECRET.get().map(Vec::as_slice).unwrap_or(b"");
+    format!(
+        "h:{}",
+        crate::crypto::hmac_sha256_hex(
+            secret,
+            format!(
+                "account-restriction:{scope}:{}",
+                crate::auth::normalize_email(norm_email)
+            )
+            .as_bytes()
+        )
+    )
+}
+
 /// Rewrites any plaintext ban rows as hashed ones. Idempotent. Returns how
 /// many rows were rewritten.
 pub fn hash_plaintext_rows(store: &DataStore) -> usize {

@@ -72,7 +72,7 @@
           <label for="restriction-account">Account</label><input id="restriction-account" required placeholder="Username or email" autocomplete="off">
           <label for="restriction-scope">Feature</label><select id="restriction-scope"><option value="vm-ban">All virtual machines</option><option value="byo-os-ban">BYO-OS only</option></select>
           <label for="restriction-reason">Reason for the audit log</label><input id="restriction-reason" required maxlength="200">
-          <button type="submit">Restrict access</button><p id="restriction-status" class="bans-status" role="status"></p>
+          <button type="submit">Restrict access</button><button type="button" id="restriction-restore">Restore access</button><p id="restriction-status" class="bans-status" role="status"></p>
         </form>
         <div id="restriction-list"></div>
       </section>

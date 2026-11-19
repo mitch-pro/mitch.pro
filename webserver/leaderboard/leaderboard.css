@@ -151,3 +151,21 @@ html.theme-light .leaderboard-shell .player-name[data-color="mint_flash"] { colo
 @media (prefers-reduced-motion: reduce) {
   .leaderboard-shell *, .leaderboard-shell *::before, .leaderboard-shell *::after { animation: none !important; transition: none !important; }
 }
+
+/* Items added after the first release, same treatment as the ones above. */
+.leaderboard-shell .player-name[data-color="sky_cyan"] { color: #7dd3fc; text-shadow: 0 0 10px #7dd3fc73; }
+.leaderboard-shell .player-name[data-color="sunset_orange"] { color: #fdba74; text-shadow: 0 0 10px #fdba7473; }
+.leaderboard-shell .player-name[data-color="lime_pop"] { color: #bef264; text-shadow: 0 0 10px #bef26473; }
+.leaderboard-shell .player-name[data-color="lavender_mist"] { color: #d8b4fe; text-shadow: 0 0 10px #d8b4fe73; }
+html.theme-light .leaderboard-shell .player-name[data-color="sky_cyan"] { color: #0369a1; text-shadow: none; }
+html.theme-light .leaderboard-shell .player-name[data-color="sunset_orange"] { color: #b45309; text-shadow: none; }
+html.theme-light .leaderboard-shell .player-name[data-color="lime_pop"] { color: #4d7c0f; text-shadow: none; }
+html.theme-light .leaderboard-shell .player-name[data-color="lavender_mist"] { color: #7e22ce; text-shadow: none; }
+.leaderboard-shell .player-name[data-color="aurora_name"] { background: linear-gradient(90deg,#34d399,#38bdf8,#a78bfa,#34d399); background-size: 220% auto; background-clip: text; -webkit-background-clip: text; color: transparent; -webkit-text-fill-color: transparent; animation: board-rainbow 4s linear infinite; }
+html.theme-light .leaderboard-shell .player-name[data-color="aurora_name"] { background-image: linear-gradient(90deg,#047857,#0369a1,#6d28d9,#047857); }
+.leaderboard-shell .profile-surface[data-effect="profile_aurora"] { background-image: linear-gradient(120deg,#34d39922,#38bdf81c,#a78bfa22); }
+.leaderboard-shell .profile-surface[data-effect="profile_dots"] { background-image: radial-gradient(#ffffff1f 1px,transparent 1.5px); background-size: 14px 14px; }
+html.theme-light .leaderboard-shell .profile-surface[data-effect="profile_dots"] { background-image: radial-gradient(#00000020 1px,transparent 1.5px); }
+.leaderboard-shell .profile-surface[data-effect="profile_sunset_frame"] { outline: 1px solid #fb7185a0; outline-offset: -1px; box-shadow: inset 0 0 24px #fb923c1a; }
+.profile-surface[data-effect="profile_hearts"]::after { content: '♥  ·  ♥  ·  ♥'; position: absolute; right: 16px; top: 12px; color: #f472b6; opacity: .6; letter-spacing: 10px; font-size: 12px; pointer-events: none; }
+.theme-no-motion .leaderboard-shell .player-name[data-color="aurora_name"] { animation: none; }

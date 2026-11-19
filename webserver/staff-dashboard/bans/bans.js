@@ -75,7 +75,7 @@
     $('ban-form').querySelector('button').disabled = busy || !timedBansReady;
     if (!timedBansReady) status('ban-status','Ban management is updating. Use Refresh in a moment to continue.');
     else if (!wasReady) status('ban-status','');
-    renderRestrictions(data.restrictions || []);
+    renderRestrictions(data.restrictionCounts || {});
     render();
     $('passphrase-lock').hidden = true;
     $('bans-workspace').hidden = false;
@@ -95,19 +95,12 @@
       if (['invalid_passphrase','passphrase_not_configured'].includes(error.code)) {setup=error.code==='passphrase_not_configured';showLock();}
     } finally {setBusy(false);}
   }
-  function renderRestrictions(rows) {
+  function renderRestrictions(counts) {
     const list = $('restriction-list'); list.replaceChildren();
-    if (!rows.length) { const empty = document.createElement('p'); empty.className='bans-empty'; empty.textContent='No VM restrictions.'; list.append(empty); }
-    rows.sort((a,b)=>a.email.localeCompare(b.email)).forEach(row=>{
-      const item = document.createElement('article'); item.className='ban-entry';
-      const name = document.createElement('strong'); name.textContent=row.email; item.append(name);
-      for (const [key,scope,label] of [['vm','vm-ban','Restore VM access'],['byoOs','byo-os-ban','Restore BYO-OS']]) {
-        if (!row[key]) continue;
-        const button = document.createElement('button'); button.type='button';button.textContent=label;
-        button.addEventListener('click',()=>restriction(scope,row.email,false));item.append(button);
-      }
-      list.append(item);
-    });
+    const p = document.createElement('p'); p.className='bans-empty';
+    const vm = counts.vm || 0, byo = counts.byoOs || 0;
+    p.textContent = vm || byo ? vm+' with VM access restricted, '+byo+' with BYO-OS restricted.' : 'No VM restrictions.';
+    list.append(p);
   }
   async function restriction(scope,email,banned,reason='') {
     if (busy) return;
@@ -116,6 +109,7 @@
     catch (error) {status('restriction-status',error.message,true);}
     finally {setBusy(false);}
   }
+  $('restriction-restore').addEventListener('click',()=>{const account=$('restriction-account').value.trim();if(!account){status('restriction-status','Enter the account to restore.',true);return;}restriction($('restriction-scope').value,account,false);});
   $('restriction-form').addEventListener('submit',event=>{event.preventDefault();restriction($('restriction-scope').value,$('restriction-account').value.trim(),true,$('restriction-reason').value.trim());});
   $('ban-form').addEventListener('submit',event=>{
     event.preventDefault();

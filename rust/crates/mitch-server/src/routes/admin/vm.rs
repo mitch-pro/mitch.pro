@@ -272,19 +272,11 @@ pub async fn handle(
                     mitch_lib::auth::normalize_email(record["ownerEmail"].as_str().unwrap_or(""));
                 map.insert(
                     "ownerVmBanned".into(),
-                    json!(state
-                        .vm_bans
-                        .read()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .contains(&owner)),
+                    json!(state.is_vm_restricted(&owner)),
                 );
                 map.insert(
                     "ownerByoBanned".into(),
-                    json!(state
-                        .byo_os_bans
-                        .read()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .contains(&owner)),
+                    json!(state.is_byo_os_restricted(&owner)),
                 );
                 map.insert("activeUsers".into(), json!(active_users));
                 map.insert("isCurrentlyInUse".into(), json!(!active_users.is_empty()));

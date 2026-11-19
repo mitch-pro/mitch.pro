@@ -133,18 +133,10 @@ fn isos_manifest_file(state: &AppState) -> PathBuf {
 }
 
 fn is_vm_banned(state: &AppState, email: &str) -> bool {
-    state
-        .vm_bans
-        .read()
-        .unwrap_or_else(|e| e.into_inner())
-        .contains(email)
+    state.is_vm_restricted(email)
 }
 fn is_byo_os_banned(state: &AppState, email: &str) -> bool {
-    state
-        .byo_os_bans
-        .read()
-        .unwrap_or_else(|e| e.into_inner())
-        .contains(email)
+    state.is_byo_os_restricted(email)
 }
 
 fn safe_iso_filename(raw: &str) -> String {

@@ -63,3 +63,10 @@ shows reason, date and expiry but not whose ban it is; restore from the "Account
 email. Plaintext rows from before the change are rewritten at startup (`bans::hash_plaintext_rows`).
 Chat-cleanup tombstones for banned accounts (`account_chat_removals`, `moderated_media`) still carry
 the email until the chat server finishes.
+
+VM and BYO-OS restrictions (`data/vm_bans.json`, `data/byo_os_bans.json`) are hashed the same way:
+each entry is `bans::restriction_key(scope, address)`, with `vm` and `byo_os` as separate scopes so
+one hash can't be used for the other. `AppState::is_vm_restricted` / `is_byo_os_restricted` hash the
+address they are asked about. Plaintext files are rewritten on startup. The bans page shows counts
+only; to restore, type the account in the VM restrictions form and press Restore access. The admin
+activity log still records the address an admin typed when they changed a restriction.

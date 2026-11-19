@@ -11,7 +11,8 @@ shown in the Matrix chat client.
   `data-mx-color`, `data-mx-effect`, `data-mx-badge` (on the name) and `data-mx-profile` (on the
   message row). It never adds or moves nodes, because the chat client is a React app.
 - `webserver/cosmetics.css` styles every item for dark and light mode. Profiles reuse it for the
-  items added after the first release (`.display-name.<id>`, `.wrap.<effect>`).
+  items added after the first release (`.display-name.<id>`, `.wrap.<effect>`); the leaderboard has
+  its own tables and styles in `leaderboard.js` / `leaderboard.css`.
 - Site themes are accent colors (`SHOP_THEMES` in `site-theme.js`) applied from the `shop_theme`
   cookie, which the shop and the chat client set. A custom accent in Preferences wins.
 
