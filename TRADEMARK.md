@@ -6,7 +6,8 @@ it, including commercially, with attribution.
 
 That license covers the **code only**. It does not grant any right to use
 the **mitch.pro name, logo, or branding** (or the branding of its other
-properties, including `rjuhsd.school` and `sexypickleclub.com`).
+properties, including `mitchdog.com`, `rjuhsd.school`, and
+`sexypickleclub.com`).
 
 ## What this means in practice
 

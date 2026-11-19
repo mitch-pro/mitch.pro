@@ -6,15 +6,14 @@
 
 `/staff/` — a plain directory of links to every staff-facing page (admin
 dashboard and its sub-tools, the moderator panel, the beta tester hub),
-linked from the homepage footer for admins/moderators/testers only. New
-subsystem, no `server.js` equivalent.
+linked from the homepage footer for admins/moderators/testers only.
 
 ## Why its own endpoint
 
 `GET /api/staff-hub/status` returns `{isAdmin, isModerator, isTester,
-isStaff}` for the caller. Deliberately not added to `/api/me` (a
-`server.js`-parity-tracked response shape not worth risking for this) and
-deliberately not relying on `/api/tester/status`, which is the tester hub's
+isStaff}` for the caller. Deliberately kept separate from `/api/me` (to keep
+`/api/me`'s response shape unchanged) and deliberately not relying on
+`/api/tester/status`, which is the tester hub's
 own API and only admits accounts on the explicit tester list (see
 [tester-hub.md](tester-hub.md)). Admins see the `/staff/` link to `/tester/` but get
 the "tester role required" notice there unless they are on that list.

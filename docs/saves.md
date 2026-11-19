@@ -62,10 +62,6 @@ Authenticated by session cookie; every call only touches the caller's own file.
 | `POST` | Shallow-merges the body's top-level keys into the blob (a posted `_snapshot` replaces the whole snapshot). `413` over quota. A client echo of `_quota` is ignored. |
 | `DELETE` | `{"all":true}` removes the blob; `{"keys":[...]}` removes those top-level keys (`_updated` is protected). |
 
-The original `server.js` routed every method into the write path, so a GET
-returned `{ok:true}` and sync restore silently never fired. GET now returns the
-data; this is a deliberate deviation from the JS server.
-
 ## `/saves/` (save manager)
 
 Has an Auto slot panel (sync status, sync now, restore everything, backup download/import,
