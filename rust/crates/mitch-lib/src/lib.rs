@@ -51,6 +51,7 @@ pub mod minigames;
 pub mod newsletter_unsub;
 pub mod passphrase_reset;
 pub mod passwords;
+pub mod premium_email;
 pub mod privacy;
 pub mod profile;
 pub mod profiles;

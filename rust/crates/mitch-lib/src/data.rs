@@ -152,6 +152,26 @@ impl DataStore {
                         value TEXT NOT NULL,
                         updated_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS premium_email_requests (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        email TEXT NOT NULL,
+                        address TEXT NOT NULL,
+                        full_name TEXT NOT NULL,
+                        reasons TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'pending',
+                        created_at INTEGER NOT NULL,
+                        decided_by TEXT NOT NULL DEFAULT '',
+                        decided_at INTEGER,
+                        note TEXT NOT NULL DEFAULT ''
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_premium_email_requests_email
+                        ON premium_email_requests(email);
+                    CREATE INDEX IF NOT EXISTS idx_premium_email_requests_address
+                        ON premium_email_requests(address);
+                    CREATE TABLE IF NOT EXISTS premium_email_prompt_dismissed (
+                        email TEXT PRIMARY KEY,
+                        dismissed_at INTEGER NOT NULL
+                    );
                     CREATE TABLE IF NOT EXISTS deleted_account_marks (
                         email_hash TEXT PRIMARY KEY,
                         deleted_at INTEGER NOT NULL

@@ -31,6 +31,7 @@ pub mod legacy;
 pub mod moderation;
 pub mod newsletters;
 pub mod owner_container;
+pub mod premium_email;
 pub mod special_schedule;
 pub mod staff_dashboard;
 pub mod support;
@@ -246,6 +247,10 @@ pub async fn handle(
 
     // ── Moderation + staff tools ──
     if let Some(resp) = moderation::handle(state, method, path, headers, body, &ctx) {
+        return Some(resp);
+    }
+
+    if let Some(resp) = premium_email::handle(state, method, path, body, &ctx) {
         return Some(resp);
     }
 

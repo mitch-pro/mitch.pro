@@ -34,6 +34,7 @@ pub mod misc;
 pub mod movies;
 pub mod pickle;
 pub mod portal_catalog;
+pub mod premium_email;
 pub mod proxy;
 pub mod push;
 pub mod rjuhsd_online;

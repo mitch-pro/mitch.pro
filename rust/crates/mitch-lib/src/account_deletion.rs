@@ -69,6 +69,8 @@ pub const EMAIL_TABLES: &[(&str, &str)] = &[
     ("matrix_outside_approvals", "email"),
     ("matrix_reports", "reported_by"),
     ("reserved_usernames", "holder_email"),
+    ("premium_email_requests", "email"),
+    ("premium_email_prompt_dismissed", "email"),
     ("virtual_machines", "owner_email"),
     ("vm_usage_samples", "owner_email"),
     ("vm_admin_access_grants", "owner_email"),
@@ -108,6 +110,7 @@ pub const KEPT_EMAIL_COLUMNS: &[(&str, &str)] = &[
     ("support_email_requests", "decided_by"),
     ("feedback_entries", "handled_by"),
     ("matrix_reports", "handled_by"),
+    ("premium_email_requests", "decided_by"),
     ("matrix_outside_approvals", "decided_by"),
     ("reserved_usernames", "reserved_by"),
 ];
