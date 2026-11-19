@@ -19,6 +19,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use crate::hosts::request_host;
 use crate::state::AppState;
 
+mod cosmetics;
 mod direct;
 
 /// Browser-like UA for fetching GIFs/stickers from Tenor/Giphy — their CDNs
@@ -3355,6 +3356,9 @@ pub async fn handle_api(
 
     if path == "/api/matrix/dm" && method == Method::POST {
         return Some(direct::open(state, headers, body_bytes).await);
+    }
+    if path == "/api/matrix/cosmetics" && method == Method::GET {
+        return Some(cosmetics::cosmetics(state, headers, search));
     }
     if path == "/api/matrix/sso-status" && method == Method::GET {
         return Some(api_sso_status(state, headers).await);

@@ -103,6 +103,7 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/ban-guard.js",
     "/mitch-coins.js",
     "/premium-email-prompt.js",
+    "/cosmetics.css",
     "/mitch-coins.css",
     "/mitchcoin.png",
     "/mitchcoin.webp",

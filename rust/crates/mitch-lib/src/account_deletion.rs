@@ -187,10 +187,8 @@ impl Identity {
     }
 
     fn matches(&self, text: &str) -> bool {
-        if text.contains('@') && !text.starts_with('@') {
-            if normalize_email(text) == self.norm {
-                return true;
-            }
+        if text.contains('@') && !text.starts_with('@') && normalize_email(text) == self.norm {
+            return true;
         }
         !self.aliases.is_empty() && self.aliases.contains(&text.to_lowercase())
     }

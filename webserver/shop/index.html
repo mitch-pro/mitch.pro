@@ -485,7 +485,12 @@
     builder_badge: '🛠',
     lucky_badge: '🍀',
     premium_star_badge: '⭐',
-    owner_fan_badge: '👑'
+    owner_fan_badge: '👑',
+    gamer_badge: '🎮',
+    music_badge: '🎵',
+    rocket_badge: '🚀',
+    flame_badge: '🔥',
+    heart_badge: '❤'
   };
 
   let coins = 0;
@@ -847,6 +852,8 @@
       inventory = Object.assign(defaultInventory(), invData || {});
       inventory.cosmetics = Object.assign(defaultInventory().cosmetics, inventory.cosmetics || {});
       items = Array.isArray(itemData.items) ? itemData.items : [];
+      // site-theme.js reads this cookie to apply the equipped theme's accent.
+      document.cookie = 'shop_theme=' + encodeURIComponent((inventory.cosmetics && inventory.cosmetics.activeTheme) || '') + '; Path=/; Max-Age=31536000; SameSite=Lax' + (location.protocol === 'https:' ? '; Secure' : '');
       premiumDiscountPct = Number(itemData.premiumDiscountPct || 0);
       document.getElementById('balance').textContent = coins.toFixed(2);
       const premiumPill = document.getElementById('premium-pill');

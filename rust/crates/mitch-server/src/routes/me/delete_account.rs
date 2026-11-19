@@ -62,7 +62,7 @@ pub(crate) async fn delete_account(
     }
 
     if let Err(response) = confirm_identity(state, &norm, &body) {
-        return response;
+        return *response;
     }
 
     if has_open_marketplace_listing(state, &norm) {
@@ -154,8 +154,8 @@ fn has_open_marketplace_listing(state: &Arc<AppState>, norm: &str) -> bool {
 
 /// Password (or, for accounts without one, the email address) and the
 /// authenticator code when TOTP is enabled.
-fn confirm_identity(state: &Arc<AppState>, norm: &str, body: &Value) -> Result<(), Response> {
-    let wrong = |message: &str| json_response(401, json!({ "error": message }));
+fn confirm_identity(state: &Arc<AppState>, norm: &str, body: &Value) -> Result<(), Box<Response>> {
+    let wrong = |message: &str| Box::new(json_response(401, json!({ "error": message })));
     let stored = mitch_lib::passwords::password_hash_get(&state.store, norm).unwrap_or_default();
     if stored.is_empty() {
         let typed = body
@@ -163,10 +163,10 @@ fn confirm_identity(state: &Arc<AppState>, norm: &str, body: &Value) -> Result<(
             .and_then(Value::as_str)
             .unwrap_or("");
         if typed.is_empty() {
-            return Err(json_response(
+            return Err(Box::new(json_response(
                 400,
                 json!({ "error": "Type your email address to confirm.", "needs": "email" }),
-            ));
+            )));
         }
         if auth::normalize_email(typed) != norm {
             return Err(wrong("That isn't this account's email address."));
@@ -181,10 +181,10 @@ fn confirm_identity(state: &Arc<AppState>, norm: &str, body: &Value) -> Result<(
     if twofa.enabled && twofa.type_ == "totp" {
         let code = body.get("totpCode").and_then(Value::as_str).unwrap_or("");
         if code.is_empty() {
-            return Err(json_response(
+            return Err(Box::new(json_response(
                 400,
                 json!({ "error": "Enter your authenticator code.", "needs": "totp" }),
-            ));
+            )));
         }
         if !mitch_lib::totp::verify_totp(&twofa.secret, code) {
             return Err(wrong("Invalid authenticator code."));

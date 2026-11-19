@@ -85,3 +85,9 @@ checks that neither the IP nor the page appears anywhere in the database or the
 data directory. It also seeds the retired files and checks the startup cleanup
 removes them while an explicit network ban still works.
 `mitch_lib::privacy` has a unit test for each cleanup step.
+
+## Account deletion
+
+Deleting an account is immediate and covers the account's rows, JSON-document entries, computer and
+Matrix messages; see [account-deletion.md](account-deletion.md). Bans and a keyed hash used to stop
+re-registration reward loops are the only things kept.

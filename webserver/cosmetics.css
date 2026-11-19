@@ -1,0 +1,75 @@
+/* Shop cosmetics as shown in the Matrix chat client (matrix/cosmetics.js sets
+   the data-mx-* attributes) and, for the items added after the first release,
+   on profiles (.display-name.<id>, .wrap.<effect>). Every item in the shop
+   catalog is styled here. Colors use a dark value and a light-mode value
+   (html.theme-light); animations stop under .theme-no-motion. */
+
+/* ── Name colors ─────────────────────────────────────────────────────── */
+[data-mx-color="neon_purple"]   { --cos-c: #c291ff; --cos-l: #7840b3; }
+[data-mx-color="electric_blue"] { --cos-c: #72b5ff; --cos-l: #215dab; }
+[data-mx-color="mint_flash"]    { --cos-c: #81d9b0; --cos-l: #24734f; }
+[data-mx-color="rose_spark"]    { --cos-c: #f2a4bf; --cos-l: #aa3f69; }
+[data-mx-color="ember_red"]     { --cos-c: #f69689; --cos-l: #ae392f; }
+[data-mx-color="void_white"]    { --cos-c: #ffffff; --cos-l: #202622; }
+[data-mx-color="gold_glow"]     { --cos-c: #e8c578; --cos-l: #856019; }
+[data-mx-color="sky_cyan"], .display-name.sky_cyan             { --cos-c: #7dd3fc; --cos-l: #0369a1; }
+[data-mx-color="sunset_orange"], .display-name.sunset_orange   { --cos-c: #fdba74; --cos-l: #b45309; }
+[data-mx-color="lime_pop"], .display-name.lime_pop             { --cos-c: #bef264; --cos-l: #4d7c0f; }
+[data-mx-color="lavender_mist"], .display-name.lavender_mist   { --cos-c: #d8b4fe; --cos-l: #7e22ce; }
+[data-mx-color]:not([data-mx-color="rainbow_name"]):not([data-mx-color="aurora_name"]),
+.display-name.sky_cyan, .display-name.sunset_orange, .display-name.lime_pop, .display-name.lavender_mist {
+  color: var(--cos-c) !important;
+}
+html.theme-light [data-mx-color]:not([data-mx-color="rainbow_name"]):not([data-mx-color="aurora_name"]),
+html.theme-light .display-name.sky_cyan, html.theme-light .display-name.sunset_orange,
+html.theme-light .display-name.lime_pop, html.theme-light .display-name.lavender_mist {
+  color: var(--cos-l) !important;
+}
+[data-mx-color="rainbow_name"], [data-mx-color="aurora_name"], .display-name.aurora_name {
+  background-size: 220% auto;
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent !important;
+  animation: cos-shift 4s linear infinite;
+}
+[data-mx-color="rainbow_name"] { background-image: linear-gradient(90deg, #ff4d4d, #ffb84d, #ffe14d, #5dd66f, #4da6ff, #a06bff, #ff4d4d); }
+[data-mx-color="aurora_name"], .display-name.aurora_name { background-image: linear-gradient(90deg, #34d399, #38bdf8, #a78bfa, #34d399); }
+html.theme-light [data-mx-color="aurora_name"], html.theme-light .display-name.aurora_name { background-image: linear-gradient(90deg, #047857, #0369a1, #6d28d9, #047857); }
+@keyframes cos-shift { to { background-position: 220% center; } }
+
+/* ── Badges (after the name) ─────────────────────────────────────────── */
+[data-mx-badge]::after { content: attr(data-mx-badge); display: inline-block; margin-left: .35em; font-size: .9em; -webkit-text-fill-color: initial; }
+
+/* ── Chat effects (on the name) ──────────────────────────────────────── */
+[data-mx-effect="chat_sparkles"]::before { content: "✦"; margin-right: .3em; color: #facc15; animation: cos-twinkle 1.6s ease-in-out infinite; -webkit-text-fill-color: initial; }
+[data-mx-effect="chat_shadow"] { text-shadow: 2px 2px 0 rgba(0,0,0,.45); }
+html.theme-light [data-mx-effect="chat_shadow"] { text-shadow: 2px 2px 0 rgba(0,0,0,.18); }
+[data-mx-effect="chat_wave"] { display: inline-block; animation: cos-wave 2s ease-in-out infinite; }
+[data-mx-effect="chat_terminal"] { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace !important; }
+[data-mx-effect="chat_terminal"]::before { content: "> "; opacity: .7; }
+[data-mx-effect="chat_prism"] { animation: cos-hue 5s linear infinite; text-shadow: 0 0 8px rgba(168,85,247,.55); }
+[data-mx-effect="chat_glitch"] { animation: cos-glitch 2.4s steps(2, end) infinite; text-shadow: 1px 0 rgba(255,0,80,.7), -1px 0 rgba(0,200,255,.7); }
+[data-mx-effect="chat_flame"] { text-shadow: 0 0 6px rgba(251,146,60,.8), 0 -2px 10px rgba(239,68,68,.55); animation: cos-flicker 1.8s ease-in-out infinite; }
+[data-mx-effect="chat_frost"] { text-shadow: 0 0 6px rgba(125,211,252,.85), 0 0 14px rgba(186,230,253,.5); }
+html.theme-light [data-mx-effect="chat_flame"] { text-shadow: 0 0 5px rgba(234,88,12,.35); }
+html.theme-light [data-mx-effect="chat_frost"] { text-shadow: 0 0 5px rgba(14,116,144,.3); }
+@keyframes cos-twinkle { 50% { opacity: .35; transform: scale(.8); } }
+@keyframes cos-wave { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+@keyframes cos-hue { to { filter: hue-rotate(360deg); } }
+@keyframes cos-glitch { 0%, 92%, 100% { transform: none; } 94% { transform: translate(-1px, 1px); } 96% { transform: translate(1px, -1px); } 98% { transform: translate(-1px, 0); } }
+@keyframes cos-flicker { 0%, 100% { opacity: 1; } 45% { opacity: .82; } 60% { opacity: .95; } }
+
+/* ── Profile effects: on a chat message row, and on profiles ────────── */
+[data-mx-profile] { position: relative; }
+[data-mx-profile="profile_grid"] { background-image: linear-gradient(color-mix(in srgb, currentColor 7%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, currentColor 7%, transparent) 1px, transparent 1px); background-size: 18px 18px; }
+[data-mx-profile="profile_scanlines"] { background-image: repeating-linear-gradient(0deg, color-mix(in srgb, currentColor 6%, transparent) 0 1px, transparent 1px 3px); }
+[data-mx-profile="profile_stars"]::after { content: "✦  ·  ✧  ·  ✦"; position: absolute; right: 12px; top: 6px; color: #d99a06; letter-spacing: 8px; font-size: 10px; pointer-events: none; }
+[data-mx-profile="profile_gold_frame"] { box-shadow: inset 3px 0 0 rgba(245,158,11,.85), 0 0 18px rgba(245,158,11,.14); }
+[data-mx-profile="profile_neon_frame"] { box-shadow: inset 3px 0 0 rgba(236,72,153,.9), 0 0 18px rgba(236,72,153,.18); }
+[data-mx-profile="profile_sunset_frame"] { box-shadow: inset 3px 0 0 #fb7185, 0 0 18px rgba(251,146,60,.16); border-image: none; }
+[data-mx-profile="profile_aurora"], .wrap.profile_aurora { background-image: linear-gradient(120deg, rgba(52,211,153,.14), rgba(56,189,248,.12), rgba(167,139,250,.14)); }
+[data-mx-profile="profile_dots"], .wrap.profile_dots { background-image: radial-gradient(color-mix(in srgb, currentColor 14%, transparent) 1px, transparent 1.5px); background-size: 14px 14px; }
+[data-mx-profile="profile_hearts"]::after, .wrap.profile_hearts::after { content: "♥  ·  ♥  ·  ♥"; position: absolute; right: 12px; top: 6px; color: #f472b6; letter-spacing: 8px; font-size: 10px; pointer-events: none; }
+.wrap.profile_sunset_frame { border-color: rgba(251,113,133,.75); box-shadow: 0 0 30px rgba(251,146,60,.22); }
+.wrap.profile_hearts { position: relative; overflow: hidden; }
+
+.theme-no-motion [data-mx-color], .theme-no-motion [data-mx-effect], .theme-no-motion [data-mx-effect]::before { animation: none !important; }
