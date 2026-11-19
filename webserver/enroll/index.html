@@ -155,16 +155,8 @@
 
           <div id="support-actions" style="display:none;">
             <button id="resend-btn" class="btn" type="button" onclick="submit(true)">Resend code (wait 30s)</button>
-            <br>
-            <a href="javascript:void(0)" id="no-email-link" onclick="showNoEmailForm()">Can’t receive the email? Request a manual account.</a>
           </div>
 
-          <div id="no-email-form" style="display:none;">
-            <h3>Request a manual account</h3>
-            <p>If you can’t receive our emails, tell us why you need a manual account.</p>
-            <textarea id="no-email-reason" placeholder="Brief reason..."></textarea>
-            <button class="btn-primary" type="button" onclick="applyNoEmail()">Send request</button>
-          </div>
         </div>
 
         <div id="invite-step-2" style="display:none;">
@@ -815,7 +807,6 @@ var resendInterval;
 function startResendTimer() {
   clearInterval(resendInterval);
   const resendBtn = document.getElementById('resend-btn');
-  const link = document.getElementById('no-email-link');
   let left = 30;
   const availableAt = Date.now() + 30000;
   resendBtn.disabled = true;
@@ -827,59 +818,10 @@ function startResendTimer() {
       clearInterval(resendInterval);
       resendBtn.disabled = false;
       resendBtn.textContent = "Resend code";
-      link.style.display = 'inline-block';
     } else {
       resendBtn.textContent = `Resend available in ${left}s`;
     }
   }, 1000);
-}
-
-function showNoEmailForm() {
-  document.getElementById('no-email-form').style.display = 'block';
-  document.getElementById('no-email-link').style.display = 'none';
-}
-
-async function applyNoEmail() {
-  const email = document.getElementById('email').value.trim();
-  const reasonEl = document.getElementById('no-email-reason');
-  const reason = reasonEl.value.trim();
-  const msg = document.getElementById('msg');
-  const form = document.getElementById('no-email-form');
-  const btn = form.querySelector('button');
-  if (btn && btn.disabled) return;
-  const fail = (text) => { msg.className = 'err'; msg.textContent = text; if (btn) btn.disabled = false; resetCaptcha(); };
-
-  if (!reason) {
-    msg.className = 'err'; msg.textContent = 'Enter a brief reason.';
-    reasonEl.focus();
-    return;
-  }
-  if (btn) btn.disabled = true;
-  msg.className = ''; msg.textContent = 'Submitting request...';
-
-  const captcha = await getCaptchaResponse('apply_no_email');
-  if (!captcha) {
-    msg.className = 'err'; msg.textContent = 'Please complete reCAPTCHA.';
-    if (btn) btn.disabled = false;
-    return;
-  }
-
-  try {
-    const r = await fetch('/api/apply-no-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, reason, recaptcha_token: captcha })
-    });
-    const d = await r.json();
-    if (d.success) {
-      msg.textContent = '';
-      form.innerHTML = '<p class="ok" style="font-size:0.8rem;font-weight:700;">Manual request submitted. We will review it soon.</p>';
-    } else {
-      fail(d.message || 'Failed to submit request.');
-    }
-  } catch (e) {
-    fail('Could not reach the server. Check your connection and try again.');
-  }
 }
 
 function switchTab(tab) {

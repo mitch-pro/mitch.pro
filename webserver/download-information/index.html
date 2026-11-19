@@ -68,19 +68,18 @@
     <div class="container" style="max-width: 650px;">
       <div class="glass-card info-card">
         <span class="data-icon">📦</span>
-        <div class="badge">Data Portability</div>
         <h1>Download Your Information</h1>
-        <p>Get a copy of everything mitch.pro knows about you. Your file will include your profile details, coin balance, game statistics, friend list, and E2E encryption keys.</p>
+        <p>Download a copy of the information mitch.pro stores about your account.</p>
         
         <a href="/api/download-information" class="dl-btn" id="dlLink" download>
-          <span>Generate JSON Export</span>
+          <span>Download JSON</span>
           <div class="loader" id="loader"></div>
         </a>
 
         <div class="file-meta">
           <p><b>Format:</b> JSON (Portable machine-readable format)</p>
-          <p><b>Included:</b> Account Metadata, Profiles, Coins, Stats, Friends, Cosmetics, E2E Keys, Userdata, and DMs.</p>
-          <p style="margin-top:10px; font-size: 11px; opacity: 0.6;">Note: For your security, this file contains sensitive cryptographic keys. Keep it private and never share it with anyone.</p>
+          <p><b>Included:</b> profile, coins, stats, friends, cosmetics, achievements, support requests, computers, and direct messages you sent or received.</p>
+          <p style="margin-top:10px; font-size: 11px; opacity: 0.6;">Password hashes, sign-in sessions, and encryption keys are not included. The file is still personal, so keep it private.</p>
         </div>
       </div>
 

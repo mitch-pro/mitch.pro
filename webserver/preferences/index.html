@@ -2344,23 +2344,40 @@ async function resetPreferencesOnly() {
 }
 
 async function deleteAccount() {
-  if (!(await customConfirm('Delete Account', 'Are you sure you want to permanently delete your account? This cannot be undone.'))) return;
+  if (!(await customConfirm('Delete Account', 'Permanently delete your account now? Your data, computer and chat messages are erased immediately and this cannot be undone.'))) return;
+  var body = {};
   var password = await customPrompt('Delete Account', 'Enter your current password to confirm deletion:');
   if (!password) return;
+  body.password = password;
   var btn = document.getElementById('deleteAccountBtn');
   btn.disabled = true;
   setStatus('deleteAccountStatus', 'Deleting account...');
   try {
-    var r = await fetch('/api/delete-account', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: password })
-    });
-    var d = await r.json().catch(function() { return {}; });
-    if (!r.ok) throw new Error(d.error || 'Account deletion failed.');
-    setStatus('deleteAccountStatus', 'Account deleted. Logging out...');
-    setTimeout(function() { location.href = '/'; }, 700);
+    // The server asks for more proof when it needs it: an email address for
+    // accounts that have no password, an authenticator code when 2FA is on.
+    for (var attempt = 0; attempt < 3; attempt++) {
+      var r = await fetch('/api/delete-account', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      var d = await r.json().catch(function() { return {}; });
+      if (r.ok) {
+        setStatus('deleteAccountStatus', d.chatPending ? 'Account deleted. Chat history is still being erased.' : 'Account deleted.');
+        setTimeout(function() { location.href = '/'; }, 900);
+        return;
+      }
+      if (d.needs === 'email') {
+        body.confirmEmail = await customPrompt('Delete Account', 'Type your email address to confirm:');
+      } else if (d.needs === 'totp') {
+        body.totpCode = await customPrompt('Delete Account', 'Enter your authenticator code:');
+      } else {
+        throw new Error(d.error || 'Account deletion failed.');
+      }
+      if (!body.confirmEmail && d.needs === 'email' || !body.totpCode && d.needs === 'totp') break;
+    }
+    throw new Error('Account deletion was cancelled.');
   } catch (e) {
     setStatus('deleteAccountStatus', errMsg(e, 'Account deletion failed.'), true);
     btn.disabled = false;

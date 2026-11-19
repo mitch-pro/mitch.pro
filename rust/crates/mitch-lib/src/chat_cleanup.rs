@@ -151,6 +151,75 @@ pub fn purge_transaction(
     Ok(())
 }
 
+/// Starts a permanent account deletion's chat side, in one transaction:
+/// everything the account wrote up to `cutoff` is tombstoned exactly as for a
+/// ban (so the gateway stops serving it at once), the account's Matrix ids are
+/// remembered, and the row is flagged `erase` so the background worker also
+/// deactivates the Matrix account and, when finished, removes the tombstone
+/// (see `finish_erasure`). Must run before the account's other data is erased:
+/// it reads the email-to-Matrix mapping.
+pub fn begin_erasure(
+    store: &DataStore,
+    email: &str,
+    cutoff: i64,
+    ids: &[String],
+) -> rusqlite::Result<()> {
+    let email = normalize_email(email);
+    let snapshots = snapshots(store);
+    let conn = store.conn();
+    let tx = conn.unchecked_transaction()?;
+    purge_transaction(&tx, &email, cutoff, snapshots)?;
+    for id in ids {
+        tx.execute("INSERT INTO account_chat_removal_ids(email,user_id,cutoff) VALUES(?1,?2,?3) ON CONFLICT(email,user_id) DO UPDATE SET cutoff=MAX(cutoff,excluded.cutoff)", rusqlite::params![email, id, cutoff])?;
+    }
+    tx.execute(
+        "UPDATE account_chat_removals SET erase=1 WHERE email=?1",
+        [&email],
+    )?;
+    tx.commit()
+}
+
+/// True when the pending chat cleanup for `email` belongs to an account deletion.
+pub fn is_erasure(store: &DataStore, email: &str) -> bool {
+    store
+        .conn()
+        .query_row(
+            "SELECT erase FROM account_chat_removals WHERE email=?1",
+            [email],
+            |r| r.get::<_, bool>(0),
+        )
+        .unwrap_or(false)
+}
+
+/// Matrix ids remembered for `email` by [`begin_erasure`] or a ban.
+pub fn remembered_ids(store: &DataStore, email: &str) -> Vec<String> {
+    let conn = store.conn();
+    let Ok(mut stmt) = conn.prepare("SELECT user_id FROM account_chat_removal_ids WHERE email=?1")
+    else {
+        return Vec::new();
+    };
+    let Ok(rows) = stmt.query_map([email], |r| r.get(0)) else {
+        return Vec::new();
+    };
+    rows.filter_map(Result::ok).collect()
+}
+
+/// Final step of a deletion once the chat server has redacted the history and
+/// deactivated the account: drops the tombstone rows that carry the email.
+/// Media stays blocked, but is no longer linked to an address.
+pub fn finish_erasure(store: &DataStore, email: &str) {
+    let conn = store.conn();
+    let _ = conn.execute(
+        "UPDATE moderated_media SET blocked=1, email='' WHERE email=?1",
+        [email],
+    );
+    let _ = conn.execute(
+        "DELETE FROM account_chat_removal_ids WHERE email=?1",
+        [email],
+    );
+    let _ = conn.execute("DELETE FROM account_chat_removals WHERE email=?1", [email]);
+}
+
 pub fn safe_filename(file: &str) -> bool {
     !file.is_empty()
         && file != "."

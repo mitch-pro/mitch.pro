@@ -176,7 +176,76 @@ async fn request(
     serde_json::from_slice(&bytes).map_err(|_| "Invalid chat response".into())
 }
 
-async fn cleanup_matrix(state: &AppState, email: &str, cutoff: i64) -> Result<(), String> {
+/// Asks Conduit to deactivate the account the token belongs to. Conduit wants
+/// user-interactive auth: the first call returns a session id, the second
+/// carries the password. Deactivation also removes the account from its rooms.
+async fn deactivate_matrix_account(
+    token: &str,
+    username: &str,
+    password: &str,
+) -> Result<(), String> {
+    let path = "/_matrix/client/v3/account/deactivate";
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        "Authorization",
+        HeaderValue::from_str(&format!("Bearer {token}")).map_err(|_| "Invalid cleanup token")?,
+    );
+    headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+    let send = |body: Value| {
+        let headers = headers.clone();
+        async move {
+            matrix::call_conduit(
+                path,
+                Method::POST,
+                Some(headers),
+                Some(Bytes::from(body.to_string())),
+            )
+            .await
+            .map_err(|_| "Chat server unavailable".to_string())
+        }
+    };
+    let (status, _, bytes) = send(json!({"erase": true})).await?;
+    if status.is_success() {
+        return Ok(());
+    }
+    let session = serde_json::from_slice::<Value>(&bytes)
+        .ok()
+        .and_then(|v| v["session"].as_str().map(str::to_string));
+    let mut auth = json!({
+        "type": "m.login.password",
+        "identifier": {"type": "m.id.user", "user": username},
+        "password": password,
+    });
+    if let Some(session) = session {
+        auth["session"] = json!(session);
+    }
+    let (status, _, _) = send(json!({"erase": true, "auth": auth})).await?;
+    if status.is_success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Chat server refused deactivation ({})",
+            status.as_u16()
+        ))
+    }
+}
+
+/// Matrix localpart from a remembered `@name:server` id.
+fn localpart(id: &str) -> Option<String> {
+    let name = id.strip_prefix('@')?.split(':').next()?;
+    (!name.is_empty()).then(|| name.to_string())
+}
+
+/// Redacts the account's chat history. For an account deletion
+/// (`erase == true`) it then deactivates the Matrix account. Returns whether
+/// the account was fully erased (`Ok(false)`: there was nothing reachable to
+/// erase, e.g. the chat account no longer accepts the login).
+async fn cleanup_matrix(
+    state: &AppState,
+    email: &str,
+    cutoff: i64,
+    erase: bool,
+) -> Result<bool, String> {
     let mut ids: Vec<String> = sender_cutoffs(state)
         .into_iter()
         .filter(|(_, (owner, _))| owner == email)
@@ -185,10 +254,17 @@ async fn cleanup_matrix(state: &AppState, email: &str, cutoff: i64) -> Result<()
     ids.sort();
     ids.dedup();
     if ids.is_empty() {
-        return Ok(());
+        return Ok(erase);
     }
-    let Some(username) = matrix::matrix_username_for_email(state, email).await else {
-        return Ok(());
+    // After a deletion the email-to-username mapping is gone; the ids kept
+    // with the tombstone still name the account.
+    let username = match matrix::matrix_username_for_email(state, email).await {
+        Some(name) => name,
+        None if erase => match ids.iter().find_map(|id| localpart(id)) {
+            Some(name) => name,
+            None => return Ok(true),
+        },
+        None => return Ok(false),
     };
     let password = matrix::get_matrix_password_for_email(email, &state.id_secret);
     let payload = json!({"type":"m.login.password","identifier":{"type":"m.id.user","user":username},"password":password,"device_id":"MITCH_MODERATION_CLEANUP","initial_device_display_name":"Account moderation"});
@@ -206,12 +282,16 @@ async fn cleanup_matrix(state: &AppState, email: &str, cutoff: i64) -> Result<()
     let login: Value = serde_json::from_slice(&bytes).map_err(|_| "Invalid chat login response")?;
     let Some(token) = login["access_token"].as_str() else {
         if login["errcode"] == "M_FORBIDDEN" {
-            // No Matrix account has been created yet: no room history to erase.
+            // No Matrix account has been created yet (or, for a deletion, it
+            // is already gone): no room history to erase.
+            if erase {
+                return Ok(false);
+            }
             let mapped = state
                 .store
                 .read_document(&state.data_dir().join("matrix_users.json"), json!({}));
             if mapped.get(email).is_none() {
-                return Ok(());
+                return Ok(false);
             }
         }
         return Err("Could not authenticate chat cleanup".into());
@@ -290,7 +370,33 @@ async fn cleanup_matrix(state: &AppState, email: &str, cutoff: i64) -> Result<()
             return Err("Chat cleanup needs another pass".into());
         }
     }
-    Ok(())
+    if erase {
+        deactivate_matrix_account(token, &username, &password).await?;
+    }
+    Ok(erase)
+}
+
+/// Runs one pending cleanup job to completion or records why it could not.
+/// Shared by the background worker and by account deletion, which tries the
+/// job immediately so a small account is fully gone before the response.
+pub async fn run_job(state: &AppState, email: &str, cutoff: i64) -> bool {
+    clear_relay(state, email);
+    let erase = data::is_erasure(&state.store, email);
+    let result = cleanup_matrix(state, email, cutoff, erase).await;
+    let (done, error) = match &result {
+        Ok(_) => (true, String::new()),
+        Err(error) => (false, error.clone()),
+    };
+    data::finish_job(&state.store, email, cutoff, done, &error);
+    // Only a confirmed deactivation lets the tombstone go. If the chat account
+    // was unreachable it stays, and the gateway keeps hiding the history.
+    if matches!(result, Ok(true)) && erase {
+        data::finish_erasure(&state.store, email);
+    }
+    if !done {
+        tracing::warn!("Chat cleanup is pending; it will retry automatically");
+    }
+    done
 }
 
 pub fn spawn(state: Arc<AppState>) {
@@ -302,16 +408,7 @@ pub fn spawn(state: Arc<AppState>) {
             let _ = data::remove_files(&state.store);
             let jobs = data::pending_jobs(&state.store);
             for (email, cutoff) in jobs {
-                clear_relay(&state, &email);
-                let result = cleanup_matrix(&state, &email, cutoff).await;
-                let (done, error) = match result {
-                    Ok(()) => (true, String::new()),
-                    Err(error) => (false, error),
-                };
-                data::finish_job(&state.store, &email, cutoff, done, &error);
-                if !done {
-                    tracing::warn!("Chat cleanup is pending; it will retry automatically");
-                }
+                run_job(&state, &email, cutoff).await;
             }
         }
     });
