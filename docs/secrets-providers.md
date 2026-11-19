@@ -17,8 +17,8 @@ scripts mentions Doppler. Edit all four together (the block sits between
 
 ## Configuring Infisical
 
-Everything below is done by hand on the server, as root. Only the `INFISICAL=True`
-flag goes in the project's `.env`; the domain and token never go in the repo.
+Everything below is done by hand on the server, as root. The Infisical domain
+and token live only in `/etc/infisical/env` and never go in `.env` or the repo.
 
 ### How the scripts call it
 
@@ -90,7 +90,7 @@ Auth. Moving to one is a future improvement.
 
 ```sh
 set -a; . /etc/infisical/env; set +a
-cd /home/mitch/server/bun
+cd /path/to/mitch.pro
 infisical export --format=json | head -c 100
 ```
 

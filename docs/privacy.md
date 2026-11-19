@@ -79,7 +79,7 @@ current-page data must never be persisted (AGENTS.md, "Privacy and telemetry").
 
 ## Validation
 
-`cargo test -p mitch-server --test privacy` starts a real server, sends a
+`cargo test -p mitch-server --test privacy` starts a local server, sends a
 signed-in request with a forwarded IP, a ping and a presence report, then
 checks that neither the IP nor the page appears anywhere in the database or the
 data directory. It also seeds the retired files and checks the startup cleanup
