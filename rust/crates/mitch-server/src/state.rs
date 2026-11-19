@@ -300,6 +300,8 @@ impl AppState {
             tracing::warn!("id_secret load failed: {e}");
             vec![0u8; 32]
         });
+        // Ban records are stored as keyed hashes (`mitch_lib::bans`).
+        mitch_lib::bans::init_hash_secret(&id_secret);
         // Refusing to start beats generating a new key that orphans encrypted data.
         let keyring = Arc::new(
             mitch_lib::keyring::KeyRing::load(&cfg.data_dir)

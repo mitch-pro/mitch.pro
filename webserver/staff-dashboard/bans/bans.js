@@ -37,7 +37,7 @@
   }
   function render() {
     const query = $('ban-search').value.trim().toLowerCase();
-    const filtered = bans.filter(ban => [ban.email,ban.reason,ban.by].some(value => String(value || '').toLowerCase().includes(query)));
+    const filtered = bans.filter(ban => [ban.reason,ban.by].some(value => String(value || '').toLowerCase().includes(query)));
     $('bans-summary').textContent = query ? filtered.length+' of '+bans.length+' accounts' : bans.length+' banned '+(bans.length===1?'account':'accounts');
     const list = $('ban-list');
     list.replaceChildren();
@@ -50,7 +50,7 @@
     filtered.forEach(ban => {
       const row = document.createElement('article');row.className='ban-entry';row.setAttribute('role','listitem');
       const copy = document.createElement('div');copy.className='ban-entry-copy';
-      const email = document.createElement('strong');email.textContent=ban.email;
+      const email = document.createElement('strong');email.textContent='Banned account';
       const reason = document.createElement('p');reason.textContent=ban.reason || 'No reason recorded.';
       const meta = document.createElement('small');
       const date = new Date(ban.bannedAt);
@@ -64,14 +64,12 @@
         cleanup.textContent=ban.cleanup.complete ? 'Chat messages removed; uploaded media blocked.' : ban.cleanup.error ? 'Chat history hidden. Server cleanup is retrying.' : 'Chat history hidden. Server cleanup is queued.';
         copy.append(cleanup);
       }
-      const restore = document.createElement('button');restore.type='button';restore.textContent='Restore access';restore.disabled=busy;
-      restore.addEventListener('click',()=>changeBan(false,ban.email,'','list-status'));
-      row.append(copy,restore);list.append(row);
+      row.append(copy);list.append(row);
     });
   }
   async function loadBans() {
     const data = await request('/api/admin/bans');
-    bans = (data.bans || []).map(ban => ({...ban,cleanup:data.chatCleanup?.[ban.email]}));
+    bans = data.bans || [];
     const wasReady = timedBansReady;
     timedBansReady = data.supportsTimedBans === true && data.supportsChatCleanup === true;
     $('ban-form').querySelector('button').disabled = busy || !timedBansReady;

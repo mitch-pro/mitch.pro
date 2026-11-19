@@ -34,7 +34,7 @@ listing, because escrow holds other people's coins.
 
 ## Kept on purpose
 
-- `blacklist` and `banned_ips`: otherwise deleting an account would lift a ban.
+- `blacklist` and `banned_ips`: otherwise deleting an account would lift a ban. Neither holds an address (see below).
 - `deleted_account_marks`: see step 2.
 - Records about other people that name staff (ticket replies, report handling).
 - Chat tombstones until the chat server has finished (step 6). If the chat account can no longer be
@@ -52,3 +52,14 @@ removes.
 `GET /api/download-information` (the Download Information page) returns the account's rows and
 document entries as JSON, minus password hashes, sessions, push keys and encryption keys
 (`EXPORT_SKIP_TABLES`).
+
+## Ban records are hashed
+
+`blacklist.email` stores `h:` + an HMAC of the normalized address (`bans::record_key`, keyed with the
+site's ID secret), never the address. Signup and login hash the address they are given and match
+it; `POST /api/admin/unban-account` hashes the address staff type and deletes the matching row, and
+reports that no ban exists when nothing matches. The ban list on `/staff-dashboard/bans/` therefore
+shows reason, date and expiry but not whose ban it is; restore from the "Account" form by typing the
+email. Plaintext rows from before the change are rewritten at startup (`bans::hash_plaintext_rows`).
+Chat-cleanup tombstones for banned accounts (`account_chat_removals`, `moderated_media`) still carry
+the email until the chat server finishes.

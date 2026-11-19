@@ -49,7 +49,9 @@ pub fn filter_document(conn: &Connection, key: &str, value: &mut Value) {
         }
         "gif_favorites.json" => {
             if let Some(map) = value.as_object_mut() {
-                map.retain(|email, _| !conn.query_row("SELECT EXISTS(SELECT 1 FROM blacklist WHERE email = ?1 AND (expires_at IS NULL OR expires_at > ?2))", rusqlite::params![normalize_email(email), crate::school::now_millis()], |r| r.get::<_, bool>(0)).unwrap_or(false));
+                map.retain(|email, _| {
+                    !crate::bans::active_ban_exists(conn, &normalize_email(email))
+                });
             }
         }
         _ => {}

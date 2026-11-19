@@ -124,6 +124,11 @@ pub fn run_startup_cleanup(store: &DataStore, id_secret: &[u8]) -> CleanupReport
         }
     }
     report.auth_sessions_migrated = crate::auth_sessions::migrate_from_json(store);
+    crate::bans::init_hash_secret(id_secret);
+    let ban_rows = crate::bans::hash_plaintext_rows(store);
+    if ban_rows > 0 {
+        tracing::info!(ban_rows, "hashed plaintext ban records");
+    }
     let (deleted, hashed) = crate::bans::hash_legacy_banned_ips(store, id_secret);
     report.banned_ips_deleted = deleted;
     report.banned_ips_hashed = hashed;

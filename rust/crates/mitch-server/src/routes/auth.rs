@@ -360,7 +360,7 @@ async fn signup(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -
     if mitch_lib::bans::blacklist_get(&state.store, &norm_email, &norm_email).is_some() {
         return json_resp(
             400,
-            json!({ "success": false, "message": "Access denied." }),
+            json!({ "success": false, "message": "This account is banned, so it can't sign up." }),
         );
     }
 

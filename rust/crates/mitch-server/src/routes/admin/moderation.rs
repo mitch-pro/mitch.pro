@@ -91,11 +91,7 @@ pub fn handle(
         let mut seen = std::collections::HashSet::new();
         let bans: Vec<Value> = mitch_lib::bans::blacklist_all(&state.store)
             .into_iter()
-            .filter(|ban| {
-                seen.insert(mitch_lib::auth::normalize_email(
-                    ban["email"].as_str().unwrap_or(""),
-                ))
-            })
+            .filter(|ban| seen.insert(ban["id"].as_str().unwrap_or("").to_string()))
             .collect();
         let vm_bans = state.vm_bans.read().unwrap_or_else(|e| e.into_inner());
         let byo_bans = state.byo_os_bans.read().unwrap_or_else(|e| e.into_inner());
