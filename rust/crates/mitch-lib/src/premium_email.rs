@@ -330,7 +330,7 @@ mod tests {
     #[test]
     fn request_lifecycle_and_prompt_rules() {
         let s = store("life");
-        let me = "me@student.rjuhsd.us";
+        let me = "test.student1@student.rjuhsd.us";
         assert!(should_prompt(&s, me));
 
         let id = create(&s, me, "myname", "My Name", "I like it").unwrap();
@@ -354,7 +354,7 @@ mod tests {
     #[test]
     fn denied_members_may_reapply_but_are_not_prompted() {
         let s = store("deny");
-        let me = "me@student.rjuhsd.us";
+        let me = "test.student1@student.rjuhsd.us";
         let id = create(&s, me, "myname", "My Name", "x").unwrap();
         decide(&s, id, false, "admin@x.test", "no").unwrap();
         assert!(!should_prompt(&s, me));
@@ -364,7 +364,7 @@ mod tests {
     #[test]
     fn dismissing_the_prompt_is_permanent() {
         let s = store("dismiss");
-        let me = "me@student.rjuhsd.us";
+        let me = "test.student1@student.rjuhsd.us";
         assert!(should_prompt(&s, me));
         dismiss_prompt(&s, me);
         dismiss_prompt(&s, me);

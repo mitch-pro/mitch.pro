@@ -306,8 +306,8 @@ mod tests {
     #[tokio::test]
     async fn deletes_everything_after_the_right_password_and_nothing_before() {
         let (state, dir) = test_state();
-        let email = "leaver@student.rjuhsd.us";
-        let other = "stayer@student.rjuhsd.us";
+        let email = "test.student1@student.rjuhsd.us";
+        let other = "test.student2@student.rjuhsd.us";
         mitch_lib::passwords::password_set(
             &state.store,
             email,
@@ -359,7 +359,7 @@ mod tests {
     #[tokio::test]
     async fn an_open_marketplace_listing_blocks_deletion_and_a_referral_cannot_be_replayed() {
         let (state, dir) = test_state();
-        let email = "seller@student.rjuhsd.us";
+        let email = "test.student3@student.rjuhsd.us";
         mitch_lib::passwords::password_set(
             &state.store,
             email,

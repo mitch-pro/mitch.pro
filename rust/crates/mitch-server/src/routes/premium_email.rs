@@ -165,7 +165,7 @@ mod tests {
     #[tokio::test]
     async fn status_register_and_dismiss_follow_premium_and_prompt_rules() {
         let (state, dir) = test_state();
-        let email = "member@student.rjuhsd.us";
+        let email = "test.student2@student.rjuhsd.us";
         let headers = headers_for(&state, email);
 
         assert_eq!(
