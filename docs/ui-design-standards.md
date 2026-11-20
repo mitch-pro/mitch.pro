@@ -38,7 +38,7 @@ Every user-facing and internal page on the site must adhere to the design langua
 
 ### Home, Games, and Rankings
 
-The homepage groups the animated hello, Mitch mark, local clock, and shortcuts in a single welcome panel. Games spans the shortcut area above Matrix, Cloud Linux, and Movies. Rankings and Friends share a panel, and the Pages directory arranges Community, MitchCoins, and Account links in columns that stack on phones. Preferences lives in the Account column. The Rankings preview requests three rows from the same leaderboard endpoint used by the full rankings page and keeps the existing profile links and cosmetics.
+The Friends strip sits directly below the masthead. The welcome panel places the floating Mitch mark to the left of the animated hello and keeps the local clock on the right. Games spans the shortcut area above Matrix, Cloud Linux, and Movies. Rankings appears below the welcome panel, and the Pages directory arranges Community, MitchCoins, and Account links in columns that stack on phones. Preferences lives in the Account column. The Rankings preview requests three rows from the same leaderboard endpoint used by the full rankings page and keeps the existing profile links and cosmetics.
 
 The games portal uses the full viewport width and adapts the number of game columns to the available space. The player fills the viewport with a compact toolbar, and the Fullscreen button expands the game itself where the browser supports it. The portal uses the same color tokens and wordmark as the homepage. The rankings page accepts a `metric` query parameter to open a category directly.
 

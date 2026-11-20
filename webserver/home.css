@@ -137,15 +137,15 @@ body.home:has(> #site-credit) #_agree_footer { display: none; }
   font: 600 1.35rem/1.15 var(--t-heading);
   letter-spacing: -.02em;
 }
-.home-welcome, .home-overview, .home-directory {
+.home-friends, .home-welcome, .home-rankings, .home-directory {
   border: 1px solid var(--t-bd);
   border-radius: var(--t-radius);
   background: var(--t-bg2);
 }
-.home-welcome { padding: 0 var(--home-inset); }
+.home-welcome { margin-top: 18px; padding: 0 var(--home-inset); }
 .home-hello {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 18px;
   padding-block: 20px;
@@ -170,11 +170,6 @@ body.home:has(> #site-credit) #_agree_footer { display: none; }
   background: var(--t-gls);
   color: var(--t-fg);
   font-size: .76rem;
-}
-.home-overview {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  margin-top: 18px;
 }
 .home-features { min-width: 0; }
 .home-feature {
@@ -223,10 +218,10 @@ body.home:has(> #site-credit) #_agree_footer { display: none; }
 }
 .feature-games h2 { margin: 0; font: 600 clamp(1.55rem, 3vw, 2rem)/1.1 var(--t-heading); }
 .feature-arrow { color: var(--t-ac); font-size: 1.35rem; line-height: 1; }
-.home-overview > section { min-width: 0; padding: 15px var(--home-inset); }
-.home-overview > section + section { border-inline-start: 1px solid var(--t-bd); }
-.home-overview header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 7px; }
-.home-overview header a, .home-rankings-footer {
+.home-friends, .home-rankings { min-width: 0; padding: 15px var(--home-inset); }
+.home-rankings { margin-top: 18px; }
+:is(.home-friends, .home-rankings) header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 7px; }
+:is(.home-friends, .home-rankings) header a, .home-rankings-footer {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -234,7 +229,7 @@ body.home:has(> #site-credit) #_agree_footer { display: none; }
   color: var(--t-fg2);
   font-size: .875rem;
 }
-.home-overview a:hover { color: var(--t-ac); }
+:is(.home-friends, .home-rankings) a:hover { color: var(--t-ac); }
 .home-rankings-content { display: grid; gap: 5px; min-width: 0; }
 .home-rankings-content .home-ranking-metric { display: flex; align-items: center; gap: 7px; min-height: 26px; color: var(--t-fg2); font-size: .77rem; }
 #home-ranking-list { display: grid; gap: 1px; list-style: none; margin: 0; padding: 0; }
@@ -554,10 +549,12 @@ body.members-rail-open #people-edge-trigger {display:none}
 .home-control-card p { margin: 4px 0 0; color: var(--t-fg2); font-size: .8rem; }
 .control-status { display: flex; align-items: center; gap: 7px; color: var(--t-fg2); font-size: .77rem; }
 body.home.home-compact .home-hello { padding-block: 8px; }
-body.home.home-compact .hello-emblem { --logo-size: 60px; height: 92px; }
 body.home.home-compact .home-feature-row .home-feature { min-height: 44px; }
 body.home.home-compact .feature-games { min-height: 62px; padding-block: 8px; }
 
+@media (min-width: 561px) {
+  body.home.home-compact .hello-emblem { --logo-size: 60px; height: 92px; }
+}
 @media (max-width: 760px) {
   .home-main { width: calc(100% - 28px); padding-top: 14px; }
   #people-edge-trigger { display: none; }
@@ -568,16 +565,19 @@ body.home.home-compact .feature-games { min-height: 62px; padding-block: 8px; }
   .home-link-group .site-link .link-arrow { display: none; }
 }
 @media (max-width: 560px) {
-  .home-hello { grid-template-columns: minmax(0, 1fr) auto; padding-block: 15px; }
-  .hello-emblem { display: none; }
+  .home-welcome, .home-rankings { margin-top: 14px; }
+  .home-hello { gap: 8px; padding-block: 15px; }
+  .hello-emblem { --logo-size: 38px; --logo-travel: 5px; width: 56px; height: 64px; }
+  .hello-logo-prism { top: 6px; }
+  .hello-logo-shadow { bottom: 14px; }
+  .hello-logo-wordmark { font-size: .65rem; }
   .home-clock time { font-size: clamp(1.38rem, 5.4vw, 1.95rem); }
   .home-clock > span { max-width: 115px; font-size: .68rem; }
   .hello-writing { width: min(100%, 155px); margin-left: -5px; }
   .home-feature.feature-games { min-height: 66px; padding: 8px 12px; }
   .home-feature-row .home-feature { flex-direction: column; justify-content: center; gap: 5px; padding-inline: 3px; font-size: .88rem; text-align: center; }
   .home-feature-row .feature-icon { width: 16px; height: 16px; }
-  .home-overview, .category-grid { grid-template-columns: minmax(0, 1fr); }
-  .home-overview > section + section { border-inline-start: 0; border-top: 1px solid var(--t-bd); }
+  .category-grid { grid-template-columns: minmax(0, 1fr); }
   .home-directory { padding-block: 16px 10px; }
   .home-link-group + .home-link-group { border-inline-start: 0; border-top: 1px solid var(--t-bd); padding: 12px 0 0; }
   .home-link-group:not(:last-child) { padding-inline-end: 0; padding-bottom: 8px; margin-bottom: 10px; }
