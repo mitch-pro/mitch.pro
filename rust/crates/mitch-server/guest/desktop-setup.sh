@@ -40,15 +40,34 @@ if [ ! -e /etc/dconf/profile/user ]; then
 elif ! grep -qx 'system-db:local' /etc/dconf/profile/user; then
   printf '\nsystem-db:local\n' >>/etc/dconf/profile/user
 fi
-cat >/etc/dconf/db/local.d/20-mitch-desktop <<'EOF'
+cat >/etc/dconf/db/.mitch-desktop.new <<'EOF'
 [org/gnome/desktop/session]
 idle-delay=uint32 0
 [org/gnome/desktop/screensaver]
 lock-enabled=false
 [org/gnome/desktop/lockdown]
 disable-lock-screen=true
+[org/cinnamon/desktop/session]
+idle-delay=uint32 0
+[org/cinnamon/desktop/screensaver]
+lock-enabled=false
+[org/cinnamon/desktop/lockdown]
+disable-lock-screen=true
+[org/cinnamon/settings-daemon/plugins/power]
+sleep-display-ac=0
+sleep-inactive-ac-timeout=0
+lock-on-suspend=false
 EOF
-dconf update
+if cmp -s /etc/dconf/db/.mitch-desktop.new /etc/dconf/db/local.d/20-mitch-desktop; then
+  rm -f /etc/dconf/db/.mitch-desktop.new
+else
+  mv /etc/dconf/db/.mitch-desktop.new /etc/dconf/db/local.d/20-mitch-desktop
+fi
+# Recompiling the system database makes a running Cinnamon shell reload, so
+# only do it when the database is missing or older than its sources.
+if [ ! -e /etc/dconf/db/local ] || [ -n "$(find /etc/dconf/db/local.d /etc/dconf/profile/user -type f -newer /etc/dconf/db/local)" ]; then
+  dconf update
+fi
 if [ -d /etc/gdm3 ]; then
   # Preserve unrelated GDM settings; only change the managed login keys.
   python3 - "$user" <<'PY'
@@ -118,8 +137,9 @@ ready() {
   pgrep -u "$uid" -x gnome-shell >/dev/null || pgrep -u "$uid" -x xfce4-session >/dev/null || pgrep -u "$uid" -x cinnamon >/dev/null || pgrep -u "$uid" -x mate-session >/dev/null
 }
 if ! ready; then
-  # Leave any existing human session intact. A logged-out greeter can safely restart.
-  if ! loginctl list-sessions --no-legend | awk '$4=="seat0" && $3!="gdm" {found=1} END{exit !found}'; then
+  # Leave any existing human session intact. A logged-out greeter (GDM's gdm
+  # user or LightDM's lightdm user) can safely restart.
+  if ! loginctl list-sessions --no-legend | awk '$4=="seat0" && $3!="gdm" && $3!="lightdm" {found=1} END{exit !found}'; then
     systemctl restart display-manager
   fi
 fi
@@ -146,4 +166,4 @@ if command -v apt-get >/dev/null; then
   fi
 fi
 install -d /var/lib/mitch-desktop
-printf '2\n' >/var/lib/mitch-desktop/setup-version
+printf '3\n' >/var/lib/mitch-desktop/setup-version

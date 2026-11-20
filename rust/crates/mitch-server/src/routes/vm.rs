@@ -1321,6 +1321,9 @@ pub(crate) fn is_eligible_for_free_vm(state: &AppState, email: &str, is_admin: b
 /// after `PENDING_START_TTL_MS`.
 type PendingStarts = std::collections::HashMap<i64, (f64, f64, u64)>;
 static PENDING_STARTS: std::sync::Mutex<Option<PendingStarts>> = std::sync::Mutex::new(None);
+/// Fixed guest login name for every managed computer.
+const DESKTOP_GUEST_USERNAME: &str = "student";
+
 const PENDING_START_TTL_MS: u64 = 120_000;
 
 /// Reserves a VM's resources against the capacity cap until it is running.
@@ -4142,20 +4145,11 @@ pub(crate) async fn handle(
             requests.insert(lock_key.clone(), json!({ "startedAt": now_ms() as f64 }));
         }
 
-        let email_prefix = actor.email.split('@').next().unwrap_or("student");
-        let mut base_user = email_prefix.to_lowercase();
-        base_user.retain(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
-        if !base_user.starts_with(|c: char| c.is_ascii_lowercase()) {
-            base_user = format!("u{base_user}");
-        }
-        base_user.truncate(30);
-        if matches!(base_user.as_str(), "root" | "daemon" | "nobody" | "ubuntu") {
-            base_user = format!("u{base_user}");
-        }
-
-        let requested_username = jsval::str_or(body.get("desktopUsername"), &base_user)
-            .trim()
-            .to_lowercase();
+        // Every computer's guest login is "student", regardless of the owner's
+        // email or any client-supplied name. Deriving it from the email broke
+        // accounts whose local part collides with a system account (e.g.
+        // "admin").
+        let requested_username = DESKTOP_GUEST_USERNAME.to_string();
         let raw_password = body
             .get("desktopPassword")
             .and_then(Value::as_str)
@@ -4423,20 +4417,11 @@ pub(crate) async fn handle(
             requests.insert(lock_key.clone(), json!({ "startedAt": now_ms() as f64 }));
         }
 
-        let email_prefix = actor.email.split('@').next().unwrap_or("student");
-        let mut base_user = email_prefix.to_lowercase();
-        base_user.retain(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
-        if !base_user.starts_with(|c: char| c.is_ascii_lowercase()) {
-            base_user = format!("u{base_user}");
-        }
-        base_user.truncate(30);
-        if matches!(base_user.as_str(), "root" | "daemon" | "nobody" | "ubuntu") {
-            base_user = format!("u{base_user}");
-        }
-
-        let requested_username = jsval::str_or(body.get("desktopUsername"), &base_user)
-            .trim()
-            .to_lowercase();
+        // Every computer's guest login is "student", regardless of the owner's
+        // email or any client-supplied name. Deriving it from the email broke
+        // accounts whose local part collides with a system account (e.g.
+        // "admin").
+        let requested_username = DESKTOP_GUEST_USERNAME.to_string();
         let raw_password = body
             .get("desktopPassword")
             .and_then(Value::as_str)
