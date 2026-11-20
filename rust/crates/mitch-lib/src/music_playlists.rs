@@ -503,32 +503,32 @@ mod tests {
     #[test]
     fn access_rules() {
         let (dir, s) = store();
-        let id = create(&s, "Owner@x.com", "  Road   trip ", false, "").unwrap();
+        let id = create(&s, "Owner@x.test", "  Road   trip ", false, "").unwrap();
         let pl = get(&s, &id).unwrap();
         assert_eq!(pl.name, "Road trip");
-        assert!(can_view(&pl, "owner@x.com", ""));
-        assert!(!can_view(&pl, "other@x.com", ""));
+        assert!(can_view(&pl, "owner@x.test", ""));
+        assert!(!can_view(&pl, "other@x.test", ""));
         let token = set_share(&s, &id, true);
         let pl = get(&s, &id).unwrap();
-        assert!(can_view(&pl, "other@x.com", &token));
-        assert!(!can_view(&pl, "other@x.com", "wrong"));
-        assert!(!can_view(&pl, "other@x.com", ""));
+        assert!(can_view(&pl, "other@x.test", &token));
+        assert!(!can_view(&pl, "other@x.test", "wrong"));
+        assert!(!can_view(&pl, "other@x.test", ""));
         set_share(&s, &id, false);
         let pl = get(&s, &id).unwrap();
-        assert!(!can_view(&pl, "other@x.com", &token));
+        assert!(!can_view(&pl, "other@x.test", &token));
         assert!(
-            !can_view(&pl, "other@x.com", ""),
+            !can_view(&pl, "other@x.test", ""),
             "empty token never matches"
         );
         update(&s, &id, None, Some(true)).unwrap();
-        assert!(can_view(&get(&s, &id).unwrap(), "other@x.com", ""));
+        assert!(can_view(&get(&s, &id).unwrap(), "other@x.test", ""));
         let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
     fn tracks_add_dedupe_move_remove() {
         let (dir, s) = store();
-        let id = create(&s, "o@x.com", "P", false, "").unwrap();
+        let id = create(&s, "o@x.test", "P", false, "").unwrap();
         let added = add_tracks(
             &s,
             &id,
@@ -555,12 +555,12 @@ mod tests {
     #[test]
     fn caps_names_playlists_and_tracks() {
         let (dir, s) = store();
-        assert!(create(&s, "o@x.com", "   ", false, "").is_err());
+        assert!(create(&s, "o@x.test", "   ", false, "").is_err());
         assert_eq!(
             clean_name(&"x".repeat(200)).unwrap().chars().count(),
             MAX_NAME_CHARS
         );
-        let id = create(&s, "o@x.com", "Big", false, "").unwrap();
+        let id = create(&s, "o@x.test", "Big", false, "").unwrap();
         let many: Vec<_> = (0..MAX_TRACKS + 20)
             .map(|i| sp(&format!("sp{i}"), "t"))
             .collect();
@@ -575,7 +575,7 @@ mod tests {
     #[test]
     fn spotify_sync_keeps_matches_and_manual_tracks() {
         let (dir, s) = store();
-        let id = create(&s, "o@x.com", "S", true, "37i9dQZF1DXcBWIGoYBM5M").unwrap();
+        let id = create(&s, "o@x.test", "S", true, "37i9dQZF1DXcBWIGoYBM5M").unwrap();
         sync_spotify(&s, &id, vec![sp("s1", "one"), sp("s2", "two")]).unwrap();
         add_tracks(&s, &id, vec![t("ccccccccccc", "mine")]).unwrap();
         // Pretend s1 got matched to a video earlier.
@@ -596,17 +596,17 @@ mod tests {
     #[test]
     fn public_listing_and_copy() {
         let (dir, s) = store();
-        let a = create(&s, "o@x.com", "Summer 100%", true, "").unwrap();
+        let a = create(&s, "o@x.test", "Summer 100%", true, "").unwrap();
         add_tracks(&s, &a, vec![t("aaaaaaaaaaa", "1")]).unwrap();
-        let _empty = create(&s, "o@x.com", "Summer empty", true, "").unwrap();
-        let _private = create(&s, "o@x.com", "Summer private", false, "").unwrap();
+        let _empty = create(&s, "o@x.test", "Summer empty", true, "").unwrap();
+        let _private = create(&s, "o@x.test", "Summer private", false, "").unwrap();
         let listed = list_public(&s, "summer", 50);
         assert_eq!(listed.len(), 1, "private and empty playlists aren't listed");
         assert_eq!(list_public(&s, "100%", 50).len(), 1);
         assert_eq!(list_public(&s, "_", 50).len(), 0, "wildcards are literal");
-        let copy = copy_to(&s, &get(&s, &a).unwrap(), "friend@x.com").unwrap();
+        let copy = copy_to(&s, &get(&s, &a).unwrap(), "friend@x.test").unwrap();
         let c = get(&s, &copy).unwrap();
-        assert!(!c.public && is_owner(&c, "friend@x.com"));
+        assert!(!c.public && is_owner(&c, "friend@x.test"));
         assert_eq!(tracks(&s, &copy).len(), 1);
         delete(&s, &a);
         assert!(get(&s, &a).is_none() && tracks(&s, &a).is_empty());
