@@ -1622,7 +1622,7 @@ pub async fn handle(
             let vm_json = vm.to_json();
             let action_clone = action.clone();
             power_futs.push(async move {
-                let _ = pve_clone.power(&vm_json, &action_clone, false).await;
+                let _ = pve_clone.power(&vm_json, &action_clone).await;
             });
             vmlib::update_virtual_machine_runtime(&state.store, &vm.id, None, Some(target_status));
         }

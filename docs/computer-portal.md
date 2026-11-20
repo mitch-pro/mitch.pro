@@ -137,20 +137,14 @@ and SATA/E1000e devices with inbox Windows drivers. Linux/custom defaults remain
 separate. See [Proxmox's Windows 11 recommendations](https://pve.proxmox.com/wiki/Windows_11_guest_best_practices).
 
 `ensure_optimized_vm_config` forces a display adapter on every VM at
-power-on: `virtio,memory=128` by default, `virtio-gl` (VirGL — GPU-
-accelerated 3D, not just the plain virtio-gpu 2D framebuffer) for ChromeOS
-clones and owner-owned VMs, and nothing at all for Windows guests
-(`ostype` starting with `win` — vanilla Windows has neither driver).
-ChromeOS-clone detection (VM record's `templateVmid` matching the
-configured `chromeos_template_vmid`) and owner detection (`is_owner_email`
-on the record's `ownerEmail`) both have to happen in `power()`, not inside
-`ensure_optimized_vm_config` itself: the bare Proxmox config that function
-reads has no owner or "cloned from template X" information, and
-`ProxmoxDesktopService` has no `DataStore` access to look either up
-itself. Without the Windows exception, a Windows guest's display would be
-silently overwritten (black screen) on its next restart;
-`clone_chromeos_desktop` also sets `virtio-gl` directly at clone time, so
-a fresh ChromeOS clone doesn't wait for its first manual restart to get it.
+power-on: `virtio-gl` (VirGL — GPU-accelerated 3D, not just the plain
+virtio-gpu 2D framebuffer) for every guest except Windows (`ostype`
+starting with `win` — vanilla Windows has no virtio-gpu driver, so its
+display is left alone or it would go black on its next restart).
+`virtio-gl` used to be limited to ChromeOS and owner VMs because the old
+Ubuntu template didn't work with it; the Mint template does, so it is now
+the default. `clone_chromeos_desktop` also sets `virtio-gl` directly at
+clone time, so a fresh ChromeOS clone doesn't wait for its first restart.
 
 ## ChromeOS (BYO-OS preset)
 
