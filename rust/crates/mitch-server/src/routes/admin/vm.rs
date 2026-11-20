@@ -1426,7 +1426,6 @@ pub async fn handle(
             ));
         }
         let all_records = vmlib::list_virtual_machines(&state.store, true);
-        let norm_actor = auth::normalize_email(&actor.email);
         let pve = crate::proxmox_desktop::desktop();
         let guest_statuses = pve.list_guests().await.unwrap_or_default();
         let status_by_vmid: std::collections::HashMap<i64, String> = guest_statuses
@@ -1440,9 +1439,7 @@ pub async fn handle(
 
         let mut fleet = Vec::new();
         for r in all_records {
-            if auth::normalize_email(&r.owner_email) == norm_actor
-                && (r.operating_system == "ChromeOS" || r.hostname.starts_with("chromeos-fleet-"))
-            {
+            if vmlib::is_fleet_hostname(&r.hostname) {
                 let mut json_val = r.to_json();
                 let vmid = r.vmid as i64;
                 if let Some(live_status) = status_by_vmid.get(&vmid) {
@@ -1473,14 +1470,9 @@ pub async fn handle(
         }
 
         let all_records = vmlib::list_virtual_machines(&state.store, true);
-        let norm_actor = auth::normalize_email(&actor.email);
         let mut existing_fleet: Vec<vmlib::VmRecord> = all_records
             .iter()
-            .filter(|r| {
-                auth::normalize_email(&r.owner_email) == norm_actor
-                    && (r.operating_system == "ChromeOS"
-                        || r.hostname.starts_with("chromeos-fleet-"))
-            })
+            .filter(|r| vmlib::is_fleet_hostname(&r.hostname))
             .cloned()
             .collect();
 
@@ -1547,8 +1539,8 @@ pub async fn handle(
 
             let rec_json = json!({
                 "id": id,
-                "ownerEmail": actor.email,
-                "ownerUserId": profile::get_uid_for_email(&state.store, &state.id_secret, &actor.email).unwrap_or_default(),
+                "ownerEmail": "",
+                "ownerUserId": "",
                 "vmid": vmid,
                 "node": pve.node(),
                 "guestType": "qemu",
@@ -1612,14 +1604,9 @@ pub async fn handle(
         }
 
         let all_records = vmlib::list_virtual_machines(&state.store, true);
-        let norm_actor = auth::normalize_email(&actor.email);
         let fleet: Vec<vmlib::VmRecord> = all_records
             .into_iter()
-            .filter(|r| {
-                auth::normalize_email(&r.owner_email) == norm_actor
-                    && (r.operating_system == "ChromeOS"
-                        || r.hostname.starts_with("chromeos-fleet-"))
-            })
+            .filter(|r| vmlib::is_fleet_hostname(&r.hostname))
             .collect();
 
         let pve = crate::proxmox_desktop::desktop();
@@ -1681,13 +1668,12 @@ pub async fn handle(
             .or_else(|| body.get("dbOnly").and_then(Value::as_bool))
             .unwrap_or(false);
         let all_records = vmlib::list_virtual_machines(&state.store, true);
-        let norm_actor = auth::normalize_email(&actor.email);
         let pve = crate::proxmox_desktop::desktop();
         let template_vmid = pve.chromeos_template_vmid();
 
         let mut to_delete = Vec::new();
         for r in &all_records {
-            if auth::normalize_email(&r.owner_email) != norm_actor {
+            if !vmlib::is_fleet_hostname(&r.hostname) {
                 continue;
             }
             if !target_id.is_empty() && r.id != target_id {

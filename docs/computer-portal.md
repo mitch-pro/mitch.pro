@@ -170,6 +170,9 @@ Until `PROXMOX_CHROMEOS_TEMPLATE_VMID` is set, the "chromeos" preset is
 simply absent from `GET /api/vm/byo-os/presets` and `create-preset`
 returns 503 for it — there's no broken-looking option sitting in the UI.
 
+BYO-OS presets (including ChromeOS) are free (`PRESET_ISO_COST_COINS = 0`);
+the charge step is skipped at 0. Custom ISO uploads still cost `BYO_OS_COST_COINS`.
+
 Existing custom VMs offer **Windows installer compatibility**. This is an
 explicit, authenticated, CSRF-protected action on the user's own stopped VM. It
 preserves disks and existing TPM/EFI state, grows storage to 64 GB when needed,
@@ -197,7 +200,7 @@ silently reset this back to `false`).
 ### Owner 24-Machine ChromeOS Fleet & Controller
 
 To support automated batch testing and owner workflows, an owner-exclusive 24-machine ChromeOS fleet can be provisioned and controlled via `/staff-dashboard/vms`:
-- **Hardware Specs**: 2 CPU cores, 4 GB RAM (4096 MB), 32 GB disk, `keep_alive = 1` (exempt from inactivity shutdown), owner-locked (`is_vm_owner_locked`).
+- **Hardware Specs**: 2 CPU cores, 4 GB RAM (4096 MB), 32 GB disk, `keep_alive = 1` (exempt from inactivity shutdown), **ownerless** (empty `ownerEmail`; fleet machines are identified by the `chromeos-fleet-` hostname prefix, only the site owner can reach them through the fleet endpoints/console, and per-user lookups like recreate and BYO-OS replace never see them — `get_virtual_machines_for_owner` filters the prefix, which also covers older fleet rows created under the owner's email).
 - **VMID Allocation**: VMIDs start strictly at 300 (avoiding any collision with VMIDs below 300), checking both Proxmox's live cluster guest registry and SQLite database to allocate contiguous available IDs.
 - **Provisioning Endpoint**: `POST /api/admin/vms/fleet/create-chromeos` provisions up to 24 machines named `chromeos-fleet-01` through `24`, cloned from `PROXMOX_CHROMEOS_TEMPLATE_VMID`. Strictly owner-only.
 - **Batch Power Endpoint**: `POST /api/admin/vms/fleet/power` accepts `action: "start" | "shutdown" | "restart" | "force-stop"`, executing power transitions across all 24 machines concurrently.

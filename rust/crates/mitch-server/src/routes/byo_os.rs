@@ -82,12 +82,14 @@ struct PresetIso {
     filename: &'static str,
 }
 
-/// Cheaper than custom BYO-OS (`PRESET_ISO_COST_COINS` vs
-/// `BYO_OS_COST_COINS`) since there's no upload — the file is already
-/// sitting on `iso_storage`. This is the one place the catalog is listed;
+/// Presets are free: there's no upload, and the file is already sitting on
+/// `iso_storage`. A user only ever has one computer (creating a preset
+/// replaces it), so free creation can't mint coins or stack resources. The
+/// charge/refund paths below skip entirely at 0 because `spend_coins`
+/// rejects zero amounts. This is the one place the catalog is listed;
 /// don't let a second copy of it drift out of sync (AGENTS.md "Economy
 /// integrity").
-const PRESET_ISO_COST_COINS: f64 = 750.0;
+const PRESET_ISO_COST_COINS: f64 = 0.0;
 const PRESET_ISOS: &[PresetIso] = &[
     PresetIso {
         id: "windows",
@@ -1218,17 +1220,19 @@ pub(crate) async fn handle(
         // Checked and debited up front, before anything (including the user's existing
         // computer) is touched — failing late here would mean deleting a
         // working computer only to then refuse the replacement.
-        if let Err(e) = mitch_lib::coins::spend_coins(
-            &state.store,
-            state.data_dir(),
-            &actor.email,
-            PRESET_ISO_COST_COINS,
-            &format!("byo-os preset: {}", preset_name),
-        ) {
-            return Some(json_response(
-                400,
-                json!({ "error": format!("Insufficient coins: {e}") }),
-            ));
+        if PRESET_ISO_COST_COINS > 0.0 {
+            if let Err(e) = mitch_lib::coins::spend_coins(
+                &state.store,
+                state.data_dir(),
+                &actor.email,
+                PRESET_ISO_COST_COINS,
+                &format!("byo-os preset: {}", preset_name),
+            ) {
+                return Some(json_response(
+                    400,
+                    json!({ "error": format!("Insufficient coins: {e}") }),
+                ));
+            }
         }
 
         let lock_key = format!("byo-os-create-{}", actor.email);
