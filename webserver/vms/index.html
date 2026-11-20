@@ -7,7 +7,7 @@
   <title>VM Lab · mitch.pro</title>
   <link rel="icon" href="/favicon.ico">
   <link rel="stylesheet" href="/app.css">
-  <link rel="stylesheet" href="/vms/portal.css?v=8">
+  <link rel="stylesheet" href="/vms/portal.css?v=10">
   <link rel="stylesheet" href="/vms/portal-polish.css?v=9">
 </head>
 <body class="app-shell computer-portal">
@@ -83,69 +83,71 @@
     </form>
   </dialog>
 
-  <dialog id="byo-os-dialog" class="confirm-dialog">
+  <dialog id="byo-os-dialog" class="confirm-dialog" aria-labelledby="byo-os-title">
     <form id="byo-os-form" method="dialog">
-      <h2>Custom OS</h2>
-      <p style="font-size: 0.85rem; color: var(--t-fg2); text-align: left; margin: 0 0 14px 0;">
-        Boot a blank computer from an install ISO and set up the OS yourself. Costs 1000 MitchCoins per ISO; recreating from the same stored ISO is free. Uploads are capped at 6GB. Links over 6GB add a surcharge (100 <img class="mitch-coin-inline" src="/mitchcoin.svg?v=4" width="20" height="20" alt="MitchCoins">/GB, capped at 12GB).
-      </p>
+      <header class="byo-header">
+        <h2 id="byo-os-title">Custom OS</h2>
+        <button type="button" id="byo-os-close-btn" class="quiet-button" autofocus>Close</button>
+      </header>
 
-      <div style="background:var(--t-bg3); border:1px solid var(--t-bd); border-radius:var(--t-radius-sm); padding:12px; margin-bottom:16px; text-align:left;">
-        <p style="font-size:0.85rem; color:var(--t-fg); margin:0 0 8px 0; font-weight:600;">Or start from a ready-made ISO</p>
-        <p class="byo-hint">Replaces your current computer.</p>
-        <label style="display:flex; flex-direction:column; gap:6px; font-size:0.85rem; color:var(--t-fg2);">
-          <span>Operating system</span>
-          <select id="byo-os-preset-select" style="padding:9px 12px; border-radius:var(--t-radius-sm); background:var(--t-bg3); border:1px solid var(--t-bd); color:var(--t-fg);">
-            <option value="">Loading…</option>
-          </select>
-        </label>
-        <button type="button" id="byo-os-preset-btn" class="primary-button" style="margin-top:10px;" disabled>Create computer from preset →</button>
-      </div>
+      <div class="byo-content">
+        <p id="byo-os-replace-warning" class="byo-warning" hidden>Creating a computer replaces your current one and deletes its files.</p>
 
-      <div id="byo-os-no-iso">
-        <label style="display:flex; flex-direction:column; gap:6px; text-align:left; font-size:0.85rem; color:var(--t-fg2);">
-          <span>Link to an ISO (http/https, any size)</span>
-          <input type="url" id="byo-os-url-input" placeholder="https://example.com/install.iso" style="padding:9px 12px; border-radius:var(--t-radius-sm); background:var(--t-bg3); border:1px solid var(--t-bd); color:var(--t-fg);">
-        </label>
-        <button type="button" id="byo-os-url-btn" class="primary-button" style="margin-top:10px;" disabled>Fetch from link (1000 <img class="mitch-coin-inline" src="/mitchcoin.svg?v=4" width="20" height="20" alt="MitchCoins">+)</button>
+        <fieldset class="byo-presets">
+          <legend>Operating system presets</legend>
+          <p id="byo-os-preset-status" class="byo-preset-status" role="status">Loading presets…</p>
+          <div id="byo-os-preset-options" class="byo-preset-grid"></div>
+          <button type="button" id="byo-os-preset-btn" class="primary-button" disabled>Create from preset</button>
+        </fieldset>
 
-        <p class="byo-hint byo-or">Or upload a file</p>
-        <label style="display:flex; flex-direction:column; gap:6px; text-align:left; font-size:0.85rem; color:var(--t-fg2);">
-          <span>Install ISO (.iso, max 6GB)</span>
-          <input type="file" id="byo-os-file-input" accept=".iso">
-        </label>
-        <div id="byo-os-progress-wrap" class="is-hidden" style="margin-top:12px;">
-          <div style="height:8px; border-radius:999px; background:var(--t-bd); overflow:hidden;">
-            <div id="byo-os-progress-bar" style="height:100%; width:0%; background:var(--t-ac); transition:width .2s;"></div>
+        <section class="byo-iso-section" aria-labelledby="byo-os-iso-title">
+          <h3 id="byo-os-iso-title">Your own ISO</h3>
+
+          <div id="byo-os-no-iso">
+            <p class="byo-copy">An ISO costs 1,000 MitchCoins. You can use the stored ISO again for free.</p>
+            <div class="byo-import-grid">
+              <div class="byo-import-option">
+                <label for="byo-os-url-input">ISO link</label>
+                <p id="byo-os-url-hint">Up to 12 GB. Each GB above 6 GB adds 100 MitchCoins.</p>
+                <input type="url" id="byo-os-url-input" placeholder="https://example.com/install.iso" aria-describedby="byo-os-url-hint">
+                <button type="button" id="byo-os-url-btn" class="quiet-button" disabled>Fetch ISO</button>
+              </div>
+              <div class="byo-import-option">
+                <label for="byo-os-file-input">Upload an ISO</label>
+                <p id="byo-os-file-hint">Choose an .iso file up to 6 GB.</p>
+                <input type="file" id="byo-os-file-input" accept=".iso" aria-describedby="byo-os-file-hint">
+                <button type="button" id="byo-os-upload-btn" class="quiet-button" disabled>Upload ISO</button>
+              </div>
+            </div>
+            <div id="byo-os-progress-wrap" class="is-hidden">
+              <progress id="byo-os-progress-bar" max="100" value="0" aria-label="ISO upload progress"></progress>
+              <p id="byo-os-progress-text"></p>
+            </div>
           </div>
-          <p id="byo-os-progress-text" style="font-size:0.8rem; color:var(--t-fg2); margin:6px 0 0 0;"></p>
-        </div>
-        <button type="button" id="byo-os-upload-btn" class="quiet-button" style="margin-top:14px;" disabled>Upload ISO (1000 <img class="mitch-coin-inline" src="/mitchcoin.svg?v=4" width="20" height="20" alt="MitchCoins">)</button>
-      </div>
 
-      <div id="byo-os-has-iso" class="is-hidden" style="text-align:left;">
-        <div style="background:var(--t-bg3); border:1px solid var(--t-bd); border-radius:var(--t-radius-sm); padding:12px; margin-bottom:12px;">
-          <strong id="byo-os-iso-name" style="word-break:break-all;"></strong>
-          <p id="byo-os-iso-meta" style="font-size:0.8rem; color:var(--t-fg2); margin:4px 0 0 0;"></p>
-        </div>
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-          <button type="button" id="byo-os-create-btn" class="primary-button">Create computer from this ISO →</button>
-          <button type="button" id="byo-os-delete-btn" class="quiet-button">Remove ISO</button>
-        </div>
-        <div id="byo-os-problem-box" style="margin-top:14px; padding-top:12px; border-top:1px solid var(--t-bd);">
-          <p style="font-size:0.78rem; color:var(--t-fg3); margin:0 0 8px 0;">Got the wrong file? (e.g. a download <em>page</em> instead of the ISO itself)</p>
-          <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <button type="button" id="byo-os-refund-btn" class="quiet-button is-hidden">This was the wrong link — refund me</button>
-            <button type="button" id="byo-os-report-btn" class="quiet-button">Report an issue</button>
+          <div id="byo-os-has-iso" class="is-hidden">
+            <div class="byo-stored-iso">
+              <span class="byo-disc" aria-hidden="true"></span>
+              <div>
+                <strong id="byo-os-iso-name"></strong>
+                <p id="byo-os-iso-meta"></p>
+              </div>
+            </div>
+            <div class="byo-actions">
+              <button type="button" id="byo-os-create-btn" class="primary-button" disabled>Create from this ISO</button>
+              <button type="button" id="byo-os-delete-btn" class="quiet-button">Remove ISO</button>
+            </div>
+            <div id="byo-os-problem-box">
+              <div class="byo-actions">
+                <button type="button" id="byo-os-refund-btn" class="quiet-button is-hidden">Refund wrong ISO</button>
+                <button type="button" id="byo-os-report-btn" class="quiet-button">Report an issue</button>
+              </div>
+            </div>
           </div>
-        </div>
+        </section>
       </div>
 
-      <p id="byo-os-status" class="form-status" style="font-size: 0.85rem; margin: 12px 0 0 0; min-height: 1.2em;" role="status"></p>
-
-      <div class="dialog-actions">
-        <button type="button" id="byo-os-close-btn" class="quiet-button">Close</button>
-      </div>
+      <p id="byo-os-status" role="status"></p>
     </form>
   </dialog>
 
@@ -185,7 +187,7 @@
   </dialog>
 
   <script src="/app-shell.js?v=17" defer></script>
-  <script src="/vms/portal.js?v=14" defer></script>
-  <script src="/vms/byo-os.js?v=4" defer></script>
+  <script src="/vms/portal.js?v=15" defer></script>
+  <script src="/vms/byo-os.js?v=5" defer></script>
 </body>
 </html>

@@ -193,6 +193,7 @@
       const trigger = document.activeElement;
       const dlg = document.createElement('dialog');
       dlg.className = 'confirm-dialog';
+      dlg.setAttribute('aria-label', title);
       const form = document.createElement('form'); form.method = 'dialog';
       const h = document.createElement('h2'); h.textContent = title;
       const p = document.createElement('p'); p.textContent = body;

@@ -83,7 +83,142 @@ html[data-theme=dark]{--vm-danger:#ef8c91;--vm-ok:#65d49a}
 @media (prefers-color-scheme:dark){html:not([data-theme=light]){--vm-danger:#ef8c91;--vm-ok:#65d49a}}
 body.computer-portal,body.computer-portal button,body.computer-portal input,body.computer-portal select,body.computer-portal textarea{font-family:var(--t-font)}
 .computer-header-actions{display:flex;gap:8px;align-items:center}
-.byo-hint{font-size:.78rem;color:var(--t-fg3);margin:0 0 10px;text-align:left}.byo-or{margin:18px 0 6px}
 #empty-create-box,#empty-unauthorized-box{flex:1;min-width:0}
 #empty-create-box .quiet-button{margin-top:10px}
 @media(max-width:560px){.computer-hero{flex-wrap:wrap;align-items:flex-start}.computer-header-actions{width:100%}body.computer-portal .computer-header-actions .quiet-button{flex:0 0 auto;min-width:max-content;padding-inline:14px}#empty-create-box .primary-button,#empty-create-box .quiet-button{display:flex;width:100%;margin-left:0}}
+
+/* Custom OS */
+#byo-os-dialog { width: min(790px, calc(100% - 28px)); overflow: hidden; }
+#byo-os-form { display: flex; flex-direction: column; max-height: calc(100dvh - 44px); padding: 0; }
+.byo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px clamp(14px, 3vw, 24px);
+  border-bottom: 1px solid var(--t-bd);
+}
+.byo-content { overflow-y: auto; padding: 18px clamp(14px, 3vw, 24px) 22px; }
+.byo-presets { min-width: 0; margin: 0; padding: 0; border: 0; }
+.byo-presets legend, .byo-iso-section h3 { margin: 0; padding: 0; font: 600 1.19rem/1.25 var(--t-heading, var(--t-font)); }
+.byo-preset-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.byo-preset-grid:empty, .byo-preset-status:empty { display: none; }
+.byo-preset-status, .byo-copy { margin: 7px 0 0; color: var(--t-fg2); font-size: .89rem; line-height: 1.5; }
+.byo-preset-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 68px;
+  padding: 9px;
+  border: 1px solid var(--t-bd);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg3);
+  cursor: pointer;
+}
+.byo-preset-card:hover, .byo-preset-card:has(input:checked) { border-color: var(--t-ac); }
+.byo-preset-card:has(input:checked) { background: color-mix(in srgb, var(--t-ac) 14%, var(--t-bg2)); }
+.byo-preset-card:has(input:focus-visible) { outline: 2px solid var(--t-ac); outline-offset: 2px; }
+.byo-preset-card input { grid-column: 3; grid-row: 1; margin: 0; accent-color: var(--t-ac); }
+.byo-preset-logo {
+  grid-column: 1;
+  grid-row: 1;
+  display: grid;
+  width: 38px;
+  aspect-ratio: 1;
+  place-items: center;
+  border: 1px solid var(--t-bd);
+  border-radius: var(--t-radius-sm);
+  background: #fff;
+}
+.byo-preset-logo img { width: 26px; height: 26px; object-fit: contain; }
+.byo-preset-logo:not(:has(img)) { background: var(--t-bg2); }
+.byo-preset-logo:not(:has(img))::before {
+  content: "";
+  width: 20px;
+  aspect-ratio: 1;
+  border: 1px solid var(--t-ac);
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--t-ac) 0 2px, transparent 3px);
+}
+.byo-preset-info { grid-column: 2; grid-row: 1; min-width: 0; line-height: 1.3; overflow-wrap: anywhere; }
+.byo-preset-info strong { display: block; color: var(--t-fg); font-size: .95rem; }
+.byo-preset-info small { display: block; margin-top: 3px; color: var(--t-fg2); font-size: .78rem; }
+#byo-os-preset-btn { margin-top: 10px; }
+.byo-warning {
+  margin: 0 0 14px;
+  padding: 8px 10px;
+  border-inline-start: 2px solid color-mix(in srgb, #b37821 65%, var(--t-fg));
+  background: var(--t-bg3);
+  color: var(--t-fg);
+  font-size: .9rem;
+}
+.byo-iso-section { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--t-bd); }
+.byo-import-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.byo-import-option {
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--t-bd);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg3);
+}
+.byo-import-option label { font-size: .96rem; font-weight: 600; }
+.byo-import-option p, #byo-os-iso-meta, #byo-os-progress-text { margin: 0; color: var(--t-fg2); font-size: .84rem; line-height: 1.4; }
+.byo-import-option input {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 6px 8px;
+  border: 1px solid var(--t-bd);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg);
+  color: var(--t-fg);
+  font: inherit;
+  font-size: .9rem;
+}
+.byo-import-option input::file-selector-button {
+  margin-inline-end: 6px;
+  padding: 4px 6px;
+  border: 1px solid var(--t-bd);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg3);
+  color: var(--t-fg);
+  font: inherit;
+  cursor: pointer;
+}
+.byo-import-option button { justify-self: start; }
+.byo-stored-iso { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: var(--t-radius-sm); background: var(--t-bg3); }
+#byo-os-has-iso, #byo-os-progress-wrap { margin-top: 10px; }
+#byo-os-iso-name { display: block; overflow-wrap: anywhere; }
+#byo-os-progress-bar { display: block; width: 100%; height: 8px; margin-bottom: 5px; accent-color: var(--t-ac); }
+.byo-disc {
+  display: grid;
+  flex: none;
+  width: 23px;
+  aspect-ratio: 1;
+  place-items: center;
+  border: 2px solid var(--t-ac);
+  border-radius: 50%;
+}
+.byo-disc::after { content: ""; width: 5px; aspect-ratio: 1; border-radius: 50%; background: var(--t-ac); }
+.byo-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+#byo-os-problem-box { margin-top: 13px; padding-top: 4px; border-top: 1px solid var(--t-bd); }
+#byo-os-status { flex: none; margin: 0; color: var(--t-fg2); font-size: .9rem; }
+#byo-os-status:not(:empty) { padding: 10px clamp(14px, 3vw, 24px); border-top: 1px solid var(--t-bd); }
+#byo-os-status.is-error { color: var(--vm-danger); }
+
+@media (max-width: 640px) {
+  .byo-preset-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 500px) {
+  .byo-preset-grid, .byo-import-grid { grid-template-columns: minmax(0, 1fr); }
+  .byo-preset-card { min-height: 54px; }
+}
+@media (max-height: 430px) {
+  #byo-os-status:not(:empty) { max-height: 25dvh; overflow-y: auto; }
+}
+
+/* The portal's narrow-screen icon buttons keep labels in this dialog. */
+#byo-os-dialog .quiet-button { width: auto; height: auto; padding: 8px 13px; }

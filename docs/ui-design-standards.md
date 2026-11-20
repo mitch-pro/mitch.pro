@@ -35,6 +35,10 @@ Every user-facing and internal page on the site must adhere to the design langua
    - Container shells use `.app-main`, `.shell`, or `.legal-shell` with responsive max-width (`1000px` - `1200px`).
    - Cards use `.panel`, `.card`, or semantic sections with `background: var(--t-bg2); border: 1px solid var(--t-bd); border-radius: var(--t-radius);`.
 
+### VM Lab Custom OS
+
+Custom OS shows selectable preset cards with logos and prices from the existing preset catalog. ISO links, uploads, and stored ISO actions are grouped separately. The icons are bundled locally. Devicon supplies the Windows, Linux Mint, Arch Linux, Kali Linux, and Chrome marks, and Tails uses its project favicon. [Devicon icons and license](https://github.com/devicons/devicon/tree/v2.17.0), [Tails project favicon](https://tails.net/favicon.ico).
+
 ## 2. No Orphan Endpoints
 
 - **Backend + Frontend Symmetry:** Any new feature, moderation tool, or settings toggle exposed by the backend or admin API must ship with its corresponding frontend UI in the same commit.
