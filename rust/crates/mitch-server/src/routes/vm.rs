@@ -3706,6 +3706,82 @@ pub(crate) async fn handle(
         ));
     }
 
+    // GET /api/vm/virgl — whether the account owns the VirGL display, and its price.
+    if path == "/api/vm/virgl" && *method == Method::GET {
+        let Some(actor) = authenticated_vm_actor(state, headers) else {
+            return Some(json_response(401, json!({ "error": "Sign in required." })));
+        };
+        return Some(json_response(
+            200,
+            json!({
+                "owned": mitch_lib::vm_hardware::has_virgl(&state.store, &actor.email),
+                "cost": mitch_lib::vm_hardware::VIRGL_COST_COINS,
+                "coins": mitch_lib::coins::get_coins(&state.store, state.data_dir(), &actor.email),
+            }),
+        ));
+    }
+
+    // POST /api/vm/virgl/buy — one-time, permanent, non-refundable purchase of
+    // the VirGL (virtio-gl) display. The entitlement row is claimed first
+    // (atomic: only one concurrent request can create it) and the coins are
+    // debited only by the request that claimed it, so it can't be charged
+    // twice, and a failed debit releases the claim.
+    if path == "/api/vm/virgl/buy" && *method == Method::POST {
+        let Some(actor) = authenticated_vm_actor(state, headers) else {
+            return Some(json_response(401, json!({ "error": "Sign in required." })));
+        };
+        if !vm_same_origin_request(headers) {
+            return Some(json_response(
+                403,
+                json!({ "error": "Request origin rejected." }),
+            ));
+        }
+        if mitch_lib::vm_hardware::has_virgl(&state.store, &actor.email) {
+            return Some(json_response(
+                400,
+                json!({ "error": "You already have the VirGL display." }),
+            ));
+        }
+        let feature = mitch_lib::vm_hardware::VIRGL_FEATURE;
+        if !mitch_lib::vm_hardware::claim(&state.store, &actor.email, feature, now_ms()) {
+            return Some(json_response(
+                409,
+                json!({ "error": "You already have the VirGL display." }),
+            ));
+        }
+        if let Err(e) = mitch_lib::coins::spend_coins(
+            &state.store,
+            state.data_dir(),
+            &actor.email,
+            mitch_lib::vm_hardware::VIRGL_COST_COINS,
+            "VirGL display unlock",
+        ) {
+            mitch_lib::vm_hardware::revoke(&state.store, &actor.email, feature);
+            return Some(json_response(
+                402,
+                json!({
+                    "error": format!("Insufficient coins: {e}"),
+                    "code": "insufficient_coins",
+                    "required": mitch_lib::vm_hardware::VIRGL_COST_COINS,
+                }),
+            ));
+        }
+        // Make the account's existing computers re-evaluate their display on
+        // their next start.
+        for record in vmlib::get_virtual_machines_for_owner(&state.store, &actor.email) {
+            crate::proxmox_desktop::desktop().forget_optimized(record.vmid as i64);
+        }
+        vm_audit(state, &actor.email, None, "VIRGL_PURCHASED", true, None);
+        return Some(json_response(
+            200,
+            json!({
+                "success": true,
+                "owned": true,
+                "coins": mitch_lib::coins::get_coins(&state.store, state.data_dir(), &actor.email),
+            }),
+        ));
+    }
+
     if path == "/api/vm/owner-resources" && *method == Method::POST {
         return Some(owner_resources(state, headers, body_bytes).await);
     }
@@ -4248,6 +4324,7 @@ pub(crate) async fn handle(
             disk_gb: Some(disk_gb),
             desktop_username: desktop_login.0,
             desktop_password: desktop_login.1,
+            virgl: mitch_lib::vm_hardware::has_virgl(&state.store, &actor.email),
         };
 
         let clone_res = crate::proxmox_desktop::desktop()
@@ -4558,6 +4635,7 @@ pub(crate) async fn handle(
             disk_gb: Some(disk_gb),
             desktop_username: desktop_login.0,
             desktop_password: desktop_login.1,
+            virgl: mitch_lib::vm_hardware::has_virgl(&state.store, &actor.email),
         };
 
         let clone_res = crate::proxmox_desktop::desktop()
@@ -5098,10 +5176,11 @@ pub(crate) async fn handle(
                 );
             }
 
-            let owner_vm = !record_owner.is_empty()
-                && mitch_lib::auth::is_owner_email(&state.store, &record_owner);
+            // VirGL is a per-account purchase; the VM's owner decides, not
+            // whoever (owner/admin) is pressing the button.
+            let gl_allowed = mitch_lib::vm_hardware::has_virgl(&state.store, &record_owner);
             match crate::proxmox_desktop::desktop()
-                .power(&record, &action, owner_vm)
+                .power(&record, &action, gl_allowed)
                 .await
             {
                 Ok(task) => {

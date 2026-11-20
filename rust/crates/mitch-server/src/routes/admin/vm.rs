@@ -869,6 +869,7 @@ pub async fn handle(
             disk_gb: Some(disk_gb),
             desktop_username: login_username.clone(),
             desktop_password: login_password.clone(),
+            virgl: mitch_lib::vm_hardware::has_virgl(&state.store, &owner_email),
         };
         let clone_res = crate::proxmox_desktop::desktop()
             .clone_desktop(&clone_params)
@@ -1524,6 +1525,7 @@ pub async fn handle(
             if pve.chromeos_template_vmid().is_some() {
                 let clone_res = pve
                     .clone_chromeos_desktop(&crate::proxmox_desktop::CloneChromeOsParams {
+                        virgl: true,
                         owner_resources: true,
                         vmid: Some(vmid),
                         hostname: hostname.clone(),
@@ -1622,7 +1624,7 @@ pub async fn handle(
             let vm_json = vm.to_json();
             let action_clone = action.clone();
             power_futs.push(async move {
-                let _ = pve_clone.power(&vm_json, &action_clone, false).await;
+                let _ = pve_clone.power(&vm_json, &action_clone, true).await;
             });
             vmlib::update_virtual_machine_runtime(&state.store, &vm.id, None, Some(target_status));
         }
