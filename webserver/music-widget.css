@@ -22,7 +22,8 @@
 .mm-card[hidden] { display: none; }
 
 .mm-head { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; grid-template-areas: 'art meta btns' 'tools tools tools'; gap: 4px 10px; align-items: center; }
-.mm-art { grid-area: art; width: 48px; height: 48px; object-fit: cover; border-radius: var(--t-radius-sm, 7px); background: var(--t-bg3, #22222c); }
+.mm-artbox { grid-area: art; width: 48px; height: 48px; overflow: hidden; border-radius: var(--t-radius-sm, 7px); background: var(--t-bg3, #22222c); }
+.mm-art { display: block; width: 100%; height: 100%; object-fit: cover; transform: scale(1.34); }  /* crops the video's black bars */
 .mm-meta { grid-area: meta; min-width: 0; }
 .mm-title, .mm-artist { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mm-title { font-weight: 700; }
@@ -30,19 +31,25 @@
 .mm-btns { grid-area: btns; display: flex; gap: 2px; }
 .mm-tools { grid-area: tools; display: flex; gap: 2px; justify-content: flex-end; margin-top: 2px; }
 
-.mm-btn {
+/* Buttons are reset completely: some pages (the homepage) style every <button>
+ * with padding, borders and a minimum height, which would swell the icons into
+ * boxes. `all: unset` at this specificity wins over those page rules. */
+.mm-card .mm-btn {
+  all: unset;
+  box-sizing: border-box;
   display: inline-grid; place-items: center;
-  width: 32px; height: 32px; padding: 0;
-  background: transparent; color: var(--t-fg, #e8e6e3);
-  border: 0; border-radius: 999px; cursor: pointer;
+  width: 32px; height: 32px;
+  color: var(--t-fg, #e8e6e3);
+  border-radius: 999px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
-.mm-btn svg { width: 18px; height: 18px; fill: currentColor; }
-.mm-btn:hover { background: var(--t-bg3, rgba(255, 255, 255, 0.08)); }
-.mm-btn:focus-visible, .mm-bar:focus-visible { outline: 2px solid var(--t-ac, #a78bfa); outline-offset: 1px; }
-.mm-play { background: var(--t-ac, #a78bfa); color: var(--t-ac-ink, #111); }
-.mm-play:hover { background: var(--t-ac2, var(--t-ac, #a78bfa)); }
-.mm-tools .mm-btn { width: 28px; height: 28px; color: var(--t-fg2, #a8a6a3); }
-.mm-tools .mm-btn svg { width: 16px; height: 16px; }
+.mm-card .mm-btn svg { width: 18px; height: 18px; fill: currentColor; }
+.mm-card .mm-btn:hover { background: var(--t-bg3, rgba(255, 255, 255, 0.08)); }
+.mm-card .mm-btn:focus-visible, .mm-bar:focus-visible { outline: 2px solid var(--t-ac, #a78bfa); outline-offset: 1px; }
+.mm-card .mm-play { background: var(--t-ac, #a78bfa); color: var(--t-ac-ink, #111); }
+.mm-card .mm-play:hover { background: var(--t-ac2, var(--t-ac, #a78bfa)); }
+.mm-card .mm-tools .mm-btn { width: 28px; height: 28px; color: var(--t-fg2, #a8a6a3); }
+.mm-card .mm-tools .mm-btn svg { width: 16px; height: 16px; }
 
 .mm-bar { height: 4px; margin-top: 8px; background: var(--t-bg3, rgba(255, 255, 255, 0.12)); border-radius: 999px; cursor: pointer; overflow: hidden; }
 .mm-bar i { display: block; height: 100%; width: 0; background: var(--t-ac, #a78bfa); }
@@ -57,7 +64,7 @@
 .mm-min { width: min(260px, calc(100vw - 32px)); padding: 8px 10px; }
 .mm-min .mm-head { grid-template-areas: 'art meta btns' 'tools tools tools'; }
 .mm-min .mm-artist, .mm-min .mm-bar, .mm-min .mm-lyric, .mm-min .mm-prev, .mm-min .mm-next, .mm-min .mm-tools .mm-popout, .mm-min .mm-tools .mm-open { display: none; }
-.mm-min .mm-art { width: 36px; height: 36px; }
+.mm-min .mm-artbox { width: 36px; height: 36px; }
 .mm-min .mm-head { grid-template-columns: 36px minmax(0, 1fr) auto; }
 .mm-min .mm-tools { margin-top: 0; }
 
@@ -107,9 +114,9 @@
 
 /* Spinner on a play button while a song is being fetched. The ring replaces
  * the icon, and the button ignores clicks until the song is ready. */
-.mm-btn.mm-loading, .mp-icon.mp-loading { position: relative; pointer-events: none; }
-.mm-btn.mm-loading svg, .mp-icon.mp-loading svg { opacity: 0; }
-.mm-btn.mm-loading::after, .mp-icon.mp-loading::after {
+.mm-card .mm-btn.mm-loading, .mp-icon.mp-loading { position: relative; pointer-events: none; }
+.mm-card .mm-btn.mm-loading svg, .mp-icon.mp-loading svg { opacity: 0; }
+.mm-card .mm-btn.mm-loading::after, .mp-icon.mp-loading::after {
   content: ''; position: absolute; inset: 7px;
   border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
   border-top-color: currentColor; border-radius: 50%;
@@ -117,5 +124,5 @@
 }
 @keyframes mm-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
-  .mm-btn.mm-loading::after, .mp-icon.mp-loading::after { animation-duration: 2.4s; }
+  .mm-card .mm-btn.mm-loading::after, .mp-icon.mp-loading::after { animation-duration: 2.4s; }
 }

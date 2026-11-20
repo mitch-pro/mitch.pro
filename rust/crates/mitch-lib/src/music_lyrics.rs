@@ -657,7 +657,7 @@ fn is_cjk(c: char) -> bool {
 /// `max(1.2 s, 280 ms per character)`, so an instrumental gap after it
 /// doesn't slow the highlight to a crawl.
 pub fn estimate_words(l: &mut Lyrics) {
-    if l.sync != Sync::Line {
+    if l.sync == Sync::None {
         return;
     }
     let mut changed = false;
@@ -698,6 +698,122 @@ pub fn estimate_words(l: &mut Lyrics) {
     if changed {
         l.estimated = true;
     }
+}
+
+/// True when some sung line has no word timing, so `estimate_words` would
+/// change it (used to decide whether a cached copy needs it on read).
+pub fn has_unworded_lines(l: &Lyrics) -> bool {
+    l.sync != Sync::None
+        && l.lines.iter().any(|x| {
+            !x.text.trim().is_empty() && x.words.is_empty() && split_units(&x.text).len() >= 2
+        })
+}
+
+/// Takes word timing from `donor` (word-synced lyrics of the same song, often
+/// a different length: the studio cut when the video has an intro or repeats a
+/// section) and puts it on `base` (line-synced lyrics that fit this video).
+/// Line starts stay as the video's own; each matched line gets the donor's
+/// words at the same offsets from the line start.
+///
+/// Lines are aligned by their text with a longest-common-subsequence match, so
+/// lines the two versions don't share (an extra chorus, a missing ad-lib line)
+/// don't throw off the rest. Lines that don't match keep no words here, and
+/// `estimate_words` fills them in. Returns `None` unless at least half of the
+/// sung lines matched, so a different song never gets grafted.
+pub fn graft_words(base: &Lyrics, donor: &Lyrics) -> Option<Lyrics> {
+    const MAX_LINES: usize = 600;
+    if base.sync != Sync::Line || donor.sync != Sync::Word {
+        return None;
+    }
+    if base.lines.len() > MAX_LINES || donor.lines.len() > MAX_LINES {
+        return None;
+    }
+    let bk: Vec<String> = base.lines.iter().map(|l| normalize(&l.text)).collect();
+    let dk: Vec<String> = donor
+        .lines
+        .iter()
+        .map(|l| {
+            if l.words.len() >= 2 {
+                normalize(&l.text)
+            } else {
+                String::new()
+            }
+        })
+        .collect();
+    let same = |i: usize, j: usize| -> bool {
+        !bk[i].is_empty()
+            && !dk[j].is_empty()
+            && (bk[i] == dk[j] || similarity(&bk[i], &dk[j]) >= 0.85)
+    };
+    let (n, m) = (bk.len(), dk.len());
+    // lcs[i][j]: best alignment of the first i base lines with the first j donor lines.
+    let mut lcs = vec![vec![0u16; m + 1]; n + 1];
+    for i in 1..=n {
+        for j in 1..=m {
+            lcs[i][j] = if same(i - 1, j - 1) {
+                lcs[i - 1][j - 1] + 1
+            } else {
+                lcs[i - 1][j].max(lcs[i][j - 1])
+            };
+        }
+    }
+    let mut pairs: Vec<(usize, usize)> = Vec::new();
+    let (mut i, mut j) = (n, m);
+    while i > 0 && j > 0 {
+        if same(i - 1, j - 1) && lcs[i][j] == lcs[i - 1][j - 1] + 1 {
+            pairs.push((i - 1, j - 1));
+            i -= 1;
+            j -= 1;
+        } else if lcs[i - 1][j] >= lcs[i][j - 1] {
+            i -= 1;
+        } else {
+            j -= 1;
+        }
+    }
+    let mut out = base.clone();
+    let sung = bk.iter().filter(|k| !k.is_empty()).count();
+    let mut grafted = 0usize;
+    for (bi, dj) in pairs {
+        let line = &mut out.lines[bi];
+        let d = &donor.lines[dj];
+        let first = d.words[0].t;
+        let span = d
+            .words
+            .last()
+            .map(|w| w.e)
+            .unwrap_or(first)
+            .saturating_sub(first);
+        let room = line.e.saturating_sub(line.t);
+        // Must fit in the time this video gives the line (a little slack).
+        if u64::from(span) > u64::from(room) * 13 / 10 + 500 {
+            continue;
+        }
+        line.words = d
+            .words
+            .iter()
+            .map(|w| Word {
+                t: line.t + w.t.saturating_sub(first),
+                e: (line.t + w.e.saturating_sub(first)).min(line.e.max(line.t + 1)),
+                text: w.text.clone(),
+            })
+            .collect();
+        grafted += 1;
+    }
+    if sung == 0 || grafted * 2 < sung {
+        return None;
+    }
+    out.sync = Sync::Word;
+    out.estimated = false;
+    Some(out)
+}
+
+/// Whether a recording's length is close enough to the video's to be the same
+/// song for borrowing word timing: between 0.6 and 1.7 times as long.
+pub fn duration_is_similar(video_ms: u32, got_ms: u32) -> bool {
+    video_ms > 0
+        && got_ms > 0
+        && u64::from(got_ms) * 10 >= u64::from(video_ms) * 6
+        && u64::from(got_ms) * 10 <= u64::from(video_ms) * 17
 }
 
 /// Splits a line into highlight units: words with their trailing space, or
@@ -1270,6 +1386,42 @@ mod tests {
         assert!(!duration_is_full_version(91_000, 500_000));
         assert!(!duration_is_full_version(260_000, 91_000));
         assert!(!duration_is_full_version(0, 91_000));
+    }
+
+    #[test]
+    fn grafts_word_timing_onto_a_longer_videos_lines() {
+        // Video has a 30 s intro the studio cut doesn't.
+        let base = parse_lrc(
+            "[00:40.00]Hello there my friend\n[00:45.00]Second line here\n[00:50.00]Last one now\n",
+        );
+        let donor = parse_lrc("[00:10.00]<00:10.00>Hello <00:10.50>there <00:11.00>my <00:11.50>friend\n[00:15.00]<00:15.00>Second <00:15.60>line <00:16.20>here\n[00:20.00]<00:20.00>Last <00:20.50>one <00:21.00>now\n");
+        assert_eq!(base.sync, Sync::Line);
+        let g = graft_words(&base, &donor).unwrap();
+        assert_eq!(g.sync, Sync::Word);
+        assert_eq!(g.lines[0].t, 40_000, "line starts stay the video's own");
+        assert_eq!(g.lines[0].words[1].t, 40_500);
+        assert_eq!(g.lines[1].words[2].t, 46_200);
+        assert_eq!(g.lines[0].words[0].text, "Hello ");
+        // A different song doesn't graft.
+        let other = parse_lrc("[00:10.00]<00:10.00>Totally <00:10.50>different <00:11.00>words\n");
+        assert!(graft_words(&base, &other).is_none());
+        // Words that can't fit in the line's time are skipped, and with too few matches it is refused.
+        let tight = parse_lrc(
+            "[00:40.00]Hello there my friend\n[00:40.50]Second line here\n[00:41.00]Last one now\n",
+        );
+        assert!(graft_words(&tight, &donor).is_none());
+        // An extra section in the video's version doesn't break the alignment.
+        let longer = parse_lrc("[00:40.00]Hello there my friend\n[00:45.00]An extra line only the video has\n[00:50.00]Second line here\n[00:55.00]Last one now\n");
+        let g = graft_words(&longer, &donor).unwrap();
+        assert!(
+            g.lines[1].words.is_empty(),
+            "the extra line gets no borrowed words"
+        );
+        assert_eq!(g.lines[2].words[1].t, 50_600);
+        assert_eq!(g.lines[3].words[1].t, 55_500);
+        assert!(duration_is_similar(239_000, 206_000));
+        assert!(!duration_is_similar(239_000, 90_000));
+        assert!(!duration_is_similar(90_000, 260_000));
     }
 
     #[test]

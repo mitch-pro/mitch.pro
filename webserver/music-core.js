@@ -23,7 +23,8 @@
     queue: [], index: -1, playing: false, vol: 0.9, pos: 0, dur: 0,
     role: 'idle',            // 'host' | 'remote' | 'idle'
     buffering: false, blocked: false, error: '',
-    isPopout: false, popoutOpen: false, remoteTs: 0
+    isPopout: false, popoutOpen: false, remoteTs: 0,
+    shuffle: false, repeat: 'off'      // repeat: 'off' | 'all' | 'one'
   };
   var listeners = [];
   var audio = null, bc = null, popWin = null;
@@ -49,7 +50,7 @@
     try {
       localStorage.setItem(KEY, JSON.stringify(Object.assign({
         queue: st.queue, index: st.index, pos: currentPos(), playing: st.playing,
-        vol: st.vol, owner: ownerId(), ts: Date.now()
+        vol: st.vol, shuffle: st.shuffle, repeat: st.repeat, owner: ownerId(), ts: Date.now()
       }, extra || {})));
     } catch (e) { /* storage unavailable */ }
   }
@@ -91,7 +92,7 @@
     audio.addEventListener('canplay', function () { st.buffering = false; emit(); });
     audio.addEventListener('loadedmetadata', function () { if (isFinite(audio.duration) && audio.duration > 0) st.dur = audio.duration; });
     audio.addEventListener('timeupdate', onTime);
-    audio.addEventListener('ended', function () { go(st.index + 1, true); changed(); });
+    audio.addEventListener('ended', function () { advance(true); changed(); });
     audio.addEventListener('error', onAudioError);
     return audio;
   }
@@ -173,6 +174,20 @@
     if (autoplay) playNow();
   }
 
+  /** The song after the current one: random when shuffling, wrapping when repeating all. */
+  function advance(auto) {
+    if (!st.queue.length) return;
+    if (auto && st.repeat === 'one') { go(st.index, true); return; }
+    if (st.shuffle && st.queue.length > 1) {
+      var n;
+      do { n = Math.floor(Math.random() * st.queue.length); } while (n === st.index);
+      go(n, true);
+      return;
+    }
+    if (st.index + 1 >= st.queue.length && st.repeat === 'all') { go(0, true); return; }
+    go(st.index + 1, true);
+  }
+
   function go(i, autoplay) {
     if (!st.queue.length) return;
     if (i >= st.queue.length) {            // end of the queue
@@ -217,7 +232,8 @@
   function snapshot(withQueue) {
     var s = {
       index: st.index, playing: st.playing, pos: currentPos(), dur: st.dur, vol: st.vol,
-      buffering: st.buffering, blocked: st.blocked, error: st.error, ts: Date.now()
+      buffering: st.buffering, blocked: st.blocked, error: st.error, ts: Date.now(),
+      shuffle: st.shuffle, repeat: st.repeat
     };
     if (withQueue) s.queue = st.queue;
     return s;
@@ -235,6 +251,7 @@
     st.index = s.index; st.playing = !!s.playing; st.pos = s.pos || 0; st.dur = s.dur || 0;
     if (typeof s.vol === 'number') st.vol = s.vol;
     st.buffering = !!s.buffering; st.blocked = !!s.blocked; st.error = s.error || '';
+    st.shuffle = !!s.shuffle; st.repeat = s.repeat || 'off';
     st.popoutOpen = !!m.popout; st.remoteTs = s.ts || Date.now();
     lastBeat = Date.now();
     emit();
@@ -261,7 +278,9 @@
         break;
       case 'play': playNow(); break;
       case 'pause': audio.pause(); break;
-      case 'next': go(st.index + 1, true); break;
+      case 'next': advance(false); break;
+      case 'shuffle': st.shuffle = !!arg; break;
+      case 'repeat': st.repeat = arg === 'all' || arg === 'one' ? arg : 'off'; break;
       case 'prev': if (audio.currentTime > 3) audio.currentTime = 0; else go(st.index - 1, true); break;
       case 'seek': if (isFinite(arg)) { audio.currentTime = clamp(arg, 0, st.dur || 1e9); st.pos = audio.currentTime; } break;
       case 'vol': st.vol = clamp(arg, 0, 1); audio.volume = st.vol; break;
@@ -373,6 +392,7 @@
     if (s && Array.isArray(s.queue)) {
       st.queue = s.queue; st.index = typeof s.index === 'number' ? s.index : -1;
       st.pos = s.pos || 0; if (typeof s.vol === 'number') st.vol = s.vol;
+      st.shuffle = !!s.shuffle; st.repeat = s.repeat === 'all' || s.repeat === 'one' ? s.repeat : 'off';
     }
     emit();
     try {
@@ -468,6 +488,7 @@
 
     function set(d) {
       active = -2; lineEls = []; wordEls = []; wordsOf = [];
+      if (d === 'idle') { root.replaceChildren(); data = null; return; }
       if (d === 'loading') return message('Finding lyrics…');
       if (!d || !d.found || !d.lines || !d.lines.length) return message(d && d.error ? 'Could not load lyrics' : 'No lyrics found');
       data = d;
@@ -578,6 +599,8 @@
     seek: function (sec) { control('seek', sec); },
     volume: function (v) { control('vol', v); },
     jump: function (i) { control('jump', i); },
+    shuffle: function (on) { control('shuffle', on); },
+    repeat: function (mode) { control('repeat', mode); },
     stop: function () { if (st.role === 'remote') post({ k: 'cmd', cmd: 'stop' }); else stopHost(); },
     popout: popout,
     getLyrics: getLyrics, lineAt: lineAt, createLyricsView: createLyricsView

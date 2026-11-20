@@ -16,6 +16,10 @@
     plus: 'M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z',
     queue: 'M4 6h16v2H4zm0 5h10v2H4zm0 5h10v2H4zm12-5v6.2a3 3 0 1 0 2 2.8V13h2v-2z',
     listadd: 'M3 6h12v2H3zm0 5h12v2H3zm0 5h8v2H3zm13-1v-3h2v3h3v2h-3v3h-2v-3h-3v-2z',
+    shuffle: 'M16 4h5v5l-1.8-1.8L5.4 21 4 19.6 17.8 5.8 16 4zm0 16l1.8-1.8-3.2-3.2 1.4-1.4 3.2 3.2L21 15v5h-5zM4 4.4 9.6 10 8.2 11.4 2.6 5.8 4 4.4z',
+    repeat: 'M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z',
+    search: 'M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z',
+    note: 'M12 3v10.55A4 4 0 1 0 14 17V7h4V3z',
     up: 'M7 14l5-5 5 5z',
     down: 'M7 10l5 5 5-5z',
     remove: 'M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6z'
@@ -40,9 +44,14 @@
     plPanel: $('mp-playlists'), plHome: $('mp-plhome'), plList: $('mp-pllist'), plDetail: $('mp-pldetail'),
     plName: $('mp-pl-name'), plMeta: $('mp-pl-meta'), plActions: $('mp-pl-actions'), plShare: $('mp-pl-share'),
     plTracks: $('mp-pltracks'), plSearch: $('mp-plsearch'), plQ: $('mp-plq'),
-    dialog: $('mp-dialog'), picker: $('mp-picker')
+    dialog: $('mp-dialog'), picker: $('mp-picker'),
+    shuffle: $('mp-shuffle'), repeat: $('mp-repeat'), stage: $('mp-stage'), ambient: $('mp-ambient')
   };
   setIcon(el.prev, 'prev'); setIcon(el.play, 'play'); setIcon(el.next, 'next'); setIcon(el.fav, 'heart');
+  if (el.shuffle) setIcon(el.shuffle, 'shuffle');
+  if (el.repeat) setIcon(el.repeat, 'repeat');
+  if ($('mp-searchicon')) setIcon($('mp-searchicon'), 'search');
+  if ($('mp-coverempty')) setIcon($('mp-coverempty'), 'note');
   if (el.pop) setIcon(el.pop, 'pop');
 
   var lv = M.createLyricsView(el.lyrics, { onSeek: function (s) { M.seek(s); } });
@@ -55,9 +64,16 @@
     var li = document.createElement('li');
     li.className = 'mp-row';
     li.dataset.id = track.id || '';
+    var wrap = document.createElement('span');
+    wrap.className = 'mp-thumbwrap';
     var img = document.createElement('img');
-    img.className = 'mp-thumb'; img.alt = ''; img.loading = 'lazy'; img.width = 48; img.height = 48;
+    img.className = 'mp-thumb'; img.alt = ''; img.loading = 'lazy'; img.width = 52; img.height = 52;
     if (track.id) img.src = M.thumb(track.id);
+    var eq = document.createElement('span');
+    eq.className = 'mp-eq';
+    eq.setAttribute('aria-hidden', 'true');
+    eq.append(document.createElement('i'), document.createElement('i'), document.createElement('i'));
+    wrap.append(img, eq);
     var main = document.createElement('button');
     main.type = 'button'; main.className = 'mp-rowmain';
     var t = document.createElement('span'); t.className = 'mp-rowtitle'; t.textContent = track.title;
@@ -66,12 +82,15 @@
     main.addEventListener('click', function () { M.play(list, i); });
     var d = document.createElement('span');
     d.className = 'mp-rowdur'; d.textContent = M.fmt(track.duration);
+    var actions = document.createElement('span');
+    actions.className = 'mp-rowactions';
     var add = document.createElement('button');
     add.type = 'button'; add.className = 'mp-icon mp-small'; add.title = 'Add to queue'; add.setAttribute('aria-label', 'Add to queue');
     setIcon(add, 'plus');
     add.addEventListener('click', function () { M.enqueue(track); say('Added to queue'); });
-    li.append(img, main, d, add);
-    if (extra) { extra(li); return li; }
+    actions.appendChild(add);
+    li.append(wrap, main, d, actions);
+    if (extra) { extra(li, actions); return li; }
     var toPl = document.createElement('button');
     toPl.type = 'button'; toPl.className = 'mp-icon mp-small'; toPl.title = 'Add to playlist'; toPl.setAttribute('aria-label', 'Add to playlist');
     setIcon(toPl, 'listadd');
@@ -80,9 +99,10 @@
     heart.type = 'button'; heart.className = 'mp-icon mp-small mp-heart'; setIcon(heart, 'heart');
     syncHeart(heart, track.id);
     heart.addEventListener('click', function () { toggleFav(track).then(function () { syncHeart(heart, track.id); }); });
-    li.append(toPl, heart);
+    actions.append(toPl, heart);
     return li;
   }
+
   function syncHeart(btn, id) {
     var on = !!favIds[id];
     btn.classList.toggle('mp-on', on);
@@ -123,6 +143,7 @@
         var mine = !!cur && !!cur.id && li.dataset.id === cur.id;
         li.classList.toggle('mp-playing', mine);
         li.classList.toggle('mp-fetching', mine && !!M.state.buffering && !M.state.playing && !M.state.error);
+        li.classList.toggle('mp-live', mine && !!M.state.playing);
       });
     });
   }
@@ -232,20 +253,37 @@
   function on(node, ev, fn) { if (node) node.addEventListener(ev, fn); }
   function post(path, body) { return M.api(path, { body: body }); }
 
+  /** A playlist as a card: a mosaic of its first covers, name and details. */
   function playlistRow(p) {
     var li = document.createElement('li');
-    li.className = 'mp-row mp-plrow';
-    var main = document.createElement('button');
-    main.type = 'button'; main.className = 'mp-rowmain';
-    var t = document.createElement('span'); t.className = 'mp-rowtitle'; t.textContent = p.name;
-    var a = document.createElement('span'); a.className = 'mp-rowartist';
-    var bits = [p.trackCount + (p.trackCount === 1 ? ' song' : ' songs'), p.public ? 'Public' : 'Private'];
+    var card = document.createElement('button');
+    card.type = 'button'; card.className = 'mp-plcard';
+    var mosaic = document.createElement('span');
+    var covers = (p.covers || []).slice(0, 4);
+    mosaic.className = 'mp-plmosaic' + (covers.length < 4 ? ' one' : '');
+    if (covers.length >= 4) {
+      covers.forEach(function (id) {
+        var tile = document.createElement('span'); tile.className = 'mp-mosaictile';
+        var img = document.createElement('img'); img.alt = ''; img.loading = 'lazy'; img.src = M.thumb(id);
+        tile.appendChild(img); mosaic.appendChild(tile);
+      });
+    } else if (covers.length) {
+      var tile1 = document.createElement('span'); tile1.className = 'mp-mosaictile';
+      var img1 = document.createElement('img'); img1.alt = ''; img1.loading = 'lazy'; img1.src = M.thumb(covers[0]);
+      tile1.appendChild(img1); mosaic.appendChild(tile1);
+    } else {
+      var empty = document.createElement('span'); empty.className = 'mp-mosaicempty'; setIcon(empty, 'note');
+      mosaic.appendChild(empty);
+    }
+    var name = document.createElement('span'); name.className = 'mp-plcardname'; name.textContent = p.name;
+    var meta = document.createElement('span'); meta.className = 'mp-plcardmeta'; meta.style.display = 'block';
+    var bits = [p.trackCount + (p.trackCount === 1 ? ' song' : ' songs')];
+    if (!p.mine) bits.push(p.owner.name); else bits.push(p.public ? 'Public' : 'Private');
     if (p.spotify) bits.push('Spotify');
-    if (!p.mine) bits.push('by ' + p.owner.name);
-    a.textContent = bits.join(' · ');
-    main.append(t, a);
-    main.addEventListener('click', function () { openPlaylist(p.id); });
-    li.appendChild(main);
+    meta.textContent = bits.join(' · ');
+    card.append(mosaic, name, meta);
+    card.addEventListener('click', function () { openPlaylist(p.id); });
+    li.appendChild(card);
     return li;
   }
 
@@ -352,7 +390,7 @@
       el.plTracks.appendChild(empty);
     }
     tracks.forEach(function (t, i) {
-      el.plTracks.appendChild(row(t, i, tracks, p.mine ? function (li) {
+      el.plTracks.appendChild(row(t, i, tracks, p.mine ? function (li, actions) {
         function small(name, label, fn, disabled) {
           var b = document.createElement('button');
           b.type = 'button'; b.className = 'mp-icon mp-small'; b.title = label; b.setAttribute('aria-label', label);
@@ -361,7 +399,7 @@
           b.addEventListener('click', fn);
           return b;
         }
-        li.append(
+        actions.append(
           small('up', 'Move up', function () { moveTrack(i, i - 1); }, i === 0),
           small('down', 'Move down', function () { moveTrack(i, i + 1); }, i === tracks.length - 1),
           small('remove', 'Remove from playlist', function () {
@@ -539,13 +577,16 @@
     seeking = true;
     var d = M.state.dur || 0;
     el.cur.textContent = M.fmt((el.seek.value / 1000) * d);
+    el.seek.style.setProperty('--p', (el.seek.value / 10) + '%');
   });
   el.seek.addEventListener('change', function () {
     var d = M.state.dur || 0;
     if (d > 0) M.seek((el.seek.value / 1000) * d);
     seeking = false;
   });
-  el.vol.addEventListener('input', function () { M.volume(el.vol.value / 100); });
+  el.vol.addEventListener('input', function () { M.volume(el.vol.value / 100); el.vol.style.setProperty('--p', el.vol.value + '%'); });
+  if (el.shuffle) el.shuffle.addEventListener('click', function () { M.shuffle(!M.state.shuffle); });
+  if (el.repeat) el.repeat.addEventListener('click', function () { M.repeat(M.state.repeat === 'off' ? 'all' : M.state.repeat === 'all' ? 'one' : 'off'); });
 
   function loadLyrics(track, custom) {
     lv.set('loading');
@@ -586,11 +627,29 @@
     if (t && t.id && shownId !== t.id) {
       shownId = t.id;
       el.art.src = M.thumb(t.id);
+      if (el.ambient) el.ambient.style.setProperty('--cover', 'url("' + M.thumb(t.id) + '")');
       el.wrongForm.hidden = true;
       loadLyrics(t);
     }
     if (t && !t.id) el.art.hidden = true;
-    if (!t && shownId) { shownId = ''; lv.set(null); el.info.textContent = ''; el.wrong.hidden = true; }
+    if (!t && shownId) { shownId = ''; lv.set('idle'); el.info.textContent = ''; el.wrong.hidden = true; }
+    if (!t && !shownId) lv.set('idle');
+    if (el.stage) {
+      el.stage.classList.toggle('is-empty', !t);
+      el.stage.classList.toggle('is-playing', !!s.playing);
+    }
+    if (el.shuffle) {
+      el.shuffle.setAttribute('aria-pressed', s.shuffle ? 'true' : 'false');
+      el.shuffle.title = s.shuffle ? 'Shuffle on' : 'Shuffle off';
+      el.shuffle.setAttribute('aria-label', el.shuffle.title);
+    }
+    if (el.repeat) {
+      el.repeat.dataset.mode = s.repeat;
+      var rl = s.repeat === 'one' ? 'Repeat this song' : s.repeat === 'all' ? 'Repeat all' : 'Repeat off';
+      el.repeat.title = rl;
+      el.repeat.setAttribute('aria-label', rl);
+      el.repeat.setAttribute('aria-pressed', s.repeat === 'off' ? 'false' : 'true');
+    }
     var loading = !!s.buffering && !s.playing && !s.error;
     setIcon(el.play, s.playing ? 'pause' : 'play');
     el.play.classList.toggle('mp-loading', loading);
@@ -598,7 +657,7 @@
     var label = loading ? 'Loading' : s.playing ? 'Pause' : 'Play';
     el.play.setAttribute('aria-label', label);
     el.play.title = label;
-    if (document.activeElement !== el.vol) el.vol.value = Math.round(s.vol * 100);
+    if (document.activeElement !== el.vol) { el.vol.value = Math.round(s.vol * 100); el.vol.style.setProperty('--p', Math.round(s.vol * 100) + '%'); }
     var msg = s.error ? s.error : loading ? 'Loading…' : s.blocked ? 'Press play to continue'
       : (!popout && s.popoutOpen && s.role === 'remote') ? 'Playing in the pop-out window' : '';
     if (msg || (el.status.dataset.owner === 'state')) { say(msg); el.status.dataset.owner = msg ? 'state' : ''; }
@@ -613,6 +672,7 @@
       el.cur.textContent = M.fmt(time);
       el.dur.textContent = M.fmt(s.dur);
       el.seek.value = s.dur > 0 ? Math.round((time / s.dur) * 1000) : 0;
+      el.seek.style.setProperty('--p', (el.seek.value / 10) + '%');
     }
     lv.tick(time * 1000);
     requestAnimationFrame(frame);
@@ -621,6 +681,8 @@
   document.addEventListener('keydown', function (e) {
     if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     if (e.key === ' ') { e.preventDefault(); M.toggle(); }
+    else if (e.key === 'ArrowRight') M.seek(M.getTime() + 5);
+    else if (e.key === 'ArrowLeft') M.seek(Math.max(0, M.getTime() - 5));
   });
 
   M.init({ popout: popout });

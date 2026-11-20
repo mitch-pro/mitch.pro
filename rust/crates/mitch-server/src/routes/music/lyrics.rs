@@ -51,13 +51,25 @@ pub struct Query {
     pub artist: String,
     pub duration_ms: u32,
     pub video_id: String,
-    /// Accept a recording up to four times longer than the video (the full
-    /// version of a TV-size or clipped upload) instead of requiring the same
-    /// length. Only used when the strict search found nothing.
-    pub relaxed: bool,
+    /// Which recording lengths count as the same song.
+    pub length: Length,
+    /// Only word-timed results matter (the search for word timing to borrow).
+    pub donor: bool,
     /// Also try YouTube's captions. Only the first reading of the title does,
     /// so a lookup costs at most one extra yt-dlp run.
     pub captions: bool,
+}
+
+/// How far a recording's length may be from the video's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Length {
+    /// Within a few seconds: the same recording.
+    Same,
+    /// Up to four times longer: the full version of a TV-size or clipped upload.
+    FullVersion,
+    /// 0.6 to 1.7 times as long: the same song cut differently (a video with an
+    /// intro, an edit), good enough to borrow word timing from.
+    Similar,
 }
 
 #[derive(Debug, Clone)]
@@ -167,10 +179,10 @@ fn secs_to_ms(v: Option<&Value>) -> u32 {
 /// The provider's matches that are worth fetching lyrics for, best first.
 fn best_matches<T>(q: &Query, mut items: Vec<(f32, u32, T)>, take: usize) -> Vec<(f32, T)> {
     items.retain(|(score, dur, _)| {
-        let length_ok = if q.relaxed {
-            *dur == 0 || ml::duration_is_full_version(q.duration_ms, *dur)
-        } else {
-            ml::duration_close(q.duration_ms, *dur, DURATION_TOLERANCE_MS)
+        let length_ok = match q.length {
+            Length::Same => ml::duration_close(q.duration_ms, *dur, DURATION_TOLERANCE_MS),
+            Length::FullVersion => *dur == 0 || ml::duration_is_full_version(q.duration_ms, *dur),
+            Length::Similar => *dur == 0 || ml::duration_is_similar(q.duration_ms, *dur),
         };
         *score >= 0.55 && length_ok
     });
@@ -202,6 +214,11 @@ async fn lrclib(q: &Query) -> Result<Vec<Cand>, String> {
     let mut items = Vec::new();
     for item in list.as_array().into_iter().flatten() {
         if item.get("instrumental").and_then(|v| v.as_bool()) == Some(true) {
+            continue;
+        }
+        // Looking for word timing to borrow: skip entries that have none, or
+        // they crowd the ones that do out of the top results.
+        if q.donor && item.get("hasWordSync").and_then(|v| v.as_bool()) != Some(true) {
             continue;
         }
         let score = ml::match_score(
@@ -407,7 +424,7 @@ async fn qqmusic(q: &Query) -> Result<Vec<Cand>, String> {
         // QQ has many cover/live versions with the same name: a lyric that
         // ends long after the track does is a different recording.
         let last = l.lines.last().map(|x| x.t).unwrap_or(0);
-        if !q.relaxed && q.duration_ms > 0 && last > q.duration_ms + 15_000 {
+        if q.length == Length::Same && q.duration_ms > 0 && last > q.duration_ms + 15_000 {
             continue;
         }
         if let Some(c) = cand("QQ Music", score, false, l) {
@@ -487,36 +504,72 @@ pub async fn find(
     video_id: &str,
 ) -> (Option<Found>, Vec<Tried>) {
     let guesses = ml::query_guesses(title, artist);
-    let mut passes = vec![false];
+    let mut passes = vec![Length::Same];
     if duration_ms > 0 {
-        passes.push(true);
+        passes.push(Length::FullVersion);
     }
     let mut first_tried: Vec<Tried> = Vec::new();
-    for relaxed in passes {
-        let runs = guesses.iter().take(4).enumerate().map(|(i, (t, a))| {
-            find_once(Query {
-                title: t.clone(),
-                artist: a.clone(),
-                duration_ms,
-                video_id: video_id.to_string(),
-                relaxed,
-                captions: i == 0 && !relaxed,
-            })
-        });
-        let results = futures_util::future::join_all(runs).await;
+    for length in passes {
+        let results = search_all(&guesses, title_query(duration_ms, video_id, length, false)).await;
         if first_tried.is_empty() {
             first_tried = results.first().map(|r| r.1.clone()).unwrap_or_default();
         }
-        let best = results
-            .into_iter()
-            .filter_map(|(f, _)| f)
-            .max_by(|a, b| a.rank.cmp(&b.rank).then(a.score.total_cmp(&b.score)));
+        let best = best_of(results);
         if let Some(mut f) = best {
-            f.approximate = relaxed;
+            f.approximate = length == Length::FullVersion;
+            // Line timing that fits this video, but word timing exists for the
+            // song at another length: keep the video's line times and take the
+            // words from there.
+            if f.rank == 3 && !f.approximate && duration_ms > 0 {
+                let donors = search_all(
+                    &guesses,
+                    title_query(duration_ms, video_id, Length::Similar, true),
+                )
+                .await;
+                if let Some(d) = best_of(donors) {
+                    if let Some(grafted) = ml::graft_words(&f.lyrics, &d.lyrics) {
+                        f.lyrics = grafted;
+                        f.rank = 4;
+                    }
+                }
+            }
             return (Some(f), first_tried);
         }
     }
     (None, first_tried)
+}
+
+fn title_query(duration_ms: u32, video_id: &str, length: Length, donor: bool) -> Query {
+    Query {
+        title: String::new(),
+        artist: String::new(),
+        duration_ms,
+        video_id: video_id.to_string(),
+        length,
+        donor,
+        captions: false,
+    }
+}
+
+/// Runs `find_once` for the first four readings of the title at once. Only the
+/// first reading of a normal (not donor) pass also tries YouTube's captions.
+async fn search_all(guesses: &[(String, String)], base: Query) -> Vec<(Option<Found>, Vec<Tried>)> {
+    let runs = guesses.iter().take(4).enumerate().map(|(i, (t, a))| {
+        find_once(Query {
+            title: t.clone(),
+            artist: a.clone(),
+            captions: i == 0 && !base.donor && base.length == Length::Same,
+            ..base.clone()
+        })
+    });
+    futures_util::future::join_all(runs).await
+}
+
+fn best_of(results: Vec<(Option<Found>, Vec<Tried>)>) -> Option<Found> {
+    results
+        .into_iter()
+        .filter_map(|(f, _)| f)
+        .max_by(|a, b| a.rank.cmp(&b.rank).then(a.score.total_cmp(&b.score)))
 }
 
 /// Queries every provider for one reading of the title and returns the best
@@ -582,6 +635,9 @@ async fn find_once(q: Query) -> (Option<Found>, Vec<Tried>) {
             break;
         }
     }
+    if q.donor {
+        cands.retain(|c| c.rank == 4);
+    }
     (choose(cands), tried)
 }
 
@@ -645,7 +701,8 @@ mod tests {
             artist: "a".into(),
             duration_ms: 200_000,
             video_id: String::new(),
-            relaxed: false,
+            length: Length::Same,
+            donor: false,
             captions: false,
         };
         let items = vec![
@@ -661,7 +718,7 @@ mod tests {
         assert_eq!(got, vec!["good", "unknown length"]);
         let tv = Query {
             duration_ms: 91_000,
-            relaxed: true,
+            length: Length::FullVersion,
             ..q.clone()
         };
         let items = vec![

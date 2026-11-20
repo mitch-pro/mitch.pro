@@ -336,7 +336,7 @@ async fn lyrics_for(state: &Arc<AppState>, email: &str, search: &str) -> Respons
                         source: f.source.to_string(),
                         sync: f.lyrics.sync.as_str().to_string(),
                         // Estimated word timing is recomputed on read.
-                        estimated: f.lyrics.sync == ml::Sync::Line,
+                        estimated: ml::has_unworded_lines(&f.lyrics),
                         body: ml::to_enhanced_lrc(&f.lyrics),
                         approximate: f.approximate,
                     },

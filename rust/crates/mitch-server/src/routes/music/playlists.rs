@@ -65,6 +65,7 @@ fn summary(state: &AppState, p: &Playlist, count: i64, viewer: &str, full_identi
         "mine": pl::is_owner(p, viewer),
         "spotify": !p.spotify_id.is_empty(),
         "spotifySyncedAt": p.spotify_synced_at,
+        "covers": pl::cover_ids(&state.store, &p.id, 4),
         "updatedAt": p.updated_at,
         "owner": owner_identity(state, &p.owner_email, full_identity),
     })

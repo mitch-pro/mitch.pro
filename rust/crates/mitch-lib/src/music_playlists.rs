@@ -197,6 +197,20 @@ pub fn list_public(store: &DataStore, q: &str, limit: i64) -> Vec<Listed> {
     .collect()
 }
 
+/// Video ids of a playlist's first `n` matched songs, for its cover mosaic.
+pub fn cover_ids(store: &DataStore, id: &str, n: i64) -> Vec<String> {
+    let conn = store.conn();
+    let Ok(mut stmt) = conn.prepare(
+        "SELECT video_id FROM music_playlist_tracks WHERE playlist_id = ?1 AND video_id != '' \
+         ORDER BY position LIMIT ?2",
+    ) else {
+        return Vec::new();
+    };
+    let rows = stmt.query_map(rusqlite::params![id, n], |r| r.get(0));
+    rows.map(|r| r.filter_map(Result::ok).collect())
+        .unwrap_or_default()
+}
+
 pub fn tracks(store: &DataStore, id: &str) -> Vec<PlaylistTrack> {
     let conn = store.conn();
     let Ok(mut stmt) = conn.prepare(

@@ -193,6 +193,19 @@ length, a second pass accepts a recording up to four times longer than the video
 song's lyrics. That result is flagged `approximate` and the page says "timing is
 for the full song": the start usually lines up, the rest may drift.
 
+**Word timing from another version.** A music video often differs from the studio
+track (an intro, a repeated section), so the word-timed lyrics for the song are
+a different length and are rejected for the video, leaving only line timing.
+When the video's own line timing is all there is, a second search looks for
+word-timed lyrics of the same song at a similar length (0.6 to 1.7 times,
+`duration_is_similar`) and `graft_words` borrows their word timing: the lines of
+the two versions are aligned by text (longest common subsequence, so extra or
+missing lines don't throw it off), every matched line keeps the video's own start
+time, and its words follow at the donor's offsets from that start. At least half
+of the sung lines must match, and a line whose words wouldn't fit the time the
+video gives it is skipped (it gets estimated words). Unmatched lines fall back
+to `estimate_words`.
+
 "Per word" for every synced song: a line-timed result goes through
 `estimate_words`, which spreads the line's time over its words (by length; CJK
 per character) and marks `estimated: true`. The page says "line timing, words
@@ -202,6 +215,24 @@ A custom search ("Wrong lyrics?") passes `custom=1`, which skips the cache in
 both directions so one user's correction never replaces what others get. A
 lookup where every source errored (network trouble) isn't cached as "nothing
 found"; a clean miss is cached for 6 h, a hit for 30 days.
+
+## The page
+
+`/music/` is built around a stage: the playing song's cover art large, its lyrics
+in big type, and a dock with seek, shuffle, previous/play/next and repeat
+(repeat is off, all, or one) and volume. The stage tints itself from the cover
+art (a blurred copy behind a scrim, so text stays readable in both themes); the
+cover grows slightly while playing. The left panel has search, the library,
+playlists (cards with a mosaic of their first covers) and the queue. Rows show a
+moving equalizer on the playing song and reveal their buttons on hover. On a
+narrow screen the stage comes first and the panel below it. Thumbnails are
+cropped to remove the black bars YouTube adds around video frames. Keys: space
+plays or pauses, left and right arrows seek 5 seconds.
+
+The follow-along card resets every `<button>` style (`all: unset`), because pages
+such as the homepage style all buttons with padding and a minimum height, which
+turned its icons into large empty boxes. The pop-out hides the site's wallet bar,
+bell, mobile dock and credit band, which would cover its controls.
 
 ## Playing across pages
 

@@ -59,10 +59,12 @@
     card.setAttribute('aria-label', 'Music player');
     card.hidden = true;
 
+    var artBox = document.createElement('div');
+    artBox.className = 'mm-artbox';
     var art = document.createElement('img');
     art.className = 'mm-art';
     art.alt = '';
-    art.width = 48; art.height = 48;
+    artBox.appendChild(art);
     var meta = document.createElement('div');
     meta.className = 'mm-meta';
     var title = document.createElement('div'); title.className = 'mm-title';
@@ -111,7 +113,7 @@
 
     var head = document.createElement('div');
     head.className = 'mm-head';
-    head.append(art, meta, btns, tools);
+    head.append(artBox, meta, btns, tools);
     card.append(head, bar, lyric, status);
     document.body.appendChild(card);
 
@@ -170,8 +172,8 @@
     requestAnimationFrame(frame);
   }
 
-  load('link', { rel: 'stylesheet', href: '/music-widget.css?v=2' });
-  var core = load('script', { src: '/music-core.js?v=2' });
+  load('link', { rel: 'stylesheet', href: '/music-widget.css?v=3' });
+  var core = load('script', { src: '/music-core.js?v=3' });
   core.onload = function () {
     window.MitchMusic.init();
     build();
