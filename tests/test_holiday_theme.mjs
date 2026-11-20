@@ -8,7 +8,7 @@ import vm from 'node:vm';
 
 const source = fs.readFileSync(new URL('../webserver/site-theme.js', import.meta.url), 'utf8');
 
-function load(search = '', stored = {}, pinned) {
+function load(search = '', stored = {}, pinned, cookie = '', osDark = false) {
   const attrs = {};
   const root = {
     style: { setProperty() {}, removeProperty() {}, getPropertyValue: () => '' },
@@ -19,8 +19,8 @@ function load(search = '', stored = {}, pinned) {
     getAttribute: k => attrs[k] ?? null
   };
   const sandbox = {
-    document: { documentElement: root, cookie: '', head: { appendChild() {} }, createElement: () => ({}), querySelector: () => null },
-    window: { dispatchEvent() {}, matchMedia: () => ({ matches: false }), addEventListener() {}, __holidayForce: pinned },
+    document: { documentElement: root, cookie, head: { appendChild() {} }, createElement: () => ({}), querySelector: () => null },
+    window: { dispatchEvent() {}, matchMedia: () => ({ matches: osDark }), addEventListener() {}, __holidayForce: pinned },
     location: { search },
     localStorage: { getItem: k => stored[k] ?? null, setItem: (k, v) => { stored[k] = String(v); }, removeItem: k => { delete stored[k]; } },
     getComputedStyle: () => ({ getPropertyValue: () => '' }),
@@ -34,6 +34,10 @@ function load(search = '', stored = {}, pinned) {
 }
 
 const { theme } = load();
+assert.equal(load().attrs['data-theme'], 'dark');
+assert.equal(load('', {}, undefined, 'theme=light', true).attrs['data-theme'], 'light');
+assert.equal(load('', {}, undefined, 'theme=auto').attrs['data-theme'], 'light');
+assert.equal(load('', {}, undefined, 'theme=auto', true).attrs['data-theme'], 'dark');
 const day = (y, m, d) => theme.holidayFor(new Date(y, m - 1, d));
 
 // Thanksgiving is the fourth Thursday of November.
@@ -96,13 +100,14 @@ assert.equal(load('', {}, 'bogus').theme.holidaySeason(), load().theme.holidaySe
 
 // The homepage pill turns it off for every page by writing the same setting.
 const toggled = load();
-assert.equal(toggled.theme.holidayOff(), false);
+assert.equal(toggled.theme.holidayOff(), true);
+assert.equal(toggled.attrs['data-holiday'], undefined);
 toggled.theme.setHolidayOff(true);
 assert.equal(toggled.stored.theme_holiday, 'off');
 assert.equal(toggled.theme.holidayOff(), true);
 assert.equal(toggled.attrs['data-holiday'], undefined);
 toggled.theme.setHolidayOff(false);
-assert.equal(toggled.stored.theme_holiday, undefined);
+assert.equal(toggled.stored.theme_holiday, 'on');
 assert.equal(toggled.theme.holidayOff(), false);
 
 // Turning off only the effects keeps the holiday colors.

@@ -124,13 +124,16 @@ pub fn inject_page(
     if !is_onboarding && !is_embedded && !raw.contains("/site-theme.js") {
         inject_str.push_str("<script src=\"/site-theme.js\"></script>\n");
     }
+    if (!is_embedded || is_standalone_game_portal)
+        && !crate::hosts::is_rjuhsd_host(headers)
+        && !crate::hosts::is_pickle_host(headers)
+    {
+        inject_str.push_str("<link rel=\"stylesheet\" href=\"/background.css\">\n<script src=\"/background.js\" defer></script>\n");
+    }
     if !is_embedded && !raw.contains("/app-shell.js") {
         inject_str.push_str("<script src=\"/app-shell.js?v=2\" defer></script>\n");
     }
     if !is_embedded {
-        if !raw.contains("fonts.googleapis.com") {
-            inject_str.push_str("<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n");
-        }
         if !raw.contains("/popup.js") {
             inject_str.push_str("<script src=\"/popup.js?v=3\" defer></script>\n");
         }

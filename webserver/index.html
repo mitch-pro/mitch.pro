@@ -4,17 +4,16 @@
 <meta charset="utf-8">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-<meta name="theme-color" content="#0b0d10">
+<meta name="theme-color" content="#000000">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="mitch.pro">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>mitch.pro</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"></noscript>
 <link rel="stylesheet" href="/app.css">
 <link rel="stylesheet" href="/leaderboard/leaderboard.css?v=5">
-<link rel="stylesheet" href="/home.css?v=24">
+<link rel="stylesheet" href="/home.css?v=25">
 <link rel="stylesheet" href="/turkey-catch.css?v=5">
 <script src="/turkey-catch.js?v=7" defer></script>
 <script defer src="/rjuhsd-assets/calendar.js?v=8"></script>
@@ -1328,7 +1327,7 @@ function setupHolidayPill() {
   }
   function paint() {
     var now = state();
-    pill.textContent = now === 'off' ? 'Bring back the holiday theme'
+    pill.textContent = now === 'off' ? 'Use holiday theme'
       : now === 'fx-off' ? 'Bring back ' + fxName
       : now === 'choosing' ? 'Turn off the holiday theme'
       : "Don't like the holiday theme?";
@@ -1525,6 +1524,7 @@ if (document.readyState === 'loading') {
       <span class="hello-logo-wordmark">mitch<span>.pro</span></span>
     </div>
     <div class="hello-tools">
+      <button class="background-customize" type="button" data-background-customize aria-haspopup="dialog" aria-label="Customize appearance"><svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="8" cy="7" r="2"/><circle cx="16" cy="17" r="2"/></svg><span>Customize</span></button>
       <a id="home-staff-pill" href="/staff-dashboard/" class="home-staff-pill" hidden>Staff dashboard</a>
       <label id="abToggleBar" class="ab-toggle" title="Open links in an about:blank tab"><span>Private window</span><span class="toggle-switch"><input type="checkbox" id="abToggle" aria-label="Open links in an about:blank tab"><span class="toggle-slider"></span></span></label>
     </div>
@@ -1535,7 +1535,6 @@ if (document.readyState === 'loading') {
         <div class="feature-games-copy">
           <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 6h10c3 0 4 3 5 10s-3 7-6 2H8c-3 5-7 5-6-2S4 6 7 6Z"/><path d="M7 10v6m-3-3h6m6-2h.01M19 14h.01"/></svg>
           <h2>Games</h2>
-          <p>Arcade, puzzles, and multiplayer</p>
         </div>
         <span class="feature-arrow" aria-hidden="true">↗</span>
       </a>

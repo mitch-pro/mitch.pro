@@ -1,5 +1,4 @@
 /* Shared colors and components for the student portal. */
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
 @import url('/theme-tokens.css');
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -22,8 +21,8 @@ body {
   color: var(--t-fg);
   background-color: var(--t-bg);
   font-family: var(--t-font);
-  font-size: 1rem;
-  line-height: 1.55;
+  font-size: 1.125rem;
+  line-height: 1.7;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -129,9 +128,9 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--t-font); font-weight: 700; line-heig
   align-items: center;
   gap: clamp(14px, 2vw, 28px);
   width: min(var(--site-content-width), calc(100% - 48px));
-  min-height: 66px;
-  margin: 16px auto 0;
-  padding: 0 18px;
+  min-height: 74px;
+  margin: 18px auto 0;
+  padding: 0 22px;
   border: 1px solid var(--t-bd);
   border-radius: var(--t-radius);
   background: var(--t-bg2);
@@ -142,7 +141,7 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--t-font); font-weight: 700; line-heig
   align-items: center;
   gap: 10px;
   color: var(--t-fg);
-  font: 550 clamp(1.04rem, 2vw, 1.27rem)/1 var(--t-brand);
+  font: 550 clamp(1.04rem, 2vw, 1.435rem)/1 var(--t-brand);
   letter-spacing: -0.065em;
   white-space: nowrap;
 }
@@ -166,7 +165,7 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--t-font); font-weight: 700; line-heig
   align-items: center;
   min-height: 56px;
   color: var(--t-fg2);
-  font-size: .82rem;
+  font-size: 1rem;
   font-weight: 650;
   white-space: nowrap;
 }
@@ -183,7 +182,7 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--t-font); font-weight: 700; line-heig
   background: var(--t-ac);
 }
 .mitch-masthead :is(.app-account-link, .home-account-link) {
-  min-height: 40px;
+  min-height: 44px;
   border-radius: var(--t-radius-sm);
 }
 @media (max-width: 760px) {
@@ -292,7 +291,7 @@ label, .field-label { display: block; margin-bottom: 0.35rem; color: var(--t-fg2
   border-radius: var(--t-radius-sm);
   background: var(--t-bg);
   color: var(--t-fg);
-  font-family: inherit; font-size: 0.92rem;
+  font-family: inherit; font-size: 1.125rem;
   transition: border-color var(--t-motion) ease, box-shadow var(--t-motion) ease;
 }
 textarea { min-height: 7rem; resize: vertical; }
@@ -338,7 +337,7 @@ th { color: var(--t-fg2); background: var(--t-bg2); font-size: 12px; font-weight
 tbody tr:hover { background: var(--t-bg2); }
 .table-wrap, .table-container { overflow-x: auto; }
 .badge, .tag, .role-tag, .status, .role, .label { border-radius: 5px; }
-pre, code, .code, .terminal, .log, .console { border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm); color: var(--t-fg); background: var(--t-bg); }
+pre, code, .code, .terminal, .log, .console { font-family: var(--t-mono); border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm); color: var(--t-fg); background: var(--t-bg); }
 .price, .listing-price, .balance-value, .accent, .highlight, .rank-position, .stat-value, .stat-number { color: var(--t-ac); font-variant-numeric: tabular-nums; }
 .avatar, .member-avatar, .profile-avatar { border: 1px solid var(--t-bd); }
 
@@ -443,7 +442,7 @@ body.enroll-page { background: var(--t-bg); }
   .app-account-link { flex: 0 0 38px; width: 38px; min-height: 38px; display: grid; place-items: center; font-size: 0; padding: 0; }
   .app-account-link span { font-size: 22px; }
   #theme-btn, #sw-notif-btn { position: static; width: 38px; height: 38px; flex-shrink: 0; }
-  #mobile-dock { position: fixed; z-index: 9000; bottom: max(10px, env(safe-area-inset-bottom, 0px)); left: 12px; right: 12px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; padding: 5px; border: 1px solid var(--t-bd); border-radius: 21px; background: color-mix(in srgb, var(--t-bg) 95%, transparent); box-shadow: 0 8px 32px rgba(20, 16, 24, 0.12); backdrop-filter: blur(16px); }
+  #mobile-dock { position: fixed; z-index: 9000; bottom: max(10px, env(safe-area-inset-bottom, 0px)); left: 12px; right: 12px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; padding: 5px; border: 1px solid var(--t-bd); border-radius: 21px; background: var(--t-bg2); }
   #mobile-dock :is(a, button) { min-width: 0; min-height: 50px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 4px; border: 0; border-radius: 16px; background: none; color: var(--t-fg2); padding: 4px 2px; text-decoration: none; font: 650 12px/1.2 var(--t-font); cursor: pointer; }
   #mobile-dock svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
   #mobile-dock [aria-current] { color: var(--t-ac-ink); background: var(--t-ac); }
@@ -462,10 +461,10 @@ body.enroll-page { background: var(--t-bg); }
 
 :where(p, li, dd, td, th, label, summary, blockquote) { line-height: 1.65; }
 :where(h1, h2, h3) { line-height: 1.18; }
-:where(button:not([id^="_"]), .btn, [role="button"]) { min-height: 38px; font-weight: 650; }
+:where(button:not([id^="_"]), .btn, [role="button"]) { min-height: 44px; font-weight: 650; }
 :where(th, td) { padding-block: 0.62rem; }
 @media (max-width: 720px) {
-  :where(button:not([id^="_"]), .btn) { min-height: 42px; }
+  :where(button:not([id^="_"]), .btn) { min-height: 44px; }
 }
 
 /* --------------------------------------------------------------------------

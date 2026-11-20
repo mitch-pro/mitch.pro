@@ -6,7 +6,7 @@
   --muted: var(--t-fg2);
   --text: var(--t-fg);
   --accent: var(--t-ac);
-  font-family: var(--t-font, 'DM Sans', system-ui, sans-serif);
+  font-family: var(--t-font, system-ui, sans-serif);
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; scroll-padding-top: 100px; }
@@ -27,12 +27,12 @@ h1, h2, h3, p { margin: 0; }
 .brand img { width: 29px; height: 29px; border-radius: var(--t-radius-sm); object-fit: contain; }
 .side-group-label { color: var(--muted); font-size: 12px; padding: 0 11px; margin-bottom: 10px; }
 .side-nav, .side-categories { display: grid; gap: 3px; }
-.side-link, .side-category { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px; border: 0; border-radius: var(--t-radius-sm); background: transparent; color: var(--t-fg2); text-align: left; font-size: 13px; }
+.side-link, .side-category { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px; border: 0; border-radius: var(--t-radius-sm); background: transparent; color: var(--t-fg2); text-align: left; font-size: 1rem; }
 .side-link svg { width: 17px; height: 17px; flex: none; }
 .side-link:hover, .side-category:hover, .sidebar-recent-game:hover { background: var(--t-bg3); color: var(--text); }
 .side-link[aria-pressed=true], .side-category[aria-pressed=true] { background: var(--t-gls); color: var(--t-ac); font-weight: 650; }
 .categories-label { margin-top: 28px; }
-.side-category { padding: 8px 11px; font-size: 12px; }
+.side-category { padding: 8px 11px; font-size: .95rem; }
 .side-category span { min-width: 0; flex: 1; }
 .side-category-count { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
 .sidebar-recent { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 18px; }
@@ -62,7 +62,7 @@ h1, h2, h3, p { margin: 0; }
 .search-box { width: clamp(200px, 25vw, 360px); height: 42px; display: flex; align-items: center; gap: 9px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--t-radius-sm); padding: 0 12px; color: var(--muted); }
 .search-box:focus-within { border-color: var(--accent); }
 .search-box svg { width: 16px; height: 16px; flex: none; }
-.search-box input { min-width: 0; flex: 1; padding: 10px 0; border: 0; background: transparent; color: var(--text); font-size: 13px; outline: none; }
+.search-box input { min-width: 0; flex: 1; padding: 10px 0; border: 0; background: transparent; color: var(--text); font-size: 1.125rem; outline: none; }
 .search-box input::placeholder { color: var(--muted); }
 .search-box kbd { font: inherit; font-size: 11px; border: 1px solid var(--t-bd); border-radius: 4px; padding: 1px 5px; }
 .icon-button { min-width: 42px; height: 42px; flex: none; display: grid; place-items: center; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: var(--t-radius-sm); }
@@ -75,27 +75,25 @@ h1, h2, h3, p { margin: 0; }
 .page-intro {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: center;
   gap: 18px;
-  min-height: 171px;
-  margin-bottom: 27px;
-  padding: 22px clamp(15px, 3vw, 29px);
-  border: 1px solid #373146;
+  min-height: 128px;
+  margin-bottom: 24px;
+  padding: 20px clamp(16px, 3vw, 28px);
+  border: 1px solid var(--line);
   border-radius: var(--t-radius);
-  color: #f4f6ff;
-  background:
-    linear-gradient(90deg, #111321 12%, #111321f2 34%, #11132194 67%, #11132145),
-    url('/home-card-games.jpg') right 46% / clamp(320px, 58%, 760px) auto no-repeat #111321;
+  color: var(--text);
+  background: var(--panel);
 }
-h1 { font: 650 clamp(2.4rem, 5vw, 3.75rem)/.98 var(--t-heading); letter-spacing: -.045em; }
-.page-intro p { color: #d7dcec; font-size: .86rem; margin-top: 8px; }
-.coin-summary { display: flex; align-items: center; gap: 9px; max-width: 230px; padding: 10px 12px; border: 1px solid #dce9ff35; border-radius: var(--t-radius-sm); background: #111321d4; }
+h1 { font: 600 clamp(2rem, 4.5vw, 2.5rem)/1.2 var(--t-heading); }
+.page-intro p { color: var(--muted); font-size: 1.125rem; margin-top: 6px; }
+.coin-summary { display: flex; align-items: center; gap: 9px; max-width: 230px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--t-radius-sm); background: var(--t-bg); }
 .coin-summary > img { width: 28px; height: 28px; }
 .coin-summary-copy { display: grid; gap: 4px; min-width: 0; }
 .coin-summary strong { font-size: 12px; font-weight: 500; }
-.coin-summary small { color: #d7dcec; font-size: 11px; }
-.reward-meter { height: 3px; margin-top: 3px; background: #3c425b; border-radius: 3px; overflow: hidden; }
-.reward-meter i { display: block; width: 0; height: 100%; background: #b4d7ff; }
+.coin-summary small { color: var(--muted); font-size: 11px; }
+.reward-meter { height: 3px; margin-top: 3px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.reward-meter i { display: block; width: 0; height: 100%; background: var(--accent); }
 .section-heading { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 17px; }
 .section-heading h2 { font: 600 1.42rem/1.1 var(--t-heading); letter-spacing: -.025em; }
 .browse-link { font-size: 12px; color: var(--muted); white-space: nowrap; }
@@ -202,7 +200,7 @@ h1 { font: 650 clamp(2.4rem, 5vw, 3.75rem)/.98 var(--t-heading); letter-spacing:
   .wallet-link { width: 42px; flex: none; padding: 0; justify-content: center; }
   .wallet-link span { display: none; }
   .main { padding: 12px 0 40px; }
-  .page-intro { min-height: 140px; margin-bottom: 20px; padding-block: 15px; }
+  .page-intro { min-height: 0; margin-bottom: 20px; padding-block: 15px; }
   .coin-summary { max-width: 180px; }
   .coin-summary > img { display: none; }
   .quick-grid, .item-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -229,7 +227,7 @@ h1 { font: 650 clamp(2.4rem, 5vw, 3.75rem)/.98 var(--t-heading); letter-spacing:
 }
 .item-grid.is-loading { opacity: .45; transition: opacity .15s; pointer-events: none; }
 .load-more:disabled, .shuffle-button:disabled { opacity: .6; cursor: default; }
-body { font-family: var(--t-font, 'DM Sans', system-ui, sans-serif); }
+body { font-family: var(--t-font, system-ui, sans-serif); }
 @media (max-width: 480px) {
   .page-intro { flex-direction: column; align-items: flex-start; gap: 12px; }
   .coin-summary { max-width: none; }

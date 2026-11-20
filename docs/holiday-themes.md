@@ -1,6 +1,6 @@
 # Holiday themes
 
-Five seasonal looks, switched on by date (the visitor's local calendar):
+The default appearance is black and charcoal. Turn on seasonal themes to use these palettes on the dates in your local calendar.
 
 | Theme | Active | Look |
 | --- | --- | --- |
@@ -40,10 +40,7 @@ starts Nov 27 that year).
   hidden, and does not run with reduced motion, with Animations off in
   Preferences, on `/vms/desktop`, or on the games page (`/game-portal`, which
   `/games` redirects to).
-- A pill on the homepage, right below the Private window toggle, says "Don't like
-  the holiday theme?" while a holiday is in season. Clicking it turns the theme off
-  on every page and the pill becomes "Bring back the holiday theme"
-  (`__siteTheme.setHolidayOff`). It is the same setting as the one below.
+- The homepage seasonal controls offer **Use holiday theme** while a holiday is in season. The same controls can turn the theme or effects off.
 - Preferences → Appearance → Holiday theme: Automatic or Off (stored as
   `theme_holiday` in local storage, like the other appearance settings).
 

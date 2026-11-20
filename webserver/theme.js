@@ -7,85 +7,35 @@
      normalize to dark or light. */
 
   var DARK = {
-    name: 'Dark',
-    bg: '#070510', bg2: 'rgba(22,13,44,0.7)', bg3: 'rgba(42,23,76,0.74)',
-    fg: '#faf7ff', fg2: '#b4a9c9',
-    ac: '#b86cff', ac2: '#e47cff', ac3: '#8257ff',
-    bd: 'rgba(224,198,255,0.16)', bda: 'rgba(194,126,255,0.48)',
-    gl: 'rgba(180,94,255,0.35)', gls: 'rgba(180,94,255,0.14)',
-    gr: 'linear-gradient(135deg,#7957f1,#ca57f5 56%,#ff5fa7)',
-    bgr: 'linear-gradient(180deg,rgba(5,4,17,0.85),rgba(5,4,17,0.95))',
-    bgImg: '',
-    sw: '#b86cff',
+    name:'Dark',bg:'#000000',bg2:'#111111',bg3:'#1c1c1c',fg:'#f0f0f0',fg2:'#d0d0d0',fg3:'#bdbdbd',
+    ac:'#9acbfa',ac2:'#b9dcff',ac3:'#b9dcff',bd:'#303030',bda:'#555555',
+    gl:'transparent',gls:'#1c1c1c',gr:'#9acbfa',bgr:'none',bgImg:'',sw:'#9acbfa'
   };
   var LIGHT = {
-    name: 'Light',
-    light: true,
-    bg: '#eef1f9', bg2: '#ffffff', bg3: '#e7ebf7',
-    fg: '#101426', fg2: '#3f4560',
-    ac: '#4f46e5', ac2: '#0891b2', ac3: '#db2777',
-    bd: 'rgba(16,20,42,0.16)', bda: 'rgba(79,70,229,0.5)',
-    gl: 'rgba(79,70,229,0.34)', gls: 'rgba(79,70,229,0.16)',
-    // Light mode keeps gradients in one indigo family — the old indigo→cyan→pink
-    // sweep read as confetti. Page backdrop is a plain neutral wash.
-    gr: 'linear-gradient(135deg,#4f46e5,#7c3aed)',
-    bgr: 'linear-gradient(160deg,#f3f5fa,#e9edf6)',
-    bgImg: '',
-    sw: '#4f46e5',
+    name:'Light',light:true,bg:'#f3f6fa',bg2:'#ffffff',bg3:'#e8eef6',fg:'#172536',fg2:'#485d73',fg3:'#526783',
+    ac:'#245c8c',ac2:'#183f61',ac3:'#183f61',bd:'#52678366',bda:'#526783',
+    gl:'transparent',gls:'#e8eef6',gr:'#245c8c',bgr:'none',bgImg:'',sw:'#245c8c'
   };
   var T = { dark: DARK, light: LIGHT };
   var LEGACY_LIGHT = { daylight: 1, paper: 1, arctic: 1, blossom: 1 };
-  var BACKGROUND_DEFAULTS_VERSION = 'mountain-2026-09-06';
-  var VFX_DEFAULTS_VERSION = 'all-on-2026-09-06';
-  var VFX_DEFAULTS = { snow: true, stars: true, rain: true, particles: true };
-  function applyVFXDefaults() {
-    if (usesSchoolDefaults() || getPref('vfxDefaults', '') === VFX_DEFAULTS_VERSION) return;
-    try {
-      localStorage.setItem('_prefVFX', JSON.stringify(VFX_DEFAULTS));
-      setPref('vfxDefaults', VFX_DEFAULTS_VERSION);
-    } catch (_) {}
-  }
-  var BACKGROUND_DEFAULTS = {
-    bgimg: '/backgrounds/wallhaven-black-mountain.webp',
-    bgblur: '8', accent: '', adapt: 'on', dim: '0.50', bgmode: 'cover', bgpos: 'center'
-  };
   var SCHOOL_BACKGROUND_DEFAULT = '/backgrounds/wallhaven-black-mountain.webp';
 
   function usesSchoolDefaults() {
     return /(^|\.)rjuhsd\.school$/.test(location.hostname) || /^\/rjuhsd(?:\/|$)/.test(location.pathname);
   }
   function applyBackgroundDefaults() {
-    if (usesSchoolDefaults()) {
-      if (!getPref('bgimg', '')) setBgImgCookie(SCHOOL_BACKGROUND_DEFAULT);
-      if (!getPref('bgblur', '')) setPref('bgblur', '8');
-      return;
-    }
-    if (getPref('backgroundDefaults', '') === BACKGROUND_DEFAULTS_VERSION) return;
-    Object.keys(BACKGROUND_DEFAULTS).forEach(function (key) { setPref(key, BACKGROUND_DEFAULTS[key]); });
-    setBgImgCookie(BACKGROUND_DEFAULTS.bgimg);
-    setCookie('dark');
-    setPref('backgroundDefaults', BACKGROUND_DEFAULTS_VERSION);
+    if (!usesSchoolDefaults()) return;
+    if (!getPref('bgimg', '')) setBgImgCookie(SCHOOL_BACKGROUND_DEFAULT);
+    if (!getPref('bgblur', '')) setPref('bgblur', '8');
   }
   function preparePreferenceSnapshot(snapshot) {
-    if (usesSchoolDefaults()) {
-      if (snapshot.theme_bgimg) return snapshot;
-      return Object.assign({}, snapshot, { theme_bgimg: SCHOOL_BACKGROUND_DEFAULT });
-    }
-    var result = snapshot;
-    if (snapshot.theme_vfxDefaults !== VFX_DEFAULTS_VERSION) {
-      result = Object.assign({}, result, { _prefVFX: Object.assign({}, VFX_DEFAULTS), theme_vfxDefaults: VFX_DEFAULTS_VERSION });
-    }
-    if (snapshot.theme_backgroundDefaults === BACKGROUND_DEFAULTS_VERSION) return result;
-    // Old account backups must not undo the site-wide default rollout.
-    result = Object.assign({}, result);
-    Object.keys(BACKGROUND_DEFAULTS).forEach(function (key) { result['theme_' + key] = BACKGROUND_DEFAULTS[key]; });
-    result.theme_backgroundDefaults = BACKGROUND_DEFAULTS_VERSION;
-    setCookie('dark');
-    return result;
+    return usesSchoolDefaults() && !snapshot.theme_bgimg
+      ? Object.assign({}, snapshot, { theme_bgimg: SCHOOL_BACKGROUND_DEFAULT })
+      : snapshot;
   }
 
   function normalize(name) {
-    if (name === 'light' || LEGACY_LIGHT[name]) return 'light';
+    if (name === 'light' || LEGACY_LIGHT[name] || (name === 'auto' && window.matchMedia('(prefers-color-scheme: light)').matches)) return 'light';
     return 'dark';
   }
 
@@ -176,23 +126,25 @@
     var defaultDensity = navigator.userAgent.includes('CrOS') ? 'compact' : 'normal';
     var density = getPref('density', defaultDensity);
     var radius = getPref('radius', 'soft');
-    var font = getPref('font', 'system');
+    var font = getPref('font', 'arcade');
     var motion = getPref('motion', 'on');
     var fontMap = {
+      arcade: 'var(--t-arcade)',
+      plain: 'Arial, Helvetica, sans-serif',
       system: '"Segoe UI",system-ui,-apple-system,sans-serif',
       mono: '"DM Mono","SFMono-Regular",Consolas,monospace',
       rounded: 'ui-rounded,"Nunito","Segoe UI",system-ui,sans-serif',
       serif: 'Georgia,"Times New Roman",serif',
       futuristic: '"Trebuchet MS","Segoe UI",system-ui,sans-serif'
     };
-    var radiusMap = { sharp: '3px', soft: '8px', round: '14px', bubble: '22px' };
+    var radiusMap = { sharp: '0px', soft: '12px', round: '14px', bubble: '22px' };
     var densityMap = { compact: '.9', normal: '1', comfy: '1.05', huge: '1.10' };
     r.setProperty('--t-bg-dim', dim.toFixed(2));
     r.setProperty('--t-bg-size', bgSize);
     r.setProperty('--t-bg-repeat', bgRepeat);
     r.setProperty('--t-bg-pos', bgPos);
     r.setProperty('--t-bg-blur', clamp(getPref('bgblur', '8'), 0, 40).toFixed(0) + 'px');
-    r.setProperty('--t-font', fontMap[font] || fontMap.system);
+    r.setProperty('--t-font', fontMap[font] || fontMap.arcade);
     r.setProperty('--t-radius', radiusMap[radius] || radiusMap.soft);
     r.setProperty('--t-ui-scale', densityMap[density] || '1');
     r.setProperty('--t-motion', motion === 'off' ? '0s' : '.15s');
@@ -693,7 +645,7 @@
     r.setProperty('--t-gls', t.gls);
     r.setProperty('--t-gr',  t.gr);
     r.setProperty('--t-bgr-theme', t.bgr);
-    r.setProperty('--t-display', "'Figtree', system-ui, sans-serif");
+    r.setProperty('--t-display', 'var(--t-font)');
     applyCustomizationPrefs();
     applyBgImg(getEffectiveBgImg());
     applyAdaptiveTheme();
@@ -701,7 +653,6 @@
   }
 
   applyBackgroundDefaults();
-  applyVFXDefaults();
   applyTheme(getCookie());
   // applyTheme ran while <body> didn't exist yet (script is in <head>) —
   // re-assert the wallpaper layer's body transparency once it does.

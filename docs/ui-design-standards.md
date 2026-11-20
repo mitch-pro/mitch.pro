@@ -29,8 +29,8 @@ Every user-facing and internal page on the site must adhere to the design langua
      - `--t-radius-sm`: Input and button corner radius (default: 7px)
 
 3. **Typography:**
-   - Use `var(--t-font)` (`DM Sans`, system-ui, sans-serif).
-   - Use `var(--t-brand)` for the Mitch wordmark and `var(--t-heading)` for display headings on Home, Games, and Rankings. JetBrains Mono and Pixelify Sans are served locally with their font licenses.
+   - Use `var(--t-font)` for copy, controls, and headings. Pixelify Sans is the default and Preferences offers other fonts.
+   - Use `var(--t-brand)` for the Mitch wordmark and `var(--t-mono)` for code. JetBrains Mono and Pixelify Sans are served locally with their font licenses.
 
 4. **Cards, Panels & Lists:**
    - Container shells use `.app-main`, `.shell`, or `.legal-shell` with responsive max-width (`1000px` - `1200px`).
@@ -40,7 +40,11 @@ Every user-facing and internal page on the site must adhere to the design langua
 
 The homepage keeps the animated hello and Mitch mark next to a local clock. Games is the lead shortcut, alongside Matrix, Cloud Linux, and Movies. Friends and the Community, MitchCoins, and Account groups use the existing destinations. The Rankings preview requests three rows from the same leaderboard endpoint used by the full rankings page and keeps the existing profile links and cosmetics.
 
-The games portal keeps its own sidebar, search, player, and reward display. It uses the same color tokens, wordmark, and arcade artwork as the homepage. The rankings page accepts a `metric` query parameter to open a category directly.
+The games portal keeps its own sidebar, search, player, game covers, and reward display. It uses the same color tokens and wordmark as the homepage. The rankings page accepts a `metric` query parameter to open a category directly.
+
+### Background
+
+Mitch uses Tylerium's charcoal Vanta Clouds preset and locally hosted Three.js and Vanta with their upstream licenses. Customize offers dark clouds, blue clouds, a solid background, and motion controls. Saved wallpaper takes precedence until the user switches presets. The layer uses the static WebP fallback with reduced motion, disabled animation, Save-Data, or unavailable WebGL. Embedded games skip the background engine.
 
 ### VM Lab Custom OS
 
@@ -57,10 +61,10 @@ Custom OS shows selectable preset cards with logos and prices from the existing 
 - Always test UI changes in both dark and light mode. Test light mode both ways it can be reached: the OS setting (Playwright `colorScheme: 'light'`) and the manual Preferences toggle.
 - Contrast must be verified for all text, borders, buttons, and status indicators.
 
-How the mode is set: the server injects `/site-theme.js` into every page. It reads the `theme` cookie (`light`, `dark`, or unset for "follow the OS") and:
+The shared `/site-theme.js` uses dark by default. It reads the `theme` cookie for an explicit light, dark, or system setting:
 
-- sets `html[data-theme="light"|"dark"]` for a manual choice (removed for auto), which `theme-tokens.css` uses to pick the palette;
-- toggles `html.theme-light` on whenever the *effective* mode is light, manual or OS, and keeps it in step with OS changes while in auto mode.
+- Sets `html[data-theme="light"|"dark"]` to the effective mode for `theme-tokens.css`.
+- Updates `html.theme-light` when the effective mode is light. Only the explicit system setting follows OS changes.
 
 So page CSS can key light-mode fixes off `html.theme-light` (or `html:not(.theme-light)` for dark-only colors) and they apply on every page. Prefer not needing them at all: tokens already switch, and a status color written as `color-mix(in srgb, #dc2626 70%, var(--t-fg))` reads in both modes. The legacy `theme.js` (still loaded by a few pages such as Preferences and the admin panel) also toggles `theme-light`; both scripts read the same cookie.
 

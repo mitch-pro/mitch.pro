@@ -33,21 +33,15 @@
   function isDarkMode(mode) {
     if (mode === 'dark') return true;
     if (mode === 'light') return false;
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return mode !== 'auto' || !window.matchMedia || window.matchMedia('(prefers-color-scheme: dark)').matches;
   }
 
   function applyMode(mode) {
     var root = document.documentElement;
-    if (mode === 'light' || mode === 'dark') {
-      root.setAttribute('data-theme', mode);
-    } else {
-      root.removeAttribute('data-theme');
-    }
-    root.style.colorScheme = isDarkMode(mode) ? 'dark' : 'light';
-    // Page stylesheets key their light-mode fixes off html.theme-light, so
-    // keep that class in step with the effective mode (manual or OS) on every
-    // page. Pages that also load the legacy theme.js re-toggle it themselves.
-    root.classList.toggle('theme-light', !isDarkMode(mode));
+    var effective = isDarkMode(mode) ? 'dark' : 'light';
+    root.setAttribute('data-theme', effective);
+    root.style.colorScheme = effective;
+    root.classList.toggle('theme-light', effective === 'light');
     var themeColor = document.querySelector('meta[name="theme-color"]');
     if (themeColor) {
       var background = getComputedStyle(root).getPropertyValue('--t-bg').trim();
@@ -104,9 +98,11 @@
     }
     var root = document.documentElement;
     var sizes = { compact: 0.9, normal: 1, comfy: 1.05, huge: 1.1 };
-    var corners = { sharp: '0px', soft: '10px', round: '14px', bubble: '22px' };
+    var corners = { sharp: '0px', soft: '12px', round: '14px', bubble: '22px' };
     var fonts = {
-      system: "'DM Sans', system-ui, sans-serif",
+      arcade: "var(--t-arcade)",
+      system: 'system-ui, sans-serif',
+      plain: 'Arial, Helvetica, sans-serif',
       mono: 'ui-monospace, monospace',
       rounded: "'Arial Rounded MT Bold', 'Trebuchet MS', sans-serif",
       serif: 'Georgia, serif',
@@ -114,12 +110,12 @@
     };
     var size = sizes[preference('density', 'normal')] || 1;
     var radius = preference('radius', 'soft');
-    var font = fonts[preference('font', 'system')] || fonts.system;
+    var font = fonts[preference('font', 'arcade')] || fonts.arcade;
     var reducedMotion = preference('motion', 'on') === 'off';
     root.style.fontSize = (16 * size) + 'px';
     root.style.setProperty('--t-ui-scale', String(size));
     root.style.setProperty('--t-radius', corners[radius] || corners.soft);
-    root.style.setProperty('--t-radius-sm', radius === 'sharp' ? '0px' : '7px');
+    root.style.setProperty('--t-radius-sm', radius === 'sharp' ? '0px' : '6px');
     root.style.setProperty('--t-font', font);
     root.style.setProperty('--t-display', font);
     root.style.setProperty('--t-motion', reducedMotion ? '0s' : '.15s');
@@ -190,7 +186,8 @@
     else {
       var preference = '';
       try { preference = localStorage.getItem('theme_holiday') || ''; } catch (_) {}
-      name = preference === 'off' ? '' : holidaySeason();
+      var enabled = preference === 'on' || preference === 'auto' || (!preference && SEASONS[window.__holidayForce]);
+      name = enabled ? holidaySeason() : '';
     }
     if (name) root.setAttribute('data-holiday', name);
     else root.removeAttribute('data-holiday');
@@ -222,7 +219,7 @@
     var osDark = window.matchMedia('(prefers-color-scheme: dark)');
     var onOsChange = function () {
       var mode = readCookie('theme');
-      if (mode !== 'light' && mode !== 'dark') applyMode(mode);
+      if (mode === 'auto') applyMode(mode);
     };
     if (osDark.addEventListener) osDark.addEventListener('change', onOsChange);
     else if (osDark.addListener) osDark.addListener(onOsChange);
@@ -240,7 +237,8 @@
   }
 
   function holidayOff() {
-    try { return localStorage.getItem('theme_holiday') === 'off'; } catch (_) { return false; }
+    try { var saved = localStorage.getItem('theme_holiday');
+      return saved !== 'on' && saved !== 'auto' && !(!saved && SEASONS[window.__holidayForce]); } catch (_) { return !SEASONS[window.__holidayForce]; }
   }
 
   // Turns the holiday theme off (or back on) for every page; Preferences shows
@@ -248,7 +246,7 @@
   function setHolidayOff(off) {
     try {
       if (off) localStorage.setItem('theme_holiday', 'off');
-      else localStorage.removeItem('theme_holiday');
+      else localStorage.setItem('theme_holiday', 'on');
     } catch (_) {}
     apply();
   }
@@ -278,7 +276,7 @@
     setHolidayFxOff: setHolidayFxOff,
     getMode: function () { return readCookie('theme'); },
     setMode: function (mode) {
-      writeCookie('theme', mode === 'light' || mode === 'dark' ? mode : '');
+      writeCookie('theme', ['light', 'dark', 'auto'].includes(mode) ? mode : '');
       apply();
     },
     getAccent: function () { return readCookie('accent'); },

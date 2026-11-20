@@ -783,8 +783,8 @@
     <div class="field">
       <label>Theme Preset</label>
       <div class="chip-row" id="themePresetGrid">
-        <button class="chip" data-theme="" onclick="selectThemePreset(this)">System (default)</button>
-        <button class="chip" data-theme="dark" onclick="selectThemePreset(this)">Dark</button>
+        <button class="chip" data-theme="dark" onclick="selectThemePreset(this)">Dark (default)</button>
+        <button class="chip" data-theme="auto" onclick="selectThemePreset(this)">System</button>
         <button class="chip" data-theme="light" onclick="selectThemePreset(this)">Light</button>
       </div>
     </div>
@@ -793,8 +793,8 @@
       <div class="field">
         <label>Custom Accent</label>
         <div class="inline-color">
-          <input id="accentColor" type="color" value="#ff6f99">
-          <input id="accentText" type="text" placeholder="#ff6f99">
+          <input id="accentColor" type="color" value="#9acbfa">
+          <input id="accentText" type="text" placeholder="#9acbfa">
           <button class="soft-btn" type="button" id="accentClear">Clear</button>
         </div>
       </div>
@@ -830,7 +830,9 @@
       <div class="field">
         <label>Font Style</label>
         <select id="fontSelect">
-          <option value="system">Clean system</option>
+          <option value="arcade">Arcade (default)</option>
+          <option value="system">System sans</option>
+          <option value="plain">Plain sans</option>
           <option value="mono">Terminal mono</option>
           <option value="rounded">Rounded</option>
           <option value="serif">Serif</option>
@@ -1913,13 +1915,13 @@ function updateSummaries() {
   var theme = getCookieValue('theme', '');
   var home = load(HOME_CONFIG_KEY, { showQuickActions: true, showMemberRail: true });
   var sync = load(SYNC_CONFIG_KEY, { enabled: true });
-  document.getElementById('summaryTheme').textContent = theme || 'system';
+  document.getElementById('summaryTheme').textContent = theme === 'auto' ? 'System' : theme === 'light' ? 'Light' : 'Dark';
   document.getElementById('summaryHome').textContent = (home.compactHome ? 'Compact' : 'Standard');
   document.getElementById('summarySync').textContent = sync.enabled === false ? 'Manual' : 'Enabled';
 }
 
 function refreshThemeButtons() {
-  var current = getCookieValue('theme', '');
+  var current = getCookieValue('theme', '') || 'dark';
   document.querySelectorAll('#themePresetGrid [data-theme]').forEach(function(btn) {
     btn.classList.toggle('active', btn.getAttribute('data-theme') === current);
   });
@@ -1942,9 +1944,9 @@ function syncAppearanceControls() {
   document.getElementById('accentColor').value = /^#[0-9a-f]{6}$/i.test(accent) ? accent : getComputedStyle(document.documentElement).getPropertyValue('--t-ac').trim();
   document.getElementById('densitySelect').value = getThemePref('density', 'normal');
   document.getElementById('radiusSelect').value = getThemePref('radius', 'soft');
-  document.getElementById('fontSelect').value = getThemePref('font', 'system');
+  document.getElementById('fontSelect').value = getThemePref('font', 'arcade');
   document.getElementById('motionSelect').value = getThemePref('motion', 'on');
-  document.getElementById('holidaySelect').value = getThemePref('holiday', 'auto');
+  document.getElementById('holidaySelect').value = window.__siteTheme?.holidayOff() === false ? 'auto' : 'off';
   document.getElementById('holidayFxSelect').value = getThemePref('holidayfx', 'on');
   var mat = document.getElementById('materialSelect');
   if (mat) mat.value = getThemePref('material', 'auto');
@@ -1968,7 +1970,7 @@ function setupAppearanceControls() {
   document.getElementById('accentText').addEventListener('change', function() {
     var v = this.value.trim();
     if (v && !/^#[0-9a-f]{6}$/i.test(v)) {
-      setStatus('appearanceStatus', 'Use a hex color like #ff6f99.');
+      setStatus('appearanceStatus', 'Use a hex color like #9acbfa.');
       return;
     }
     setThemePref('accent', v);
