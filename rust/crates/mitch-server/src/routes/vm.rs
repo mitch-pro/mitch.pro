@@ -5098,8 +5098,10 @@ pub(crate) async fn handle(
                 );
             }
 
+            let owner_vm = !record_owner.is_empty()
+                && mitch_lib::auth::is_owner_email(&state.store, &record_owner);
             match crate::proxmox_desktop::desktop()
-                .power(&record, &action)
+                .power(&record, &action, owner_vm)
                 .await
             {
                 Ok(task) => {

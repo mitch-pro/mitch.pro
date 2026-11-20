@@ -421,7 +421,7 @@ pub(crate) async fn enforce_vm_max_uptime_worker(state: &AppState) {
                     );
                     crate::routes::vm::revoke_vm_desktop_connections(state, &record_key);
                     let _ = crate::proxmox_desktop::desktop()
-                        .power(rec, "force-stop")
+                        .power(rec, "force-stop", false)
                         .await;
                 } else {
                     let synthetic = json!({
@@ -430,7 +430,7 @@ pub(crate) async fn enforce_vm_max_uptime_worker(state: &AppState) {
                         "guestType": guest.get("type"),
                     });
                     let _ = crate::proxmox_desktop::desktop()
-                        .power(&synthetic, "force-stop")
+                        .power(&synthetic, "force-stop", false)
                         .await;
                 }
 
@@ -487,7 +487,7 @@ pub(crate) async fn enforce_vm_max_uptime_worker(state: &AppState) {
                     );
                     crate::routes::vm::revoke_vm_desktop_connections(state, &record_key);
                     if let Err(err) = crate::proxmox_desktop::desktop()
-                        .power(rec, "shutdown")
+                        .power(rec, "shutdown", false)
                         .await
                     {
                         tracing::warn!(
@@ -496,7 +496,7 @@ pub(crate) async fn enforce_vm_max_uptime_worker(state: &AppState) {
                             err
                         );
                         let _ = crate::proxmox_desktop::desktop()
-                            .power(rec, "force-stop")
+                            .power(rec, "force-stop", false)
                             .await;
                     }
                     if !owner_email.is_empty() {
@@ -513,12 +513,12 @@ pub(crate) async fn enforce_vm_max_uptime_worker(state: &AppState) {
                         "guestType": guest.get("type"),
                     });
                     if crate::proxmox_desktop::desktop()
-                        .power(&synthetic, "shutdown")
+                        .power(&synthetic, "shutdown", false)
                         .await
                         .is_err()
                     {
                         let _ = crate::proxmox_desktop::desktop()
-                            .power(&synthetic, "force-stop")
+                            .power(&synthetic, "force-stop", false)
                             .await;
                     }
                 }

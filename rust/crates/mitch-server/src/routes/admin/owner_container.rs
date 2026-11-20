@@ -80,7 +80,7 @@ pub fn spawn_idle_shutdown() {
             let (next, shutdown) = idle_decision(running, last, mitch_lib::school::now_millis());
             LAST_ACTIVITY.store(next, std::sync::atomic::Ordering::Relaxed);
             if shutdown {
-                let _ = desktop().power(&record_for(&guest), "shutdown").await;
+                let _ = desktop().power(&record_for(&guest), "shutdown", true).await;
             }
         }
     });
@@ -231,7 +231,7 @@ pub async fn handle(
 
 async fn power(record: &Value, body: &Value) -> axum::response::Response {
     let action = jsval::str_or(body.get("action"), "");
-    match desktop().power(record, &action).await {
+    match desktop().power(record, &action, true).await {
         Ok(_) => {
             // A start or restart begins a fresh ten minutes.
             note_activity();
