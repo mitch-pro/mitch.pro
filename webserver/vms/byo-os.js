@@ -10,6 +10,11 @@
 
   const $ = (id) => document.getElementById(id);
   const dialog = () => $('byo-os-dialog');
+  const presetLogos = new Map([
+    ['windows', 'windows.svg'], ['mint', 'mint.svg'], ['arch', 'arch.svg'],
+    ['tails', 'tails.png'], ['kali', 'kali.svg'], ['chromeos', 'chromeos.svg'],
+  ]);
+  const presetPrice = preset => `${Number(preset.cost).toLocaleString()} MitchCoins`;
 
   function fmtBytes(n) {
     if (!n) return '0 B';
@@ -27,7 +32,7 @@
     const el = $('byo-os-status');
     if (!el) return;
     el.textContent = text || '';
-    el.style.color = isError ? 'var(--vm-danger)' : 'var(--t-fg2)';
+    el.classList.toggle('is-error', Boolean(isError));
   }
 
   async function api(url, opts) {
@@ -46,18 +51,41 @@
     return data;
   }
 
-  // Tracked so the create button can warn before permanently deleting an
-  // existing computer — /api/vm/byo-os/create itself now deletes whatever
-  // computer the user already has (template or BYO-OS) before building the
-  // new one, the same way the template path's "Delete & Recreate" does.
-  let hasExistingComputer = false;
+  let hasExistingComputer = null;
+  let checkingComputer = false;
+  let creatingComputer = false;
+  let presets = [];
+  let loadingPresets = false;
+
+  function updateCreateButtons() {
+    const unavailable = hasExistingComputer === null || creatingComputer;
+    $('byo-os-preset-btn').disabled = unavailable || !presets.length;
+    $('byo-os-create-btn').disabled = unavailable;
+  }
+
+  async function refreshComputerState() {
+    // Creation can erase the current VM. Wait for its state before choosing the confirmation.
+    if (checkingComputer) return;
+    checkingComputer = true;
+    hasExistingComputer = null;
+    $('byo-os-replace-warning').hidden = true;
+    updateCreateButtons();
+    try {
+      const data = await api('/api/vm/computers', { method: 'GET' });
+      if (!Array.isArray(data?.computers)) throw new Error('Could not check your current computer.');
+      hasExistingComputer = data.computers.length > 0;
+      $('byo-os-replace-warning').hidden = !hasExistingComputer;
+    } catch (error) {
+      setStatus(error.message, true);
+    } finally {
+      checkingComputer = false;
+      updateCreateButtons();
+    }
+  }
 
   async function refreshIsoState() {
     try {
-      const [isoData, computersData] = await Promise.all([
-        api('/api/vm/byo-os/iso', { method: 'GET' }),
-        api('/api/vm/computers', { method: 'GET' }).catch(() => null),
-      ]);
+      const isoData = await api('/api/vm/byo-os/iso', { method: 'GET' });
       const has = isoData && isoData.iso;
       $('byo-os-no-iso').classList.toggle('is-hidden', !!has);
       $('byo-os-has-iso').classList.toggle('is-hidden', !has);
@@ -73,43 +101,91 @@
           reportBtn.textContent = isoData.iso.reported ? 'Already reported' : 'Report an issue';
         }
       }
-      hasExistingComputer = !!(
-        computersData && Array.isArray(computersData.computers) && computersData.computers.length > 0
-      );
-      const createBtn = $('byo-os-create-btn');
-      if (createBtn) {
-        createBtn.textContent = hasExistingComputer
-          ? 'Delete current computer & create from this ISO →'
-          : 'Create computer from this ISO →';
-      }
     } catch (e) {
       setStatus(e.message, true);
     }
   }
 
-  // Preset ISOs (no upload — the file already lives on Proxmox's storage)
-  // are independent of the custom-ISO state above, so they're loaded once
-  // per dialog open rather than as part of refreshIsoState.
-  let presetsLoaded = false;
+  function presetCard(preset, index) {
+    const label = document.createElement('label');
+    label.className = 'byo-preset-card';
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = 'preset';
+    input.value = preset.id;
+    input.checked = index === 0;
+    const logo = document.createElement('span');
+    logo.className = 'byo-preset-logo';
+    logo.setAttribute('aria-hidden', 'true');
+    const file = presetLogos.get(preset.id);
+    if (file) {
+      const img = document.createElement('img');
+      img.src = '/vms/os-logos/' + file;
+      img.alt = '';
+      img.addEventListener('error', () => img.remove(), { once: true });
+      logo.append(img);
+    }
+    const info = document.createElement('span');
+    info.className = 'byo-preset-info';
+    const name = document.createElement('strong');
+    name.textContent = preset.name;
+    const price = document.createElement('small');
+    price.textContent = presetPrice(preset);
+    info.append(name, price);
+    label.append(input, logo, info);
+    return label;
+  }
+
   async function loadPresets() {
-    if (presetsLoaded) return;
-    const select = $('byo-os-preset-select');
-    const btn = $('byo-os-preset-btn');
-    if (!select || !btn) return;
+    if (presets.length || loadingPresets) return;
+    loadingPresets = true;
+    const status = $('byo-os-preset-status');
+    status.textContent = 'Loading presets…';
     try {
       const data = await api('/api/vm/byo-os/presets', { method: 'GET' });
-      const presets = (data && data.presets) || [];
-      if (!presets.length) {
-        select.innerHTML = '<option value="">No presets available</option>';
-        return;
+      presets = Array.isArray(data?.presets) ? data.presets : [];
+      $('byo-os-preset-options').replaceChildren(...presets.map(presetCard));
+      status.textContent = presets.length ? '' : 'No presets available.';
+    } catch {
+      status.textContent = 'Presets could not be loaded.';
+    } finally {
+      loadingPresets = false;
+      updateCreateButtons();
+    }
+  }
+
+  async function createComputer(preset) {
+    if (creatingComputer || hasExistingComputer === null) return;
+    const replacesComputer = hasExistingComputer;
+    creatingComputer = true;
+    let created = false;
+    try {
+      if (preset || replacesComputer) {
+        const source = preset ? `${preset.name} (${presetPrice(preset)})` : 'this ISO';
+        const confirmed = await window.mitchConfirm(replacesComputer
+          ? { title: 'Replace your computer?', body: `This permanently deletes your current computer and all its files, then creates a new one from ${source}. This cannot be undone.`, confirmLabel: 'Delete and create' }
+          : { title: 'Create computer?', body: `Create a computer from ${source}.`, confirmLabel: 'Create computer' });
+        if (!confirmed) return;
       }
-      select.innerHTML = presets
-        .map((p) => `<option value="${p.id}">${p.name} (${p.cost} coins)</option>`)
-        .join('');
-      btn.disabled = false;
-      presetsLoaded = true;
-    } catch (e) {
-      select.innerHTML = '<option value="">Failed to load presets</option>';
+      updateCreateButtons();
+      setStatus(replacesComputer
+        ? 'Deleting your current computer and creating a new one… this can take a minute.'
+        : 'Creating your computer… this can take a minute.');
+      await api(preset ? '/api/vm/byo-os/create-preset' : '/api/vm/byo-os/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
+        body: JSON.stringify(preset ? { presetId: preset.id } : {}),
+      });
+      created = true;
+      setStatus('Computer created. Reloading…');
+      setTimeout(() => location.reload(), 1200);
+    } catch (error) {
+      setStatus(error.message, true);
+    } finally {
+      if (!created) {
+        creatingComputer = false;
+        updateCreateButtons();
+      }
     }
   }
 
@@ -150,6 +226,8 @@
     const progressWrap = $('byo-os-progress-wrap');
     const progressBar = $('byo-os-progress-bar');
     const progressText = $('byo-os-progress-text');
+    progressBar.value = 0;
+    progressText.textContent = '';
     progressWrap.classList.remove('is-hidden');
     $('byo-os-upload-btn').disabled = true;
     try {
@@ -189,7 +267,7 @@
           await uploadChunkWithRetry(uploadId, i, file.slice(startByte, endByte));
         }
         const pct = Math.round(((i + 1) / totalChunks) * 100);
-        progressBar.style.width = `${pct}%`;
+        progressBar.value = pct;
         progressText.textContent =
           `Uploading… ${pct}% (${fmtBytes(Math.min((i + 1) * CHUNK_SIZE, file.size))} / ${fmtBytes(file.size)})`;
       }
@@ -248,10 +326,12 @@
     const reportBtn = $('byo-os-report-btn');
     const presetBtn = $('byo-os-preset-btn');
 
+    $('byo-os-form').addEventListener('submit', event => event.preventDefault());
     openBtns.forEach((btn) => {
       btn.addEventListener('click', () => {
         setStatus('');
         refreshIsoState();
+        refreshComputerState();
         loadPresets();
         dialog().showModal();
       });
@@ -324,64 +404,12 @@
         reportBtn.disabled = false;
       }
     });
-    createBtn.addEventListener('click', async () => {
-      if (hasExistingComputer) {
-        const ok = await window.mitchConfirm({
-          title: 'Replace your computer?',
-          body: 'This permanently deletes your current computer and all its files, then creates a new one from this ISO. This cannot be undone.',
-          confirmLabel: 'Delete and create',
-        });
-        if (!ok) return;
-      }
-      createBtn.disabled = true;
-      setStatus(
-        hasExistingComputer
-          ? 'Deleting your current computer and creating a new one… this can take a minute.'
-          : 'Creating your computer… this can take a minute.',
-      );
-      try {
-        await api('/api/vm/byo-os/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
-          body: '{}',
-        });
-        setStatus('Computer created — reloading…');
-        setTimeout(() => location.reload(), 1200);
-      } catch (e) {
-        setStatus(e.message, true);
-        createBtn.disabled = false;
-      }
+    createBtn.addEventListener('click', () => createComputer());
+    presetBtn.addEventListener('click', () => {
+      const selection = $('byo-os-preset-options').querySelector('input:checked');
+      const preset = presets.find(item => item.id === selection?.value);
+      if (preset) createComputer(preset);
     });
-    if (presetBtn) {
-      presetBtn.addEventListener('click', async () => {
-        const select = $('byo-os-preset-select');
-        const presetId = select && select.value;
-        if (!presetId) return;
-        const presetLabel = select.options[select.selectedIndex].textContent;
-        const ok = await window.mitchConfirm(hasExistingComputer
-          ? { title: 'Replace your computer?', body: `This permanently deletes your current computer and all its files, then creates a new one from ${presetLabel}. This cannot be undone.`, confirmLabel: 'Delete and create' }
-          : { title: 'Create computer?', body: `Create a computer from ${presetLabel}.`, confirmLabel: 'Create computer' });
-        if (!ok) return;
-        presetBtn.disabled = true;
-        setStatus(
-          hasExistingComputer
-            ? 'Deleting your current computer and creating a new one… this can take a minute.'
-            : 'Creating your computer… this can take a minute.',
-        );
-        try {
-          await api('/api/vm/byo-os/create-preset', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
-            body: JSON.stringify({ presetId }),
-          });
-          setStatus('Computer created — reloading…');
-          setTimeout(() => location.reload(), 1200);
-        } catch (e) {
-          setStatus(e.message, true);
-          presetBtn.disabled = false;
-        }
-      });
-    }
   }
 
   if (document.readyState === 'loading') {
