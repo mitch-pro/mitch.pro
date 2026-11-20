@@ -141,8 +141,12 @@ fn split_word_tags(text: &str, line_start: u32) -> Vec<(u32, String)> {
     let mut rest = text;
     while let Some(open) = rest.find('<') {
         let after = &rest[open + 1..];
-        let tag = after
-            .find('>')
+        // A timestamp tag is short; searching the whole remainder for the `>`
+        // would make a line of thousands of `<` quadratic.
+        let window = &after.as_bytes()[..after.len().min(MAX_HEADER_BYTES)];
+        let tag = window
+            .iter()
+            .position(|&b| b == b'>')
             .and_then(|close| parse_ts(&after[..close]).map(|ts| (ts, open + 1 + close + 1)));
         match tag {
             Some((ts, consumed)) => {
@@ -355,7 +359,11 @@ pub fn from_cached(body: &str, sync: &str, estimated: bool) -> Lyrics {
 /// of the header).
 fn seg_header(s: &str, open: char, close: char) -> Option<(i64, i64, usize)> {
     let inner = s.strip_prefix(open)?;
-    let end = inner.find(close)?;
+    // A header is `a,b,c` of three numbers, so it is short. Looking for the
+    // closing character only inside a small window keeps input made of
+    // thousands of unmatched openers from being rescanned to its end each time.
+    let window = &inner.as_bytes()[..inner.len().min(MAX_HEADER_BYTES)];
+    let end = window.iter().position(|&b| b == close as u8)?;
     let mut nums = inner[..end].split(',');
     let a = nums.next()?.trim().parse::<i64>().ok()?;
     let b = nums.next()?.trim().parse::<i64>().ok()?;
@@ -365,6 +373,9 @@ fn seg_header(s: &str, open: char, close: char) -> Option<(i64, i64, usize)> {
     }
     Some((a, b, open.len_utf8() + end + close.len_utf8()))
 }
+
+/// Longest `(a,b,c)` / `<a,b,c>` header or `<mm:ss.xx>` tag we will look for.
+const MAX_HEADER_BYTES: usize = 80;
 
 /// Splits `(a,b,c)text(a,b,c)text...` into (a, b, text) segments.
 fn timed_segments(body: &str, open: char, close: char) -> Vec<(i64, i64, String)> {
@@ -1565,6 +1576,48 @@ mod tests {
             {"tStartMs": -1, "segs":[{"utf8":"c"}]}, {"segs": 5}, {"tStartMs": "x"}]});
         let _ = parse_json3(&j3);
         let _ = parse_json3(&serde_json::json!(null));
+    }
+
+    /// Input made to be slow (many unmatched openers) must stay fast, and a
+    /// zlib "bomb" must not be inflated past the output limit.
+    #[test]
+    fn hostile_input_stays_cheap() {
+        let started = std::time::Instant::now();
+        for opener in ["(", "<", "[", "(1,", "<00:01", "[00:01.00]<", "[1,2](1,"] {
+            let text = opener.repeat(300_000 / opener.len());
+            let _ = parse_lrc(&text);
+            let _ = parse_yrc(&text);
+            let _ = parse_krc(&text);
+            let mut l = parse_lrc(&format!("[00:01.00]{text}\n[00:09.00]x\n"));
+            estimate_words(&mut l);
+        }
+        let many_lines = "[00:01.00]a b c\n".repeat(60_000);
+        let mut l = parse_lrc(&many_lines);
+        estimate_words(&mut l);
+        let _ = to_enhanced_lrc(&l);
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(20),
+            "parsers took {:?}",
+            started.elapsed()
+        );
+
+        use std::io::Write;
+        const KEY: [u8; 16] = [
+            0x40, 0x47, 0x61, 0x77, 0x5e, 0x32, 0x74, 0x47, 0x51, 0x36, 0x31, 0x2d, 0xce, 0xd2,
+            0x6e, 0x69,
+        ];
+        let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
+        z.write_all(&vec![b'a'; 64 * 1024 * 1024]).unwrap();
+        let comp = z.finish().unwrap();
+        assert!(
+            comp.len() < 200_000,
+            "the bomb really is small ({} bytes)",
+            comp.len()
+        );
+        let mut blob = b"krc1".to_vec();
+        blob.extend(comp.iter().enumerate().map(|(i, b)| b ^ KEY[i % 16]));
+        let out = decode_krc(&blob).unwrap_or_default();
+        assert!(out.len() <= 4 * 1024 * 1024, "inflated {} bytes", out.len());
     }
 
     #[test]
