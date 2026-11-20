@@ -137,6 +137,31 @@ fn isos_manifest_file(state: &AppState) -> PathBuf {
 fn is_vm_banned(state: &AppState, email: &str) -> bool {
     state.is_vm_restricted(email)
 }
+/// Parses and authorizes the `hardware` object of a create request.
+///
+/// Every field is validated against a fixed allowlist
+/// (`mitch_lib::vm_hardware`), and the `virtio-gl` display is refused with
+/// 403 `virgl_required` unless the account owns VirGL. Call this before
+/// charging or deleting anything.
+fn hardware_from_body(
+    state: &AppState,
+    email: &str,
+    body: &Value,
+) -> Result<mitch_lib::vm_hardware::HardwareOptions, Box<Response>> {
+    let hardware = mitch_lib::vm_hardware::HardwareOptions::from_json(body.get("hardware"))
+        .map_err(|e| Box::new(json_response(400, json!({ "error": e }))))?;
+    if hardware.needs_virgl() && !mitch_lib::vm_hardware::has_virgl(&state.store, email) {
+        return Err(Box::new(json_response(
+            403,
+            json!({
+                "error": "The VirGL display needs to be unlocked first.",
+                "code": "virgl_required",
+            }),
+        )));
+    }
+    Ok(hardware)
+}
+
 fn is_byo_os_banned(state: &AppState, email: &str) -> bool {
     state.is_byo_os_restricted(email)
 }
@@ -885,6 +910,11 @@ pub(crate) async fn handle(
                 json!({ "error": "BYO-OS is restricted on this account." }),
             ));
         }
+        let body: Value = serde_json::from_slice(body_bytes).unwrap_or(json!({}));
+        let hardware = match hardware_from_body(state, &actor.email, &body) {
+            Ok(h) => h,
+            Err(response) => return Some(*response),
+        };
         let iso_manifest = state
             .store
             .read_document(&isos_manifest_file(state), json!({}));
@@ -1078,6 +1108,7 @@ pub(crate) async fn handle(
                 memory_mb: Some(memory_mb),
                 disk_gb: Some(disk_gb),
                 iso_filename: proxmox_filename.clone(),
+                hardware,
             })
             .await;
         state
@@ -1215,6 +1246,11 @@ pub(crate) async fn handle(
             "ChromeOS"
         } else {
             preset.map(|p| p.name).unwrap_or("")
+        };
+
+        let hardware = match hardware_from_body(state, &actor.email, &body) {
+            Ok(h) => h,
+            Err(response) => return Some(*response),
         };
 
         // Checked and debited up front, before anything (including the user's existing
@@ -1401,6 +1437,12 @@ pub(crate) async fn handle(
         let result = if is_chromeos {
             crate::proxmox_desktop::desktop()
                 .clone_chromeos_desktop(&crate::proxmox_desktop::CloneChromeOsParams {
+                    // ChromeOS clones get the display the member chose, else
+                    // VirGL when they own it (it was tested with Flex).
+                    virgl: match hardware.display {
+                        Some(display) => display == mitch_lib::vm_hardware::Display::VirtioGl,
+                        None => mitch_lib::vm_hardware::has_virgl(&state.store, &actor.email),
+                    },
                     owner_resources: actor.is_owner,
                     vmid: Some(vmid),
                     hostname: hostname.clone(),
@@ -1419,6 +1461,7 @@ pub(crate) async fn handle(
                     memory_mb: Some(memory_mb),
                     disk_gb: Some(disk_gb),
                     iso_filename: preset.map(|p| p.filename.to_string()).unwrap_or_default(),
+                    hardware,
                 })
                 .await
         };

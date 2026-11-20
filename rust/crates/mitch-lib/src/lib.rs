@@ -79,6 +79,7 @@ pub mod user_stats;
 pub mod userdata;
 pub mod vm;
 pub mod vm_access;
+pub mod vm_hardware;
 pub mod vm_security;
 pub mod webauthn;
 

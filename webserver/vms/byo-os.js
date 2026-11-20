@@ -154,6 +154,72 @@
     }
   }
 
+  const hwFields = [
+    ['display', 'byo-hw-display'], ['firmware', 'byo-hw-firmware'], ['machine', 'byo-hw-machine'],
+    ['tpm', 'byo-hw-tpm'], ['nic', 'byo-hw-nic'], ['diskBus', 'byo-hw-bus'],
+  ];
+  let virgl = { owned: false, cost: 0 };
+
+  // Only the settings the member changed are sent; the server falls back to
+  // the OS default for the rest and re-validates everything (including
+  // refusing VirtIO-GL without the purchase).
+  function hardwareSelection() {
+    const hardware = {};
+    for (const [key, id] of hwFields) {
+      const value = $(id)?.value;
+      if (value) hardware[key] = value;
+    }
+    return hardware;
+  }
+
+  function renderVirgl() {
+    const status = $('byo-hw-virgl-status');
+    const buy = $('byo-hw-virgl-buy');
+    if (!status || !buy) return;
+    $('byo-hw-virgl-option').disabled = !virgl.owned;
+    if (!virgl.owned && $('byo-hw-display').value === 'virtio-gl') $('byo-hw-display').value = '';
+    status.textContent = virgl.owned
+      ? 'VirtIO-GL (3D display) is unlocked.'
+      : `VirtIO-GL (3D display) costs ${Number(virgl.cost).toLocaleString()} MitchCoins, once. Other displays are free.`;
+    buy.classList.toggle('is-hidden', virgl.owned);
+    buy.textContent = `Unlock VirtIO-GL (${Number(virgl.cost).toLocaleString()} MitchCoins)`;
+  }
+
+  async function loadVirgl() {
+    try {
+      const data = await api('/api/vm/virgl', { method: 'GET' });
+      virgl = { owned: !!data.owned, cost: Number(data.cost) || 0 };
+    } catch (_) {
+      return;
+    }
+    renderVirgl();
+  }
+
+  async function buyVirgl() {
+    const buy = $('byo-hw-virgl-buy');
+    const confirmed = await window.mitchConfirm({
+      title: 'Unlock VirtIO-GL?',
+      body: `This costs ${Number(virgl.cost).toLocaleString()} MitchCoins, is permanent, and can't be refunded.`,
+      confirmLabel: 'Unlock',
+    });
+    if (!confirmed) return;
+    buy.disabled = true;
+    try {
+      await api('/api/vm/virgl/buy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
+        body: '{}',
+      });
+      virgl.owned = true;
+      renderVirgl();
+      setStatus('VirtIO-GL unlocked.');
+    } catch (error) {
+      setStatus(error.message, true);
+    } finally {
+      buy.disabled = false;
+    }
+  }
+
   async function createComputer(preset) {
     if (creatingComputer || hasExistingComputer === null) return;
     const replacesComputer = hasExistingComputer;
@@ -174,7 +240,7 @@
       await api(preset ? '/api/vm/byo-os/create-preset' : '/api/vm/byo-os/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
-        body: JSON.stringify(preset ? { presetId: preset.id } : {}),
+        body: JSON.stringify(preset ? { presetId: preset.id, hardware: hardwareSelection() } : { hardware: hardwareSelection() }),
       });
       created = true;
       setStatus('Computer created. Reloading…');
@@ -327,12 +393,14 @@
     const presetBtn = $('byo-os-preset-btn');
 
     $('byo-os-form').addEventListener('submit', event => event.preventDefault());
+    $('byo-hw-virgl-buy')?.addEventListener('click', buyVirgl);
     openBtns.forEach((btn) => {
       btn.addEventListener('click', () => {
         setStatus('');
         refreshIsoState();
         refreshComputerState();
         loadPresets();
+        loadVirgl();
         dialog().showModal();
       });
     });

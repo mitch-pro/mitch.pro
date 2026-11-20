@@ -110,6 +110,64 @@
       <div class="byo-content">
         <p id="byo-os-replace-warning" class="byo-warning" hidden>Creating a computer replaces your current one and deletes its files.</p>
 
+        <details class="byo-hardware">
+          <summary>Hardware options</summary>
+          <p class="byo-copy">Applies to presets and your own ISO. Leave a setting on Default to use what suits the OS.</p>
+          <div class="byo-hw-grid">
+            <label>Display
+              <select id="byo-hw-display">
+                <option value="">Default</option>
+                <option value="std">Standard VGA</option>
+                <option value="qxl">QXL</option>
+                <option value="vmware">VMware SVGA</option>
+                <option value="virtio">VirtIO</option>
+                <option value="virtio-gl" id="byo-hw-virgl-option">VirtIO-GL (VirGL)</option>
+              </select>
+            </label>
+            <label>Firmware
+              <select id="byo-hw-firmware">
+                <option value="">Default</option>
+                <option value="uefi">UEFI</option>
+                <option value="bios">Legacy BIOS</option>
+              </select>
+            </label>
+            <label>Machine type
+              <select id="byo-hw-machine">
+                <option value="">Default</option>
+                <option value="q35">Q35</option>
+                <option value="i440fx">i440fx</option>
+              </select>
+            </label>
+            <label>TPM 2.0
+              <select id="byo-hw-tpm">
+                <option value="">Default</option>
+                <option value="on">On</option>
+                <option value="off">Off</option>
+              </select>
+            </label>
+            <label>Network card
+              <select id="byo-hw-nic">
+                <option value="">Default</option>
+                <option value="virtio">VirtIO</option>
+                <option value="e1000e">Intel e1000e</option>
+                <option value="e1000">Intel e1000</option>
+                <option value="rtl8139">Realtek RTL8139</option>
+              </select>
+            </label>
+            <label>Disk bus
+              <select id="byo-hw-bus">
+                <option value="">Default</option>
+                <option value="scsi">VirtIO SCSI</option>
+                <option value="sata">SATA</option>
+              </select>
+            </label>
+          </div>
+          <div class="byo-virgl" id="byo-hw-virgl">
+            <p id="byo-hw-virgl-status" class="byo-copy" role="status"></p>
+            <button type="button" id="byo-hw-virgl-buy" class="quiet-button is-hidden">Unlock VirGL</button>
+          </div>
+        </details>
+
         <fieldset class="byo-presets">
           <legend>Operating system presets</legend>
           <p id="byo-os-preset-status" class="byo-preset-status" role="status">Loading presets…</p>

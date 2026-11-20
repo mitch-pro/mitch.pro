@@ -427,6 +427,12 @@ impl DataStore {
                     );
                     CREATE INDEX IF NOT EXISTS idx_admin_actions_ts ON admin_actions (ts DESC);
                     CREATE INDEX IF NOT EXISTS idx_admin_actions_action ON admin_actions (action, ts DESC);
+                    CREATE TABLE IF NOT EXISTS vm_entitlements (
+                        email TEXT NOT NULL,
+                        feature TEXT NOT NULL,
+                        granted_at INTEGER NOT NULL,
+                        PRIMARY KEY (email, feature)
+                    );
                     CREATE TABLE IF NOT EXISTS vm_admin_access_grants (
                         vm_record_id TEXT PRIMARY KEY,
                         owner_email TEXT NOT NULL,
