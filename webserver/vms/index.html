@@ -7,13 +7,14 @@
   <title>VM Lab · mitch.pro</title>
   <link rel="icon" href="/favicon.ico">
   <link rel="stylesheet" href="/app.css">
-  <link rel="stylesheet" href="/vms/portal.css?v=10">
-  <link rel="stylesheet" href="/vms/portal-polish.css?v=9">
+  <link rel="stylesheet" href="/vms/portal.css?v=11">
+  <link rel="stylesheet" href="/vms/portal-polish.css?v=10">
 </head>
 <body class="app-shell computer-portal">
   <main class="computer-shell">
     <header class="computer-hero">
       <div class="computer-heading">
+        <span class="lab-terminal-mark" aria-hidden="true">&gt;_</span>
         <h1>VM Lab</h1>
       </div>
       <div class="computer-header-actions">
@@ -28,17 +29,34 @@
       <div><strong>Loading</strong></div>
     </section>
 
-    <section id="empty-state" class="state-panel is-hidden">
-      <div id="empty-create-box">
-        <strong>Your Linux desktop</strong>
-        <p>A personal computer in your browser. Files persist between sessions.</p>
-        <p class="empty-specs">2 CPU cores · 4 GB memory · 64 GB storage</p>
-        <button type="button" id="create-vm-btn" class="primary-button" style="margin-top: 18px; font-size: 0.96rem; padding: 12px 24px;">Create Computer</button>
-        <button type="button" id="byo-os-open-btn" class="quiet-button" style="margin-top: 10px; font-size: 0.88rem;">Bring your own OS · 1,000 coins</button>
+    <section id="empty-state" class="state-panel setup-panel is-hidden">
+      <div class="setup-content">
+        <div id="empty-create-box">
+          <h2>Your Linux desktop</h2>
+          <p>Open your own computer in your browser. Your files stay between sessions.</p>
+          <dl class="setup-specs">
+            <div><dt>CPU</dt><dd>2 cores</dd></div>
+            <div><dt>Memory</dt><dd>4 GB</dd></div>
+            <div><dt>Storage</dt><dd>64 GB</dd></div>
+          </dl>
+          <div class="setup-actions">
+            <button type="button" id="create-vm-btn" class="primary-button">Create Computer <span aria-hidden="true">+</span></button>
+            <button type="button" id="byo-os-open-btn" class="quiet-button">Bring your own OS · 1,000 coins</button>
+          </div>
+        </div>
+        <div id="empty-unauthorized-box" class="is-hidden">
+          <h2>No computer assigned yet</h2>
+          <p>Ask an administrator to assign one to your account.</p>
+        </div>
       </div>
-      <div id="empty-unauthorized-box" class="is-hidden">
-        <strong>No computer assigned yet</strong>
-        <p>Ask an administrator to assign one to your account.</p>
+      <div class="lab-schematic" aria-hidden="true">
+        <div class="lab-monitor">
+          <div class="lab-screen">
+            <img src="/icon-192.png" width="64" height="64" alt="">
+            <span class="lab-screen-indicator"></span>
+          </div>
+        </div>
+        <div class="lab-monitor-stand"></div>
       </div>
     </section>
 
@@ -47,12 +65,12 @@
       <div><strong>Your computers could not be reached.</strong><p id="error-copy">Try again in a moment.</p><button type="button" id="error-retry" class="quiet-button">Retry</button></div>
     </section>
 
-    <section id="computer-grid" class="computer-grid is-hidden" aria-live="polite"></section>
+    <section id="computer-grid" class="computer-grid is-hidden" aria-label="Your computers" aria-live="polite"></section>
   </main>
 
-  <dialog id="confirm-dialog" class="confirm-dialog">
+  <dialog id="confirm-dialog" class="confirm-dialog" aria-labelledby="confirm-title">
     <form method="dialog">
-            <h2 id="confirm-title">Restart computer?</h2>
+      <h2 id="confirm-title">Restart computer?</h2>
       <p id="confirm-copy">Anything unsaved inside the desktop may be lost.</p>
       <div class="dialog-actions">
         <button value="cancel" class="quiet-button">Cancel</button>
@@ -61,9 +79,8 @@
     </form>
   </dialog>
 
-  <dialog id="provision-dialog" class="confirm-dialog">
+  <dialog id="provision-dialog" class="confirm-dialog" aria-labelledby="provision-title">
     <form id="provision-form" method="dialog">
-      <p class="provision-label" id="provision-eyebrow">New Computer</p>
       <h2 id="provision-title">Create Computer</h2>
 
       <div id="recreate-warning" class="is-hidden" style="border: 1px solid var(--vm-danger); border-radius: var(--t-radius-sm); padding: 12px; margin: 12px 0; color: var(--t-fg); text-align: left;">
@@ -74,7 +91,7 @@
         </p>
       </div>
 
-            <p id="provision-status" class="form-status" style="color: var(--vm-danger); font-size: 0.88rem; margin: 0 0 12px 0; min-height: 1.2em;" role="status"></p>
+      <p id="provision-status" class="form-status" role="status"></p>
 
       <div class="dialog-actions">
         <button type="button" id="provision-cancel" class="quiet-button">Cancel</button>
@@ -151,7 +168,7 @@
     </form>
   </dialog>
 
-  <dialog id="upgrade-dialog" class="upgrade-dialog">
+  <dialog id="upgrade-dialog" class="upgrade-dialog" aria-labelledby="upgrade-title">
     <div class="upgrade-dialog-content">
       <div class="upgrade-header">
         <div>
@@ -187,7 +204,7 @@
   </dialog>
 
   <script src="/app-shell.js?v=17" defer></script>
-  <script src="/vms/portal.js?v=15" defer></script>
+  <script src="/vms/portal.js?v=16" defer></script>
   <script src="/vms/byo-os.js?v=5" defer></script>
 </body>
 </html>

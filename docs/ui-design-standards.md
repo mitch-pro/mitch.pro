@@ -42,13 +42,15 @@ The Friends strip sits directly below the masthead. The welcome panel places the
 
 The games portal uses the full viewport width and adapts the number of game columns to the available space. The player fills the viewport with a compact toolbar, and the Fullscreen button expands the game itself where the browser supports it. The portal uses the same color tokens and wordmark as the homepage. The rankings page accepts a `metric` query parameter to open a category directly.
 
+### VM Lab
+
+The setup panel shows the default Linux desktop specs alongside the Create Computer and Custom OS controls. Each assigned computer shows its power status, connection details, and desktop controls next to CPU, memory, and storage meters. Offline meters are marked unavailable. The connection and resource panels stack on phones.
+
+Custom OS shows selectable preset cards with logos and prices from the existing preset catalog. ISO links, uploads, and stored ISO actions are grouped separately. The icons are bundled locally. Devicon supplies the Windows, Linux Mint, Arch Linux, Kali Linux, and Chrome marks, and Tails uses its project favicon. [Devicon icons and license](https://github.com/devicons/devicon/tree/v2.17.0), [Tails project favicon](https://tails.net/favicon.ico).
+
 ### Background
 
 Mitch uses Tylerium's charcoal Vanta Clouds preset and locally hosted Three.js and Vanta with their upstream licenses. Customize offers dark clouds, blue clouds, a solid background, and motion controls. Saved wallpaper takes precedence until the user switches presets. The layer uses the static WebP fallback with reduced motion, disabled animation, Save-Data, or unavailable WebGL. Embedded games skip the background engine.
-
-### VM Lab Custom OS
-
-Custom OS shows selectable preset cards with logos and prices from the existing preset catalog. ISO links, uploads, and stored ISO actions are grouped separately. The icons are bundled locally. Devicon supplies the Windows, Linux Mint, Arch Linux, Kali Linux, and Chrome marks, and Tails uses its project favicon. [Devicon icons and license](https://github.com/devicons/devicon/tree/v2.17.0), [Tails project favicon](https://tails.net/favicon.ico).
 
 ## 2. No Orphan Endpoints
 

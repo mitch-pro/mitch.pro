@@ -64,25 +64,39 @@
     const startDisabled = busy || inCooldown || vm.status !== 'stopped' || dailyLimitReached;
     const startLabel = dailyLimitReached ? 'Daily limit reached' : inCooldown ? 'Cooldown (' + cooldownMins + 'm)' : operation || 'Start Computer';
     const primaryAction = running
-      ? open ? `<a class="primary-button main-action" href="/vms/desktop/?id=${encodeURIComponent(vm.id)}">Open Desktop </a>`
+      ? open ? `<a class="primary-button main-action" href="/vms/desktop/?id=${encodeURIComponent(vm.id)}">Open Desktop <span aria-hidden="true">↗</span></a>`
         : `<button class="primary-button main-action" disabled>${esc(busy ? status : 'Desktop unavailable')}</button>`
       : `<button class="primary-button main-action" data-action="start" ${startDisabled ? 'disabled' : ''}>${esc(startLabel)}</button>`;
     return `<article class="computer-card" data-id="${esc(vm.id)}">
+      <header class="computer-title-row">
+        <span class="lab-terminal-mark" aria-hidden="true">&gt;_</span>
+        <div class="computer-name"><h2>${esc(vm.name || 'My Computer')}</h2><p>${esc(distro)}</p></div>
+        <span class="status-pill ${statusTone}">${esc(status)}</span>
+      </header>
       <div class="computer-details">
-        <div class="computer-title-row">
-          <div><h2>${esc(vm.name || 'My Computer')}</h2><p>${esc(distro)}</p></div>
-          <span class="status-pill ${statusTone}">${esc(status)}</span>
+        <div class="connection-pane">
+          ${firstBootNotice ? `<div class="first-boot-banner"><span aria-hidden="true">⏳</span><p>Your desktop is being prepared. Its status will update here.</p></div>` : ''}
+          <section class="detail-section connection-section" aria-label="Connection">
+            <h3>Connection</h3>
+            <dl class="machine-facts">
+              ${infoStat('IP Address', vm.ipAddress || (running ? 'Connecting…' : 'Not available'))}
+              ${infoStat('Uptime', running ? uptime(vm.uptime) : '—')}
+              ${infoStat(isExempt ? 'Session Limit' : running ? 'Session Time' : 'Session Limit', sessionValue, sessionDetail)}
+              ${inCooldown ? infoStat('Cooldown', cooldownMins + 'm left') : ''}
+            </dl>
+          </section>
+          <div class="computer-actions">
+            ${primaryAction}
+            ${isByoOs ? `<button type="button" class="control-button" data-action="windows-compatibility" ${busy ? 'disabled' : ''}>Windows installer compatibility</button><button type="button" class="control-button" data-action="detach-iso" ${busy ? 'disabled' : ''} title="Once your OS is installed, eject the install ISO so the next boot goes straight to disk">Detach ISO</button>` : ''}
+            ${canExtend ? '<button type="button" class="control-button" data-action="extend">Extend 30m</button>' : running && dailyUsed ? '<button type="button" class="control-button" disabled title="Only one 30-minute extension is allowed per day">Extension used</button>' : ''}
+            <details class="more-menu"><summary aria-label="More computer actions"><span aria-hidden="true">···</span> More</summary><div class="menu-panel" role="group" aria-label="Computer power and reset">
+              ${running ? `${vm.managedDesktop ? '<button type="button" data-action="repair-desktop">Repair desktop</button>' : ''}<button type="button" data-action="restart" ${busy ? 'disabled' : ''}>Restart</button><button type="button" data-action="shutdown" ${busy ? 'disabled' : ''}>Shut Down</button><span class="menu-divider"></span>` : ''}
+              <button type="button" class="danger-menu-action" data-action="recreate" ${busy ? 'disabled' : ''}>Delete &amp; Recreate Computer</button>
+            </div></details>
+          </div>
+          ${adminAccessSection(vm)}
+          ${vm.desktopSetup?.status === 'preparing' ? '<p class="desktop-setup-status" role="status">Preparing automatic sign-in and video support…</p>' : vm.desktopSetup?.status === 'failed' ? '<p class="desktop-setup-status failed" role="status">Desktop setup needs another try. Choose Repair desktop from the More menu.</p>' : ''}
         </div>
-        ${firstBootNotice ? `<div class="first-boot-banner"><span aria-hidden="true">⏳</span><p>Your desktop is being prepared. Its status will update here.</p></div>` : ''}
-        <section class="detail-section connection-section" aria-label="Connection">
-          <h3>Connection</h3>
-          <dl class="machine-facts">
-            ${infoStat('IP Address', vm.ipAddress || (running ? 'Connecting…' : 'Not available'))}
-            ${infoStat('Uptime', running ? uptime(vm.uptime) : '—')}
-            ${infoStat(isExempt ? 'Session Limit' : running ? 'Session Time' : 'Session Limit', sessionValue, sessionDetail)}
-            ${inCooldown ? infoStat('Cooldown', cooldownMins + 'm left') : ''}
-          </dl>
-        </section>
         <section class="detail-section resources-section" aria-labelledby="resources-${esc(vm.id)}">
           <div class="section-heading"><h3 id="resources-${esc(vm.id)}">Resources</h3><button type="button" class="text-button" data-action="open-upgrade" title="Upgrade CPU, RAM, Disk, or Session Time with MitchCoins">Edit specs </button></div>
           <div class="resource-grid">
@@ -91,17 +105,6 @@
             ${resourceMeter('Storage', running && diskTotal ? bytes(vm.diskUsed) + ' / ' + bytes(diskTotal) : bytes(diskTotal), diskLoad, running && diskTotal > 0)}
           </div>
         </section>
-        ${adminAccessSection(vm)}
-        ${vm.desktopSetup?.status === 'preparing' ? '<p class="desktop-setup-status" role="status">Preparing automatic sign-in and video support…</p>' : vm.desktopSetup?.status === 'failed' ? '<p class="desktop-setup-status failed" role="status">Desktop setup needs another try. Choose Repair desktop below.</p>' : ''}
-        <div class="computer-actions">
-          ${primaryAction}
-          ${isByoOs ? `<button type="button" class="control-button" data-action="windows-compatibility" ${busy ? 'disabled' : ''}>Windows installer compatibility</button><button type="button" class="control-button" data-action="detach-iso" ${busy ? 'disabled' : ''} title="Once your OS is installed, eject the install ISO so the next boot goes straight to disk">Detach ISO</button>` : ''}
-          ${canExtend ? '<button type="button" class="control-button" data-action="extend">Extend 30m</button>' : running && dailyUsed ? '<button type="button" class="control-button" disabled title="Only one 30-minute extension is allowed per day">Extension used</button>' : ''}
-          <details class="more-menu"><summary aria-label="More computer actions"><span aria-hidden="true">···</span> More</summary><div class="menu-panel" role="group" aria-label="Computer power and reset">
-            ${running ? `${vm.managedDesktop ? '<button type="button" data-action="repair-desktop">Repair desktop</button>' : ''}<button type="button" data-action="restart" ${busy ? 'disabled' : ''}>Restart</button><button type="button" data-action="shutdown" ${busy ? 'disabled' : ''}>Shut Down</button><span class="menu-divider"></span>` : ''}
-            <button type="button" class="danger-menu-action" data-action="recreate" ${busy ? 'disabled' : ''}>Delete &amp; Recreate Computer</button>
-          </div></details>
-        </div>
       </div>
     </article>`;
   }
@@ -274,7 +277,6 @@
     if (!provDialog) return;
     provisionMode = mode;
     const isRecreate = mode === 'recreate';
-    $('provision-eyebrow').textContent = isRecreate ? 'Recreate Computer' : 'New Computer';
     $('provision-title').textContent = isRecreate ? 'Delete & Recreate Computer' : 'Create Computer';
     $('recreate-warning').classList.toggle('is-hidden', !isRecreate);
     $('provision-submit').textContent = isRecreate ? 'Delete & Recreate (Erase All Data)' : 'Create Computer';
@@ -550,6 +552,10 @@
   $('refresh-button').addEventListener('click', load);
   window.addEventListener('hashchange', () => { if (location.hash === '#upgrades') openUpgradeModal(); });
   load().then(checkUrlAction);
-  const timer = setInterval(() => { if (!document.hidden && !dialog.open && !provDialog?.open && !upDialog?.open && !pending.size) load(); }, 10000);
+  const timer = setInterval(() => {
+    // A refresh rebuilds the cards. Keep open menus and keyboard focus in place.
+    if (!document.hidden && !document.querySelector('.computer-portal dialog[open]')
+        && !grid.querySelector('.more-menu[open], :focus-visible') && !pending.size) load();
+  }, 10000);
   window.addEventListener('pagehide', () => clearInterval(timer), { once: true });
 })();
