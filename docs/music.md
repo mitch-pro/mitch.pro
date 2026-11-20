@@ -132,6 +132,22 @@ queue advances are near-instant. Search takes about 1.4 s (`--flat-playlist`).
   here needs an allowlist change (YouTube, `*.googlevideo.com`, `i.ytimg.com`),
   which is infrastructure and was not touched.
 - Optional: `MUSIC_YTDLP_COOKIES` (cookies.txt path).
+- Speed. Most of a cold start is yt-dlp resolving the song. Three things help:
+  - **Cache** (`MUSIC_YTDLP_CACHE_DIR`, default `/tmp/mitch-ytdlp-cache`): yt-dlp
+    keeps the solved YouTube player script there, so each song doesn't download and
+    solve it again. This used to be switched off (`--no-cache-dir`), which made every
+    uncached song slow.
+  - **Warm-up**: five seconds after startup the server resolves one well-known video
+    so the first real click isn't the one that fills that cache. The log line
+    `[music] yt-dlp primed in N ms` also tells you yt-dlp works from this server.
+  - **Extractor args** (`MUSIC_YTDLP_EXTRACTOR_ARGS`, unset by default): passed to
+    yt-dlp as `--extractor-args`. Choosing one player client, for example
+    `youtube:player_client=android_vr`, can cut a second or more, but which clients
+    work changes with YouTube, so it is a knob to try, not a default.
+  - To see where a click's time went, open the `stream` request in the browser's
+    network panel: the `Server-Timing` header shows `resolve` (with `memory`, `db` or
+    `yt-dlp` as the source) and `upstream` (time to the first byte from Google).
+    Resolves over 2.5 s are also logged.
 
 ## API (all require a login; 401 otherwise)
 

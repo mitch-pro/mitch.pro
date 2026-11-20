@@ -206,15 +206,19 @@ async fn stream(email: &str, headers: &HeaderMap, search: &str) -> Response {
         if !ytdlp::is_cached(&id) && !allow(email, "resolve", 40, Duration::from_secs(60)) {
             return limited();
         }
-        let resolved = match ytdlp::resolve(&id).await {
+        let t_resolve = Instant::now();
+        let (resolved, source) = match ytdlp::resolve_timed(&id).await {
             Ok(r) => r,
             Err(e) => return yt_error(&e),
         };
+        let resolve_ms = t_resolve.elapsed().as_millis();
+        let t_upstream = Instant::now();
         let upstream = client
             .get(&resolved.url)
             .header(header::RANGE, &range)
             .send()
             .await;
+        let upstream_ms = t_upstream.elapsed().as_millis();
         let resp = match upstream {
             Ok(r) => r,
             Err(_) => return json_response(502, json!({ "error": "could not load that track" })),
@@ -255,7 +259,12 @@ async fn stream(email: &str, headers: &HeaderMap, search: &str) -> Response {
         // answered in one go; browsers always send Range for <audio>, so
         // this only matters for odd clients, which get the first chunk.
         let body = axum::body::Body::from_stream(resp.bytes_stream());
+        // Where the time went, visible in the browser's network panel.
         return out
+            .header(
+                "server-timing",
+                format!("resolve;desc=\"{source}\";dur={resolve_ms}, upstream;dur={upstream_ms}"),
+            )
             .header(header::CONTENT_TYPE, resolved.mime)
             .header(header::ACCEPT_RANGES, "bytes")
             .header(header::CACHE_CONTROL, "private, max-age=3600")

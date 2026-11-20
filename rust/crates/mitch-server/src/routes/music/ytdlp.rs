@@ -84,6 +84,8 @@ struct Config {
     proxy: Option<String>,
     cookies: Option<String>,
     js_runtime: Option<String>,
+    cache_dir: String,
+    extractor_args: Option<String>,
 }
 
 fn env_nonempty(name: &str) -> Option<String> {
@@ -97,6 +99,13 @@ fn config() -> &'static Config {
         proxy: env_nonempty("MUSIC_EGRESS_PROXY"),
         cookies: env_nonempty("MUSIC_YTDLP_COOKIES"),
         js_runtime: env_nonempty("MUSIC_YTDLP_JS_RUNTIME"),
+        cache_dir: env_nonempty("MUSIC_YTDLP_CACHE_DIR").unwrap_or_else(|| {
+            std::env::temp_dir()
+                .join("mitch-ytdlp-cache")
+                .to_string_lossy()
+                .into_owned()
+        }),
+        extractor_args: env_nonempty("MUSIC_YTDLP_EXTRACTOR_ARGS"),
     })
 }
 
@@ -145,7 +154,11 @@ async fn run(args: &[String]) -> Result<String, YtError> {
     let mut cmd = Command::new(&cfg.bin);
     cmd.arg("--ignore-config")
         .arg("--no-warnings")
-        .arg("--no-cache-dir")
+        // yt-dlp caches the solved YouTube player script here. Without it every
+        // uncached song would download and re-solve the player first, which is
+        // most of a resolve's time.
+        .arg("--cache-dir")
+        .arg(&cfg.cache_dir)
         .arg("--socket-timeout")
         .arg("12");
     if let Some(p) = &cfg.proxy {
@@ -156,6 +169,9 @@ async fn run(args: &[String]) -> Result<String, YtError> {
     }
     if let Some(js) = &cfg.js_runtime {
         cmd.arg("--js-runtimes").arg(js);
+    }
+    if let Some(args) = &cfg.extractor_args {
+        cmd.arg("--extractor-args").arg(args);
     }
     cmd.args(args)
         .kill_on_drop(true)
@@ -414,6 +430,12 @@ pub fn warm(ids: Vec<String>) {
 
 /// The stream URL for a video id, from cache when fresh.
 pub async fn resolve(id: &str) -> Result<Resolved, YtError> {
+    resolve_timed(id).await.map(|(r, _)| r)
+}
+
+/// Like `resolve`, and says where the link came from: `memory`, `db` or
+/// `yt-dlp` (the slow one). Used for the `Server-Timing` header and the log.
+pub async fn resolve_timed(id: &str) -> Result<(Resolved, &'static str), YtError> {
     if !valid_video_id(id) {
         return Err(YtError::Failed("bad id".into()));
     }
@@ -426,20 +448,21 @@ pub async fn resolve(id: &str) -> Result<Resolved, YtError> {
             .cloned()
     };
     if let Some(r) = cached(id) {
-        return Ok(r);
+        return Ok((r, "memory"));
     }
     let lock = resolve_lock(id);
     let _guard = lock.lock().await;
     if let Some(r) = cached(id) {
-        return Ok(r);
+        return Ok((r, "memory"));
     }
     if let Some(r) = from_db(id) {
         resolve_cache()
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .insert(id.to_string(), r.clone());
-        return Ok(r);
+        return Ok((r, "db"));
     }
+    let started = Instant::now();
     let out = run(&[
         "--no-playlist".into(),
         "-f".into(),
@@ -457,7 +480,37 @@ pub async fn resolve(id: &str) -> Result<Resolved, YtError> {
         .unwrap_or_else(|e| e.into_inner())
         .insert(id.to_string(), resolved.clone());
     to_db(id, &resolved);
-    Ok(resolved)
+    let took = started.elapsed();
+    if took > Duration::from_millis(2500) {
+        tracing::info!("[music] resolving {id} took {} ms", took.as_millis());
+    }
+    Ok((resolved, "yt-dlp"))
+}
+
+/// Resolves a well-known video once so yt-dlp's player cache is populated
+/// before the first real click (the first extraction after a deploy is the
+/// slowest). Logs how long it took, which is also a startup check that yt-dlp
+/// works from this server.
+pub async fn prime() {
+    const PRIME_VIDEO: &str = "jNQXAC9IVRw";
+    let started = Instant::now();
+    match run(&[
+        "--no-playlist".into(),
+        "-f".into(),
+        "bestaudio[ext=m4a]/bestaudio/best".into(),
+        "--simulate".into(),
+        "--print".into(),
+        "%(id)s".into(),
+        format!("https://www.youtube.com/watch?v={PRIME_VIDEO}"),
+    ])
+    .await
+    {
+        Ok(_) => tracing::info!(
+            "[music] yt-dlp primed in {} ms",
+            started.elapsed().as_millis()
+        ),
+        Err(e) => tracing::warn!("[music] yt-dlp priming failed: {:?}", e),
+    }
 }
 
 /// Parses `--print` output (url line, then extension line). Only Google video

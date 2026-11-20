@@ -31,6 +31,11 @@ const MATCH_PER_CYCLE: i64 = 10;
 /// Starts the background worker. Call once at startup.
 pub fn spawn(state: Arc<AppState>) {
     ytdlp::attach_store(state.store.clone());
+    // Warm yt-dlp's player cache so the first real click isn't the slow one.
+    tokio::spawn(async {
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        ytdlp::prime().await;
+    });
     tokio::spawn(async move {
         // Let the server settle before the first pass.
         tokio::time::sleep(Duration::from_secs(60)).await;
