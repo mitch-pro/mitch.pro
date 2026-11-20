@@ -18,11 +18,14 @@
   var POPOUT_NAME = 'mitch-music-popout';
   var MAX_QUEUE = 300;
   var HOST_TIMEOUT_MS = 2500;
+  var LOADING_LIMIT_MS = 40000;
+  var loadingSince = 0;
 
   var st = {
     queue: [], index: -1, playing: false, vol: 0.9, pos: 0, dur: 0,
     role: 'idle',            // 'host' | 'remote' | 'idle'
     buffering: false, blocked: false, error: '',
+    loading: false,                    // a start was asked for and sound hasn't begun yet
     isPopout: false, popoutOpen: false, remoteTs: 0,
     shuffle: false, repeat: 'off'      // repeat: 'off' | 'all' | 'one'
   };
@@ -86,10 +89,17 @@
     audio = new Audio();
     audio.preload = 'auto';
     audio.volume = st.vol;
-    audio.addEventListener('playing', function () { st.playing = true; st.buffering = false; st.blocked = false; st.error = ''; changed(); });
+    audio.addEventListener('playing', function () { st.playing = true; st.loading = false; st.buffering = false; st.blocked = false; st.error = ''; changed(); });
     audio.addEventListener('pause', function () { if (!audio.ended) { st.playing = false; changed(); } });
     audio.addEventListener('waiting', function () { st.buffering = true; emit(); });
-    audio.addEventListener('canplay', function () { st.buffering = false; emit(); });
+    audio.addEventListener('canplay', function () {
+      st.buffering = false;
+      // If a start was asked for but the browser dropped it (a play() cut short
+      // by the source loading), try again now that there is data, so a song
+      // never sits loaded and waiting for a second click.
+      if (st.loading && audio.paused) playNow();
+      emit();
+    });
     audio.addEventListener('loadedmetadata', function () { if (isFinite(audio.duration) && audio.duration > 0) st.dur = audio.duration; });
     audio.addEventListener('timeupdate', onTime);
     audio.addEventListener('ended', function () { advance(true); changed(); });
@@ -120,17 +130,17 @@
         if (r.status === 401) { loggedOut(); return; }
         return r.json().catch(function () { return {}; }).then(function (d) {
           st.error = (d && d.error) || 'Could not play this track';
-          st.playing = false; st.buffering = false; changed();
+          st.playing = false; st.buffering = false; st.loading = false; changed();
           if (st.index + 1 < st.queue.length) setTimeout(function () { if (st.error) go(st.index + 1, true); }, 1800);
         });
-      }).catch(function () { st.error = 'Could not play this track'; st.playing = false; changed(); });
+      }).catch(function () { st.error = 'Could not play this track'; st.playing = false; st.loading = false; changed(); });
   }
 
   function playNow() {
     var p = audio.play();
     if (p && p.catch) {
       p.catch(function (err) {
-        if (err && err.name === 'NotAllowedError') { st.blocked = true; st.playing = false; changed(); }
+        if (err && err.name === 'NotAllowedError') { st.blocked = true; st.loading = false; st.playing = false; changed(); }
       });
     }
   }
@@ -146,7 +156,7 @@
     if (!t) return;
     ensureAudio();
     if (!t.id) {                       // not matched to a video yet
-      st.buffering = true; st.error = ''; st.dur = t.duration || 0; audio.removeAttribute('src');
+      st.buffering = true; st.error = ''; st.loading = !!autoplay; st.dur = t.duration || 0; audio.removeAttribute('src');
       emit();
       matchTrack(t).then(function (id) {
         if (st.queue[i] !== t) return;           // the queue moved on
@@ -155,14 +165,14 @@
         changed();
       }).catch(function (e) {
         if (st.queue[i] !== t) return;
-        st.error = e.message || "Couldn't find that song"; st.buffering = false; st.playing = false; changed();
+        st.error = e.message || "Couldn't find that song"; st.buffering = false; st.playing = false; st.loading = false; changed();
         if (st.index + 1 < st.queue.length) setTimeout(function () { if (st.error && st.queue[st.index] === t) go(st.index + 1, true); }, 1800);
       });
       return;
     }
     prefetchedFor = '';
     st.dur = t.duration || 0;
-    st.buffering = true; st.error = ''; st.blocked = false;
+    st.buffering = true; st.error = ''; st.blocked = false; st.loading = !!autoplay;
     audio.src = '/api/music/stream?id=' + encodeURIComponent(t.id);
     if (pos > 0) {
       audio.addEventListener('loadedmetadata', function seekOnce() {
@@ -196,18 +206,18 @@
     }
     if (i < 0) i = 0;
     st.index = i; st.pos = 0; queueDirty = true;
-    st.buffering = true; st.error = ''; st.playing = false;   // shows the spinner at once
+    st.buffering = true; st.error = ''; st.playing = false; st.loading = !!autoplay;   // shows the spinner at once
     loadTrack(i, 0, autoplay);
   }
 
   /* --------------------------------------------------------- role changes */
-  function becomeHost() {
+  function becomeHost(autoplay) {
     if (st.role === 'host') return;
     ensureAudio();
     post({ k: 'claim', from: ownerId() });
     st.role = 'host';
     startTimers();
-    if (st.index >= 0) loadTrack(st.index, st.pos, false);
+    if (st.index >= 0) loadTrack(st.index, st.pos, !!autoplay);
   }
 
   function releaseHost() {
@@ -232,7 +242,7 @@
   function snapshot(withQueue) {
     var s = {
       index: st.index, playing: st.playing, pos: currentPos(), dur: st.dur, vol: st.vol,
-      buffering: st.buffering, blocked: st.blocked, error: st.error, ts: Date.now(),
+      buffering: st.buffering, loading: st.loading, blocked: st.blocked, error: st.error, ts: Date.now(),
       shuffle: st.shuffle, repeat: st.repeat
     };
     if (withQueue) s.queue = st.queue;
@@ -250,7 +260,7 @@
     if (s.queue) st.queue = s.queue;
     st.index = s.index; st.playing = !!s.playing; st.pos = s.pos || 0; st.dur = s.dur || 0;
     if (typeof s.vol === 'number') st.vol = s.vol;
-    st.buffering = !!s.buffering; st.blocked = !!s.blocked; st.error = s.error || '';
+    st.buffering = !!s.buffering; st.loading = !!s.loading; st.blocked = !!s.blocked; st.error = s.error || '';
     st.shuffle = !!s.shuffle; st.repeat = s.repeat || 'off';
     st.popoutOpen = !!m.popout; st.remoteTs = s.ts || Date.now();
     lastBeat = Date.now();
@@ -273,7 +283,7 @@
         if (!st.queue.length) return;
         // A song that is still being fetched ignores the button, so repeated
         // presses don't start and stop it.
-        if (st.buffering && !st.playing && !st.error) return;
+        if (st.loading && !st.playing && !st.error) return;
         if (audio.paused) playNow(); else audio.pause();
         break;
       case 'play': playNow(); break;
@@ -321,13 +331,21 @@
   /** Sends a command to the host, becoming the host first if there is none. */
   function control(cmd, arg) {
     if (st.role === 'remote') {
-      if (cmd === 'playQueue' || cmd === 'jump' || cmd === 'next' || cmd === 'prev') { st.buffering = true; st.error = ''; emit(); }
+      if (cmd === 'playQueue' || cmd === 'jump' || cmd === 'next' || cmd === 'prev') { st.buffering = true; st.loading = true; st.error = ''; emit(); }
       post({ k: 'cmd', cmd: cmd, arg: arg });
       return;
     }
     if (st.role === 'idle') {
       if (!st.queue.length && cmd !== 'playQueue' && cmd !== 'enqueue') return;
       if (cmd === 'playQueue') st.index = -1;      // don't load the stale track first
+      // The first play after a page load has to load the song and start it in
+      // one go. (Loading it first and then running the toggle would see
+      // "loading" and do nothing, so it took a second click.)
+      if (cmd === 'toggle' || cmd === 'play') {
+        becomeHost(true);
+        changed();
+        return;
+      }
       becomeHost();
     }
     runCmd(cmd, arg);
@@ -401,8 +419,16 @@
     } catch (e) { bc = null; }
     watchTimer = setInterval(function () {
       if (st.role === 'remote' && Date.now() - lastBeat > HOST_TIMEOUT_MS) {
-        st.role = 'idle'; st.playing = false; st.popoutOpen = false; emit();
+        st.role = 'idle'; st.playing = false; st.loading = false; st.popoutOpen = false; emit();
       }
+      // A start that never produces sound ends with a message, not a spinner forever.
+      if (st.role === 'host' && st.loading) {
+        if (!loadingSince) loadingSince = Date.now();
+        if (Date.now() - loadingSince > LOADING_LIMIT_MS) {
+          st.loading = false; st.buffering = false; st.error = 'Took too long to load. Try again.';
+          loadingSince = 0; changed();
+        }
+      } else loadingSince = 0;
     }, 1000);
     window.addEventListener('pagehide', function () {
       if (st.role === 'host') {
@@ -415,7 +441,7 @@
     setTimeout(function () {
       if (st.role !== 'idle') return;
       var resume = s && s.playing && s.owner === ownerId() && Date.now() - (s.ts || 0) < 60000 && st.queue.length && st.index >= 0;
-      if (resume) { becomeHost(); playNow(); }
+      if (resume) { becomeHost(true); }
       else if (st.isPopout && st.queue.length) becomeHost();
     }, 300);
   }

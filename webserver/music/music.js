@@ -158,7 +158,7 @@
       Array.prototype.forEach.call(ul.children, function (li) {
         var mine = !!cur && !!cur.id && li.dataset.id === cur.id;
         li.classList.toggle('mp-playing', mine);
-        li.classList.toggle('mp-fetching', mine && !!M.state.buffering && !M.state.playing && !M.state.error);
+        li.classList.toggle('mp-fetching', mine && !!M.state.loading && !M.state.playing && !M.state.error);
         li.classList.toggle('mp-live', mine && !!M.state.playing);
       });
     });
@@ -209,6 +209,7 @@
     var d = el.dialog;
     $('mp-dialogtitle').textContent = opts.title;
     $('mp-dialognote').textContent = opts.note || '';
+    $('mp-dialognote').classList.toggle('mp-problem', !!opts.problem);
     $('mp-dialogok').textContent = opts.submit;
     var box = $('mp-dialogfields');
     box.replaceChildren();
@@ -231,7 +232,7 @@
         input.type = 'text'; input.maxLength = f.max || 200;
         if (f.placeholder) input.placeholder = f.placeholder;
       }
-      input.value = f.value || '';
+      if (f.value) input.value = f.value;      // a dropdown keeps its first option unless told otherwise
       inputs[f.name] = input;
       label.append(span, input);
       box.appendChild(label);
@@ -512,19 +513,27 @@
       }).catch(function (e) { say(e.message); });
     });
   });
-  on($('mp-pl-spotify'), 'click', function () {
+  /** The Spotify import dialog. A failure reopens it with the link still filled
+   *  in and the reason shown in it, so it is obvious what to fix. */
+  function importFromSpotify(prefillUrl, problem, prefillVisibility) {
     askForm({ title: 'Import from Spotify', submit: 'Import',
-      note: 'Works with public playlists. Spotify shares the first 100 songs.',
-      fields: [{ name: 'url', label: 'Playlist link', placeholder: 'https://open.spotify.com/playlist/…', max: 300 }, { name: 'visibility', label: 'Who can see it', options: VISIBILITY }]
+      note: problem || 'Works with public playlists. Spotify shares the first 100 songs.',
+      problem: !!problem,
+      fields: [{ name: 'url', label: 'Playlist link', placeholder: 'https://open.spotify.com/playlist/…', max: 300, value: prefillUrl || '' }, { name: 'visibility', label: 'Who can see it', options: VISIBILITY, value: prefillVisibility || '' }]
     }).then(function (v) {
       if (!v || !v.url) return;
       say('Importing from Spotify…');
       post('/api/music/playlist/spotify/import', { url: v.url, public: v.visibility === 'public' }).then(function (d) {
         say('Imported ' + d.tracks + ' songs');
         plMode = 'mine'; return openPlaylist(d.id);
-      }).catch(function (e) { say(e.message); });
+      }).catch(function (e) {
+        say('');
+        if (e.status === 400) importFromSpotify(v.url, e.message, v.visibility);   // a problem with the link: fix it and retry
+        else say(e.message);
+      });
     });
-  });
+  }
+  on($('mp-pl-spotify'), 'click', function () { importFromSpotify('', ''); });
   on($('mp-seg-mine'), 'click', function () { plMode = 'mine'; renderPlaylists(); });
   on($('mp-seg-public'), 'click', function () { plMode = 'public'; renderPlaylists(); });
   on($('mp-pl-back'), 'click', function () { plOpen = null; shareOpen = false; render(); });
@@ -668,7 +677,7 @@
       setAttr(el.repeat, 'aria-label', rl);
       setAttr(el.repeat, 'aria-pressed', s.repeat === 'off' ? 'false' : 'true');
     }
-    var loading = !!s.buffering && !s.playing && !s.error;
+    var loading = !!s.loading && !s.playing && !s.error;
     setIcon(el.play, s.playing ? 'pause' : 'play');
     el.play.classList.toggle('mp-loading', loading);
     setAttr(el.play, 'aria-busy', loading ? 'true' : 'false');

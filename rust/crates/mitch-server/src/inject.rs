@@ -48,7 +48,7 @@ pub fn inject_music_widget(html: &str) -> String {
     }
     html.replacen(
         "</head>",
-        "<script src=\"/music-widget.js?v=5\" defer></script>\n</head>",
+        "<script src=\"/music-widget.js?v=6\" defer></script>\n</head>",
         1,
     )
 }

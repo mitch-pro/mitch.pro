@@ -56,8 +56,47 @@ fn clean_title(t: &str) -> String {
     }
 }
 
-pub fn parse_embed(html: &str) -> Result<SpotifyPlaylist, &'static str> {
-    const FAIL: &str = "Couldn't read that playlist. It may be private or not exist";
+/// Why an import failed. The first three are about the link, so they answer 400
+/// with a message that says what to fix; only `Unavailable` (Spotify itself
+/// failing) is a 502.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ImportError {
+    /// Spotify has no public playlist at this link: it is private, deleted, or
+    /// not a real id.
+    NotPublic,
+    /// The link is to something else (an album, an artist).
+    NotAPlaylist,
+    /// A public playlist with nothing in it we can read.
+    Empty,
+    /// Spotify didn't answer or answered something unusable.
+    Unavailable,
+}
+
+impl ImportError {
+    pub fn status(&self) -> u16 {
+        match self {
+            ImportError::Unavailable => 502,
+            _ => 400,
+        }
+    }
+
+    pub fn message(&self) -> &'static str {
+        match self {
+            ImportError::NotPublic => {
+                "Invalid link, or the playlist isn't public. Only public Spotify playlists can be imported."
+            }
+            ImportError::NotAPlaylist => "That isn't a link to a Spotify playlist.",
+            ImportError::Empty => "That playlist has no songs Spotify shares publicly.",
+            ImportError::Unavailable => "Couldn't reach Spotify. Try again in a moment.",
+        }
+    }
+}
+
+pub fn parse_embed(html: &str) -> Result<SpotifyPlaylist, ImportError> {
+    // A page without the playlist data is what Spotify serves for a private or
+    // missing playlist (it would also be what a changed page looks like, which
+    // the server log line in `fetch` is there to reveal).
+    const FAIL: ImportError = ImportError::NotPublic;
     let start = html
         .find("id=\"__NEXT_DATA__\"")
         .and_then(|i| html[i..].find('>').map(|j| i + j + 1))
@@ -68,7 +107,7 @@ pub fn parse_embed(html: &str) -> Result<SpotifyPlaylist, &'static str> {
         .pointer("/props/pageProps/state/data/entity")
         .ok_or(FAIL)?;
     if entity.get("type").and_then(|t| t.as_str()) != Some("playlist") {
-        return Err("That link isn't a playlist");
+        return Err(ImportError::NotAPlaylist);
     }
     let name = entity
         .get("name")
@@ -113,7 +152,7 @@ pub fn parse_embed(html: &str) -> Result<SpotifyPlaylist, &'static str> {
         });
     }
     if tracks.is_empty() {
-        return Err("That playlist has no tracks Spotify shares publicly");
+        return Err(ImportError::Empty);
     }
     Ok(SpotifyPlaylist { name, tracks })
 }
@@ -131,26 +170,37 @@ fn client() -> Option<&'static reqwest::Client> {
     .as_ref()
 }
 
-/// Fetches a public playlist. Err is a message for the visitor.
-pub async fn fetch(id: &str) -> Result<SpotifyPlaylist, &'static str> {
-    let c = client().ok_or("Spotify import isn't available")?;
+/// Fetches a public playlist.
+pub async fn fetch(id: &str) -> Result<SpotifyPlaylist, ImportError> {
+    let c = client().ok_or(ImportError::Unavailable)?;
     let resp = c
         .get(format!("https://open.spotify.com/embed/playlist/{id}"))
         .header("Accept-Language", "en-US,en;q=0.9")
         .send()
         .await
-        .map_err(|_| "Couldn't reach Spotify")?;
-    if resp.status().as_u16() == 404 {
-        return Err("That playlist isn't public, or doesn't exist");
+        .map_err(|_| ImportError::Unavailable)?;
+    let status = resp.status().as_u16();
+    if status == 404 {
+        return Err(ImportError::NotPublic);
     }
     if !resp.status().is_success() {
-        return Err("Spotify didn't answer");
+        tracing::warn!("[music] Spotify embed answered {status} for a playlist import");
+        return Err(ImportError::Unavailable);
     }
-    let bytes = resp.bytes().await.map_err(|_| "Couldn't reach Spotify")?;
+    let bytes = resp.bytes().await.map_err(|_| ImportError::Unavailable)?;
     if bytes.len() > super::ytdlp::MAX_BODY_BYTES {
-        return Err("Spotify's page was unexpectedly large");
+        return Err(ImportError::Unavailable);
     }
-    parse_embed(&String::from_utf8_lossy(&bytes))
+    let parsed = parse_embed(&String::from_utf8_lossy(&bytes));
+    if parsed.as_ref().err() == Some(&ImportError::NotPublic) {
+        // Normal for a private playlist; if Spotify changed its page this is
+        // where it would show up, so leave a trace for the owner.
+        tracing::info!(
+            "[music] Spotify embed had no playlist data ({} bytes): private playlist, or the page changed",
+            bytes.len()
+        );
+    }
+    parsed
 }
 
 #[cfg(test)]
@@ -185,6 +235,24 @@ mod tests {
     }
 
     #[test]
+    fn link_problems_answer_400_and_say_what_to_fix() {
+        for e in [
+            ImportError::NotPublic,
+            ImportError::NotAPlaylist,
+            ImportError::Empty,
+        ] {
+            assert_eq!(
+                e.status(),
+                400,
+                "{e:?} is about the link, not a server failure"
+            );
+        }
+        assert_eq!(ImportError::Unavailable.status(), 502);
+        let m = ImportError::NotPublic.message();
+        assert!(m.starts_with("Invalid link") && m.contains("public"), "{m}");
+    }
+
+    #[test]
     fn parses_embed_page() {
         let data = serde_json::json!({"props":{"pageProps":{"state":{"data":{"entity":{
         "type":"playlist","name":"Mix",
@@ -205,11 +273,11 @@ mod tests {
         assert_eq!(p.tracks[0].duration, 225);
         assert_eq!(p.tracks[0].spotify_id, "AAA");
         assert!(p.tracks[0].id.is_empty());
-        assert!(parse_embed("<html></html>").is_err());
-        let album = html.replace("\"playlist\"", "\"album\"");
         assert_eq!(
-            parse_embed(&album).err(),
-            Some("That link isn't a playlist")
+            parse_embed("<html></html>").err(),
+            Some(ImportError::NotPublic)
         );
+        let album = html.replace("\"playlist\"", "\"album\"");
+        assert_eq!(parse_embed(&album).err(), Some(ImportError::NotAPlaylist));
     }
 }

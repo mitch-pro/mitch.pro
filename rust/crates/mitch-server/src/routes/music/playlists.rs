@@ -291,14 +291,14 @@ fn copy(state: &Arc<AppState>, email: &str, id: &str, token: &str) -> Response {
 
 async fn spotify_import(state: &Arc<AppState>, email: &str, v: &Value) -> Response {
     let Some(sid) = super::spotify::parse_playlist_id(&text(v, "url")) else {
-        return bad("Paste a link to a public Spotify playlist");
+        return bad("Invalid link. Paste the link to a public Spotify playlist.");
     };
     if !allow(email, "spotify", 6, Duration::from_secs(60)) {
         return limited();
     }
     let imported = match super::spotify::fetch(&sid).await {
         Ok(p) => p,
-        Err(m) => return json_response(502, json!({ "error": m })),
+        Err(e) => return json_response(e.status(), json!({ "error": e.message() })),
     };
     let public = v.get("public").and_then(|p| p.as_bool()).unwrap_or(false);
     let id = match pl::create(&state.store, email, &imported.name, public, &sid) {
@@ -320,7 +320,7 @@ async fn spotify_sync(state: &Arc<AppState>, email: &str, p: &Playlist) -> Respo
     }
     let fetched = match super::spotify::fetch(&p.spotify_id).await {
         Ok(f) => f,
-        Err(m) => return json_response(502, json!({ "error": m })),
+        Err(e) => return json_response(e.status(), json!({ "error": e.message() })),
     };
     match pl::sync_spotify(&state.store, &p.id, fetched.tracks) {
         Ok((added, removed)) => {

@@ -139,7 +139,7 @@
         art.src = M.thumb(t.id);
         M.getLyrics(t).then(function (d) { if (shownId === t.id && d && d.found && d.sync !== 'none') lyrics = d; });
       }
-      var loading = !!s.buffering && !s.playing && !s.error;
+      var loading = !!s.loading && !s.playing && !s.error;
       var label = loading ? 'Loading' : s.playing ? 'Pause' : 'Play';
       if (play.getAttribute('aria-label') !== label) { play.setAttribute('aria-label', label); play.title = label; }
       play.setAttribute('aria-busy', loading ? 'true' : 'false');
@@ -173,7 +173,7 @@
   }
 
   load('link', { rel: 'stylesheet', href: '/music-widget.css?v=3' });
-  var core = load('script', { src: '/music-core.js?v=3' });
+  var core = load('script', { src: '/music-core.js?v=4' });
   core.onload = function () {
     window.MitchMusic.init();
     build();

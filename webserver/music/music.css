@@ -285,3 +285,6 @@ html.theme-light .mp-ambient { opacity: 0.4; }
  * mobile dock and credit band, which would cover the controls in a small window. */
 .music-popout .mitch-coin-gamebar, .music-popout #site-topbar, .music-popout #mobile-dock,
 .music-popout #mobile-menu, .music-popout #site-credit, .music-popout #site-credit-space { display: none !important; }
+
+/* A problem the import dialog reopens with. */
+.mp-dialog .mp-status.mp-problem { color: color-mix(in srgb, #dc2626 75%, var(--t-fg)); font-weight: 600; }
