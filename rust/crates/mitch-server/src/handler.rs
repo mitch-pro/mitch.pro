@@ -85,7 +85,18 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/media/site-tour-v4.mp4",
     "/media/site-tour-poster-v3.webp",
     "/home-friends.js",
+    "/ui-style.js",
+    "/background.css",
+    "/background.js",
+    "/assets/clouds-dark.webp",
+    "/assets/clouds-blue.webp",
+    "/vendor/three.r134.min.js",
+    "/vendor/vanta.clouds.min.js",
     "/home.css",
+    "/leaderboard/leaderboard.css",
+    "/leaderboard/leaderboard.js",
+    "/fonts/jetbrains-mono.woff2",
+    "/fonts/pixelify-sans.ttf",
     "/turkey-catch.js",
     "/turkey-catch.css",
     "/auth.js",
@@ -495,9 +506,19 @@ fn legacy_catalog_redirect(path: &str, method: &Method, search: &str) -> Option<
     Some(redirect(&destination, 302))
 }
 
-/// lib/site_redirects.js bellScheduleRedirect — GET/HEAD only.
-fn bell_schedule_redirect(path: &str, method: &Method, search: &str) -> Option<Response> {
+/// lib/site_redirects.js bellScheduleRedirect — GET/HEAD only. Sends the
+/// `/rjuhsd/bell` alias, and `/bell` on the school host, to rjuhsd.school's
+/// homepage (its schedule). On mitch.pro, `/bell/` serves the bell page itself.
+fn bell_schedule_redirect(
+    path: &str,
+    method: &Method,
+    search: &str,
+    school_host: bool,
+) -> Option<Response> {
     if method != Method::GET && method != Method::HEAD {
+        return None;
+    }
+    if !school_host && !path.to_ascii_lowercase().starts_with("/rjuhsd/") {
         return None;
     }
     static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
@@ -712,7 +733,12 @@ async fn handle_resolved(
     }
 
     // 1. Bell redirects.
-    if let Some(resp) = bell_schedule_redirect(&path, &method, &search) {
+    if let Some(resp) = bell_schedule_redirect(
+        &path,
+        &method,
+        &search,
+        crate::hosts::is_rjuhsd_host(headers),
+    ) {
         return resp;
     }
 
@@ -1188,6 +1214,9 @@ async fn handle_resolved(
         if let Some(resp) =
             crate::routes::premium_email::handle(&state, &method, &path, headers, body_bytes)
         {
+            return resp;
+        }
+        if let Some(resp) = crate::ui_style::handle(&state, &method, &path, headers, body_bytes) {
             return resp;
         }
         // me/* group (Step 9). Runs after misc so /api/me/coins (ported in
@@ -1806,6 +1835,14 @@ async fn handle_resolved(
                                 content
                             };
                         let content = crate::inject::inject_companion(&content);
+                        // The chat client skips the pipeline, so it applies
+                        // the account's site style itself (docs/ui-styles.md).
+                        let content =
+                            if crate::ui_style::for_page(&state, headers, &path).is_tylerium() {
+                                crate::ui_style::apply_standalone(&content)
+                            } else {
+                                content
+                            };
                         return Response::builder()
                             .status(StatusCode::OK)
                             .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")
@@ -1862,6 +1899,18 @@ async fn handle_resolved(
         } else {
             safe_webroot_path(&webroot, &path)
         };
+        // Accounts on the Tylerium style get its variant of the page when
+        // webserver/tylerium/ has one (the homepage and Rankings).
+        let page_style = crate::ui_style::for_page(&state, headers, &path);
+        let file_path = match file_path {
+            Some(fp) if page_style.is_tylerium() => fp
+                .strip_prefix(&webroot)
+                .ok()
+                .and_then(|rel| rel.to_str())
+                .and_then(|rel| crate::ui_style::overlay_path(&webroot, rel))
+                .or(Some(fp)),
+            other => other,
+        };
         if let Some(fp) = file_path {
             if fp.exists() && std::fs::metadata(&fp).map(|m| !m.is_dir()).unwrap_or(false) {
                 if let Ok(raw) = std::fs::read(&fp) {
@@ -1892,7 +1941,7 @@ async fn handle_resolved(
                     }
                     if let Ok(mut html) = String::from_utf8(raw) {
                         let body_str = crate::pipeline::inject_page(
-                            &state, headers, &path, &html_base, &mut html,
+                            &state, headers, &path, &html_base, &mut html, page_style,
                         );
                         let mut resp = html_response(body_str);
                         if set_trial_cookie {
@@ -2797,5 +2846,25 @@ mod school_footer_asset_tests {
     fn school_visitor_count_script_is_public() {
         assert!(PUBLIC_ASSETS.contains(&"/rjuhsd-assets/online.js"));
         assert!(PUBLIC_ASSETS.contains(&"/site-status.js"));
+    }
+}
+
+#[cfg(test)]
+mod bell_redirect_tests {
+    use super::*;
+
+    #[test]
+    fn bell_stays_on_mitch_and_goes_to_school_site_elsewhere() {
+        for path in ["/bell", "/bell/", "/bell/index.html"] {
+            assert!(bell_schedule_redirect(path, &Method::GET, "", false).is_none());
+            let resp = bell_schedule_redirect(path, &Method::GET, "", true).unwrap();
+            assert_eq!(resp.status(), 302);
+        }
+        let alias = bell_schedule_redirect("/rjuhsd/bell/", &Method::GET, "a=1", false).unwrap();
+        assert_eq!(
+            alias.headers()[axum::http::header::LOCATION],
+            "https://rjuhsd.school/?a=1"
+        );
+        assert!(bell_schedule_redirect("/bell/", &Method::POST, "", true).is_none());
     }
 }

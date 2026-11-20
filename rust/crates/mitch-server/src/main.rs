@@ -36,6 +36,7 @@ mod proxmox_desktop;
 mod routes;
 mod state;
 mod static_files;
+mod ui_style;
 mod workers;
 mod workers_email;
 mod workers_site;

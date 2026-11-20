@@ -33,13 +33,29 @@
     bgImg: '',
     sw: '#4f46e5',
   };
+  // Accounts on the Tylerium style (html[data-ui], docs/ui-styles.md) get its
+  // charcoal/blue palettes and keep the Vanta background instead of the
+  // mountain wallpaper rollout below.
+  var TYLERIUM = document.documentElement.getAttribute('data-ui') === 'tylerium';
+  if (TYLERIUM) {
+    DARK = {
+      name:'Dark',bg:'#000000',bg2:'#111111',bg3:'#1c1c1c',fg:'#f0f0f0',fg2:'#d0d0d0',fg3:'#bdbdbd',
+      ac:'#9acbfa',ac2:'#b9dcff',ac3:'#b9dcff',bd:'#303030',bda:'#555555',
+      gl:'transparent',gls:'#1c1c1c',gr:'#9acbfa',bgr:'none',bgImg:'',sw:'#9acbfa'
+    };
+    LIGHT = {
+      name:'Light',light:true,bg:'#f3f6fa',bg2:'#ffffff',bg3:'#e8eef6',fg:'#172536',fg2:'#485d73',fg3:'#526783',
+      ac:'#245c8c',ac2:'#183f61',ac3:'#183f61',bd:'#52678366',bda:'#526783',
+      gl:'transparent',gls:'#e8eef6',gr:'#245c8c',bgr:'none',bgImg:'',sw:'#245c8c'
+    };
+  }
   var T = { dark: DARK, light: LIGHT };
   var LEGACY_LIGHT = { daylight: 1, paper: 1, arctic: 1, blossom: 1 };
   var BACKGROUND_DEFAULTS_VERSION = 'mountain-2026-09-06';
   var VFX_DEFAULTS_VERSION = 'all-on-2026-09-06';
   var VFX_DEFAULTS = { snow: true, stars: true, rain: true, particles: true };
   function applyVFXDefaults() {
-    if (usesSchoolDefaults() || getPref('vfxDefaults', '') === VFX_DEFAULTS_VERSION) return;
+    if (TYLERIUM || usesSchoolDefaults() || getPref('vfxDefaults', '') === VFX_DEFAULTS_VERSION) return;
     try {
       localStorage.setItem('_prefVFX', JSON.stringify(VFX_DEFAULTS));
       setPref('vfxDefaults', VFX_DEFAULTS_VERSION);
@@ -60,7 +76,7 @@
       if (!getPref('bgblur', '')) setPref('bgblur', '8');
       return;
     }
-    if (getPref('backgroundDefaults', '') === BACKGROUND_DEFAULTS_VERSION) return;
+    if (TYLERIUM || getPref('backgroundDefaults', '') === BACKGROUND_DEFAULTS_VERSION) return;
     Object.keys(BACKGROUND_DEFAULTS).forEach(function (key) { setPref(key, BACKGROUND_DEFAULTS[key]); });
     setBgImgCookie(BACKGROUND_DEFAULTS.bgimg);
     setCookie('dark');
@@ -71,6 +87,7 @@
       if (snapshot.theme_bgimg) return snapshot;
       return Object.assign({}, snapshot, { theme_bgimg: SCHOOL_BACKGROUND_DEFAULT });
     }
+    if (TYLERIUM) return snapshot;
     var result = snapshot;
     if (snapshot.theme_vfxDefaults !== VFX_DEFAULTS_VERSION) {
       result = Object.assign({}, result, { _prefVFX: Object.assign({}, VFX_DEFAULTS), theme_vfxDefaults: VFX_DEFAULTS_VERSION });

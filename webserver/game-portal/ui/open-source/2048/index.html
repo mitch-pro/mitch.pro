@@ -6,7 +6,7 @@
 
   <link href="style/main.css" rel="stylesheet" type="text/css">
   <link rel="shortcut icon" href="/icon-192.png">
-  <link rel="stylesheet" href="mitch.css">
+  <link rel="stylesheet" href="mitch.css?v=2">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
 
@@ -15,6 +15,12 @@
   <meta name="viewport" content="width=device-width, target-densitydpi=160dpi, initial-scale=1.0, maximum-scale=1, user-scalable=no, minimal-ui">
 </head>
 <body>
+  <script>
+    if (window.frameElement?.id === 'player-frame') {
+      document.documentElement.classList.add('in-game-player');
+      document.body.dataset.shell = 'off';
+    }
+  </script>
   <header class="mitch-game-header"><img src="/icon-192.png" alt="" width="32" height="32"><span>mitch.games / 2048</span></header>
   <div class="container">
     <div class="heading">

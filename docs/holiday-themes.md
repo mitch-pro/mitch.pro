@@ -1,6 +1,6 @@
 # Holiday themes
 
-Five seasonal looks, switched on by date (the visitor's local calendar):
+Five seasonal looks, switched on by date (the visitor's local calendar). They are on by default in both site styles, mitch.pro and Tylerium ([ui-styles.md](ui-styles.md)), and their palettes replace either style's colors while active:
 
 | Theme | Active | Look |
 | --- | --- | --- |
@@ -43,7 +43,8 @@ starts Nov 27 that year).
 - A pill on the homepage, right below the Private window toggle, says "Don't like
   the holiday theme?" while a holiday is in season. Clicking it turns the theme off
   on every page and the pill becomes "Bring back the holiday theme"
-  (`__siteTheme.setHolidayOff`). It is the same setting as the one below.
+  (`__siteTheme.setHolidayOff`). It is the same setting as the one below. Both
+  homepages (mitch.pro and Tylerium) have it.
 - Preferences → Appearance → Holiday theme: Automatic or Off (stored as
   `theme_holiday` in local storage, like the other appearance settings).
 

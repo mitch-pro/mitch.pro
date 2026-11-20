@@ -30,24 +30,27 @@
     return '#' + [r, g, b].map(function (v) { return v.toString(16).padStart(2, '0'); }).join('');
   }
 
+  // No saved mode (or "auto") follows the OS in both UI styles.
   function isDarkMode(mode) {
     if (mode === 'dark') return true;
     if (mode === 'light') return false;
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
   }
 
+  // The UI style the server rendered this page in (html[data-ui], set from the
+  // account's choice; see docs/ui-styles.md). Only Tylerium is marked.
+  function isTylerium() {
+    return document.documentElement.getAttribute('data-ui') === 'tylerium';
+  }
+
+  // data-theme always carries the effective mode (manual or OS), so palettes
+  // in theme-tokens.css and tylerium.css can key off it directly.
   function applyMode(mode) {
     var root = document.documentElement;
-    if (mode === 'light' || mode === 'dark') {
-      root.setAttribute('data-theme', mode);
-    } else {
-      root.removeAttribute('data-theme');
-    }
-    root.style.colorScheme = isDarkMode(mode) ? 'dark' : 'light';
-    // Page stylesheets key their light-mode fixes off html.theme-light, so
-    // keep that class in step with the effective mode (manual or OS) on every
-    // page. Pages that also load the legacy theme.js re-toggle it themselves.
-    root.classList.toggle('theme-light', !isDarkMode(mode));
+    var effective = isDarkMode(mode) ? 'dark' : 'light';
+    root.setAttribute('data-theme', effective);
+    root.style.colorScheme = effective;
+    root.classList.toggle('theme-light', effective === 'light');
     var themeColor = document.querySelector('meta[name="theme-color"]');
     if (themeColor) {
       var background = getComputedStyle(root).getPropertyValue('--t-bg').trim();
@@ -104,9 +107,12 @@
     }
     var root = document.documentElement;
     var sizes = { compact: 0.9, normal: 1, comfy: 1.05, huge: 1.1 };
-    var corners = { sharp: '0px', soft: '10px', round: '14px', bubble: '22px' };
+    var tylerium = isTylerium();
+    var corners = { sharp: '0px', soft: tylerium ? '12px' : '10px', round: '14px', bubble: '22px' };
     var fonts = {
+      arcade: 'var(--t-arcade)',
       system: "'DM Sans', system-ui, sans-serif",
+      plain: 'Arial, Helvetica, sans-serif',
       mono: 'ui-monospace, monospace',
       rounded: "'Arial Rounded MT Bold', 'Trebuchet MS', sans-serif",
       serif: 'Georgia, serif',
@@ -114,12 +120,15 @@
     };
     var size = sizes[preference('density', 'normal')] || 1;
     var radius = preference('radius', 'soft');
-    var font = fonts[preference('font', 'system')] || fonts.system;
+    // Each style has its own default font: DM Sans for mitch.pro, Pixelify
+    // Sans for Tylerium. A font picked in Preferences applies to both.
+    var defaultFont = tylerium ? 'arcade' : 'system';
+    var font = fonts[preference('font', defaultFont)] || fonts[defaultFont];
     var reducedMotion = preference('motion', 'on') === 'off';
     root.style.fontSize = (16 * size) + 'px';
     root.style.setProperty('--t-ui-scale', String(size));
     root.style.setProperty('--t-radius', corners[radius] || corners.soft);
-    root.style.setProperty('--t-radius-sm', radius === 'sharp' ? '0px' : '7px');
+    root.style.setProperty('--t-radius-sm', radius === 'sharp' ? '0px' : (tylerium ? '6px' : '7px'));
     root.style.setProperty('--t-font', font);
     root.style.setProperty('--t-display', font);
     root.style.setProperty('--t-motion', reducedMotion ? '0s' : '.15s');
@@ -190,6 +199,7 @@
     else {
       var preference = '';
       try { preference = localStorage.getItem('theme_holiday') || ''; } catch (_) {}
+      // On by default in both UI styles; only an explicit "off" hides it.
       name = preference === 'off' ? '' : holidaySeason();
     }
     if (name) root.setAttribute('data-holiday', name);
@@ -276,6 +286,7 @@
     setHolidayOff: setHolidayOff,
     holidayFxOff: holidayFxOff,
     setHolidayFxOff: setHolidayFxOff,
+    isTylerium: isTylerium,
     getMode: function () { return readCookie('theme'); },
     setMode: function (mode) {
       writeCookie('theme', mode === 'light' || mode === 'dark' ? mode : '');

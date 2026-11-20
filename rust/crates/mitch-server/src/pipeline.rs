@@ -17,6 +17,7 @@ pub fn inject_page(
     path: &str,
     _html_base: &str,
     html: &mut String,
+    page_style: crate::ui_style::PageStyle,
 ) -> String {
     let cfg: &SiteConfig = &state.cfg;
     let mut raw = std::mem::take(html);
@@ -123,6 +124,24 @@ pub fn inject_page(
     // paint — not deferred, so there's no flash of the stock theme.
     if !is_onboarding && !is_embedded && !raw.contains("/site-theme.js") {
         inject_str.push_str("<script src=\"/site-theme.js\"></script>\n");
+    }
+    // Tylerium style (docs/ui-styles.md): mark <html>, link its tokens (and
+    // its layout layer on ordinary pages) and the cloud background. for_page
+    // already keeps public pages, rjuhsd.school and the pickle host on mitch.pro.
+    let tylerium =
+        page_style.is_tylerium() && !is_onboarding && (!is_embedded || is_standalone_game_portal);
+    if tylerium {
+        raw = crate::ui_style::mark_html(&raw);
+        inject_str.push_str("<link rel=\"stylesheet\" href=\"/tylerium/tokens.css?v=1\">\n");
+        if !is_embedded {
+            inject_str.push_str("<link rel=\"stylesheet\" href=\"/tylerium/tylerium.css?v=1\">\n");
+        }
+        inject_str.push_str("<link rel=\"stylesheet\" href=\"/background.css?v=2\">\n<script src=\"/background.js?v=2\" defer></script>\n");
+    }
+    // Signed in and never picked a style: ask once (the answer is saved on
+    // the account, so the chooser stops appearing everywhere).
+    if page_style.ask && !is_onboarding && !is_embedded && !raw.contains("/ui-style.js") {
+        inject_str.push_str("<script src=\"/ui-style.js?v=1\" data-ask=\"1\" defer></script>\n");
     }
     if !is_embedded && !raw.contains("/app-shell.js") {
         inject_str.push_str("<script src=\"/app-shell.js?v=2\" defer></script>\n");

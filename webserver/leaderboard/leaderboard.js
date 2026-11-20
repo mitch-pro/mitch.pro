@@ -35,7 +35,9 @@
   const initials = name => Array.from(String(name || '?').trim())[0]?.toUpperCase() || '?';
   const label = metric => metrics.find(([key]) => key === metric)?.[1] || 'MitchCoins';
   const profileLink = user => '/profile/?u=' + encodeURIComponent(user.profileId || user.email || user.handle || user.name);
-  let activeMetric = 'coins', search = '', data = null, request = null, sequence = 0, debounce;
+  const urlMetric = new URLSearchParams(location.search).get('metric');
+  let activeMetric = metrics.some(([key]) => key === urlMetric) ? urlMetric : 'coins';
+  let search = '', data = null, request = null, sequence = 0, debounce;
 
   function imageSource(value, allowData = false) {
     if (typeof value !== 'string' || /[\u0000-\u001f\u007f]/.test(value)) return '';
@@ -62,6 +64,28 @@
   }
   function handle(user) {
     return user.handle ? '@' + user.handle : '';
+  }
+  async function loadPreview(list) {
+    const status = $('home-ranking-status');
+    list.addEventListener('error', event => {
+      if (event.target instanceof HTMLImageElement) event.target.remove();
+    }, true);
+    try {
+      const response = await fetch('/api/leaderboard?metric=coins&limit=3', { credentials: 'same-origin', cache: 'no-store' });
+      if (!response.ok) throw new Error('Rankings unavailable');
+      const { top } = await response.json();
+      if (!top.length) {
+        status.textContent = 'No ranked players yet.';
+        return;
+      }
+      list.innerHTML = top.slice(0, 3).map(user => `<li><span class="home-ranking-place" aria-label="Rank ${exact(user.rank)}">${exact(user.rank)}</span><a class="home-ranked-player" href="${profileLink(user)}">${avatar(user)}${name(user)}</a><strong class="home-ranking-score" title="${exact(user.coins)} MitchCoins">${compact(user.coins)}</strong></li>`).join('');
+      list.hidden = false;
+      status.hidden = true;
+    } catch {
+      status.textContent = 'Rankings are unavailable.';
+    } finally {
+      $('home-rankings-content').setAttribute('aria-busy', 'false');
+    }
   }
   function loadout(user) {
     const equipped = [
@@ -150,6 +174,11 @@
         $('refresh-board').classList.remove('is-loading');
       }
     }
+  }
+  const preview = $('home-ranking-list');
+  if (preview) {
+    loadPreview(preview);
+    return;
   }
   $('metric-tabs').innerHTML = metrics.map(([key, title]) => `<button type="button" class="board-category" data-metric="${key}" aria-pressed="${key === activeMetric}">${title}</button>`).join('');
   $('metric-tabs').addEventListener('click', event => {

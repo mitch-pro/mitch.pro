@@ -1,5 +1,23 @@
 /* Site color tokens (--t-*): light/dark palettes, manual overrides and high contrast.
-   Shared by app.css and by pages that only need the palette (rjuhsd.school). */
+   Shared by app.css and by pages that only need the palette (rjuhsd.school).
+   These are the mitch.pro style. The Tylerium style (docs/ui-styles.md)
+   overrides them from /tylerium/tylerium.css. */
+
+/* Locally hosted, OFL-licensed fonts (licenses in /fonts/). Used by the
+   Tylerium style and by the Arcade font option in Preferences; browsers only
+   download them when something uses them. */
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/jetbrains-mono.woff2') format('woff2');
+  font-weight: 100 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Pixelify Sans';
+  src: url('/fonts/pixelify-sans.ttf') format('truetype');
+  font-weight: 400 700;
+  font-display: swap;
+}
 :root {
   --t-bg: #f6f7f3;
   --t-bg2: #ffffff;
@@ -22,6 +40,14 @@
   --t-motion: 0.14s;
   --t-display: 'DM Sans', system-ui, -apple-system, sans-serif;
   --t-font: 'DM Sans', system-ui, -apple-system, sans-serif;
+  --t-arcade: 'Pixelify Sans', system-ui, sans-serif;
+  /* Wordmark, headings and code. Shared pages (games, VM Lab) use these so
+     the same markup reads right in either style. */
+  --t-brand: var(--t-font);
+  --t-brand-tracking: -0.03em;
+  --t-heading: var(--t-font);
+  --t-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+  --site-content-width: 1120px;
   --sheet-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --ink-shadow: none;
   --mobile-dock-space: 0px;

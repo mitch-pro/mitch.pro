@@ -215,6 +215,11 @@ html:not([data-bglayer]) body::after { display: none !important; }
 .matrix-wordmark img { width: 32px; height: 32px; object-fit: contain; border-radius: 7px; flex-shrink: 0; }
 .matrix-wordmark b { font-weight: 700; }
 .matrix-wordmark span { color: var(--t-fg2); font-weight: 500; }
+/* Tylerium style: monospace wordmark with the accent ".pro". */
+html[data-ui="tylerium"] .matrix-wordmark { font-family: var(--t-brand); font-weight: 550; letter-spacing: var(--t-brand-tracking); }
+html[data-ui="tylerium"] .matrix-wordmark :is(b, span) { font-weight: inherit; }
+html[data-ui="tylerium"] .matrix-wordmark span { color: var(--t-ac); }
+html[data-ui="tylerium"] .matrix-wordmark img { width: 29px; height: 29px; }
 
 .matrix-site-links {
   align-self: stretch;

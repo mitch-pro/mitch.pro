@@ -1,0 +1,1698 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="mitch.pro">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title>mitch.pro</title>
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/tylerium/leaderboard/leaderboard.css?v=5">
+<link rel="stylesheet" href="/tylerium/home.css?v=28">
+<link rel="stylesheet" href="/turkey-catch.css?v=5">
+<script src="/turkey-catch.js?v=7" defer></script>
+<script defer src="/rjuhsd-assets/calendar.js?v=8"></script>
+<script src="/app-shell.js" defer></script>
+<script src="/tylerium/home-friends.js?v=6" defer></script>
+<script src="/tylerium/home-dashboard.js" defer></script>
+<script src="/leaderboard/leaderboard.js?v=5" defer></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js?v=48', { updateViaCache: 'none' }).catch(err => console.warn('SW register failed: ', err));
+    });
+  }
+</script>
+<script src="/api.js" defer></script>
+<script>
+  (function () {
+    var ua = (navigator.userAgent || '').toLowerCase();
+    if (/\b(firefox|librewolf|waterfox|floorp)\b/.test(ua)) {
+      document.documentElement.classList.add('theme-firefox');
+    }
+  })();
+</script>
+<!-- AUTH_INJECT_START -->
+<style>
+  #devtools-btn{position:fixed;right:12px;bottom:12px;z-index:999999;
+    padding:.6rem .8rem;border-radius:.7rem;background:#111;color:#fff;opacity:.65}
+</style>
+<!-- AUTH_INJECT_END -->
+<style>#_ab{position:fixed;bottom:55px;left:12px;z-index:2147483630;width:38px;height:38px;border-radius:50%;border:none;cursor:pointer;background:#8b5cf6;color:#fff;font-size:.65rem;font-weight:700;letter-spacing:.02em;line-height:1;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 14px rgba(0,0,0,.45);transition:transform .15s,box-shadow .15s;font-family:system-ui,sans-serif;}#_ab:hover{transform:scale(1.1);box-shadow:0 4px 20px rgba(0,0,0,.55);}#_ap{position:fixed;bottom:103px;left:12px;z-index:2147483629;width:310px;max-height:440px;display:flex;flex-direction:column;background:#1e1a17;border:1px solid #3d3a37;border-radius:14px;box-shadow:0 8px 40px rgba(0,0,0,.65);overflow:hidden;transform:translateY(10px) scale(.97);opacity:0;pointer-events:none;transition:transform .18s ease,opacity .18s ease;}#_ap.vis{transform:none;opacity:1;pointer-events:all;}#_ah{display:flex;align-items:center;padding:9px 13px;border-bottom:1px solid #3d3a37;font-family:system-ui,sans-serif;font-size:.8rem;font-weight:700;color:#e8e6e3;gap:6px;}#_ah .logo{color:#8b5cf6;font-size:.75rem;font-weight:900;}#_ah .title{flex:1;}#_ahx{background:none;border:none;color:#555;cursor:pointer;font-size:.9rem;padding:2px 5px;border-radius:4px;line-height:1;}#_ahx:hover{color:#e8e6e3;}#_am{flex:1;overflow-y:auto;padding:9px 11px;display:flex;flex-direction:column;gap:7px;font-family:system-ui,sans-serif;font-size:.79rem;line-height:1.55;min-height:60px;}._mb{max-width:88%;padding:6px 10px;border-radius:10px;word-break:break-word;}._mu{background:#302e2b;color:#e8e6e3;align-self:flex-end;border-radius:10px 10px 2px 10px;white-space:pre-wrap;}._ma{background:#272522;color:#bababa;align-self:flex-start;border-radius:10px 10px 10px 2px;}._ma p{margin:0 0 .4em;}._ma p:last-child{margin:0;}._ma strong{color:#e8e6e3;font-weight:700;}._ma em{font-style:italic;}._ma code{background:#1a1815;color:#8b5cf6;padding:1px 4px;border-radius:3px;font-size:.88em;font-family:monospace;}._ma pre{background:#1a1815;padding:7px 9px;border-radius:6px;overflow-x:auto;margin:.3em 0;}._ma pre code{background:none;padding:0;color:#c8c5c0;font-size:.85em;}._ma ul,._ma ol{margin:.2em 0 .2em 1.2em;padding:0;}._ma li{margin:.1em 0;}._ma h1,._ma h2,._ma h3{color:#e8e6e3;font-weight:700;margin:.3em 0 .15em;line-height:1.2;}._ma h1{font-size:1em;}._ma h2{font-size:.95em;}._ma h3{font-size:.9em;}._ma a{color:#8b5cf6;text-decoration:underline;}._ma hr{border:none;border-top:1px solid #3d3a37;margin:.4em 0;}._merr{color:#e57373;font-size:.73rem;align-self:center;padding:3px 8px;background:rgba(192,57,43,.12);border-radius:6px;}._mnotice{color:#f0c040;font-size:.69rem;align-self:center;padding:3px 8px;background:rgba(240,192,64,.08);border-radius:6px;}#_ai{display:flex;gap:6px;padding:8px 10px;border-top:1px solid #3d3a37;align-items:flex-end;}#_at{flex:1;resize:none;background:#272522;border:1px solid #3d3a37;color:#e8e6e3;border-radius:8px;padding:6px 8px;font-size:.79rem;font-family:system-ui,sans-serif;outline:none;line-height:1.4;max-height:80px;overflow-y:auto;}#_at:focus{border-color:#8b5cf6;}#_as{background:#8b5cf6;color:#fff;border:none;border-radius:8px;padding:6px 11px;font-size:.79rem;font-weight:700;cursor:pointer;flex-shrink:0;}#_as:disabled{opacity:.35;cursor:default;}</style><script>
+// Session probe: only used to show the banned screen. The page list is static (HOME_LINKS).
+async function checkAccess() {
+  try {
+    const request = await fetch('/api/pass', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
+      body: JSON.stringify({})
+    });
+    if (!request.ok) {
+      try { await request.text(); } catch (_) {}
+      return;
+    }
+    const data = await request.json();
+    if (data && data.banned) showBannedPopup(data.reason || 'This account is banned from the website.');
+  } catch (e) {
+    console.error('[mitch.pro] access check failed:', e);
+  }
+}
+
+function showBannedPopup(reason) {
+  document.body.innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#111318;color:#f8fafc;font-family:system-ui,sans-serif;padding:24px;"><div style="max-width:440px;background:#1b1f2a;border:1px solid rgba(248,113,113,.35);border-radius:14px;box-shadow:0 24px 80px rgba(0,0,0,.45);padding:24px;text-align:center;"><div style="display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:999px;background:rgba(239,68,68,.14);color:#fecaca;font-weight:900;margin-bottom:14px;">!</div><h1 style="font-size:1.35rem;margin:0 0 10px;">This account is banned from the website</h1><p style="color:#cbd5e1;line-height:1.5;margin:0 0 12px;">Your account cannot access mitch.pro right now.</p><div style="background:#111827;border:1px solid rgba(148,163,184,.18);border-radius:10px;padding:12px;margin:14px 0;color:#e5e7eb;text-align:left;"><strong>Reason:</strong><br>' + escText(reason) + '</div><button onclick="location.href=\'/appeal.html\'" style="margin-top:8px;border:0;border-radius:9px;background:#ef4444;color:white;padding:10px 16px;font-weight:700;cursor:pointer;">Appeal ban</button></div></div>';
+  alert('This account is banned from the website. Reason: ' + reason);
+}
+
+
+function aboutBlankOn() {
+  var t = document.getElementById('abToggle');
+  return !!(t && t.checked);
+}
+
+function launchSite(type, href) {
+  href = href || '/';
+  var realPath = realHref(href);
+  if (!isAliasedHref(href)) href = aliasHref(href);
+  var abToggle = typeof document !== 'undefined' && document.getElementById('abToggle');
+  if (abToggle && abToggle.checked) {
+    openAboutBlank(href);
+    return;
+  }
+  try {
+    var siteUrl = new URL(href, location.href);
+    var realUrl = new URL(realPath, location.href);
+    var isGameRuntime = (realUrl.pathname.startsWith('/games/') && !['/games/', '/games/index.html'].includes(realUrl.pathname)) || realUrl.pathname.startsWith('/proxy/');
+    if (siteUrl.origin === location.origin && !isGameRuntime) {
+      window.location.href = siteUrl.href;
+      return;
+    }
+  } catch (_) {}
+  if (/^https:\/\/rjuhsd\.school(?:[/?#]|$)/i.test(href)) {
+    window.location.href = href;
+    return;
+  }
+  var displayPrefs = {};
+  try { displayPrefs = JSON.parse(localStorage.getItem('_prefDisplay') || '{}'); } catch(e) {}
+  if (displayPrefs.gameLaunch === 'tab') {
+    openInNewTab(href);
+    return;
+  }
+  if (displayPrefs.gameLaunch === 'iframe' && type !== 'popup' && type !== 'tab' && type !== 'newtab') {
+    showIframe(href, false);
+    return;
+  }
+  if (type === 'iframe') {
+    showIframe(href, false);
+  } else if (type === 'eframe') {
+    showIframe(href, true);
+  } else if (type === 'popup') {
+    showPopup(href);
+  } else if (type === 'tab' || type === 'newtab') {
+    openInNewTab(href);
+  } else {
+    window.location.href = href;
+  }
+}
+
+function openInNewTab(href) {
+  var w = window.open(href, '_blank');
+  if (!w) window.location.href = href;
+}
+
+function recordRecentVisit(href, label) {
+  if (!href) return;
+  try {
+    var list = JSON.parse(localStorage.getItem('_prefRecent') || '[]');
+    if (!Array.isArray(list)) list = [];
+    list = list.filter(function(e) { return e && e.href !== href; });
+    list.unshift({ href: href, label: label || href, ts: Date.now() });
+    localStorage.setItem('_prefRecent', JSON.stringify(list.slice(0, 8)));
+  } catch(e) {}
+}
+
+function labelFromLink(el) {
+  if (!el) return '';
+  var named = el.querySelector && el.querySelector('h2, b, .feature-label');
+  return String((named ? named.textContent : el.textContent) || '').trim();
+}
+
+// Rotating link aliases: /<daily uuid>/<section uuid>/rest serves /<section>/rest.
+var linkAlias = null;
+var UUID_SEG = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+function isAliasedHref(href) {
+  return new RegExp('^/' + UUID_SEG + '(/|$)', 'i').test(String(href || ''));
+}
+// Inverse of aliasHref: /<root>/<section uuid>/rest -> /<section>/rest.
+function realHref(href) {
+  href = String(href || '');
+  var m = href.match(new RegExp('^/' + UUID_SEG + '(?:/(' + UUID_SEG + '))?(/[^?#]*|)([?#].*)?$', 'i'));
+  if (!m) return href;
+  var rest = (m[2] || '') + (m[3] || '');
+  if (!m[1]) return rest || '/';
+  if (linkAlias) {
+    for (var key in linkAlias.sections) {
+      if (linkAlias.sections[key] === m[1].toLowerCase()) return '/' + key + (rest || '/');
+    }
+  }
+  return href;
+}
+function aliasHref(href) {
+  if (!linkAlias || typeof href !== 'string' || href.charAt(0) !== '/' || href.charAt(1) === '/') return href;
+  var m = href.match(/^\/([^?#]*)(.*)$/);
+  if (!m) return href;
+  var segs = m[1].split('/');
+  // The longest section wins, so /proxy/movies/ gets its own UUID, not /proxy's.
+  for (var n = Math.min(segs.length, 3); n >= 1; n--) {
+    var token = linkAlias.sections[segs.slice(0, n).join('/')];
+    if (token) return '/' + linkAlias.root + '/' + token + '/' + segs.slice(n).join('/') + m[2];
+  }
+  return href;
+}
+function applyLinkAliases() {
+  if (!linkAlias) return;
+  document.querySelectorAll('a[href^="/"]').forEach(function(a) {
+    var real = a.getAttribute('href');
+    var aliased = aliasHref(real);
+    if (aliased !== real) a.setAttribute('href', aliased);
+  });
+}
+function loadLinkAliases() {
+  fetch('/api/alias', { cache: 'no-store' }).then(function(r) { return r.ok ? r.json() : null; }).then(function(data) {
+    if (!data || !data.root || !data.sections) return;
+    linkAlias = data;
+    applyLinkAliases();
+    new MutationObserver(applyLinkAliases).observe(document.body, { childList: true, subtree: true });
+  }).catch(function() {});
+}
+
+function openHomeHref(event, href) {
+  if (event && (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button > 0)) return;
+  if (event) event.preventDefault();
+  href = realHref(href);
+  recordRecentVisit(href, event && event.currentTarget ? labelFromLink(event.currentTarget) : '');
+  href = aliasHref(href);
+  try {
+    launchSite('url', href);
+  } catch (e) {
+    window.location.href = href;
+  }
+}
+
+function loadDisplayPrefs() {
+  try { return JSON.parse(localStorage.getItem('_prefDisplay') || '{}') || {}; } catch(e) { return {}; }
+}
+
+function saveDisplayPrefs(prefs) {
+  try { localStorage.setItem('_prefDisplay', JSON.stringify(prefs || {})); } catch(e) {}
+}
+
+function setupAboutBlankToggle() {
+  var ab = document.getElementById('abToggle');
+  if (!ab) return;
+  var displayPref = loadDisplayPrefs();
+  ab.checked = !!displayPref.abAutoLaunch;
+  ab.onchange = function() {
+    var prefs = loadDisplayPrefs();
+    prefs.abAutoLaunch = !!ab.checked;
+    saveDisplayPrefs(prefs);
+  };
+}
+
+function makeSiteLink(type, href, label, extraClass) {
+  var a = document.createElement('a');
+  a.href = href || '#';
+  if (type === 'tab' || type === 'newtab') {
+    a.target = '_blank';
+    a.rel = 'noopener';
+  }
+  a.className = 'site-link' + (extraClass ? ' ' + extraClass : '');
+  a.dataset.search = label.toLowerCase();
+  a.dataset.art = artForDestination(label, href);
+  a.innerHTML = '<span class="icon">' + getIconFor(label) + '</span><span class="lbl">' + escText(label) + '</span><span class="link-arrow" aria-hidden="true">↗</span>';
+  a.onclick = function(e) {
+    if (a.classList.contains('disabled-site-link')) {
+      e.preventDefault();
+      return;
+    }
+    try {
+      var visits = JSON.parse(localStorage.getItem('_prefVisits') || '{}');
+      visits[href] = (visits[href] || 0) + 1;
+      localStorage.setItem('_prefVisits', JSON.stringify(visits));
+    } catch(err) {}
+    recordRecentVisit(href, label);
+    try {
+      e.preventDefault();
+      launchSite(type, href);
+    } catch (err) {
+      window.location.href = href || '/';
+    }
+  };
+  return a;
+}
+
+function renderRecentVisits() {
+  var wrap = document.getElementById('home-recent');
+  var list = document.getElementById('home-recent-list');
+  if (!wrap || !list) return;
+  var recent = [];
+  try { recent = JSON.parse(localStorage.getItem('_prefRecent') || '[]'); } catch(e) {}
+  if (!Array.isArray(recent)) recent = [];
+  recent = recent.filter(function(e) { return e && e.href && e.label; });
+  if (!recent.length) { wrap.hidden = true; return; }
+  list.innerHTML = '';
+  recent.slice(0, 6).forEach(function(e) {
+    list.appendChild(makeSiteLink('url', e.href, e.label, 'recent-site-link'));
+  });
+  wrap.hidden = false;
+}
+
+function artForDestination(label, href) {
+  var text = (String(label || '') + ' ' + String(href || '')).toLowerCase();
+  if (/game|chess|movie|arcade/.test(text)) return 'games';
+  if (/chat|friend|member|invite|feedback|newsletter|leaderboard|profile|team|learn/.test(text)) return 'social';
+  if (/market|shop|premium|inventory|coin|account|claim/.test(text)) return 'market';
+  return 'tools';
+}
+
+// Dashboard links still go through the normal recent-link and alias handling.
+var HOME_LINKS = [
+  {
+    label: 'Community',
+    links: [
+      { href: '/friends/', label: 'Friends' },
+      { href: '/members/', label: 'People' },
+      { href: '/blog/', label: 'Blog' },
+      { href: '/canvas/', label: 'Canvas' },
+      { href: '/feedback/', label: 'Feedback' }
+    ]
+  },
+  {
+    label: 'MitchCoins',
+    links: [
+      { href: '/coins/?v=2', label: 'Wallet' },
+      { href: '/shop/', label: 'Shop' },
+      { href: '/marketplace/', label: 'Marketplace' },
+      { href: '/casino/', label: 'Casino' },
+      { href: '/leaderboard/', label: 'Rankings' }
+    ]
+  },
+  {
+    label: 'Account',
+    links: [
+      { href: '/profile/', label: 'Profile' },
+      { href: '/inventory/', label: 'Inventory' },
+      { href: '/saves/', label: 'Save Manager' },
+      { href: '/notifications/', label: 'Notification Settings' },
+      { href: '/companion/', label: 'Companion' },
+      { href: '/preferences/', label: 'Preferences' }
+    ]
+  }
+];
+
+function renderHomeLinks() {
+  var container = document.getElementById('links');
+  if (!container) return;
+  container.replaceChildren();
+  window.cachedEntries = HOME_LINKS.flatMap(function(group) {
+    var section = document.createElement('section');
+    section.className = 'home-link-group';
+    var heading = document.createElement('h3');
+    heading.textContent = group.label;
+    var links = document.createElement('div');
+    links.className = 'home-group-links';
+    group.links.forEach(function(link) {
+      links.appendChild(makeSiteLink('url', link.href, link.label));
+    });
+    section.append(heading, links);
+    container.appendChild(section);
+    return group.links.map(function(link) {
+      return { type: 'url', href: link.href, label: link.label };
+    });
+  });
+}
+
+function openMembersRail(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation(); // Stop click event propagation to prevent document handler from closing it!
+  }
+  var rail = document.getElementById('member-side-rail');
+  if (!rail) {
+    window.location.href = '/friends/';
+    return;
+  }
+  try {
+    var nextOpen = !rail.classList.contains('is-open');
+    if (typeof rail._setOpen === 'function') rail._setOpen(nextOpen);
+    else {
+      rail.classList.toggle('is-open', nextOpen);
+      rail.classList.toggle('is-collapsed', !nextOpen);
+      rail.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+    }
+  } catch (err) {
+    window.location.href = '/friends/';
+  }
+}
+
+function focusAllPages(event) {
+  if (event) event.preventDefault();
+  var target = document.getElementById('home-catalog') || document.getElementById('links');
+  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+
+function syncHubDailyChip(state) {
+  var chip = document.getElementById('hub-daily-chip');
+  if (!chip) return;
+  if (!state) {
+    chip.hidden = true;
+    return;
+  }
+  chip.hidden = false;
+  if (state.canClaim) {
+    chip.textContent = 'Claim +' + state.nextReward;
+    chip.classList.add('is-claimable');
+    chip.onclick = function(e) {
+      e.preventDefault();
+      claimDailyReward();
+    };
+  } else {
+    chip.textContent = 'Streak ' + state.streak;
+    chip.classList.remove('is-claimable');
+    chip.onclick = function(e) {
+      e.preventDefault();
+      window.location.href = '/coins/?v=2';
+    };
+  }
+}
+
+function syncStreakBadge(state) {
+  var badge = document.getElementById('streak-badge');
+  var count = document.getElementById('streak-badge-count');
+  if (!badge) return;
+  if (!state || !state.streak) {
+    badge.hidden = true;
+    return;
+  }
+  if (count) count.textContent = state.streak;
+  badge.title = 'Streak: ' + state.streak + ' day' + (state.streak === 1 ? '' : 's') +
+    (state.streakFreezes > 0 ? ' · ' + state.streakFreezes + ' freeze' + (state.streakFreezes === 1 ? '' : 's') : '');
+  badge.hidden = false;
+}
+
+function getIconFor(label) {
+  const l = label.toLowerCase();
+  var glyph = '<path d="M8.5 8.5h7v7h-7z"/><path d="M5 12a7 7 0 0 1 7-7m7 7a7 7 0 0 1-7 7"/>';
+  if (l.includes('teacher')) glyph = '<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8L3.5 9.7l5.9-.9z"/>';
+  else if (l.includes('market') || l.includes('shop')) glyph = '<path d="M5 7h14l-1.5 7.5h-11z"/><path d="M8 7l1.5-3h5L16 7"/><circle cx="9" cy="18" r="1"/><circle cx="16" cy="18" r="1"/>';
+  else if (l.includes('inventory')) glyph = '<path d="m3 7 9-5 9 5v11l-9 4-9-4V7Zm0 0 9 5 9-5M12 12v10"/>';
+  else if (l.includes('wallet')) glyph = '<path d="M21 7H5a2 2 0 0 1 0-4h14v4M3 5v14a2 2 0 0 0 2 2h16V7m0 5h-5v4h5"/>';
+  else if (l.includes('casino')) glyph = '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M7 7h.01M12 12h.01M17 17h.01" stroke-width="3"/>';
+  else if (l.includes('canvas')) glyph = '<path d="M3 4h18v16H3zM7 15l4-4 3 3 3-5"/>';
+  else if (l.includes('blog')) glyph = '<path d="M6 3h12v18H6zM9 8h6m-6 4h6m-6 4h3"/>';
+  else if (l.includes('save')) glyph = '<path d="M4 3h13l3 3v15H4zM8 3v7h8V3M8 21v-7h8v7"/>';
+  else if (l.includes('notification')) glyph = '<path d="M18 9a6 6 0 0 0-12 0c0 6-3 6-3 8h18c0-2-3-2-3-8ZM10 21h4"/>';
+  else if (l.includes('prox') || l.includes('vm')) glyph = '<path d="M13 2 5.5 13H11l-1 9 8.5-12H13z"/>';
+  else if (l.includes('team') || l.includes('members') || l.includes('friends') || l.includes('people')) glyph = '<circle cx="9" cy="9" r="3"/><circle cx="16.5" cy="10" r="2.3"/><path d="M3.5 19c.5-3.3 2.2-5 5.5-5s5 1.7 5.5 5M14 15c3.5-.5 5.5.8 6 3.5"/>';
+  else if (l.includes('profile') || l.includes('account')) glyph = '<circle cx="12" cy="8" r="4"/><path d="M4.5 20c.7-4.4 3.2-6.5 7.5-6.5s6.8 2.1 7.5 6.5"/>';
+  else if (l.includes('leaderboard') || l.includes('ranking')) glyph = '<path d="M8 4h8v4c0 3-1.5 5-4 5S8 11 8 8z"/><path d="M8 6H4c0 3 1.5 4.5 4.5 4.5M16 6h4c0 3-1.5 4.5-4.5 4.5M12 13v4m-4 3h8"/>';
+  else if (l.includes('sanctum') || l.includes('premium')) glyph = '<path d="m12 3 6 6-6 12L6 9z"/><path d="M6 9h12M9 9l3-6 3 6-3 12z"/>';
+  else if (l.includes('games') || l.includes('battle') || l.includes('jeopardy') || l.includes('chess')) glyph = '<path d="M8 8h8c3 0 5 2.5 5 6s-2 6-4.5 6c-2 0-2.5-2.5-4.5-2.5S9.5 20 7.5 20C5 20 3 17.5 3 14s2-6 5-6Z"/><path d="M7 12v4m-2-2h4m7-1h.01m2 3h.01"/>';
+  else if (l.includes('learn')) glyph = '<path d="M4 5.5C6.5 4 9.5 4 12 5.5c2.5-1.5 5.5-1.5 8 0V19c-2.5-1.5-5.5-1.5-8 0-2.5-1.5-5.5-1.5-8 0z"/><path d="M12 5.5V19"/>';
+  else if (l.includes('feedback') || l.includes('add a page')) glyph = '<path d="M9 18h6M10 22h4"/><path d="M8 14c-1.3-1.1-2-2.6-2-4.5a6 6 0 1 1 12 0c0 1.9-.7 3.4-2 4.5-.8.7-1 1.3-1 2H9c0-.7-.2-1.3-1-2Z"/>';
+  else if (l.includes('chat') || l.includes('diffie')) glyph = '<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/>';
+  else if (l.includes('export')) glyph = '<path d="M12 3v12m-4-4 4 4 4-4"/><path d="M5 15v5h14v-5"/>';
+  else if (l.includes('newsletter')) glyph = '<rect x="4" y="5" width="16" height="14" rx="2"/><path d="m5 7 7 6 7-6"/>';
+  else if (l.includes('invite')) glyph = '<rect x="4" y="9" width="16" height="11" rx="2"/><path d="M12 9v11M3 9h18V6H3zM12 6c-2-4-6-3-4 0m4 0c2-4 6-3 4 0"/>';
+  else if (l.includes('shell') || l.includes('simulation') || l.includes('admin') || l.includes('settings') || l.includes('preferences')) glyph = '<path d="M5 6h14M5 12h14M5 18h14"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="10" cy="18" r="2"/>';
+  return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + glyph + '</svg>';
+}
+
+function showPopup(src) {
+  setTimeout(function() {
+    var w = window.open(src, '_blank', 'width=900,height=600,resizable=yes,scrollbars=yes');
+    if (!w) window.location.href = src;
+  }, 0);
+}
+
+// Same launch method as /ab/: a blank window written with a full-page iframe.
+// Keep the closing tags escaped; the server's HTML transform rewrites literal
+// body/html end tags inside scripts.
+function openAboutBlank(target) {
+  if (!target) return;
+  var abs;
+  try { abs = new URL(String(target).trim(), location.href).href; } catch (e) { abs = String(target).trim(); }
+  var w = window.open('', '_blank', 'width=1000,height=700');
+  if (!w) {
+    window.location.href = abs;
+    return;
+  }
+  var safe = abs.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  var html = '<!doctype html>\n<html>\n<head>\n  <title>New Tab<\/title>\n  <link rel="icon" type="image/svg" href="https://www.google.com/chrome/static/images/chrome-logo_112px.svg">\n  <meta charset="utf-8">\n  <style>\n    html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#000}\n    iframe{border:0;width:100%;height:100%;display:block}\n  <\/style>\n<\/head>\n<body><iframe src="' + safe + '" allowfullscreen allow="fullscreen; autoplay; clipboard-read; clipboard-write; encrypted-media"><\/iframe><\/body>\n<\/html>';
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+}
+
+// With the toggle on, every link on the page opens in an about:blank tab, not
+// just the ones that go through launchSite().
+document.addEventListener('click', function(e) {
+  if (!aboutBlankOn() || e.defaultPrevented) return;
+  if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button > 0) return;
+  var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+  if (!a || a.closest('#fullframe')) return;
+  var raw = a.getAttribute('href') || '';
+  if (!raw || raw.charAt(0) === '#' || /^(javascript|mailto|tel):/i.test(raw)) return;
+  e.preventDefault();
+  // Stop here so a link's own onclick (launchSite) doesn't open a second window.
+  e.stopPropagation();
+  openAboutBlank(raw);
+}, true);
+
+async function showIframe(src, escape) {
+  var id = new URLSearchParams(document.cookie.replaceAll('; ', '&')).get('id');
+  try {
+    await fetch('/api/ping', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id: id, page: src})});
+  } catch(e) {}
+  var main = document.getElementById('mainpage');
+  if (main) main.style.display = 'none';
+  var frame = document.getElementById('fullframe');
+  if (!frame) {
+    window.location.href = src;
+    return;
+  }
+  document.body.classList.add('is-browsing-frame');
+  frame.src = src;
+  frame.style.display = 'block';
+  iframeEscape = !!escape;
+  if (iframeEscape && !eSuppressed) {
+    focusInterval = setInterval(function() {
+      if (Math.random() < 0.0) {
+        window.location.href = '/ship.html';
+      }
+    }, 120000);
+  }
+  eSuppressed = false;
+}
+
+function goBack() {
+  var frame = document.getElementById('fullframe');
+  if (frame) {
+    frame.src = 'about:blank';
+    frame.style.display = 'none';
+    window.MitchPresence?.setActivity(null);
+  }
+  var main = document.getElementById('mainpage');
+  if (main) main.style.display = '';
+  document.body.classList.remove('is-browsing-frame');
+  iframeEscape = false;
+  if (focusInterval) { clearInterval(focusInterval); focusInterval = null; }
+}
+
+var iframeEscape = false;
+var focusInterval = null;
+var eSuppressed = false;
+
+document.addEventListener('keydown', function(e) {
+  if ((e.key === ':') && !iframeEscape) {
+    eSuppressed = true;
+  }
+});
+
+function applyHomepagePrefs() {
+  var homePref = {};
+  var displayPref = {};
+  var privPref = {};
+  try { homePref = JSON.parse(localStorage.getItem('_prefHomepage') || '{}'); } catch(e) {}
+  try { privPref = JSON.parse(localStorage.getItem('_prefPrivacy') || '{}'); } catch(e) {}
+  displayPref = loadDisplayPrefs();
+  document.body.classList.toggle('home-compact', !!homePref.compactHome);
+
+  var memberRail = document.getElementById('member-side-rail');
+  if (memberRail) {
+    var showRail = (homePref.showMemberRail !== false) && !privPref.stealthDash;
+    memberRail.style.display = showRail ? '' : 'none';
+    var edgeTab = document.getElementById('people-edge-trigger');
+    if (edgeTab) edgeTab.style.display = showRail ? '' : 'none';
+  }
+
+  var quick = document.querySelector('.home-features');
+  if (quick) quick.style.display = homePref.showQuickActions === false ? 'none' : '';
+  document.body.classList.toggle('home-no-quick', homePref.showQuickActions === false);
+
+  var ab = document.getElementById('abToggle');
+  if (ab) ab.checked = !!displayPref.abAutoLaunch;
+}
+
+// The old control stored a transparency value here; drop it so it can't be
+// misread by anything else.
+try { const _hp = JSON.parse(localStorage.getItem('_prefHomepage') || '{}'); if (_hp.backgroundTransparency !== undefined) { delete _hp.backgroundTransparency; localStorage.setItem('_prefHomepage', JSON.stringify(_hp)); } } catch(e) {}
+
+
+
+function loadGreeting() {
+  var greetEl = document.getElementById('greeting-text');
+  var emailEl = document.getElementById('greeting-email');
+  window._currentUserEmail = null;
+
+  if (greetEl) greetEl.textContent = 'hello';
+  fetch('/api/me', {credentials: 'include'}).then(function(r) {
+    return r.ok ? r.json() : null;
+  }).then(function(d) {
+    if (d) {
+      if (d.email) {
+        if (emailEl) emailEl.textContent = d.email;
+        window._currentUserEmail = d.email.toLowerCase();
+      }
+      if (d.bonusAwarded) {
+        var bonusNote = document.createElement('div');
+        bonusNote.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--t-gr);color:#fff;padding:12px 24px;border-radius:12px;font-weight:800;z-index:100000;box-shadow:0 10px 40px rgba(0,0,0,0.5);animation:bonus-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;';
+        bonusNote.innerHTML = '💰 Daily Bonus: +' + d.bonusAwarded + ' Mitch Coins!';
+        document.body.appendChild(bonusNote);
+        setTimeout(function() {
+          bonusNote.style.opacity = '0';
+          bonusNote.style.transform = 'translateX(-50%) translateY(-20px)';
+          bonusNote.style.transition = 'all 0.5s ease';
+          setTimeout(function() { bonusNote.remove(); }, 500);
+        }, 4000);
+        if (!document.getElementById('bonus-pop-style')) {
+          var s = document.createElement('style');
+          s.id = 'bonus-pop-style';
+          s.textContent = '@keyframes bonus-pop { from { opacity:0; transform:translateX(-50%) translateY(-20px) scale(0.9); } to { opacity:1; transform:translateX(-50%) translateY(0) scale(1); } }';
+          document.head.appendChild(s);
+        }
+      }
+
+    }
+  }).catch(function() {});
+
+
+}
+
+
+  /* TASK4 */ function optimizeForDevice() {
+    const ua = navigator.userAgent;
+    if (ua.includes('CrOS')) {
+      const isAboutBlank = (function() { try { return window.top.location.href === 'about:blank'; } catch(e) { return true; } })();
+      console.log('[device] Chromebook detected, ab:blank: ' + (isAboutBlank ? 'already active' : 'normal tab'));
+    }
+    if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)) {
+      document.body.classList.add('mobile-mode');
+      console.log('[device] Mobile detected');
+    }
+  }
+
+  function initMemberSideRail() {
+    var rail = document.getElementById('member-side-rail');
+    if (!rail) return;
+    var handle = document.getElementById('member-side-rail-collapsed-handle');
+    var hoverTimeout = null;
+    var hoverCapable = window.matchMedia("(hover: hover) and (pointer: fine)");
+
+    function setOpen(open) {
+      if (hoverTimeout) {
+        clearTimeout(hoverTimeout);
+        hoverTimeout = null;
+      }
+      rail.classList.toggle('is-open', !!open);
+      rail.classList.toggle('is-collapsed', !open);
+      rail.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (handle) handle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      document.body.classList.toggle('members-rail-open', !!open);
+      Array.from(rail.children).forEach(function(child) { if (child !== handle) child.inert = !open; });
+    }
+    rail._setOpen = setOpen;
+    var edge = document.getElementById('people-edge-trigger');
+    if (edge) {
+      edge.addEventListener('mouseenter', function() { if (hoverCapable.matches) { hoverTimeout = setTimeout(function() { setOpen(true); }, 180); } });
+      edge.addEventListener('mouseleave', function() { if (hoverTimeout) clearTimeout(hoverTimeout); });
+      edge.addEventListener('click', function(e) {
+        // Stop here so the click-outside handler below doesn't close the rail
+        // on the same tap (touch devices have no hover to open it instead).
+        e.stopPropagation();
+        setOpen(true);
+        rail.querySelector('.members-rail-close').focus();
+      });
+    }
+
+    if (handle) {
+      handle.setAttribute('role', 'button');
+      handle.tabIndex = 0;
+      handle.setAttribute('aria-label', 'Open members and friends panel');
+      handle.setAttribute('aria-controls', 'member-side-rail');
+      handle.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        setOpen(!rail.classList.contains('is-open'));
+      });
+      handle.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handle.click();
+        }
+      });
+    }
+
+    // Hover to pop open smoothly with a grace timeout on mouseleave
+    rail.addEventListener('mouseenter', function() {
+      if (!hoverCapable.matches) return;
+      if (hoverTimeout) {
+        clearTimeout(hoverTimeout);
+        hoverTimeout = null;
+      }
+      setOpen(true);
+    });
+
+    rail.addEventListener('mouseleave', function() {
+      if (hoverTimeout) clearTimeout(hoverTimeout);
+      if (!hoverCapable.matches || rail.contains(document.activeElement)) return;
+      hoverTimeout = setTimeout(function() { setOpen(false); }, 450);
+    });
+
+    document.addEventListener('click', function(e) {
+      if (!rail.classList.contains('is-open')) return;
+      if (rail.contains(e.target) || e.target.closest('[onclick*="openMembersRail"]')) return;
+      setOpen(false);
+    });
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && rail.classList.contains('is-open')) setOpen(false);
+    });
+
+    setOpen(false);
+  }
+
+function escText(t) {
+  var d = document.createElement('div');
+  d.textContent = t == null ? '' : String(t);
+  return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+  async function loadDailyLoginState() {
+    try {
+      var response = await fetch('/api/daily-login/state', { credentials: 'include' });
+      var state = response.ok ? await response.json() : null;
+      syncHubDailyChip(state);
+      syncStreakBadge(state);
+    } catch (_) {
+      syncHubDailyChip(null);
+      syncStreakBadge(null);
+    }
+  }
+  async function claimDailyReward() {
+    var chip = document.getElementById('hub-daily-chip');
+    if (!chip || chip.disabled) return;
+    chip.disabled = true;
+    try {
+      var response = await fetch('/api/daily-login/claim', { method: 'POST', credentials: 'include' });
+      var data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Could not claim reward');
+      await loadDailyLoginState();
+    } catch (error) { chip.textContent = 'Try daily reward again'; chip.title = error.message; }
+    finally { chip.disabled = false; }
+  }
+
+async function grantFreePremium() {
+  var status = document.getElementById('grant-premium-status');
+  var btn = document.getElementById('grant-premium-submit');
+  var targetEmail = document.getElementById('grant-premium-email').value.trim();
+  var reason = document.getElementById('grant-premium-reason').value.trim();
+  if (!targetEmail || !reason) {
+    status.className = 'admin-status err';
+    status.textContent = 'Email and reason required.';
+    return;
+  }
+  btn.disabled = true;
+  status.className = 'admin-status';
+  status.textContent = 'Granting...';
+  try {
+    var r = await fetch('/api/admin/grant-premium', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetEmail: targetEmail, reason: reason }),
+    });
+    var d = await r.json();
+    if (!r.ok || d.error) {
+      status.className = 'admin-status err';
+      status.textContent = d.error || 'Failed to grant premium.';
+    } else {
+      status.className = 'admin-status ok';
+      status.textContent = 'Premium granted to ' + d.targetEmail + '.';
+      document.getElementById('grant-premium-email').value = '';
+      document.getElementById('grant-premium-reason').value = '';
+    }
+  } catch(e) {
+    status.className = 'admin-status err';
+    status.textContent = 'Network error.';
+  }
+  btn.disabled = false;
+}
+
+async function sendAdminNotification() {
+  var status = document.getElementById('admin-notif-status');
+  var btn = document.getElementById('admin-notif-submit');
+  var allUsers = document.getElementById('admin-notif-all').checked;
+  var targetEmail = document.getElementById('admin-notif-email').value.trim();
+  var title = document.getElementById('admin-notif-title').value.trim();
+  var message = document.getElementById('admin-notif-message').value.trim();
+  if ((!allUsers && !targetEmail) || !message) {
+    status.className = 'admin-status err';
+    status.textContent = allUsers ? 'Message required.' : 'Email and message required.';
+    return;
+  }
+  btn.disabled = true;
+  status.className = 'admin-status';
+  status.textContent = 'Sending...';
+  try {
+    var r = await fetch('/api/admin/send-notification', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetEmail: targetEmail, title: title, message: message, allUsers: allUsers }),
+    });
+    var d = await r.json();
+    if (!r.ok || d.error) {
+      status.className = 'admin-status err';
+      status.textContent = d.error || 'Failed to send notification.';
+    } else {
+      status.className = 'admin-status ok';
+      status.textContent = allUsers ? 'Notification sent to ' + (d.count || 0) + ' users.' : 'Notification sent to ' + d.targetEmail + '.';
+      document.getElementById('admin-notif-email').value = '';
+      document.getElementById('admin-notif-title').value = '';
+      document.getElementById('admin-notif-message').value = '';
+    }
+  } catch(e) {
+    status.className = 'admin-status err';
+    status.textContent = 'Network error.';
+  }
+  btn.disabled = false;
+}
+
+function setupAdminNotificationMode() {
+  var all = document.getElementById('admin-notif-all');
+  var email = document.getElementById('admin-notif-email');
+  if (!all || !email) return;
+  function sync() {
+    email.disabled = all.checked;
+    email.placeholder = all.checked ? 'Sending to all users' : 'user@email.com';
+    if (all.checked) email.value = '';
+  }
+  all.onchange = sync;
+  sync();
+}
+
+document.addEventListener('error', function(event) {
+  var image = event.target;
+  if (!(image instanceof HTMLImageElement)) return;
+  if (image.classList.contains('collapsed-pfp-img')) {
+    image.remove();
+    return;
+  }
+  if (!image.classList.contains('member-presence-avatar')) return;
+  var fallback = document.createElement('span');
+  fallback.className = 'member-presence-avatar member-presence-initials';
+  fallback.setAttribute('aria-hidden', 'true');
+  fallback.textContent = image.dataset.initials || 'M';
+  image.replaceWith(fallback);
+}, true);
+
+function renderOnlineMembers(members) {
+  var wrap = document.getElementById('online-members-wrap');
+  var list = document.getElementById('online-members-list');
+  var online = (members || []).filter(function(m) { return m.online; }).sort(function(a, b) {
+    return window.MitchPeople.compare(a, b);
+  });
+  var allMembers = online;
+  var signature = JSON.stringify(allMembers.map(function(m) {
+    return [m.email || '', m.displayName || '', m.pfp || '', m.badge || '', m.color || '', !!m.online, m.activity || m.playing || '', m.page || '', m.status || '', m.role || '', m.lastActive || 0];
+  }));
+  if (signature === window._onlineMembersSignature) return;
+  window._onlineMembersSignature = signature;
+
+  // Populate collapsed handle details
+  var badgeEl = document.getElementById('collapsed-online-count');
+  var pfpsEl = document.getElementById('collapsed-pfps-container');
+  var liveLabel = document.getElementById('members-live-label');
+  if (liveLabel) liveLabel.textContent = online.length ? online.length + ' online' : '';
+  if (badgeEl) {
+    if (online.length > 0) {
+      badgeEl.textContent = online.length;
+      badgeEl.style.display = 'inline-flex';
+    } else {
+      badgeEl.style.display = 'none';
+    }
+  }
+  if (pfpsEl) {
+    var withPfp = online.filter(function(m) { return !!m.pfp; }).slice(0, 3);
+    pfpsEl.innerHTML = withPfp.map(function(m) {
+      return '<img src="' + escText(m.pfp) + '" class="collapsed-pfp-img" alt="' + escText(m.displayName || m.email) + '" title="' + escText(m.displayName || m.email) + '" referrerpolicy="no-referrer">';
+    }).join('');
+  }
+
+  if (!allMembers.length) {
+    list.innerHTML = '<span class="side-empty">No one is online</span>';
+    wrap.style.display = '';
+    return;
+  }
+
+  list.innerHTML = allMembers.map(function(m) {
+    var email = m.email || '';
+    var name = m.displayName || email || 'member';
+    var badge = badgeLabels[m.badge];
+    var badgeHtml = badge ? ' <span class="l-badge ' + badge.cls + '">' + badge.text + '</span>' : '';
+    var colorClass = m.color || '';
+
+    var isMe = false;
+    if (email && window._currentUserEmail) {
+      var e1 = email.toLowerCase().trim();
+      var e2 = window._currentUserEmail.toLowerCase().trim();
+      isMe = (e1 === e2 || e1 === e2.replace(/@student\.rjuhsd\.us$/i, '@student.mitch.pro') || e2 === e1.replace(/@student\.rjuhsd\.us$/i, '@student.mitch.pro'));
+    }
+    var nameContent = escText(name);
+    if (colorClass === 'rainbow_name') {
+      nameContent = '<span class="name-inner">' + nameContent + '</span>';
+    }
+    var initials = String(name).trim().split(/\s+/).slice(0, 2).map(function(part) { return part.charAt(0); }).join('').toUpperCase() || 'M';
+    var avatar = m.pfp
+      ? '<img class="member-presence-avatar" src="' + escText(m.pfp) + '" alt="" data-initials="' + escText(initials) + '" referrerpolicy="no-referrer">'
+      : '<span class="member-presence-avatar member-presence-initials" aria-hidden="true">' + escText(initials) + '</span>';
+    var statusText = escText(m.online ? ((m.status === 'away' ? 'Away · ' : '') + (m.activity || m.playing || 'Online now')) : 'Offline');
+    var tooltip = email.includes('@') ? email : '';
+    return '<a class="member-presence-card name ' + escText(colorClass) + (m.online ? ' is-online' : ' is-offline') + '" href="/profile/?u=' + encodeURIComponent(m.handle || email) + '" title="' + escText(tooltip) + '">' +
+      avatar + '<span class="member-presence-copy"><span class="member-presence-name name ' + escText(colorClass) + '">' + nameContent + badgeHtml + '</span><span class="member-presence-rank">' + escText(window.MitchPeople.rank(m)) + (m.friendStatus === 'friends' ? ' · Friend' : '') + '</span><span class="member-presence-status"><span class="online-dot"></span>' + statusText + '</span></span></a>';
+  }).join('');
+  wrap.style.display = '';
+}
+
+async function loadOnlineMembers() {
+  var wrap = document.getElementById('online-members-wrap');
+  var list = document.getElementById('online-members-list');
+  if (document.hidden) return;
+  var request = (window._peopleRequest || 0) + 1; window._peopleRequest = request;
+  try {
+    var r = await fetch('/api/members?t=' + Date.now(), {
+      credentials: 'include',
+      cache: 'no-store'
+    });
+    if (request !== window._peopleRequest) return;
+    if (!r.ok) {
+      r.text().catch(()=>{});
+      window._onlineMembersSignature = '';
+      list.innerHTML = '<span class="side-empty">Sign in to see online members</span>';
+      wrap.style.display = '';
+      var badgeEl = document.getElementById('collapsed-online-count');
+      var pfpsEl = document.getElementById('collapsed-pfps-container');
+      if (badgeEl) badgeEl.style.display = 'none';
+      if (pfpsEl) pfpsEl.innerHTML = '';
+      return;
+    }
+    var d = await r.json();
+    if (request === window._peopleRequest) renderOnlineMembers(d.members || []);
+  } catch(e) {
+    if (request !== window._peopleRequest) return;
+    window._onlineMembersSignature = '';
+    list.innerHTML = '<span class="side-empty">Online list unavailable</span>';
+    wrap.style.display = '';
+    var badgeEl = document.getElementById('collapsed-online-count');
+    var pfpsEl = document.getElementById('collapsed-pfps-container');
+    if (badgeEl) badgeEl.style.display = 'none';
+    if (pfpsEl) pfpsEl.innerHTML = '';
+  }
+}
+
+// ── Friends and Presence Client Side Logic ──────────────────────────────────
+function sendPresenceHeartbeat() { window.MitchPresence?.send(); }
+
+async function loadFriends() {
+  const friendsList = document.getElementById('friends-list');
+  if (!friendsList || document.hidden) return;
+  const request = (window._friendsRequest || 0) + 1; window._friendsRequest = request;
+  try {
+    const r = await fetch('/api/friends/list?t=' + Date.now(), { credentials: 'include' });
+    if (request !== window._friendsRequest) return;
+    if (!r.ok) {
+      r.text().catch(()=>{});
+      window._friendsSignature = '';
+      friendsList.innerHTML = '<span class="side-empty">Log in to view friends</span>';
+      return;
+    }
+    const d = await r.json();
+    if (request !== window._friendsRequest) return;
+    const list = (d.friends || []).slice().sort((a, b) => Number(!!b.online) - Number(!!a.online) || String(a.maskedEmail || a.email || '').localeCompare(String(b.maskedEmail || b.email || '')));
+    const signature = JSON.stringify(list.map(f => [f.email || '', f.color || '', f.displayName || '', f.maskedEmail || '', !!f.online, f.activity || f.playing || '', f.page || '', f.status || '']));
+    if (signature === window._friendsSignature) return;
+    window._friendsSignature = signature;
+    if (list.length === 0) {
+      friendsList.innerHTML = '<span class="side-empty">No friends added yet</span>';
+      return;
+    }
+    friendsList.innerHTML = list.map(f => {
+      const email = f.email;
+      const masked = f.displayName || f.handle || f.maskedEmail || 'Friend';
+      const isOnline = f.online;
+      const statusText = isOnline ? (f.status === 'away' ? 'Away · ' : '') + (f.activity || f.playing || 'Online now') : 'Offline';
+      const initials = String(masked).replace(/[^a-z0-9 ]/gi, ' ').trim().split(/\s+/).slice(0, 2).map(part => part.charAt(0)).join('').toUpperCase() || 'F';
+
+      return `
+        <div class="friend-presence-card ${isOnline ? 'is-online' : 'is-offline'}">
+          <span class="friend-presence-avatar" aria-hidden="true">${escText(initials)}</span>
+          <div class="friend-presence-copy">
+            <span class="friend-presence-name name ${escText(f.color || '')}">${escText(masked)}</span>
+            <span class="friend-presence-status"><span class="online-dot"></span>${escText(statusText)}</span>
+          </div>
+
+        </div>
+      `;
+    }).join('');
+  } catch(e) {
+    if (request !== window._friendsRequest) return;
+    window._friendsSignature = '';
+    friendsList.innerHTML = '<span class="side-empty">Error loading friends</span>';
+  }
+}
+
+function showNotificationToast(title, body) {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.style.position = 'fixed';
+    container.style.top = '20px';
+    container.style.right = '20px';
+    container.style.zIndex = '99999';
+    container.style.display = 'flex';
+    container.style.flexDirection = 'column';
+    container.style.gap = '10px';
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  toast.style.background = 'rgba(15, 23, 42, 0.96)';
+  toast.style.border = '1px solid rgba(59, 130, 246, 0.3)';
+  toast.style.boxShadow = '0 10px 30px rgba(0, 0, 0, 0.5)';
+  toast.style.borderRadius = '10px';
+  toast.style.padding = '14px 20px';
+  toast.style.color = 'white';
+  toast.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+  toast.style.fontSize = '13px';
+  toast.style.minWidth = '280px';
+  toast.style.maxWidth = '360px';
+  toast.style.transform = 'translateX(120%)';
+  toast.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+
+  toast.innerHTML = `
+    <div style="font-weight: bold; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+      <span style="font-size: 16px;">🔔</span> ${escText(title)}
+    </div>
+    <div style="opacity: 0.8; font-size: 12px; line-height: 1.4;">${escText(body)}</div>
+  `;
+
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.transform = 'translateX(0)';
+  }, 50);
+
+  setTimeout(() => {
+    toast.style.transform = 'translateX(120%)';
+    setTimeout(() => {
+      toast.remove();
+    }, 300);
+  }, 5000);
+
+  if (window.Notification && Notification.permission === 'granted') {
+    new Notification(title, { body: body });
+  }
+}
+
+async function loadPendingFriendRequests() {
+  const pendingContainer = document.getElementById('friend-pending-container');
+  const pendingList = document.getElementById('friend-pending-list');
+  const badge = document.getElementById('friend-requests-badge');
+  if (!pendingList) return;
+  try {
+    const r = await fetch('/api/friends/requests/pending?t=' + Date.now(), { credentials: 'include' });
+    if (!r.ok) { r.text().catch(()=>{}); return; }
+    const d = await r.json();
+    const incoming = d.incoming || [];
+    const outgoing = d.outgoing || [];
+    const totalPending = incoming.length;
+    const signature = JSON.stringify({
+      incoming: incoming.map(req => [req.from || '', req.maskedFrom || '']),
+      outgoing: outgoing.map(req => [req.to || '', req.maskedTo || ''])
+    });
+    if (signature === window._friendRequestsSignature) return;
+    window._friendRequestsSignature = signature;
+
+    // Check for new incoming requests
+    if (typeof window.lastIncomingRequestsCount === 'number') {
+      if (incoming.length > window.lastIncomingRequestsCount) {
+        const oldSet = new Set(window.lastIncomingRequestsEmails || []);
+        const newReqs = incoming.filter(req => !oldSet.has(req.from));
+        for (const req of newReqs) {
+          showNotificationToast('New Friend Request', `${req.maskedFrom} sent you a friend request!`);
+        }
+      }
+    }
+    window.lastIncomingRequestsCount = incoming.length;
+    window.lastIncomingRequestsEmails = incoming.map(req => req.from);
+
+    if (window.Notification && Notification.permission === 'default' && incoming.length > 0) {
+      Notification.requestPermission();
+    }
+
+    if (badge) {
+      if (totalPending > 0) {
+        badge.innerText = totalPending;
+        badge.style.display = 'inline-block';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+
+    if (incoming.length === 0 && outgoing.length === 0) {
+      pendingContainer.style.display = 'none';
+      return;
+    }
+
+    pendingContainer.style.display = 'block';
+
+    let html = '';
+
+    // Render incoming requests
+    if (incoming.length > 0) {
+      html += incoming.map(req => `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 6px; background: rgba(59, 130, 246, 0.08); border-radius: 4px; margin-bottom: 4px;">
+          <div style="font-size: 11px; font-weight: 500; color: white; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; margin-right: 6px;">
+            ${escText(req.maskedFrom)}
+          </div>
+          <div style="display: flex; gap: 4px; shrink: 0;">
+            <button onclick="respondFriendRequest('${escText(req.from)}', 'accept', this)" style="padding: 2px 6px; font-size: 10px; font-weight: bold; border-radius: 3px; border: none; background: #a855f7; color: white; cursor: pointer;">Accept</button>
+            <button onclick="respondFriendRequest('${escText(req.from)}', 'reject', this)" style="padding: 2px 6px; font-size: 10px; font-weight: bold; border-radius: 3px; border: none; background: #ef4444; color: white; cursor: pointer;">Deny</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Render outgoing requests
+    if (outgoing.length > 0) {
+      html += outgoing.map(req => `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 6px; background: rgba(255, 255, 255, 0.03); border-radius: 4px; margin-bottom: 4px;">
+          <div style="font-size: 11px; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; margin-right: 6px;">
+            ${escText(req.maskedTo)} <span style="font-size: 9px; opacity: 0.7;">(sent)</span>
+          </div>
+          <button onclick="cancelFriendRequest('${escText(req.to)}', this)" style="padding: 2px 4px; font-size: 9px; font-weight: bold; border-radius: 3px; border: none; background: #ef4444; color: white; cursor: pointer; shrink: 0;">Cancel</button>
+        </div>
+      `).join('');
+    }
+
+    pendingList.innerHTML = html;
+  } catch(e) {}
+}
+
+async function getFriendsCaptchaToken(action) {
+  for (let i = 0; i < 50; i++) {
+    if (window.getCaptchaToken && window.grecaptcha) break;
+    await new Promise(r => setTimeout(r, 100));
+  }
+  if (window.getCaptchaToken) {
+    return await window.getCaptchaToken(action) || '';
+  }
+  return '';
+}
+
+async function sendFriendRequest() {
+  const input = document.getElementById('friend-req-input');
+  const btn = document.getElementById('friend-req-submit-btn');
+  const msg = document.getElementById('friend-req-status-msg');
+  if (!input || !input.value.trim()) return;
+
+  if (btn.disabled) return;
+  const email = input.value.trim();
+  btn.disabled = true;
+  msg.style.display = 'block';
+  msg.style.color = '#38bdf8';
+  msg.innerText = 'Sending request...';
+
+  const recaptcha_token = await getFriendsCaptchaToken('friend_request');
+  try {
+    const r = await fetch('/api/friends/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, recaptcha_token })
+    });
+    const d = await r.json();
+    if (r.ok) {
+      msg.style.color = '#d8b4fe';
+      msg.innerText = d.status === 'accepted' ? 'Friend request accepted (already mutual)!' : 'Friend request sent!';
+      input.value = '';
+      loadFriends();
+      loadPendingFriendRequests();
+    } else {
+      msg.style.color = '#ef4444';
+      msg.innerText = d.error || 'Failed to send request';
+    }
+  } catch(e) {
+    msg.style.color = '#ef4444';
+    msg.innerText = 'Connection error';
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { msg.style.display = 'none'; }, 5000);
+  }
+}
+
+function friendActionFailed(message) {
+  const msg = document.getElementById('friend-req-status-msg');
+  if (!msg) return;
+  msg.style.display = 'block';
+  msg.style.color = '#ef4444';
+  msg.innerText = message || 'That did not go through. Try again.';
+  clearTimeout(window._friendActionTimer);
+  window._friendActionTimer = setTimeout(() => { msg.style.display = 'none'; }, 5000);
+}
+
+async function friendAction(url, payload, buttonEl) {
+  if (buttonEl) { if (buttonEl.disabled) return; buttonEl.disabled = true; }
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (r.ok) { loadFriends(); loadPendingFriendRequests(); return; }
+    const d = await r.json().catch(() => ({}));
+    friendActionFailed(d.error);
+  } catch (e) {
+    friendActionFailed('Connection error. Try again.');
+  }
+  if (buttonEl) buttonEl.disabled = false;
+}
+
+async function respondFriendRequest(friendEmail, action, buttonEl) {
+  await friendAction('/api/friends/request/respond', { email: friendEmail, action: action }, buttonEl);
+}
+
+async function cancelFriendRequest(friendEmail, buttonEl) {
+  await friendAction('/api/friends/request/cancel', { email: friendEmail }, buttonEl);
+}
+
+async function removeFriend(friendEmail) {
+  if (!(await customConfirm('Remove Friend', 'Are you sure you want to remove this friend?'))) return;
+  await friendAction('/api/friends/remove', { email: friendEmail });
+}
+
+function initFriendsSystem() {
+  const submitBtn = document.getElementById('friend-req-submit-btn');
+  const inputEl = document.getElementById('friend-req-input');
+  if (submitBtn) {
+    submitBtn.onclick = sendFriendRequest;
+  }
+  if (inputEl) {
+    inputEl.onkeydown = function(e) {
+      if (e.key === 'Enter') {
+        sendFriendRequest();
+      }
+    };
+  }
+
+  loadFriends();
+  loadPendingFriendRequests();
+  sendPresenceHeartbeat();
+
+  var presenceRefreshTimer = 0;
+  function refreshPresenceSoon() {
+    if (presenceRefreshTimer) return;
+    presenceRefreshTimer = setTimeout(function() {
+      presenceRefreshTimer = 0;
+      loadOnlineMembers();
+      loadFriends();
+    }, 1000);
+  }
+  window.addEventListener('ws-broadcast-message', function(event) {
+    if (event.detail && event.detail.type === 'presence_changed') refreshPresenceSoon();
+  });
+  window.addEventListener('ws-broadcast-status', function(event) {
+    if (event.detail && event.detail.connected) refreshPresenceSoon();
+  });
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+      sendPresenceHeartbeat();
+      refreshPresenceSoon();
+    }
+  });
+
+  setInterval(loadFriends, 15000);
+  setInterval(loadPendingFriendRequests, 15000);
+  setInterval(sendPresenceHeartbeat, 30000);
+}
+
+// A greeting on the day itself ("Happy Thanksgiving"), shown while the holiday theme is on.
+function setupHolidayGreeting() {
+  var el = document.getElementById('holiday-greeting');
+  var theme = window.__siteTheme;
+  if (!el || !theme || !theme.holidayGreeting) return;
+  var text = theme.holidayGreeting();
+  el.textContent = text;
+  el.hidden = !text;
+}
+
+// "Winter break in 17 days": days until the last school day before the next
+// break from the district calendar (rjuhsd-assets/calendar.js), shown when it
+// is within two months. Counting to the break's first closed day would be off
+// by the weekend in front of it (a Monday start means a Friday last day).
+function setupBreakChip() {
+  var el = document.getElementById('break-chip');
+  var cal = window.RJUHSD_CALENDAR;
+  if (!el || !cal || !cal.district) return;
+  var closures = cal.district.closures;
+  function parse(iso) { var p = iso.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function iso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function closed(d) {
+    var key = iso(d);
+    return d.getDay() === 0 || d.getDay() === 6 || closures.some(function(c) { return key >= c[0] && key <= c[1]; });
+  }
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var next = null;
+  closures.forEach(function(c) {
+    if (!/break/i.test(c[2])) return;
+    var start = parse(c[0]);
+    if (start > today && (!next || start < next.start)) next = { start: start, name: c[2] };
+  });
+  if (!next) return;
+  // Step back from the first closed day to the last day with school.
+  var last = new Date(next.start);
+  do { last.setDate(last.getDate() - 1); } while (closed(last) && last > today);
+  if (closed(last)) return; // the weekend in front of the break: school is already out
+  var days = Math.round((last - today) / 86400000);
+  if (days > 60) return;
+  el.textContent = days === 0 ? 'Last day before ' + next.name
+    : days === 1 ? 'Last day before ' + next.name + ' is tomorrow'
+    : next.name + ' in ' + days + ' days';
+  el.hidden = false;
+}
+
+// Holiday theme pills. Normally one pill, "Don't like the holiday theme?".
+// Clicking it offers two choices: turn the whole theme off (the same setting
+// as Preferences > Holiday theme), or just remove the moving effect (falling
+// leaves, snow, ...) and keep the holiday colors (Preferences > Holiday
+// effects). Afterwards a single pill offers to bring back whatever was
+// removed. Only shown while a holiday theme is in season. When animations are
+// off anyway (Preferences > Motion or reduced motion) there is no effect to
+// remove, so the first click turns the theme off directly.
+function setupHolidayPill() {
+  var pill = document.getElementById('holiday-pill');
+  var fxPill = document.getElementById('holiday-fx-pill');
+  var theme = window.__siteTheme;
+  if (!pill || !fxPill || !theme || !theme.holidaySeason || !theme.setHolidayFxOff) return;
+  var season = theme.holidaySeason();
+  if (!season) return;
+  var FX_NAMES = { thanksgiving: 'falling leaves', christmas: 'snow', halloween: 'embers', newyear: 'confetti', valentines: 'hearts' };
+  var fxName = FX_NAMES[season] || 'holiday effects';
+  var choosing = false;
+  function motionOff() {
+    var off = false;
+    try { off = localStorage.getItem('theme_motion') === 'off'; } catch (_) {}
+    return off || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }
+  function state() {
+    if (theme.holidayOff()) return 'off';
+    if (theme.holidayFxOff() && !motionOff()) return 'fx-off';
+    return choosing ? 'choosing' : 'on';
+  }
+  function paint() {
+    var now = state();
+    pill.textContent = now === 'off' ? 'Bring back the holiday theme'
+      : now === 'fx-off' ? 'Bring back ' + fxName
+      : now === 'choosing' ? 'Turn off the holiday theme'
+      : "Don't like the holiday theme?";
+    pill.hidden = false;
+    fxPill.textContent = 'Just remove ' + fxName;
+    fxPill.hidden = now !== 'choosing';
+  }
+  pill.addEventListener('click', function() {
+    var now = state();
+    if (now === 'off') theme.setHolidayOff(false);
+    else if (now === 'fx-off') theme.setHolidayFxOff(false);
+    else if (now === 'on' && !motionOff()) { choosing = true; paint(); return; }
+    else theme.setHolidayOff(true);
+    choosing = false;
+    paint();
+    setupHolidayGreeting();
+  });
+  fxPill.addEventListener('click', function() { theme.setHolidayFxOff(true); choosing = false; paint(); });
+  paint();
+}
+
+// The manual update log (written on /staff-dashboard/updates/). Collapsed it is one line
+// with the newest title; clicking it lists recent entries with their details.
+function loadUpdates() {
+  fetch('/api/updates?limit=5', { cache: 'no-store' }).then(function(r) { return r.ok ? r.json() : null; }).then(function(data) {
+    var list = data && data.updates;
+    if (!list || !list.length) return;
+    function day(ms) { return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
+    var latest = list[0];
+    var bar = document.getElementById('updates-bar');
+    var items = document.getElementById('home-updates-list');
+    document.getElementById('updates-latest-date').textContent = day(latest.postedAt);
+    document.getElementById('updates-latest-title').textContent = latest.title;
+    items.replaceChildren.apply(items, list.map(function(u) {
+      var li = document.createElement('li');
+      var date = document.createElement('time');
+      date.dateTime = new Date(u.postedAt).toISOString().slice(0, 10);
+      date.textContent = new Date(u.postedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      var title = document.createElement('strong');
+      title.textContent = u.title;
+      li.append(date, title);
+      if (u.body) { var p = document.createElement('p'); p.textContent = u.body; li.append(p); }
+      return li;
+    }));
+    // Nothing more to show when the only entry has no details.
+    var expandable = list.length > 1 || !!latest.body;
+    bar.classList.toggle('is-static', !expandable);
+    bar.addEventListener('click', function() {
+      if (!expandable) return;
+      var open = bar.getAttribute('aria-expanded') !== 'true';
+      bar.setAttribute('aria-expanded', String(open));
+      items.hidden = !open;
+    });
+    document.getElementById('home-updates').hidden = false;
+  }).catch(function() {});
+}
+
+async function initHome() {
+  setupHolidayGreeting();
+  setupBreakChip();
+  setupHolidayPill();
+  loadUpdates();
+  loadLinkAliases();
+    /* TASK4 */ optimizeForDevice();
+  setupAboutBlankToggle();
+  applyHomepagePrefs();
+  try { if (JSON.parse(localStorage.getItem('_prefHomepage') || '{}').showRecent !== false) renderRecentVisits(); } catch (_) {}
+  renderHomeLinks();
+  checkAccess();
+  loadGreeting();
+  loadDailyLoginState();
+  setupAdminNotificationMode();
+  loadOnlineMembers();
+  initMemberSideRail();
+  setInterval(loadOnlineMembers, 15000);
+  initFriendsSystem();
+  loadVmStatusChip();
+  setInterval(loadVmStatusChip, 30000);
+}
+
+async function loadVmStatusChip() {
+  var chip = document.getElementById('vm-status-chip');
+  var text = document.getElementById('vm-status-text');
+  var dot = document.getElementById('vm-status-dot');
+  if (!chip) return;
+  try {
+    var res = await fetch('/api/vm/status');
+    if (!res.ok) { res.text().catch(function(){}); chip.hidden = true; return; }
+    var data = await res.json();
+    if (!data || data.status === 'none') { chip.hidden = true; return; }
+    chip.hidden = false;
+    if (data.status === 'pending') {
+      if (text) text.textContent = 'Pending approval';
+      if (dot) dot.className = 'status-dot status-pending';
+    } else if (data.vmStatus === 'running') {
+      if (text) text.textContent = 'Running';
+      if (dot) dot.className = 'status-dot status-running';
+    } else {
+      if (text) text.textContent = 'Stopped';
+      if (dot) dot.className = 'status-dot status-stopped';
+    }
+  } catch(e) {
+    chip.hidden = true;
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initHome, { once: true });
+} else {
+  initHome();
+}
+</script>
+<script src="/people.js"></script>
+<style>.member-presence-rank{display:block;font-size:10px;color:var(--t-fg2,#99a3b3);margin:2px 0}.member-presence-copy{min-width:0}</style>
+</head>
+
+<body data-shell="off" class="home mitch-design">
+<a class="skip-link" href="#mainpage">Skip to content</a>
+<header class="home-masthead mitch-masthead">
+  <a class="home-wordmark" href="/" aria-label="mitch.pro home"><img class="site-logo" src="/icon-192.png" alt="" width="29" height="29"><b>mitch<span>.pro</span></b></a>
+  <nav class="home-masthead-links" aria-label="Primary">
+    <a href="/" aria-current="page">Home</a>
+    <a href="/game-portal/">Games</a>
+    <a href="/matrix/">Chat</a>
+    <a href="/leaderboard/">Rankings</a>
+    <a href="/members/">People</a>
+    <a href="/bell/">Schedule</a>
+    <a href="/vms/">VM Lab</a>
+  </nav>
+  <a class="home-account-link app-account-link" href="/profile/" aria-label="My account"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></svg><span>My account</span></a>
+</header>
+
+
+
+<!-- ══════════════════ Members & friends rail ══════════════════ -->
+<button id="people-edge-trigger" aria-label="Open People panel" aria-controls="member-side-rail" title="People" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3"/><circle cx="16.5" cy="10" r="2.3"/><path d="M3.5 19c.5-3.3 2.2-5 5.5-5s5 1.7 5.5 5M14 15c3.5-.5 5.5.8 6 3.5"/></svg></button>
+<div id="member-side-rail" class="is-collapsed" aria-expanded="false">
+  <div class="members-rail-head">
+    <div class="members-rail-mark" aria-hidden="true"><span></span><span></span></div>
+    <div class="members-rail-heading"><strong>People</strong><small>See who’s here</small></div>
+    <button class="members-rail-close" type="button" aria-label="Close people panel" onclick="document.getElementById('member-side-rail')._setOpen(false)">&times;</button>
+  </div>
+
+  <div id="online-members-wrap" class="side-section" style="display:none">
+    <div class="side-title side-title-presence"><span>Online</span><small id="members-live-label"></small></div>
+    <div id="online-members-list" class="side-list" aria-live="polite"></div>
+  </div>
+  <div id="friends-section-wrap" class="side-section">
+    <div class="side-title friends-side-title">
+      <span>Friends</span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <a href="/friends/" class="friends-manage-link" title="Manage friends">Manage</a>
+        <span id="friend-requests-badge" style="background:#ef4444;color:#fff;border-radius:9999px;padding:2px 6px;font-size:10px;font-weight:800;display:none;">0</span>
+      </div>
+    </div>
+    <div class="friend-request-form">
+      <input type="email" id="friend-req-input" placeholder="Friend's email">
+      <button id="friend-req-submit-btn" type="button">Add</button>
+    </div>
+    <div id="friend-req-status-msg" style="font-size:11px;margin-bottom:8px;display:none;"></div>
+    <div id="friend-pending-container" style="display:none;padding:8px;border-radius:8px;background:var(--t-bg2);border:1px solid var(--t-bd);">
+      <div style="font-size:11px;font-weight:700;color:var(--t-fg2);margin-bottom:6px;">Pending requests</div>
+      <div id="friend-pending-list" class="side-list"></div>
+    </div>
+    <div id="friends-list" class="side-list" aria-live="polite"></div>
+  </div>
+</div>
+
+<!-- ══════════════════ Main page ══════════════════ -->
+<main id="mainpage" class="home-main">
+
+  <section class="home-friends" aria-labelledby="home-friends-title">
+    <header><h2 id="home-friends-title">Friends <span class="home-friend-count"></span></h2><a href="/friends/">Manage friends <span aria-hidden="true">↗</span></a></header>
+    <div class="home-friend-list" aria-busy="true"></div>
+  </section>
+
+  <div class="home-welcome">
+    <header class="hud-topbar home-hello" aria-labelledby="home-brand">
+      <div class="hello-emblem" aria-hidden="true">
+        <div class="hello-logo-shadow"></div>
+        <div class="hello-logo-prism">
+          <div class="hello-logo-face hello-logo-back"></div>
+          <div class="hello-logo-edge hello-logo-notch-left"></div>
+          <div class="hello-logo-edge hello-logo-notch-right"></div>
+          <div class="hello-logo-edge hello-logo-right"></div>
+          <div class="hello-logo-edge hello-logo-bottom"></div>
+          <div class="hello-logo-edge hello-logo-left"></div>
+          <div class="hello-logo-face hello-logo-front"></div>
+        </div>
+        <span class="hello-logo-wordmark">mitch<span>.pro</span></span>
+      </div>
+      <div class="hello-copy">
+        <h1 id="home-brand" class="hello-heading"><span id="greeting-text">hello</span><svg class="hello-writing" viewBox="0 0 240 96" aria-hidden="true"><path pathLength="1" d="M15 70 C22 58 47 18 40 12 C31 4 18 77 23 76 C29 57 44 46 47 56 C49 65 36 82 51 74 L63 64 C92 51 78 38 67 57 C51 84 80 85 96 65 C108 49 127 13 119 10 C107 5 86 75 99 78 C113 85 145 17 138 11 C125 1 109 76 124 78 C136 79 148 64 151 54 C160 35 178 48 169 67 C160 87 140 78 148 59 C154 45 169 43 174 55 C178 68 184 72 198 64"/></svg></h1>
+        <p id="greeting-email" class="hello-email"></p>
+        <p id="holiday-greeting" class="hello-holiday" hidden></p>
+        <span id="streak-badge" class="streak-badge" hidden><b id="streak-badge-count">0</b> day streak</span>
+      </div>
+      <div class="home-clock" id="home-clock" hidden aria-label="Local time">
+        <time id="home-clock-time"></time>
+        <span id="home-clock-date"></span>
+      </div>
+    </header>
+    <nav class="home-features" aria-label="Shortcuts">
+      <a class="home-feature feature-games" href="/game-portal/" onclick="openHomeHref(event, '/game-portal/');">
+        <div class="feature-games-copy">
+          <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 6h10c3 0 4 3 5 10s-3 7-6 2H8c-3 5-7 5-6-2S4 6 7 6Z"/><path d="M7 10v6m-3-3h6m6-2h.01M19 14h.01"/></svg>
+          <h2>Games</h2>
+        </div>
+        <span class="feature-arrow" aria-hidden="true">↗</span>
+      </a>
+      <div class="home-feature-row">
+        <a class="home-feature feature-chat" href="/matrix/" onclick="openHomeHref(event, '/matrix/');">
+          <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v12H9l-5 4Z"/><path d="M8 8h8m-8 4h5"/></svg>
+          <span>Matrix chat</span>
+        </a>
+        <a class="home-feature feature-vms" href="/vms/" onclick="openHomeHref(event, '/vms/');">
+          <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 17v4m-5 0h10M7 8l2 2-2 2m5 0h4"/></svg>
+          <span>Cloud Linux</span>
+        </a>
+        <a class="home-feature feature-movies" href="/proxy/movies/" onclick="openHomeHref(event, this.getAttribute('href'));">
+          <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h18v12H3V9ZM3 9 2 4l18-3 1 5-18 3ZM7 3l3 5m4-6 3 5m-7 6 5 3-5 3v-6Z"/></svg>
+          <span>Movies</span>
+        </a>
+      </div>
+    </nav>
+    <div class="hello-tools">
+      <button class="background-customize" type="button" data-background-customize aria-haspopup="dialog" aria-label="Customize appearance"><svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="8" cy="7" r="2"/><circle cx="16" cy="17" r="2"/></svg><span>Customize</span></button>
+      <a id="home-staff-pill" href="/staff-dashboard/" class="home-staff-pill" hidden>Staff dashboard</a>
+      <label id="abToggleBar" class="ab-toggle" title="Open links in an about:blank tab"><span>Private window</span><span class="toggle-switch"><input type="checkbox" id="abToggle" aria-label="Open links in an about:blank tab"><span class="toggle-slider"></span></span></label>
+    </div>
+  </div>
+
+  <section class="home-rankings" aria-labelledby="home-rankings-title">
+    <header class="home-rankings-head">
+      <h2 id="home-rankings-title">Rankings</h2>
+      <a href="/leaderboard/">View all <span aria-hidden="true">↗</span></a>
+    </header>
+    <div class="home-rankings-content leaderboard-shell" aria-busy="true" id="home-rankings-content">
+      <p class="home-ranking-metric"><img src="/mitchcoin.svg" alt="" width="18" height="18">MitchCoins</p>
+      <ol id="home-ranking-list" hidden></ol>
+      <p class="home-ranking-status" id="home-ranking-status" role="status">Loading standings…</p>
+    </div>
+    <a class="home-rankings-footer" href="/leaderboard/?metric=wins">Chess rankings <span aria-hidden="true">→</span></a>
+  </section>
+
+  <section class="home-recent" id="home-recent" hidden aria-label="Continue where you left off">
+    <div class="home-section-heading home-recent-heading"><h2>Continue where you left off</h2></div>
+    <div id="home-recent-list" class="recent-strip"></div>
+  </section>
+
+  <section class="home-directory" aria-labelledby="directory-title">
+    <div class="home-section-heading"><h2 id="directory-title">Pages</h2></div>
+    <div class="category-grid" id="links"></div>
+  </section>
+
+  <div class="home-season">
+    <p id="break-chip" class="break-chip" hidden></p>
+    <div class="holiday-pills"><button type="button" id="holiday-pill" class="holiday-pill" hidden></button><button type="button" id="holiday-fx-pill" class="holiday-pill" hidden></button><button type="button" id="turkey-launch" class="holiday-pill" hidden>Catch the turkey</button></div>
+  </div>
+
+  <nav class="home-actions" aria-label="More shortcuts">
+    <button type="button" class="hub-action" id="hub-friends-btn" onclick="openMembersRail(event)"><span class="action-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3"/><circle cx="16.5" cy="10" r="2.3"/><path d="M3.5 19c.5-3.3 2.2-5 5.5-5s5 1.7 5.5 5M14 15c3.5-.5 5.5.8 6 3.5"/></svg></span>Who’s online</button>
+    <a class="hub-action" href="/invite/" onclick="openHomeHref(event, '/invite/');">Invite friends</a>
+    <a class="hub-action" href="/teachers/" onclick="openHomeHref(event, '/teachers/');">Rate my teacher</a>
+    <a class="hub-action" href="/learn/" onclick="openHomeHref(event, '/learn/');">Learn the site</a>
+    <a class="hub-action" href="/support/" onclick="openHomeHref(event, '/support/');">Support</a>
+    <button type="button" class="hub-action hub-daily mitch-coin-amount" id="hub-daily-chip" hidden>Daily claim</button>
+  </nav>
+
+  <a id="vm-status-chip" class="home-control-card" href="/vms/" hidden><div><h2>Your computer</h2><p>Open your desktop or manage its resources.</p></div><span class="control-status"><span class="status-dot" id="vm-status-dot"></span><span id="vm-status-text">Computer</span></span></a>
+
+  <section class="home-updates" id="home-updates" hidden aria-label="Updates">
+    <button type="button" class="updates-bar" id="updates-bar" aria-expanded="false" aria-controls="home-updates-list">
+      <span class="updates-tag">Update</span>
+      <time id="updates-latest-date"></time>
+      <strong id="updates-latest-title"></strong>
+      <span class="updates-chev" aria-hidden="true"></span>
+    </button>
+    <ol class="updates-list" id="home-updates-list" hidden></ol>
+  </section>
+</main>
+
+<button id="backbtn" onclick="goBack()">&#8592; Back</button>
+
+<iframe id="fullframe" src="about:blank" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-orientation-lock" allowfullscreen allow="fullscreen; autoplay; clipboard-read; clipboard-write; encrypted-media"></iframe>
+
+<div id="_agree_footer"><span class="footer-agreement">By using mitch.pro you agree to the <a href="/use-agreement/" target="_blank">use agreement</a> and <a href="/privacy/" target="_blank">privacy policy</a>. </span><span class="footer-cookies">See also <a href="/cookies/" target="_blank">cookies</a> and <a href="/copyright/" target="_blank">copyright</a>. </span><span class="footer-oss">mitch.pro is open source — <a href="https://github.com/mitch-pro/mitch.pro" target="_blank" rel="noopener">view the code yourself on GitHub</a></span><span class="footer-discord"> · <a href="https://discord.gg/nrBCnK7KM5" target="_blank" rel="noopener">Discord</a></span></div>
+<script>
+  fetch('/api/staff-hub/status', { credentials: 'same-origin', cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (status) {
+      if (status && status.isStaff) {
+        var pill = document.getElementById('home-staff-pill');
+        if (pill) {
+          if (status.isAdmin) { pill.textContent = 'Staff dashboard'; }
+          else if (status.isModerator) { pill.href = '/moderator/'; pill.textContent = 'Moderator dashboard'; }
+          pill.hidden = false;
+        }
+      }
+    })
+    .catch(function () {});
+</script>
+
+<script>
+  const badgeLabels = {
+    verified_badge: { text: '✔', cls: 'badge-verified' },
+    og_badge: { text: '📜', cls: 'badge-og' },
+    artist_badge: { text: '🎨', cls: 'badge-shop' },
+    chess_badge: { text: '♟', cls: 'badge-shop' },
+    builder_badge: { text: '🛠', cls: 'badge-shop' },
+    lucky_badge: { text: '🍀', cls: 'badge-shop' },
+    premium_star_badge: { text: '⭐', cls: 'badge-shop' },
+    owner_fan_badge: { text: '👑', cls: 'badge-shop' },
+  };
+</script>
+
+<!-- CORE SCRIPTS -->
+<script>
+  (function() {
+    const originalFetch = window.fetch;
+    window.fetch = function() {
+      let [resource, config] = arguments;
+      try {
+        const priv = JSON.parse(localStorage.getItem('_prefPrivacy') || '{}');
+        if (priv.hideOnline) {
+          config = config || {};
+          config.headers = config.headers || {};
+          if (config.headers instanceof Headers) {
+            config.headers.set('x-mitch-privacy-hide', '1');
+          } else {
+            config.headers['x-mitch-privacy-hide'] = '1';
+          }
+        }
+      } catch(e) {}
+      return originalFetch(resource, config);
+    };
+  })();
+</script>
+<script src="/broadcast.js?v=11"></script>
+<script src="/sync.js?v=2"></script>
+<script src="/cookie-consent.js" defer></script>
+<script>
+(function () {
+  'use strict';
+  var emblem = document.querySelector('.hello-emblem');
+  if (!emblem) return;
+  var inView = false;
+  var logoEnabled = true;
+  try { logoEnabled = JSON.parse(localStorage.getItem('_prefHomepage') || '{}').animateLogo !== false; } catch (_) {}
+  emblem.dataset.logoMotion = logoEnabled ? 'on' : 'off';
+  var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  function updateMotion() {
+    emblem.dataset.motion = logoEnabled && inView && !document.hidden && !reducedMotion.matches ? 'active' : 'paused';
+  }
+  if ('IntersectionObserver' in window) {
+    var observer = new IntersectionObserver(function (entries) {
+      inView = entries[0].isIntersecting;
+      updateMotion();
+    });
+    observer.observe(emblem);
+  }
+  document.addEventListener('visibilitychange', updateMotion);
+  reducedMotion.addEventListener('change', updateMotion);
+})();
+</script>
+</body>
+</html>

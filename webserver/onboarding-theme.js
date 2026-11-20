@@ -1,5 +1,9 @@
 (() => {
-  const light = /(?:^|;\s*)theme=light(?:;|$)/.test(document.cookie);
+  // A saved light/dark choice wins; otherwise follow the OS, like every
+  // other page (site-theme.js).
+  const saved = (document.cookie.match(/(?:^|;\s*)theme=(light|dark)(?:;|$)/) || [])[1];
+  const os = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
+  const light = saved ? saved === 'light' : !!(os && os.matches);
   const apply = value => {
     document.documentElement.classList.toggle('theme-light', value);
     // The holiday palettes in theme-tokens.css pick light or dark from
@@ -13,6 +17,11 @@
     });
   };
   apply(light);
+  if (os && !saved) {
+    os.addEventListener('change', event => {
+      if (!/(?:^|;\s*)theme=(light|dark)(?:;|$)/.test(document.cookie)) apply(event.matches);
+    });
+  }
   document.addEventListener('DOMContentLoaded', () => {
     apply(light);
     document.querySelectorAll('[data-theme-toggle]').forEach(button => {

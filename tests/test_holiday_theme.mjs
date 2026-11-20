@@ -8,10 +8,11 @@ import vm from 'node:vm';
 
 const source = fs.readFileSync(new URL('../webserver/site-theme.js', import.meta.url), 'utf8');
 
-function load(search = '', stored = {}, pinned) {
-  const attrs = {};
+function load(search = '', stored = {}, pinned, { cookie = '', osDark = false, ui = '' } = {}) {
+  const attrs = ui ? { 'data-ui': ui } : {};
+  const props = {};
   const root = {
-    style: { setProperty() {}, removeProperty() {}, getPropertyValue: () => '' },
+    style: { setProperty(k, v) { props[k] = v; }, removeProperty(k) { delete props[k]; }, getPropertyValue: k => props[k] ?? '' },
     dataset: {},
     classList: { toggle() {} },
     setAttribute: (k, v) => { attrs[k] = v; },
@@ -19,8 +20,8 @@ function load(search = '', stored = {}, pinned) {
     getAttribute: k => attrs[k] ?? null
   };
   const sandbox = {
-    document: { documentElement: root, cookie: '', head: { appendChild() {} }, createElement: () => ({}), querySelector: () => null },
-    window: { dispatchEvent() {}, matchMedia: () => ({ matches: false }), addEventListener() {}, __holidayForce: pinned },
+    document: { documentElement: root, cookie, head: { appendChild() {} }, createElement: () => ({}), querySelector: () => null },
+    window: { dispatchEvent() {}, matchMedia: () => ({ matches: osDark }), addEventListener() {}, __holidayForce: pinned },
     location: { search },
     localStorage: { getItem: k => stored[k] ?? null, setItem: (k, v) => { stored[k] = String(v); }, removeItem: k => { delete stored[k]; } },
     getComputedStyle: () => ({ getPropertyValue: () => '' }),
@@ -30,10 +31,24 @@ function load(search = '', stored = {}, pinned) {
   sandbox.window.document = sandbox.document;
   vm.createContext(sandbox);
   vm.runInContext(source, sandbox);
-  return { theme: sandbox.window.__siteTheme, attrs, stored };
+  return { theme: sandbox.window.__siteTheme, attrs, stored, props };
 }
 
 const { theme } = load();
+
+// Light/dark follows the OS unless a mode was saved, in both site styles.
+for (const ui of ['', 'tylerium']) {
+  assert.equal(load('', {}, undefined, { ui }).attrs['data-theme'], 'light');
+  assert.equal(load('', {}, undefined, { ui, osDark: true }).attrs['data-theme'], 'dark');
+  assert.equal(load('', {}, undefined, { ui, cookie: 'theme=light', osDark: true }).attrs['data-theme'], 'light');
+  assert.equal(load('', {}, undefined, { ui, cookie: 'theme=dark' }).attrs['data-theme'], 'dark');
+  // Holiday themes are on by default in both styles.
+  assert.equal(load('', {}, 'christmas', { ui }).attrs['data-holiday'], 'christmas');
+}
+// Each style has its own default font; a saved font applies to both.
+assert.match(load().props['--t-font'], /DM Sans/);
+assert.equal(load('', {}, undefined, { ui: 'tylerium' }).props['--t-font'], 'var(--t-arcade)');
+assert.equal(load('', { theme_font: 'serif' }, undefined, { ui: 'tylerium' }).props['--t-font'], 'Georgia, serif');
 const day = (y, m, d) => theme.holidayFor(new Date(y, m - 1, d));
 
 // Thanksgiving is the fourth Thursday of November.

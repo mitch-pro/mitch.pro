@@ -159,7 +159,7 @@
   function init() {
     if (!document.querySelector('link[href^="/mitch-coins.css"]')) {
       const style = document.createElement('link');
-      style.rel = 'stylesheet'; style.href = '/mitch-coins.css?v=4';
+      style.rel = 'stylesheet'; style.href = '/mitch-coins.css?v=5';
       document.head.appendChild(style);
     }
     if (document.body.classList.contains('encrypt-page')) {

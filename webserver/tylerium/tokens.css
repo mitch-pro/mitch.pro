@@ -1,0 +1,71 @@
+/* Tylerium style tokens (docs/ui-styles.md). The server links this file and
+   sets html[data-ui="tylerium"] only for accounts that chose Tylerium, so
+   nothing here reaches mitch.pro-style pages, public pages or rjuhsd.school.
+   Pages with their own chrome (the games portal) take just these tokens;
+   ordinary pages also get tylerium.css.
+
+   Specificity: the palettes below outrank theme-tokens.css's light/dark
+   blocks, and step aside while a holiday theme is active (:not([data-holiday]))
+   so the holiday palettes in theme-tokens.css apply in both styles. */
+
+:root[data-ui="tylerium"] {
+  --t-brand: 'JetBrains Mono', ui-monospace, monospace;
+  --t-mono: var(--t-brand);
+  --t-brand-tracking: -0.065em;
+  --t-heading: var(--t-font);
+  --t-display: var(--t-font);
+  --sheet-ease: ease;
+}
+
+:root[data-ui="tylerium"][data-theme="dark"]:not([data-holiday]) {
+  color-scheme: dark;
+  --t-bg: #000000;
+  --t-bg2: #111111;
+  --t-bg3: #1c1c1c;
+  --t-fg: #f0f0f0;
+  --t-fg2: #d0d0d0;
+  --t-fg3: #bdbdbd;
+  --t-ac: #9acbfa;
+  --t-ac-ink: #061a2d;
+  --t-ac2: #b9dcff;
+  --t-ac3: #b9dcff;
+  --t-bd: #303030;
+  --t-bda: #555555;
+  --t-gl: transparent;
+  --t-gls: #1c1c1c;
+  --t-gr: #9acbfa;
+  --t-bgr: none;
+}
+:root[data-ui="tylerium"][data-theme="light"]:not([data-holiday]) {
+  color-scheme: light;
+  --t-bg: #f3f6fa;
+  --t-bg2: #ffffff;
+  --t-bg3: #e8eef6;
+  --t-fg: #172536;
+  --t-fg2: #485d73;
+  --t-fg3: #526783;
+  --t-ac: #245c8c;
+  --t-ac-ink: #ffffff;
+  --t-ac2: #183f61;
+  --t-ac3: #183f61;
+  --t-bd: #52678366;
+  --t-bda: #526783;
+  --t-gl: transparent;
+  --t-gls: #e8eef6;
+  --t-gr: #245c8c;
+  --t-bgr: none;
+}
+:root[data-ui="tylerium"][data-theme="dark"][data-contrast="high"]:not([data-holiday]) {
+  --t-fg: #ffffff;
+  --t-fg2: #e0e2e8;
+  --t-fg3: #d0ddec;
+  --t-bd: #b2bfce;
+  --t-bda: #e0e2e8;
+}
+:root[data-ui="tylerium"][data-theme="light"][data-contrast="high"]:not([data-holiday]) {
+  --t-fg: #09101a;
+  --t-fg2: #172536;
+  --t-fg3: #172536;
+  --t-bd: #172536;
+  --t-bda: #09101a;
+}
