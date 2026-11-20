@@ -46,7 +46,7 @@ The pipeline (`pipeline.rs`), for pages rendered in Tylerium:
 
 The Matrix chat client (`/matrix/`) skips the pipeline, so its handler applies the style itself with `ui_style::apply_standalone`. This marks `<html>` and links `tokens.css` only, and the chat page has no cloud background. A small script in `matrix/index.html` switches its site bar to the Tylerium link order, and `matrix-galaxy.css` styles the wordmark.
 
-Some pages linked from the homepage stay mitch.pro on purpose: Schedule redirects to rjuhsd.school, and Help (`/support/`) and the legal pages are public. Movies (`/proxy/movies/`) is a proxied third-party app with no site chrome in either style.
+Some pages linked from the homepage stay mitch.pro on purpose: Help (`/support/`) and the legal pages are public. Schedule (`/bell/`) is served on mitch.pro itself and follows the account's style; only the `/rjuhsd/bell` alias and `/bell` on the school host redirect to rjuhsd.school. Movies (`/proxy/movies/`) is a proxied third-party app with no site chrome in either style.
 
 The handler serves the Tylerium variant of a page when `webserver/tylerium/<path>` exists (`ui_style::overlay_path`). This covers the homepage (`tylerium/index.html` with `tylerium/home.css`, `home-friends.js` and `home-dashboard.js`) and Rankings (`tylerium/leaderboard/`). `leaderboard/leaderboard.js` is shared by both styles and by the Tylerium homepage's top-three preview.
 
