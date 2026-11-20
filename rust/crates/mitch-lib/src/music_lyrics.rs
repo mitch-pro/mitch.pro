@@ -83,6 +83,13 @@ impl Lyrics {
 
 /// Last line (or last word) with no following timestamp lasts this long.
 const TAIL_MS: u32 = 4000;
+/// No timestamp from outside is trusted past a day. Clamping every parsed time
+/// to this at the door keeps all later arithmetic far from overflow.
+const MAX_MS: u32 = 86_400_000;
+
+fn clamp_ms(v: i64) -> u32 {
+    v.clamp(0, i64::from(MAX_MS)) as u32
+}
 
 // --------------------------------------------------------------- LRC ----
 
@@ -111,7 +118,13 @@ fn parse_ts(s: &str) -> Option<u32> {
         f.push('0');
     }
     let ms: u64 = f.parse().ok()?;
-    u32::try_from((h * 3600 + m * 60 + sec) * 1000 + ms).ok()
+    let total = h
+        .checked_mul(3600)?
+        .checked_add(m.checked_mul(60)?)?
+        .checked_add(sec)?
+        .checked_mul(1000)?
+        .checked_add(ms)?;
+    u32::try_from(total).ok().filter(|t| *t <= MAX_MS)
 }
 
 fn fmt_ts(ms: u32) -> String {
@@ -168,7 +181,11 @@ pub fn parse_lrc(text: &str) -> Lyrics {
             if let Some(ts) = parse_ts(tag) {
                 stamps.push(ts);
             } else if let Some(v) = tag.strip_prefix("offset:") {
-                offset = v.trim().parse().unwrap_or(0);
+                offset = v
+                    .trim()
+                    .parse::<i64>()
+                    .unwrap_or(0)
+                    .clamp(-i64::from(MAX_MS), i64::from(MAX_MS));
             } else if !tag.contains(':') {
                 break;
             }
@@ -190,7 +207,7 @@ pub fn parse_lrc(text: &str) -> Lyrics {
         return plain(untimed.iter().map(String::as_str));
     }
     entries.sort_by_key(|(t, _)| *t);
-    let shift = |t: u32| -> u32 { u32::try_from((i64::from(t) - offset).max(0)).unwrap_or(0) };
+    let shift = |t: u32| -> u32 { clamp_ms(i64::from(t) - offset) };
     let mut lines: Vec<Line> = Vec::with_capacity(entries.len());
     for (t, body) in &entries {
         let t = shift(*t);
@@ -258,7 +275,7 @@ fn finish(mut lines: Vec<Line>) -> Lyrics {
         let last_word_start = line.words.last().map(|w| w.t).unwrap_or(line.t);
         line.e = match next {
             Some(n) if n >= line.t => n,
-            _ => last_word_start.max(line.t) + TAIL_MS,
+            _ => last_word_start.max(line.t).saturating_add(TAIL_MS),
         };
         let line_end = line.e;
         let n_words = line.words.len();
@@ -270,7 +287,9 @@ fn finish(mut lines: Vec<Line>) -> Lyrics {
                 // Last word: until the next line, but a long instrumental
                 // gap shouldn't keep it lit.
                 None => {
-                    let natural = w.t + (w.text.chars().count() as u32 * 120).max(500);
+                    let natural = w.t.saturating_add(
+                        (w.text.chars().count() as u32).saturating_mul(120).max(500),
+                    );
                     natural.min(line_end).max(w.t)
                 }
             };
@@ -403,10 +422,10 @@ fn parse_timed_lines(text: &str, open: char, close: char, relative: bool) -> Lyr
             if s.is_empty() {
                 continue;
             }
-            let ws = if relative { start + a } else { a };
+            let ws = clamp_ms(if relative { start.saturating_add(a) } else { a }) as i64;
             words.push(Word {
-                t: ws.max(0) as u32,
-                e: (ws + b).max(ws).max(0) as u32,
+                t: ws as u32,
+                e: clamp_ms(ws.saturating_add(b)).max(ws as u32),
                 text: s,
             });
         }
@@ -415,8 +434,8 @@ fn parse_timed_lines(text: &str, open: char, close: char, relative: bool) -> Lyr
             continue;
         }
         lines.push(Line {
-            t: start.max(0) as u32,
-            e: (start + dur).max(start).max(0) as u32,
+            t: clamp_ms(start),
+            e: clamp_ms(start.saturating_add(dur)).max(clamp_ms(start)),
             text: text.trim().to_string(),
             words,
         });
@@ -516,7 +535,7 @@ pub fn parse_json3(v: &serde_json::Value) -> Lyrics {
                 }
             }
             pending_space = raw.ends_with(char::is_whitespace);
-            let t = (start + off).max(0) as u32;
+            let t = clamp_ms(start.saturating_add(off));
             words.push(Word {
                 t,
                 e: t,
@@ -531,10 +550,10 @@ pub fn parse_json3(v: &serde_json::Value) -> Lyrics {
         if lines.last().is_some_and(|l| l.text == text) {
             continue; // rolling captions repeat the previous line
         }
-        let line_t = start.max(0) as u32;
+        let line_t = clamp_ms(start);
         let mut line = Line {
             t: line_t,
-            e: (start + dur).max(start).max(0) as u32,
+            e: clamp_ms(start.saturating_add(dur)).max(line_t),
             text,
             words: if words.len() >= 2 { words } else { Vec::new() },
         };
@@ -615,7 +634,7 @@ pub fn parse_lyricsfile(yaml: &str) -> Lyrics {
                 });
             }
         } else if key == "start_ms" || key == "end_ms" {
-            let n = val.parse::<u32>().unwrap_or(0);
+            let n = val.parse::<u32>().unwrap_or(0).min(MAX_MS);
             if let Some(line) = lines.last_mut() {
                 if in_words {
                     if let Some(w) = line.words.last_mut() {
@@ -669,23 +688,22 @@ pub fn estimate_words(l: &mut Lyrics) {
         if units.len() < 2 {
             continue;
         }
-        let chars: u32 = units.iter().map(|u| u.trim().chars().count() as u32).sum();
-        let span = line
-            .e
-            .saturating_sub(line.t)
+        let chars: u64 = units.iter().map(|u| u.trim().chars().count() as u64).sum();
+        let span = u64::from(line.e.saturating_sub(line.t))
             .min((chars * 280).max(1200))
             .max(1);
-        let total_weight: u32 = units
+        let total_weight: u64 = units
             .iter()
-            .map(|u| u.trim().chars().count().max(1) as u32)
+            .map(|u| u.trim().chars().count().max(1) as u64)
             .sum();
-        let mut acc = 0u32;
+        let at = |acc: u64| -> u32 { line.t.saturating_add((span * acc / total_weight) as u32) };
+        let mut acc = 0u64;
         let mut words = Vec::with_capacity(units.len());
         for u in units {
-            let weight = u.trim().chars().count().max(1) as u32;
-            let start = line.t + span * acc / total_weight;
+            let weight = u.trim().chars().count().max(1) as u64;
+            let start = at(acc);
             acc += weight;
-            let end = line.t + span * acc / total_weight;
+            let end = at(acc);
             words.push(Word {
                 t: start,
                 e: end,
@@ -792,8 +810,11 @@ pub fn graft_words(base: &Lyrics, donor: &Lyrics) -> Option<Lyrics> {
             .words
             .iter()
             .map(|w| Word {
-                t: line.t + w.t.saturating_sub(first),
-                e: (line.t + w.e.saturating_sub(first)).min(line.e.max(line.t + 1)),
+                t: line.t.saturating_add(w.t.saturating_sub(first)),
+                e: line
+                    .t
+                    .saturating_add(w.e.saturating_sub(first))
+                    .min(line.e.max(line.t.saturating_add(1))),
                 text: w.text.clone(),
             })
             .collect();
@@ -1422,6 +1443,128 @@ mod tests {
         assert!(duration_is_similar(239_000, 206_000));
         assert!(!duration_is_similar(239_000, 90_000));
         assert!(!duration_is_similar(90_000, 260_000));
+    }
+
+    /// Tiny deterministic generator so the stress test needs no extra crate.
+    struct Rng(u64);
+    impl Rng {
+        fn next(&mut self) -> u64 {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            self.0
+        }
+        fn pick<'a>(&mut self, items: &[&'a str]) -> &'a str {
+            items[(self.next() % items.len() as u64) as usize]
+        }
+    }
+
+    fn junk(rng: &mut Rng, pieces: &[&str], max: usize) -> String {
+        let n = (rng.next() % max as u64) as usize;
+        (0..n).map(|_| rng.pick(pieces)).collect()
+    }
+
+    /// None of the parsers may panic (bad slicing, integer overflow) on hostile
+    /// input. Tests run with overflow checks on, so this catches both.
+    #[test]
+    fn parsers_survive_hostile_input() {
+        let lrc = [
+            "[",
+            "]",
+            "<",
+            ">",
+            ":",
+            ".",
+            "-",
+            "0",
+            "1",
+            "9",
+            "99999999999999999999",
+            "00:01.00",
+            "[00:01.00]",
+            "<00:01.50>",
+            "[offset:+999999999]",
+            "[offset:-999999999999]",
+            "é",
+            "你",
+            "😀",
+            " ",
+            "word ",
+            "\n",
+            "\r\n",
+            "(",
+            ")",
+            ",",
+        ];
+        let timed = [
+            "[",
+            "]",
+            "(",
+            ")",
+            "<",
+            ">",
+            ",",
+            "0",
+            "7",
+            "9223372036854775807",
+            "-9223372036854775808",
+            "4294967295",
+            "4294967296",
+            "99999999999",
+            "[1,2]",
+            "(1,2,0)",
+            "<1,2,0>",
+            "word",
+            "é",
+            "你",
+            "😀",
+            "\n",
+            " ",
+        ];
+        let words = [
+            "a", "bb", " ", "你好", "😀", "x y z", "\u{a0}", "é", "-", "(", ")",
+        ];
+        let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
+        for _ in 0..4000 {
+            let t = junk(&mut rng, &lrc, 80);
+            let mut l = parse_lrc(&t);
+            estimate_words(&mut l);
+            let _ = to_enhanced_lrc(&l);
+            let _ = from_cached(&to_enhanced_lrc(&l), l.sync.as_str(), true);
+            strip_credits(&mut l);
+            let y = junk(&mut rng, &timed, 80);
+            let mut a = parse_yrc(&y);
+            estimate_words(&mut a);
+            let mut b = parse_krc(&y);
+            estimate_words(&mut b);
+            let _ = graft_words(&parse_lrc(&t), &a);
+            let _ = graft_words(&parse_lrc(&t), &b);
+            let q = junk(&mut rng, &words, 40);
+            let _ = normalize(&q);
+            let _ = clean_youtube_title(&q, &q);
+            let _ = query_guesses(&q, &q);
+            let _ = parse_plain(&q);
+            let _ = parse_lyricsfile(&format!("lines:\n- text: {q}\n  start_ms: {y}\n  words:\n  - text: {q}\n    start_ms: {y}\n"));
+            let mut bytes = Vec::new();
+            for _ in 0..(rng.next() % 40) {
+                bytes.push(rng.next() as u8);
+            }
+            let _ = decode_krc(&bytes);
+            let _ = decode_krc(&[b"krc1".as_slice(), &bytes].concat());
+        }
+        // Extreme but well-formed numbers.
+        let big = parse_yrc("[9223372036854775807,9223372036854775807](9223372036854775807,9223372036854775807,0)x(0,0,0)y\n");
+        let _ = to_enhanced_lrc(&big);
+        let mut huge = parse_lrc("[99999:59.999]x\n[00:00.00]y\n");
+        estimate_words(&mut huge);
+        let long_line = format!("[00:01.00]{}\n[00:09.00]end\n", "word ".repeat(200_000));
+        let mut l = parse_lrc(&long_line);
+        estimate_words(&mut l);
+        let j3 = serde_json::json!({"events":[
+            {"tStartMs": 9223372036854775807i64, "dDurationMs": 9223372036854775807i64, "segs":[{"utf8":"a","tOffsetMs":9223372036854775807i64},{"utf8":" b","tOffsetMs":-5}]},
+            {"tStartMs": -1, "segs":[{"utf8":"c"}]}, {"segs": 5}, {"tStartMs": "x"}]});
+        let _ = parse_json3(&j3);
+        let _ = parse_json3(&serde_json::json!(null));
     }
 
     #[test]
