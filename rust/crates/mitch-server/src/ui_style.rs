@@ -127,6 +127,18 @@ pub fn mark_html(raw: &str) -> String {
     raw.to_string()
 }
 
+/// Tylerium for pages that skip the injection pipeline and carry their own
+/// chrome (the Matrix chat client): marks `<html>` and links the Tylerium
+/// tokens, without the layout layer or the cloud background.
+pub fn apply_standalone(raw: &str) -> String {
+    let marked = mark_html(raw);
+    let link = "<link rel=\"stylesheet\" href=\"/tylerium/tokens.css?v=1\">\n";
+    match marked.find("</head>") {
+        Some(at) => format!("{}{}{}", &marked[..at], link, &marked[at..]),
+        None => marked,
+    }
+}
+
 pub(crate) fn handle(
     state: &Arc<AppState>,
     method: &Method,
@@ -356,6 +368,15 @@ mod tests {
         assert!(overlay_path(&webroot, "vms/index.html").is_none());
         assert!(overlay_path(&webroot, "tylerium/index.html").is_none());
         assert!(overlay_path(&webroot, "../etc/passwd").is_none());
+    }
+
+    #[test]
+    fn standalone_pages_get_tokens_only() {
+        let out = apply_standalone("<html lang=\"en\"><head><title>x</title></head><body>");
+        assert!(out.starts_with("<html data-ui=\"tylerium\" lang=\"en\">"));
+        assert!(out.contains("/tylerium/tokens.css?v=1\">\n</head>"));
+        assert!(!out.contains("/tylerium/tylerium.css"));
+        assert!(!out.contains("/background.js"));
     }
 
     #[test]

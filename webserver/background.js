@@ -323,9 +323,13 @@
         <label class="background-check"><input id="clouds-pointer" type="checkbox">Respond to pointer movement</label>
         </section><section class="background-options"><h3>Appearance</h3>
         <label>Accent color<input id="customize-accent" type="color"></label>
-        <label>Text style<select id="customize-font"><option value="arcade">Arcade</option><option value="system">System sans</option><option value="plain">Plain</option><option value="mono">Monospace</option><option value="rounded">Rounded</option><option value="serif">Serif</option><option value="futuristic">Trebuchet</option></select></label>
+        <label>Text style<select id="customize-font"><option value="arcade">Arcade</option><option value="system">Clean system</option><option value="plain">Plain</option><option value="mono">Monospace</option><option value="rounded">Rounded</option><option value="serif">Serif</option><option value="futuristic">Trebuchet</option></select></label>
         <label>Text size<select id="customize-density"><option value="compact">Small</option><option value="normal">Default</option><option value="comfy">Large</option><option value="huge">Largest</option></select></label>
         <label class="background-check"><input id="customize-contrast" type="checkbox">High contrast</label>
+        </section><section class="background-options site-style-option"><h3>Site style</h3>
+        <p>You're using Tylerium.</p>
+        <button type="button" data-switch-mitch>Switch to mitch.pro</button>
+        <p class="background-note" data-site-style-status role="status"></p>
         </section><footer><a href="/preferences/#appearance">All appearance settings</a><button type="button" data-customize-reset>Reset customization</button></footer>`,
       );
       dialog.addEventListener("input", (event) => {
@@ -336,6 +340,31 @@
           dialog.querySelector("#background-dim-value").value =
             event.target.value + "%";
       });
+      // Site style is saved on the account (docs/ui-styles.md); this layer only
+      // loads for Tylerium, so the only switch offered is back to mitch.pro.
+      const switchButton = dialog.querySelector("[data-switch-mitch]");
+      switchButton.onclick = () => {
+        const status = dialog.querySelector("[data-site-style-status]");
+        switchButton.disabled = true;
+        status.textContent = "";
+        fetch("/api/me/ui-style", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Mitch-Requested-With": "1",
+          },
+          body: JSON.stringify({ style: "mitch" }),
+        })
+          .then((response) => {
+            if (!response.ok) throw new Error("Could not save");
+            location.reload();
+          })
+          .catch(() => {
+            switchButton.disabled = false;
+            status.textContent = "Couldn't switch styles. Try again.";
+          });
+      };
       dialog.querySelector("[data-customize-reset]").onclick = () => {
         for (const key of [
           "theme_background",

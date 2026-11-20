@@ -1820,6 +1820,14 @@ async fn handle_resolved(
                                 content
                             };
                         let content = crate::inject::inject_companion(&content);
+                        // The chat client skips the pipeline, so it applies
+                        // the account's site style itself (docs/ui-styles.md).
+                        let content =
+                            if crate::ui_style::for_page(&state, headers, &path).is_tylerium() {
+                                crate::ui_style::apply_standalone(&content)
+                            } else {
+                                content
+                            };
                         return Response::builder()
                             .status(StatusCode::OK)
                             .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")

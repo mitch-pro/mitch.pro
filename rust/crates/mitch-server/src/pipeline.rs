@@ -136,7 +136,7 @@ pub fn inject_page(
         if !is_embedded {
             inject_str.push_str("<link rel=\"stylesheet\" href=\"/tylerium/tylerium.css?v=1\">\n");
         }
-        inject_str.push_str("<link rel=\"stylesheet\" href=\"/background.css\">\n<script src=\"/background.js\" defer></script>\n");
+        inject_str.push_str("<link rel=\"stylesheet\" href=\"/background.css?v=2\">\n<script src=\"/background.js?v=2\" defer></script>\n");
     }
     // Signed in and never picked a style: ask once (the answer is saved on
     // the account, so the chooser stops appearing everywhere).

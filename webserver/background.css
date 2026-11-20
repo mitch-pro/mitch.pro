@@ -264,6 +264,29 @@ html:is(.theme-light, [data-theme="light"])
   padding-top: 20px;
   border-top: 1px solid var(--t-bd);
 }
+.site-style-option p {
+  margin: 0 0 12px;
+  color: var(--t-fg2);
+}
+.site-style-option button {
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--t-bd);
+  color: var(--t-fg);
+  background: var(--t-bg);
+  font: inherit;
+  cursor: pointer;
+}
+.site-style-option button:hover {
+  border-color: var(--t-ac);
+}
+.site-style-option button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.site-style-option .background-note:empty {
+  display: none;
+}
 .background-dialog footer button {
   background: var(--t-bg);
   color: var(--t-fg);

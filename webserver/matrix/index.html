@@ -73,7 +73,7 @@
     <!-- Cinny Stylesheet & Mitch.pro chat overrides -->
     <link rel="stylesheet" crossorigin href="/matrix/assets/index-DmaX6Xe5.css" />
     <link rel="stylesheet" href="/theme-tokens.css" />
-    <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=15" />
+    <link rel="stylesheet" href="/matrix/matrix-galaxy.css?v=16" />
     <link rel="stylesheet" href="/cosmetics.css?v=1" />
     <script defer src="/matrix/media-auth.js?v=3"></script>
     <script src="/matrix/dom-guard.js?v=1"></script>
@@ -98,6 +98,23 @@
         </a>
       </div>
     </header>
+    <script>
+      // Tylerium site style (docs/ui-styles.md): the server marks <html>
+      // with data-ui="tylerium"; match its navigation order.
+      (function () {
+        if (document.documentElement.getAttribute('data-ui') !== 'tylerium') return;
+        var nav = document.querySelector('#matrix-site-bar .matrix-site-links');
+        if (!nav) return;
+        var links = [['/', 'Home'], ['/game-portal/', 'Games'], ['/matrix/', 'Chat'], ['/leaderboard/', 'Rankings'], ['/members/', 'People'], ['/bell/', 'Schedule'], ['/vms/', 'VM Lab']];
+        nav.replaceChildren.apply(nav, links.map(function (item) {
+          var a = document.createElement('a');
+          a.href = item[0];
+          a.textContent = item[1];
+          if (item[0] === '/matrix/') a.setAttribute('aria-current', 'page');
+          return a;
+        }));
+      })();
+    </script>
 
     <!-- Mitch.pro SSO Connect Banner (only shown if guest/logged out) -->
     <div id="mitch-sso-banner">
