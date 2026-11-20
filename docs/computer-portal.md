@@ -149,7 +149,7 @@ reads has no owner or "cloned from template X" information, and
 `ProxmoxDesktopService` has no `DataStore` access to look either up
 itself. Without the Windows exception, a Windows guest's display would be
 silently overwritten (black screen) on its next restart;
-`clone_chromeos_desktop` also sets `virtio-gl` directly at clone time, so
+`clone_desktop` sets `virtio,memory=128` explicitly at clone time (templates are built with `std`, and clones are marked optimized so power-on wouldn't fix an inherited `std`); `clone_chromeos_desktop` also sets `virtio-gl` directly at clone time, so
 a fresh ChromeOS clone doesn't wait for its first manual restart to get it.
 
 ## ChromeOS (BYO-OS preset)

@@ -1602,13 +1602,12 @@ impl ProxmoxDesktopService {
         config_body.insert("memory".to_string(), jsval::num_value(memory_mb));
         config_body.insert("cpu".to_string(), json!("host"));
         config_body.insert("rng0".to_string(), json!("source=/dev/urandom"));
-        // See ensure_optimized_vm_config's doc comment re: virtio-gpu. This
-        // just inherits the template's own current vga either way, so it
-        // only matters the first time a template is ever cloned.
-        config_body.insert(
-            "vga".to_string(),
-            jsval::or(template_config.get("vga"), json!("virtio,memory=128")),
-        );
+        // See ensure_optimized_vm_config's doc comment re: virtio-gpu. Set it
+        // explicitly rather than inheriting the template's vga: templates are
+        // built with `std` (a real VGA is needed to build them), and since
+        // this function marks the VM as optimized below, inheriting it would
+        // leave every clone on `std` forever.
+        config_body.insert("vga".to_string(), json!("virtio,memory=128"));
         config_body.insert("balloon".to_string(), jsval::num_value(balloon));
         config_body.insert("agent".to_string(), json!(1));
         config_body.insert("ciuser".to_string(), json!(login.0));
