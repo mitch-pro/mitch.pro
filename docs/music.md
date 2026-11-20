@@ -168,8 +168,8 @@ run at once; per-user limits per minute: 20 searches, 20 uncached lyric lookups,
 40 stream resolutions.
 
 Storage: `music_favorites` (per user, erased with the account, listed in
-`account_deletion.rs`) and `music_lyrics_cache` (shared, keyed by video id,
-stored as enhanced-LRC text, not JSON). Listening history is **not** stored
+`account_deletion.rs`) and `music_lyrics_cache` (shared, keyed by the video id plus a hash of the
+title and artist the lookup used, stored as enhanced-LRC text, not JSON). Listening history is **not** stored
 anywhere; only tracks a user saves.
 
 ## Lyrics
@@ -226,6 +226,18 @@ to `estimate_words`.
 `estimate_words`, which spreads the line's time over its words (by length; CJK
 per character) and marks `estimated: true`. The page says "line timing, words
 estimated" in that case.
+
+The lyrics cache key includes the title and artist because the client supplies
+them: keyed by video id alone, one user could store the wrong song's lyrics for
+everyone. Now a different title gets its own entry, and the usual case (the title
+the server's own search produced) is shared. The table keeps at most 5,000 rows
+(oldest removed first), skips bodies over 120 KB, and the worker removes rows
+past their time to live.
+
+Other bounds: background link warming holds at most 40 songs at a time (the rest
+of a burst is dropped; a click still resolves its own song), a request waits at
+most 20 s for a yt-dlp slot (6 run at once), and the per-user limits above apply
+to every endpoint that resolves, searches or looks up lyrics.
 
 A custom search ("Wrong lyrics?") passes `custom=1`, which skips the cache in
 both directions so one user's correction never replaces what others get. A

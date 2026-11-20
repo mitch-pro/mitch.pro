@@ -10,7 +10,8 @@
 //!   a time, so a large library can't hammer the source);
 //! - Spotify tracks without a YouTube video yet are matched, and the match is
 //!   written to every playlist row holding that track;
-//! - links nothing needs (expired and not in any playlist) are pruned. Deleting
+//! - links nothing needs (expired and not in any playlist) are pruned, and
+//!   lyrics cache rows past their time to live are removed. Deleting
 //!   a playlist drops its songs' links at once (`music_playlists::delete`).
 //!
 //! `warm_playlist` does the same for one playlist right away, when it is opened,
@@ -53,6 +54,7 @@ pub fn spawn(state: Arc<AppState>) {
 /// or blocking us), so the caller backs off.
 async fn cycle(state: &Arc<AppState>) -> bool {
     mitch_lib::music::prune_stream_links(&state.store);
+    mitch_lib::music::prune_lyrics_cache(&state.store);
     if !match_spotify(state, MATCH_PER_CYCLE).await {
         return false;
     }

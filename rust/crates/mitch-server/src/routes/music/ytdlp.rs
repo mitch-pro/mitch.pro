@@ -28,6 +28,11 @@ use tokio::sync::Semaphore;
 const RESOLVE_TTL: Duration = Duration::from_secs(4 * 3600);
 const SEARCH_TTL: Duration = Duration::from_secs(10 * 60);
 const RUN_TIMEOUT: Duration = Duration::from_secs(25);
+/// How long a request may wait for one of the yt-dlp process slots.
+const SLOT_WAIT: Duration = Duration::from_secs(20);
+/// Most songs queued or running for background link warming at once; the
+/// rest of a burst is dropped (a click still resolves its own song).
+const WARM_BACKLOG_MAX: usize = 40;
 /// Tracks longer than this are left out of search (mixes, podcasts, streams).
 const MAX_TRACK_SECONDS: i64 = 20 * 60;
 
@@ -147,10 +152,13 @@ fn spawn_slots() -> &'static Semaphore {
 /// Runs yt-dlp with `args` and returns stdout. At most six run at once.
 async fn run(args: &[String]) -> Result<String, YtError> {
     let cfg = config();
-    let _slot = spawn_slots()
-        .acquire()
-        .await
-        .map_err(|_| YtError::Failed("shutting down".into()))?;
+    // Waiting for a free yt-dlp slot is bounded too, so a burst of requests
+    // fails fast instead of piling up.
+    let _slot = match tokio::time::timeout(SLOT_WAIT, spawn_slots().acquire()).await {
+        Ok(Ok(slot)) => slot,
+        Ok(Err(_)) => return Err(YtError::Failed("shutting down".into())),
+        Err(_) => return Err(YtError::Timeout),
+    };
     let mut cmd = Command::new(&cfg.bin);
     cmd.arg("--ignore-config")
         .arg("--no-warnings")
@@ -397,9 +405,16 @@ pub fn warm(ids: Vec<String>) {
             .get_or_init(Default::default)
             .lock()
             .unwrap_or_else(|e| e.into_inner());
-        ids.into_iter()
-            .filter(|id| valid_video_id(id) && !is_cached(id) && set.insert(id.clone()))
-            .collect()
+        let mut keep = Vec::new();
+        for id in ids {
+            if set.len() >= WARM_BACKLOG_MAX {
+                break;
+            }
+            if valid_video_id(&id) && !is_cached(&id) && set.insert(id.clone()) {
+                keep.push(id);
+            }
+        }
+        keep
     };
     if todo.is_empty() {
         return;

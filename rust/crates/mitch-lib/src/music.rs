@@ -123,13 +123,13 @@ pub struct CachedLyrics {
     pub body: String,
 }
 
-pub fn get_cached_lyrics(store: &DataStore, video_id: &str) -> Option<CachedLyrics> {
+pub fn get_cached_lyrics(store: &DataStore, cache_key: &str) -> Option<CachedLyrics> {
     let conn = store.conn();
     let (row, fetched_at): (CachedLyrics, i64) = conn
         .query_row(
             "SELECT source, sync, estimated, body, fetched_at, approximate FROM music_lyrics_cache \
-             WHERE video_id = ?1",
-            rusqlite::params![video_id],
+             WHERE cache_key = ?1",
+            rusqlite::params![cache_key],
             |r| {
                 Ok((
                     CachedLyrics {
@@ -152,14 +152,38 @@ pub fn get_cached_lyrics(store: &DataStore, video_id: &str) -> Option<CachedLyri
     (now_millis() - fetched_at < ttl).then_some(row)
 }
 
-pub fn put_cached_lyrics(store: &DataStore, video_id: &str, row: &CachedLyrics) {
-    let _ = store.conn().execute(
-        "INSERT INTO music_lyrics_cache (video_id, source, sync, estimated, body, fetched_at, approximate) \
+/// The key lyrics are cached under: the video id plus a hash of the title and
+/// artist the lookup used. The lookup's title and artist come from the client,
+/// so keying by video id alone would let one user store the wrong song's lyrics
+/// for everyone. With this key a different title simply gets its own entry, and
+/// the usual case (the title the server's own search produced) is shared.
+pub fn lyrics_cache_key(video_id: &str, title: &str, artist: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    h.update(crate::music_lyrics::normalize(title).as_bytes());
+    h.update(b"\x1f");
+    h.update(crate::music_lyrics::normalize(artist).as_bytes());
+    let digest = h.finalize();
+    let hex: String = digest.iter().take(8).map(|b| format!("{b:02x}")).collect();
+    format!("{video_id}|{hex}")
+}
+
+/// Rows kept at most (the oldest go first) and the largest body cached.
+pub const MAX_LYRICS_ROWS: i64 = 5000;
+const MAX_LYRICS_BODY_BYTES: usize = 120 * 1024;
+
+pub fn put_cached_lyrics(store: &DataStore, cache_key: &str, row: &CachedLyrics) {
+    if row.body.len() > MAX_LYRICS_BODY_BYTES {
+        return;
+    }
+    let conn = store.conn();
+    let _ = conn.execute(
+        "INSERT INTO music_lyrics_cache (cache_key, source, sync, estimated, body, fetched_at, approximate) \
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) \
-         ON CONFLICT(video_id) DO UPDATE SET source = ?2, sync = ?3, estimated = ?4, \
+         ON CONFLICT(cache_key) DO UPDATE SET source = ?2, sync = ?3, estimated = ?4, \
          body = ?5, fetched_at = ?6, approximate = ?7",
         rusqlite::params![
-            video_id,
+            cache_key,
             row.source,
             row.sync,
             i64::from(row.estimated),
@@ -168,6 +192,25 @@ pub fn put_cached_lyrics(store: &DataStore, video_id: &str, row: &CachedLyrics) 
             i64::from(row.approximate)
         ],
     );
+    // Cap the table: keep only the newest MAX_LYRICS_ROWS.
+    let _ = conn.execute(
+        "DELETE FROM music_lyrics_cache WHERE cache_key IN \
+         (SELECT cache_key FROM music_lyrics_cache ORDER BY fetched_at DESC LIMIT -1 OFFSET ?1)",
+        rusqlite::params![MAX_LYRICS_ROWS],
+    );
+}
+
+/// Removes cached lyrics past their time to live (the worker calls this).
+pub fn prune_lyrics_cache(store: &DataStore) -> usize {
+    let now = now_millis();
+    store
+        .conn()
+        .execute(
+            "DELETE FROM music_lyrics_cache WHERE \
+             (sync = 'miss' AND fetched_at < ?1) OR fetched_at < ?2",
+            rusqlite::params![now - MISS_TTL_MS, now - HIT_TTL_MS],
+        )
+        .unwrap_or(0)
 }
 
 // ------------------------------------------------------- stream links ----
@@ -333,6 +376,50 @@ mod tests {
             get_stream_link(&s, "aaaaaaaaaaa", 0).is_some(),
             "other cached links are untouched"
         );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn lyrics_cache_is_keyed_by_title_too_and_bounded() {
+        let dir =
+            std::env::temp_dir().join(format!("music-lyr-{}", crate::crypto::random_bytes_hex(6)));
+        std::fs::create_dir_all(&dir).unwrap();
+        let s = DataStore::open(&dir, &dir).unwrap();
+        // The same song under decorated titles shares an entry; a different title doesn't.
+        let a = lyrics_cache_key("aaaaaaaaaaa", "Song (Remastered 2011)", "The Artist");
+        let b = lyrics_cache_key("aaaaaaaaaaa", "song", "the artist");
+        let other = lyrics_cache_key("aaaaaaaaaaa", "A Different Song", "The Artist");
+        assert_eq!(a, b);
+        assert_ne!(a, other, "a wrong title can't overwrite the real entry");
+        let row = |body: &str| CachedLyrics {
+            source: "x".into(),
+            sync: "line".into(),
+            estimated: false,
+            approximate: false,
+            body: body.into(),
+        };
+        put_cached_lyrics(&s, &a, &row("real"));
+        put_cached_lyrics(&s, &other, &row("poison"));
+        assert_eq!(get_cached_lyrics(&s, &a).unwrap().body, "real");
+        // Oversized bodies are not cached.
+        put_cached_lyrics(&s, "big", &row(&"x".repeat(MAX_LYRICS_BODY_BYTES + 1)));
+        assert!(get_cached_lyrics(&s, "big").is_none());
+        // The table keeps only the newest MAX_LYRICS_ROWS.
+        {
+            let conn = s.conn();
+            let tx = conn.unchecked_transaction().unwrap();
+            for i in 0..(MAX_LYRICS_ROWS + 50) {
+                tx.execute("INSERT INTO music_lyrics_cache (cache_key, source, sync, body, fetched_at) VALUES (?1, 'x', 'line', '', ?2)", rusqlite::params![format!("k{i}"), i]).unwrap();
+            }
+            tx.commit().unwrap();
+        }
+        put_cached_lyrics(&s, "newest", &row("n"));
+        let count: i64 = s
+            .conn()
+            .query_row("SELECT COUNT(*) FROM music_lyrics_cache", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, MAX_LYRICS_ROWS);
+        assert!(get_cached_lyrics(&s, "newest").is_some());
         let _ = std::fs::remove_dir_all(dir);
     }
 

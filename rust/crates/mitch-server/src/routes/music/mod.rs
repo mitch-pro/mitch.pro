@@ -321,8 +321,11 @@ async fn lyrics_for(state: &Arc<AppState>, email: &str, search: &str) -> Respons
     if title.chars().count() > 200 || artist.chars().count() > 200 {
         return json_response(400, json!({ "error": "title or artist too long" }));
     }
+    // Keyed by the title and artist as well as the video, so what a client
+    // sends can't replace the lyrics everyone else gets for the video.
+    let cache_key = music::lyrics_cache_key(&id, title.trim(), artist.trim());
     if !custom {
-        if let Some(hit) = music::get_cached_lyrics(&state.store, &id) {
+        if let Some(hit) = music::get_cached_lyrics(&state.store, &cache_key) {
             return lyrics_response(
                 &hit.source,
                 ml::from_cached(&hit.body, &hit.sync, hit.estimated),
@@ -340,7 +343,7 @@ async fn lyrics_for(state: &Arc<AppState>, email: &str, search: &str) -> Respons
             if !custom {
                 music::put_cached_lyrics(
                     &state.store,
-                    &id,
+                    &cache_key,
                     &CachedLyrics {
                         source: f.source.to_string(),
                         sync: f.lyrics.sync.as_str().to_string(),
@@ -367,7 +370,7 @@ async fn lyrics_for(state: &Arc<AppState>, email: &str, search: &str) -> Respons
             if !custom && !all_failed {
                 music::put_cached_lyrics(
                     &state.store,
-                    &id,
+                    &cache_key,
                     &CachedLyrics {
                         source: String::new(),
                         sync: "miss".into(),

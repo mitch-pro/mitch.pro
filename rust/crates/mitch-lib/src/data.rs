@@ -714,7 +714,7 @@ impl DataStore {
                         matched_at INTEGER NOT NULL
                     );
                     CREATE TABLE IF NOT EXISTS music_lyrics_cache (
-                        video_id TEXT PRIMARY KEY,
+                        cache_key TEXT PRIMARY KEY,
                         source TEXT NOT NULL,
                         sync TEXT NOT NULL,
                         estimated INTEGER NOT NULL DEFAULT 0,
@@ -722,6 +722,7 @@ impl DataStore {
                         fetched_at INTEGER NOT NULL,
                         approximate INTEGER NOT NULL DEFAULT 0
                     );
+                    CREATE INDEX IF NOT EXISTS idx_music_lyrics_cache_fetched ON music_lyrics_cache (fetched_at);
                     CREATE TABLE IF NOT EXISTS companion_characters (
                         id TEXT PRIMARY KEY,
                         name TEXT NOT NULL,
@@ -914,16 +915,23 @@ impl DataStore {
                 [],
             )?;
         }
-        let has_music_lyrics_approximate = conn
+        // The lyrics cache used to be keyed by video id alone (and was never
+        // released in that shape). Its rows are disposable, so an old-shaped
+        // table is simply replaced.
+        let has_lyrics_cache_key = conn
             .prepare("PRAGMA table_info(music_lyrics_cache)")?
             .query_map([], |row| row.get::<_, String>(1))?
             .collect::<rusqlite::Result<Vec<_>>>()?
             .iter()
-            .any(|name| name == "approximate");
-        if !has_music_lyrics_approximate {
-            conn.execute(
-                "ALTER TABLE music_lyrics_cache ADD COLUMN approximate INTEGER NOT NULL DEFAULT 0",
-                [],
+            .any(|name| name == "cache_key");
+        if !has_lyrics_cache_key {
+            conn.execute_batch(
+                "DROP TABLE IF EXISTS music_lyrics_cache; \
+                 CREATE TABLE music_lyrics_cache ( \
+                     cache_key TEXT PRIMARY KEY, source TEXT NOT NULL, sync TEXT NOT NULL, \
+                     estimated INTEGER NOT NULL DEFAULT 0, body TEXT NOT NULL, \
+                     fetched_at INTEGER NOT NULL, approximate INTEGER NOT NULL DEFAULT 0); \
+                 CREATE INDEX IF NOT EXISTS idx_music_lyrics_cache_fetched ON music_lyrics_cache (fetched_at);",
             )?;
         }
         let has_companion_special_ability = conn

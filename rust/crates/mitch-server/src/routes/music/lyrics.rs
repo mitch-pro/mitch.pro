@@ -41,6 +41,8 @@ const CAPTIONS_TIMEOUT: Duration = Duration::from_secs(14);
 /// arrived after this long: they cost a yt-dlp run.
 const CAPTIONS_GRACE: Duration = Duration::from_millis(2000);
 const HARD_DEADLINE: Duration = Duration::from_secs(10);
+/// The most the search for word timing to borrow may take.
+const DONOR_LIMIT: Duration = Duration::from_secs(3);
 /// How long after line-timed lyrics arrive the other sources may still
 /// replace them with word-timed ones.
 const UPGRADE_WINDOW: Duration = Duration::from_millis(1200);
@@ -510,7 +512,16 @@ pub async fn find(
     }
     let mut first_tried: Vec<Tried> = Vec::new();
     for length in passes {
-        let results = search_all(&guesses, title_query(duration_ms, video_id, length, false)).await;
+        let results = search_all(
+            &guesses,
+            title_query(duration_ms, video_id, length, false),
+            if length == Length::Same {
+                HARD_DEADLINE
+            } else {
+                Duration::from_secs(6)
+            },
+        )
+        .await;
         if first_tried.is_empty() {
             first_tried = results.first().map(|r| r.1.clone()).unwrap_or_default();
         }
@@ -524,6 +535,9 @@ pub async fn find(
                 let donors = search_all(
                     &guesses,
                     title_query(duration_ms, video_id, Length::Similar, true),
+                    // Word timing to borrow is a bonus: don't hold the lyrics
+                    // back long waiting for one that may not exist.
+                    DONOR_LIMIT,
                 )
                 .await;
                 if let Some(d) = best_of(donors) {
@@ -551,18 +565,52 @@ fn title_query(duration_ms: u32, video_id: &str, length: Length, donor: bool) ->
     }
 }
 
-/// Runs `find_once` for the first four readings of the title at once. Only the
-/// first reading of a normal (not donor) pass also tries YouTube's captions.
-async fn search_all(guesses: &[(String, String)], base: Query) -> Vec<(Option<Found>, Vec<Tried>)> {
-    let runs = guesses.iter().take(4).enumerate().map(|(i, (t, a))| {
-        find_once(Query {
-            title: t.clone(),
-            artist: a.clone(),
-            captions: i == 0 && !base.donor && base.length == Length::Same,
-            ..base.clone()
+/// Runs `find_once` for the first four readings of the title at once and
+/// collects results as they arrive, without waiting on slow readings:
+/// - a close word-timed match ends it at once (nothing can beat it);
+/// - once line-timed (or better) lyrics are in, the rest get `UPGRADE_WINDOW`
+///   to improve on them;
+/// - otherwise it waits at most `limit`.
+///
+/// Only the first reading of a normal (not donor) pass also tries YouTube's
+/// captions.
+async fn search_all(
+    guesses: &[(String, String)],
+    base: Query,
+    limit: Duration,
+) -> Vec<(Option<Found>, Vec<Tried>)> {
+    let mut runs: futures_util::stream::FuturesUnordered<_> = guesses
+        .iter()
+        .take(4)
+        .enumerate()
+        .map(|(i, (t, a))| {
+            find_once(Query {
+                title: t.clone(),
+                artist: a.clone(),
+                captions: i == 0 && !base.donor && base.length == Length::Same,
+                ..base.clone()
+            })
         })
-    });
-    futures_util::future::join_all(runs).await
+        .collect();
+    let mut out = Vec::new();
+    let mut deadline = tokio::time::Instant::now() + limit;
+    let mut upgrading = false;
+    while let Ok(Some(result)) = tokio::time::timeout_at(deadline, runs.next()).await {
+        let (rank, score) = result
+            .0
+            .as_ref()
+            .map(|f| (f.rank, f.score))
+            .unwrap_or((0, 0.0));
+        out.push(result);
+        if rank == 4 && score >= 0.85 {
+            break;
+        }
+        if rank >= 3 && !upgrading {
+            upgrading = true;
+            deadline = deadline.min(tokio::time::Instant::now() + UPGRADE_WINDOW);
+        }
+    }
+    out
 }
 
 fn best_of(results: Vec<(Option<Found>, Vec<Tried>)>) -> Option<Found> {
