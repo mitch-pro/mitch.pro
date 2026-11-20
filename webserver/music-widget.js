@@ -132,8 +132,8 @@
       var t = M.current();
       if (!t) { card.hidden = true; return; }
       card.hidden = false;
-      title.textContent = t.title;
-      artist.textContent = t.artist;
+      if (title.textContent !== t.title) title.textContent = t.title;
+      if (artist.textContent !== t.artist) artist.textContent = t.artist;
       if (t.id && shownId !== t.id) {          // tracks from Spotify have no id until matched
         shownId = t.id; lastLine = -2; lyrics = null; lyric.textContent = '';
         art.src = M.thumb(t.id);
@@ -141,11 +141,11 @@
       }
       var loading = !!s.buffering && !s.playing && !s.error;
       var label = loading ? 'Loading' : s.playing ? 'Pause' : 'Play';
-      play.setAttribute('aria-label', label);
-      play.title = label;
+      if (play.getAttribute('aria-label') !== label) { play.setAttribute('aria-label', label); play.title = label; }
       play.setAttribute('aria-busy', loading ? 'true' : 'false');
       play.classList.toggle('mm-loading', loading);
-      play.replaceChildren(icon(s.playing ? 'pause' : 'play'));
+      var want = s.playing ? 'pause' : 'play';
+      if (play.dataset.icon !== want) { play.dataset.icon = want; play.replaceChildren(icon(want)); }   // not on every update: it can swallow a click
       card.classList.toggle('mm-busy', !!s.buffering && !s.error);
       var msg = s.error ? s.error
         : loading ? 'Loading…'

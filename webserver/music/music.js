@@ -33,7 +33,16 @@
     svg.appendChild(p);
     return svg;
   }
-  function setIcon(el, name) { el.replaceChildren(icon(name)); }
+  /** Sets a button's icon only if it changed. State updates arrive several
+   *  times a second while playing; rebuilding the icon every time can swallow a
+   *  click that lands on the node being replaced. */
+  function setIcon(el, name) {
+    if (el.dataset.icon === name) return;
+    el.dataset.icon = name;
+    el.replaceChildren(icon(name));
+  }
+  function setText(el, text) { if (el.textContent !== text) el.textContent = text; }
+  function setAttr(el, name, value) { if (el.getAttribute(name) !== value) el.setAttribute(name, value); }
 
   var el = {
     art: $('mp-art'), title: $('mp-title'), artist: $('mp-artist'), fav: $('mp-fav'), pop: $('mp-pop'),
@@ -55,7 +64,7 @@
   if (el.pop) setIcon(el.pop, 'pop');
 
   var lv = M.createLyricsView(el.lyrics, { onSeek: function (s) { M.seek(s); } });
-  var results = [], library = [], favIds = {}, tab = 'search', shownId = '', seeking = false;
+  var results = [], library = [], favIds = {}, tab = 'search', shownId = '', seeking = false, queueSig = '';
 
   /* ---------------------------------------------------------- list views */
   function say(text) { el.status.textContent = text || ''; }
@@ -150,6 +159,7 @@
 
   function setTab(name) {
     tab = name;
+    queueSig = '';
     ['search', 'library', 'playlists', 'queue'].forEach(function (n) {
       $('tab-' + n).setAttribute('aria-selected', n === name ? 'true' : 'false');
     });
@@ -621,8 +631,8 @@
 
   function onState(s) {
     var t = M.current();
-    el.title.textContent = t ? t.title : 'Nothing playing';
-    el.artist.textContent = t ? t.artist : '';
+    setText(el.title, t ? t.title : 'Nothing playing');
+    setText(el.artist, t ? t.artist : '');
     el.art.hidden = !t;
     if (t && t.id && shownId !== t.id) {
       shownId = t.id;
@@ -639,31 +649,35 @@
       el.stage.classList.toggle('is-playing', !!s.playing);
     }
     if (el.shuffle) {
-      el.shuffle.setAttribute('aria-pressed', s.shuffle ? 'true' : 'false');
-      el.shuffle.title = s.shuffle ? 'Shuffle on' : 'Shuffle off';
-      el.shuffle.setAttribute('aria-label', el.shuffle.title);
+      setAttr(el.shuffle, 'aria-pressed', s.shuffle ? 'true' : 'false');
+      var sl = s.shuffle ? 'Shuffle on' : 'Shuffle off';
+      if (el.shuffle.title !== sl) el.shuffle.title = sl;
+      setAttr(el.shuffle, 'aria-label', sl);
     }
     if (el.repeat) {
       el.repeat.dataset.mode = s.repeat;
       var rl = s.repeat === 'one' ? 'Repeat this song' : s.repeat === 'all' ? 'Repeat all' : 'Repeat off';
-      el.repeat.title = rl;
-      el.repeat.setAttribute('aria-label', rl);
-      el.repeat.setAttribute('aria-pressed', s.repeat === 'off' ? 'false' : 'true');
+      if (el.repeat.title !== rl) el.repeat.title = rl;
+      setAttr(el.repeat, 'aria-label', rl);
+      setAttr(el.repeat, 'aria-pressed', s.repeat === 'off' ? 'false' : 'true');
     }
     var loading = !!s.buffering && !s.playing && !s.error;
     setIcon(el.play, s.playing ? 'pause' : 'play');
     el.play.classList.toggle('mp-loading', loading);
-    el.play.setAttribute('aria-busy', loading ? 'true' : 'false');
+    setAttr(el.play, 'aria-busy', loading ? 'true' : 'false');
     var label = loading ? 'Loading' : s.playing ? 'Pause' : 'Play';
-    el.play.setAttribute('aria-label', label);
-    el.play.title = label;
+    setAttr(el.play, 'aria-label', label);
+    if (el.play.title !== label) el.play.title = label;
     if (document.activeElement !== el.vol) { el.vol.value = Math.round(s.vol * 100); el.vol.style.setProperty('--p', Math.round(s.vol * 100) + '%'); }
     var msg = s.error ? s.error : loading ? 'Loading…' : s.blocked ? 'Press play to continue'
       : (!popout && s.popoutOpen && s.role === 'remote') ? 'Playing in the pop-out window' : '';
     if (msg || (el.status.dataset.owner === 'state')) { say(msg); el.status.dataset.owner = msg ? 'state' : ''; }
     syncNowFav();
     markPlaying();
-    if (tab === 'queue' && el.list) render();
+    if (tab === 'queue' && el.list) {
+      var sig = s.queue.length + ':' + s.index + ':' + (s.queue[0] && s.queue[0].id) + ':' + (s.queue[s.queue.length - 1] && s.queue[s.queue.length - 1].id);
+      if (sig !== queueSig) { queueSig = sig; render(); }
+    }
   }
 
   function frame() {

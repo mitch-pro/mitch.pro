@@ -162,10 +162,12 @@
 html.theme-light .mp-ambient { opacity: 0.4; }
 .mp-stage.is-empty .mp-ambient { opacity: 0; }
 
-.mp-stagebody { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(220px, 330px) minmax(0, 1fr); gap: 40px; padding: 32px 36px 8px; }
-.mp-cover { display: flex; flex-direction: column; align-items: stretch; gap: 14px; min-width: 0; align-self: center; }
+.mp-stagebody { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(200px, 330px) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 40px; padding: 28px 36px 8px; overflow: hidden; }
+.mp-cover { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; min-width: 0; min-height: 0; align-self: center; }
 .mp-coverart {
-  position: relative; width: 100%; aspect-ratio: 1; overflow: hidden; border-radius: 16px; background: var(--t-bg3);
+  /* Sized by the window's height as well as the column's width, so the title
+   * and buttons below it always fit above the dock in a short window. */
+  position: relative; width: min(100%, max(120px, calc(100vh - 470px))); aspect-ratio: 1; flex: none; overflow: hidden; border-radius: 16px; background: var(--t-bg3);
   box-shadow: 0 28px 60px rgba(0, 0, 0, 0.45); transform: scale(0.9); transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .mp-stage.is-playing .mp-coverart { transform: scale(1); }
@@ -175,8 +177,8 @@ html.theme-light .mp-ambient { opacity: 0.4; }
 .mp-coverempty svg { width: 34%; fill: currentColor; }
 .mp-coverart img:not([hidden]) ~ .mp-coverempty { display: none; }
 
-.mp-nowmeta { min-width: 0; }
-.mp-title { font-size: 26px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.15; overflow-wrap: anywhere; }
+.mp-nowmeta { min-width: 0; max-width: 100%; }
+.mp-title { font-size: clamp(20px, 2.4vw, 26px); font-weight: 700; letter-spacing: -0.03em; line-height: 1.15; overflow-wrap: anywhere; }
 .mp-artist { margin-top: 2px; font-size: 17px; color: var(--t-fg2); overflow-wrap: anywhere; }
 .mp-nowtools { display: flex; gap: 4px; margin: -4px 0 0 -8px; }
 
@@ -191,14 +193,16 @@ html.theme-light .mp-ambient { opacity: 0.4; }
 .mp-lyrics .ml-plain { padding: 8px 4px 24px; }
 .mp-lyrics .ml-plain .ml-line { font-size: 20px; font-weight: 600; line-height: 1.35; margin-bottom: 10px; }
 .mp-lyrics .ml-message { padding: 40px 4px; font-size: 20px; text-align: left; }
-.mp-lyricsmeta { display: flex; justify-content: space-between; gap: 8px; padding: 6px 2px 0; color: var(--t-fg2); font-size: 12px; min-height: 1.2em; }
+.mp-lyricsmeta { display: flex; flex: none; justify-content: space-between; align-items: baseline; gap: 12px; padding: 6px 2px 0; color: var(--t-fg2); font-size: 12px; min-height: 1.2em; }
+.mp-lyricsmeta > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-lyricsmeta .mp-link { flex: none; white-space: nowrap; }
 .mp-link { padding: 0; background: none; border: 0; color: var(--t-ac); font: inherit; cursor: pointer; text-decoration: underline; }
 .mp-link[hidden], .mp-wrongform[hidden] { display: none; }
 .mp-wrongform { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 8px; }
 .mp-wrongform input[type=text] { flex: 1; min-width: 120px; padding: 8px 12px; background: var(--t-bg); color: var(--t-fg); border: 1px solid var(--t-bd); border-radius: 999px; font: inherit; }
 
 /* ---------------------------------------------------------------- dock */
-.mp-dock { padding: 6px 36px 22px; }
+.mp-dock { flex: none; padding: 6px 36px 20px; }
 .mp-scrub { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 10px; align-items: center; }
 .mp-time { color: var(--t-fg2); font-size: 12px; font-variant-numeric: tabular-nums; }
 .mp-scrub .mp-time:last-child { text-align: right; }
@@ -240,7 +244,7 @@ html.theme-light .mp-ambient { opacity: 0.4; }
   .mp-stage { order: -1; border-radius: 18px; }
   .mp-side { max-height: none; }
   .mp-scroll { overflow: visible; }
-  .mp-stagebody { grid-template-columns: 1fr; gap: 14px; padding: 20px 18px 4px; }
+  .mp-stagebody { grid-template-columns: 1fr; grid-template-rows: none; gap: 14px; padding: 20px 18px 4px; overflow: visible; }
   .mp-cover { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
   .mp-coverart { width: 96px; flex: none; transform: none; box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35); border-radius: 12px; }
   .mp-nowmeta { flex: 1; }
