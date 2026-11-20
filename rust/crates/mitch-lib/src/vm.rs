@@ -122,11 +122,25 @@ pub fn list_virtual_machines(store: &DataStore, include_unassigned: bool) -> Vec
     }
 }
 
-/// `getVirtualMachinesForOwner(ownerEmail)` (data_store.js:238-243).
+/// Hostname prefix of the owner's ChromeOS test fleet. Fleet machines belong
+/// to no user: they are created with an empty owner and managed only through
+/// the owner-gated fleet endpoints. Per-user paths (recreate, BYO-OS replace,
+/// account deletion) must never see them, so
+/// [`get_virtual_machines_for_owner`] filters this prefix out even for older
+/// fleet rows that were created with the site owner's email.
+pub const FLEET_HOSTNAME_PREFIX: &str = "chromeos-fleet-";
+
+/// True when a hostname belongs to the ChromeOS test fleet.
+pub fn is_fleet_hostname(hostname: &str) -> bool {
+    hostname.starts_with(FLEET_HOSTNAME_PREFIX)
+}
+
+/// `getVirtualMachinesForOwner(ownerEmail)` (data_store.js:238-243), minus
+/// the ownerless ChromeOS fleet (see [`FLEET_HOSTNAME_PREFIX`]).
 pub fn get_virtual_machines_for_owner(store: &DataStore, owner_email: &str) -> Vec<VmRecord> {
     let conn = store.conn();
     let mut stmt = match conn.prepare(
-        "SELECT * FROM virtual_machines WHERE lower(owner_email) = lower(?1) AND status != 'unassigned' ORDER BY created_at DESC",
+        "SELECT * FROM virtual_machines WHERE lower(owner_email) = lower(?1) AND status != 'unassigned' AND hostname NOT LIKE 'chromeos-fleet-%' ORDER BY created_at DESC",
     ) {
         Ok(s) => s,
         Err(_) => return Vec::new(),
