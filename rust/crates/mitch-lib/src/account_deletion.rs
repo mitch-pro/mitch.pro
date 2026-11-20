@@ -74,6 +74,7 @@ pub const EMAIL_TABLES: &[(&str, &str)] = &[
     ("virtual_machines", "owner_email"),
     ("vm_usage_samples", "owner_email"),
     ("vm_admin_access_grants", "owner_email"),
+    ("vm_entitlements", "email"),
     ("vm_audit_logs", "owner_email"),
     ("vm_audit_logs", "actor_email"),
     ("companion_user_settings", "email"),

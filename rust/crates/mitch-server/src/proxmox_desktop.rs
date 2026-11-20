@@ -260,6 +260,110 @@ fn net0_with_fresh_mac(net0: &str) -> String {
     }
 }
 
+/// The `vga` value a VM should be switched to at power-on, or `None` to
+/// leave its display alone. See `ensure_optimized_vm_config` for the rules.
+fn display_update(
+    current: &str,
+    is_windows: bool,
+    gl_allowed: bool,
+    custom_os: bool,
+) -> Option<&'static str> {
+    if is_windows {
+        return None;
+    }
+    // virtio-gl takes no `memory` suboption; plain virtio does (128MB of
+    // ordinary VM RAM, not scarce host GPU VRAM).
+    let target = if custom_os {
+        if current.starts_with("virtio-gl") && !gl_allowed {
+            "virtio,memory=128"
+        } else {
+            return None;
+        }
+    } else if gl_allowed {
+        "virtio-gl"
+    } else {
+        "virtio,memory=128"
+    };
+    (current != target).then_some(target)
+}
+
+/// Swaps the NIC model of a net0 string, keeping bridge/tag/firewall options
+/// and dropping any MAC (Proxmox generates a fresh one).
+fn net0_with_model(net0: &str, model: &str) -> String {
+    match net0.split_once(',') {
+        Some((_model, rest)) => format!("{model},{rest}"),
+        None => model.to_string(),
+    }
+}
+
+/// Applies member-chosen hardware to a `create_from_iso` request body.
+/// Only fields the member set are touched, so an empty selection leaves the
+/// OS defaults (including the Windows preset's) alone. `virtio-gl` must have
+/// been authorized by the caller; this function does not check entitlement.
+fn apply_hardware_options(
+    body: &mut Map<String, Value>,
+    hw: &mitch_lib::vm_hardware::HardwareOptions,
+    storage: &str,
+    windows: bool,
+) {
+    use mitch_lib::vm_hardware::Firmware;
+    if let Some(display) = hw.display {
+        body.insert("vga".into(), json!(display.vga()));
+    }
+    if let Some(machine) = hw.machine {
+        body.insert("machine".into(), json!(machine.value()));
+    }
+    match hw.firmware {
+        Some(Firmware::Uefi) => {
+            body.insert("bios".into(), json!("ovmf"));
+            if !body.contains_key("efidisk0") {
+                // Pre-enrolled (Secure Boot) keys only for Windows: they make
+                // OVMF reject unsigned bootloaders, which breaks most of the
+                // unusual systems this option exists for.
+                let keys = if windows { 1 } else { 0 };
+                body.insert(
+                    "efidisk0".into(),
+                    json!(format!("{storage}:1,efitype=4m,pre-enrolled-keys={keys}")),
+                );
+            }
+        }
+        Some(Firmware::Bios) => {
+            body.insert("bios".into(), json!("seabios"));
+            body.remove("efidisk0");
+        }
+        None => {}
+    }
+    match hw.tpm {
+        Some(true) => {
+            body.insert(
+                "tpmstate0".into(),
+                json!(format!("{storage}:1,version=v2.0")),
+            );
+        }
+        Some(false) => {
+            body.remove("tpmstate0");
+        }
+        None => {}
+    }
+    if let Some(nic) = hw.nic {
+        if let Some(Value::String(net)) = body.get_mut("net0") {
+            *net = net0_with_model(net, nic.model());
+        }
+    }
+    if let Some(bus) = hw.disk_bus {
+        let target = bus.key();
+        let current = ["scsi0", "sata0"]
+            .into_iter()
+            .find(|key| body.contains_key(*key));
+        if let Some(current) = current.filter(|current| *current != target) {
+            if let Some(disk) = body.remove(current) {
+                body.insert(target.into(), disk);
+            }
+            body.insert("boot".into(), json!(format!("order=ide2;{target}")));
+        }
+    }
+}
+
 /// The four module-level caches, behind one shared lock.
 #[derive(Default)]
 struct Caches {
@@ -359,12 +463,17 @@ pub struct CloneDesktopParams {
     pub disk_gb: Option<f64>,
     pub desktop_username: String,
     pub desktop_password: String,
+    /// Account may use the `virtio-gl` display (see `mitch_lib::vm_hardware`).
+    pub virgl: bool,
 }
 
 /// `cloneChromeOsDesktop({ ... })` inputs. No `template_vmid` (always
 /// `chromeos_template_vmid`, not caller-chosen) and no username/password
 /// (no cloud-init, no local Linux user — see `clone_chromeos_desktop`).
 pub struct CloneChromeOsParams {
+    /// Account may use the `virtio-gl` display; otherwise the clone gets
+    /// plain `virtio`.
+    pub virgl: bool,
     pub owner_resources: bool,
     pub vmid: Option<f64>,
     pub hostname: String,
@@ -385,6 +494,10 @@ pub struct CreateFromIsoParams {
     pub memory_mb: Option<f64>,
     pub disk_gb: Option<f64>,
     pub iso_filename: String,
+    /// Member-chosen virtual hardware; empty = defaults for the OS. The
+    /// caller must already have refused `virtio-gl` for accounts without the
+    /// VirGL entitlement.
+    pub hardware: mitch_lib::vm_hardware::HardwareOptions,
 }
 
 /// A new Windows installer gets TPM 2.0, signed UEFI variables and inbox display support.
@@ -1011,41 +1124,40 @@ fn append_form_value(form: &mut form_urlencoded::Serializer<String>, key: &str, 
 }
 
 impl ProxmoxDesktopService {
+    /// Forgets that a VM's config was already optimized, so its display is
+    /// re-evaluated on its next start (used after buying VirGL).
+    pub fn forget_optimized(&self, vmid: i64) {
+        self.lock_caches().optimized_vmids.remove(&vmid);
+    }
+
     /// `ensureOptimizedVmConfig(vmid, node)` (lib/proxmox_desktop.js:228-249)
     /// — the whole body is try/catch in the JS, so every failure path returns
     /// `None` (null) and only a successful pass marks the VMID optimized.
     ///
-    /// Display adapter: virtio-gpu (Proxmox UI calls the same `vga=virtio`
-    /// value "VirtIO-GPU") — qxl needs a guest-side driver the curated
-    /// Ubuntu template doesn't have, which produced tearing; std has no
-    /// acceleration at all. virtio-gpu's DRM/KMS driver ships in the
-    /// mainline Linux kernel, so it works out of the box on both the
-    /// template and BYO-OS without installing anything in the guest.
-    /// A bare `vga=virtio` was tried and reverted once before (see the
-    /// Sept 18 "noVNC black screen" commits) — confirmed working now,
-    /// tested through mitch.pro's own VM console, not just Proxmox's.
+    /// Display adapter. The default is `virtio` (Proxmox's "VirtIO-GPU"; its
+    /// DRM/KMS driver ships in the mainline Linux kernel, so it works out of
+    /// the box with nothing installed in the guest). `std` has no
+    /// acceleration and qxl needs a guest driver, which produced tearing.
+    ///
+    /// `virtio-gl` (VirGL — GPU-accelerated 3D on the shared host GPU) is a
+    /// paid per-account entitlement (`mitch_lib::vm_hardware`); the caller
+    /// passes `gl_allowed` after checking it. Template computers (managed
+    /// Linux desktops, ChromeOS clones) get `virtio-gl` when allowed and
+    /// plain `virtio` otherwise. Preset/Custom OS computers (`custom_os`)
+    /// keep whatever display their owner chose at creation, except that
+    /// `virtio-gl` is downgraded to `virtio` when `gl_allowed` is false — a
+    /// second check behind the one in the create route.
     ///
     /// Exception: Windows guests (`ostype` starting with `win`, set by
     /// `windows_install_config`) are left alone here. Vanilla Windows has
     /// no inbox virtio-gpu driver, so forcing virtio on a Windows VM would
-    /// silently break its display on its next restart — this function
-    /// would otherwise undo `windows_install_config`'s deliberate `std`
-    /// choice the first time it runs after install.
-    ///
-    /// `prefer_gl` picks `virtio-gl` (VirGL — GPU-accelerated 3D, not just
-    /// the plain virtio-gpu 2D framebuffer) over the plain `virtio`
-    /// default, for ChromeOS clones and owner-owned VMs (owner's own
-    /// hardware, tested and confirmed working). Windows still wins over
-    /// this: Linux/ChromeOS have Mesa's inbox virtio-gpu GL driver,
-    /// Windows has neither that nor the plain one. The caller (`power()`)
-    /// computes this from the app's VM record, since this function only
-    /// ever sees Proxmox's own per-VM config, which carries no owner or
-    /// "cloned from template X" information.
+    /// silently break its display on its next restart.
     pub async fn ensure_optimized_vm_config(
         &self,
         vmid: i64,
         node: &str,
-        prefer_gl: bool,
+        gl_allowed: bool,
+        custom_os: bool,
     ) -> Option<Value> {
         if self.lock_caches().optimized_vmids.contains(&vmid) {
             return None;
@@ -1063,18 +1175,9 @@ impl ProxmoxDesktopService {
             if !jsval::truthy(&config["rng0"]) {
                 updates.insert("rng0".to_string(), json!("source=/dev/urandom"));
             }
-            // memory is a real suboption for plain virtio too, same as
-            // std/qxl — 128MB of ordinary VM RAM, not scarce host GPU
-            // VRAM. virtio-gl doesn't take that suboption.
-            let target_vga = if prefer_gl {
-                "virtio-gl"
-            } else {
-                "virtio,memory=128"
-            };
-            let skip_vga = is_windows;
             let vga = config["vga"].as_str().unwrap_or("");
-            if !skip_vga && vga != target_vga {
-                updates.insert("vga".to_string(), json!(target_vga));
+            if let Some(target) = display_update(vga, is_windows, gl_allowed, custom_os) {
+                updates.insert("vga".to_string(), json!(target));
             }
             if !updates.is_empty() {
                 self.request(
@@ -1108,16 +1211,14 @@ impl ProxmoxDesktopService {
     }
 
     /// `power(record, requestedAction)` (lib/proxmox_desktop.js:281-293).
-    /// `owner_vm` is computed by the caller (`is_owner_email` on the VM's
-    /// owner — this service has no `DataStore` access to check that
-    /// itself) and just means "prefer VirGL" alongside the ChromeOS check
-    /// this function can already do on its own; irrelevant for any action
-    /// other than start/restart.
+    /// `gl_allowed` is computed by the caller (the account owns the VirGL
+    /// entitlement — this service has no `DataStore` access); it only matters
+    /// for start/restart, where it picks the display adapter.
     pub async fn power(
         &self,
         record: &Value,
         requested_action: &str,
-        owner_vm: bool,
+        gl_allowed: bool,
     ) -> Result<Value, ProxmoxServiceError> {
         let vmid = self.assert_vmid(jsval::number(&record["vmid"]))?;
         let action = match requested_action {
@@ -1137,11 +1238,12 @@ impl ProxmoxDesktopService {
             && (requested_action == "start" || requested_action == "restart")
         {
             let node = self.node_of(record);
-            let is_chromeos_clone = self
-                .chromeos_template_vmid
-                .is_some_and(|t| record["templateVmid"].as_f64() == Some(t as f64));
+            // Preset/Custom OS computers keep their chosen display (see
+            // ensure_optimized_vm_config).
+            let os = jsval::str_or(record.get("operatingSystem"), "");
+            let custom_os = os.starts_with("Custom (") || os.starts_with("Preset (");
             let _ = self
-                .ensure_optimized_vm_config(vmid, &node, owner_vm || is_chromeos_clone)
+                .ensure_optimized_vm_config(vmid, &node, gl_allowed, custom_os)
                 .await;
         }
         self.request(
@@ -1607,7 +1709,14 @@ impl ProxmoxDesktopService {
         // built with `std` (a real VGA is needed to build them), and since
         // this function marks the VM as optimized below, inheriting it would
         // leave every clone on `std` forever.
-        config_body.insert("vga".to_string(), json!("virtio,memory=128"));
+        config_body.insert(
+            "vga".to_string(),
+            json!(if params.virgl {
+                "virtio-gl"
+            } else {
+                "virtio,memory=128"
+            }),
+        );
         config_body.insert("balloon".to_string(), jsval::num_value(balloon));
         config_body.insert("agent".to_string(), json!(1));
         config_body.insert("ciuser".to_string(), json!(login.0));
@@ -1808,7 +1917,14 @@ impl ProxmoxDesktopService {
         // and confirmed working with ChromeOS Flex. See
         // ensure_optimized_vm_config's doc comment for why Windows never
         // gets this (irrelevant here: this function is ChromeOS-only).
-        config_body.insert("vga".to_string(), json!("virtio-gl"));
+        config_body.insert(
+            "vga".to_string(),
+            json!(if params.virgl {
+                "virtio-gl"
+            } else {
+                "virtio,memory=128"
+            }),
+        );
         config_body.insert("balloon".to_string(), jsval::num_value(balloon));
         config_body.insert("agent".to_string(), json!(1));
         if jsval::truthy(&template_config["sshkeys"]) {
@@ -2515,6 +2631,13 @@ impl ProxmoxDesktopService {
             }
         }
 
+        apply_hardware_options(
+            &mut body,
+            &params.hardware,
+            &self.vm_disk_storage,
+            params.windows,
+        );
+
         let create_upid = self
             .request(
                 "POST",
@@ -2900,6 +3023,93 @@ mod tests {
         );
         // Degenerate case: no comma at all.
         assert_eq!(net0_with_fresh_mac("virtio"), "virtio");
+    }
+
+    #[test]
+    fn display_update_enforces_the_virgl_entitlement() {
+        // Template computers: virtio-gl only with the entitlement.
+        assert_eq!(
+            display_update("std", false, false, false),
+            Some("virtio,memory=128")
+        );
+        assert_eq!(
+            display_update("virtio-gl", false, false, false),
+            Some("virtio,memory=128")
+        );
+        assert_eq!(
+            display_update("virtio,memory=128", false, true, false),
+            Some("virtio-gl")
+        );
+        assert_eq!(display_update("virtio-gl", false, true, false), None);
+        // Preset/Custom OS: the member's choice stands...
+        assert_eq!(display_update("std,memory=128", false, false, true), None);
+        assert_eq!(display_update("qxl,memory=128", false, true, true), None);
+        assert_eq!(display_update("virtio-gl", false, true, true), None);
+        // ...except virtio-gl is never kept without the entitlement.
+        assert_eq!(
+            display_update("virtio-gl", false, false, true),
+            Some("virtio,memory=128")
+        );
+        // Windows is never touched.
+        assert_eq!(display_update("std", true, false, false), None);
+        assert_eq!(display_update("virtio-gl", true, false, true), None);
+    }
+
+    #[test]
+    fn net0_with_model_keeps_bridge_options_and_drops_the_mac() {
+        assert_eq!(
+            net0_with_model("virtio=AA:BB:CC:DD:EE:FF,bridge=vmbr1,firewall=1", "e1000e"),
+            "e1000e,bridge=vmbr1,firewall=1"
+        );
+        assert_eq!(net0_with_model("virtio", "rtl8139"), "rtl8139");
+    }
+
+    #[test]
+    fn hardware_options_only_change_what_was_chosen() {
+        use mitch_lib::vm_hardware::HardwareOptions;
+        let base = || {
+            let mut body = Map::new();
+            body.insert("scsi0".into(), json!("local-lvm:64"));
+            body.insert("boot".into(), json!("order=ide2;scsi0"));
+            body.insert("net0".into(), json!("virtio,bridge=vmbr2"));
+            body.insert("vga".into(), json!("virtio,memory=128"));
+            body
+        };
+        // Nothing chosen: untouched.
+        let mut body = base();
+        apply_hardware_options(&mut body, &HardwareOptions::default(), "local-lvm", false);
+        assert_eq!(body, base());
+
+        let hw = HardwareOptions::from_json(Some(&json!({
+            "display": "std", "firmware": "uefi", "machine": "q35", "tpm": "on",
+            "nic": "e1000e", "diskBus": "sata",
+        })))
+        .unwrap();
+        let mut body = base();
+        apply_hardware_options(&mut body, &hw, "local-lvm", false);
+        assert_eq!(body["vga"], "std,memory=128");
+        assert_eq!(body["bios"], "ovmf");
+        // Non-Windows UEFI must not pre-enroll Secure Boot keys.
+        assert_eq!(
+            body["efidisk0"],
+            "local-lvm:1,efitype=4m,pre-enrolled-keys=0"
+        );
+        assert_eq!(body["machine"], "q35");
+        assert_eq!(body["tpmstate0"], "local-lvm:1,version=v2.0");
+        assert_eq!(body["net0"], "e1000e,bridge=vmbr2");
+        assert!(body.get("scsi0").is_none());
+        assert_eq!(body["sata0"], "local-lvm:64");
+        assert_eq!(body["boot"], "order=ide2;sata0");
+
+        // Turning things off removes them (Windows preset defaults included).
+        let mut body = base();
+        windows_install_config(&mut body, "local-lvm");
+        let off =
+            HardwareOptions::from_json(Some(&json!({"tpm": "off", "firmware": "bios"}))).unwrap();
+        apply_hardware_options(&mut body, &off, "local-lvm", true);
+        assert!(body.get("tpmstate0").is_none());
+        assert!(body.get("efidisk0").is_none());
+        assert_eq!(body["bios"], "seabios");
     }
 
     #[test]

@@ -984,6 +984,8 @@ pub fn rate_limit_for(endpoint: &str) -> (u32, u32) {
         "/api/vm/my-computer/recreate" => (5, 60),
         "/api/vm/upgrades" => (30, 60),
         "/api/vm/upgrade" => (15, 60),
+        "/api/vm/virgl" => (30, 60),
+        "/api/vm/virgl/buy" => (5, 60),
         // Companion chat calls the Groq API per message — "rate limited
         // but not harshly" per the feature's own cost-control requirement.
         "/api/companion/chat" => (12, 60),

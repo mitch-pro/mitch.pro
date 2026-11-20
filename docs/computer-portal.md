@@ -136,21 +136,54 @@ keys, TPM 2.0, host CPU, at least 2 cores / 4 GB RAM / 64 GB disk, standard disp
 and SATA/E1000e devices with inbox Windows drivers. Linux/custom defaults remain
 separate. See [Proxmox's Windows 11 recommendations](https://pve.proxmox.com/wiki/Windows_11_guest_best_practices).
 
-`ensure_optimized_vm_config` forces a display adapter on every VM at
-power-on: `virtio,memory=128` by default, `virtio-gl` (VirGL — GPU-
-accelerated 3D, not just the plain virtio-gpu 2D framebuffer) for ChromeOS
-clones and owner-owned VMs, and nothing at all for Windows guests
-(`ostype` starting with `win` — vanilla Windows has neither driver).
-ChromeOS-clone detection (VM record's `templateVmid` matching the
-configured `chromeos_template_vmid`) and owner detection (`is_owner_email`
-on the record's `ownerEmail`) both have to happen in `power()`, not inside
-`ensure_optimized_vm_config` itself: the bare Proxmox config that function
-reads has no owner or "cloned from template X" information, and
-`ProxmoxDesktopService` has no `DataStore` access to look either up
-itself. Without the Windows exception, a Windows guest's display would be
-silently overwritten (black screen) on its next restart;
-`clone_desktop` sets `virtio,memory=128` explicitly at clone time (templates are built with `std`, and clones are marked optimized so power-on wouldn't fix an inherited `std`); `clone_chromeos_desktop` also sets `virtio-gl` directly at clone time, so
-a fresh ChromeOS clone doesn't wait for its first manual restart to get it.
+`ensure_optimized_vm_config` sets the display adapter at power-on. Template
+computers (managed Linux desktops, ChromeOS clones) get `virtio,memory=128`,
+or `virtio-gl` when the account owns VirGL (below). Preset OS and Custom OS
+computers (`operatingSystem` starting `Preset (` or `Custom (`) keep the
+display their owner chose at creation, except that `virtio-gl` is downgraded
+to `virtio` when the account doesn't own VirGL. Windows guests (`ostype`
+starting with `win`) are never touched — vanilla Windows has no virtio-gpu
+driver and would show a black screen. `power()` receives `gl_allowed` from
+its caller (`mitch_lib::vm_hardware::has_virgl` on the VM's *owner*, not on
+whoever pressed the button), because `ProxmoxDesktopService` has no
+`DataStore` access. `clone_desktop` and `clone_chromeos_desktop` set the
+display explicitly at clone time (templates are built with `std`, and clones
+are marked optimized so power-on wouldn't fix an inherited `std`). Fleet
+machines (owner's ChromeOS fleet) always get `virtio-gl`.
+
+## Hardware options and VirGL
+
+Preset OS and Custom OS creation accept an optional `hardware` object
+(`POST /api/vm/byo-os/create`, `POST /api/vm/byo-os/create-preset`), chosen
+from "Hardware options" in the Custom OS dialog. Every field is optional
+(missing/`default` = the OS default, so an empty selection behaves as
+before): `display` (`std`, `qxl`, `vmware`, `virtio`, `virtio-gl`),
+`firmware` (`uefi`, `bios`), `machine` (`q35`, `i440fx`), `tpm`
+(`on`/`off`), `nic` (`virtio`, `e1000e`, `e1000`, `rtl8139`), `diskBus`
+(`scsi`, `sata`). `mitch_lib::vm_hardware::HardwareOptions::from_json` is the
+only parser and rejects anything outside those allowlists, so nothing a
+client sends is forwarded to Proxmox verbatim. `apply_hardware_options`
+(`proxmox_desktop.rs`) applies only the fields that were set. Non-Windows
+UEFI is created without pre-enrolled Secure Boot keys, since those make OVMF
+refuse the unsigned bootloaders most unusual systems use. The ChromeOS
+preset is a template clone, so it only honors `virtio-gl` vs `virtio`.
+
+Everything above is free except `virtio-gl` (VirGL, GPU-accelerated 3D on the
+shared host GPU), which is a one-time, permanent, non-refundable purchase per
+account (`VIRGL_COST_COINS`, stored as `virgl` in the `vm_entitlements`
+table). Without it, an account can use every other display, including plain
+`virtio`. The site owner always has it. It is enforced in three places: the
+create routes refuse `virtio-gl` with 403 `virgl_required`
+(`hardware_from_body`, before any coins are charged or computer deleted),
+template clones only get `virtio-gl` when `has_virgl`, and power-on
+downgrades `virtio-gl` on accounts without it.
+
+- `GET /api/vm/virgl` — `{ owned, cost, coins }`.
+- `POST /api/vm/virgl/buy` — claims the entitlement row first
+  (`INSERT OR IGNORE`, so only one concurrent request wins), debits only the
+  request that claimed it, and releases the claim if the debit fails. There is
+  no way to sell it back, so it can't be used to loop coins. Existing
+  computers re-check their display on their next start.
 
 ## ChromeOS (BYO-OS preset)
 
