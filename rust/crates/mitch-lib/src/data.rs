@@ -701,6 +701,13 @@ impl DataStore {
                         spotify_id TEXT NOT NULL DEFAULT '',
                         PRIMARY KEY (playlist_id, position)
                     );
+                    CREATE TABLE IF NOT EXISTS music_stream_links (
+                        video_id TEXT PRIMARY KEY,
+                        url TEXT NOT NULL,
+                        mime TEXT NOT NULL,
+                        expires_at INTEGER NOT NULL
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_music_stream_links_expires ON music_stream_links (expires_at);
                     CREATE TABLE IF NOT EXISTS music_track_matches (
                         match_key TEXT PRIMARY KEY,
                         video_id TEXT NOT NULL,
@@ -712,7 +719,8 @@ impl DataStore {
                         sync TEXT NOT NULL,
                         estimated INTEGER NOT NULL DEFAULT 0,
                         body TEXT NOT NULL,
-                        fetched_at INTEGER NOT NULL
+                        fetched_at INTEGER NOT NULL,
+                        approximate INTEGER NOT NULL DEFAULT 0
                     );
                     CREATE TABLE IF NOT EXISTS companion_characters (
                         id TEXT PRIMARY KEY,
@@ -903,6 +911,18 @@ impl DataStore {
         if !has_companion_allow_coin_requests {
             conn.execute(
                 "ALTER TABLE companion_user_settings ADD COLUMN allow_coin_requests INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
+        let has_music_lyrics_approximate = conn
+            .prepare("PRAGMA table_info(music_lyrics_cache)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+            .iter()
+            .any(|name| name == "approximate");
+        if !has_music_lyrics_approximate {
+            conn.execute(
+                "ALTER TABLE music_lyrics_cache ADD COLUMN approximate INTEGER NOT NULL DEFAULT 0",
                 [],
             )?;
         }

@@ -140,3 +140,12 @@
 .mp-field input:focus, .mp-field select:focus { outline: none; border-color: var(--t-ac); }
 .mp-dialogbtns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 #mp-pickerlist { max-height: 40vh; overflow-y: auto; }
+
+/* The row of the song being fetched: its art gets a spinner. */
+.mp-row.mp-fetching .mp-thumb { opacity: 0.5; }
+.mp-row.mp-fetching { position: relative; }
+.mp-row.mp-fetching::before {
+  content: ''; position: absolute; left: 20px; top: 50%; width: 20px; height: 20px; margin-top: -10px;
+  border: 2px solid color-mix(in srgb, var(--t-fg) 30%, transparent); border-top-color: var(--t-fg); border-radius: 50%;
+  animation: mm-spin 0.8s linear infinite; z-index: 1;
+}

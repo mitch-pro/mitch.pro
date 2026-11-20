@@ -51,6 +51,13 @@ pub struct Query {
     pub artist: String,
     pub duration_ms: u32,
     pub video_id: String,
+    /// Accept a recording up to four times longer than the video (the full
+    /// version of a TV-size or clipped upload) instead of requiring the same
+    /// length. Only used when the strict search found nothing.
+    pub relaxed: bool,
+    /// Also try YouTube's captions. Only the first reading of the title does,
+    /// so a lookup costs at most one extra yt-dlp run.
+    pub captions: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -70,6 +77,10 @@ pub struct Tried {
 pub struct Found {
     pub source: &'static str,
     pub lyrics: Lyrics,
+    rank: u8,
+    score: f32,
+    /// Matched by relaxed length: the timing is for a longer recording.
+    pub approximate: bool,
 }
 
 fn client() -> Option<&'static reqwest::Client> {
@@ -152,7 +163,12 @@ fn secs_to_ms(v: Option<&Value>) -> u32 {
 /// The provider's matches that are worth fetching lyrics for, best first.
 fn best_matches<T>(q: &Query, mut items: Vec<(f32, u32, T)>, take: usize) -> Vec<(f32, T)> {
     items.retain(|(score, dur, _)| {
-        *score >= 0.55 && ml::duration_close(q.duration_ms, *dur, DURATION_TOLERANCE_MS)
+        let length_ok = if q.relaxed {
+            *dur == 0 || ml::duration_is_full_version(q.duration_ms, *dur)
+        } else {
+            ml::duration_close(q.duration_ms, *dur, DURATION_TOLERANCE_MS)
+        };
+        *score >= 0.55 && length_ok
     });
     items.sort_by(|a, b| b.0.total_cmp(&a.0));
     items
@@ -387,7 +403,7 @@ async fn qqmusic(q: &Query) -> Result<Vec<Cand>, String> {
         // QQ has many cover/live versions with the same name: a lyric that
         // ends long after the track does is a different recording.
         let last = l.lines.last().map(|x| x.t).unwrap_or(0);
-        if q.duration_ms > 0 && last > q.duration_ms + 15_000 {
+        if !q.relaxed && q.duration_ms > 0 && last > q.duration_ms + 15_000 {
             continue;
         }
         if let Some(c) = cand("QQ Music", score, false, l) {
@@ -456,9 +472,52 @@ where
     })
 }
 
-/// Queries every provider and returns the best lyrics, plus what each
-/// provider reported (for the "tried" list in the response).
-pub async fn find(q: Query) -> (Option<Found>, Vec<Tried>) {
+/// Looks lyrics up under every plausible reading of the title (see
+/// `query_guesses`), all at once, and keeps the best. If nothing matches by
+/// length, tries again accepting a longer recording, which finds the full
+/// song for a TV-size or clipped upload; that result is flagged `approximate`.
+pub async fn find(
+    title: &str,
+    artist: &str,
+    duration_ms: u32,
+    video_id: &str,
+) -> (Option<Found>, Vec<Tried>) {
+    let guesses = ml::query_guesses(title, artist);
+    let mut passes = vec![false];
+    if duration_ms > 0 {
+        passes.push(true);
+    }
+    let mut first_tried: Vec<Tried> = Vec::new();
+    for relaxed in passes {
+        let runs = guesses.iter().take(4).enumerate().map(|(i, (t, a))| {
+            find_once(Query {
+                title: t.clone(),
+                artist: a.clone(),
+                duration_ms,
+                video_id: video_id.to_string(),
+                relaxed,
+                captions: i == 0 && !relaxed,
+            })
+        });
+        let results = futures_util::future::join_all(runs).await;
+        if first_tried.is_empty() {
+            first_tried = results.first().map(|r| r.1.clone()).unwrap_or_default();
+        }
+        let best = results
+            .into_iter()
+            .filter_map(|(f, _)| f)
+            .max_by(|a, b| a.rank.cmp(&b.rank).then(a.score.total_cmp(&b.score)));
+        if let Some(mut f) = best {
+            f.approximate = relaxed;
+            return (Some(f), first_tried);
+        }
+    }
+    (None, first_tried)
+}
+
+/// Queries every provider for one reading of the title and returns the best
+/// lyrics, plus what each provider reported (for the "tried" list).
+async fn find_once(q: Query) -> (Option<Found>, Vec<Tried>) {
     let q = Arc::new(q);
     let have_line_sync = Arc::new(AtomicBool::new(false));
     let mut jobs: futures_util::stream::FuturesUnordered<Job> = Default::default();
@@ -473,7 +532,7 @@ pub async fn find(q: Query) -> (Option<Found>, Vec<Tried>) {
     provider!("Kugou", kugou);
     provider!("QQ Music", qqmusic);
     provider!("lyrics.ovh", lyrics_ovh);
-    {
+    if q.captions {
         let q = q.clone();
         let gate = have_line_sync.clone();
         jobs.push(job("YouTube captions", CAPTIONS_TIMEOUT, async move {
@@ -528,6 +587,9 @@ fn choose(mut cands: Vec<Cand>) -> Option<Found> {
     cands.into_iter().next().map(|c| Found {
         source: c.source,
         lyrics: c.lyrics,
+        rank: c.rank,
+        score: c.score,
+        approximate: false,
     })
 }
 
@@ -579,6 +641,8 @@ mod tests {
             artist: "a".into(),
             duration_ms: 200_000,
             video_id: String::new(),
+            relaxed: false,
+            captions: false,
         };
         let items = vec![
             (0.9, 201_000, "good"),
@@ -591,5 +655,20 @@ mod tests {
             .map(|(_, t)| t)
             .collect();
         assert_eq!(got, vec!["good", "unknown length"]);
+        let tv = Query {
+            duration_ms: 91_000,
+            relaxed: true,
+            ..q.clone()
+        };
+        let items = vec![
+            (0.9, 260_000, "full song"),
+            (0.9, 500_000, "too long"),
+            (0.9, 40_000, "shorter"),
+        ];
+        let got: Vec<&str> = best_matches(&tv, items, 5)
+            .into_iter()
+            .map(|(_, t)| t)
+            .collect();
+        assert_eq!(got, vec!["full song"]);
     }
 }

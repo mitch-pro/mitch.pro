@@ -17,6 +17,7 @@
 mod lyrics;
 mod playlists;
 mod spotify;
+mod worker;
 mod ytdlp;
 
 use crate::routes::me::{cookies_of, json_response, me_uid, parse_body_strict};
@@ -70,6 +71,11 @@ pub(super) fn qs(search: &str, key: &str) -> String {
         .find(|(k, _)| k == key)
         .map(|(_, v)| v.into_owned())
         .unwrap_or_default()
+}
+
+/// Starts the music background worker (called once at startup).
+pub fn spawn_worker(state: Arc<AppState>) {
+    worker::spawn(state);
 }
 
 pub async fn handle(
@@ -130,7 +136,11 @@ async fn search_tracks(email: &str, search: &str) -> Response {
         return limited();
     }
     match ytdlp::search(q).await {
-        Ok(tracks) => json_response(200, json!({ "tracks": tracks })),
+        Ok(tracks) => {
+            // Start resolving every result now so a click plays at once.
+            ytdlp::warm(tracks.iter().map(|t| t.id.clone()).collect());
+            json_response(200, json!({ "tracks": tracks }))
+        }
         Err(e) => yt_error(&e),
     }
 }
@@ -308,19 +318,14 @@ async fn lyrics_for(state: &Arc<AppState>, email: &str, search: &str) -> Respons
                 &hit.source,
                 ml::from_cached(&hit.body, &hit.sync, hit.estimated),
                 &[],
+                hit.approximate,
             );
         }
     }
     if !allow(email, "lyrics", 20, Duration::from_secs(60)) {
         return limited();
     }
-    let query = lyrics::Query {
-        title: title.trim().to_string(),
-        artist: artist.trim().to_string(),
-        duration_ms: duration_s * 1000,
-        video_id: id.clone(),
-    };
-    let (found, tried) = lyrics::find(query).await;
+    let (found, tried) = lyrics::find(title.trim(), artist.trim(), duration_s * 1000, &id).await;
     match found {
         Some(f) => {
             if !custom {
@@ -333,12 +338,13 @@ async fn lyrics_for(state: &Arc<AppState>, email: &str, search: &str) -> Respons
                         // Estimated word timing is recomputed on read.
                         estimated: f.lyrics.sync == ml::Sync::Line,
                         body: ml::to_enhanced_lrc(&f.lyrics),
+                        approximate: f.approximate,
                     },
                 );
             }
             let mut l = f.lyrics;
             ml::estimate_words(&mut l);
-            lyrics_response(f.source, l, &tried)
+            lyrics_response(f.source, l, &tried, f.approximate)
         }
         None => {
             // Only a clean "nobody has it" is cached; if every provider
@@ -358,6 +364,7 @@ async fn lyrics_for(state: &Arc<AppState>, email: &str, search: &str) -> Respons
                         sync: "miss".into(),
                         estimated: false,
                         body: String::new(),
+                        approximate: false,
                     },
                 );
             }
@@ -366,7 +373,12 @@ async fn lyrics_for(state: &Arc<AppState>, email: &str, search: &str) -> Respons
     }
 }
 
-fn lyrics_response(source: &str, l: ml::Lyrics, tried: &[lyrics::Tried]) -> Response {
+fn lyrics_response(
+    source: &str,
+    l: ml::Lyrics,
+    tried: &[lyrics::Tried],
+    approximate: bool,
+) -> Response {
     if l.is_empty() && source.is_empty() {
         return json_response(200, json!({ "found": false, "tried": tried }));
     }
@@ -377,6 +389,7 @@ fn lyrics_response(source: &str, l: ml::Lyrics, tried: &[lyrics::Tried]) -> Resp
             "source": source,
             "sync": l.sync,
             "estimated": l.estimated,
+            "approximate": approximate,
             "lines": l.lines,
             "tried": tried,
         }),

@@ -80,6 +80,35 @@ bytes to the browser. Everything goes through this server (audio, cover art,
 lyrics), so a network that blocks YouTube or the lyric sites still works and no
 third party sees the visitor.
 
+### Keeping links ready
+
+Playback starts fast because links are resolved before anyone clicks:
+
+- **Search results**: as soon as a search returns, the server resolves a stream
+  link for every result in the background (`ytdlp::warm`, two at a time, with its
+  own queue so a click never waits behind it; it stops if the source is blocked).
+- **Playlists**: opening, creating, adding to, importing or syncing a playlist
+  gets its songs ready the same way (`worker::warm_playlist`). Spotify songs are
+  matched to a YouTube video first, and the match is written into every playlist
+  row that holds the song, so they play without a lookup.
+- **Stored in the database**: every resolved link goes into `music_stream_links`
+  (and an in-memory copy), so links survive a restart. A stored link is only handed
+  out with at least 10 minutes of life left.
+- **Kept fresh**: Google's links last about six hours and only work from the IP
+  that asked, so they can't be kept forever. For every song that is in a playlist,
+  a background worker (`routes/music/worker.rs`, every 5 minutes) re-resolves any
+  link missing or lapsing within 45 minutes (25 per cycle, one at a time). Links
+  stay as long as any playlist holds the song. Deleting a playlist removes the
+  links of songs no other playlist has, and expired links nothing needs are pruned.
+- A 403/410 from the CDN drops the link and resolves again once.
+
+The play button shows a spinner (and the song's row and the card show "Loading…")
+from the moment a song is chosen until sound starts, and ignores presses meanwhile.
+
+Time from click to sound when nothing was ready: yt-dlp resolution (2 to 5 s)
+plus the first bytes (about 1 s); with a ready link, under a second. The old
+note follows for reference:
+
 Time from click to sound, uncached: yt-dlp resolution (2 to 5 s) plus the first
 bytes (about 1 s). A cached URL starts in under a second. While a track plays,
 the next queue entry is resolved in the background (`/api/music/prefetch`), so
@@ -152,6 +181,17 @@ captions rank below line-timed lyrics because speech recognition mishears sung
 words even though it times each word. Once line-timed lyrics are in hand the
 remaining sources get 1.2 s to upgrade them to word timing, and nothing waits
 past 10 s.
+
+**Finding lyrics for awkward titles.** The video title is read several ways
+(`query_guesses`): the obvious artist/title split, the title alone (catalogs credit
+artists in other languages or spellings, so the artist is dropped), each `|` part
+and each quoted part (`"Song"`, `『Song』`), and artist/title swapped. Parts that
+only describe the video ("Opening 1", "Creditless", "4K", "Subtitles") are never
+taken as the song. All readings are searched at once. If nothing matches by
+length, a second pass accepts a recording up to four times longer than the video
+(`duration_is_full_version`), which is how a 1:30 TV-size upload finds the full
+song's lyrics. That result is flagged `approximate` and the page says "timing is
+for the full song": the start usually lines up, the rest may drift.
 
 "Per word" for every synced song: a line-timed result goes through
 `estimate_words`, which spreads the line's time over its words (by length; CJK

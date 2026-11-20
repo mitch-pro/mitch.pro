@@ -265,6 +265,11 @@ pub fn update(
 }
 
 pub fn delete(store: &DataStore, id: &str) {
+    let ids: Vec<String> = tracks(store, id)
+        .into_iter()
+        .map(|t| t.id)
+        .filter(|v| !v.is_empty())
+        .collect();
     let conn = store.conn();
     let _ = conn.execute(
         "DELETE FROM music_playlist_tracks WHERE playlist_id = ?1",
@@ -273,6 +278,46 @@ pub fn delete(store: &DataStore, id: &str) {
     let _ = conn.execute(
         "DELETE FROM music_playlists WHERE id = ?1",
         rusqlite::params![id],
+    );
+    // The stored stream links of songs no other playlist holds go with it.
+    for v in ids {
+        let _ = conn.execute(
+            "DELETE FROM music_stream_links WHERE video_id = ?1 AND video_id NOT IN \
+             (SELECT video_id FROM music_playlist_tracks WHERE video_id != '')",
+            rusqlite::params![v],
+        );
+    }
+}
+
+/// Spotify tracks in playlists that have no YouTube video yet:
+/// (spotify id, title, artist, duration seconds), one per Spotify track.
+pub fn unmatched_spotify_tracks(
+    store: &DataStore,
+    limit: i64,
+) -> Vec<(String, String, String, i64)> {
+    let conn = store.conn();
+    let Ok(mut stmt) = conn.prepare(
+        "SELECT spotify_id, title, artist, MAX(duration_s) FROM music_playlist_tracks \
+         WHERE video_id = '' AND spotify_id != '' GROUP BY spotify_id LIMIT ?1",
+    ) else {
+        return Vec::new();
+    };
+    let rows = stmt.query_map(rusqlite::params![limit], |r| {
+        Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+    });
+    rows.map(|r| r.filter_map(Result::ok).collect())
+        .unwrap_or_default()
+}
+
+/// Records the YouTube video found for a Spotify track in every playlist row
+/// that holds it, so those songs play without a lookup.
+pub fn set_spotify_match(store: &DataStore, spotify_id: &str, video_id: &str) {
+    if !valid_video_id(video_id) {
+        return;
+    }
+    let _ = store.conn().execute(
+        "UPDATE music_playlist_tracks SET video_id = ?2 WHERE spotify_id = ?1 AND video_id = ''",
+        rusqlite::params![spotify_id, video_id],
     );
 }
 

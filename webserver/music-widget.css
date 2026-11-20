@@ -104,3 +104,18 @@
 @media (prefers-reduced-motion: reduce) {
   .ml-line { transition: none; }
 }
+
+/* Spinner on a play button while a song is being fetched. The ring replaces
+ * the icon, and the button ignores clicks until the song is ready. */
+.mm-btn.mm-loading, .mp-icon.mp-loading { position: relative; pointer-events: none; }
+.mm-btn.mm-loading svg, .mp-icon.mp-loading svg { opacity: 0; }
+.mm-btn.mm-loading::after, .mp-icon.mp-loading::after {
+  content: ''; position: absolute; inset: 7px;
+  border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-top-color: currentColor; border-radius: 50%;
+  animation: mm-spin 0.8s linear infinite;
+}
+@keyframes mm-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .mm-btn.mm-loading::after, .mp-icon.mp-loading::after { animation-duration: 2.4s; }
+}

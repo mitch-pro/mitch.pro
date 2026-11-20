@@ -120,7 +120,9 @@
     var cur = M.current();
     [el.list, el.plTracks].forEach(function (ul) {
       Array.prototype.forEach.call(ul.children, function (li) {
-        li.classList.toggle('mp-playing', !!cur && !!cur.id && li.dataset.id === cur.id);
+        var mine = !!cur && !!cur.id && li.dataset.id === cur.id;
+        li.classList.toggle('mp-playing', mine);
+        li.classList.toggle('mp-fetching', mine && !!M.state.buffering && !M.state.playing && !M.state.error);
       });
     });
   }
@@ -555,7 +557,7 @@
       el.wrong.hidden = false;
       if (d && d.found) {
         var how = d.sync === 'word' ? 'word by word' : d.sync === 'line' ? (d.estimated ? 'line timing, words estimated' : 'line by line') : 'text only';
-        el.info.textContent = 'Lyrics from ' + d.source + ' · ' + how;
+        el.info.textContent = 'Lyrics from ' + d.source + ' · ' + how + (d.approximate ? ' · timing is for the full song' : '');
       } else {
         el.info.textContent = '';
       }
@@ -589,11 +591,15 @@
     }
     if (t && !t.id) el.art.hidden = true;
     if (!t && shownId) { shownId = ''; lv.set(null); el.info.textContent = ''; el.wrong.hidden = true; }
+    var loading = !!s.buffering && !s.playing && !s.error;
     setIcon(el.play, s.playing ? 'pause' : 'play');
-    el.play.setAttribute('aria-label', s.playing ? 'Pause' : 'Play');
-    el.play.title = s.playing ? 'Pause' : 'Play';
+    el.play.classList.toggle('mp-loading', loading);
+    el.play.setAttribute('aria-busy', loading ? 'true' : 'false');
+    var label = loading ? 'Loading' : s.playing ? 'Pause' : 'Play';
+    el.play.setAttribute('aria-label', label);
+    el.play.title = label;
     if (document.activeElement !== el.vol) el.vol.value = Math.round(s.vol * 100);
-    var msg = s.error ? s.error : s.blocked ? 'Press play to continue'
+    var msg = s.error ? s.error : loading ? 'Loading…' : s.blocked ? 'Press play to continue'
       : (!popout && s.popoutOpen && s.role === 'remote') ? 'Playing in the pop-out window' : '';
     if (msg || (el.status.dataset.owner === 'state')) { say(msg); el.status.dataset.owner = msg ? 'state' : ''; }
     syncNowFav();

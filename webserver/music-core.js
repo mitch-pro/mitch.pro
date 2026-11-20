@@ -181,6 +181,7 @@
     }
     if (i < 0) i = 0;
     st.index = i; st.pos = 0; queueDirty = true;
+    st.buffering = true; st.error = ''; st.playing = false;   // shows the spinner at once
     loadTrack(i, 0, autoplay);
   }
 
@@ -251,7 +252,13 @@
   /* -------------------------------------------------------------- commands */
   function runCmd(cmd, arg) {
     switch (cmd) {
-      case 'toggle': if (!st.queue.length) return; if (audio.paused) playNow(); else audio.pause(); break;
+      case 'toggle':
+        if (!st.queue.length) return;
+        // A song that is still being fetched ignores the button, so repeated
+        // presses don't start and stop it.
+        if (st.buffering && !st.playing && !st.error) return;
+        if (audio.paused) playNow(); else audio.pause();
+        break;
       case 'play': playNow(); break;
       case 'pause': audio.pause(); break;
       case 'next': go(st.index + 1, true); break;
@@ -294,7 +301,11 @@
 
   /** Sends a command to the host, becoming the host first if there is none. */
   function control(cmd, arg) {
-    if (st.role === 'remote') { post({ k: 'cmd', cmd: cmd, arg: arg }); return; }
+    if (st.role === 'remote') {
+      if (cmd === 'playQueue' || cmd === 'jump' || cmd === 'next' || cmd === 'prev') { st.buffering = true; st.error = ''; emit(); }
+      post({ k: 'cmd', cmd: cmd, arg: arg });
+      return;
+    }
     if (st.role === 'idle') {
       if (!st.queue.length && cmd !== 'playQueue' && cmd !== 'enqueue') return;
       if (cmd === 'playQueue') st.index = -1;      // don't load the stale track first

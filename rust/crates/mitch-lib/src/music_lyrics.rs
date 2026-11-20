@@ -837,14 +837,183 @@ pub fn clean_youtube_title(title: &str, channel: &str) -> (String, String) {
     for sep in [" - ", " – ", " — ", " ~ ", " | "] {
         if let Some((a, b)) = t.split_once(sep) {
             let (a, b) = (a.trim(), b.trim());
-            if !a.is_empty() && !b.is_empty() {
-                // "Title | Artist" is rare; only " | " is ambiguous, and the
-                // first part being the artist is still the better guess.
-                return (a.to_string(), b.to_string());
+            if a.is_empty() || b.is_empty() {
+                continue;
             }
+            // "Series Opening 1 | Song" or "Song | Creditless | 4K": when some
+            // parts only describe the video, the rest is the song, with no
+            // artist named in the title.
+            if sep == " | " {
+                if let Some(song) = pipe_song(&t) {
+                    return (ch, song);
+                }
+            }
+            return (a.to_string(), song_part(b));
         }
     }
-    (ch, t.trim().to_string())
+    (ch, song_part(t.trim()))
+}
+
+/// Words that describe a video rather than name a song.
+const DESCRIPTOR_WORDS: &[&str] = &[
+    "opening",
+    "ending",
+    "op",
+    "ed",
+    "ost",
+    "theme",
+    "creditless",
+    "lyrics",
+    "romaji",
+    "english",
+    "subtitles",
+    "subbed",
+    "amv",
+    "full",
+    "4k",
+    "60fps",
+    "hd",
+    "mv",
+    "pv",
+    "tv",
+    "size",
+    "ver",
+    "version",
+    "audio",
+    "music",
+    "video",
+    "official",
+    "season",
+];
+
+/// True when `s` is made of descriptor words and numbers only, or contains
+/// "opening"/"ending" style markers.
+fn is_descriptor(s: &str) -> bool {
+    let n = normalize(s);
+    let words: Vec<&str> = n.split(' ').filter(|w| !w.is_empty()).collect();
+    !words.is_empty()
+        && words.iter().any(|w| {
+            matches!(
+                *w,
+                "opening" | "ending" | "op" | "ed" | "ost" | "creditless" | "amv"
+            )
+        })
+}
+
+/// From "Opening 1 | Redo | 4K" style text keep the part that is the song.
+fn song_part(title: &str) -> String {
+    let title = title.split(" #").next().unwrap_or(title).trim().to_string();
+    let parts: Vec<&str> = title
+        .split(" | ")
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .collect();
+    if parts.len() < 2 {
+        return title;
+    }
+    let plain: Vec<&&str> = parts
+        .iter()
+        .filter(|p| !is_descriptor(p) && !only_descriptor_words(p))
+        .collect();
+    match plain.last() {
+        Some(p)
+            if parts
+                .iter()
+                .any(|p| is_descriptor(p) || only_descriptor_words(p)) =>
+        {
+            p.to_string()
+        }
+        _ => parts[0].to_string(),
+    }
+}
+
+/// The song among `|`-separated parts when at least one part is only a
+/// description of the video; `None` when nothing looks like a description.
+fn pipe_song(title: &str) -> Option<String> {
+    let parts: Vec<&str> = title
+        .split(" | ")
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .collect();
+    let song: Vec<&&str> = parts
+        .iter()
+        .filter(|p| !is_descriptor(p) && !only_descriptor_words(p))
+        .collect();
+    (parts.len() >= 2 && !song.is_empty() && song.len() < parts.len())
+        .then(|| song[song.len() - 1].to_string())
+}
+
+fn only_descriptor_words(s: &str) -> bool {
+    let n = normalize(s);
+    let mut any = false;
+    for w in n.split(' ').filter(|w| !w.is_empty()) {
+        any = true;
+        if !(DESCRIPTOR_WORDS.contains(&w) || w.chars().all(|c| c.is_ascii_digit())) {
+            return false;
+        }
+    }
+    any
+}
+
+/// Text inside quotes or Japanese brackets: `"Redo"`, `『Redo』`, `「Redo」`.
+fn quoted_parts(s: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for (open, close) in [('「', '」'), ('『', '』'), ('“', '”'), ('"', '"')] {
+        let mut rest = s;
+        while let Some(i) = rest.find(open) {
+            let after = &rest[i + open.len_utf8()..];
+            let Some(j) = after.find(close) else { break };
+            let inner = after[..j].trim();
+            if inner.chars().count() >= 2 {
+                out.push(inner.to_string());
+            }
+            rest = &after[j + close.len_utf8()..];
+        }
+    }
+    out
+}
+
+/// Other (title, artist) readings of a video title, best first, for when the
+/// obvious one finds no lyrics: the same title without the artist (catalogs
+/// credit artists in other languages or spellings), each `|` part and each
+/// quoted part as a title, and the artist and title swapped.
+pub fn query_guesses(title: &str, artist: &str) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = vec![(title.to_string(), artist.to_string())];
+    if !artist.is_empty() {
+        out.push((title.to_string(), String::new()));
+    }
+    let mut segments: Vec<String> = quoted_parts(title);
+    segments.extend(
+        title
+            .split(" | ")
+            .map(|p| p.trim().to_string())
+            .filter(|p| p.chars().count() >= 2),
+    );
+    for seg in segments {
+        if !is_descriptor(&seg) && !only_descriptor_words(&seg) {
+            out.push((seg, String::new()));
+        }
+    }
+    if !artist.is_empty() {
+        out.push((artist.to_string(), title.to_string()));
+    }
+    let mut seen = std::collections::HashSet::new();
+    out.retain(|(t, a)| {
+        let key = (normalize(t), normalize(a));
+        !key.0.is_empty() && seen.insert(key)
+    });
+    out.truncate(5);
+    out
+}
+
+/// A recording much longer than the video is plausibly the full version of a
+/// TV-size or clipped upload: up to four times as long, never shorter by more
+/// than the usual tolerance.
+pub fn duration_is_full_version(video_ms: u32, got_ms: u32) -> bool {
+    video_ms > 0
+        && got_ms > 0
+        && got_ms + 4000 >= video_ms
+        && u64::from(got_ms) <= u64::from(video_ms) * 4
 }
 
 fn strip_noise_brackets(s: &str) -> String {
@@ -1060,6 +1229,47 @@ mod tests {
         assert!(duration_close(354_000, 356_500, 3000));
         assert!(!duration_close(354_000, 200_000, 3000));
         assert!(duration_close(0, 200_000, 3000));
+    }
+
+    #[test]
+    fn handles_series_and_descriptor_titles() {
+        assert_eq!(
+            clean_youtube_title(
+                "Re:ZERO - Starting Life in Another World Opening 1 | Redo",
+                "Crunchyroll"
+            ),
+            ("Re:ZERO".into(), "Redo".into())
+        );
+        assert_eq!(
+            clean_youtube_title(
+                "Starting Life in Another World Opening 1 | Redo",
+                "Crunchyroll"
+            ),
+            ("Crunchyroll".into(), "Redo".into())
+        );
+        assert_eq!(
+            clean_youtube_title(
+                "Redo | Creditless | 4K | English / Romaji Subtitles",
+                "Bruh Clan ++"
+            ),
+            ("Bruh Clan ++".into(), "Redo".into())
+        );
+        assert_eq!(
+            clean_youtube_title("Artist - Song Name | Live #shorts", "x").1,
+            "Song Name"
+        );
+        let g = query_guesses("Redo", "Re:ZERO");
+        assert_eq!(g[0], ("Redo".to_string(), "Re:ZERO".to_string()));
+        assert!(g.contains(&("Redo".to_string(), String::new())));
+        let g = query_guesses("Zvlh \"Redo\" Special", "X");
+        assert!(g.contains(&("Redo".to_string(), String::new())));
+        let g = query_guesses("『Redo』4K 60FPS", "Re:Zero OPENING 1");
+        assert!(g.contains(&("Redo".to_string(), String::new())));
+        assert!(g.len() <= 5);
+        assert!(duration_is_full_version(91_000, 260_000));
+        assert!(!duration_is_full_version(91_000, 500_000));
+        assert!(!duration_is_full_version(260_000, 91_000));
+        assert!(!duration_is_full_version(0, 91_000));
     }
 
     #[test]

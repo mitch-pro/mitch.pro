@@ -137,12 +137,16 @@
         art.src = M.thumb(t.id);
         M.getLyrics(t).then(function (d) { if (shownId === t.id && d && d.found && d.sync !== 'none') lyrics = d; });
       }
-      var label = s.playing ? 'Pause' : 'Play';
+      var loading = !!s.buffering && !s.playing && !s.error;
+      var label = loading ? 'Loading' : s.playing ? 'Pause' : 'Play';
       play.setAttribute('aria-label', label);
       play.title = label;
+      play.setAttribute('aria-busy', loading ? 'true' : 'false');
+      play.classList.toggle('mm-loading', loading);
       play.replaceChildren(icon(s.playing ? 'pause' : 'play'));
       card.classList.toggle('mm-busy', !!s.buffering && !s.error);
       var msg = s.error ? s.error
+        : loading ? 'Loading…'
         : s.blocked ? 'Press play to continue'
         : s.popoutOpen && s.role === 'remote' ? 'Playing in the pop-out window' : '';
       if (!status.textContent || status.textContent !== msg) status.textContent = msg;
@@ -166,8 +170,8 @@
     requestAnimationFrame(frame);
   }
 
-  load('link', { rel: 'stylesheet', href: '/music-widget.css?v=1' });
-  var core = load('script', { src: '/music-core.js?v=1' });
+  load('link', { rel: 'stylesheet', href: '/music-widget.css?v=2' });
+  var core = load('script', { src: '/music-core.js?v=2' });
   core.onload = function () {
     window.MitchMusic.init();
     build();

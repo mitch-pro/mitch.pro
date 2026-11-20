@@ -17,8 +17,8 @@
 
 use mitch_lib::music::valid_video_id;
 use serde::Serialize;
-use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use tokio::process::Command;
 use tokio::sync::Semaphore;
@@ -121,10 +121,10 @@ pub fn media_client() -> Option<&'static reqwest::Client> {
 
 fn spawn_slots() -> &'static Semaphore {
     static SLOTS: OnceLock<Semaphore> = OnceLock::new();
-    SLOTS.get_or_init(|| Semaphore::new(4))
+    SLOTS.get_or_init(|| Semaphore::new(6))
 }
 
-/// Runs yt-dlp with `args` and returns stdout. At most four run at once.
+/// Runs yt-dlp with `args` and returns stdout. At most six run at once.
 async fn run(args: &[String]) -> Result<String, YtError> {
     let cfg = config();
     let _slot = spawn_slots()
@@ -272,6 +272,20 @@ pub fn is_cached(id: &str) -> bool {
         .unwrap_or_else(|e| e.into_inner())
         .get(id)
         .is_some_and(|r| r.expires > Instant::now())
+        || from_db(id).is_some()
+}
+
+/// Forces a fresh resolution (for the background refresh of playlist songs),
+/// replacing the cached link.
+pub async fn refresh(id: &str) -> Result<Resolved, YtError> {
+    resolve_cache()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(id);
+    if let Some(store) = store() {
+        mitch_lib::music::delete_stream_link(store, id);
+    }
+    resolve(id).await
 }
 
 pub fn forget(id: &str) {
@@ -279,6 +293,112 @@ pub fn forget(id: &str) {
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .remove(id);
+    if let Some(store) = store() {
+        mitch_lib::music::delete_stream_link(store, id);
+    }
+}
+
+/// The database that keeps resolved links across restarts. Set once at
+/// startup by `worker::spawn`; without it links are only kept in memory.
+static STORE: OnceLock<Arc<mitch_lib::data::DataStore>> = OnceLock::new();
+
+pub fn attach_store(store: Arc<mitch_lib::data::DataStore>) {
+    let _ = STORE.set(store);
+}
+
+fn store() -> Option<&'static Arc<mitch_lib::data::DataStore>> {
+    STORE.get()
+}
+
+/// A stored link must have at least this long left to be handed out.
+const MIN_LINK_LIFE_MS: i64 = 10 * 60 * 1000;
+
+fn from_db(id: &str) -> Option<Resolved> {
+    let link = mitch_lib::music::get_stream_link(store()?, id, MIN_LINK_LIFE_MS)?;
+    if !stream_host_ok(&link.url) {
+        return None;
+    }
+    let left = (link.expires_at - mitch_lib::school::now_millis()).max(0) as u64;
+    Some(Resolved {
+        url: link.url,
+        mime: mime_static(&link.mime),
+        expires: Instant::now() + Duration::from_millis(left),
+    })
+}
+
+fn mime_static(m: &str) -> &'static str {
+    match m {
+        "audio/webm" => "audio/webm",
+        "audio/mpeg" => "audio/mpeg",
+        "audio/ogg" => "audio/ogg",
+        _ => "audio/mp4",
+    }
+}
+
+fn to_db(id: &str, r: &Resolved) {
+    if let Some(store) = store() {
+        let left = r
+            .expires
+            .saturating_duration_since(Instant::now())
+            .as_millis() as i64;
+        mitch_lib::music::put_stream_link(
+            store,
+            id,
+            &mitch_lib::music::StreamLink {
+                url: r.url.clone(),
+                mime: r.mime.to_string(),
+                expires_at: mitch_lib::school::now_millis() + left,
+            },
+        );
+    }
+}
+
+fn warm_limit() -> &'static Semaphore {
+    static S: OnceLock<Semaphore> = OnceLock::new();
+    S.get_or_init(|| Semaphore::new(2))
+}
+
+/// Resolves stream links for `ids` in the background, two at a time, so a
+/// click on any of them starts at once. Interactive requests never wait on
+/// this queue (it has its own limit; they only share the yt-dlp process
+/// slots). Ids already cached or already being warmed are skipped, and the
+/// batch stops if the source is blocked or missing rather than hammering it.
+pub fn warm(ids: Vec<String>) {
+    static IN_FLIGHT: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    let todo: Vec<String> = {
+        let mut set = IN_FLIGHT
+            .get_or_init(Default::default)
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        ids.into_iter()
+            .filter(|id| valid_video_id(id) && !is_cached(id) && set.insert(id.clone()))
+            .collect()
+    };
+    if todo.is_empty() {
+        return;
+    }
+    tokio::spawn(async move {
+        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let mut handles = Vec::new();
+        for id in todo {
+            let stop = stop.clone();
+            handles.push(tokio::spawn(async move {
+                if let Ok(_permit) = warm_limit().acquire().await {
+                    if !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                        if let Err(YtError::Blocked | YtError::NotInstalled) = resolve(&id).await {
+                            stop.store(true, std::sync::atomic::Ordering::Relaxed);
+                        }
+                    }
+                }
+                if let Some(set) = IN_FLIGHT.get() {
+                    set.lock().unwrap_or_else(|e| e.into_inner()).remove(&id);
+                }
+            }));
+        }
+        for h in handles {
+            let _ = h.await;
+        }
+    });
 }
 
 /// The stream URL for a video id, from cache when fresh.
@@ -302,6 +422,13 @@ pub async fn resolve(id: &str) -> Result<Resolved, YtError> {
     if let Some(r) = cached(id) {
         return Ok(r);
     }
+    if let Some(r) = from_db(id) {
+        resolve_cache()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(id.to_string(), r.clone());
+        return Ok(r);
+    }
     let out = run(&[
         "--no-playlist".into(),
         "-f".into(),
@@ -318,6 +445,7 @@ pub async fn resolve(id: &str) -> Result<Resolved, YtError> {
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .insert(id.to_string(), resolved.clone());
+    to_db(id, &resolved);
     Ok(resolved)
 }
 

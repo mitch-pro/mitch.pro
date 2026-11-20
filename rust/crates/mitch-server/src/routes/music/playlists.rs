@@ -163,7 +163,10 @@ pub async fn handle(
         },
         "playlist/tracks/add" => match owned(state, email, &id) {
             Ok(p) => match pl::add_tracks(&state.store, &p.id, parse_tracks(&v)) {
-                Ok(n) => json_response(200, json!({ "added": n })),
+                Ok(n) => {
+                    super::worker::warm_playlist(state, &p.id);
+                    json_response(200, json!({ "added": n }))
+                }
                 Err(m) => bad(m),
             },
             Err(r) => r,
@@ -237,6 +240,8 @@ fn one_playlist(state: &Arc<AppState>, email: &str, search: &str) -> Response {
         return not_found();
     }
     let tracks = pl::tracks(&state.store, &p.id);
+    // Get its songs ready (matches and stream links) before anyone presses play.
+    super::worker::warm_playlist(state, &p.id);
     let mut out = summary(state, &p, tracks.len() as i64, email, true);
     if pl::is_owner(&p, email) {
         out["shareToken"] = json!(p.share_token);
@@ -253,6 +258,7 @@ fn create(state: &Arc<AppState>, email: &str, v: &Value) -> Response {
     match pl::create(&state.store, email, &text(v, "name"), public, "") {
         Ok(id) => {
             let _ = pl::add_tracks(&state.store, &id, parse_tracks(v));
+            super::worker::warm_playlist(state, &id);
             json_response(200, json!({ "id": id }))
         }
         Err(m) => bad(m),
@@ -300,6 +306,7 @@ async fn spotify_import(state: &Arc<AppState>, email: &str, v: &Value) -> Respon
     };
     let n = imported.tracks.len();
     let _ = pl::sync_spotify(&state.store, &id, imported.tracks);
+    super::worker::warm_playlist(state, &id);
     json_response(200, json!({ "id": id, "tracks": n }))
 }
 
@@ -315,7 +322,10 @@ async fn spotify_sync(state: &Arc<AppState>, email: &str, p: &Playlist) -> Respo
         Err(m) => return json_response(502, json!({ "error": m })),
     };
     match pl::sync_spotify(&state.store, &p.id, fetched.tracks) {
-        Ok((added, removed)) => json_response(200, json!({ "added": added, "removed": removed })),
+        Ok((added, removed)) => {
+            super::worker::warm_playlist(state, &p.id);
+            json_response(200, json!({ "added": added, "removed": removed }))
+        }
         Err(m) => bad(m),
     }
 }
@@ -348,6 +358,17 @@ pub(crate) fn best_match(
     best.map(|(i, _)| i)
 }
 
+/// Searches YouTube for the song and returns the best match's video id.
+pub(super) async fn find_match(
+    title: &str,
+    artist: &str,
+    duration: i64,
+) -> Result<Option<String>, ytdlp::YtError> {
+    let first = artist.split(',').next().unwrap_or("").trim();
+    let found = ytdlp::search(&format!("{first} {title}")).await?;
+    Ok(best_match(title, artist, duration, &found).map(|i| found[i].id.clone()))
+}
+
 async fn match_track(state: &Arc<AppState>, email: &str, search: &str) -> Response {
     let title = qs(search, "title");
     let artist = qs(search, "artist");
@@ -362,17 +383,13 @@ async fn match_track(state: &Arc<AppState>, email: &str, search: &str) -> Respon
     if !allow(email, "match", 40, Duration::from_secs(60)) {
         return limited();
     }
-    let first = artist.split(',').next().unwrap_or("").trim();
-    let found = match ytdlp::search(&format!("{first} {title}")).await {
-        Ok(f) => f,
-        Err(e) => return super::yt_error(&e),
-    };
-    match best_match(&title, &artist, duration, &found) {
-        Some(i) => {
-            pl::put_match(&state.store, &key, &found[i].id);
-            json_response(200, json!({ "id": found[i].id }))
+    match find_match(&title, &artist, duration).await {
+        Ok(Some(id)) => {
+            pl::put_match(&state.store, &key, &id);
+            json_response(200, json!({ "id": id }))
         }
-        None => json_response(404, json!({ "error": "couldn't find that song" })),
+        Ok(None) => json_response(404, json!({ "error": "couldn't find that song" })),
+        Err(e) => super::yt_error(&e),
     }
 }
 
