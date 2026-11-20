@@ -13,7 +13,7 @@
 <title>mitch.pro</title>
 <link rel="stylesheet" href="/app.css">
 <link rel="stylesheet" href="/leaderboard/leaderboard.css?v=5">
-<link rel="stylesheet" href="/home.css?v=25">
+<link rel="stylesheet" href="/home.css?v=26">
 <link rel="stylesheet" href="/turkey-catch.css?v=5">
 <script src="/turkey-catch.js?v=7" defer></script>
 <script defer src="/rjuhsd-assets/calendar.js?v=8"></script>
@@ -1529,31 +1529,31 @@ if (document.readyState === 'loading') {
       <label id="abToggleBar" class="ab-toggle" title="Open links in an about:blank tab"><span>Private window</span><span class="toggle-switch"><input type="checkbox" id="abToggle" aria-label="Open links in an about:blank tab"><span class="toggle-slider"></span></span></label>
     </div>
   </header>
-  <div class="home-launch">
-    <nav class="home-features" aria-label="Shortcuts">
-      <a class="home-feature feature-games" href="/game-portal/" onclick="openHomeHref(event, '/game-portal/');">
-        <div class="feature-games-copy">
-          <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 6h10c3 0 4 3 5 10s-3 7-6 2H8c-3 5-7 5-6-2S4 6 7 6Z"/><path d="M7 10v6m-3-3h6m6-2h.01M19 14h.01"/></svg>
-          <h2>Games</h2>
-        </div>
-        <span class="feature-arrow" aria-hidden="true">↗</span>
-      </a>
-      <div class="home-feature-row">
-        <a class="home-feature feature-chat" href="/matrix/" onclick="openHomeHref(event, '/matrix/');">
-          <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v12H9l-5 4Z"/><path d="M8 8h8m-8 4h5"/></svg>
-          <span class="feature-label">Matrix chat</span><span class="feature-arrow" aria-hidden="true">↗</span>
-        </a>
-        <a class="home-feature feature-vms" href="/vms/" onclick="openHomeHref(event, '/vms/');">
-          <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 17v4m-5 0h10M7 8l2 2-2 2m5 0h4"/></svg>
-          <span class="feature-label">Cloud Linux</span><span class="feature-arrow" aria-hidden="true">↗</span>
-        </a>
-        <a class="home-feature feature-movies" href="/proxy/movies/" onclick="openHomeHref(event, this.getAttribute('href'));">
-          <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h18v12H3V9ZM3 9 2 4l18-3 1 5-18 3ZM7 3l3 5m4-6 3 5m-7 6 5 3-5 3v-6Z"/></svg>
-          <span class="feature-label">Movies</span><span class="feature-arrow" aria-hidden="true">↗</span>
-        </a>
+  <nav class="home-features" aria-label="Shortcuts">
+    <a class="home-feature feature-games" href="/game-portal/" onclick="openHomeHref(event, '/game-portal/');">
+      <div class="feature-games-copy">
+        <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 6h10c3 0 4 3 5 10s-3 7-6 2H8c-3 5-7 5-6-2S4 6 7 6Z"/><path d="M7 10v6m-3-3h6m6-2h.01M19 14h.01"/></svg>
+        <h2>Games</h2>
       </div>
-    </nav>
+      <span class="feature-arrow" aria-hidden="true">↗</span>
+    </a>
+    <div class="home-feature-row">
+      <a class="home-feature feature-chat" href="/matrix/" onclick="openHomeHref(event, '/matrix/');">
+        <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v12H9l-5 4Z"/><path d="M8 8h8m-8 4h5"/></svg>
+        <span class="feature-label">Matrix chat</span><span class="feature-arrow" aria-hidden="true">↗</span>
+      </a>
+      <a class="home-feature feature-vms" href="/vms/" onclick="openHomeHref(event, '/vms/');">
+        <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 17v4m-5 0h10M7 8l2 2-2 2m5 0h4"/></svg>
+        <span class="feature-label">Cloud Linux</span><span class="feature-arrow" aria-hidden="true">↗</span>
+      </a>
+      <a class="home-feature feature-movies" href="/proxy/movies/" onclick="openHomeHref(event, this.getAttribute('href'));">
+        <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h18v12H3V9ZM3 9 2 4l18-3 1 5-18 3ZM7 3l3 5m4-6 3 5m-7 6 5 3-5 3v-6Z"/></svg>
+        <span class="feature-label">Movies</span><span class="feature-arrow" aria-hidden="true">↗</span>
+      </a>
+    </div>
+  </nav>
 
+  <div class="home-overview">
     <section class="home-rankings" aria-labelledby="home-rankings-title">
       <header class="home-rankings-head">
         <span class="rankings-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 4h8v4a4 4 0 0 1-8 0V4ZM8 6H4v2a4 4 0 0 0 4 4m8-6h4v2a4 4 0 0 1-4 4m-4 0v6m-4 2h8"/></svg></span>
@@ -1567,12 +1567,11 @@ if (document.readyState === 'loading') {
       </div>
       <a class="home-rankings-footer" href="/leaderboard/?metric=wins">Chess rankings <span aria-hidden="true">→</span></a>
     </section>
+    <section class="home-friends" aria-labelledby="home-friends-title">
+      <header><h2 id="home-friends-title">Friends <span class="home-friend-count"></span></h2><a href="/friends/">Manage friends <span aria-hidden="true">↗</span></a></header>
+      <div class="home-friend-list" aria-busy="true"></div>
+    </section>
   </div>
-
-  <section class="home-friends" aria-labelledby="home-friends-title">
-    <header><h2 id="home-friends-title">Friends <span class="home-friend-count"></span></h2><a href="/friends/">Manage friends <span aria-hidden="true">↗</span></a></header>
-    <div class="home-friend-list" aria-busy="true"></div>
-  </section>
 
   <div class="home-season">
     <p id="break-chip" class="break-chip" hidden></p>

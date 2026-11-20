@@ -8,3 +8,13 @@ body { background: #080611; color: #f8f5ff; font-family: Figtree, system-ui, san
 .score-container, .best-container, .restart-button, .retry-button, .keep-playing-button { background: #74315e; color: #fff; }
 .mitch-credit { padding-top: 18px; color: #ab9ebc; font-size: 12px; line-height: 1.5; }
 .mitch-credit a { color: #d0a4ff; }
+
+.in-game-player body {
+  margin: 0;
+  padding: clamp(1rem, 4vh, 2rem) 12px;
+}
+html.in-game-player :is(.mitch-game-header, #site-topbar, #mobile-dock, #site-credit, #site-credit-space) { display: none; }
+.in-game-player :is(.score-container, .best-container) { box-sizing: content-box; }
+.in-game-player :is(.title, .game-intro strong, .important) { color: var(--t-fg, #f8f5ff); }
+.in-game-player .mitch-credit { color: var(--t-fg2, #ab9ebc); }
+.in-game-player .mitch-credit a { color: var(--t-ac, #d0a4ff); }

@@ -22,8 +22,11 @@
     recent: readList('mitch.games.catalog.recent')
   };
   const PAGE = 60;
+  const library = document.querySelector('.shell');
   const player = byId('player');
   const frame = byId('player-frame');
+  const fullscreen = byId('player-fullscreen');
+  const mobileMenu = byId('mobile-menu');
   const search = byId('search');
   let previousFocus = null;
 
@@ -100,7 +103,7 @@
     open.className = 'card-open';
     open.type = 'button';
     open.setAttribute('aria-label', canEmbed(game) ? 'Play' : 'Play (opens in new tab)');
-    open.addEventListener('click', () => launch(game));
+    open.addEventListener('click', () => launch(game, open));
     const favorite = document.createElement('button');
     favorite.className = 'favorite-button' + (state.favorites.includes(game.id) ? ' is-saved' : '');
     favorite.type = 'button';
@@ -117,13 +120,13 @@
     if (state.view === 'favorites') loadList(true); else render();
   }
 
-  function launch(game) {
+  function launch(game, opener) {
     if (!game?.url) return;
     if (!canEmbed(game)) {
       window.open(game.url, '_blank', 'noopener');
       return;
     }
-    previousFocus = document.activeElement;
+    previousFocus = opener;
     state.recent = [game.id, ...state.recent.filter(id => id !== game.id)].slice(0, 30);
     saveList('mitch.games.catalog.recent', state.recent);
     setTitle(byId('player-title'), game.title);
@@ -132,7 +135,8 @@
     frame.src = game.url;
     frame.title = 'Player';
     player.hidden = false;
-    document.body.style.overflow = 'hidden';
+    document.body.classList.add('game-player-open');
+    library.inert = true;
     byId('player-back').focus();
     state.current = game;
     window.MitchPresence?.setActivity("Playing " + game.title, game.url);
@@ -147,10 +151,18 @@
     player.hidden = true;
     frame.src = 'about:blank';
     window._mitchSync?.saveIdb();
-    document.body.style.overflow = '';
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    render();
-    (previousFocus?.isConnected ? previousFocus : search).focus();
+    document.body.classList.remove('game-player-open');
+    library.inert = false;
+    if (document.fullscreenElement === frame) document.exitFullscreen().catch(() => {});
+    let returnFocus = previousFocus;
+    if (returnFocus.closest('.sidebar') && mobileMenu.offsetWidth) {
+      returnFocus = mobileMenu;
+    } else if (!returnFocus.isConnected) {
+      const card = returnFocus.closest('.item-card');
+      returnFocus = card && byId('item-grid').querySelector(`[data-item-id="${card.dataset.itemId}"] .card-open`);
+    }
+    (returnFocus || search).focus({ preventScroll: true });
+    renderSidebarRecent();
   }
 
   async function randomGame() {
@@ -162,7 +174,7 @@
     const data = await api('random');
     button.disabled = false;
     button.textContent = label;
-    if (data?.item) { remember(data.item); launch(data.item); }
+    if (data?.item) { remember(data.item); launch(data.item, button); }
     else showToast('Could not pick a title. Try again.');
   }
 
@@ -412,7 +424,7 @@
       title.className = 'sidebar-recent-title';
       setTitle(title, game.title);
       button.append(art, title);
-      button.addEventListener('click', () => { closeMenu(); launch(game); });
+      button.addEventListener('click', () => { closeMenu(); launch(game, button); });
       return button;
     }));
   }
@@ -452,13 +464,13 @@
   function closeMenu() {
     byId('sidebar').classList.remove('is-open');
     byId('menu-scrim').hidden = true;
-    byId('mobile-menu').setAttribute('aria-expanded', 'false');
+    mobileMenu.setAttribute('aria-expanded', 'false');
   }
-  byId('mobile-menu').addEventListener('click', () => {
+  mobileMenu.addEventListener('click', () => {
     const open = !byId('sidebar').classList.contains('is-open');
     byId('sidebar').classList.toggle('is-open', open);
     byId('menu-scrim').hidden = !open;
-    byId('mobile-menu').setAttribute('aria-expanded', String(open));
+    mobileMenu.setAttribute('aria-expanded', String(open));
   });
   byId('menu-scrim').addEventListener('click', closeMenu);
   document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => { state.view = button.dataset.view; state.category = 'All'; closeMenu(); loadList(true); }));
@@ -469,12 +481,18 @@
   byId('load-more').addEventListener('click', () => loadList(false));
   byId('shuffle').addEventListener('click', randomGame);
   byId('player-back').addEventListener('click', () => closePlayer());
-  byId('player-fullscreen').addEventListener('click', () => frame.requestFullscreen?.().catch(() => {}));
+  if (document.fullscreenEnabled && typeof frame.requestFullscreen === 'function') {
+    fullscreen.hidden = false;
+    fullscreen.addEventListener('click', () => {
+      frame.requestFullscreen().catch(() => showToast('Fullscreen is unavailable.'));
+    });
+  }
   document.addEventListener('visibilitychange', () => { if (!player.hidden) heartbeat(document.visibilityState === 'visible'); });
   window.addEventListener('pagehide', () => { if (!player.hidden) stopRewardLoop(true); });
   document.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && !player.hidden) closePlayer();
-    else if (event.key === 'Escape') closeMenu();
+    if (event.key === 'Escape' && !document.fullscreenElement) {
+      if (player.hidden) closeMenu(); else closePlayer();
+    }
     if (event.key === '/' && player.hidden && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) { event.preventDefault(); search.focus(); }
   });
   refreshIcons();
