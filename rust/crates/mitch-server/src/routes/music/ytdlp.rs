@@ -110,7 +110,18 @@ pub fn media_client() -> Option<&'static reqwest::Client> {
             let mut b = reqwest::Client::builder()
                 .user_agent(DESKTOP_UA)
                 .connect_timeout(Duration::from_secs(8))
-                .read_timeout(Duration::from_secs(20));
+                .read_timeout(Duration::from_secs(20))
+                // A redirect may only lead to another host we already fetch
+                // from, so a stream URL can't be bounced to an internal address.
+                .redirect(reqwest::redirect::Policy::custom(|attempt| {
+                    if attempt.previous().len() >= 5 {
+                        attempt.error("too many redirects")
+                    } else if media_redirect_ok(attempt.url().as_str()) {
+                        attempt.follow()
+                    } else {
+                        attempt.stop()
+                    }
+                }));
             if let Some(p) = &config().proxy {
                 b = b.proxy(reqwest::Proxy::all(p).ok()?);
             }
@@ -498,6 +509,24 @@ pub fn stream_host_ok(url: &str) -> bool {
             .is_some_and(|h| h == "googlevideo.com" || h.ends_with(".googlevideo.com"))
 }
 
+/// Hosts a redirect from the media client may lead to: Google's video CDN,
+/// YouTube's thumbnail hosts and YouTube itself, over https.
+pub fn media_redirect_ok(url: &str) -> bool {
+    let Ok(u) = url::Url::parse(url) else {
+        return false;
+    };
+    let Some(host) = u.host_str() else {
+        return false;
+    };
+    let under = |d: &str| host == d || host.ends_with(&format!(".{d}"));
+    u.scheme() == "https"
+        && (under("googlevideo.com") || under("ytimg.com") || host == "www.youtube.com")
+}
+
+/// Largest text body read from any outside service (lyrics, captions, the
+/// Spotify page).
+pub const MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
+
 /// Whether a URL is YouTube's caption endpoint (the only caption host fetched).
 pub fn caption_url_ok(url: &str) -> bool {
     let Ok(u) = url::Url::parse(url) else {
@@ -535,17 +564,20 @@ pub async fn captions(id: &str) -> Result<Option<Captions>, YtError> {
     let Some(client) = media_client() else {
         return Ok(None);
     };
-    let body = client
+    let bytes = client
         .get(&url)
         .send()
         .await
         .map_err(|e| YtError::Failed(e.to_string()))?
         .error_for_status()
         .map_err(|e| YtError::Failed(e.to_string()))?
-        .text()
+        .bytes()
         .await
         .map_err(|e| YtError::Failed(e.to_string()))?;
-    let json = serde_json::from_str(&body).map_err(|e| YtError::Failed(e.to_string()))?;
+    if bytes.len() > MAX_BODY_BYTES {
+        return Err(YtError::Failed("caption track too large".into()));
+    }
+    let json = serde_json::from_slice(&bytes).map_err(|e| YtError::Failed(e.to_string()))?;
     Ok(Some(Captions { json, auto }))
 }
 
@@ -604,6 +636,22 @@ mod tests {
         ));
         assert!(!caption_url_ok("https://www.youtube.com/watch?v=x"));
         assert!(!caption_url_ok("https://evil.com/api/timedtext"));
+    }
+
+    #[test]
+    fn redirects_may_only_stay_on_known_hosts() {
+        assert!(media_redirect_ok(
+            "https://rr2---sn-x.googlevideo.com/videoplayback?a=1"
+        ));
+        assert!(media_redirect_ok("https://i.ytimg.com/vi/x/hqdefault.jpg"));
+        assert!(media_redirect_ok("https://www.youtube.com/api/timedtext"));
+        assert!(!media_redirect_ok("http://rr2.googlevideo.com/x"));
+        assert!(!media_redirect_ok("https://127.0.0.1/x"));
+        assert!(!media_redirect_ok(
+            "https://169.254.169.254/latest/meta-data"
+        ));
+        assert!(!media_redirect_ok("https://googlevideo.com.evil.com/x"));
+        assert!(!media_redirect_ok("https://evilytimg.com/x"));
     }
 
     #[test]

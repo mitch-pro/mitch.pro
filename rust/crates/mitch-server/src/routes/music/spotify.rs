@@ -146,8 +146,11 @@ pub async fn fetch(id: &str) -> Result<SpotifyPlaylist, &'static str> {
     if !resp.status().is_success() {
         return Err("Spotify didn't answer");
     }
-    let html = resp.text().await.map_err(|_| "Couldn't reach Spotify")?;
-    parse_embed(&html)
+    let bytes = resp.bytes().await.map_err(|_| "Couldn't reach Spotify")?;
+    if bytes.len() > super::ytdlp::MAX_BODY_BYTES {
+        return Err("Spotify's page was unexpectedly large");
+    }
+    parse_embed(&String::from_utf8_lossy(&bytes))
 }
 
 #[cfg(test)]

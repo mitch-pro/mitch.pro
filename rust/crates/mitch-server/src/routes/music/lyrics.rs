@@ -132,7 +132,11 @@ async fn get_json(url: &str, headers: &[(&str, &str)]) -> Result<Value, String> 
     if !resp.status().is_success() {
         return Err(format!("http {}", resp.status().as_u16()));
     }
-    resp.json::<Value>().await.map_err(|e| short(&e))
+    let bytes = resp.bytes().await.map_err(|e| short(&e))?;
+    if bytes.len() > ytdlp::MAX_BODY_BYTES {
+        return Err("response too large".into());
+    }
+    serde_json::from_slice::<Value>(&bytes).map_err(|_| "bad response".to_string())
 }
 
 fn short(e: &reqwest::Error) -> String {
