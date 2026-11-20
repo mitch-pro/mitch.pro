@@ -3,54 +3,54 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#17191b">
-  <meta name="description" content="Entertainment Portal on mitch.pro.">
-  <title>Entertainment Portal — mitch.pro</title>
+  <meta name="theme-color" content="#0b0d10">
+  <meta name="description" content="Browse and play games on mitch.pro.">
+  <title>Games — mitch.pro</title>
   <link rel="icon" href="/icon-192.png">
   <script src="/site-theme.js"></script>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="/theme-tokens.css">
-  <link rel="stylesheet" href="./ui/style.css?v=11">
+  <link rel="stylesheet" href="./ui/style.css?v=12">
   <script defer src="/sync.js?v=2"></script>
   <script defer src="./ui/lucide.min.js"></script>
   <script defer src="./ui/canvas-text.js?v=4"></script>
-  <script defer src="./ui/app.js?v=12"></script>
+  <script defer src="./ui/app.js?v=13"></script>
 </head>
 <body data-shell="off">
   <div class="shell">
     <aside class="sidebar" id="sidebar" aria-label="Navigation">
-      <a class="brand" href="/" target="_top" aria-label="mitch.pro homepage"><img src="/icon-192.png" alt="" width="38" height="38"><span>mitch.pro</span></a>
-      <div class="side-group-label">Library</div>
-      <nav class="side-nav" aria-label="Library">
-        <button class="side-link" type="button" data-view="all"><i data-lucide="compass"></i><span>All titles</span></button>
-        <button class="side-link" type="button" data-view="favorites"><i data-lucide="heart"></i><span>Saved</span></button>
-        <button class="side-link" type="button" data-view="recent"><i data-lucide="history"></i><span>Recently played</span></button>
+      <a class="brand" href="/" target="_top" aria-label="mitch.pro homepage" data-plain-text><img src="/icon-192.png" alt="" width="29" height="29"><b>mitch<span>.pro</span></b></a>
+      <div class="side-group-label" data-plain-text>Library</div>
+      <nav class="side-nav" aria-label="Library" data-plain-text>
+        <button class="side-link" type="button" data-view="all" aria-label="All titles"><i data-lucide="compass"></i><span>All titles</span></button>
+        <button class="side-link" type="button" data-view="favorites" aria-label="Saved"><i data-lucide="heart"></i><span>Saved</span></button>
+        <button class="side-link" type="button" data-view="recent" aria-label="Recently played"><i data-lucide="history"></i><span>Recently played</span></button>
       </nav>
-      <div class="side-group-label categories-label">Categories</div>
-      <nav class="side-categories" id="side-categories" aria-label="Categories"></nav>
+      <div class="side-group-label categories-label" data-plain-text>Categories</div>
+      <nav class="side-categories" id="side-categories" aria-label="Categories" data-plain-text></nav>
       <section class="sidebar-recent" id="sidebar-recent" aria-label="Jump back in" hidden>
         <div class="side-group-label">Recently played</div>
         <div class="sidebar-recent-list" id="sidebar-recent-list"></div>
       </section>
-      <a class="school-shortcut" href="https://rjuhsd.school/"><img src="/rjuhsd-assets/district-logo.png" alt="" width="38" height="38"><span>School schedules<small>rjuhsd.school</small></span></a>
-      <div class="sidebar-foot"><a href="/" target="_top">Back to homepage</a></div>
+      <a class="school-shortcut" href="https://rjuhsd.school/" data-plain-text><img src="/rjuhsd-assets/district-logo.png" alt="" width="38" height="38"><span>School schedules<small>rjuhsd.school</small></span></a>
+      <div class="sidebar-foot" data-plain-text><a href="/leaderboard/" target="_top"><i data-lucide="trophy"></i> Rankings</a><a href="/" target="_top"><i data-lucide="house"></i> Home</a></div>
     </aside>
     <div class="content">
-      <header class="topbar">
-        <div class="topbar-navigation"><button class="mobile-menu icon-button" id="mobile-menu" type="button" aria-label="Open menu" aria-expanded="false"><i data-lucide="menu"></i></button>
-        <nav class="topbar-location" aria-label="Breadcrumb"><a href="/" target="_top">Home</a><span aria-hidden="true">/</span><strong id="current-view-name">Entertainment</strong></nav></div>
-        <div class="topbar-actions"><a class="wallet-link" id="wallet-link" href="/coins/?v=2" aria-label="MitchCoins balance"><img src="/mitchcoin.svg?v=4" alt=""><span id="wallet-balance">—</span></a><label class="search-box"><i data-lucide="search"></i><input id="search" type="search" placeholder="Search" autocomplete="off" aria-label="Search"><kbd>/</kbd></label><button class="icon-button shuffle-button" id="shuffle" type="button" aria-label="Play something random" title="Play something random">Random</button></div>
+      <header class="topbar" data-plain-text>
+        <div class="topbar-navigation"><button class="mobile-menu icon-button" id="mobile-menu" type="button" aria-label="Open game menu" aria-expanded="false" aria-controls="sidebar"><i data-lucide="menu"></i></button>
+        <nav class="topbar-location" aria-label="Breadcrumb"><a href="/" target="_top" aria-label="mitch.pro home"><span class="portal-home-label">Home</span><span class="portal-home-wordmark">mitch<span>.pro</span></span></a><span aria-hidden="true">/</span><strong id="current-view-name">Games</strong></nav></div>
+        <div class="topbar-actions"><a class="wallet-link" id="wallet-link" href="/coins/?v=2" aria-label="MitchCoins balance"><img src="/mitchcoin.svg?v=4" alt=""><span id="wallet-balance">—</span></a><label class="search-box"><i data-lucide="search"></i><input id="search" type="search" placeholder="Search games" autocomplete="off" aria-label="Search"><kbd>/</kbd></label><button class="icon-button shuffle-button" id="shuffle" type="button" aria-label="Play something random" title="Play something random">Random</button></div>
       </header>
       <main class="main">
-        <div class="page-intro">
-          <div><h1 id="page-title">Entertainment Portal</h1><p id="library-count">Loading…</p></div>
+        <div class="page-intro" data-plain-text>
+          <div><h1 id="page-title">Games</h1><p id="library-count">Loading games…</p></div>
           <div class="coin-summary"><img src="/mitchcoin.svg?v=4" alt="" width="34" height="34"><div class="coin-summary-copy"><strong id="reward-title">Checking rewards</strong><small id="reward-detail">MitchCoins</small><span class="reward-meter" aria-hidden="true"><i id="reward-progress"></i></span></div></div>
         </div>
         <section id="quick-picks-section" class="quick-section" aria-labelledby="popular-heading">
-          <div class="section-heading"><h2 id="popular-heading">Popular</h2><a class="browse-link" href="#catalog">Browse all</a></div>
+          <div class="section-heading" data-plain-text><h2 id="popular-heading">Popular</h2><a class="browse-link" href="#catalog">Browse all</a></div>
           <div class="quick-grid" id="quick-grid" aria-label="Popular"></div>
         </section>
-        <section class="catalog-section" id="catalog" aria-label="All titles"><div class="section-heading catalog-heading-row"><h2 id="catalog-heading">All titles</h2><div class="catalog-controls"><span class="result-count" id="result-count" aria-live="polite"></span><label id="sort-control" class="sort-control">Sort <select id="sort-items" aria-label="Sort"><option value="popular">Popular first</option><option value="alphabetical">A–Z</option></select></label></div></div><div class="filters" id="filters" aria-label="Filter by category"></div><div class="item-grid" id="item-grid"></div><div id="empty-state" class="empty-state" hidden><i data-lucide="search-x"></i><h3>Nothing found</h3><p>Try another search or category.</p><button id="clear-filters" type="button">Clear filters</button></div><button id="load-more" class="load-more" type="button" hidden>Show more</button></section>
+        <section class="catalog-section" id="catalog" aria-label="All titles"><div class="section-heading catalog-heading-row" data-plain-text><h2 id="catalog-heading">All titles</h2><div class="catalog-controls"><span class="result-count" id="result-count" aria-live="polite"></span><label id="sort-control" class="sort-control">Sort <select id="sort-items" aria-label="Sort"><option value="popular">Popular first</option><option value="alphabetical">A–Z</option></select></label></div></div><div class="filters" id="filters" aria-label="Filter by category" data-plain-text></div><div class="item-grid" id="item-grid"></div><div id="empty-state" class="empty-state" data-plain-text hidden><i data-lucide="search-x"></i><h3>Nothing found</h3><p>Try another search or category.</p><button id="clear-filters" type="button">Clear filters</button></div><button id="load-more" class="load-more" type="button" data-plain-text hidden>Show more</button></section>
       </main>
       <footer class="footer"><a href="/" target="_top">mitch.pro homepage</a><span>Titles and artwork belong to their respective creators. <a href="./ui/THIRD_PARTY_NOTICES.md">Open-source credits</a></span></footer>
     </div>

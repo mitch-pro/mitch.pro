@@ -9,6 +9,7 @@ Every user-facing and internal page on the site must adhere to the design langua
 1. **Shared Masthead & App Shell:**
    - Every ordinary page must load `/app.css` and `/app-shell.js`.
    - The body tag should use `class="app-shell"` so that the unified masthead (`#app-topbar`) is rendered consistently with the brand mark, navigation links, user profile, and MitchCoins wallet.
+   - Mitch's masthead uses the floating layout shared with the homepage. Games and Rankings are primary destinations on desktop and in the mobile dock.
    - For standalone fullscreen experiences (e.g. game or emulator players), provide an overlay or topbar that matches the site masthead instead of inventing a custom header.
 
 2. **Theme Tokens (`app.css` & `theme-tokens.css`):**
@@ -22,18 +23,24 @@ Every user-facing and internal page on the site must adhere to the design langua
      - `--t-fg3`: Faint caption text
      - `--t-bd`: Standard border
      - `--t-bda`: Accentuated or hover border
-     - `--t-ac`: Accent color (brand pink/magenta or theme selection)
+     - `--t-ac`: Accent color (blue by default, with seasonal and user-selected alternatives)
      - `--t-ac-ink`: High-contrast text on accent buttons
      - `--t-radius`: Standard card corner radius (default: 10px)
      - `--t-radius-sm`: Input and button corner radius (default: 7px)
 
 3. **Typography:**
    - Use `var(--t-font)` (`DM Sans`, system-ui, sans-serif).
-   - Headings use bold weight (`font-weight: 700; letter-spacing: -0.03em;`).
+   - Use `var(--t-brand)` for the Mitch wordmark and `var(--t-heading)` for display headings on Home, Games, and Rankings. JetBrains Mono and Pixelify Sans are served locally with their font licenses.
 
 4. **Cards, Panels & Lists:**
    - Container shells use `.app-main`, `.shell`, or `.legal-shell` with responsive max-width (`1000px` - `1200px`).
    - Cards use `.panel`, `.card`, or semantic sections with `background: var(--t-bg2); border: 1px solid var(--t-bd); border-radius: var(--t-radius);`.
+
+### Home, Games, and Rankings
+
+The homepage keeps the animated hello and Mitch mark next to a local clock. Games is the lead shortcut, alongside Matrix, Cloud Linux, and Movies. Friends and the Community, MitchCoins, and Account groups use the existing destinations. The Rankings preview requests three rows from the same leaderboard endpoint used by the full rankings page and keeps the existing profile links and cosmetics.
+
+The games portal keeps its own sidebar, search, player, and reward display. It uses the same color tokens, wordmark, and arcade artwork as the homepage. The rankings page accepts a `metric` query parameter to open a category directly.
 
 ### VM Lab Custom OS
 
@@ -75,7 +82,7 @@ These came out of a consistency pass over every page linked from the homepage. C
 
 - **Container and header.** Wrap content in `<main class="app-main">` (add a page class for a narrower `max-width` if the content is a single column). Put the title in `<header class="page-head"><h1>…</h1><p class="page-sub">…</p></header>` and don't restyle `.page-head` per page. The masthead is not fixed-position, so don't add top padding to clear it.
 - **Body class.** Put `app-shell` on `<body>` in the markup. `app-shell.js` adds it at runtime anyway, but having it up front avoids a layout jump.
-- **Font and weights.** Only `var(--t-font)`; no page-specific font families. Headings and strong labels use weight 700, not 750/800/900. Labels are sentence case, not uppercase with letter-spacing.
+- **Font and weights.** Use the shared font tokens. Headings and strong labels use semibold or bold weight. Labels are sentence case.
 - **Radii.** `var(--t-radius)` for cards, panels and dialogs; `var(--t-radius-sm)` for inputs, buttons, chips and small pills. Pills that are meant to be fully round may use `999px`. No hardcoded 6–16px radii.
 - **Buttons.** Use the shared button styles in `app.css` instead of page-local `.btn`/`.btn-primary`. Text on an accent background uses `var(--t-ac-ink)`, never `#fff`: a custom light accent sets the ink to black. Hover on accent buttons uses `var(--t-ac2)` rather than glows or `filter: brightness()`.
 - **Inputs.** Background `var(--t-bg)` (so they read as wells inside `--t-bg2` cards), border `var(--t-bd)`, focus `var(--t-ac)`, radius `--t-radius-sm`.
@@ -83,4 +90,4 @@ These came out of a consistency pass over every page linked from the homepage. C
 - **Dialogs.** Backdrops are semi-transparent so the page stays visible behind them.
 - **No inline styling for states.** Put hover and focus in the stylesheet, not in `style=""` / `onmouseover` attributes.
 - **Copy.** Labels describe the content or action. No tagline lines under headings unless they say something the heading doesn't, no "Looking for more?" lead-ins, no hidden marketing blocks left in the markup.
-- **Cache busting.** When you change a page's stylesheet, bump its `?v=` in the HTML. The local server also caches static files in memory, so restart it to see CSS changes.
+- **Cache busting.** When you change a page's stylesheet, bump its `?v=` in the HTML. With `NODE_ENV=development`, the local server checks for static file edits on each request.

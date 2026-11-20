@@ -1,25 +1,42 @@
+/* Tylerium's locally hosted, OFL-licensed display and wordmark fonts. */
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/jetbrains-mono.woff2') format('woff2');
+  font-weight: 100 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Pixelify Sans';
+  src: url('/fonts/pixelify-sans.ttf') format('truetype');
+  font-weight: 400 700;
+  font-display: swap;
+}
+
 /* Site color tokens (--t-*): light/dark palettes, manual overrides and high contrast.
    Shared by app.css and by pages that only need the palette (rjuhsd.school). */
 :root {
-  --t-bg: #f6f7f3;
+  --t-bg: #f3f6fa;
   --t-bg2: #ffffff;
-  --t-bg3: #e9ede5;
-  --t-fg: #202622;
-  --t-fg2: #657062;
-  --t-fg3: #657062;
-  --t-ac: #f75383;
+  --t-bg3: #e8eef5;
+  --t-fg: #172536;
+  --t-fg2: #526378;
+  --t-fg3: #526378;
+  --t-ac: #275b8d;
   --t-ac-ink: #ffffff;
-  --t-ac2: #e03d6c;
-  --t-ac3: #e03d6c;
-  --t-bd: #dce2d8;
-  --t-bda: #c5cfc0;
+  --t-ac2: #194571;
+  --t-ac3: #194571;
+  --t-bd: #d8e0ea;
+  --t-bda: #b6c4d3;
   --t-gl: transparent;
-  --t-gls: #fdeef3;
-  --t-gr: #f75383;
+  --t-gls: #e5effa;
+  --t-gr: #275b8d;
   --t-bgr: none;
   --t-radius: 10px;
   --t-radius-sm: 7px;
   --t-motion: 0.14s;
+  --t-brand: 'JetBrains Mono', ui-monospace, monospace;
+  --t-heading: 'Pixelify Sans', 'DM Sans', system-ui, sans-serif;
+  --site-content-width: 1180px;
   --t-display: 'DM Sans', system-ui, -apple-system, sans-serif;
   --t-font: 'DM Sans', system-ui, -apple-system, sans-serif;
   --sheet-ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -29,20 +46,20 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --t-bg: #17191b;
-    --t-bg2: #222527;
-    --t-bg3: #2b2f31;
-    --t-fg: #f4f5f1;
-    --t-fg2: #a6adaf;
-    --t-fg3: #828b8c;
-    --t-ac: #ff6f99;
-    --t-ac-ink: #ffffff;
-    --t-ac2: #ff8bad;
-    --t-ac3: #ff8bad;
-    --t-bd: #363a3c;
-    --t-bda: #4b5355;
-    --t-gls: #332127;
-    --t-gr: #ff6f99;
+    --t-bg: #0b0d10;
+    --t-bg2: #15181c;
+    --t-bg3: #21262c;
+    --t-fg: #f0f3f7;
+    --t-fg2: #b3bcc8;
+    --t-fg3: #929eae;
+    --t-ac: #a8d2ff;
+    --t-ac-ink: #10253b;
+    --t-ac2: #c5e3ff;
+    --t-ac3: #c5e3ff;
+    --t-bd: #2c333b;
+    --t-bda: #465363;
+    --t-gls: #23364b;
+    --t-gr: #a8d2ff;
   }
 }
 
@@ -51,37 +68,37 @@
    outside the media query and key off an attribute selector so they outrank
    the query regardless of actual OS preference or source order. */
 :root[data-theme="light"] {
-  --t-bg: #f6f7f3;
+  --t-bg: #f3f6fa;
   --t-bg2: #ffffff;
-  --t-bg3: #e9ede5;
-  --t-fg: #202622;
-  --t-fg2: #657062;
-  --t-fg3: #657062;
-  --t-ac: #f75383;
+  --t-bg3: #e8eef5;
+  --t-fg: #172536;
+  --t-fg2: #526378;
+  --t-fg3: #526378;
+  --t-ac: #275b8d;
   --t-ac-ink: #ffffff;
-  --t-ac2: #e03d6c;
-  --t-ac3: #e03d6c;
-  --t-bd: #dce2d8;
-  --t-bda: #c5cfc0;
+  --t-ac2: #194571;
+  --t-ac3: #194571;
+  --t-bd: #d8e0ea;
+  --t-bda: #b6c4d3;
   --t-gl: transparent;
-  --t-gls: #fdeef3;
-  --t-gr: #f75383;
+  --t-gls: #e5effa;
+  --t-gr: #275b8d;
 }
 :root[data-theme="dark"] {
-  --t-bg: #17191b;
-  --t-bg2: #222527;
-  --t-bg3: #2b2f31;
-  --t-fg: #f4f5f1;
-  --t-fg2: #a6adaf;
-  --t-fg3: #828b8c;
-  --t-ac: #ff6f99;
-  --t-ac-ink: #ffffff;
-  --t-ac2: #ff8bad;
-  --t-ac3: #ff8bad;
-  --t-bd: #363a3c;
-  --t-bda: #4b5355;
-  --t-gls: #332127;
-  --t-gr: #ff6f99;
+  --t-bg: #0b0d10;
+  --t-bg2: #15181c;
+  --t-bg3: #21262c;
+  --t-fg: #f0f3f7;
+  --t-fg2: #b3bcc8;
+  --t-fg3: #929eae;
+  --t-ac: #a8d2ff;
+  --t-ac-ink: #10253b;
+  --t-ac2: #c5e3ff;
+  --t-ac3: #c5e3ff;
+  --t-bd: #2c333b;
+  --t-bda: #465363;
+  --t-gls: #23364b;
+  --t-gr: #a8d2ff;
 }
 
 /* High contrast mode (Preferences → Appearance, or OS "increase contrast").
@@ -94,9 +111,9 @@
   --t-fg3: #000000;
   --t-bd: #3d3d42;
   --t-bda: #19191c;
-  --t-ac: #c81855;
-  --t-ac2: #a10f43;
-  --t-ac3: #a10f43;
+  --t-ac: #174e80;
+  --t-ac2: #0b355f;
+  --t-ac3: #0b355f;
 }
 @media (prefers-contrast: more) {
   :root {
@@ -105,32 +122,32 @@
     --t-fg3: #000000;
     --t-bd: #3d3d42;
     --t-bda: #19191c;
-    --t-ac: #c81855;
-    --t-ac2: #a10f43;
-    --t-ac3: #a10f43;
+    --t-ac: #174e80;
+    --t-ac2: #0b355f;
+    --t-ac3: #0b355f;
   }
 }
 @media (prefers-color-scheme: dark) {
   :root[data-contrast="high"] {
-    --t-fg: #f6f7f3;
+    --t-fg: #f3f6fa;
     --t-fg2: #f0f0f0;
-    --t-fg3: #f6f7f3;
+    --t-fg3: #f3f6fa;
     --t-bd: #9a9aa0;
     --t-bda: #c7c7cc;
-    --t-ac: #ffb3c9;
-    --t-ac2: #ffd1df;
-    --t-ac3: #ffd1df;
+    --t-ac: #b3d9ff;
+    --t-ac2: #e2f0ff;
+    --t-ac3: #e2f0ff;
   }
   @media (prefers-contrast: more) {
     :root {
-      --t-fg: #f6f7f3;
+      --t-fg: #f3f6fa;
       --t-fg2: #f0f0f0;
-      --t-fg3: #f6f7f3;
+      --t-fg3: #f3f6fa;
       --t-bd: #9a9aa0;
       --t-bda: #c7c7cc;
-      --t-ac: #ffb3c9;
-      --t-ac2: #ffd1df;
-      --t-ac3: #ffd1df;
+      --t-ac: #b3d9ff;
+      --t-ac2: #e2f0ff;
+      --t-ac3: #e2f0ff;
     }
   }
 }
@@ -140,19 +157,19 @@
   --t-fg3: #000000;
   --t-bd: #3d3d42;
   --t-bda: #19191c;
-  --t-ac: #c81855;
-  --t-ac2: #a10f43;
-  --t-ac3: #a10f43;
+  --t-ac: #174e80;
+  --t-ac2: #0b355f;
+  --t-ac3: #0b355f;
 }
 :root[data-theme="dark"][data-contrast="high"] {
-  --t-fg: #f6f7f3;
+  --t-fg: #f3f6fa;
   --t-fg2: #f0f0f0;
-  --t-fg3: #f6f7f3;
+  --t-fg3: #f3f6fa;
   --t-bd: #9a9aa0;
   --t-bda: #c7c7cc;
-  --t-ac: #ffb3c9;
-  --t-ac2: #ffd1df;
-  --t-ac3: #ffd1df;
+  --t-ac: #b3d9ff;
+  --t-ac2: #e2f0ff;
+  --t-ac3: #e2f0ff;
 }
 
 /* Holiday themes (dates in site-theme.js, docs/holiday-themes.md). These sit

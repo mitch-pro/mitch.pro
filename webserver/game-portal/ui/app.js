@@ -418,9 +418,9 @@
   }
 
   function render() {
-    const viewName = state.view === 'favorites' ? 'Saved' : state.view === 'recent' ? 'Recently played' : (state.category === 'All' ? 'Entertainment' : state.category);
+    const viewName = state.view === 'favorites' ? 'Saved' : state.view === 'recent' ? 'Recently played' : (state.category === 'All' ? 'Games' : state.category);
     byId('current-view-name').textContent = viewName;
-    byId('page-title').textContent = state.view === 'favorites' ? 'Saved' : state.view === 'recent' ? 'Recently played' : 'Entertainment Portal';
+    byId('page-title').textContent = state.view === 'favorites' ? 'Saved' : state.view === 'recent' ? 'Recently played' : 'Games';
     byId('quick-picks-section').hidden = !!state.query || state.view !== 'all' || state.category !== 'All';
     byId('sort-control').hidden = state.view !== 'all';
     byId('catalog-heading').textContent = state.view === 'favorites' ? 'Saved' : (state.view === 'recent' ? 'Recently played' : 'All titles');

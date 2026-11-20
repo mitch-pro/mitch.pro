@@ -408,7 +408,7 @@ fn log_click(state: &Arc<AppState>, body: &serde_json::Value) -> Response {
     }
 }
 
-/// `GET /api/leaderboard?metric=coins&q=...` — ranks the full community by
+/// `GET /api/leaderboard?metric=coins&q=...&limit=...` — ranks the full community by
 /// the selected score (coins by default), then searches public names/handles.
 /// Reads coins, user_stats, profiles, and equipped cosmetics from the store.
 fn leaderboard(state: &Arc<AppState>, headers: &HeaderMap, search: &str) -> Response {
@@ -447,6 +447,12 @@ fn leaderboard(state: &Arc<AppState>, headers: &HeaderMap, search: &str) -> Resp
         .get("q")
         .map(|v| v.trim().trim_start_matches('@').to_lowercase())
         .unwrap_or_default();
+    let player_limit = params
+        .get("limit")
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|limit| *limit > 0)
+        .unwrap_or(100)
+        .min(100);
     let rows = ranked_players(
         &state.store,
         [&coins, &profiles, &user_stats],
@@ -461,11 +467,18 @@ fn leaderboard(state: &Arc<AppState>, headers: &HeaderMap, search: &str) -> Resp
             metric,
             &query,
             mitch_lib::auth::is_tester_email(&state.store, &viewer_norm),
+            player_limit,
         ),
     )
 }
 
-fn leaderboard_payload(rows: &[Value], metric: &str, query: &str, is_tester: bool) -> Value {
+fn leaderboard_payload(
+    rows: &[Value],
+    metric: &str,
+    query: &str,
+    is_tester: bool,
+    player_limit: usize,
+) -> Value {
     let me = rows.iter().find(|r| r["isMe"] == true).cloned();
     let matches: Vec<_> = rows
         .iter()
@@ -484,9 +497,9 @@ fn leaderboard_payload(rows: &[Value], metric: &str, query: &str, is_tester: boo
         })
         .collect();
     json!({
-        "top": rows.iter().take(10).collect::<Vec<_>>(),
+        "top": rows.iter().take(10.min(player_limit)).collect::<Vec<_>>(),
         "me": me,
-        "players": matches.iter().take(100).collect::<Vec<_>>(),
+        "players": matches.iter().take(player_limit).collect::<Vec<_>>(),
         "total": rows.len(),
         "matchCount": matches.len(),
         "metric": metric,
@@ -1222,25 +1235,30 @@ mod tests {
         assert!(unsafe_row["activeColor"].is_null());
         assert!(!unsafe_row["profileId"].as_str().unwrap().contains('@'));
 
-        let result = leaderboard_payload(&rows, "coins", "hero", false);
+        let result = leaderboard_payload(&rows, "coins", "hero", false, 100);
         assert_eq!(result["players"].as_array().unwrap().len(), 1);
         assert_eq!(result["players"][0]["rank"], hero["rank"]);
         assert_eq!(result["matchCount"], 1);
         assert_eq!(result["top"][0]["coins"], 105);
         assert_eq!(result["me"], *hero);
         assert_eq!(
-            leaderboard_payload(&rows, "coins", "", false)["players"]
+            leaderboard_payload(&rows, "coins", "", false, 100)["players"]
                 .as_array()
                 .unwrap()
                 .len(),
             100
         );
+        let preview = leaderboard_payload(&rows, "coins", "", false, 3);
+        assert_eq!(preview["top"].as_array().unwrap().len(), 3);
+        assert_eq!(preview["players"], preview["top"]);
+        assert_eq!(preview["total"], rows.len());
+        assert_eq!(preview["me"], *hero);
 
         let wins = ranked_players(&store, docs, "hero@example.test", b"test-secret", "wins");
         assert_eq!(wins[0]["name"], "Current name");
         assert_eq!(wins[0]["rank"], 1);
         assert_eq!(wins[1]["wins"], 500);
-        let empty = leaderboard_payload(&[], "coins", "", true);
+        let empty = leaderboard_payload(&[], "coins", "", true, 100);
         assert_eq!(empty["players"], json!([]));
         assert!(empty["me"].is_null());
         assert_eq!(empty["isTester"], true);

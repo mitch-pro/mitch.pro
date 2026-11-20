@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-<meta name="theme-color" content="#17191b">
+<meta name="theme-color" content="#0b0d10">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -13,12 +13,15 @@
 <title>mitch.pro</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"></noscript>
 <link rel="stylesheet" href="/app.css">
-<link rel="stylesheet" href="/home.css?v=23">
+<link rel="stylesheet" href="/leaderboard/leaderboard.css?v=5">
+<link rel="stylesheet" href="/home.css?v=24">
 <link rel="stylesheet" href="/turkey-catch.css?v=5">
 <script src="/turkey-catch.js?v=7" defer></script>
 <script defer src="/rjuhsd-assets/calendar.js?v=8"></script>
 <script src="/app-shell.js" defer></script>
-<script src="/home-friends.js?v=5" defer></script>
+<script src="/home-friends.js?v=6" defer></script>
+<script src="/home-dashboard.js" defer></script>
+<script src="/leaderboard/leaderboard.js?v=5" defer></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
@@ -136,7 +139,7 @@ function recordRecentVisit(href, label) {
 
 function labelFromLink(el) {
   if (!el) return '';
-  var named = el.querySelector && el.querySelector('h2, b');
+  var named = el.querySelector && el.querySelector('h2, b, .feature-label');
   return String((named ? named.textContent : el.textContent) || '').trim();
 }
 
@@ -232,7 +235,7 @@ function makeSiteLink(type, href, label, extraClass) {
   a.className = 'site-link' + (extraClass ? ' ' + extraClass : '');
   a.dataset.search = label.toLowerCase();
   a.dataset.art = artForDestination(label, href);
-  a.innerHTML = '<span class="icon">' + getIconFor(label) + '</span><span class="lbl">' + escText(label) + '</span>';
+  a.innerHTML = '<span class="icon">' + getIconFor(label) + '</span><span class="lbl">' + escText(label) + '</span><span class="link-arrow" aria-hidden="true">↗</span>';
   a.onclick = function(e) {
     if (a.classList.contains('disabled-site-link')) {
       e.preventDefault();
@@ -278,29 +281,60 @@ function artForDestination(label, href) {
   return 'tools';
 }
 
-// The homepage page list. Static on purpose: changing it is a code change.
-// Retired pages are listed in docs/deprecated-pages.md.
+// Dashboard links still go through the normal recent-link and alias handling.
 var HOME_LINKS = [
-  { href: '/inventory/', label: 'Inventory' },
-  { href: '/companion/', label: 'Companion' },
-  { href: '/saves/', label: 'Save Manager' },
-  { href: '/notifications/', label: 'Notification Settings' },
-  { href: '/blog/', label: 'Blog' },
-  { href: '/leaderboard/', label: 'Leaderboard' },
-  { href: '/shop/', label: 'Market' },
-  { href: '/learn/', label: 'Learn About the Site' },
-  { href: '/feedback/', label: 'Feedback' },
-  { href: '/support/', label: 'Support' }
+  {
+    label: 'Community',
+    links: [
+      { href: '/friends/', label: 'Friends' },
+      { href: '/members/', label: 'People' },
+      { href: '/blog/', label: 'Blog' },
+      { href: '/canvas/', label: 'Canvas' },
+      { href: '/feedback/', label: 'Feedback' }
+    ]
+  },
+  {
+    label: 'MitchCoins',
+    links: [
+      { href: '/coins/?v=2', label: 'Wallet' },
+      { href: '/shop/', label: 'Shop' },
+      { href: '/marketplace/', label: 'Marketplace' },
+      { href: '/casino/', label: 'Casino' },
+      { href: '/leaderboard/', label: 'Rankings' }
+    ]
+  },
+  {
+    label: 'Account',
+    links: [
+      { href: '/profile/', label: 'Profile' },
+      { href: '/inventory/', label: 'Inventory' },
+      { href: '/saves/', label: 'Save Manager' },
+      { href: '/notifications/', label: 'Notification Settings' },
+      { href: '/companion/', label: 'Companion' }
+    ]
+  }
 ];
 
 function renderHomeLinks() {
   var container = document.getElementById('links');
   if (!container) return;
   container.replaceChildren();
-  HOME_LINKS.forEach(function(link) {
-    container.appendChild(makeSiteLink('url', link.href, link.label));
+  window.cachedEntries = HOME_LINKS.flatMap(function(group) {
+    var section = document.createElement('section');
+    section.className = 'home-link-group';
+    var heading = document.createElement('h3');
+    heading.textContent = group.label;
+    var links = document.createElement('div');
+    links.className = 'home-group-links';
+    group.links.forEach(function(link) {
+      links.appendChild(makeSiteLink('url', link.href, link.label));
+    });
+    section.append(heading, links);
+    container.appendChild(section);
+    return group.links.map(function(link) {
+      return { type: 'url', href: link.href, label: link.label };
+    });
   });
-  window.cachedEntries = HOME_LINKS.map(function(l) { return { type: 'url', href: l.href, label: l.label }; });
 }
 
 function openMembersRail(event) {
@@ -376,11 +410,18 @@ function getIconFor(label) {
   const l = label.toLowerCase();
   var glyph = '<path d="M8.5 8.5h7v7h-7z"/><path d="M5 12a7 7 0 0 1 7-7m7 7a7 7 0 0 1-7 7"/>';
   if (l.includes('teacher')) glyph = '<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8L3.5 9.7l5.9-.9z"/>';
-  else if (l.includes('market') || l.includes('shop') || l.includes('inventory')) glyph = '<path d="M5 7h14l-1.5 7.5h-11z"/><path d="M8 7l1.5-3h5L16 7"/><circle cx="9" cy="18" r="1"/><circle cx="16" cy="18" r="1"/>';
+  else if (l.includes('market') || l.includes('shop')) glyph = '<path d="M5 7h14l-1.5 7.5h-11z"/><path d="M8 7l1.5-3h5L16 7"/><circle cx="9" cy="18" r="1"/><circle cx="16" cy="18" r="1"/>';
+  else if (l.includes('inventory')) glyph = '<path d="m3 7 9-5 9 5v11l-9 4-9-4V7Zm0 0 9 5 9-5M12 12v10"/>';
+  else if (l.includes('wallet')) glyph = '<path d="M21 7H5a2 2 0 0 1 0-4h14v4M3 5v14a2 2 0 0 0 2 2h16V7m0 5h-5v4h5"/>';
+  else if (l.includes('casino')) glyph = '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M7 7h.01M12 12h.01M17 17h.01" stroke-width="3"/>';
+  else if (l.includes('canvas')) glyph = '<path d="M3 4h18v16H3zM7 15l4-4 3 3 3-5"/>';
+  else if (l.includes('blog')) glyph = '<path d="M6 3h12v18H6zM9 8h6m-6 4h6m-6 4h3"/>';
+  else if (l.includes('save')) glyph = '<path d="M4 3h13l3 3v15H4zM8 3v7h8V3M8 21v-7h8v7"/>';
+  else if (l.includes('notification')) glyph = '<path d="M18 9a6 6 0 0 0-12 0c0 6-3 6-3 8h18c0-2-3-2-3-8ZM10 21h4"/>';
   else if (l.includes('prox') || l.includes('vm')) glyph = '<path d="M13 2 5.5 13H11l-1 9 8.5-12H13z"/>';
-  else if (l.includes('team') || l.includes('members') || l.includes('friends')) glyph = '<circle cx="9" cy="9" r="3"/><circle cx="16.5" cy="10" r="2.3"/><path d="M3.5 19c.5-3.3 2.2-5 5.5-5s5 1.7 5.5 5M14 15c3.5-.5 5.5.8 6 3.5"/>';
+  else if (l.includes('team') || l.includes('members') || l.includes('friends') || l.includes('people')) glyph = '<circle cx="9" cy="9" r="3"/><circle cx="16.5" cy="10" r="2.3"/><path d="M3.5 19c.5-3.3 2.2-5 5.5-5s5 1.7 5.5 5M14 15c3.5-.5 5.5.8 6 3.5"/>';
   else if (l.includes('profile') || l.includes('account')) glyph = '<circle cx="12" cy="8" r="4"/><path d="M4.5 20c.7-4.4 3.2-6.5 7.5-6.5s6.8 2.1 7.5 6.5"/>';
-  else if (l.includes('leaderboard')) glyph = '<path d="M8 4h8v4c0 3-1.5 5-4 5S8 11 8 8z"/><path d="M8 6H4c0 3 1.5 4.5 4.5 4.5M16 6h4c0 3-1.5 4.5-4.5 4.5M12 13v4m-4 3h8"/>';
+  else if (l.includes('leaderboard') || l.includes('ranking')) glyph = '<path d="M8 4h8v4c0 3-1.5 5-4 5S8 11 8 8z"/><path d="M8 6H4c0 3 1.5 4.5 4.5 4.5M16 6h4c0 3-1.5 4.5-4.5 4.5M12 13v4m-4 3h8"/>';
   else if (l.includes('sanctum') || l.includes('premium')) glyph = '<path d="m12 3 6 6-6 12L6 9z"/><path d="M6 9h12M9 9l3-6 3 6-3 12z"/>';
   else if (l.includes('games') || l.includes('battle') || l.includes('jeopardy') || l.includes('chess')) glyph = '<path d="M8 8h8c3 0 5 2.5 5 6s-2 6-4.5 6c-2 0-2.5-2.5-4.5-2.5S9.5 20 7.5 20C5 20 3 17.5 3 14s2-6 5-6Z"/><path d="M7 12v4m-2-2h4m7-1h.01m2 3h.01"/>';
   else if (l.includes('learn')) glyph = '<path d="M4 5.5C6.5 4 9.5 4 12 5.5c2.5-1.5 5.5-1.5 8 0V19c-2.5-1.5-5.5-1.5-8 0-2.5-1.5-5.5-1.5-8 0z"/><path d="M12 5.5V19"/>';
@@ -1405,11 +1446,20 @@ if (document.readyState === 'loading') {
 </head>
 
 <body data-shell="off" class="home mitch-design">
-<nav class="home-masthead" aria-label="Primary">
-  <a class="home-wordmark" href="/" aria-label="mitch.pro home"><img class="site-logo" src="/icon-192.png" alt="" width="35" height="35">mitch<span>.pro</span></a>
-  <div class="home-masthead-links"><a href="/" aria-current="page">Home</a><a href="/vms/" class="nav-vm-link">VM Lab <span class="nav-pill-free">FREE</span></a><a href="/matrix/">Chat</a><a href="/game-portal/">Games</a><a href="/members/">People</a><a href="/bell/">Schedule</a></div>
-  <a class="home-account-link" href="/profile/">My account </a>
-</nav>
+<a class="skip-link" href="#mainpage">Skip to content</a>
+<header class="home-masthead mitch-masthead">
+  <a class="home-wordmark" href="/" aria-label="mitch.pro home"><img class="site-logo" src="/icon-192.png" alt="" width="29" height="29"><b>mitch<span>.pro</span></b></a>
+  <nav class="home-masthead-links" aria-label="Primary">
+    <a href="/" aria-current="page">Home</a>
+    <a href="/game-portal/">Games</a>
+    <a href="/matrix/">Chat</a>
+    <a href="/leaderboard/">Rankings</a>
+    <a href="/members/">People</a>
+    <a href="/bell/">Schedule</a>
+    <a href="/vms/">VM Lab</a>
+  </nav>
+  <a class="home-account-link app-account-link" href="/profile/" aria-label="My account"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></svg><span>My account</span></a>
+</header>
 
 
 
@@ -1448,20 +1498,18 @@ if (document.readyState === 'loading') {
 </div>
 
 <!-- ══════════════════ Main page ══════════════════ -->
-<div id="mainpage" class="home-main">
+<main id="mainpage" class="home-main">
 
-  <header class="hud-topbar home-hello">
+  <header class="hud-topbar home-hello" aria-labelledby="home-brand">
     <div class="hello-copy">
     <h1 id="home-brand" class="hello-heading"><span id="greeting-text">hello</span><svg class="hello-writing" viewBox="0 0 240 96" aria-hidden="true"><path pathLength="1" d="M15 70 C22 58 47 18 40 12 C31 4 18 77 23 76 C29 57 44 46 47 56 C49 65 36 82 51 74 L63 64 C92 51 78 38 67 57 C51 84 80 85 96 65 C108 49 127 13 119 10 C107 5 86 75 99 78 C113 85 145 17 138 11 C125 1 109 76 124 78 C136 79 148 64 151 54 C160 35 178 48 169 67 C160 87 140 78 148 59 C154 45 169 43 174 55 C178 68 184 72 198 64"/></svg></h1>
     <p id="greeting-email" class="hello-email"></p>
     <p id="holiday-greeting" class="hello-holiday" hidden></p>
     <span id="streak-badge" class="streak-badge" hidden><b id="streak-badge-count">0</b> day streak</span>
-    <div class="hello-tools">
-    <a id="home-staff-pill" href="/staff-dashboard/" class="home-staff-pill" hidden>Staff dashboard</a>
-    <label id="abToggleBar" class="ab-toggle" title="Open links in an about:blank tab"><span>Private window</span><span class="toggle-switch"><input type="checkbox" id="abToggle" aria-label="Open links in an about:blank tab"><span class="toggle-slider"></span></span></label>
     </div>
-    <div class="holiday-pills"><button type="button" id="holiday-pill" class="holiday-pill" hidden></button><button type="button" id="holiday-fx-pill" class="holiday-pill" hidden></button><button type="button" id="turkey-launch" class="holiday-pill" hidden>Catch the turkey</button></div>
-    <p id="break-chip" class="break-chip" hidden></p>
+    <div class="home-clock" id="home-clock" hidden aria-label="Local time">
+      <time id="home-clock-time"></time>
+      <span id="home-clock-date"></span>
     </div>
     <div class="hello-emblem" aria-hidden="true">
       <div class="hello-logo-shadow"></div>
@@ -1476,10 +1524,84 @@ if (document.readyState === 'loading') {
       </div>
       <span class="hello-logo-wordmark">mitch<span>.pro</span></span>
     </div>
+    <div class="hello-tools">
+      <a id="home-staff-pill" href="/staff-dashboard/" class="home-staff-pill" hidden>Staff dashboard</a>
+      <label id="abToggleBar" class="ab-toggle" title="Open links in an about:blank tab"><span>Private window</span><span class="toggle-switch"><input type="checkbox" id="abToggle" aria-label="Open links in an about:blank tab"><span class="toggle-slider"></span></span></label>
+    </div>
   </header>
+  <div class="home-launch">
+    <nav class="home-features" aria-label="Shortcuts">
+      <a class="home-feature feature-games" href="/game-portal/" onclick="openHomeHref(event, '/game-portal/');">
+        <div class="feature-games-copy">
+          <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 6h10c3 0 4 3 5 10s-3 7-6 2H8c-3 5-7 5-6-2S4 6 7 6Z"/><path d="M7 10v6m-3-3h6m6-2h.01M19 14h.01"/></svg>
+          <h2>Games</h2>
+          <p>Arcade, puzzles, and multiplayer</p>
+        </div>
+        <span class="feature-arrow" aria-hidden="true">↗</span>
+      </a>
+      <div class="home-feature-row">
+        <a class="home-feature feature-chat" href="/matrix/" onclick="openHomeHref(event, '/matrix/');">
+          <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v12H9l-5 4Z"/><path d="M8 8h8m-8 4h5"/></svg>
+          <span class="feature-label">Matrix chat</span><span class="feature-arrow" aria-hidden="true">↗</span>
+        </a>
+        <a class="home-feature feature-vms" href="/vms/" onclick="openHomeHref(event, '/vms/');">
+          <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 17v4m-5 0h10M7 8l2 2-2 2m5 0h4"/></svg>
+          <span class="feature-label">Cloud Linux</span><span class="feature-arrow" aria-hidden="true">↗</span>
+        </a>
+        <a class="home-feature feature-movies" href="/proxy/movies/" onclick="openHomeHref(event, this.getAttribute('href'));">
+          <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h18v12H3V9ZM3 9 2 4l18-3 1 5-18 3ZM7 3l3 5m4-6 3 5m-7 6 5 3-5 3v-6Z"/></svg>
+          <span class="feature-label">Movies</span><span class="feature-arrow" aria-hidden="true">↗</span>
+        </a>
+      </div>
+    </nav>
+
+    <section class="home-rankings" aria-labelledby="home-rankings-title">
+      <header class="home-rankings-head">
+        <span class="rankings-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 4h8v4a4 4 0 0 1-8 0V4ZM8 6H4v2a4 4 0 0 0 4 4m8-6h4v2a4 4 0 0 1-4 4m-4 0v6m-4 2h8"/></svg></span>
+        <h2 id="home-rankings-title">Rankings</h2>
+        <a href="/leaderboard/">View all <span aria-hidden="true">↗</span></a>
+      </header>
+      <div class="home-rankings-content leaderboard-shell" aria-busy="true" id="home-rankings-content">
+        <p class="home-ranking-metric"><img src="/mitchcoin.svg" alt="" width="18" height="18">MitchCoins</p>
+        <ol id="home-ranking-list" hidden></ol>
+        <p class="home-ranking-status" id="home-ranking-status" role="status">Loading standings…</p>
+      </div>
+      <a class="home-rankings-footer" href="/leaderboard/?metric=wins">Chess rankings <span aria-hidden="true">→</span></a>
+    </section>
+  </div>
+
+  <section class="home-friends" aria-labelledby="home-friends-title">
+    <header><h2 id="home-friends-title">Friends <span class="home-friend-count"></span></h2><a href="/friends/">Manage friends <span aria-hidden="true">↗</span></a></header>
+    <div class="home-friend-list" aria-busy="true"></div>
+  </section>
+
+  <div class="home-season">
+    <p id="break-chip" class="break-chip" hidden></p>
+    <div class="holiday-pills"><button type="button" id="holiday-pill" class="holiday-pill" hidden></button><button type="button" id="holiday-fx-pill" class="holiday-pill" hidden></button><button type="button" id="turkey-launch" class="holiday-pill" hidden>Catch the turkey</button></div>
+  </div>
+
   <section class="home-recent" id="home-recent" hidden aria-label="Continue where you left off">
     <div class="home-section-heading home-recent-heading"><h2>Continue where you left off</h2></div>
     <div id="home-recent-list" class="recent-strip"></div>
+  </section>
+
+  <section class="home-directory" aria-labelledby="directory-title">
+    <div class="home-section-heading"><h2 id="directory-title">Pages</h2></div>
+    <div class="category-grid" id="links"></div>
+  </section>
+
+  <nav class="home-actions" aria-label="More shortcuts">
+    <button type="button" class="hub-action" id="hub-friends-btn" onclick="openMembersRail(event)"><span class="action-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3"/><circle cx="16.5" cy="10" r="2.3"/><path d="M3.5 19c.5-3.3 2.2-5 5.5-5s5 1.7 5.5 5M14 15c3.5-.5 5.5.8 6 3.5"/></svg></span>Who’s online</button>
+    <a class="hub-action" href="/invite/" onclick="openHomeHref(event, '/invite/');">Invite friends</a>
+    <a class="hub-action" href="/teachers/" onclick="openHomeHref(event, '/teachers/');">Rate my teacher</a>
+    <a class="hub-action" href="/learn/" onclick="openHomeHref(event, '/learn/');">Learn the site</a>
+    <a class="hub-action" href="/support/" onclick="openHomeHref(event, '/support/');">Support</a>
+    <button type="button" class="hub-action hub-daily mitch-coin-amount" id="hub-daily-chip" hidden>Daily claim</button>
+  </nav>
+
+  <section class="home-controls" aria-label="Your settings">
+    <a id="vm-status-chip" class="home-control-card" href="/vms/" hidden><div><h2>Your computer</h2><p>Open your desktop or manage its resources.</p></div><span class="control-status"><span class="status-dot" id="vm-status-dot"></span><span id="vm-status-text">Computer</span></span></a>
+    <a id="preferences-card" class="home-control-card" href="/preferences/"><div><h2>Preferences</h2><p>Appearance, privacy, and your account.</p></div><span class="control-status" aria-hidden="true">↗</span></a>
   </section>
 
   <section class="home-updates" id="home-updates" hidden aria-label="Updates">
@@ -1491,49 +1613,7 @@ if (document.readyState === 'loading') {
     </button>
     <ol class="updates-list" id="home-updates-list" hidden></ol>
   </section>
-
-  <div class="home-section-heading"><h2>Shortcuts</h2></div>
-  <section class="home-features" aria-label="Start here">
-    <a class="home-feature feature-vms" href="/vms/" onclick="openHomeHref(event, '/vms/');">
-
-      <h2>Cloud Linux</h2>
-      <span class="feature-bottom">Your Linux desktop, files, and apps. </span>
-    </a>
-    <a class="home-feature feature-chat" href="/matrix/" onclick="openHomeHref(event, '/matrix/');">
-
-      <h2>Matrix chat</h2>
-      <span class="feature-bottom">Rooms and private conversations. </span>
-    </a>
-    <a class="home-feature feature-games" href="/game-portal/" onclick="openHomeHref(event, '/game-portal/');">
-
-      <h2>Play games</h2>
-      <span class="feature-bottom">Browse all games </span>
-    </a>
-    <a class="home-feature feature-movies" href="/proxy/movies/" onclick="openHomeHref(event, this.getAttribute('href'));">
-      <h2>Movies</h2>
-      <span class="feature-bottom">Open Movies</span>
-    </a>
-  </section>
-
-      <div class="home-section-heading home-tools-heading"><h2>Explore</h2></div>
-      <nav class="home-actions" aria-label="Quick actions">
-        <button type="button" class="hub-action" id="hub-friends-btn" onclick="openMembersRail(event)"><span class="action-logo"><svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="3"/><circle cx="16.5" cy="10" r="2.3"/><path d="M3.5 19c.5-3.3 2.2-5 5.5-5s5 1.7 5.5 5M14 15c3.5-.5 5.5.8 6 3.5"/></svg></span><span class="action-copy"><b>People</b><small>See who's online</small></span></button>
-        <a class="hub-action" href="/invite/" onclick="openHomeHref(event, '/invite/');"><span class="action-logo"><svg viewBox="0 0 24 24"><rect x="4" y="9" width="16" height="11" rx="2"/><path d="M12 9v11M3 9h18V6H3zM12 6c-2-4-6-3-4 0m4 0c2-4 6-3 4 0"/></svg></span><span class="action-copy"><b>Invite friends</b><small>Earn 2,000 coins per signup</small></span></a>
-        <a class="hub-action" href="/teachers/" onclick="openHomeHref(event, '/teachers/');"><span class="action-logo"><svg viewBox="0 0 24 24"><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8L3.5 9.7l5.9-.9z"/></svg></span><span class="action-copy"><b>Rate my teacher</b><small>Rate your teachers</small></span></a>
-        <a class="hub-action" href="/learn/" onclick="openHomeHref(event, '/learn/');"><span class="action-logo"><svg viewBox="0 0 24 24"><path d="M4 5.5C6.5 4 9.5 4 12 5.5c2.5-1.5 5.5-1.5 8 0V19c-2.5-1.5-5.5-1.5-8 0-2.5-1.5-5.5-1.5-8 0z"/><path d="M12 5.5V19"/></svg></span><span class="action-copy"><b>Learn the site</b><small>What's here and how to use it</small></span></a>
-        <button type="button" class="hub-action hub-daily mitch-coin-amount" id="hub-daily-chip" hidden>Daily claim</button>
-      </nav>
-
-  <section class="home-directory" aria-labelledby="directory-title">
-    <div class="directory-heading"><h2 id="directory-title">Pages</h2></div>
-    <div class="category-grid" id="links"></div>
-  </section>
-  <section class="home-controls" aria-label="Your settings">
-    <a id="vm-status-chip" class="home-control-card" href="/vms/" hidden><div><h2>Your computer</h2><p>Open your desktop or manage its resources.</p></div><span class="control-status"><span class="status-dot" id="vm-status-dot"></span><span id="vm-status-text">Computer</span></span></a>
-    <a id="preferences-card" class="home-control-card" href="/preferences/"><div><h2>Preferences</h2><p>Appearance, privacy, and your account.</p></div><span class="control-status">Edit settings</span></a>
-  </section>
-
-</div>
+</main>
 
 <button id="backbtn" onclick="goBack()">&#8592; Back</button>
 

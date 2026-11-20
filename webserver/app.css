@@ -121,6 +121,83 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--t-font); font-weight: 700; line-heig
 .app-account-link:hover { background: var(--t-bg3); border-color: var(--t-fg3); }
 .app-account-link svg { width: 16px; height: 16px; stroke: currentColor; stroke-width: 1.6; fill: none; }
 
+.mitch-masthead:is(#app-topbar, .home-masthead) {
+  position: sticky;
+  top: max(10px, env(safe-area-inset-top, 0px));
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  gap: clamp(14px, 2vw, 28px);
+  width: min(var(--site-content-width), calc(100% - 48px));
+  min-height: 66px;
+  margin: 16px auto 0;
+  padding: 0 18px;
+  border: 1px solid var(--t-bd);
+  border-radius: var(--t-radius);
+  background: var(--t-bg2);
+}
+.mitch-masthead :is(.app-brand, .home-wordmark) {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  color: var(--t-fg);
+  font: 550 clamp(1.04rem, 2vw, 1.27rem)/1 var(--t-brand);
+  letter-spacing: -0.065em;
+  white-space: nowrap;
+}
+.app-shell #app-topbar.mitch-masthead .app-brand { font-family: var(--t-brand); font-weight: 550; }
+.mitch-masthead .app-brand b { font-weight: inherit; }
+.mitch-masthead :is(.app-brand, .home-wordmark) b span { color: var(--t-ac); font-weight: inherit; }
+.mitch-masthead .site-logo { width: 29px; height: 29px; }
+.mitch-masthead :is(.app-nav, .home-masthead-links) {
+  display: flex;
+  flex: 1 1 auto;
+  align-self: stretch;
+  gap: clamp(10px, 1.45vw, 22px);
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.mitch-masthead :is(.app-nav, .home-masthead-links) a {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 56px;
+  color: var(--t-fg2);
+  font-size: .82rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.mitch-masthead :is(.app-nav, .home-masthead-links) a:hover,
+.mitch-masthead :is(.app-nav, .home-masthead-links) a[aria-current] { color: var(--t-ac); }
+.mitch-masthead :is(.app-nav, .home-masthead-links) a[aria-current]::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 10px;
+  left: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--t-ac);
+}
+.mitch-masthead :is(.app-account-link, .home-account-link) {
+  min-height: 40px;
+  border-radius: var(--t-radius-sm);
+}
+@media (max-width: 760px) {
+  .mitch-masthead:is(#app-topbar, .home-masthead) {
+    width: calc(100% - 28px);
+    min-height: 56px;
+    margin-top: 10px;
+    padding: 0 10px;
+    gap: 8px;
+  }
+  .mitch-masthead .app-account-link { margin-left: auto; }
+  .mitch-masthead .app-account-link span { display: none; }
+}
+
 /* Shared top-of-page content container */
 .app-shell { min-height: 100vh; display: flex; flex-direction: column; position: relative; }
 .app-main, main.shell, .legal-shell, .prefs-shell, .enroll-shell, .vms-container, .portal-shell {

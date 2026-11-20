@@ -46,13 +46,17 @@ body.sales-page .sales-top.has-mitch-wallet nav { flex: 1; }
   body.sales-page .sales-top.has-mitch-wallet .brand { margin-right: auto; }
 }
 @media (max-width: 480px) {
-  body.mitch-next .has-mitch-wallet :is(.app-account-link, .home-account-link) { display: none !important; }
-  body.mitch-next #app-topbar.has-mitch-wallet .app-brand { flex: 1; min-width: 35px; }
-  body.mitch-next .has-mitch-wallet .app-brand b { display: none; }
-  body.home.mitch-next .has-mitch-wallet .home-wordmark { font-size: 0; gap: 0; min-width: 35px; }
-  body.home.mitch-next .has-mitch-wallet .home-wordmark span { display: none; }
+  body.mitch-next .has-mitch-wallet:not(.mitch-masthead) :is(.app-account-link, .home-account-link) { display: none !important; }
+  body.mitch-next #app-topbar.has-mitch-wallet:not(.mitch-masthead) .app-brand { flex: 1; min-width: 35px; }
+  body.mitch-next .has-mitch-wallet:not(.mitch-masthead) .app-brand b { display: none; }
+  body.mitch-next .mitch-masthead.has-mitch-wallet :is(.app-brand, .home-wordmark) { gap: 6px; margin-right: auto; }
+  body.mitch-next .mitch-masthead.has-mitch-wallet .site-logo { width: 24px; height: 24px; }
+  body.mitch-next .mitch-masthead.has-mitch-wallet .app-account-link { margin-left: 0; }
   html body .mitch-wallet { max-width: 118px; }
   .mitch-wallet-value { font-size: 13px; }
+}
+@media (max-width: 350px) {
+  .mitch-masthead .mitch-wallet .mitch-coin-icon { width: 21px; height: 21px; }
 }
 @media (prefers-reduced-motion: reduce) { html body .mitch-wallet { transition: none; } }
 

@@ -121,11 +121,12 @@
 
   var NAV_MITCH = [
     { href: '/', label: 'Home', icon: '⌂', match: function (p) { return p === '/' || p === '/index.html'; } },
-    { href: '/vms/', label: 'VM Lab', badge: 'Free', icon: '▣', match: function (p) { return p.indexOf('/vms') === 0; } },
-    { href: '/matrix/', label: 'Chat', icon: '◉', match: function (p) { return p.indexOf('/matrix') === 0; } },
     { href: '/game-portal/', label: 'Games', icon: '◆', match: function (p) { return p.indexOf('/games') === 0 || p.indexOf('/game-portal') === 0; } },
+    { href: '/matrix/', label: 'Chat', icon: '◉', match: function (p) { return p.indexOf('/matrix') === 0; } },
+    { href: '/leaderboard/', label: 'Rankings', match: function (p) { return p.indexOf('/leaderboard') === 0; } },
     { href: '/members/', label: 'People', icon: '●', match: function (p) { return p.indexOf('/members') === 0 || p.indexOf('/friends') === 0 || p.indexOf('/profile') === 0; } },
-    { href: '/bell/', label: 'Schedule', icon: '◷', match: function (p) { return p.indexOf('/bell') === 0; } }
+    { href: '/bell/', label: 'Schedule', icon: '◷', match: function (p) { return p.indexOf('/bell') === 0; } },
+    { href: '/vms/', label: 'VM Lab', icon: '▣', match: function (p) { return p.indexOf('/vms') === 0; } }
   ];
 
   var NAV_RJUHSD = [
@@ -175,14 +176,14 @@
       home: '<path d="m3 10 9-7 9 7v10H3Z"/><path d="M9 20v-7h6v7"/>',
       games: '<path d="M7 7h10c3 0 5 11 3 12-2 1-5-3-5-3H9s-3 4-5 3C2 18 4 7 7 7Z"/><path d="M7 10v5m-2-2h4m6-2h.01M18 14h.01"/>',
       chat: '<path d="M4 4h16v12H9l-5 4Z"/><path d="M8 8h8M8 12h5"/>',
-      people: '<circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3m2-16a3 3 0 0 1 0 6m1 3a5 5 0 0 1 3 5v2"/>',
+      rankings: '<path d="M8 4h8v4a4 4 0 0 1-8 0V4ZM8 6H4v2a4 4 0 0 0 4 4m8-6h4v2a4 4 0 0 1-4 4m-4 0v6m-4 2h8"/>',
       more: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/>'
     };
     function icon(name) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + paths[name] + '</svg>'; }
     var dock = document.createElement('nav');
     dock.id = 'mobile-dock';
     dock.setAttribute('aria-label', 'Mobile navigation');
-    [['/', 'Home', 'home'], ['/game-portal/', 'Games', 'games'], ['/matrix/', 'Chat', 'chat'], ['/members/', 'People', 'people']].forEach(function (item) {
+    [['/', 'Home', 'home'], ['/game-portal/', 'Games', 'games'], ['/matrix/', 'Chat', 'chat'], ['/leaderboard/', 'Rankings', 'rankings']].forEach(function (item) {
       var link = document.createElement('a');
       link.href = item[0];
       link.innerHTML = icon(item[2]) + '<span>' + item[1] + '</span>';
@@ -202,7 +203,7 @@
     menu.setAttribute('aria-labelledby', 'mobile-menu-title');
     menu.innerHTML = '<header><h2 id="mobile-menu-title">mitch.pro</h2><button type="button" aria-label="Close menu">×</button></header><nav aria-label="All sections"></nav>';
     var links = menu.querySelector('nav');
-    [['/profile/', 'My profile'], ['/preferences/', 'Customizer'], ['/friends/', 'Friends'], ['/coins/?v=2', 'MitchCoins'], ['/shop/', 'Shop'], ['/casino/', 'Casino'], ['/inventory/', 'Inventory'], ['/leaderboard/', 'Leaderboard'], ['/teachers/', 'Rate my teacher'], ['https://rjuhsd.school/', 'Bell schedule'], ['/vms/', 'VM Lab'], ['/notifications/', 'Notifications'], ['/blog/', 'Blog'], ['/invite/', 'Invite friends'], ['/learn/', 'Learn about the site'], ['/feedback/', 'Feedback'], ['/support/', 'Help']].forEach(function (item) {
+    [['/profile/', 'My profile'], ['/preferences/', 'Customizer'], ['/members/', 'People'], ['/friends/', 'Friends'], ['/coins/?v=2', 'MitchCoins'], ['/shop/', 'Shop'], ['/casino/', 'Casino'], ['/inventory/', 'Inventory'], ['/teachers/', 'Rate my teacher'], ['https://rjuhsd.school/', 'Bell schedule'], ['/vms/', 'VM Lab'], ['/notifications/', 'Notifications'], ['/blog/', 'Blog'], ['/invite/', 'Invite friends'], ['/learn/', 'Learn about the site'], ['/feedback/', 'Feedback'], ['/support/', 'Help']].forEach(function (item) {
       var link = document.createElement('a'); link.href = item[0]; link.textContent = item[1];
       if (item[0].charAt(0) === '/' && currentPath() === item[0].split('?')[0].replace(/\/$/, '')) link.setAttribute('aria-current', 'page');
       links.appendChild(link);
@@ -282,6 +283,8 @@
   }
 
   function currentPath() {
+    // Ranking links may use an alias, so use the page identity for its active navigation.
+    if (document.body && document.body.classList.contains('leaderboard-page')) return '/leaderboard';
     try {
       return (location.pathname || '/').replace(/\/+$/, '') || '/';
     } catch (e) {
@@ -294,6 +297,7 @@
     var bar = document.createElement('header');
     bar.id = 'app-topbar';
     bar.className = 'app-topbar unified-masthead';
+    if (!IS_RJUHSD) bar.classList.add('mitch-masthead');
     bar.setAttribute('role', 'banner');
 
     var brand = document.createElement('a');
@@ -412,7 +416,7 @@
     }
     if (!IS_RJUHSD && !document.querySelector('script[src^="/mitch-coins.js"]')) {
       var coins = document.createElement('script');
-      coins.src = '/mitch-coins.js?v=5';
+      coins.src = '/mitch-coins.js?v=6';
       document.head.appendChild(coins);
     }
     if (!shouldInject()) {

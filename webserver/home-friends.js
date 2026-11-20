@@ -1,11 +1,6 @@
 (() => {
-  const hero = document.querySelector('#mainpage .hud-topbar');
-  if (!hero || document.querySelector('.home-friends')) return;
-  const section = document.createElement('section');
-  section.className = 'home-friends';
-  section.setAttribute('aria-label', 'Friends activity');
-  section.innerHTML = '<header><h2>Friends <span class="home-friend-count"></span></h2><a href="/friends/">Manage friends</a></header><div class="home-friend-list"></div>';
-  hero.after(section);
+  const section = document.querySelector('.home-friends');
+  if (!section) return;
   const list = section.querySelector('.home-friend-list');
   function activityLabel(friend) {
     if (!friend.online) return 'Offline';
@@ -21,7 +16,7 @@
     section.classList.toggle('is-empty',!friends.length);
     if (!friends.length) {
       const empty = document.createElement('div'); empty.className = 'home-friends-empty';
-      empty.innerHTML = '<a class="home-friend-add" href="/members/" aria-label="Add friends"><span aria-hidden="true">+</span></a><div><strong>Find friends</strong><small></small></div>';
+      empty.innerHTML = '<a href="/members/"><span class="home-friend-add" aria-hidden="true">+</span> Find friends</a>';
       list.append(empty); return;
     }
     friends.sort(window.MitchPeople?.compare || ((a,b) => Number(b.online)-Number(a.online))).forEach(friend => {
@@ -51,7 +46,7 @@
     busy = true;
     try { const response = await fetch('/api/friends/list', { credentials:'same-origin', cache:'no-store' }); if (!response.ok) throw new Error('Friends unavailable'); const data = await response.json(); render(Array.isArray(data.friends) ? data.friends : []); }
     catch { list.querySelectorAll('.home-friend small span').forEach(el => { el.textContent = 'Status unavailable'; }); section.querySelector('.home-friend-count').textContent = ''; list.querySelectorAll('.home-friend.online').forEach(el => el.classList.remove('online')); }
-    finally { busy = false; if (refreshAgain) { refreshAgain = false; setTimeout(refresh, 500); } }
+    finally { list.setAttribute('aria-busy', 'false'); busy = false; if (refreshAgain) { refreshAgain = false; setTimeout(refresh, 500); } }
   }
   render([]); refresh();
   let timer = setInterval(refresh, 30000);
