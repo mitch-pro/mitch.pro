@@ -36,6 +36,7 @@ const TABLES: &[(&str, &str)] = &[
     ("companion_ability_strain", "email"),
     ("companion_upgrades", "email"),
     ("reserved_usernames", "holder_email"),
+    ("ui_style_choices", "email"),
 ];
 
 /// Moves the rows listed in [`TABLES`] from `old_norm` to `new_norm`.

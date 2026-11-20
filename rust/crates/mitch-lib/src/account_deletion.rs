@@ -71,6 +71,7 @@ pub const EMAIL_TABLES: &[(&str, &str)] = &[
     ("reserved_usernames", "holder_email"),
     ("premium_email_requests", "email"),
     ("premium_email_prompt_dismissed", "email"),
+    ("ui_style_choices", "email"),
     ("virtual_machines", "owner_email"),
     ("vm_usage_samples", "owner_email"),
     ("vm_admin_access_grants", "owner_email"),

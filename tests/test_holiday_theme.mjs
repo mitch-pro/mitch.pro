@@ -8,10 +8,11 @@ import vm from 'node:vm';
 
 const source = fs.readFileSync(new URL('../webserver/site-theme.js', import.meta.url), 'utf8');
 
-function load(search = '', stored = {}, pinned, cookie = '', osDark = false) {
-  const attrs = {};
+function load(search = '', stored = {}, pinned, { cookie = '', osDark = false, ui = '' } = {}) {
+  const attrs = ui ? { 'data-ui': ui } : {};
+  const props = {};
   const root = {
-    style: { setProperty() {}, removeProperty() {}, getPropertyValue: () => '' },
+    style: { setProperty(k, v) { props[k] = v; }, removeProperty(k) { delete props[k]; }, getPropertyValue: k => props[k] ?? '' },
     dataset: {},
     classList: { toggle() {} },
     setAttribute: (k, v) => { attrs[k] = v; },
@@ -30,14 +31,24 @@ function load(search = '', stored = {}, pinned, cookie = '', osDark = false) {
   sandbox.window.document = sandbox.document;
   vm.createContext(sandbox);
   vm.runInContext(source, sandbox);
-  return { theme: sandbox.window.__siteTheme, attrs, stored };
+  return { theme: sandbox.window.__siteTheme, attrs, stored, props };
 }
 
 const { theme } = load();
-assert.equal(load().attrs['data-theme'], 'dark');
-assert.equal(load('', {}, undefined, 'theme=light', true).attrs['data-theme'], 'light');
-assert.equal(load('', {}, undefined, 'theme=auto').attrs['data-theme'], 'light');
-assert.equal(load('', {}, undefined, 'theme=auto', true).attrs['data-theme'], 'dark');
+
+// Light/dark follows the OS unless a mode was saved, in both site styles.
+for (const ui of ['', 'tylerium']) {
+  assert.equal(load('', {}, undefined, { ui }).attrs['data-theme'], 'light');
+  assert.equal(load('', {}, undefined, { ui, osDark: true }).attrs['data-theme'], 'dark');
+  assert.equal(load('', {}, undefined, { ui, cookie: 'theme=light', osDark: true }).attrs['data-theme'], 'light');
+  assert.equal(load('', {}, undefined, { ui, cookie: 'theme=dark' }).attrs['data-theme'], 'dark');
+  // Holiday themes are on by default in both styles.
+  assert.equal(load('', {}, 'christmas', { ui }).attrs['data-holiday'], 'christmas');
+}
+// Each style has its own default font; a saved font applies to both.
+assert.match(load().props['--t-font'], /DM Sans/);
+assert.equal(load('', {}, undefined, { ui: 'tylerium' }).props['--t-font'], 'var(--t-arcade)');
+assert.equal(load('', { theme_font: 'serif' }, undefined, { ui: 'tylerium' }).props['--t-font'], 'Georgia, serif');
 const day = (y, m, d) => theme.holidayFor(new Date(y, m - 1, d));
 
 // Thanksgiving is the fourth Thursday of November.
@@ -100,14 +111,13 @@ assert.equal(load('', {}, 'bogus').theme.holidaySeason(), load().theme.holidaySe
 
 // The homepage pill turns it off for every page by writing the same setting.
 const toggled = load();
-assert.equal(toggled.theme.holidayOff(), true);
-assert.equal(toggled.attrs['data-holiday'], undefined);
+assert.equal(toggled.theme.holidayOff(), false);
 toggled.theme.setHolidayOff(true);
 assert.equal(toggled.stored.theme_holiday, 'off');
 assert.equal(toggled.theme.holidayOff(), true);
 assert.equal(toggled.attrs['data-holiday'], undefined);
 toggled.theme.setHolidayOff(false);
-assert.equal(toggled.stored.theme_holiday, 'on');
+assert.equal(toggled.stored.theme_holiday, undefined);
 assert.equal(toggled.theme.holidayOff(), false);
 
 // Turning off only the effects keeps the holiday colors.

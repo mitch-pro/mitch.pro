@@ -74,6 +74,7 @@ pub mod teachers;
 pub mod tester;
 pub mod tokens;
 pub mod totp;
+pub mod ui_style;
 pub mod user_stats;
 pub mod userdata;
 pub mod vm;

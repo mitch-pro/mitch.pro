@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="description" content="Player rankings by MitchCoins and game scores.">
-  <title>Rankings — mitch.pro</title>
+  <title>Leaderboard — mitch.pro</title>
   <link rel="stylesheet" href="/app.css">
-  <link rel="stylesheet" href="/leaderboard/leaderboard.css?v=5">
+  <link rel="stylesheet" href="/leaderboard/leaderboard.css?v=4">
   <script src="/api.js"></script>
   <script src="/app-shell.js" defer></script>
   <script src="/leaderboard/leaderboard.js?v=5" defer></script>
@@ -14,7 +14,7 @@
 <body class="app-shell leaderboard-page">
   <main class="app-main leaderboard-shell">
     <header class="board-heading">
-      <div class="board-title"><span class="board-title-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 4h8v4a4 4 0 0 1-8 0V4ZM8 6H4v2a4 4 0 0 0 4 4m8-6h4v2a4 4 0 0 1-4 4m-4 0v6m-4 2h8"/></svg></span><h1>Rankings</h1></div>
+      <h1>Leaderboard</h1>
       <div class="rankings-actions">
         <label class="player-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m16 16 4 4"></path></svg><span class="board-sr-only">Search players by name or username</span><input id="rank-search" type="search" placeholder="Search players" maxlength="100" autocomplete="off"></label>
         <button class="board-refresh" id="refresh-board" type="button" aria-label="Refresh rankings" title="Refresh rankings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"></path><path d="M6.1 7a7 7 0 0 1 11.6-1L20 9M4 15l2.3 3A7 7 0 0 0 18 17"></path></svg></button>

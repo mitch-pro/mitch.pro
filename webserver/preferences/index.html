@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="/app.css">
 <link rel="stylesheet" href="/preferences/preferences-galaxy.css?v=13">
 <script src="/api.js"></script>
+<script src="/ui-style.js?v=1"></script>
 <script src="/app-shell.js" defer></script>
 <script src="/sync.js?v=2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/zxcvbn/4.4.2/zxcvbn.js" defer></script>
@@ -780,11 +781,19 @@
   <section class="pref-section" id="appearance">
     <h2>Appearance</h2>
 
+    <div class="field" id="uiStyleField" hidden>
+      <label>Site style</label>
+      <div class="chip-row" id="uiStyleGrid">
+        <button class="chip" type="button" data-ui-style="mitch">mitch.pro (recommended)</button>
+        <button class="chip" type="button" data-ui-style="tylerium">Tylerium</button>
+      </div>
+    </div>
+
     <div class="field">
       <label>Theme Preset</label>
       <div class="chip-row" id="themePresetGrid">
-        <button class="chip" data-theme="dark" onclick="selectThemePreset(this)">Dark (default)</button>
-        <button class="chip" data-theme="auto" onclick="selectThemePreset(this)">System</button>
+        <button class="chip" data-theme="" onclick="selectThemePreset(this)">System (default)</button>
+        <button class="chip" data-theme="dark" onclick="selectThemePreset(this)">Dark</button>
         <button class="chip" data-theme="light" onclick="selectThemePreset(this)">Light</button>
       </div>
     </div>
@@ -793,8 +802,8 @@
       <div class="field">
         <label>Custom Accent</label>
         <div class="inline-color">
-          <input id="accentColor" type="color" value="#9acbfa">
-          <input id="accentText" type="text" placeholder="#9acbfa">
+          <input id="accentColor" type="color" value="#ff6f99">
+          <input id="accentText" type="text" placeholder="#ff6f99">
           <button class="soft-btn" type="button" id="accentClear">Clear</button>
         </div>
       </div>
@@ -830,8 +839,8 @@
       <div class="field">
         <label>Font Style</label>
         <select id="fontSelect">
-          <option value="arcade">Arcade (default)</option>
-          <option value="system">System sans</option>
+          <option value="system">Clean system</option>
+          <option value="arcade">Arcade</option>
           <option value="plain">Plain sans</option>
           <option value="mono">Terminal mono</option>
           <option value="rounded">Rounded</option>
@@ -1915,13 +1924,13 @@ function updateSummaries() {
   var theme = getCookieValue('theme', '');
   var home = load(HOME_CONFIG_KEY, { showQuickActions: true, showMemberRail: true });
   var sync = load(SYNC_CONFIG_KEY, { enabled: true });
-  document.getElementById('summaryTheme').textContent = theme === 'auto' ? 'System' : theme === 'light' ? 'Light' : 'Dark';
+  document.getElementById('summaryTheme').textContent = theme || 'system';
   document.getElementById('summaryHome').textContent = (home.compactHome ? 'Compact' : 'Standard');
   document.getElementById('summarySync').textContent = sync.enabled === false ? 'Manual' : 'Enabled';
 }
 
 function refreshThemeButtons() {
-  var current = getCookieValue('theme', '') || 'dark';
+  var current = getCookieValue('theme', '');
   document.querySelectorAll('#themePresetGrid [data-theme]').forEach(function(btn) {
     btn.classList.toggle('active', btn.getAttribute('data-theme') === current);
   });
@@ -1944,9 +1953,11 @@ function syncAppearanceControls() {
   document.getElementById('accentColor').value = /^#[0-9a-f]{6}$/i.test(accent) ? accent : getComputedStyle(document.documentElement).getPropertyValue('--t-ac').trim();
   document.getElementById('densitySelect').value = getThemePref('density', 'normal');
   document.getElementById('radiusSelect').value = getThemePref('radius', 'soft');
-  document.getElementById('fontSelect').value = getThemePref('font', 'arcade');
+  // Each site style has its own default font (site-theme.js).
+  var tylerium = document.documentElement.getAttribute('data-ui') === 'tylerium';
+  document.getElementById('fontSelect').value = getThemePref('font', tylerium ? 'arcade' : 'system');
   document.getElementById('motionSelect').value = getThemePref('motion', 'on');
-  document.getElementById('holidaySelect').value = window.__siteTheme?.holidayOff() === false ? 'auto' : 'off';
+  document.getElementById('holidaySelect').value = getThemePref('holiday', 'auto');
   document.getElementById('holidayFxSelect').value = getThemePref('holidayfx', 'on');
   var mat = document.getElementById('materialSelect');
   if (mat) mat.value = getThemePref('material', 'auto');
@@ -1959,8 +1970,40 @@ function selectThemePreset(btn) {
   saveAll();
 }
 
+// Site style (mitch.pro or Tylerium) is saved on the account, not in this
+// browser, so it only shows for signed-in accounts and never on rjuhsd.school.
+// See docs/ui-styles.md.
+function setupUiStyleControl() {
+  var field = document.getElementById('uiStyleField');
+  if (!field || !window.MitchUiStyle || /(^|\.)rjuhsd\.school$/.test(location.hostname)) return;
+  window.MitchUiStyle.status().then(function(data) {
+    if (!data || !data.style) return;
+    var buttons = field.querySelectorAll('[data-ui-style]');
+    buttons.forEach(function(btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-ui-style') === data.style);
+      btn.setAttribute('aria-pressed', String(btn.getAttribute('data-ui-style') === data.style));
+      btn.addEventListener('click', function() {
+        var style = btn.getAttribute('data-ui-style');
+        buttons.forEach(function(other) { other.disabled = true; });
+        window.MitchUiStyle.save(style).then(function() {
+          if (style !== window.MitchUiStyle.current()) location.reload();
+          else {
+            buttons.forEach(function(other) { other.disabled = false; });
+            setStatus('appearanceStatus', 'Site style saved.');
+          }
+        }).catch(function() {
+          buttons.forEach(function(other) { other.disabled = false; });
+          setStatus('appearanceStatus', "Couldn't save the site style. Try again.", true);
+        });
+      });
+    });
+    field.hidden = false;
+  });
+}
+
 function setupAppearanceControls() {
   syncAppearanceControls();
+  setupUiStyleControl();
 
   document.getElementById('accentColor').addEventListener('input', function() {
     document.getElementById('accentText').value = this.value;
@@ -1970,7 +2013,7 @@ function setupAppearanceControls() {
   document.getElementById('accentText').addEventListener('change', function() {
     var v = this.value.trim();
     if (v && !/^#[0-9a-f]{6}$/i.test(v)) {
-      setStatus('appearanceStatus', 'Use a hex color like #9acbfa.');
+      setStatus('appearanceStatus', 'Use a hex color like #ff6f99.');
       return;
     }
     setThemePref('accent', v);

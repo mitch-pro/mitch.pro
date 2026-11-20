@@ -1,4 +1,11 @@
-/* Tylerium's locally hosted, OFL-licensed display and wordmark fonts. */
+/* Site color tokens (--t-*): light/dark palettes, manual overrides and high contrast.
+   Shared by app.css and by pages that only need the palette (rjuhsd.school).
+   These are the mitch.pro style. The Tylerium style (docs/ui-styles.md)
+   overrides them from /tylerium/tylerium.css. */
+
+/* Locally hosted, OFL-licensed fonts (licenses in /fonts/). Used by the
+   Tylerium style and by the Arcade font option in Preferences; browsers only
+   download them when something uses them. */
 @font-face {
   font-family: 'JetBrains Mono';
   src: url('/fonts/jetbrains-mono.woff2') format('woff2');
@@ -11,76 +18,174 @@
   font-weight: 400 700;
   font-display: swap;
 }
-
-/* The shared Mitch palette matches Tylerium's default appearance. */
 :root {
-  color-scheme: dark;
-  --t-bg: #000000;
-  --t-bg2: #111111;
-  --t-bg3: #1c1c1c;
-  --t-fg: #f0f0f0;
-  --t-fg2: #d0d0d0;
-  --t-fg3: #bdbdbd;
-  --t-ac: #9acbfa;
-  --t-ac-ink: #061a2d;
-  --t-ac2: #b9dcff;
-  --t-ac3: #b9dcff;
-  --t-bd: #303030;
-  --t-bda: #555555;
+  --t-bg: #f6f7f3;
+  --t-bg2: #ffffff;
+  --t-bg3: #e9ede5;
+  --t-fg: #202622;
+  --t-fg2: #657062;
+  --t-fg3: #657062;
+  --t-ac: #f75383;
+  --t-ac-ink: #ffffff;
+  --t-ac2: #e03d6c;
+  --t-ac3: #e03d6c;
+  --t-bd: #dce2d8;
+  --t-bda: #c5cfc0;
   --t-gl: transparent;
-  --t-gls: #1c1c1c;
-  --t-gr: #9acbfa;
+  --t-gls: #fdeef3;
+  --t-gr: #f75383;
   --t-bgr: none;
-  --t-radius: 12px;
-  --t-radius-sm: 6px;
-  --t-motion: .14s;
-  --t-brand: 'JetBrains Mono', ui-monospace, monospace;
-  --t-mono: var(--t-brand);
+  --t-radius: 10px;
+  --t-radius-sm: 7px;
+  --t-motion: 0.14s;
+  --t-display: 'DM Sans', system-ui, -apple-system, sans-serif;
+  --t-font: 'DM Sans', system-ui, -apple-system, sans-serif;
   --t-arcade: 'Pixelify Sans', system-ui, sans-serif;
-  --t-font: var(--t-arcade);
+  /* Wordmark, headings and code. Shared pages (games, VM Lab) use these so
+     the same markup reads right in either style. */
+  --t-brand: var(--t-font);
+  --t-brand-tracking: -0.03em;
   --t-heading: var(--t-font);
-  --t-display: var(--t-font);
+  --t-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
   --site-content-width: 1120px;
-  --sheet-ease: ease;
+  --sheet-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --ink-shadow: none;
   --mobile-dock-space: 0px;
 }
-:root[data-theme="light"], html.theme-light {
-  color-scheme: light;
-  --t-bg: #f3f6fa;
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --t-bg: #17191b;
+    --t-bg2: #222527;
+    --t-bg3: #2b2f31;
+    --t-fg: #f4f5f1;
+    --t-fg2: #a6adaf;
+    --t-fg3: #828b8c;
+    --t-ac: #ff6f99;
+    --t-ac-ink: #ffffff;
+    --t-ac2: #ff8bad;
+    --t-ac3: #ff8bad;
+    --t-bd: #363a3c;
+    --t-bda: #4b5355;
+    --t-gls: #332127;
+    --t-gr: #ff6f99;
+  }
+}
+
+/* Manual light/dark override (site-theme.js sets data-theme from the
+   "theme" cookie via the preferences page's Theme Preset). Both blocks sit
+   outside the media query and key off an attribute selector so they outrank
+   the query regardless of actual OS preference or source order. */
+:root[data-theme="light"] {
+  --t-bg: #f6f7f3;
   --t-bg2: #ffffff;
-  --t-bg3: #e8eef6;
-  --t-fg: #172536;
-  --t-fg2: #485d73;
-  --t-fg3: #526783;
-  --t-ac: #245c8c;
+  --t-bg3: #e9ede5;
+  --t-fg: #202622;
+  --t-fg2: #657062;
+  --t-fg3: #657062;
+  --t-ac: #f75383;
   --t-ac-ink: #ffffff;
-  --t-ac2: #183f61;
-  --t-ac3: #183f61;
-  --t-bd: #52678366;
-  --t-bda: #526783;
-  --t-gls: #e8eef6;
-  --t-gr: #245c8c;
+  --t-ac2: #e03d6c;
+  --t-ac3: #e03d6c;
+  --t-bd: #dce2d8;
+  --t-bda: #c5cfc0;
+  --t-gl: transparent;
+  --t-gls: #fdeef3;
+  --t-gr: #f75383;
 }
+:root[data-theme="dark"] {
+  --t-bg: #17191b;
+  --t-bg2: #222527;
+  --t-bg3: #2b2f31;
+  --t-fg: #f4f5f1;
+  --t-fg2: #a6adaf;
+  --t-fg3: #828b8c;
+  --t-ac: #ff6f99;
+  --t-ac-ink: #ffffff;
+  --t-ac2: #ff8bad;
+  --t-ac3: #ff8bad;
+  --t-bd: #363a3c;
+  --t-bda: #4b5355;
+  --t-gls: #332127;
+  --t-gr: #ff6f99;
+}
+
+/* High contrast mode (Preferences → Appearance, or OS "increase contrast").
+   Darkens/lightens text and borders well past the normal palette and swaps
+   the accent for a more AA-compliant shade; background tokens are left
+   alone since text/border contrast is what actually hurts readability. */
 :root[data-contrast="high"] {
-  --t-fg: #ffffff;
-  --t-fg2: #e0e2e8;
-  --t-fg3: #d0ddec;
-  --t-bd: #b2bfce;
-  --t-bda: #e0e2e8;
+  --t-fg: #000000;
+  --t-fg2: #1a1a1a;
+  --t-fg3: #000000;
+  --t-bd: #3d3d42;
+  --t-bda: #19191c;
+  --t-ac: #c81855;
+  --t-ac2: #a10f43;
+  --t-ac3: #a10f43;
 }
-:root[data-theme="light"][data-contrast="high"], html.theme-light[data-contrast="high"] {
-  --t-fg: #09101a;
-  --t-fg2: #172536;
-  --t-fg3: #172536;
-  --t-bd: #172536;
-  --t-bda: #09101a;
+@media (prefers-contrast: more) {
+  :root {
+    --t-fg: #000000;
+    --t-fg2: #1a1a1a;
+    --t-fg3: #000000;
+    --t-bd: #3d3d42;
+    --t-bda: #19191c;
+    --t-ac: #c81855;
+    --t-ac2: #a10f43;
+    --t-ac3: #a10f43;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-contrast="high"] {
+    --t-fg: #f6f7f3;
+    --t-fg2: #f0f0f0;
+    --t-fg3: #f6f7f3;
+    --t-bd: #9a9aa0;
+    --t-bda: #c7c7cc;
+    --t-ac: #ffb3c9;
+    --t-ac2: #ffd1df;
+    --t-ac3: #ffd1df;
+  }
+  @media (prefers-contrast: more) {
+    :root {
+      --t-fg: #f6f7f3;
+      --t-fg2: #f0f0f0;
+      --t-fg3: #f6f7f3;
+      --t-bd: #9a9aa0;
+      --t-bda: #c7c7cc;
+      --t-ac: #ffb3c9;
+      --t-ac2: #ffd1df;
+      --t-ac3: #ffd1df;
+    }
+  }
+}
+:root[data-theme="light"][data-contrast="high"] {
+  --t-fg: #000000;
+  --t-fg2: #1a1a1a;
+  --t-fg3: #000000;
+  --t-bd: #3d3d42;
+  --t-bda: #19191c;
+  --t-ac: #c81855;
+  --t-ac2: #a10f43;
+  --t-ac3: #a10f43;
+}
+:root[data-theme="dark"][data-contrast="high"] {
+  --t-fg: #f6f7f3;
+  --t-fg2: #f0f0f0;
+  --t-fg3: #f6f7f3;
+  --t-bd: #9a9aa0;
+  --t-bda: #c7c7cc;
+  --t-ac: #ffb3c9;
+  --t-ac2: #ffd1df;
+  --t-ac3: #ffd1df;
 }
 
 /* Holiday themes (dates in site-theme.js, docs/holiday-themes.md). These sit
    last so they win over the default palettes above; a custom accent set from
    Preferences is an inline style on <html> and still wins over them. Each theme
-   has a light and dark palette. */
+   has a light palette, a dark palette, and the same dark palette inside the
+   prefers-color-scheme query for visitors with no manual light/dark choice. */
 /* Halloween: pumpkin orange on deep purple */
 :root[data-holiday="halloween"] {
   --t-bg: #fbf3e8; --t-bg2: #fffdf8; --t-bg3: #f1e2cf;
@@ -94,7 +199,14 @@
   --t-ac: #ff8a1f; --t-ac-ink: #1a1006; --t-ac2: #ffa24d; --t-ac3: #ffa24d;
   --t-bd: #372a47; --t-bda: #503d66; --t-gls: #33210f; --t-gr: #ff8a1f;
 }
-
+@media (prefers-color-scheme: dark) {
+  :root[data-holiday="halloween"]:not([data-theme="light"]) {
+    --t-bg: #15111b; --t-bg2: #1f1829; --t-bg3: #291f36;
+    --t-fg: #f6efe6; --t-fg2: #b9a9bd; --t-fg3: #92829a;
+    --t-ac: #ff8a1f; --t-ac-ink: #1a1006; --t-ac2: #ffa24d; --t-ac3: #ffa24d;
+    --t-bd: #372a47; --t-bda: #503d66; --t-gls: #33210f; --t-gr: #ff8a1f;
+  }
+}
 /* Thanksgiving: warm cream and amber */
 :root[data-holiday="thanksgiving"] {
   --t-bg: #faf5ee; --t-bg2: #fffdf9; --t-bg3: #f1e7d8;
@@ -108,7 +220,14 @@
   --t-ac: #f28c38; --t-ac-ink: #1a1208; --t-ac2: #ffa45c; --t-ac3: #ffa45c;
   --t-bd: #3b332b; --t-bda: #544838; --t-gls: #35261a; --t-gr: #f28c38;
 }
-
+@media (prefers-color-scheme: dark) {
+  :root[data-holiday="thanksgiving"]:not([data-theme="light"]) {
+    --t-bg: #1a1714; --t-bg2: #25201b; --t-bg3: #2e2822;
+    --t-fg: #f6f1ea; --t-fg2: #b3a794; --t-fg3: #8f8472;
+    --t-ac: #f28c38; --t-ac-ink: #1a1208; --t-ac2: #ffa45c; --t-ac3: #ffa45c;
+    --t-bd: #3b332b; --t-bda: #544838; --t-gls: #35261a; --t-gr: #f28c38;
+  }
+}
 /* Christmas: evergreen surfaces with red accents */
 :root[data-holiday="christmas"] {
   --t-bg: #e9f4ea; --t-bg2: #fbfffb; --t-bg3: #d3e8d5;
@@ -122,7 +241,14 @@
   --t-ac: #f0494f; --t-ac-ink: #ffffff; --t-ac2: #ff6f74; --t-ac3: #ff6f74;
   --t-bd: #22503a; --t-bda: #33704f; --t-gls: #3a1a1d; --t-gr: #f0494f;
 }
-
+@media (prefers-color-scheme: dark) {
+  :root[data-holiday="christmas"]:not([data-theme="light"]) {
+    --t-bg: #0a1f14; --t-bg2: #112d1d; --t-bg3: #173b26;
+    --t-fg: #f6f4ea; --t-fg2: #b4cdb9; --t-fg3: #8fae97;
+    --t-ac: #f0494f; --t-ac-ink: #ffffff; --t-ac2: #ff6f74; --t-ac3: #ff6f74;
+    --t-bd: #22503a; --t-bda: #33704f; --t-gls: #3a1a1d; --t-gr: #f0494f;
+  }
+}
 /* New Year's: midnight navy and gold */
 :root[data-holiday="newyear"] {
   --t-bg: #f6f5fb; --t-bg2: #ffffff; --t-bg3: #e6e4f3;
@@ -136,7 +262,14 @@
   --t-ac: #f5c451; --t-ac-ink: #1c1403; --t-ac2: #ffd77a; --t-ac3: #ffd77a;
   --t-bd: #283159; --t-bda: #3b4880; --t-gls: #2b2512; --t-gr: #f5c451;
 }
-
+@media (prefers-color-scheme: dark) {
+  :root[data-holiday="newyear"]:not([data-theme="light"]) {
+    --t-bg: #0c1022; --t-bg2: #141a33; --t-bg3: #1c2445;
+    --t-fg: #f4f4fb; --t-fg2: #aeb3d4; --t-fg3: #868cb3;
+    --t-ac: #f5c451; --t-ac-ink: #1c1403; --t-ac2: #ffd77a; --t-ac3: #ffd77a;
+    --t-bd: #283159; --t-bda: #3b4880; --t-gls: #2b2512; --t-gr: #f5c451;
+  }
+}
 /* Valentine's: rose */
 :root[data-holiday="valentines"] {
   --t-bg: #fff4f6; --t-bg2: #fffdfd; --t-bg3: #fbe1e7;
@@ -150,7 +283,14 @@
   --t-ac: #ff5d8f; --t-ac-ink: #1f0610; --t-ac2: #ff85ab; --t-ac3: #ff85ab;
   --t-bd: #43232f; --t-bda: #5f3445; --t-gls: #3a1523; --t-gr: #ff5d8f;
 }
-
+@media (prefers-color-scheme: dark) {
+  :root[data-holiday="valentines"]:not([data-theme="light"]) {
+    --t-bg: #1b1017; --t-bg2: #27161f; --t-bg3: #331c29;
+    --t-fg: #fbeff3; --t-fg2: #c4a3b1; --t-fg3: #9d7c8b;
+    --t-ac: #ff5d8f; --t-ac-ink: #1f0610; --t-ac2: #ff85ab; --t-ac3: #ff85ab;
+    --t-bd: #43232f; --t-bda: #5f3445; --t-gls: #3a1523; --t-gr: #ff5d8f;
+  }
+}
 
 /* Christmas string lights along the top edge, twinkling in two alternating sets. */
 html[data-holiday="christmas"]::before,

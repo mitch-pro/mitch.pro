@@ -172,6 +172,11 @@ impl DataStore {
                         email TEXT PRIMARY KEY,
                         dismissed_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS ui_style_choices (
+                        email TEXT PRIMARY KEY,
+                        style TEXT NOT NULL CHECK (style IN ('mitch', 'tylerium')),
+                        chosen_at INTEGER NOT NULL
+                    );
                     CREATE TABLE IF NOT EXISTS deleted_account_marks (
                         email_hash TEXT PRIMARY KEY,
                         deleted_at INTEGER NOT NULL

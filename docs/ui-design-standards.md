@@ -9,7 +9,7 @@ Every user-facing and internal page on the site must adhere to the design langua
 1. **Shared Masthead & App Shell:**
    - Every ordinary page must load `/app.css` and `/app-shell.js`.
    - The body tag should use `class="app-shell"` so that the unified masthead (`#app-topbar`) is rendered consistently with the brand mark, navigation links, user profile, and MitchCoins wallet.
-   - Mitch's masthead uses the floating layout shared with the homepage. Games and Rankings are primary destinations on desktop and in the mobile dock.
+   - The site has two styles, mitch.pro (default) and Tylerium, chosen per account. See [ui-styles.md](ui-styles.md). In Tylerium the masthead uses the floating layout shared with its homepage, and Games and Rankings are primary destinations on desktop and in the mobile dock.
    - For standalone fullscreen experiences (e.g. game or emulator players), provide an overlay or topbar that matches the site masthead instead of inventing a custom header.
 
 2. **Theme Tokens (`app.css` & `theme-tokens.css`):**
@@ -23,14 +23,14 @@ Every user-facing and internal page on the site must adhere to the design langua
      - `--t-fg3`: Faint caption text
      - `--t-bd`: Standard border
      - `--t-bda`: Accentuated or hover border
-     - `--t-ac`: Accent color (blue by default, with seasonal and user-selected alternatives)
+     - `--t-ac`: Accent color (pink in mitch.pro, blue in Tylerium, with seasonal and user-selected alternatives)
      - `--t-ac-ink`: High-contrast text on accent buttons
      - `--t-radius`: Standard card corner radius (default: 10px)
      - `--t-radius-sm`: Input and button corner radius (default: 7px)
 
 3. **Typography:**
-   - Use `var(--t-font)` for copy, controls, and headings. Pixelify Sans is the default and Preferences offers other fonts.
-   - Use `var(--t-brand)` for the Mitch wordmark and `var(--t-mono)` for code. JetBrains Mono and Pixelify Sans are served locally with their font licenses.
+   - Use `var(--t-font)` for copy, controls, and headings. The default is DM Sans in mitch.pro and Pixelify Sans in Tylerium. Preferences offers other fonts in both.
+   - Use `var(--t-heading)` for headings, `var(--t-brand)` with `var(--t-brand-tracking)` for the wordmark, and `var(--t-mono)` for code, so shared markup reads right in either style. JetBrains Mono and Pixelify Sans are served locally with their font licenses.
 
 4. **Cards, Panels & Lists:**
    - Container shells use `.app-main`, `.shell`, or `.legal-shell` with responsive max-width (`1000px` - `1200px`).
@@ -38,19 +38,21 @@ Every user-facing and internal page on the site must adhere to the design langua
 
 ### Home, Games, and Rankings
 
-The Friends strip sits directly below the masthead. The welcome panel places the floating Mitch mark to the left of the animated hello and keeps the local clock on the right. Games spans the shortcut area above Matrix, Cloud Linux, and Movies. Rankings appears below the welcome panel, and the Pages directory arranges Community, MitchCoins, and Account links in columns that stack on phones. Preferences lives in the Account column. The Rankings preview requests three rows from the same leaderboard endpoint used by the full rankings page and keeps the existing profile links and cosmetics.
+The mitch.pro homepage (`index.html`, `home.css`) and Rankings page (`leaderboard/`) keep their original layouts. The Tylerium versions live in `webserver/tylerium/` and are described below.
 
-The games portal uses the full viewport width and adapts the number of game columns to the available space. The player fills the viewport with a compact toolbar, and the Fullscreen button expands the game itself where the browser supports it. The portal uses the same color tokens and wordmark as the homepage. The rankings page accepts a `metric` query parameter to open a category directly.
+In the Tylerium homepage, the Friends strip sits directly below the masthead. The welcome panel places the floating Mitch mark to the left of the animated hello and keeps the local clock on the right. Games spans the shortcut area above Matrix, Cloud Linux, and Movies. Rankings appears below the welcome panel, and the Pages directory arranges Community, MitchCoins, and Account links in columns that stack on phones. Preferences lives in the Account column. The Rankings preview requests three rows from the same leaderboard endpoint used by the full rankings page and keeps the existing profile links and cosmetics.
+
+The games portal is shared by both styles. It uses the full viewport width and adapts the number of game columns to the available space. The player fills the viewport with a compact toolbar, and the Fullscreen button expands the game itself where the browser supports it. The portal uses the same color tokens and wordmark as the homepage. Both Rankings pages accept a `metric` query parameter to open a category directly.
 
 ### VM Lab
 
-The setup panel shows the default Linux desktop specs alongside the Create Computer and Custom OS controls. Each assigned computer shows its power status, connection details, and desktop controls next to CPU, memory, and storage meters. Offline meters are marked unavailable. The connection and resource panels stack on phones.
+VM Lab is shared by both styles. The setup panel shows the default Linux desktop specs alongside the Create Computer and Custom OS controls. Each assigned computer shows its power status, connection details, and desktop controls next to CPU, memory, and storage meters. Offline meters are marked unavailable. The connection and resource panels stack on phones.
 
 Custom OS shows selectable preset cards with logos and prices from the existing preset catalog. ISO links, uploads, and stored ISO actions are grouped separately. The icons are bundled locally. Devicon supplies the Windows, Linux Mint, Arch Linux, Kali Linux, and Chrome marks, and Tails uses its project favicon. [Devicon icons and license](https://github.com/devicons/devicon/tree/v2.17.0), [Tails project favicon](https://tails.net/favicon.ico).
 
 ### Background
 
-Mitch uses Tylerium's charcoal Vanta Clouds preset and locally hosted Three.js and Vanta with their upstream licenses. Customize offers dark clouds, blue clouds, a solid background, and motion controls. Saved wallpaper takes precedence until the user switches presets. The layer uses the static WebP fallback with reduced motion, disabled animation, Save-Data, or unavailable WebGL. Embedded games skip the background engine.
+The Tylerium style uses its charcoal Vanta Clouds preset and locally hosted Three.js and Vanta with their upstream licenses. Customize offers dark clouds, blue clouds, a solid background, and motion controls. Saved wallpaper takes precedence until the user switches presets. The layer uses the static WebP fallback with reduced motion, disabled animation, Save-Data, or unavailable WebGL. Embedded games skip the background engine. mitch.pro pages, public pages and rjuhsd.school never load it.
 
 ## 2. No Orphan Endpoints
 
@@ -63,10 +65,10 @@ Mitch uses Tylerium's charcoal Vanta Clouds preset and locally hosted Three.js a
 - Always test UI changes in both dark and light mode. Test light mode both ways it can be reached: the OS setting (Playwright `colorScheme: 'light'`) and the manual Preferences toggle.
 - Contrast must be verified for all text, borders, buttons, and status indicators.
 
-The shared `/site-theme.js` uses dark by default. It reads the `theme` cookie for an explicit light, dark, or system setting:
+The shared `/site-theme.js` follows the OS unless the `theme` cookie holds a manual `light` or `dark` choice. This is the same in both styles:
 
-- Sets `html[data-theme="light"|"dark"]` to the effective mode for `theme-tokens.css`.
-- Updates `html.theme-light` when the effective mode is light. Only the explicit system setting follows OS changes.
+- It sets `html[data-theme="light"|"dark"]` to the effective mode (manual or OS) for `theme-tokens.css` and `tylerium/tokens.css`.
+- It updates `html.theme-light` when the effective mode is light, and keeps both in step with OS changes while no manual mode is saved.
 
 So page CSS can key light-mode fixes off `html.theme-light` (or `html:not(.theme-light)` for dark-only colors) and they apply on every page. Prefer not needing them at all: tokens already switch, and a status color written as `color-mix(in srgb, #dc2626 70%, var(--t-fg))` reads in both modes. The legacy `theme.js` (still loaded by a few pages such as Preferences and the admin panel) also toggles `theme-light`; both scripts read the same cookie.
 

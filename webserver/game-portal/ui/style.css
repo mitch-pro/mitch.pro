@@ -22,7 +22,7 @@ svg { width: 19px; height: 19px; stroke-width: 1.8; }
 h1, h2, h3, p { margin: 0; }
 .shell { display: grid; grid-template-columns: 204px minmax(0, 1fr); min-height: calc(100dvh - var(--site-credit-height, 0px)); }
 .sidebar { position: sticky; top: 0; height: calc(100dvh - var(--site-credit-height, 0px)); padding: calc(15px + env(safe-area-inset-top)) 12px 12px max(12px, env(safe-area-inset-left)); display: flex; flex-direction: column; background: var(--sidebar); border-right: 1px solid var(--line); z-index: 30; overflow-y: auto; scrollbar-width: thin; }
-.brand { display: flex; align-items: center; gap: 9px; min-height: 43px; margin: 0 4px 20px; font: 550 1.15rem/1 var(--t-brand); letter-spacing: -.065em; color: var(--t-fg); }
+.brand { display: flex; align-items: center; gap: 9px; min-height: 43px; margin: 0 4px 20px; font: 550 1.15rem/1 var(--t-brand); letter-spacing: var(--t-brand-tracking, -.065em); color: var(--t-fg); }
 .brand b { font-weight: inherit; }
 .brand span { color: var(--accent); }
 .brand img { width: 29px; height: 29px; border-radius: var(--t-radius-sm); object-fit: contain; }
@@ -204,7 +204,7 @@ h1 { font: 600 clamp(2rem, 4.5vw, 2.5rem)/1.2 var(--t-heading); }
   .topbar-actions { width: 100%; gap: 8px; }
   .topbar-location { gap: 12px; }
   .topbar-location .portal-home-label { display: none; }
-  .topbar-location .portal-home-wordmark { display: inline; color: var(--text); font: 550 1rem/1 var(--t-brand); letter-spacing: -.06em; }
+  .topbar-location .portal-home-wordmark { display: inline; color: var(--text); font: 550 1rem/1 var(--t-brand); letter-spacing: var(--t-brand-tracking, -.06em); }
   .topbar-location .portal-home-wordmark span { color: var(--accent); }
   .search-box { width: auto; }
   .search-box kbd { display: none; }

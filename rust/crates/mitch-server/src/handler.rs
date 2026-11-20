@@ -85,7 +85,7 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/media/site-tour-v4.mp4",
     "/media/site-tour-poster-v3.webp",
     "/home-friends.js",
-    "/home-dashboard.js",
+    "/ui-style.js",
     "/background.css",
     "/background.js",
     "/assets/clouds-dark.webp",
@@ -1201,6 +1201,9 @@ async fn handle_resolved(
         {
             return resp;
         }
+        if let Some(resp) = crate::ui_style::handle(&state, &method, &path, headers, body_bytes) {
+            return resp;
+        }
         // me/* group (Step 9). Runs after misc so /api/me/coins (ported in
         // the merge adaptation) keeps its existing match.
         if let Some(resp) =
@@ -1873,6 +1876,18 @@ async fn handle_resolved(
         } else {
             safe_webroot_path(&webroot, &path)
         };
+        // Accounts on the Tylerium style get its variant of the page when
+        // webserver/tylerium/ has one (the homepage and Rankings).
+        let page_style = crate::ui_style::for_page(&state, headers, &path);
+        let file_path = match file_path {
+            Some(fp) if page_style.is_tylerium() => fp
+                .strip_prefix(&webroot)
+                .ok()
+                .and_then(|rel| rel.to_str())
+                .and_then(|rel| crate::ui_style::overlay_path(&webroot, rel))
+                .or(Some(fp)),
+            other => other,
+        };
         if let Some(fp) = file_path {
             if fp.exists() && std::fs::metadata(&fp).map(|m| !m.is_dir()).unwrap_or(false) {
                 if let Ok(raw) = std::fs::read(&fp) {
@@ -1903,7 +1918,7 @@ async fn handle_resolved(
                     }
                     if let Ok(mut html) = String::from_utf8(raw) {
                         let body_str = crate::pipeline::inject_page(
-                            &state, headers, &path, &html_base, &mut html,
+                            &state, headers, &path, &html_base, &mut html, page_style,
                         );
                         let mut resp = html_response(body_str);
                         if set_trial_cookie {

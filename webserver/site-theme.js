@@ -30,12 +30,21 @@
     return '#' + [r, g, b].map(function (v) { return v.toString(16).padStart(2, '0'); }).join('');
   }
 
+  // No saved mode (or "auto") follows the OS in both UI styles.
   function isDarkMode(mode) {
     if (mode === 'dark') return true;
     if (mode === 'light') return false;
-    return mode !== 'auto' || !window.matchMedia || window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
   }
 
+  // The UI style the server rendered this page in (html[data-ui], set from the
+  // account's choice; see docs/ui-styles.md). Only Tylerium is marked.
+  function isTylerium() {
+    return document.documentElement.getAttribute('data-ui') === 'tylerium';
+  }
+
+  // data-theme always carries the effective mode (manual or OS), so palettes
+  // in theme-tokens.css and tylerium.css can key off it directly.
   function applyMode(mode) {
     var root = document.documentElement;
     var effective = isDarkMode(mode) ? 'dark' : 'light';
@@ -98,10 +107,11 @@
     }
     var root = document.documentElement;
     var sizes = { compact: 0.9, normal: 1, comfy: 1.05, huge: 1.1 };
-    var corners = { sharp: '0px', soft: '12px', round: '14px', bubble: '22px' };
+    var tylerium = isTylerium();
+    var corners = { sharp: '0px', soft: tylerium ? '12px' : '10px', round: '14px', bubble: '22px' };
     var fonts = {
-      arcade: "var(--t-arcade)",
-      system: 'system-ui, sans-serif',
+      arcade: 'var(--t-arcade)',
+      system: "'DM Sans', system-ui, sans-serif",
       plain: 'Arial, Helvetica, sans-serif',
       mono: 'ui-monospace, monospace',
       rounded: "'Arial Rounded MT Bold', 'Trebuchet MS', sans-serif",
@@ -110,12 +120,15 @@
     };
     var size = sizes[preference('density', 'normal')] || 1;
     var radius = preference('radius', 'soft');
-    var font = fonts[preference('font', 'arcade')] || fonts.arcade;
+    // Each style has its own default font: DM Sans for mitch.pro, Pixelify
+    // Sans for Tylerium. A font picked in Preferences applies to both.
+    var defaultFont = tylerium ? 'arcade' : 'system';
+    var font = fonts[preference('font', defaultFont)] || fonts[defaultFont];
     var reducedMotion = preference('motion', 'on') === 'off';
     root.style.fontSize = (16 * size) + 'px';
     root.style.setProperty('--t-ui-scale', String(size));
     root.style.setProperty('--t-radius', corners[radius] || corners.soft);
-    root.style.setProperty('--t-radius-sm', radius === 'sharp' ? '0px' : '6px');
+    root.style.setProperty('--t-radius-sm', radius === 'sharp' ? '0px' : (tylerium ? '6px' : '7px'));
     root.style.setProperty('--t-font', font);
     root.style.setProperty('--t-display', font);
     root.style.setProperty('--t-motion', reducedMotion ? '0s' : '.15s');
@@ -186,8 +199,8 @@
     else {
       var preference = '';
       try { preference = localStorage.getItem('theme_holiday') || ''; } catch (_) {}
-      var enabled = preference === 'on' || preference === 'auto' || (!preference && SEASONS[window.__holidayForce]);
-      name = enabled ? holidaySeason() : '';
+      // On by default in both UI styles; only an explicit "off" hides it.
+      name = preference === 'off' ? '' : holidaySeason();
     }
     if (name) root.setAttribute('data-holiday', name);
     else root.removeAttribute('data-holiday');
@@ -219,7 +232,7 @@
     var osDark = window.matchMedia('(prefers-color-scheme: dark)');
     var onOsChange = function () {
       var mode = readCookie('theme');
-      if (mode === 'auto') applyMode(mode);
+      if (mode !== 'light' && mode !== 'dark') applyMode(mode);
     };
     if (osDark.addEventListener) osDark.addEventListener('change', onOsChange);
     else if (osDark.addListener) osDark.addListener(onOsChange);
@@ -237,8 +250,7 @@
   }
 
   function holidayOff() {
-    try { var saved = localStorage.getItem('theme_holiday');
-      return saved !== 'on' && saved !== 'auto' && !(!saved && SEASONS[window.__holidayForce]); } catch (_) { return !SEASONS[window.__holidayForce]; }
+    try { return localStorage.getItem('theme_holiday') === 'off'; } catch (_) { return false; }
   }
 
   // Turns the holiday theme off (or back on) for every page; Preferences shows
@@ -246,7 +258,7 @@
   function setHolidayOff(off) {
     try {
       if (off) localStorage.setItem('theme_holiday', 'off');
-      else localStorage.setItem('theme_holiday', 'on');
+      else localStorage.removeItem('theme_holiday');
     } catch (_) {}
     apply();
   }
@@ -274,9 +286,10 @@
     setHolidayOff: setHolidayOff,
     holidayFxOff: holidayFxOff,
     setHolidayFxOff: setHolidayFxOff,
+    isTylerium: isTylerium,
     getMode: function () { return readCookie('theme'); },
     setMode: function (mode) {
-      writeCookie('theme', ['light', 'dark', 'auto'].includes(mode) ? mode : '');
+      writeCookie('theme', mode === 'light' || mode === 'dark' ? mode : '');
       apply();
     },
     getAccent: function () { return readCookie('accent'); },
