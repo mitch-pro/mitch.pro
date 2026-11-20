@@ -69,7 +69,10 @@
   /* ---------------------------------------------------------- list views */
   function say(text) { el.status.textContent = text || ''; }
 
-  function row(track, i, list, extra) {
+  /** A song row. `onPlay` replaces what choosing the row does (the queue jumps
+   *  instead of replacing itself). Choosing the song that is already playing
+   *  pauses or resumes it. */
+  function row(track, i, list, extra, onPlay) {
     var li = document.createElement('li');
     li.className = 'mp-row';
     li.dataset.id = track.id || '';
@@ -88,7 +91,15 @@
     var t = document.createElement('span'); t.className = 'mp-rowtitle'; t.textContent = track.title;
     var a = document.createElement('span'); a.className = 'mp-rowartist'; a.textContent = track.artist;
     main.append(t, a);
-    main.addEventListener('click', function () { M.play(list, i); });
+    function choose() {
+      var cur = M.current();
+      if (cur && cur.id && cur.id === track.id) M.toggle();
+      else if (onPlay) onPlay();
+      else M.play(list, i);
+    }
+    main.addEventListener('click', choose);
+    // The cover shows a play hint on hover, so clicking it has to play too.
+    wrap.addEventListener('click', choose);
     var d = document.createElement('span');
     d.className = 'mp-rowdur'; d.textContent = M.fmt(track.duration);
     var actions = document.createElement('span');
@@ -136,11 +147,7 @@
       return;
     }
     list.forEach(function (t, i) {
-      var r = row(t, i, list);
-      if (tab === 'queue') {
-        r.querySelector('.mp-rowmain').onclick = function () { M.jump(i); };
-      }
-      el.list.appendChild(r);
+      el.list.appendChild(row(t, i, list, null, tab === 'queue' ? function () { M.jump(i); } : null));
     });
     markPlaying();
   }
