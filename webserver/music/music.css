@@ -42,11 +42,11 @@
 .mp-status:empty { display: none; }
 
 .mp-list { list-style: none; margin: 0; padding: 0; }
-.mp-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto auto auto; gap: 8px; align-items: center; padding: 6px; border-radius: var(--t-radius-sm); }
+.mp-row { display: flex; gap: 8px; align-items: center; padding: 6px; border-radius: var(--t-radius-sm); }
 .mp-row:hover { background: var(--t-bg3); }
 .mp-row.mp-playing { background: color-mix(in srgb, var(--t-ac) 14%, transparent); }
-.mp-thumb { width: 48px; height: 48px; object-fit: cover; border-radius: var(--t-radius-sm); background: var(--t-bg3); }
-.mp-rowmain { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; padding: 0; background: none; border: 0; color: var(--t-fg); font: inherit; text-align: left; cursor: pointer; }
+.mp-thumb { flex: none; width: 48px; height: 48px; object-fit: cover; border-radius: var(--t-radius-sm); background: var(--t-bg3); }
+.mp-rowmain { flex: 1; display: flex; flex-direction: column; align-items: flex-start; min-width: 0; padding: 0; background: none; border: 0; color: var(--t-fg); font: inherit; text-align: left; cursor: pointer; }
 .mp-rowtitle, .mp-rowartist { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mp-rowtitle { font-weight: 600; }
 .mp-rowartist { color: var(--t-fg2); font-size: 13px; }
@@ -93,7 +93,6 @@
   .mp-vol { display: none; }
 }
 @media (max-width: 520px) {
-  .mp-row { grid-template-columns: 44px minmax(0, 1fr) auto auto; }
   .mp-rowdur { display: none; }
   .mp-thumb { width: 44px; height: 44px; }
 }
@@ -109,3 +108,35 @@
  * masthead; the pop-out is only a player. */
 .music-popout .mitch-coin-gamebar { display: none; }
 .music-popout .mp-nowhead { padding-right: 52px; }  /* clears the site's floating bell */
+
+/* ------------------------------------------------------------ playlists */
+.mp-pltools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.mp-spacer { flex: 1; }
+.mp-seg { display: inline-flex; border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm); overflow: hidden; }
+.mp-seg button { padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer; background: var(--t-bg); color: var(--t-fg2); border: 0; }
+.mp-seg button[aria-pressed=true] { background: var(--t-ac); color: var(--t-ac-ink); }
+.mp-plsearch { margin-bottom: 10px; }
+.mp-plsearch input { width: 100%; box-sizing: border-box; padding: 9px 11px; background: var(--t-bg); color: var(--t-fg); border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm); font: inherit; }
+.mp-plsearch input:focus { outline: none; border-color: var(--t-ac); }
+.mp-plhead { margin-bottom: 8px; }
+.mp-plname { margin: 0 0 4px; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.mp-plmeta { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; margin-bottom: 12px; color: var(--t-fg2); font-size: 13px; }
+.mp-owner { display: inline-flex; align-items: center; gap: 6px; }
+.mp-ownerpic { width: 20px; height: 20px; border-radius: 999px; object-fit: cover; }
+.mp-danger { color: color-mix(in srgb, #dc2626 75%, var(--t-fg)); }
+.mp-btn[disabled], .mp-icon[disabled] { opacity: 0.4; cursor: default; }
+.mp-share { margin-bottom: 12px; padding: 12px; background: var(--t-bg); border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm); }
+.mp-share p { margin: 0 0 8px; color: var(--t-fg2); font-size: 13px; }
+.mp-sharelink { width: 100%; box-sizing: border-box; padding: 8px 10px; margin-bottom: 8px; background: var(--t-bg2); color: var(--t-fg); border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm); font: inherit; font-size: 13px; }
+.mp-sharebtns { display: flex; flex-wrap: wrap; gap: 8px; }
+.mp-readonly .mp-small { display: none; }
+
+.mp-dialog { width: min(420px, calc(100vw - 32px)); padding: 18px; background: var(--t-bg2); color: var(--t-fg); border: 1px solid var(--t-bd); border-radius: var(--t-radius); font-family: var(--t-font); }
+.mp-dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
+.mp-dialog h2 { margin: 0 0 12px; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+.mp-field { display: block; margin-bottom: 10px; }
+.mp-field span { display: block; margin-bottom: 4px; color: var(--t-fg2); font-size: 13px; }
+.mp-field input, .mp-field select { width: 100%; box-sizing: border-box; padding: 9px 11px; background: var(--t-bg); color: var(--t-fg); border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm); font: inherit; }
+.mp-field input:focus, .mp-field select:focus { outline: none; border-color: var(--t-ac); }
+.mp-dialogbtns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+#mp-pickerlist { max-height: 40vh; overflow-y: auto; }

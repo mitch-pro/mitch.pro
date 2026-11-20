@@ -130,11 +130,11 @@
       var t = M.current();
       if (!t) { card.hidden = true; return; }
       card.hidden = false;
-      if (shownId !== t.id) {
+      title.textContent = t.title;
+      artist.textContent = t.artist;
+      if (t.id && shownId !== t.id) {          // tracks from Spotify have no id until matched
         shownId = t.id; lastLine = -2; lyrics = null; lyric.textContent = '';
         art.src = M.thumb(t.id);
-        title.textContent = t.title;
-        artist.textContent = t.artist;
         M.getLyrics(t).then(function (d) { if (shownId === t.id && d && d.found && d.sync !== 'none') lyrics = d; });
       }
       var label = s.playing ? 'Pause' : 'Play';

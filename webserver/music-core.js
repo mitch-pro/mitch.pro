@@ -103,7 +103,8 @@
     if (t && st.pos > 6 && prefetchedFor !== t.id) {
       prefetchedFor = t.id;
       var next = st.queue[st.index + 1];
-      if (next) fetch('/api/music/prefetch?id=' + encodeURIComponent(next.id), { credentials: 'include' }).catch(function () {});
+      if (next && next.id) fetch('/api/music/prefetch?id=' + encodeURIComponent(next.id), { credentials: 'include' }).catch(function () {});
+      else if (next) matchTrack(next).then(function (id) { next.id = id; queueDirty = true; return fetch('/api/music/prefetch?id=' + encodeURIComponent(id), { credentials: 'include' }); }).catch(function () {});
     }
     if (Math.abs(st.pos - lastSessionPos) > 1) { lastSessionPos = st.pos; updateSessionPosition(); }
     emit();
@@ -133,10 +134,31 @@
     }
   }
 
+  /** Finds the YouTube video for a track that came from a Spotify playlist. */
+  function matchTrack(t) {
+    return api('/api/music/match?title=' + encodeURIComponent(t.title) + '&artist=' + encodeURIComponent(t.artist) +
+      '&duration=' + encodeURIComponent(t.duration || 0)).then(function (d) { return d.id; });
+  }
+
   function loadTrack(i, pos, autoplay) {
     var t = st.queue[i];
     if (!t) return;
     ensureAudio();
+    if (!t.id) {                       // not matched to a video yet
+      st.buffering = true; st.error = ''; st.dur = t.duration || 0; audio.removeAttribute('src');
+      emit();
+      matchTrack(t).then(function (id) {
+        if (st.queue[i] !== t) return;           // the queue moved on
+        t.id = id; queueDirty = true;
+        loadTrack(i, pos, autoplay);
+        changed();
+      }).catch(function (e) {
+        if (st.queue[i] !== t) return;
+        st.error = e.message || "Couldn't find that song"; st.buffering = false; st.playing = false; changed();
+        if (st.index + 1 < st.queue.length) setTimeout(function () { if (st.error && st.queue[st.index] === t) go(st.index + 1, true); }, 1800);
+      });
+      return;
+    }
     prefetchedFor = '';
     st.dur = t.duration || 0;
     st.buffering = true; st.error = ''; st.blocked = false;
@@ -252,13 +274,13 @@
   }
 
   function trimQueue(queue, index) {
-    queue = (queue || []).filter(function (t) { return t && t.id; });
+    queue = (queue || []).filter(function (t) { return t && (t.id || t.spotifyId); });
     if (queue.length <= MAX_QUEUE) return queue;
     var start = clamp(index - 20, 0, queue.length - MAX_QUEUE);
     return queue.slice(start, start + MAX_QUEUE);
   }
   function trimmedIndex(arg) {
-    var q = (arg.queue || []).filter(function (t) { return t && t.id; });
+    var q = (arg.queue || []).filter(function (t) { return t && (t.id || t.spotifyId); });
     var start = q.length <= MAX_QUEUE ? 0 : clamp(arg.index - 20, 0, q.length - MAX_QUEUE);
     return arg.index - start;
   }

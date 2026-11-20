@@ -678,6 +678,34 @@ impl DataStore {
                         added_at INTEGER NOT NULL,
                         PRIMARY KEY (email, video_id)
                     );
+                    CREATE TABLE IF NOT EXISTS music_playlists (
+                        id TEXT PRIMARY KEY,
+                        owner_email TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        public INTEGER NOT NULL DEFAULT 0,
+                        share_token TEXT NOT NULL DEFAULT '',
+                        spotify_id TEXT NOT NULL DEFAULT '',
+                        spotify_synced_at INTEGER NOT NULL DEFAULT 0,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_music_playlists_owner ON music_playlists (owner_email);
+                    CREATE INDEX IF NOT EXISTS idx_music_playlists_public ON music_playlists (public, updated_at);
+                    CREATE TABLE IF NOT EXISTS music_playlist_tracks (
+                        playlist_id TEXT NOT NULL,
+                        position INTEGER NOT NULL,
+                        video_id TEXT NOT NULL DEFAULT '',
+                        title TEXT NOT NULL,
+                        artist TEXT NOT NULL,
+                        duration_s INTEGER NOT NULL DEFAULT 0,
+                        spotify_id TEXT NOT NULL DEFAULT '',
+                        PRIMARY KEY (playlist_id, position)
+                    );
+                    CREATE TABLE IF NOT EXISTS music_track_matches (
+                        match_key TEXT PRIMARY KEY,
+                        video_id TEXT NOT NULL,
+                        matched_at INTEGER NOT NULL
+                    );
                     CREATE TABLE IF NOT EXISTS music_lyrics_cache (
                         video_id TEXT PRIMARY KEY,
                         source TEXT NOT NULL,

@@ -15,6 +15,8 @@
 //! still works, and so no third party sees the visitor.
 
 mod lyrics;
+mod playlists;
+mod spotify;
 mod ytdlp;
 
 use crate::routes::me::{cookies_of, json_response, me_uid, parse_body_strict};
@@ -39,7 +41,7 @@ fn email_of(state: &AppState, headers: &HeaderMap) -> Option<String> {
 
 /// Per-user sliding-window limit for the endpoints that start yt-dlp or call
 /// outside APIs. In memory; resets on restart.
-fn allow(email: &str, bucket: &str, max: usize, window: Duration) -> bool {
+pub(super) fn allow(email: &str, bucket: &str, max: usize, window: Duration) -> bool {
     static LOG: OnceLock<Mutex<HashMap<String, VecDeque<Instant>>>> = OnceLock::new();
     let mut log = LOG
         .get_or_init(Default::default)
@@ -59,11 +61,11 @@ fn allow(email: &str, bucket: &str, max: usize, window: Duration) -> bool {
     true
 }
 
-fn limited() -> Response {
+pub(super) fn limited() -> Response {
     json_response(429, json!({ "error": "slow down a little" }))
 }
 
-fn qs(search: &str, key: &str) -> String {
+pub(super) fn qs(search: &str, key: &str) -> String {
     url::form_urlencoded::parse(search.as_bytes())
         .find(|(k, _)| k == key)
         .map(|(_, v)| v.into_owned())
@@ -79,6 +81,12 @@ pub async fn handle(
     search: &str,
 ) -> Option<Response> {
     let route = path.strip_prefix("/api/music/")?;
+    if route.starts_with("playlist") || route == "match" {
+        let Some(email) = email_of(state, headers) else {
+            return Some(json_response(401, json!({ "error": "not logged in" })));
+        };
+        return playlists::handle(state, &email, method, route, body_bytes, search).await;
+    }
     let known = matches!(
         (method.as_str(), route),
         (
@@ -104,7 +112,7 @@ pub async fn handle(
     })
 }
 
-fn yt_error(e: &ytdlp::YtError) -> Response {
+pub(super) fn yt_error(e: &ytdlp::YtError) -> Response {
     // The detail stays in the server log; visitors only get the generic text.
     if let ytdlp::YtError::Failed(detail) = e {
         tracing::warn!("[music] yt-dlp failed: {detail}");

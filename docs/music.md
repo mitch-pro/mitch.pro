@@ -5,8 +5,59 @@ card follows the user to every other page so they can pause from anywhere, and
 the player can be popped out into its own window.
 
 Code: `rust/crates/mitch-server/src/routes/music/` (API), `mitch-lib/src/music.rs`
-(tables), `mitch-lib/src/music_lyrics.rs` (lyrics formats and matching),
+(favorites, lyrics cache), `mitch-lib/src/music_playlists.rs` (playlists),
+`mitch-lib/src/music_lyrics.rs` (lyrics formats and matching),
 `webserver/music-core.js`, `music-widget.js/.css`, `webserver/music/`.
+
+## Playlists
+
+Any signed-in user can make up to 100 playlists of up to 500 songs. Tables:
+`music_playlists`, `music_playlist_tracks`, `music_track_matches` (all erased
+with the account except the shared match cache, which holds no user data).
+
+| | Who can open it |
+| --- | --- |
+| **Public** | any signed-in user; listed in the Public tab (searchable by name) |
+| **Private** | only the owner |
+| **Private with a share link** | anyone signed in who has the link (`/music/?playlist=<id>&t=<token>`). "Stop sharing" clears the token, which kills every old link |
+
+Only the owner edits, renames, reorders, deletes, syncs or sees the token. A
+playlist someone can't open answers 404, the same as a missing one. A viewer can
+play it or **Save a copy** (always private, never linked to Spotify). The API
+returns the owner's display name, photo and equipped color/badge, never their
+email; list responses leave out an uploaded (data URL) photo because of its size.
+Endpoints are listed at the top of `routes/music/playlists.rs`.
+
+### Sharing over chat
+
+"Send in chat" on a playlist opens `/matrix/?mshare=<link>&mname=<name>`.
+`webserver/matrix/music-share.js` (loaded by the chat page) waits for the chat
+client to sync, lists the user's joined rooms, and sends `🎵 <name> <link>` with
+the client's own `sendTextMessage`, so encrypted rooms stay encrypted and the
+server never sees the message. The link must be on this site's `/music/` with a
+`playlist` parameter, otherwise nothing is shown. The prompt is its own overlay;
+the script doesn't touch the chat UI. Whoever clicks the link in chat lands on
+the playlist page.
+
+### Spotify import and sync
+
+"Import from Spotify" takes a link to a **public** playlist and needs no
+Spotify account or API key: the server reads Spotify's public embed page for
+the playlist (`routes/music/spotify.rs`; only `open.spotify.com` is fetched). So:
+
+- only public playlists work, and Spotify shares only the first 100 songs;
+- no audio comes from Spotify. Each song is matched to a YouTube video the first
+  time it is played (`GET /api/music/match`: search `artist title`, accept a result
+  whose title/artist score at least 0.5 and whose length is within 6 s). Matches
+  are stored in `music_track_matches` and shared by everyone;
+- **Sync from Spotify** (and an automatic sync when the owner opens a playlist
+  more than a day stale) makes the Spotify part of the playlist equal Spotify's
+  current list and order, keeps existing matches, and keeps songs the owner added
+  by hand after it. Songs removed on Spotify disappear.
+- Reading the embed page is not an official API. If Spotify changes it,
+  `parse_embed` is the one place to fix. Private playlists, Liked Songs and
+  playlists past 100 songs would need a registered Spotify app and OAuth, which
+  this doesn't have.
 
 ## Where the audio comes from
 
@@ -136,5 +187,10 @@ card's one-line lyric: a binary search finds the current line, and each word's
 - Live-verified lyrics sources: LRCLIB (including word-synced), lyrics.ovh and
   QQ Music. NetEase, Kugou and YouTube captions are covered by fixture tests of
   their formats only (those hosts were unreachable or blocked from the sandbox).
+- The chat share prompt was tested against a stub `__mxClient` (the real chat
+  server isn't available locally), not the live chat client. `sendTextMessage` is
+  the standard matrix-js-sdk call the bundle's client exposes.
+- Sharing between two different accounts wasn't exercised in a browser (local
+  dev signs everyone in as one user); the access rules are covered by unit tests.
 - No end-to-end browser test is committed; the player flow was driven by hand
   with Playwright.

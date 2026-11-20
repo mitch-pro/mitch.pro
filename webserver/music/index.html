@@ -8,10 +8,10 @@
   <link rel="icon" href="/favicon.ico">
   <link rel="stylesheet" href="/app.css">
   <link rel="stylesheet" href="/music-widget.css?v=1">
-  <link rel="stylesheet" href="/music/music.css?v=1">
+  <link rel="stylesheet" href="/music/music.css?v=2">
   <script src="/app-shell.js" defer></script>
   <script src="/music-core.js?v=1" defer></script>
-  <script src="/music/music.js?v=1" defer></script>
+  <script src="/music/music.js?v=3" defer></script>
 </head>
 <body class="app-shell music-page" data-mode="page">
   <main class="app-main mp-main">
@@ -26,10 +26,41 @@
         <div class="mp-tabs" role="tablist">
           <button type="button" role="tab" id="tab-search" aria-selected="true" data-tab="search">Results</button>
           <button type="button" role="tab" id="tab-library" aria-selected="false" data-tab="library">Library</button>
+          <button type="button" role="tab" id="tab-playlists" aria-selected="false" data-tab="playlists">Playlists</button>
           <button type="button" role="tab" id="tab-queue" aria-selected="false" data-tab="queue">Queue</button>
         </div>
         <p id="mp-status" class="mp-status" role="status"></p>
         <ul id="mp-list" class="mp-list"></ul>
+
+        <div id="mp-playlists" class="mp-playlists" hidden>
+          <div id="mp-plhome">
+            <div class="mp-pltools">
+              <div class="mp-seg" role="group" aria-label="Playlist list">
+                <button type="button" id="mp-seg-mine" aria-pressed="true">Mine</button>
+                <button type="button" id="mp-seg-public" aria-pressed="false">Public</button>
+              </div>
+              <span class="mp-spacer"></span>
+              <button type="button" id="mp-pl-new" class="mp-btn">New playlist</button>
+              <button type="button" id="mp-pl-spotify" class="mp-btn">Import from Spotify</button>
+            </div>
+            <form id="mp-plsearch" class="mp-plsearch" role="search" hidden>
+              <input id="mp-plq" type="search" maxlength="80" placeholder="Search public playlists" aria-label="Search public playlists" autocomplete="off">
+            </form>
+            <ul id="mp-pllist" class="mp-list"></ul>
+          </div>
+          <div id="mp-pldetail" hidden>
+            <div class="mp-plhead">
+              <button type="button" id="mp-pl-back" class="mp-link">&larr; Playlists</button>
+            </div>
+            <div class="mp-plinfo">
+              <h2 id="mp-pl-name" class="mp-plname"></h2>
+              <div id="mp-pl-meta" class="mp-plmeta"></div>
+            </div>
+            <div id="mp-pl-actions" class="mp-pltools"></div>
+            <div id="mp-pl-share" class="mp-share" hidden></div>
+            <ul id="mp-pltracks" class="mp-list"></ul>
+          </div>
+        </div>
       </section>
 
       <section class="mp-now" aria-label="Now playing">
@@ -66,5 +97,25 @@
       </section>
     </div>
   </main>
+
+  <dialog id="mp-dialog" class="mp-dialog">
+    <form method="dialog" id="mp-dialogform">
+      <h2 id="mp-dialogtitle"></h2>
+      <div id="mp-dialogfields"></div>
+      <p id="mp-dialognote" class="mp-status"></p>
+      <div class="mp-dialogbtns">
+        <button type="button" id="mp-dialogcancel" class="mp-btn">Cancel</button>
+        <button type="submit" id="mp-dialogok" class="mp-btn mp-primary"></button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="mp-picker" class="mp-dialog">
+    <h2>Add to playlist</h2>
+    <ul id="mp-pickerlist" class="mp-list"></ul>
+    <div class="mp-dialogbtns">
+      <button type="button" id="mp-pickernew" class="mp-btn">New playlist</button>
+      <button type="button" id="mp-pickerclose" class="mp-btn">Close</button>
+    </div>
+  </dialog>
 </body>
 </html>
