@@ -14,7 +14,7 @@
     ['windows', 'windows.svg'], ['mint', 'mint.svg'], ['arch', 'arch.svg'],
     ['tails', 'tails.png'], ['kali', 'kali.svg'], ['chromeos', 'chromeos.svg'],
   ]);
-  const presetPrice = preset => `${Number(preset.cost).toLocaleString()} MitchCoins`;
+  const presetPrice = preset => Number(preset.cost) > 0 ? `${Number(preset.cost).toLocaleString()} MitchCoins` : 'Free';
 
   function fmtBytes(n) {
     if (!n) return '0 B';
@@ -161,7 +161,7 @@
     let created = false;
     try {
       if (preset || replacesComputer) {
-        const source = preset ? `${preset.name} (${presetPrice(preset)})` : 'this ISO';
+        const source = preset ? `${preset.name}${Number(preset.cost) > 0 ? ` (${presetPrice(preset)})` : ''}` : 'this ISO';
         const confirmed = await window.mitchConfirm(replacesComputer
           ? { title: 'Replace your computer?', body: `This permanently deletes your current computer and all its files, then creates a new one from ${source}. This cannot be undone.`, confirmLabel: 'Delete and create' }
           : { title: 'Create computer?', body: `Create a computer from ${source}.`, confirmLabel: 'Create computer' });

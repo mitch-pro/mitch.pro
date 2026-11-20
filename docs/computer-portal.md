@@ -170,6 +170,9 @@ Until `PROXMOX_CHROMEOS_TEMPLATE_VMID` is set, the "chromeos" preset is
 simply absent from `GET /api/vm/byo-os/presets` and `create-preset`
 returns 503 for it — there's no broken-looking option sitting in the UI.
 
+BYO-OS presets (including ChromeOS) are free (`PRESET_ISO_COST_COINS = 0`);
+the charge step is skipped at 0. Custom ISO uploads still cost `BYO_OS_COST_COINS`.
+
 Existing custom VMs offer **Windows installer compatibility**. This is an
 explicit, authenticated, CSRF-protected action on the user's own stopped VM. It
 preserves disks and existing TPM/EFI state, grows storage to 64 GB when needed,
