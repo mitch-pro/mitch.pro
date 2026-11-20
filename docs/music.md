@@ -30,14 +30,26 @@ Endpoints are listed at the top of `routes/music/playlists.rs`.
 
 ### Sharing over chat
 
-"Send in chat" on a playlist opens `/matrix/?mshare=<link>&mname=<name>`.
+"Message someone" on a playlist opens `/matrix/?mshare=<link>&mname=<name>`.
 `webserver/matrix/music-share.js` (loaded by the chat page) waits for the chat
-client to sync, lists the user's joined rooms, and sends `🎵 <name> <link>` with
-the client's own `sendTextMessage`, so encrypted rooms stay encrypted and the
-server never sees the message. The link must be on this site's `/music/` with a
-`playlist` parameter, otherwise nothing is shown. The prompt is its own overlay;
-the script doesn't touch the chat UI. Whoever clicks the link in chat lands on
-the playlist page.
+client to sync and shows a "Send playlist to a person" prompt:
+
+1. Pick one person: people the user already has a DM with (from the `m.direct`
+   account data), or a user-directory search (2+ characters). The user's own
+   account is left out.
+2. A draft message (`🎵 <name> <link>`) appears in an editable box. Nothing is sent
+   until they press **Send**.
+3. Send uses their existing DM with that person, or creates a new private,
+   encrypted DM (`is_direct`, `trusted_private_chat`, `m.megolm.v1.aes-sha2`) and
+   records it in `m.direct` so the chat lists it as a DM.
+
+It never lists or posts to rooms or channels. Sending is the client's own
+`sendTextMessage`, so encryption is handled by the client and the server never
+sees the message. The link must be on this site's `/music/` with a `playlist`
+parameter, otherwise nothing is shown. The prompt is its own overlay; the script
+doesn't touch the chat UI. The recipient clicks the link and lands on the
+playlist page (they need to be signed in; for a private playlist the link's token
+is what lets them in).
 
 ### Spotify import and sync
 
@@ -75,12 +87,13 @@ queue advances are near-instant. Search takes about 1.4 s (`--flat-playlist`).
 
 ### Setup the server needs
 
-- `yt-dlp` on `PATH` (or `MUSIC_YTDLP_BIN`). Without it every music endpoint that
-  needs it answers 503 "music source is not set up on this server" and the page
-  shows that message. **The production image does not install it yet**: that is a
-  change to `rust/Dockerfile`, which is part of what a deploy depends on, so it
-  was left for the owner to approve. yt-dlp also wants a JS runtime for YouTube
-  (deno, or `MUSIC_YTDLP_JS_RUNTIME=node`).
+- `yt-dlp` on `PATH` (or `MUSIC_YTDLP_BIN`). The production image (`rust/Dockerfile`)
+  installs a pinned release of the standalone musl build, checked against a pinned
+  SHA-256, plus `nodejs`, which yt-dlp needs as its JavaScript runtime for YouTube
+  (`MUSIC_YTDLP_JS_RUNTIME=node` is set in the image). YouTube changes often, so
+  when playback starts failing, bump `YTDLP_VERSION` and both hashes together
+  (take the hashes from the release's `SHA2-256SUMS`). Without yt-dlp every music
+  endpoint that needs it answers 503 "music source is not set up on this server".
 - A datacenter IP is often answered with "Sign in to confirm you're not a bot"
   (this is what the sandbox the feature was built in gets). Set
   `MUSIC_EGRESS_PROXY` to an HTTP proxy that leaves through a clean connection;
@@ -188,8 +201,12 @@ card's one-line lyric: a binary search finds the current line, and each word's
   QQ Music. NetEase, Kugou and YouTube captions are covered by fixture tests of
   their formats only (those hosts were unreachable or blocked from the sandbox).
 - The chat share prompt was tested against a stub `__mxClient` (the real chat
-  server isn't available locally), not the live chat client. `sendTextMessage` is
-  the standard matrix-js-sdk call the bundle's client exposes.
+  server isn't available locally), not the live chat client. It uses standard
+  matrix-js-sdk calls (`searchUserDirectory`, `createRoom`, `setAccountData`,
+  `sendTextMessage`).
+- The Dockerfile change was checked piece by piece (the pinned download and its
+  checksum verify, the shell logic runs) but not built end to end: no Docker
+  daemon was available here and the musl binary can't run on this machine.
 - Sharing between two different accounts wasn't exercised in a browser (local
   dev signs everyone in as one user); the access rules are covered by unit tests.
 - No end-to-end browser test is committed; the player flow was driven by hand

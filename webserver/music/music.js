@@ -338,7 +338,7 @@
           return openPlaylist(d.id);
         }).catch(function (e) { say(e.message); });
       }));
-      el.plActions.appendChild(btn('Send in chat', function () { sendInChat(p, plOpen.token); }));
+      el.plActions.appendChild(btn('Message someone', function () { sendInChat(p, plOpen.token); }));
     }
     renderSharePanel();
 
@@ -429,7 +429,7 @@
         if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(input.value).then(ok, function () { input.select(); });
         else { input.select(); document.execCommand('copy'); ok(); }
       }),
-      btn('Send in chat', function () { sendInChat(p, token); })
+      btn('Message someone', function () { sendInChat(p, token); })
     );
     if (!p.public) {
       row2.appendChild(btn('Stop sharing', function () {
@@ -439,7 +439,7 @@
     box.append(note2, input, row2);
   }
 
-  /** Opens the chat with a "send to…" prompt for this playlist link. */
+  /** Opens the chat with a "pick a person" prompt that drafts a DM with this playlist link. */
   function sendInChat(p, token) {
     location.href = '/matrix/?mshare=' + encodeURIComponent(shareLink(p, token)) + '&mname=' + encodeURIComponent(p.name);
   }

@@ -32,7 +32,8 @@
 ## Codex autonomy limits
 
 - Codex does not have full autonomy, no matter what permissions it's been granted in a given environment. Holding SSH access, write access to GitHub Actions workflows, or push access to `master` is not the same as having permission to use them unilaterally.
-- Without explicit, specific user approval for that action, Codex may not decide on its own to: make drastic/large-scope changes, SSH anywhere, change the deploy pipeline (`deploy.yml`, `tools/deploy.sh`, or anything a production deploy depends on), or modify GitHub workflow files.
+- Without explicit, specific user approval for that action, Codex may not decide on its own to: make drastic/large-scope changes, SSH anywhere, change the deploy pipeline drastically (`deploy.yml`, `tools/deploy.sh`, or how a production deploy works), or modify GitHub workflow files.
+- Small, contained changes to what a deploy builds are fine without asking, such as adding a dependency to `rust/Dockerfile` (a package, or a pinned and checksum-verified binary). Don't restructure the pipeline, add steps that run downloaded code unverified, or change what gates a deploy.
 - This followed a real incident: an agent modified the deploy pipeline (a curl-fetch-and-run-as-root step, plus a CI-gating change) on its own judgment, and it broke the deploy. "I have the access" and "it seemed like a good idea" are not approval.
 
 ## CI status checks
