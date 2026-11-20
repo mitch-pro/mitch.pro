@@ -86,6 +86,7 @@ pub const EMAIL_TABLES: &[(&str, &str)] = &[
     ("companion_ability_strain", "email"),
     ("companion_upgrades", "email"),
     ("companion_bans", "email"),
+    ("music_favorites", "email"),
 ];
 
 /// Columns that hold an email but are intentionally not erased, with why.

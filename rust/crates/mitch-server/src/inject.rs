@@ -40,6 +40,19 @@ pub fn inject_companion(html: &str) -> String {
     html.replacen("</head>", block, 1)
 }
 
+/// Adds the music follow-along card loader to a page that bypasses the main
+/// injection pipeline. The script does nothing until music has been started.
+pub fn inject_music_widget(html: &str) -> String {
+    if html.contains("/music-widget.js") {
+        return html.to_string();
+    }
+    html.replacen(
+        "</head>",
+        "<script src=\"/music-widget.js?v=1\" defer></script>\n</head>",
+        1,
+    )
+}
+
 /// `injectSharedHead(html)`.
 pub fn inject_shared_head(html: &str) -> String {
     let mut html = html.to_string();
@@ -55,6 +68,7 @@ pub fn inject_shared_head(html: &str) -> String {
         let block = "<script src=\"/companion-widget.js?v=5\" defer></script>\n<link rel=\"stylesheet\" href=\"/companion-widget.css?v=3\">\n</head>";
         html = html.replacen("</head>", block, 1);
     }
+    html = inject_music_widget(&html);
     if html.contains("name=\"viewport\"") {
         if !html.contains("viewport-fit") {
             html = replace_first_viewport(&html, ", viewport-fit=cover");

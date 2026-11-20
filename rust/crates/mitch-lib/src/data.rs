@@ -669,6 +669,23 @@ impl DataStore {
                         email TEXT PRIMARY KEY,
                         created_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS music_favorites (
+                        email TEXT NOT NULL,
+                        video_id TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        artist TEXT NOT NULL,
+                        duration_s INTEGER NOT NULL DEFAULT 0,
+                        added_at INTEGER NOT NULL,
+                        PRIMARY KEY (email, video_id)
+                    );
+                    CREATE TABLE IF NOT EXISTS music_lyrics_cache (
+                        video_id TEXT PRIMARY KEY,
+                        source TEXT NOT NULL,
+                        sync TEXT NOT NULL,
+                        estimated INTEGER NOT NULL DEFAULT 0,
+                        body TEXT NOT NULL,
+                        fetched_at INTEGER NOT NULL
+                    );
                     CREATE TABLE IF NOT EXISTS companion_characters (
                         id TEXT PRIMARY KEY,
                         name TEXT NOT NULL,

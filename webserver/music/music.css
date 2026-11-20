@@ -1,0 +1,111 @@
+/* /music/ and the pop-out window (docs/music.md). Colors come from the theme
+ * tokens in app.css, so both light and dark mode work. */
+
+.mp-main { max-width: 1200px; }
+.mp-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 20px; align-items: start; }
+
+.mp-browse, .mp-now {
+  background: var(--t-bg2);
+  border: 1px solid var(--t-bd);
+  border-radius: var(--t-radius);
+  padding: 14px;
+  min-width: 0;
+}
+.mp-now { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 12px; }
+
+.mp-search { display: flex; gap: 8px; margin-bottom: 12px; }
+.mp-search input, .mp-wrongform input[type=text] {
+  flex: 1; min-width: 0; padding: 9px 11px;
+  background: var(--t-bg); color: var(--t-fg);
+  border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm);
+  font: inherit;
+}
+.mp-search input:focus, .mp-wrongform input:focus { outline: none; border-color: var(--t-ac); }
+
+.mp-btn {
+  padding: 9px 14px; font: inherit; font-weight: 600; cursor: pointer;
+  background: var(--t-bg3); color: var(--t-fg);
+  border: 1px solid var(--t-bd); border-radius: var(--t-radius-sm);
+}
+.mp-btn:hover { border-color: var(--t-bda, var(--t-ac)); }
+.mp-primary { background: var(--t-ac); color: var(--t-ac-ink); border-color: transparent; }
+.mp-primary:hover { background: var(--t-ac2, var(--t-ac)); }
+
+.mp-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--t-bd); margin-bottom: 8px; }
+.mp-tabs button {
+  padding: 8px 12px; font: inherit; font-weight: 600; cursor: pointer;
+  background: none; color: var(--t-fg2); border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.mp-tabs button[aria-selected=true] { color: var(--t-fg); border-bottom-color: var(--t-ac); }
+
+.mp-status { min-height: 1.2em; margin: 6px 0; color: var(--t-fg2); font-size: 13px; }
+.mp-status:empty { display: none; }
+
+.mp-list { list-style: none; margin: 0; padding: 0; }
+.mp-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto auto auto; gap: 8px; align-items: center; padding: 6px; border-radius: var(--t-radius-sm); }
+.mp-row:hover { background: var(--t-bg3); }
+.mp-row.mp-playing { background: color-mix(in srgb, var(--t-ac) 14%, transparent); }
+.mp-thumb { width: 48px; height: 48px; object-fit: cover; border-radius: var(--t-radius-sm); background: var(--t-bg3); }
+.mp-rowmain { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; padding: 0; background: none; border: 0; color: var(--t-fg); font: inherit; text-align: left; cursor: pointer; }
+.mp-rowtitle, .mp-rowartist { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-rowtitle { font-weight: 600; }
+.mp-rowartist { color: var(--t-fg2); font-size: 13px; }
+.mp-rowdur { color: var(--t-fg3, var(--t-fg2)); font-size: 13px; font-variant-numeric: tabular-nums; }
+.mp-empty { padding: 20px 6px; color: var(--t-fg2); }
+
+.mp-icon {
+  display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0;
+  background: none; color: var(--t-fg); border: 0; border-radius: 999px; cursor: pointer;
+}
+.mp-icon svg { width: 20px; height: 20px; fill: currentColor; }
+.mp-icon:hover { background: var(--t-bg3); }
+.mp-small { width: 30px; height: 30px; color: var(--t-fg2); }
+.mp-small svg { width: 17px; height: 17px; }
+.mp-heart.mp-on, #mp-fav.mp-on { color: var(--t-ac); }
+.mp-playbtn { width: 44px; height: 44px; background: var(--t-ac); color: var(--t-ac-ink); }
+.mp-playbtn:hover { background: var(--t-ac2, var(--t-ac)); }
+.mp-icon:focus-visible, .mp-btn:focus-visible, .mp-rowmain:focus-visible, .mp-tabs button:focus-visible, .mp-link:focus-visible {
+  outline: 2px solid var(--t-ac); outline-offset: 1px;
+}
+
+.mp-nowhead { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.mp-art { width: 72px; height: 72px; object-fit: cover; border-radius: var(--t-radius-sm); background: var(--t-bg3); }
+.mp-title { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-artist { color: var(--t-fg2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-nowtools { display: flex; }
+
+.mp-controls { display: grid; grid-template-columns: auto auto auto 38px minmax(60px, 1fr) 38px minmax(50px, 90px); gap: 6px; align-items: center; }
+.mp-time { color: var(--t-fg2); font-size: 12px; font-variant-numeric: tabular-nums; text-align: center; }
+.mp-range { width: 100%; accent-color: var(--t-ac); }
+
+.mp-lyrics { height: min(52vh, 480px); border-radius: var(--t-radius-sm); background: var(--t-bg); border: 1px solid var(--t-bd); padding: 0 14px; }
+.mp-lyricsmeta { display: flex; justify-content: space-between; gap: 8px; color: var(--t-fg2); font-size: 12px; min-height: 1.2em; }
+.mp-link { padding: 0; background: none; border: 0; color: var(--t-ac); font: inherit; cursor: pointer; text-decoration: underline; }
+.mp-link[hidden], .mp-wrongform[hidden] { display: none; }
+.mp-wrongform { display: flex; gap: 8px; flex-wrap: wrap; }
+.mp-wrongform input { min-width: 120px; }
+
+@media (max-width: 900px) {
+  .mp-grid { grid-template-columns: 1fr; }
+  .mp-now { position: static; order: -1; }
+  .mp-lyrics { height: 46vh; }
+  .mp-controls { grid-template-columns: auto auto auto 38px minmax(40px, 1fr) 38px; }
+  .mp-vol { display: none; }
+}
+@media (max-width: 520px) {
+  .mp-row { grid-template-columns: 44px minmax(0, 1fr) auto auto; }
+  .mp-rowdur { display: none; }
+  .mp-thumb { width: 44px; height: 44px; }
+}
+
+/* Pop-out window: the player fills the whole window. */
+.music-popout { margin: 0; background: var(--t-bg); min-height: 100vh; }
+.music-popout .mp-now { position: static; border: 0; border-radius: 0; min-height: 100vh; box-sizing: border-box; background: var(--t-bg); }
+.music-popout .mp-lyrics { flex: 1; height: auto; min-height: 200px; }
+.music-popout .mp-controls { grid-template-columns: auto auto auto 38px minmax(40px, 1fr) 38px; }
+.music-popout .mp-vol { display: none; }
+
+/* The shared wallet script adds a "← Games" bar to pages without the site
+ * masthead; the pop-out is only a player. */
+.music-popout .mitch-coin-gamebar { display: none; }
+.music-popout .mp-nowhead { padding-right: 52px; }  /* clears the site's floating bell */

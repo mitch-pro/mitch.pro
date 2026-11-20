@@ -22,6 +22,8 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 sha1 = { workspace = true }
 base64 = { workspace = true }
 regex = "1"
+# Kugou KRC lyrics are zlib-compressed (music_lyrics.rs).
+flate2 = "1"
 tracing = { workspace = true }
 
 [lints.rust]
