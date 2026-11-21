@@ -674,6 +674,77 @@ impl DataStore {
                         email TEXT PRIMARY KEY,
                         created_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS music_favorites (
+                        email TEXT NOT NULL,
+                        video_id TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        artist TEXT NOT NULL,
+                        duration_s INTEGER NOT NULL DEFAULT 0,
+                        added_at INTEGER NOT NULL,
+                        PRIMARY KEY (email, video_id)
+                    );
+                    CREATE TABLE IF NOT EXISTS music_playlists (
+                        id TEXT PRIMARY KEY,
+                        owner_email TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        public INTEGER NOT NULL DEFAULT 0,
+                        share_token TEXT NOT NULL DEFAULT '',
+                        spotify_id TEXT NOT NULL DEFAULT '',
+                        spotify_synced_at INTEGER NOT NULL DEFAULT 0,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_music_playlists_owner ON music_playlists (owner_email);
+                    CREATE INDEX IF NOT EXISTS idx_music_playlists_public ON music_playlists (public, updated_at);
+                    CREATE TABLE IF NOT EXISTS music_playlist_tracks (
+                        playlist_id TEXT NOT NULL,
+                        position INTEGER NOT NULL,
+                        video_id TEXT NOT NULL DEFAULT '',
+                        title TEXT NOT NULL,
+                        artist TEXT NOT NULL,
+                        duration_s INTEGER NOT NULL DEFAULT 0,
+                        spotify_id TEXT NOT NULL DEFAULT '',
+                        PRIMARY KEY (playlist_id, position)
+                    );
+                    CREATE TABLE IF NOT EXISTS music_stream_links (
+                        video_id TEXT PRIMARY KEY,
+                        url TEXT NOT NULL,
+                        mime TEXT NOT NULL,
+                        expires_at INTEGER NOT NULL
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_music_stream_links_expires ON music_stream_links (expires_at);
+                    CREATE TABLE IF NOT EXISTS music_search_queries (
+                        query TEXT PRIMARY KEY,
+                        fetched_at INTEGER NOT NULL
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_music_search_queries_fetched ON music_search_queries (fetched_at);
+                    CREATE TABLE IF NOT EXISTS music_search_results (
+                        query TEXT NOT NULL,
+                        position INTEGER NOT NULL,
+                        video_id TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        artist TEXT NOT NULL,
+                        duration INTEGER NOT NULL,
+                        PRIMARY KEY (query, position)
+                    );
+                    CREATE TABLE IF NOT EXISTS music_track_matches (
+                        match_key TEXT PRIMARY KEY,
+                        video_id TEXT NOT NULL,
+                        matched_at INTEGER NOT NULL,
+                        rules_version INTEGER NOT NULL DEFAULT 2
+                    );
+                    CREATE TABLE IF NOT EXISTS music_lyrics_cache (
+                        cache_key TEXT PRIMARY KEY,
+                        source TEXT NOT NULL,
+                        sync TEXT NOT NULL,
+                        estimated INTEGER NOT NULL DEFAULT 0,
+                        body TEXT NOT NULL,
+                        fetched_at INTEGER NOT NULL,
+                        approximate INTEGER NOT NULL DEFAULT 0,
+                        aligned INTEGER NOT NULL DEFAULT 0,
+                        upgrade_tried INTEGER NOT NULL DEFAULT 0
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_music_lyrics_cache_fetched ON music_lyrics_cache (fetched_at);
                     CREATE TABLE IF NOT EXISTS companion_characters (
                         id TEXT PRIMARY KEY,
                         name TEXT NOT NULL,
@@ -863,6 +934,73 @@ impl DataStore {
         if !has_companion_allow_coin_requests {
             conn.execute(
                 "ALTER TABLE companion_user_settings ADD COLUMN allow_coin_requests INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
+        // The lyrics cache used to be keyed by video id alone (and was never
+        // released in that shape). Its rows are disposable, so an old-shaped
+        // table is simply replaced.
+        let has_lyrics_cache_key = conn
+            .prepare("PRAGMA table_info(music_lyrics_cache)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+            .iter()
+            .any(|name| name == "cache_key");
+        if !has_lyrics_cache_key {
+            conn.execute_batch(
+                "DROP TABLE IF EXISTS music_lyrics_cache; \
+                 CREATE TABLE music_lyrics_cache ( \
+                     cache_key TEXT PRIMARY KEY, source TEXT NOT NULL, sync TEXT NOT NULL, \
+                     estimated INTEGER NOT NULL DEFAULT 0, body TEXT NOT NULL, \
+                     fetched_at INTEGER NOT NULL, approximate INTEGER NOT NULL DEFAULT 0, \
+                     aligned INTEGER NOT NULL DEFAULT 0, upgrade_tried INTEGER NOT NULL DEFAULT 0); \
+                 CREATE INDEX IF NOT EXISTS idx_music_lyrics_cache_fetched ON music_lyrics_cache (fetched_at);",
+            )?;
+        }
+        let has_lyrics_upgrade = conn
+            .prepare("PRAGMA table_info(music_lyrics_cache)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+            .iter()
+            .any(|name| name == "upgrade_tried");
+        if !has_lyrics_upgrade {
+            // Rows from before the background word-timing retry get one attempt.
+            conn.execute(
+                "ALTER TABLE music_lyrics_cache ADD COLUMN upgrade_tried INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
+        let has_match_rules = conn
+            .prepare("PRAGMA table_info(music_track_matches)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+            .iter()
+            .any(|name| name == "rules_version");
+        if !has_match_rules {
+            // Matches made before live, cover and slowed versions were ruled out
+            // may point at the wrong recording. This runs once (the column's
+            // arrival is the marker): every Spotify song is matched again.
+            conn.execute(
+                "ALTER TABLE music_track_matches ADD COLUMN rules_version INTEGER NOT NULL DEFAULT 2",
+                [],
+            )?;
+            conn.execute("DELETE FROM music_track_matches", [])?;
+            conn.execute(
+                "UPDATE music_playlist_tracks SET video_id = '' WHERE spotify_id != ''",
+                [],
+            )?;
+        }
+        let has_lyrics_aligned = conn
+            .prepare("PRAGMA table_info(music_lyrics_cache)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+            .iter()
+            .any(|name| name == "aligned");
+        if !has_lyrics_aligned {
+            // Rows from before timing was checked against the video's captions
+            // start unchecked, so each is checked the next time it is played.
+            conn.execute(
+                "ALTER TABLE music_lyrics_cache ADD COLUMN aligned INTEGER NOT NULL DEFAULT 0",
                 [],
             )?;
         }

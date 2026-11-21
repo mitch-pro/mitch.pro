@@ -95,7 +95,7 @@ fn logged_in_email(state: &AppState, headers: &HeaderMap) -> Option<String> {
 
 /// `displayName`, falling back to `username`, falling back to the default
 /// derived from the email — whichever is the first non-empty one.
-fn display_name_for(state: &AppState, email: &str) -> String {
+pub(crate) fn display_name_for(state: &AppState, email: &str) -> String {
     let norm = auth::normalize_email(email);
     let profile = mitch_lib::profiles::profile_get_opt(&state.store, &norm);
     let from_profile = profile.as_ref().and_then(|p| {

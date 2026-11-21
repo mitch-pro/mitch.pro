@@ -43,10 +43,30 @@ RUN --mount=type=cache,target=/app/target \
     cp /app/target/release/mitch-* /app/bin/
 
 FROM alpine:3.20
-RUN apk add --no-cache openssh-client ffmpeg ca-certificates curl openssl
+RUN apk add --no-cache openssh-client ffmpeg ca-certificates curl openssl nodejs
+# yt-dlp for the music player (docs/music.md). The standalone musl build of a
+# pinned release, checked against a pinned SHA-256 so a changed or corrupted
+# download fails the build. YouTube changes often: bump the version and both
+# hashes together (hashes: the release's SHA2-256SUMS file). nodejs above is the
+# JavaScript runtime yt-dlp needs for YouTube.
+ARG YTDLP_VERSION=2026.10.26
+ARG YTDLP_SHA256_X86_64=e97a4dd919221d233e7720e18fa3f66db60fbd1d8c0846bf6deb8e88e04475a8
+ARG YTDLP_SHA256_AARCH64=ea97b8564667f3cabc334c3216526de39bc684e99815ecf07b6642f4cba8af4d
+RUN set -eu; \
+    case "$(uname -m)" in \
+      x86_64) asset=yt-dlp_musllinux; sum="$YTDLP_SHA256_X86_64" ;; \
+      aarch64) asset=yt-dlp_musllinux_aarch64; sum="$YTDLP_SHA256_AARCH64" ;; \
+      *) echo "no yt-dlp build for $(uname -m)" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /usr/local/bin/yt-dlp "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/${asset}"; \
+    echo "${sum}  /usr/local/bin/yt-dlp" | sha256sum -c -; \
+    chmod 755 /usr/local/bin/yt-dlp; \
+    /usr/local/bin/yt-dlp --version
 RUN addgroup -g 1000 app && adduser -u 1000 -G app -D -s /bin/sh app
 COPY --from=builder /app/bin/mitch-* /usr/local/bin/
 USER app
 # Each service selects its binary via MITCH_SERVICE; compose sets this.
 ENV MITCH_SERVICE=mitch-server
+# Tell yt-dlp which JavaScript runtime to use (music player).
+ENV MUSIC_YTDLP_JS_RUNTIME=node
 ENTRYPOINT ["/bin/sh", "-c", "exec /usr/local/bin/${MITCH_SERVICE:-mitch-server}"]

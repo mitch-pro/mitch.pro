@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Music player</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/music-widget.css?v=4">
+  <link rel="stylesheet" href="/music/music.css?v=10">
+  <script src="/music-core.js?v=11" defer></script>
+  <script src="/music/music.js?v=13" defer></script>
+</head>
+<body class="music-page music-popout" data-shell="off" data-mode="popout">
+  <section class="mp-stage is-empty" id="mp-stage" aria-label="Now playing">
+    <div id="mp-ambient" class="mp-ambient" aria-hidden="true"></div>
+    <div class="mp-stagebody">
+      <div class="mp-cover">
+        <div class="mp-coverart"><img id="mp-art" alt="" hidden><span class="mp-coverempty" id="mp-coverempty" aria-hidden="true"></span></div>
+        <div class="mp-nowmeta">
+          <div id="mp-title" class="mp-title">Nothing playing</div>
+          <div id="mp-artist" class="mp-artist"></div>
+        </div>
+        <div class="mp-nowtools">
+          <button type="button" id="mp-fav" class="mp-icon" aria-label="Save to library" aria-pressed="false" title="Save to library" hidden></button>
+        </div>
+      </div>
+      <div class="mp-lyricspane">
+        <p id="mp-status" class="mp-status" role="status"></p>
+        <div id="mp-lyrics" class="mp-lyrics"></div>
+        <div class="mp-lyricsmeta">
+          <span id="mp-lyricsinfo"></span>
+          <button type="button" id="mp-wrong" class="mp-link" hidden>Wrong lyrics?</button>
+        </div>
+        <form id="mp-wrongform" class="mp-wrongform" hidden>
+          <input id="mp-wt" type="text" maxlength="200" placeholder="Song title" aria-label="Song title">
+          <input id="mp-wa" type="text" maxlength="200" placeholder="Artist" aria-label="Artist">
+          <button type="submit" class="mp-btn">Search lyrics</button>
+        </form>
+      </div>
+    </div>
+    <div class="mp-dock">
+      <div class="mp-scrub">
+        <span id="mp-cur" class="mp-time">0:00</span>
+        <input id="mp-seek" class="mp-range mp-seek" type="range" min="0" max="1000" value="0" aria-label="Seek">
+        <span id="mp-dur" class="mp-time">0:00</span>
+      </div>
+      <div class="mp-transport">
+        <div class="mp-transportmain">
+          <button type="button" id="mp-shuffle" class="mp-icon mp-toggle" aria-label="Shuffle" aria-pressed="false" title="Shuffle"></button>
+          <button type="button" id="mp-prev" class="mp-icon" aria-label="Previous" title="Previous"></button>
+          <button type="button" id="mp-play" class="mp-icon mp-playbtn" aria-label="Play" title="Play"></button>
+          <button type="button" id="mp-next" class="mp-icon" aria-label="Next" title="Next"></button>
+          <button type="button" id="mp-repeat" class="mp-icon mp-toggle" aria-label="Repeat" aria-pressed="false" title="Repeat"></button>
+        </div>
+      </div>
+      <input id="mp-vol" class="mp-range mp-vol" type="range" min="0" max="100" value="90" aria-label="Volume" hidden>
+    </div>
+  </section>
+</body>
+</html>

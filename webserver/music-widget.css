@@ -1,0 +1,131 @@
+/* Music follow-along card and the shared synced-lyrics view (docs/music.md).
+ * Theme tokens come from app.css / theme-tokens.css; the fallbacks keep the
+ * card readable on pages that don't load them (error pages). */
+
+.mm-card {
+  position: fixed;
+  left: 16px;
+  /* Clears the fixed site credit band along the bottom edge. */
+  bottom: calc(40px + env(safe-area-inset-bottom));
+  z-index: 9990;
+  width: min(340px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 10px 12px 12px;
+  background: var(--t-bg2, #181820);
+  color: var(--t-fg, #e8e6e3);
+  border: 1px solid var(--t-bd, rgba(255, 255, 255, 0.12));
+  border-radius: var(--t-radius, 10px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  font-family: var(--t-font, 'DM Sans', system-ui, sans-serif);
+  font-size: 13px;
+}
+.mm-card[hidden] { display: none; }
+
+.mm-head { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; grid-template-areas: 'art meta btns' 'tools tools tools'; gap: 4px 10px; align-items: center; }
+.mm-artbox { grid-area: art; width: 48px; height: 48px; overflow: hidden; border-radius: var(--t-radius-sm, 7px); background: var(--t-bg3, #22222c); }
+.mm-art { display: block; width: 100%; height: 100%; object-fit: cover; transform: scale(1.34); }  /* crops the video's black bars */
+.mm-meta { grid-area: meta; min-width: 0; }
+.mm-title, .mm-artist { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mm-title { font-weight: 700; }
+.mm-artist { color: var(--t-fg2, #a8a6a3); font-size: 12px; }
+.mm-btns { grid-area: btns; display: flex; gap: 2px; }
+.mm-tools { grid-area: tools; display: flex; gap: 2px; justify-content: flex-end; margin-top: 2px; }
+
+/* Buttons are reset completely: some pages (the homepage) style every <button>
+ * with padding, borders and a minimum height, which would swell the icons into
+ * boxes. `all: unset` at this specificity wins over those page rules. */
+.mm-card .mm-btn {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-grid; place-items: center;
+  width: 32px; height: 32px;
+  color: var(--t-fg, #e8e6e3);
+  border-radius: 999px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mm-card .mm-btn svg { width: 18px; height: 18px; fill: currentColor; }
+.mm-card .mm-btn:hover { background: var(--t-bg3, rgba(255, 255, 255, 0.08)); }
+.mm-card .mm-btn:focus-visible, .mm-bar:focus-visible { outline: 2px solid var(--t-ac, #a78bfa); outline-offset: 1px; }
+.mm-card .mm-play { background: var(--t-ac, #a78bfa); color: var(--t-ac-ink, #111); }
+.mm-card .mm-play:hover { background: var(--t-ac2, var(--t-ac, #a78bfa)); }
+.mm-card .mm-tools .mm-btn { width: 28px; height: 28px; color: var(--t-fg2, #a8a6a3); }
+.mm-card .mm-tools .mm-btn svg { width: 16px; height: 16px; }
+
+.mm-bar { height: 4px; margin-top: 8px; background: var(--t-bg3, rgba(255, 255, 255, 0.12)); border-radius: 999px; cursor: pointer; overflow: hidden; }
+.mm-bar i { display: block; height: 100%; width: 0; background: var(--t-ac, #a78bfa); }
+.mm-busy .mm-bar i { opacity: 0.55; }
+
+.mm-lyric { min-height: 1.3em; margin-top: 8px; color: var(--t-fg, #e8e6e3); font-weight: 600; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mm-lyric:empty { display: none; }
+.mm-status { margin-top: 6px; color: var(--t-fg2, #a8a6a3); font-size: 12px; }
+.mm-status[hidden] { display: none; }
+
+/* Minimized: art, title and play only. */
+.mm-min { width: min(260px, calc(100vw - 32px)); padding: 8px 10px; }
+.mm-min .mm-head { grid-template-areas: 'art meta btns' 'tools tools tools'; }
+.mm-min .mm-artist, .mm-min .mm-bar, .mm-min .mm-lyric, .mm-min .mm-prev, .mm-min .mm-next, .mm-min .mm-tools .mm-popout, .mm-min .mm-tools .mm-open { display: none; }
+.mm-min .mm-artbox { width: 36px; height: 36px; }
+.mm-min .mm-head { grid-template-columns: 36px minmax(0, 1fr) auto; }
+.mm-min .mm-tools { margin-top: 0; }
+
+@media (max-width: 520px) {
+  .mm-card { left: 8px; bottom: calc(40px + env(safe-area-inset-bottom)); width: calc(100vw - 16px); }
+  .mm-min { width: calc(100vw - 16px); }
+}
+
+/* ------------------------------------------------------- synced lyrics */
+.ml-root {
+  --ml-hi: var(--t-fg, #f4f2ef);
+  --ml-lo: color-mix(in srgb, var(--t-fg, #f4f2ef) 32%, transparent);
+  overflow-y: auto;
+  scrollbar-width: none;
+  position: relative;
+}
+.ml-root::-webkit-scrollbar { display: none; }
+.ml-message { margin: 0; padding: 24px 8px; color: var(--t-fg2, #a8a6a3); text-align: center; }
+
+.ml-lines { padding: 30% 4px 45%; }
+.ml-line { margin: 0 0 18px; font-size: clamp(22px, 3.2vw, 32px); font-weight: 700; line-height: 1.25; letter-spacing: -0.01em; color: var(--ml-lo); transform-origin: left center; transition: transform 0.35s ease, color 0.3s ease, opacity 0.3s ease; overflow-wrap: anywhere; }
+.ml-timed .ml-line { transform: scale(0.92); opacity: 0.7; }
+.ml-timed .ml-line.ml-active { transform: scale(1); opacity: 1; color: var(--ml-hi); }
+.ml-timed .ml-line.ml-past { opacity: 0.55; }
+.ml-seekable { cursor: pointer; }
+.ml-seekable:hover { opacity: 1; }
+.ml-plain .ml-line { color: var(--t-fg, #e8e6e3); font-size: 18px; font-weight: 500; margin-bottom: 8px; }
+.ml-plain { padding: 8px 4px 24px; }
+.ml-gap { letter-spacing: 0.3em; opacity: 0; }
+.ml-gap.ml-active { opacity: 0.7; }
+
+/* Each word is filled left to right by --p (0 to 1), set from script. */
+.ml-w {
+  background-image: linear-gradient(90deg, var(--ml-hi) calc(var(--p, 0) * 100%), var(--ml-lo) calc(var(--p, 0) * 100%));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+@supports not (background-clip: text) {
+  .ml-w { color: var(--ml-lo); -webkit-text-fill-color: currentColor; background: none; }
+  .ml-active .ml-w { color: var(--ml-hi); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ml-line { transition: none; }
+}
+
+/* Spinner on a play button while a song is being fetched. The ring replaces
+ * the icon, and the button ignores clicks until the song is ready. */
+.mm-card .mm-btn.mm-loading, .mp-icon.mp-loading { position: relative; pointer-events: none; }
+.mm-card .mm-btn.mm-loading svg, .mp-icon.mp-loading svg { opacity: 0; }
+.mm-card .mm-btn.mm-loading::after, .mp-icon.mp-loading::after {
+  content: ''; position: absolute; inset: 7px;
+  border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-top-color: currentColor; border-radius: 50%;
+  animation: mm-spin 0.8s linear infinite;
+}
+@keyframes mm-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .mm-card .mm-btn.mm-loading::after, .mp-icon.mp-loading::after { animation-duration: 2.4s; }
+}
+
+/* A music player page is the player; never show the follow-along card on it. */
+body.music-page .mm-card { display: none !important; }

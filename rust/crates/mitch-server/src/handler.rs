@@ -158,6 +158,9 @@ pub const PUBLIC_ASSETS: &[&str] = &[
     "/pwa-install.js",
     "/companion-widget.js",
     "/companion-widget.css",
+    "/music-widget.js",
+    "/music-widget.css",
+    "/music-core.js",
     "/games/chess-bot/chessboard.min.js",
     "/games/chess-bot/chessboard.min.css",
     "/bell/schedule.js",
@@ -1362,6 +1365,15 @@ async fn handle_resolved(
                 return resp;
             }
         }
+        // Music player API (signed-in only; see docs/music.md).
+        if path.starts_with("/api/music/") {
+            if let Some(resp) =
+                crate::routes::music::handle(&state, &method, &path, headers, body_bytes, &search)
+                    .await
+            {
+                return resp;
+            }
+        }
         // Beta tester hub API.
         if let Some(resp) =
             crate::routes::tester::handle(&state, &method, &path, headers, body_bytes).await
@@ -1834,7 +1846,9 @@ async fn handle_resolved(
                             } else {
                                 content
                             };
-                        let content = crate::inject::inject_companion(&content);
+                        let content = crate::inject::inject_music_widget(
+                            &crate::inject::inject_companion(&content),
+                        );
                         // The chat client skips the pipeline, so it applies
                         // the account's site style itself (docs/ui-styles.md).
                         let content =
