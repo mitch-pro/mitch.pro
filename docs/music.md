@@ -173,6 +173,16 @@ Storage: `music_favorites` (per user, erased with the account, listed in
 title and artist the lookup used, stored as enhanced-LRC text, not JSON). Listening history is **not** stored
 anywhere; only tracks a user saves.
 
+### Songs only
+
+Search and related results pass `looks_like_song` (`ytdlp.rs`): 1 to 12 minutes
+long, and no whole-word match on reaction, review, episode, mix, compilation,
+tutorial and similar words, or the phrases "top 10", "full album", "first time",
+"side by side". If nothing passes, the list is shown unfiltered. It's a title
+heuristic: YouTube's own songs-only search (`music.youtube.com/search#songs`
+through yt-dlp's `youtube:music:search_url`) returned no entries when tried, so
+it isn't used. Scenes and talk videos with neutral titles can still get through.
+
 ### Search cache
 
 Results are kept in `music_search_queries` / `music_search_results` (real tables,

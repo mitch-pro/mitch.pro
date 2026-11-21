@@ -246,6 +246,7 @@ pub async fn search(query: &str) -> Result<Vec<Track>, YtError> {
                         duration: r.duration,
                     })
                     .collect();
+                let tracks = only_songs(tracks);
                 let age_ms = mitch_lib::school::now_millis() - fetched_at;
                 if age_ms >= SEARCH_TTL.as_millis() as i64 {
                     refresh_search(key.clone());
@@ -358,7 +359,79 @@ pub fn parse_search(json: &str) -> Vec<Track> {
             duration: dur,
         });
     }
-    out
+    only_songs(out)
+}
+
+/// Words in a title that mark a video that isn't a song: reactions, reviews,
+/// episodes, compilations, tutorials. Matched as whole words, so "remix" is
+/// not "mix".
+const NOT_SONG_WORDS: &[&str] = &[
+    "react",
+    "reacts",
+    "reaction",
+    "reactions",
+    "reacting",
+    "review",
+    "explained",
+    "explanation",
+    "breakdown",
+    "analysis",
+    "tutorial",
+    "interview",
+    "trailer",
+    "episode",
+    "podcast",
+    "flashmob",
+    "compilation",
+    "karaoke",
+    "playlist",
+    "mix",
+    "hour",
+    "hours",
+    "tiktok",
+    "shorts",
+    "meme",
+    "ova",
+];
+
+/// Whether a result looks like a song rather than a reaction, episode, mix or
+/// other non-music video: a sensible length (1 to 12 minutes) and none of
+/// `NOT_SONG_WORDS` or a few phrases in the title.
+pub fn looks_like_song(t: &Track) -> bool {
+    if !(60..=720).contains(&t.duration) {
+        return false;
+    }
+    let lower = t.title.to_lowercase();
+    if [
+        "top 10",
+        "top 20",
+        "full album",
+        "side by side",
+        "first time",
+    ]
+    .iter()
+    .any(|p| lower.contains(p))
+    {
+        return false;
+    }
+    !lower
+        .split(|c: char| !c.is_alphanumeric())
+        .any(|w| NOT_SONG_WORDS.contains(&w))
+}
+
+/// Keeps the songs. If nothing passes (an unusual query), the list is returned
+/// as it was rather than showing nothing.
+pub fn only_songs(tracks: Vec<Track>) -> Vec<Track> {
+    let songs: Vec<Track> = tracks
+        .iter()
+        .filter(|t| looks_like_song(t))
+        .cloned()
+        .collect();
+    if songs.is_empty() {
+        tracks
+    } else {
+        songs
+    }
 }
 
 /// Songs YouTube's own "Mix" for a video suggests (its radio of related songs),
@@ -875,6 +948,41 @@ mod tests {
         assert_eq!(t[1].artist, "The Weeknd");
         assert_eq!(t[1].duration, 200);
         assert!(parse_search("not json").is_empty());
+    }
+
+    #[test]
+    fn keeps_songs_and_drops_other_videos() {
+        let t = |title: &str, duration: i64| Track {
+            id: "aaaaaaaaaaa".into(),
+            title: title.into(),
+            artist: String::new(),
+            duration,
+        };
+        for song in [
+            t("Bohemian Rhapsody", 355),
+            t("Blinding Lights (Remix)", 200),
+            t("Re:ZERO Season 3 Opening", 101),
+            t("Bohemian Rhapsody (Live at Wembley)", 330),
+        ] {
+            assert!(looks_like_song(&song), "{}", song.title);
+        }
+        for other in [
+            t("ISEKAI HATERS FIRST TIME REACTION TO ALL OPENINGS", 300),
+            t("Bohemian Rhapsody Flashmob in Paris", 358),
+            t("Best of 80s mix", 300),
+            t("Top 10 anime openings", 300),
+            t("Re:Zero season 2 review", 400),
+            t("Some song", 20),
+            t("Some song", 3600),
+        ] {
+            assert!(!looks_like_song(&other), "{}", other.title);
+        }
+        // Nothing passing means the list is shown as it was.
+        assert_eq!(only_songs(vec![t("a reaction", 300)]).len(), 1);
+        assert_eq!(
+            only_songs(vec![t("a reaction", 300), t("A song", 200)]).len(),
+            1
+        );
     }
 
     #[test]
