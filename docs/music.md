@@ -70,15 +70,20 @@ the playlist (`routes/music/spotify.rs`; only `open.spotify.com` is fetched). So
   reprise... in its title is skipped unless the Spotify title has the word too
   (`VERSION_WORDS`). With no qualifying result the song stays unmatched rather
   than getting the wrong recording. Matches are stored in
-  `music_track_matches` and shared by everyone; the stored `rules_version` is 3,
-  and whenever older matches are found at start-up (the rules changed) all Spotify
-  matches are dropped once and made again (`data.rs`);
-  `rules_version` column every old match was dropped and Spotify songs were
-  matched again under these rules (a one-time migration in `data.rs`);
-- **Sync from Spotify** (and an automatic sync when the owner opens a playlist
-  more than a day stale) makes the Spotify part of the playlist equal Spotify's
-  current list and order, keeps existing matches, and keeps songs the owner added
-  by hand after it. Songs removed on Spotify disappear.
+  `music_track_matches` and shared by everyone, each with the `rules_version` it
+  was made under (`MATCH_RULES_VERSION`, now 3). A match from older rules is not
+  trusted (`get_match` ignores it): that is the cache bust, so changing the rules
+  means raising the number, not deleting rows. It is applied lazily: a song is
+  matched again when someone plays it, and when its playlist is synced
+  (`recheck_stale_matches` clears the video of every song of that playlist whose
+  stored match is stale; the worker then matches them). A fresh match isn't
+  touched, so a second sync rechecks nothing;
+- **Resync** (the button on an imported playlist, and an automatic sync when the
+  owner opens a playlist more than a day stale) makes the Spotify part of the
+  playlist equal Spotify's current list and order, keeps matches made under the
+  current rules, rechecks the rest (see above), and keeps songs the owner added
+  by hand after it. Songs removed on Spotify disappear. The response says how
+  many songs are being rechecked (`rechecked`), and the button shows it.
 - Reading the embed page is not an official API. If Spotify changes it,
   `parse_embed` is the one place to fix. Private playlists, Liked Songs and
   playlists past 100 songs would need a registered Spotify app and OAuth, which
@@ -401,8 +406,9 @@ directly; otherwise they go to the page that is playing.
 A playlist page has a cover (a mosaic of its first songs), a big Play and a
 Shuffle button (`MitchMusic.playShuffled`: random shuffle when it was off, the
 chosen mode when it was on; it starts at a random song), and one "more" menu
-(share link, make public/private, rename, sync from Spotify, delete; for someone
-else's playlist: save a copy, message someone) instead of a row of buttons. New
+(share link, make public/private, rename, delete; for someone
+else's playlist: save a copy, message someone) instead of a row of buttons. A
+playlist imported from Spotify also has a **Resync** button next to Shuffle. New
 playlist and Import from Spotify are in the + menu of the playlist list.
 
 ## Crossfade

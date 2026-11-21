@@ -971,23 +971,6 @@ impl DataStore {
                 [],
             )?;
         }
-        // Matches made before the artist had to agree (a cover with the right
-        // title could win) are dropped once and made again: they are stored
-        // with rules_version 2, current matches with 3.
-        let stale_matches: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM music_track_matches WHERE rules_version < 3",
-                [],
-                |r| r.get(0),
-            )
-            .unwrap_or(0);
-        if stale_matches > 0 {
-            conn.execute("DELETE FROM music_track_matches", [])?;
-            conn.execute(
-                "UPDATE music_playlist_tracks SET video_id = '' WHERE spotify_id != ''",
-                [],
-            )?;
-        }
         let has_lyrics_aligned = conn
             .prepare("PRAGMA table_info(music_lyrics_cache)")?
             .query_map([], |row| row.get::<_, String>(1))?

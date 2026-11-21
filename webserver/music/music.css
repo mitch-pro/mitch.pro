@@ -196,6 +196,7 @@
 .mp-bigbtn:hover { background: color-mix(in srgb, var(--t-fg) 16%, transparent); }
 .mp-bigbtn.mp-primary { background: var(--t-ac); color: var(--t-ac-ink); }
 .mp-bigbtn.mp-primary:hover { background: var(--t-ac2, var(--t-ac)); }
+.mp-bigbtn.mp-compact { min-width: 0; padding: 0 14px; }
 .mp-bigbtn[disabled] { opacity: 0.4; cursor: default; }
 .mp-bigicon { display: inline-grid; place-items: center; width: 20px; height: 20px; }
 .mp-bigicon svg { width: 20px; height: 20px; fill: currentColor; }

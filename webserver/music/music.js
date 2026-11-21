@@ -14,6 +14,7 @@
     pop: 'M14 3h7v7h-2V6.4l-8.3 8.3-1.4-1.4L17.6 5H14zM5 5h6v2H6v11h11v-5h2v7H4V5z',
     heart: 'M12 21s-7.5-4.6-9.6-9.2C.9 8.4 2.7 5 6 5c2 0 3.4 1.1 4 2.2h4c.6-1.1 2-2.2 4-2.2 3.3 0 5.1 3.4 3.6 6.8C19.5 16.4 12 21 12 21z',
     plus: 'M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z',
+    sync: 'M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z',
     more: 'M6 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z',
     queue: 'M4 6h16v2H4zm0 5h10v2H4zm0 5h10v2H4zm12-5v6.2a3 3 0 1 0 2 2.8V13h2v-2z',
     listadd: 'M3 6h12v2H3zm0 5h12v2H3zm0 5h8v2H3zm13-1v-3h2v3h3v2h-3v3h-2v-3h-3v-2z',
@@ -530,6 +531,19 @@
     var playBtn = bigBtn('Play', 'play', function () { if (tracks.length) M.play(tracks, 0); }, true);
     var shuffleBtn = bigBtn('Shuffle', 'shuffle', function () { M.playShuffled(tracks); }, false);
     playBtn.disabled = shuffleBtn.disabled = !tracks.length;
+    var resyncBtn = null;
+    if (p.mine && p.spotify) {
+      // Imported from Spotify: fetch the latest songs, and check once more which
+      // YouTube video each song is (songs already matched under the current
+      // rules are left alone, so repeating it is cheap).
+      resyncBtn = bigBtn('Resync', 'sync', function () {
+        resyncBtn.disabled = true;
+        resyncBtn.lastChild.textContent = 'Syncing\u2026';
+        syncSpotify(false);
+      }, false);
+      resyncBtn.title = 'Get the latest songs from Spotify and check the song matches';
+      resyncBtn.classList.add('mp-compact');
+    }
     var more = document.createElement('button');
     more.type = 'button'; more.className = 'mp-icon mp-moremenu';
     more.title = 'More'; more.setAttribute('aria-label', 'More'); more.setAttribute('aria-haspopup', 'menu'); more.setAttribute('aria-expanded', 'false');
@@ -541,7 +555,6 @@
           post('/api/music/playlist/update', { id: p.id, public: !p.public }).then(reopen).catch(function (e) { say(e.message); });
         } },
         { label: 'Rename\u2026', fn: renamePlaylist },
-        p.spotify ? { label: 'Sync from Spotify', fn: function () { syncSpotify(false); } } : null,
         { label: 'Delete playlist\u2026', fn: deletePlaylist, danger: true }
       ] : [
         { label: 'Save a copy', fn: function () {
@@ -554,7 +567,9 @@
         { label: 'Message someone', fn: function () { sendInChat(p, plOpen.token); } }
       ]);
     });
-    el.plActions.append(playBtn, shuffleBtn, more);
+    el.plActions.append(playBtn, shuffleBtn);
+    if (resyncBtn) el.plActions.appendChild(resyncBtn);
+    el.plActions.appendChild(more);
     renderSharePanel();
 
     el.plTracks.replaceChildren();
@@ -606,11 +621,14 @@
   }
 
   function syncSpotify(quiet) {
-    if (!quiet) say('Syncing with Spotify…');
+    if (!quiet) say('Syncing with Spotify\u2026');
     return post('/api/music/playlist/spotify/sync', { id: plOpen.p.id }).then(function (d) {
-      if (!quiet) say(d.added || d.removed ? 'Added ' + d.added + ', removed ' + d.removed : 'Already up to date');
-      return reopen();
-    }).catch(function (e) { if (!quiet) say(e.message); });
+      var bits = [];
+      if (d.added || d.removed) bits.push('Added ' + d.added + ', removed ' + d.removed);
+      if (d.rechecked) bits.push('checking ' + d.rechecked + (d.rechecked === 1 ? ' song' : ' songs') + ' again');
+      // Reopening clears the status line, so the message goes up after it.
+      return reopen().then(function () { if (!quiet) say(bits.length ? bits.join(' \u00b7 ') : 'Already up to date'); });
+    }).catch(function (e) { if (!quiet) { say(e.message); if (plOpen) renderDetail(); } });
   }
 
   /* -------------------------------------------------------------- sharing */

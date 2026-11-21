@@ -324,8 +324,14 @@ async fn spotify_sync(state: &Arc<AppState>, email: &str, p: &Playlist) -> Respo
     };
     match pl::sync_spotify(&state.store, &p.id, fetched.tracks) {
         Ok((added, removed)) => {
+            // Songs matched under older rules are matched again (once: a fresh
+            // match isn't touched by the next sync), then everything is warmed.
+            let rechecked = pl::recheck_stale_matches(&state.store, &p.id);
             super::worker::warm_playlist(state, &p.id);
-            json_response(200, json!({ "added": added, "removed": removed }))
+            json_response(
+                200,
+                json!({ "added": added, "removed": removed, "rechecked": rechecked }),
+            )
         }
         Err(m) => bad(m),
     }
