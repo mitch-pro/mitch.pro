@@ -278,11 +278,13 @@ pub fn footer(
             )
         })
         .unwrap_or_default();
-    let student = if support_student_line {
-        " or mitchell.fogler@student.rjuhsd.us"
-    } else {
-        ""
-    };
+    // The school address is configuration, not source: SUPPORT_SCHOOL_EMAIL.
+    let student = std::env::var("SUPPORT_SCHOOL_EMAIL")
+        .ok()
+        .map(|e| e.trim().to_string())
+        .filter(|e| support_student_line && !e.is_empty())
+        .map(|e| format!(" or {}", escape(&e)))
+        .unwrap_or_default();
     format!(
         "<div style=\"margin-top:28px;padding-top:18px;border-top:1px solid {line};font-size:12px;line-height:1.55;color:{faint};text-align:center;\"><p style=\"margin:0 0 8px;\">{delivered}</p>{unsub}<p style=\"margin:0 0 8px;\">For support: email SUPPORT to {support}{student}</p><p style=\"margin:0;font-size:11px;\">2014 Capitol Ave #100, Sacramento, CA 95811</p></div>",
         line = p.line,
@@ -448,6 +450,5 @@ mod tests {
         );
         assert!(with.contains("unsubscribe from this list"));
         assert!(!without.contains("unsubscribe"));
-        assert!(without.contains("mitchell.fogler@student.rjuhsd.us"));
     }
 }

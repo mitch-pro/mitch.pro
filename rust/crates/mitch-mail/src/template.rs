@@ -132,46 +132,14 @@ mod tests {
         assert!(html.contains(">Hello!</p>"));
         assert!(html.contains("Second para<br>with break"));
         assert!(html.contains("unsubscribe from this list"));
-        assert!(
-            !html.contains("mitchell.fogler@student.rjuhsd.us"),
-            "noreply footer has no student line"
-        );
     }
 
     #[test]
-    fn gmail_footer_includes_student_line_only_with_unsubscribe() {
-        let with = format_html_email(
-            Sender::Gmail,
-            "s",
-            "b",
-            Some("https://mitch.pro/unsubscribe/t"),
-            "https://mitch.pro",
-            "https://mitchdog.com",
-        );
-        let without = format_html_email(
-            Sender::Gmail,
-            "s",
-            "b",
-            None,
-            "https://mitch.pro",
-            "https://mitchdog.com",
-        );
-        assert!(with.contains(" or mitchell.fogler@student.rjuhsd.us"));
-        assert!(!without.contains("mitchell.fogler"));
-        assert!(!without.contains("unsubscribe from this list"));
-    }
-
-    #[test]
-    fn support_footer_always_includes_student_line() {
-        let raw = format_html_email(
-            Sender::Support,
-            "s",
-            "b",
-            None,
-            "https://mitch.pro",
-            "https://mitch.88chan.me",
-        );
-        assert!(raw.contains(" or mitchell.fogler@student.rjuhsd.us"));
+    fn school_address_line_depends_on_sender() {
+        assert!(Sender::Gmail.support_line(true));
+        assert!(!Sender::Gmail.support_line(false));
+        assert!(Sender::Support.support_line(false));
+        assert!(!Sender::Noreply.support_line(true));
     }
 
     #[test]
