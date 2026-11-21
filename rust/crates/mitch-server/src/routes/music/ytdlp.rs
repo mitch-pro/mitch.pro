@@ -151,6 +151,36 @@ fn spawn_slots() -> &'static Semaphore {
     SLOTS.get_or_init(|| Semaphore::new(4))
 }
 
+/// A private, short-lived copy of the cookies file for one yt-dlp run, removed
+/// when the run ends (including when it is cancelled).
+struct CookieCopy(std::path::PathBuf);
+
+impl CookieCopy {
+    fn make(src: &str, dir: &str) -> Option<Self> {
+        let _ = std::fs::create_dir_all(dir);
+        let dst = std::path::Path::new(dir).join(format!(
+            "cookies-{}.txt",
+            mitch_lib::crypto::random_bytes_hex(6)
+        ));
+        if let Err(e) = std::fs::copy(src, &dst) {
+            tracing::warn!("[music] can't read MUSIC_YTDLP_COOKIES ({e}); running without cookies");
+            return None;
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&dst, std::fs::Permissions::from_mode(0o600));
+        }
+        Some(CookieCopy(dst))
+    }
+}
+
+impl Drop for CookieCopy {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
 /// Slots kept for searches. A search is what someone is waiting on, so it never
 /// queues behind the stream-link, caption and related-song runs that share the
 /// main slots.
@@ -200,8 +230,14 @@ async fn run_in(args: &[String], slots: &Semaphore) -> Result<String, YtError> {
     if let Some(p) = &cfg.proxy {
         cmd.arg("--proxy").arg(p);
     }
-    if let Some(c) = &cfg.cookies {
-        cmd.arg("--cookies").arg(c);
+    // yt-dlp rewrites its cookies file when it exits, and several runs go at
+    // once, so each run gets its own copy; the original is never touched.
+    let _cookie_copy = cfg
+        .cookies
+        .as_deref()
+        .and_then(|src| CookieCopy::make(src, &cfg.cache_dir));
+    if let Some(copy) = &_cookie_copy {
+        cmd.arg("--cookies").arg(&copy.0);
     }
     if let Some(js) = &cfg.js_runtime {
         cmd.arg("--js-runtimes").arg(js);
@@ -1040,6 +1076,31 @@ mod tests {
         assert_eq!(t[1].artist, "The Weeknd");
         assert_eq!(t[1].duration, 200);
         assert!(parse_search("not json").is_empty());
+    }
+
+    #[test]
+    fn each_run_gets_its_own_cookie_copy_that_is_removed_after() {
+        let dir = std::env::temp_dir().join(format!(
+            "ytdlp-cookies-{}",
+            mitch_lib::crypto::random_bytes_hex(6)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("cookies.txt");
+        std::fs::write(&src, "# Netscape HTTP Cookie File\n").unwrap();
+        let cache = dir.join("cache");
+        let a = CookieCopy::make(src.to_str().unwrap(), cache.to_str().unwrap()).unwrap();
+        let b = CookieCopy::make(src.to_str().unwrap(), cache.to_str().unwrap()).unwrap();
+        assert_ne!(a.0, b.0, "concurrent runs must not share a file");
+        assert_eq!(
+            std::fs::read_to_string(&a.0).unwrap(),
+            "# Netscape HTTP Cookie File\n"
+        );
+        let kept = a.0.clone();
+        drop(a);
+        assert!(!kept.exists(), "the copy is removed when the run ends");
+        assert!(src.exists(), "the original is never touched");
+        assert!(CookieCopy::make("/nonexistent/cookies.txt", cache.to_str().unwrap()).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

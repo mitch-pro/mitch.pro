@@ -137,7 +137,10 @@ queue advances are near-instant. Search takes about 1.4 s (`--flat-playlist`).
   allows `CONNECT` to its three Movies hosts (`egress-proxy/proxy.py`), so using it
   here needs an allowlist change (YouTube, `*.googlevideo.com`, `i.ytimg.com`),
   which is infrastructure and was not touched.
-- Optional: `MUSIC_YTDLP_COOKIES` (cookies.txt path).
+- Optional: `MUSIC_YTDLP_COOKIES` (path to a Netscape `cookies.txt` of a
+  throwaway YouTube account, see "Cookies" below). Each yt-dlp run uses its own
+  temporary copy (removed afterwards), because yt-dlp rewrites the file on exit
+  and runs overlap.
 - Speed. Most of a cold start is yt-dlp resolving the song. Three things help:
   - **Cache** (`MUSIC_YTDLP_CACHE_DIR`, default `/tmp/mitch-ytdlp-cache`): yt-dlp
     keeps the solved YouTube player script there, so each song doesn't download and
@@ -154,6 +157,30 @@ queue advances are near-instant. Search takes about 1.4 s (`--flat-playlist`).
     network panel: the `Server-Timing` header shows `resolve` (with `memory`, `db` or
     `yt-dlp` as the source) and `upstream` (time to the first byte from Google).
     Resolves over 2.5 s are also logged.
+
+### Cookies
+
+Logged-out yt-dlp use gets roughly 300 videos an hour from one IP before YouTube
+answers 429 or a bot check; a signed-in session gets about 2,000. Password
+login doesn't work with yt-dlp any more, so this takes cookies from a browser
+session. Use a throwaway Google account, never a real one: YouTube may lock or
+ban an account used this way, and automated access is against its terms.
+
+1. Make a new Google account (it may ask for a phone number).
+2. In a private/incognito browser window, sign in to youtube.com with it.
+3. In that same window, open `https://www.youtube.com/robots.txt` (a page that
+   doesn't rotate the session), and export youtube.com cookies in Netscape
+   format with a cookies.txt extension (e.g. "Get cookies.txt LOCALLY").
+4. Close the private window without signing out, so the browser never refreshes
+   those cookies.
+5. Put the file on the server outside git, e.g. `data/youtube-cookies.txt` (the
+   `data/` directory is mounted at `/app/data` and is not tracked), `chmod 600`,
+   and set `MUSIC_YTDLP_COOKIES=/app/data/youtube-cookies.txt` in `.env`.
+   Restart the server. The file is a login credential: never commit it or paste
+   it anywhere.
+
+When the cookies stop working (yt-dlp logs the bot check again) export a new
+set the same way.
 
 ## API (all require a login; 401 otherwise)
 
