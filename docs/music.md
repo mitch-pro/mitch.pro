@@ -198,11 +198,16 @@ as stored. An older one (up to 30 days; the worker prunes past that, and past
 current list for next time (one refresh per query at a time; a failed refresh
 keeps the old results; an empty answer never overwrites a stored one). New
 queries go to yt-dlp and take about a second. Results are warmed (stream links,
-lyrics) on every response. Searches have 3 yt-dlp slots of their own, so they
-ever queue behind stream-link, caption or related-song runs; one over 2.5 s is
-logged (`slow search`), which means yt-dlp itself (startup, network, the egress
-proxy) was slow. While a search is running the list shows shimmering placeholder
-rows.
+lyrics) on every response. yt-dlp runs in three pools so nothing a person waits
+on queues behind background work: 4 slots for clicks (stream links, the lyrics'
+caption fallback), 3 for searches, and 2 for background work (warming links,
+related songs, the caption check for lyric timing). Search results are warmed by
+`warm_search`: it waits 1.5 s for the search to stand still, resolves the
+results in order and stops when a newer search arrives, so typing doesn't pile
+up resolves. The page waits 650 ms after the last keystroke before searching. A
+search over 2.5 s is logged (`slow search`), which means yt-dlp itself (startup,
+network, the egress proxy, CPU) was slow. While a search is running the list
+shows shimmering placeholder rows.
 
 The page searches as you type: 400 ms after the last keystroke, for 2+
 characters, skipping a query already shown; Enter searches immediately, and an

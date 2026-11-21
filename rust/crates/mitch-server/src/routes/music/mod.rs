@@ -140,7 +140,7 @@ async fn search_tracks(state: &Arc<AppState>, email: &str, search: &str) -> Resp
     match ytdlp::search(q).await {
         Ok(tracks) => {
             // Start resolving every result now so a click plays at once.
-            ytdlp::warm(tracks.iter().map(|t| t.id.clone()).collect());
+            ytdlp::warm_search(tracks.iter().map(|t| t.id.clone()).collect());
             // ...and fetch their lyrics ahead of time too, so those are there
             // when a song is picked.
             worker::warm_lyrics(

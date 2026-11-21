@@ -165,10 +165,17 @@
     el.list.replaceChildren();
     if (tab === 'search' && searching) { skeleton(); return; }
     if (!list.length) {
+      var q = ($('mp-q') && $('mp-q').value.trim()) || '';
       var empty = document.createElement('li');
       empty.className = 'mp-empty';
-      empty.textContent = tab === 'search' ? '' : tab === 'library' ? 'Nothing saved yet' : 'The queue is empty';
-      if (empty.textContent) el.list.appendChild(empty);
+      var glyph = document.createElement('span');
+      glyph.className = 'mp-emptyicon';
+      setIcon(glyph, tab === 'search' ? 'search' : tab === 'library' ? 'heart' : 'upnext');
+      var words = document.createElement('span');
+      words.textContent = tab === 'search' ? (q ? 'No results for \u201c' + q + '\u201d' : 'Search for songs or artists')
+        : tab === 'library' ? 'Songs you save with the heart appear here' : 'The queue is empty';
+      empty.append(glyph, words);
+      el.list.appendChild(empty);
       return;
     }
     list.forEach(function (t, i) {
@@ -350,6 +357,12 @@
     var list = myPlaylists || [];
     box.hidden = myPlaylists === null;
     ul.replaceChildren();
+    if (!list.length) {
+      var none = document.createElement('li');
+      none.className = 'mp-sideplnone';
+      none.textContent = 'No playlists yet';
+      ul.appendChild(none);
+    }
     list.forEach(function (p) {
       var li = document.createElement('li');
       var b = document.createElement('button');
@@ -657,7 +670,7 @@
         if (mine !== searchSeq) return;
         searching = false;
         results = d.tracks || [];
-        say(results.length ? '' : 'No results');
+        say('');
         render();
       }).catch(function (err) {
         if (mine !== searchSeq) return;
@@ -667,7 +680,7 @@
       });
     };
     searchForm.addEventListener('submit', function (e) { e.preventDefault(); clearTimeout(typingTimer); runSearch(true); });
-    el.q.addEventListener('input', function () { clearTimeout(typingTimer); typingTimer = setTimeout(runSearch, 400); });
+    el.q.addEventListener('input', function () { clearTimeout(typingTimer); typingTimer = setTimeout(runSearch, 650); });
     Array.prototype.forEach.call(document.querySelectorAll('.mp-tabs [data-tab]'), function (b) {
       b.addEventListener('click', function () { setTab(b.dataset.tab); });
     });
@@ -839,6 +852,7 @@
   document.querySelectorAll('.mm-card').forEach(function (c) { c.remove(); });
   M.init({ popout: popout });
   M.onChange(onState);
+  render();                 // the empty state of the first tab
   loadLibrary();
   refreshSidePlaylists();
   var params = new URLSearchParams(location.search);

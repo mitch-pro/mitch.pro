@@ -561,7 +561,7 @@ pub async fn align(video_id: &str, lyrics: &mut ml::Lyrics) -> Option<i64> {
     if lyrics.sync == ml::Sync::None || lyrics.lines.is_empty() {
         return None;
     }
-    let caps = tokio::time::timeout(CAPTIONS_TIMEOUT, ytdlp::captions(video_id))
+    let caps = tokio::time::timeout(CAPTIONS_TIMEOUT, ytdlp::captions_bg(video_id))
         .await
         .ok()?
         .ok()??;

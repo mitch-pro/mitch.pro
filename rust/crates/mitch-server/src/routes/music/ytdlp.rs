@@ -33,6 +33,8 @@ const SLOT_WAIT: Duration = Duration::from_secs(20);
 /// Most songs queued or running for background link warming at once; the
 /// rest of a burst is dropped (a click still resolves its own song).
 const WARM_BACKLOG_MAX: usize = 40;
+/// How long a search must stand still before its results are warmed.
+const WARM_SETTLE: Duration = Duration::from_millis(1500);
 /// Tracks longer than this are left out of search (mixes, podcasts, streams).
 const MAX_TRACK_SECONDS: i64 = 20 * 60;
 
@@ -146,7 +148,7 @@ pub fn media_client() -> Option<&'static reqwest::Client> {
 
 fn spawn_slots() -> &'static Semaphore {
     static SLOTS: OnceLock<Semaphore> = OnceLock::new();
-    SLOTS.get_or_init(|| Semaphore::new(6))
+    SLOTS.get_or_init(|| Semaphore::new(4))
 }
 
 /// Slots kept for searches. A search is what someone is waiting on, so it never
@@ -157,9 +159,23 @@ fn search_slots() -> &'static Semaphore {
     SLOTS.get_or_init(|| Semaphore::new(3))
 }
 
-/// Runs yt-dlp with `args` and returns stdout. At most six run at once.
+/// Slots for work nobody is waiting on (warming links, suggestions, checking
+/// lyric timing). Kept small and apart from the main slots so a click never
+/// queues behind it, and so background work can't crowd the machine's CPU.
+fn background_slots() -> &'static Semaphore {
+    static SLOTS: OnceLock<Semaphore> = OnceLock::new();
+    SLOTS.get_or_init(|| Semaphore::new(2))
+}
+
+/// Runs yt-dlp with `args` and returns stdout. At most four run at once for
+/// things a person is waiting on (see also `search_slots`, `background_slots`).
 async fn run(args: &[String]) -> Result<String, YtError> {
     run_in(args, spawn_slots()).await
+}
+
+/// Same, in the background pool.
+async fn run_bg(args: &[String]) -> Result<String, YtError> {
+    run_in(args, background_slots()).await
 }
 
 async fn run_in(args: &[String], slots: &Semaphore) -> Result<String, YtError> {
@@ -475,7 +491,7 @@ pub async fn related(id: &str) -> Result<Vec<Track>, YtError> {
             return Ok(hit.clone());
         }
     }
-    let out = run(&[
+    let out = run_bg(&[
         "--flat-playlist".into(),
         "--dump-single-json".into(),
         "--playlist-end".into(),
@@ -616,6 +632,33 @@ fn warm_limit() -> &'static Semaphore {
 /// this queue (it has its own limit; they only share the yt-dlp process
 /// slots). Ids already cached or already being warmed are skipped, and the
 /// batch stops if the source is blocked or missing rather than hammering it.
+/// Warms the links for a search's results. Unlike `warm`, a newer search
+/// supersedes it: the results are only resolved once the search has stood
+/// still for a moment, and queued ones are dropped when another search comes
+/// in, so typing doesn't pile up resolves for results nobody will see.
+pub fn warm_search(ids: Vec<String>) {
+    static CURRENT: OnceLock<Arc<std::sync::atomic::AtomicU64>> = OnceLock::new();
+    let current = CURRENT.get_or_init(Default::default).clone();
+    let mine = current.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+    tokio::spawn(async move {
+        tokio::time::sleep(WARM_SETTLE).await;
+        if current.load(std::sync::atomic::Ordering::SeqCst) != mine {
+            return;
+        }
+        // Resolve in order, stopping as soon as a newer search arrives.
+        for id in ids {
+            if current.load(std::sync::atomic::Ordering::SeqCst) != mine {
+                return;
+            }
+            if valid_video_id(&id) && !is_cached(&id) {
+                if let Err(YtError::Blocked | YtError::NotInstalled) = resolve_bg(&id).await {
+                    return;
+                }
+            }
+        }
+    });
+}
+
 pub fn warm(ids: Vec<String>) {
     static IN_FLIGHT: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
     let todo: Vec<String> = {
@@ -645,7 +688,8 @@ pub fn warm(ids: Vec<String>) {
             handles.push(tokio::spawn(async move {
                 if let Ok(_permit) = warm_limit().acquire().await {
                     if !stop.load(std::sync::atomic::Ordering::Relaxed) {
-                        if let Err(YtError::Blocked | YtError::NotInstalled) = resolve(&id).await {
+                        if let Err(YtError::Blocked | YtError::NotInstalled) = resolve_bg(&id).await
+                        {
                             stop.store(true, std::sync::atomic::Ordering::Relaxed);
                         }
                     }
@@ -669,6 +713,15 @@ pub async fn resolve(id: &str) -> Result<Resolved, YtError> {
 /// Like `resolve`, and says where the link came from: `memory`, `db` or
 /// `yt-dlp` (the slow one). Used for the `Server-Timing` header and the log.
 pub async fn resolve_timed(id: &str) -> Result<(Resolved, &'static str), YtError> {
+    resolve_in(id, false).await
+}
+
+/// Resolves in the background pool: for warming, where nobody is waiting.
+async fn resolve_bg(id: &str) -> Result<Resolved, YtError> {
+    resolve_in(id, true).await.map(|(r, _)| r)
+}
+
+async fn resolve_in(id: &str, background: bool) -> Result<(Resolved, &'static str), YtError> {
     if !valid_video_id(id) {
         return Err(YtError::Failed("bad id".into()));
     }
@@ -696,8 +749,8 @@ pub async fn resolve_timed(id: &str) -> Result<(Resolved, &'static str), YtError
         return Ok((r, "db"));
     }
     let started = Instant::now();
-    let out = run(&[
-        "--no-playlist".into(),
+    let args = [
+        "--no-playlist".to_string(),
         "-f".into(),
         "bestaudio[ext=m4a]/bestaudio/best".into(),
         "--print".into(),
@@ -705,8 +758,12 @@ pub async fn resolve_timed(id: &str) -> Result<(Resolved, &'static str), YtError
         "--print".into(),
         "%(ext)s".into(),
         format!("https://www.youtube.com/watch?v={id}"),
-    ])
-    .await?;
+    ];
+    let out = if background {
+        run_bg(&args).await?
+    } else {
+        run(&args).await?
+    };
     let resolved = parse_resolved(&out).ok_or_else(|| YtError::Failed("no audio format".into()))?;
     resolve_cache()
         .lock()
@@ -832,16 +889,29 @@ pub struct Captions {
 /// Auto-generated captions are timed per word, so they give word-by-word
 /// highlighting for videos no lyrics source knows.
 pub async fn captions(id: &str) -> Result<Option<Captions>, YtError> {
+    captions_in(id, false).await
+}
+
+/// Captions fetched in the background pool, to check lyric timing.
+pub async fn captions_bg(id: &str) -> Result<Option<Captions>, YtError> {
+    captions_in(id, true).await
+}
+
+async fn captions_in(id: &str, background: bool) -> Result<Option<Captions>, YtError> {
     if !valid_video_id(id) {
         return Ok(None);
     }
-    let out = run(&[
-        "--skip-download".into(),
+    let args = [
+        "--skip-download".to_string(),
         "--no-playlist".into(),
         "--dump-single-json".into(),
         format!("https://www.youtube.com/watch?v={id}"),
-    ])
-    .await?;
+    ];
+    let out = if background {
+        run_bg(&args).await?
+    } else {
+        run(&args).await?
+    };
     let info: serde_json::Value =
         serde_json::from_str(&out).map_err(|e| YtError::Failed(e.to_string()))?;
     let Some((url, auto)) = pick_caption_url(&info) else {

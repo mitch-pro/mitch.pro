@@ -4,13 +4,14 @@
 
 .mp-sr { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-.mp-main { max-width: 1440px; padding-top: 16px; }
+.mp-main { max-width: 1440px; padding-top: 12px; padding-bottom: 0; }
 .mp-shell {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 22px;
-  height: calc(100vh - 110px);
-  min-height: 560px;
+  height: calc(100vh - 134px);   /* header above, cookie bar below */
+  height: calc(100dvh - 134px);
+  min-height: 420px;
 }
 
 /* ------------------------------------------------------------- browse */
@@ -137,7 +138,10 @@
 .mp-skel:nth-child(4) > i, .mp-skel:nth-child(4) > span > i { animation-delay: 0.24s; }
 @keyframes mp-shimmer { from { background-position: 160% 0; } to { background-position: -60% 0; } }
 @media (prefers-reduced-motion: reduce) { .mp-skel > i, .mp-skel > span > i { animation: none; } }
-.mp-empty { padding: 24px 8px; color: var(--t-fg2); }
+.mp-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 56px 16px; color: var(--t-fg2); text-align: center; }
+.mp-emptyicon { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; background: color-mix(in srgb, var(--t-fg) 8%, transparent); color: var(--t-fg2); }
+.mp-emptyicon svg { width: 26px; height: 26px; fill: currentColor; }
+.mp-sideplnone { padding: 6px 10px; color: var(--t-fg2); font-size: 14px; }
 .mp-plgrid .mp-empty { grid-column: 1 / -1; }
 
 .mp-icon {
@@ -191,6 +195,7 @@
 .mp-stage {
   position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden;
   background: var(--t-bg2); border: 1px solid var(--t-bd); border-radius: 22px; isolation: isolate;
+  container: stage / inline-size;
 }
 .mp-ambient {
   position: absolute; inset: -25%; z-index: -1; background: center / cover no-repeat var(--cover, none);
@@ -199,6 +204,13 @@
 .mp-ambient::after { content: ''; position: absolute; inset: 0; background: color-mix(in srgb, var(--t-bg2) 40%, transparent); }
 html.theme-light .mp-ambient { opacity: 0.4; }
 .mp-stage.is-empty .mp-ambient { opacity: 0; }
+/* Nothing playing: a quiet mark where the lyrics will be, not an empty void. */
+.mp-stage.is-empty .mp-lyrics { display: grid; place-items: center; }
+.mp-stage.is-empty .mp-lyrics::before {
+  content: ''; width: 120px; height: 120px; background: var(--t-fg2); opacity: 0.18;
+  -webkit-mask: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3v10.55A4 4 0 1 0 14 17V7h4V3z'/%3E%3C/svg%3E");
+  mask: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3v10.55A4 4 0 1 0 14 17V7h4V3z'/%3E%3C/svg%3E");
+}
 
 .mp-stagebody { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(200px, 330px) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 40px; padding: 28px 36px 8px; overflow: hidden; }
 .mp-cover { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; min-width: 0; min-height: 0; align-self: center; }
@@ -244,7 +256,7 @@ html.theme-light .mp-ambient { opacity: 0.4; }
 .mp-wrongform input[type=text] { flex: 1; min-width: 120px; padding: 8px 12px; background: var(--t-bg); color: var(--t-fg); border: 1px solid var(--t-bd); border-radius: 999px; font: inherit; }
 
 /* ---------------------------------------------------------------- dock */
-.mp-dock { flex: none; padding: 6px 36px 20px; }
+.mp-dock { flex: none; padding: 4px 32px 14px; }
 .mp-scrub { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 10px; align-items: center; }
 .mp-time { color: var(--t-fg2); font-size: 12px; font-variant-numeric: tabular-nums; }
 .mp-scrub .mp-time:last-child { text-align: right; }
@@ -312,6 +324,18 @@ html.theme-light .mp-ambient { opacity: 0.4; }
   .mp-transport { grid-template-columns: 1fr; }
   .mp-volwrap { display: none; }
   .mp-xfside { order: 2; justify-content: center; margin-top: 8px; display: flex; }
+}
+/* The stage sits beside the sidebar and list, so it is often narrow: cover and
+ * title in a row on top, lyrics filling the rest below. */
+@container stage (max-width: 720px) {
+  .mp-stagebody { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 14px; padding: 22px 24px 8px; }
+  .mp-cover { flex-direction: row; flex-wrap: wrap; align-items: center; align-self: start; gap: 4px 16px; }
+  .mp-coverart { width: 112px; flex: none; transform: none; border-radius: 12px; box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35); }
+  .mp-nowmeta { flex: 1; min-width: 0; }
+  .mp-title { font-size: 21px; }
+  .mp-artist { font-size: 15px; }
+  .mp-nowtools { margin: 0; }
+  .mp-lyrics .ml-line { font-size: clamp(22px, 5.2cqw, 34px); }
 }
 @media (max-width: 520px) {
   .mp-rowdur { display: none; }
