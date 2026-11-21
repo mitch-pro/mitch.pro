@@ -149,12 +149,24 @@ fn spawn_slots() -> &'static Semaphore {
     SLOTS.get_or_init(|| Semaphore::new(6))
 }
 
+/// Slots kept for searches. A search is what someone is waiting on, so it never
+/// queues behind the stream-link, caption and related-song runs that share the
+/// main slots.
+fn search_slots() -> &'static Semaphore {
+    static SLOTS: OnceLock<Semaphore> = OnceLock::new();
+    SLOTS.get_or_init(|| Semaphore::new(3))
+}
+
 /// Runs yt-dlp with `args` and returns stdout. At most six run at once.
 async fn run(args: &[String]) -> Result<String, YtError> {
+    run_in(args, spawn_slots()).await
+}
+
+async fn run_in(args: &[String], slots: &Semaphore) -> Result<String, YtError> {
     let cfg = config();
     // Waiting for a free yt-dlp slot is bounded too, so a burst of requests
     // fails fast instead of piling up.
-    let _slot = match tokio::time::timeout(SLOT_WAIT, spawn_slots().acquire()).await {
+    let _slot = match tokio::time::timeout(SLOT_WAIT, slots.acquire()).await {
         Ok(Ok(slot)) => slot,
         Ok(Err(_)) => return Err(YtError::Failed("shutting down".into())),
         Err(_) => return Err(YtError::Timeout),
@@ -275,12 +287,22 @@ fn remember(key: &str, tracks: &[Track], at: Instant) {
 
 /// Runs yt-dlp for a query and stores the result in memory and the database.
 async fn fetch_live(key: &str) -> Result<Vec<Track>, YtError> {
-    let out = run(&[
-        "--flat-playlist".into(),
-        "--dump-single-json".into(),
-        format!("ytsearch15:{key}"),
-    ])
+    let started = Instant::now();
+    let out = run_in(
+        &[
+            "--flat-playlist".into(),
+            "--dump-single-json".into(),
+            format!("ytsearch15:{key}"),
+        ],
+        search_slots(),
+    )
     .await?;
+    if started.elapsed() > Duration::from_millis(2500) {
+        tracing::info!(
+            "[music] slow search ({} ms): yt-dlp itself, not queueing, took this long",
+            started.elapsed().as_millis()
+        );
+    }
     let tracks = parse_search(&out);
     remember(key, &tracks, Instant::now());
     if let Some(store) = store() {

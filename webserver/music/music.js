@@ -136,6 +136,21 @@
     btn.setAttribute('aria-label', label);
   }
 
+  var searching = false;       // a search is in flight: show placeholder rows
+  function skeleton() {
+    for (var i = 0; i < 8; i++) {
+      var li = document.createElement('li');
+      li.className = 'mp-skel';
+      li.setAttribute('aria-hidden', 'true');
+      var art = document.createElement('i'), lines = document.createElement('span');
+      var a = document.createElement('i'), b = document.createElement('i');
+      a.style.width = (48 + (i * 17) % 36) + '%'; b.style.width = (26 + (i * 11) % 24) + '%';
+      lines.append(a, b);
+      li.append(art, lines);
+      el.list.appendChild(li);
+    }
+  }
+
   function render() {
     if (!el.list) return;
     el.list.hidden = tab === 'playlists';
@@ -143,6 +158,7 @@
     if (tab === 'playlists') { renderPlaylists(); return; }
     var list = tab === 'search' ? results : tab === 'library' ? library : M.state.queue;
     el.list.replaceChildren();
+    if (tab === 'search' && searching) { skeleton(); return; }
     if (!list.length) {
       var empty = document.createElement('li');
       empty.className = 'mp-empty';
@@ -585,20 +601,23 @@
     var searchSeq = 0, lastQuery = '', typingTimer = 0;
     var runSearch = function (force) {
       var q = el.q.value.trim();
-      if (!q) { searchSeq++; lastQuery = ''; results = []; say(''); render(); return; }
+      if (!q) { searchSeq++; lastQuery = ''; searching = false; results = []; say(''); render(); return; }
       if (q.length < 2 || (q === lastQuery && !force)) return;
       lastQuery = q;
       var mine = ++searchSeq;
       setTab('search');
-      say('Searching…');
+      searching = true;
+      render();
       M.api('/api/music/search?q=' + encodeURIComponent(q)).then(function (d) {
         if (mine !== searchSeq) return;
+        searching = false;
         results = d.tracks || [];
         say(results.length ? '' : 'No results');
         render();
       }).catch(function (err) {
         if (mine !== searchSeq) return;
         lastQuery = '';
+        searching = false;
         results = []; render(); say(err.message);
       });
     };
