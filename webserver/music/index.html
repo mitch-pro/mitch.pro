@@ -8,26 +8,34 @@
   <link rel="icon" href="/favicon.ico">
   <link rel="stylesheet" href="/app.css">
   <link rel="stylesheet" href="/music-widget.css?v=4">
-  <link rel="stylesheet" href="/music/music.css?v=14">
+  <link rel="stylesheet" href="/music/music.css?v=16">
   <script src="/app-shell.js" defer></script>
   <script src="/music-core.js?v=7" defer></script>
-  <script src="/music/music.js?v=16" defer></script>
+  <script src="/music/music.js?v=18" defer></script>
 </head>
 <body class="app-shell music-page" data-mode="page">
   <main class="app-main mp-main">
     <h1 class="mp-sr">Music</h1>
     <div class="mp-shell">
-      <aside class="mp-side" aria-label="Find music">
+      <div class="mp-left">
+      <nav class="mp-nav" aria-label="Music">
         <form class="mp-search" id="mp-search" role="search">
           <span class="mp-searchicon" id="mp-searchicon" aria-hidden="true"></span>
           <input id="mp-q" type="search" maxlength="120" placeholder="Search songs or artists" aria-label="Search songs or artists" autocomplete="off">
         </form>
         <div class="mp-tabs" role="tablist">
-          <button type="button" role="tab" id="tab-search" aria-selected="true" data-tab="search">Results</button>
-          <button type="button" role="tab" id="tab-library" aria-selected="false" data-tab="library">Library</button>
-          <button type="button" role="tab" id="tab-playlists" aria-selected="false" data-tab="playlists">Playlists</button>
-          <button type="button" role="tab" id="tab-queue" aria-selected="false" data-tab="queue">Queue</button>
+          <button type="button" role="tab" id="tab-search" aria-selected="true" data-tab="search"><span class="mp-navicon" data-ico="search"></span>Search</button>
+          <button type="button" role="tab" id="tab-library" aria-selected="false" data-tab="library"><span class="mp-navicon" data-ico="heart"></span>Library</button>
+          <button type="button" role="tab" id="tab-playlists" aria-selected="false" data-tab="playlists"><span class="mp-navicon" data-ico="playlist"></span>Playlists</button>
+          <button type="button" role="tab" id="tab-queue" aria-selected="false" data-tab="queue"><span class="mp-navicon" data-ico="upnext"></span>Queue</button>
         </div>
+        <div class="mp-sidepl" id="mp-sidepl" hidden>
+          <div class="mp-sideplhead"><span>My playlists</span><button type="button" id="mp-sidepl-new" class="mp-icon mp-small" aria-label="New playlist" title="New playlist"></button></div>
+          <ul id="mp-sideplist" class="mp-sideplist"></ul>
+        </div>
+      </nav>
+      <aside class="mp-side" aria-label="Find music">
+        <h2 id="mp-viewtitle" class="mp-viewtitle">Search</h2>
         <p id="mp-status" class="mp-status" role="status"></p>
         <div class="mp-scroll">
           <ul id="mp-list" class="mp-list"></ul>
@@ -63,6 +71,7 @@
           </div>
         </div>
       </aside>
+      </div>
 
       <section class="mp-stage is-empty" id="mp-stage" aria-label="Now playing">
         <div id="mp-ambient" class="mp-ambient" aria-hidden="true"></div>
@@ -103,7 +112,7 @@
             <span id="mp-dur" class="mp-time">0:00</span>
           </div>
           <div class="mp-transport">
-            <div class="mp-transportside mp-xfside"><button type="button" id="mp-xfade" class="mp-pill" title="Crossfade between songs" hidden>Crossfade off</button></div>
+            <div class="mp-transportside mp-xfside"><button type="button" id="mp-xfade" class="mp-pill" title="Crossfade between songs" hidden>Fade off</button></div>
             <div class="mp-transportmain">
               <button type="button" id="mp-shuffle" class="mp-icon mp-toggle" aria-label="Shuffle" aria-pressed="false" title="Shuffle"></button>
               <button type="button" id="mp-prev" class="mp-icon" aria-label="Previous" title="Previous"></button>

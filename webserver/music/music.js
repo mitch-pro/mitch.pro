@@ -20,6 +20,8 @@
     repeat: 'M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z',
     search: 'M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z',
     note: 'M12 3v10.55A4 4 0 1 0 14 17V7h4V3z',
+    playlist: 'M3 6h12v2H3zm0 5h12v2H3zm0 5h7v2H3zm13-8v7.2a3 3 0 1 0 2 2.8V10h3V8z',
+    upnext: 'M4 6h12v2H4zm0 5h12v2H4zm0 5h7v2H4zm11-1.5 6 3.5-6 3.5z',
     up: 'M7 14l5-5 5 5z',
     down: 'M7 10l5 5 5-5z',
     remove: 'M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6z'
@@ -60,6 +62,8 @@
   if (el.shuffle) setIcon(el.shuffle, 'shuffle');
   if (el.repeat) setIcon(el.repeat, 'repeat');
   if ($('mp-searchicon')) setIcon($('mp-searchicon'), 'search');
+  Array.prototype.forEach.call(document.querySelectorAll('.mp-navicon'), function (n) { setIcon(n, n.dataset.ico); });
+  if ($('mp-sidepl-new')) setIcon($('mp-sidepl-new'), 'plus');
   if ($('mp-coverempty')) setIcon($('mp-coverempty'), 'note');
   if (el.pop) setIcon(el.pop, 'pop');
 
@@ -153,6 +157,7 @@
 
   function render() {
     if (!el.list) return;
+    setTitle();
     el.list.hidden = tab === 'playlists';
     el.plPanel.hidden = tab !== 'playlists';
     if (tab === 'playlists') { renderPlaylists(); return; }
@@ -184,6 +189,18 @@
     });
   }
 
+  /** The big heading above the list says what it is showing. */
+  function setTitle() {
+    var t = $('mp-viewtitle');
+    if (!t) return;
+    var q = ($('mp-q') && $('mp-q').value.trim()) || '';
+    var text = tab === 'search' ? (q ? 'Results for \u201c' + q + '\u201d' : 'Search')
+      : tab === 'library' ? 'Library' : tab === 'queue' ? 'Queue'
+      : plOpen ? plOpen.p.name : plMode === 'public' ? 'Public playlists' : 'Playlists';
+    t.hidden = tab === 'playlists' && !!plOpen;       // an open playlist shows its own heading
+    if (t.textContent !== text) t.textContent = text;
+  }
+
   function setTab(name) {
     tab = name;
     queueSig = '';
@@ -191,6 +208,7 @@
       $('tab-' + n).setAttribute('aria-selected', n === name ? 'true' : 'false');
     });
     say('');
+    setTitle();
     if (name === 'library') loadLibrary(); else render();
   }
 
@@ -325,6 +343,32 @@
     return li;
   }
 
+  /* The sidebar lists the viewer's own playlists, like a music app's sidebar. */
+  function renderSidePlaylists() {
+    var box = $('mp-sidepl'), ul = $('mp-sideplist');
+    if (!box || !ul) return;
+    var list = myPlaylists || [];
+    box.hidden = myPlaylists === null;
+    ul.replaceChildren();
+    list.forEach(function (p) {
+      var li = document.createElement('li');
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'mp-sidepl-item';
+      if (plOpen && plOpen.p.id === p.id && tab === 'playlists') b.setAttribute('aria-current', 'true');
+      var art = document.createElement('span'); art.className = 'mp-sideplart';
+      if (p.covers && p.covers.length) { var im = document.createElement('img'); im.alt = ''; im.loading = 'lazy'; im.src = M.thumb(p.covers[0]); art.appendChild(im); }
+      else setIcon(art, 'note');
+      var name = document.createElement('span'); name.className = 'mp-sideplname'; name.textContent = p.name;
+      b.append(art, name);
+      b.addEventListener('click', function () { plMode = 'mine'; setTab('playlists'); openPlaylist(p.id); });
+      li.appendChild(b); ul.appendChild(li);
+    });
+  }
+  function refreshSidePlaylists() {
+    return M.api('/api/music/playlists').then(function (d) { myPlaylists = d.playlists; renderSidePlaylists(); }).catch(function () { /* the sidebar just stays as it is */ });
+  }
+  on($('mp-sidepl-new'), 'click', function () { setTab('playlists'); var b = $('mp-pl-new'); if (b) b.click(); });
+
   function renderPlaylists() {
     el.plHome.hidden = !!plOpen;
     el.plDetail.hidden = !plOpen;
@@ -336,7 +380,7 @@
     var req = ++plReq;
     M.api(url).then(function (d) {
       if (plOpen || req !== plReq) return;          // a newer request or a detail view took over
-      if (plMode === 'mine') myPlaylists = d.playlists;
+      if (plMode === 'mine') { myPlaylists = d.playlists; renderSidePlaylists(); }
       el.plList.replaceChildren();
       if (!d.playlists.length) {
         var empty = document.createElement('li');
@@ -358,6 +402,7 @@
     return M.api('/api/music/playlist?id=' + encodeURIComponent(id) + (token ? '&t=' + encodeURIComponent(token) : '')).then(function (d) {
       plOpen = { p: d.playlist, tracks: d.tracks, token: token || '' };
       if (tab !== 'playlists') setTab('playlists'); else render();
+      if (d.playlist.mine) refreshSidePlaylists();      // names, covers and the highlighted one
       if (d.playlist.mine && d.playlist.spotifyStale) syncSpotify(true);
     }).catch(function (e) {
       plOpen = null;
@@ -464,7 +509,7 @@
   function deletePlaylist() {
     askForm({ title: 'Delete “' + plOpen.p.name + '”?', submit: 'Delete', fields: [], note: 'Links to it stop working.' }).then(function (v) {
       if (!v) return;
-      post('/api/music/playlist/delete', { id: plOpen.p.id }).then(function () { plOpen = null; render(); }).catch(function (e) { say(e.message); });
+      post('/api/music/playlist/delete', { id: plOpen.p.id }).then(function () { plOpen = null; render(); refreshSidePlaylists(); }).catch(function (e) { say(e.message); });
     });
   }
 
@@ -739,7 +784,7 @@
     }
     var xf = $('mp-xfade');
     if (xf) {
-      var xl = s.crossfade ? 'Crossfade ' + s.crossfade + 's' : 'Crossfade off';
+      var xl = s.crossfade ? 'Fade ' + s.crossfade + 's' : 'Fade off';
       if (xf.hidden === !!s.xfOk) xf.hidden = !s.xfOk;      // not offered where the device can't do it
       if (xf.textContent !== xl) xf.textContent = xl;
       xf.dataset.on = s.crossfade ? 'true' : 'false';
@@ -795,6 +840,7 @@
   M.init({ popout: popout });
   M.onChange(onState);
   loadLibrary();
+  refreshSidePlaylists();
   var params = new URLSearchParams(location.search);
   if (!popout && params.get('playlist')) openPlaylist(params.get('playlist'), params.get('t') || '');
   requestAnimationFrame(frame);

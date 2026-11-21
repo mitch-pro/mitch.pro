@@ -314,10 +314,15 @@ in big type, and a dock with seek, shuffle, previous/play/next and repeat
 (repeat is off, all, or one) and volume. The shuffle button cycles off, random and
 smart. The stage tints itself from the cover
 art (a blurred copy behind a scrim, so text stays readable in both themes); the
-cover grows slightly while playing. The left panel has search, the library,
-playlists (cards with a mosaic of their first covers) and the queue. Rows show a
-moving equalizer on the playing song and reveal their buttons on hover. On a
-narrow screen the stage comes first and the panel below it. Thumbnails are
+cover grows slightly while playing. The left side is laid out like a music app: a sidebar (search field, the four
+sections Search, Library, Playlists and Queue with icons, and a "My playlists"
+list with cover thumbnails that opens a playlist directly), then the list for
+the chosen section under a large heading ("Results for “queen”", "Library"...),
+then the stage. Below 1280 px the sidebar collapses into a row of section
+buttons above the list and the playlist list is hidden (the Playlists section
+still has them). Rows show a moving equalizer on the playing song and reveal
+their buttons on hover. On a narrow screen the stage comes first and the panel
+below it. Thumbnails are
 cropped to remove the black bars YouTube adds around video frames. Keys: space
 plays or pauses, left and right arrows seek 5 seconds.
 
@@ -341,7 +346,7 @@ The mode is stored with the player state, so it survives reloads and page change
 
 ## Crossfade
 
-A button left of the transport controls cycles crossfade off, 3, 6 and 9 seconds
+A "Fade" button left of the transport controls cycles crossfade off, 3, 6 and 9 seconds
 (stored with the player state). In the last N seconds of a song the host starts
 the next song in a second `<audio>` element and fades the two against each other
 (equal-power curve, driven by a timer from the wall clock). Only the current
