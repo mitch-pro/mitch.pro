@@ -90,6 +90,10 @@
     main.type = 'button'; main.className = 'mp-rowmain';
     var t = document.createElement('span'); t.className = 'mp-rowtitle'; t.textContent = track.title;
     var a = document.createElement('span'); a.className = 'mp-rowartist'; a.textContent = track.artist;
+    if (track.suggested) {
+      var tag = document.createElement('span'); tag.className = 'mp-tag'; tag.textContent = 'Suggested';
+      a.prepend(tag);
+    }
     main.append(t, a);
     function choose() {
       var cur = M.current();
@@ -611,7 +615,15 @@
     seeking = false;
   });
   el.vol.addEventListener('input', function () { M.volume(el.vol.value / 100); el.vol.style.setProperty('--p', el.vol.value + '%'); });
-  if (el.shuffle) el.shuffle.addEventListener('click', function () { M.shuffle(!M.state.shuffle); });
+  // Shuffle cycles: off, random (any song, any time), smart (every song once,
+  // artists mixed, a suggestion now and then).
+  var SHUFFLE_NEXT = { off: 'random', random: 'smart', smart: 'off' };
+  var SHUFFLE_SAY = { off: 'Shuffle off', random: 'Shuffle: random', smart: 'Smart shuffle: plays every song once, mixes artists, adds suggestions' };
+  if (el.shuffle) el.shuffle.addEventListener('click', function () {
+    var next = SHUFFLE_NEXT[M.state.shuffle] || 'random';
+    M.shuffle(next);
+    say(SHUFFLE_SAY[next]);
+  });
   if (el.repeat) el.repeat.addEventListener('click', function () { M.repeat(M.state.repeat === 'off' ? 'all' : M.state.repeat === 'all' ? 'one' : 'off'); });
 
   function loadLyrics(track, custom) {
@@ -665,8 +677,9 @@
       el.stage.classList.toggle('is-playing', !!s.playing);
     }
     if (el.shuffle) {
-      setAttr(el.shuffle, 'aria-pressed', s.shuffle ? 'true' : 'false');
-      var sl = s.shuffle ? 'Shuffle on' : 'Shuffle off';
+      setAttr(el.shuffle, 'aria-pressed', s.shuffle !== 'off' ? 'true' : 'false');
+      el.shuffle.dataset.mode = s.shuffle;
+      var sl = s.shuffle === 'smart' ? 'Smart shuffle on' : s.shuffle === 'random' ? 'Shuffle on (random)' : 'Shuffle off';
       if (el.shuffle.title !== sl) el.shuffle.title = sl;
       setAttr(el.shuffle, 'aria-label', sl);
     }
@@ -715,6 +728,9 @@
     else if (e.key === 'ArrowLeft') M.seek(Math.max(0, M.getTime() - 5));
   });
 
+  // The follow-along card is for other pages. This page is the player, so make
+  // sure no card is ever shown here, whatever loaded it.
+  document.querySelectorAll('.mm-card').forEach(function (c) { c.remove(); });
   M.init({ popout: popout });
   M.onChange(onState);
   loadLibrary();

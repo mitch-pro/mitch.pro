@@ -293,10 +293,16 @@ pub fn delete(store: &DataStore, id: &str) {
         "DELETE FROM music_playlists WHERE id = ?1",
         rusqlite::params![id],
     );
-    // The stored stream links of songs no other playlist holds go with it.
+    // The stored stream links and lyrics of songs no other playlist holds go
+    // with it.
     for v in ids {
         let _ = conn.execute(
             "DELETE FROM music_stream_links WHERE video_id = ?1 AND video_id NOT IN \
+             (SELECT video_id FROM music_playlist_tracks WHERE video_id != '')",
+            rusqlite::params![v],
+        );
+        let _ = conn.execute(
+            "DELETE FROM music_lyrics_cache WHERE substr(cache_key, 1, 11) = ?1 AND ?1 NOT IN \
              (SELECT video_id FROM music_playlist_tracks WHERE video_id != '')",
             rusqlite::params![v],
         );

@@ -7,6 +7,7 @@
 //! | `GET stream?id=` | audio bytes proxied from YouTube's CDN, Range supported |
 //! | `GET prefetch?id=` | resolves a stream URL ahead of time (204) |
 //! | `GET thumb?id=` | cover art from i.ytimg.com, through this server |
+//! | `GET related?id=` | YouTube's Mix for a song, for smart shuffle |
 //! | `GET lyrics?id=&title=&artist=&duration=` | best lyrics from every source, word-timed when possible |
 //! | `GET library`, `POST library/add`, `POST library/remove` | saved tracks |
 //!
@@ -97,7 +98,7 @@ pub async fn handle(
         (method.as_str(), route),
         (
             "GET",
-            "search" | "stream" | "prefetch" | "thumb" | "lyrics" | "library"
+            "search" | "stream" | "prefetch" | "thumb" | "lyrics" | "library" | "related"
         ) | ("POST", "library/add" | "library/remove")
     );
     if !known {
@@ -107,9 +108,10 @@ pub async fn handle(
         return Some(json_response(401, json!({ "error": "not logged in" })));
     };
     Some(match route {
-        "search" => search_tracks(&email, search).await,
+        "search" => search_tracks(state, &email, search).await,
         "stream" => stream(&email, headers, search).await,
         "prefetch" => prefetch(&email, search).await,
+        "related" => related_tracks(&email, search).await,
         "thumb" => thumb(search).await,
         "lyrics" => lyrics_for(state, &email, search).await,
         "library" => library(state, &email),
@@ -126,7 +128,7 @@ pub(super) fn yt_error(e: &ytdlp::YtError) -> Response {
     json_response(e.status(), json!({ "error": e.public_message() }))
 }
 
-async fn search_tracks(email: &str, search: &str) -> Response {
+async fn search_tracks(state: &Arc<AppState>, email: &str, search: &str) -> Response {
     let q = qs(search, "q");
     let q = q.trim();
     if q.is_empty() || q.chars().count() > 120 {
@@ -139,8 +141,32 @@ async fn search_tracks(email: &str, search: &str) -> Response {
         Ok(tracks) => {
             // Start resolving every result now so a click plays at once.
             ytdlp::warm(tracks.iter().map(|t| t.id.clone()).collect());
+            // ...and fetch their lyrics ahead of time too, so those are there
+            // when a song is picked.
+            worker::warm_lyrics(
+                state,
+                tracks
+                    .iter()
+                    .map(|t| (t.id.clone(), t.title.clone(), t.artist.clone(), t.duration))
+                    .collect(),
+            );
             json_response(200, json!({ "tracks": tracks }))
         }
+        Err(e) => yt_error(&e),
+    }
+}
+
+/// `GET related?id=`: songs that go with this one, for smart shuffle.
+async fn related_tracks(email: &str, search: &str) -> Response {
+    let id = qs(search, "id");
+    if !valid_video_id(&id) {
+        return json_response(400, json!({ "error": "bad track id" }));
+    }
+    if !allow(email, "related", 20, Duration::from_secs(60)) {
+        return limited();
+    }
+    match ytdlp::related(&id).await {
+        Ok(tracks) => json_response(200, json!({ "tracks": tracks })),
         Err(e) => yt_error(&e),
     }
 }
@@ -337,8 +363,61 @@ async fn lyrics_for(state: &Arc<AppState>, email: &str, search: &str) -> Respons
     if !allow(email, "lyrics", 20, Duration::from_secs(60)) {
         return limited();
     }
-    let (found, tried) = lyrics::find(title.trim(), artist.trim(), duration_s * 1000, &id).await;
-    match found {
+    let fetched = fetch_and_cache(
+        state,
+        &id,
+        title.trim(),
+        artist.trim(),
+        duration_s,
+        FetchMode::Request { custom },
+    )
+    .await;
+    match fetched.found {
+        Some(f) => {
+            let mut l = f.lyrics;
+            ml::estimate_words(&mut l);
+            lyrics_response(f.source, l, &fetched.tried, f.approximate)
+        }
+        None => json_response(200, json!({ "found": false, "tried": fetched.tried })),
+    }
+}
+
+/// Who is asking, which decides what a lookup may do and cache.
+#[derive(Clone, Copy)]
+pub(super) enum FetchMode {
+    /// A visitor asked. `custom` is the "wrong lyrics?" search: it is never
+    /// cached, in either direction. A clean "nobody has it" is cached; if every
+    /// source errored (network trouble) the next play should try again.
+    Request { custom: bool },
+    /// Background fetching ahead of a play (search results, playlist songs):
+    /// no YouTube-captions fallback (that costs a yt-dlp run) and only found
+    /// lyrics are cached, so a miss here never blocks the fuller lookup a real
+    /// play does.
+    Ahead,
+}
+
+pub(super) struct Fetched {
+    pub found: Option<lyrics::Found>,
+    pub tried: Vec<lyrics::Tried>,
+}
+
+/// Looks lyrics up across every source and caches the outcome under the rules
+/// above. The one path both the endpoint and the background warmers use.
+pub(super) async fn fetch_and_cache(
+    state: &Arc<AppState>,
+    id: &str,
+    title: &str,
+    artist: &str,
+    duration_s: u32,
+    mode: FetchMode,
+) -> Fetched {
+    let cache_key = music::lyrics_cache_key(id, title, artist);
+    let (custom, with_captions) = match mode {
+        FetchMode::Request { custom } => (custom, true),
+        FetchMode::Ahead => (false, false),
+    };
+    let (found, tried) = lyrics::find(title, artist, duration_s * 1000, id, with_captions).await;
+    match &found {
         Some(f) => {
             if !custom {
                 music::put_cached_lyrics(
@@ -354,20 +433,15 @@ async fn lyrics_for(state: &Arc<AppState>, email: &str, search: &str) -> Respons
                     },
                 );
             }
-            let mut l = f.lyrics;
-            ml::estimate_words(&mut l);
-            lyrics_response(f.source, l, &tried, f.approximate)
         }
         None => {
-            // Only a clean "nobody has it" is cached; if every provider
-            // errored (network trouble) the next play should try again.
             let all_failed = tried.iter().all(|t| {
                 matches!(
                     t.status.as_str(),
                     "timeout" | "unreachable" | "request failed"
                 )
             });
-            if !custom && !all_failed {
+            if matches!(mode, FetchMode::Request { custom: false }) && !all_failed {
                 music::put_cached_lyrics(
                     &state.store,
                     &cache_key,
@@ -380,9 +454,9 @@ async fn lyrics_for(state: &Arc<AppState>, email: &str, search: &str) -> Respons
                     },
                 );
             }
-            json_response(200, json!({ "found": false, "tried": tried }))
         }
     }
+    Fetched { found, tried }
 }
 
 fn lyrics_response(

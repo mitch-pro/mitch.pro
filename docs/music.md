@@ -158,6 +158,7 @@ queue advances are near-instant. Search takes about 1.4 s (`--flat-playlist`).
 | `GET /api/music/prefetch?id=` | resolves a URL ahead of time, 204. Also how the client finds out why the `<audio>` element failed. |
 | `GET /api/music/thumb?id=` | cover art from `i.ytimg.com` |
 | `GET /api/music/lyrics?id=&title=&artist=&duration=[&custom=1]` | see below |
+| `GET /api/music/related?id=` | up to 20 songs YouTube's Mix suggests for a song (`watch?v=ID&list=RDID`), the seed excluded; cached 30 min. Used by smart shuffle. |
 | `GET /api/music/library`, `POST library/add`, `POST library/remove` | saved tracks (max 500 per user) |
 
 Safeguards: video ids must match `[A-Za-z0-9_-]{11}` before anything touches
@@ -230,9 +231,18 @@ estimated" in that case.
 The lyrics cache key includes the title and artist because the client supplies
 them: keyed by video id alone, one user could store the wrong song's lyrics for
 everyone. Now a different title gets its own entry, and the usual case (the title
-the server's own search produced) is shared. The table keeps at most 5,000 rows
-(oldest removed first), skips bodies over 120 KB, and the worker removes rows
-past their time to live.
+the server's own search produced) is shared. Bodies over 120 KB are skipped and
+the worker removes rows past their time to live.
+
+**Caching follows the stream-link rules.** Search results get their lyrics looked
+up in the background right after the search (`worker::warm_lyrics`: at most 2 at
+once, a backlog of 30, songs already cached skipped), so by the time a song is
+clicked its lyrics are usually there. A background lookup (`FetchMode::Ahead`)
+skips the YouTube-captions fallback and only caches hits. Songs in any playlist
+are **pinned**: their rows never expire and are not counted against the 5,000-row
+cap for unpinned rows (30,000 overall), and the worker fills in any playlist song
+that has none. Deleting a playlist deletes the lyrics of songs no other playlist
+holds. `get_cached_lyrics` retries a pinned miss after 6 h like any other.
 
 Other bounds: background link warming holds at most 40 songs at a time (the rest
 of a burst is dropped; a click still resolves its own song), a request waits at
@@ -248,7 +258,8 @@ found"; a clean miss is cached for 6 h, a hit for 30 days.
 
 `/music/` is built around a stage: the playing song's cover art large, its lyrics
 in big type, and a dock with seek, shuffle, previous/play/next and repeat
-(repeat is off, all, or one) and volume. The stage tints itself from the cover
+(repeat is off, all, or one) and volume. The shuffle button cycles off, random and
+smart. The stage tints itself from the cover
 art (a blurred copy behind a scrim, so text stays readable in both themes); the
 cover grows slightly while playing. The left panel has search, the library,
 playlists (cards with a mosaic of their first covers) and the queue. Rows show a
@@ -262,6 +273,19 @@ such as the homepage style all buttons with padding and a minimum height, which
 turned its icons into large empty boxes. The pop-out hides the site's wallet bar,
 bell, mobile dock and credit band, which would cover its controls.
 
+## Shuffle
+
+- **Random**: a uniformly random song other than the current one; Previous steps
+  back through what was actually played.
+- **Smart**: plays every song in the queue once per round, in an order weighted
+  against back-to-back songs by the same artist (weights x0.12 same artist as the
+  last song, x0.45 as the one before) and toward songs of similar length. After
+  two smart picks the player asks `related` for the playing song and slips one
+  suggestion in after the current song, tagged "Suggested" in the queue.
+  A failed lookup is ignored.
+
+The mode is stored with the player state, so it survives reloads and page changes.
+
 ## Playing across pages
 
 Pages here are separate documents, so audio can't survive a link click. Instead:
@@ -269,7 +293,7 @@ Pages here are separate documents, so audio can't survive a link click. Instead:
 - `music-widget.js` is injected on every page (`pipeline.rs`, `inject.rs`). If the
   visitor has never started the player (no `mitch.music.v1` in localStorage) it
   returns immediately and makes no requests. Otherwise it loads `music-core.js`
-  and shows the card. It isn't shown in iframes or on `/music/*`.
+  and shows the card. It isn't shown in iframes or on `/music/*`; it also checks `body.music-page` and `#mp-stage` and the page script removes any `.mm-card`, so a differently routed copy of the player page never shows two players.
 - One context at a time owns the `<audio>` (the **host**). Others are **remotes**:
   they mirror the host's state and send commands over a `BroadcastChannel`
   (`mitch-music`). The host sends its state every 500 ms; a remote that hears

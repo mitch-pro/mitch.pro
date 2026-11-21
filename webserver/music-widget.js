@@ -7,7 +7,12 @@
   if (window.top !== window.self) return;                    // not inside iframes
   if (window.__mitchMusicWidget) return;
   window.__mitchMusicWidget = true;
-  if (location.pathname.indexOf('/music') === 0) return;     // the player pages are the player
+  // The player pages are the player: no second one on them. Checked three ways
+  // (the path, the page's class, the stage element) so a different URL or a
+  // cached older page can't slip through.
+  if (location.pathname.indexOf('/music') === 0) return;
+  if (document.body && document.body.classList.contains('music-page')) return;
+  if (document.getElementById('mp-stage')) return;
 
   var saved = null;
   try { saved = JSON.parse(localStorage.getItem('mitch.music.v1') || 'null'); } catch (e) { /* ignore */ }
@@ -172,8 +177,8 @@
     requestAnimationFrame(frame);
   }
 
-  load('link', { rel: 'stylesheet', href: '/music-widget.css?v=3' });
-  var core = load('script', { src: '/music-core.js?v=4' });
+  load('link', { rel: 'stylesheet', href: '/music-widget.css?v=4' });
+  var core = load('script', { src: '/music-core.js?v=5' });
   core.onload = function () {
     window.MitchMusic.init();
     build();

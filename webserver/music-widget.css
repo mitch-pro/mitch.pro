@@ -126,3 +126,6 @@
 @media (prefers-reduced-motion: reduce) {
   .mm-card .mm-btn.mm-loading::after, .mp-icon.mp-loading::after { animation-duration: 2.4s; }
 }
+
+/* A music player page is the player; never show the follow-along card on it. */
+body.music-page .mm-card { display: none !important; }

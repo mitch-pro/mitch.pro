@@ -280,6 +280,48 @@ pub fn parse_search(json: &str) -> Vec<Track> {
     out
 }
 
+/// Songs YouTube's own "Mix" for a video suggests (its radio of related songs),
+/// for smart shuffle. The seed song itself is left out. Cached for 30 minutes.
+pub async fn related(id: &str) -> Result<Vec<Track>, YtError> {
+    type Cache = Mutex<HashMap<String, (Instant, Vec<Track>)>>;
+    static CACHE: OnceLock<Cache> = OnceLock::new();
+    const TTL: Duration = Duration::from_secs(30 * 60);
+    if !valid_video_id(id) {
+        return Err(YtError::Failed("bad id".into()));
+    }
+    if let Some((at, hit)) = CACHE
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(id)
+    {
+        if at.elapsed() < TTL {
+            return Ok(hit.clone());
+        }
+    }
+    let out = run(&[
+        "--flat-playlist".into(),
+        "--dump-single-json".into(),
+        "--playlist-end".into(),
+        "20".into(),
+        format!("https://www.youtube.com/watch?v={id}&list=RD{id}"),
+    ])
+    .await?;
+    let tracks: Vec<Track> = parse_search(&out)
+        .into_iter()
+        .filter(|t| t.id != id)
+        .collect();
+    let mut cache = CACHE
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    if cache.len() > 200 {
+        cache.retain(|_, (at, _)| at.elapsed() < TTL);
+    }
+    cache.insert(id.to_string(), (Instant::now(), tracks.clone()));
+    Ok(tracks)
+}
+
 fn resolve_cache() -> &'static Mutex<HashMap<String, Resolved>> {
     static C: OnceLock<Mutex<HashMap<String, Resolved>>> = OnceLock::new();
     C.get_or_init(Default::default)

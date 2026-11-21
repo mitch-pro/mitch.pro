@@ -27,7 +27,7 @@
     buffering: false, blocked: false, error: '',
     loading: false,                    // a start was asked for and sound hasn't begun yet
     isPopout: false, popoutOpen: false, remoteTs: 0,
-    shuffle: false, repeat: 'off'      // repeat: 'off' | 'all' | 'one'
+    shuffle: 'off', repeat: 'off'      // shuffle: 'off' | 'random' | 'smart'; repeat: 'off' | 'all' | 'one'
   };
   var listeners = [];
   var audio = null, bc = null, popWin = null;
@@ -89,7 +89,7 @@
     audio = new Audio();
     audio.preload = 'auto';
     audio.volume = st.vol;
-    audio.addEventListener('playing', function () { st.playing = true; st.loading = false; st.buffering = false; st.blocked = false; st.error = ''; changed(); });
+    audio.addEventListener('playing', function () { st.playing = true; st.loading = false; st.buffering = false; st.blocked = false; st.error = ''; changed(); maybeSuggest(); });
     audio.addEventListener('pause', function () { if (!audio.ended) { st.playing = false; changed(); } });
     audio.addEventListener('waiting', function () { st.buffering = true; emit(); });
     audio.addEventListener('canplay', function () {
@@ -184,15 +184,101 @@
     if (autoplay) playNow();
   }
 
-  /** The song after the current one: random when shuffling, wrapping when repeating all. */
+  /* ------------------------------------------------------------- shuffle */
+  // Two kinds. "random" is fully random: each next song is any other song in the
+  // queue, so a song can come back soon. "smart" plays every song once before any
+  // repeats, steers away from the same artist back to back and from jumps in
+  // length, and every few songs slips in one suggested by YouTube's own Mix for
+  // the song that is playing (marked "Suggested" in the queue).
+  var history = [];                 // songs played in shuffle order, for Previous
+  var smartPlayed = {};             // songs already played this round (smart)
+  var smartCount = 0;               // smart picks since the last suggestion
+  var pendingSuggestion = null;     // a suggested song waiting to be queued next
+  var suggestFor = '';              // the song the pending/last lookup was for
+  var suggested = {};               // suggestions already used this session
+
+  function normShuffle(v) { return v === true || v === 'random' ? 'random' : v === 'smart' ? 'smart' : 'off'; }
+  function resetShuffleMemory() { history = []; smartPlayed = {}; smartCount = 0; pendingSuggestion = null; suggestFor = ''; }
+  function songKey(t) { return t.id || ('s:' + (t.spotifyId || t.title)); }
+  function artistKey(t) { return String(t.artist || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
+
+  function remember() {
+    var t = st.queue[st.index];
+    if (t) { history.push(t); if (history.length > 100) history.shift(); }
+  }
+
+  /** Picks the next index for smart shuffle, or -1 when there is nothing left. */
+  function pickSmart() {
+    var cur = st.queue[st.index];
+    if (!cur) return -1;
+    // A suggestion that has arrived goes in right after the current song.
+    if (pendingSuggestion) {
+      var have = false;
+      st.queue.forEach(function (q) { if (q.id === pendingSuggestion.id) have = true; });
+      var sug = pendingSuggestion;
+      pendingSuggestion = null;
+      if (!have) {
+        suggested[sug.id] = true; smartCount = 0; queueDirty = true;
+        st.queue.splice(st.index + 1, 0, sug);
+        smartPlayed[songKey(cur)] = true;
+        return st.index + 1;
+      }
+    }
+    smartPlayed[songKey(cur)] = true;
+    var pool = function () {
+      var out = [];
+      for (var i = 0; i < st.queue.length; i++) if (i !== st.index && !smartPlayed[songKey(st.queue[i])]) out.push(i);
+      return out;
+    };
+    var cand = pool();
+    if (!cand.length) { smartPlayed = {}; smartPlayed[songKey(cur)] = true; cand = pool(); }   // a new round
+    if (!cand.length) return -1;
+    var recent = [artistKey(cur)];
+    for (var h = history.length - 1; h >= 0 && recent.length < 3; h--) recent.push(artistKey(history[h]));
+    var weights = cand.map(function (i) {
+      var t = st.queue[i], w = 1, a = artistKey(t);
+      if (a && a === recent[0]) w *= 0.12;                       // not the same artist twice in a row
+      else if (a && recent.indexOf(a) > 0) w *= 0.45;            // or again very soon
+      if (cur.duration && t.duration) {                           // keep the length from jumping around
+        var r = Math.min(cur.duration, t.duration) / Math.max(cur.duration, t.duration);
+        w *= 0.7 + 0.6 * r;
+      }
+      return w;
+    });
+    var total = weights.reduce(function (x, y) { return x + y; }, 0), roll = Math.random() * total, pick = cand[cand.length - 1];
+    for (var k = 0; k < cand.length; k++) { roll -= weights[k]; if (roll <= 0) { pick = cand[k]; break; } }
+    smartCount++;
+    return pick;
+  }
+
+  /** Looks up a suggestion in the background so it is ready by the next song. */
+  function maybeSuggest() {
+    var t = current();
+    if (st.shuffle !== 'smart' || !t || !t.id || pendingSuggestion || suggestFor === t.id || smartCount < 2) return;
+    suggestFor = t.id;
+    api('/api/music/related?id=' + encodeURIComponent(t.id)).then(function (d) {
+      if (st.shuffle !== 'smart') return;
+      var have = {};
+      st.queue.forEach(function (q) { have[q.id] = true; });
+      var found = (d.tracks || []).filter(function (x) { return x && x.id && !have[x.id] && !suggested[x.id]; })[0];
+      if (found) pendingSuggestion = { id: found.id, title: found.title, artist: found.artist, duration: found.duration, suggested: true };
+    }).catch(function () { /* no suggestion this time */ });
+  }
+
+  /** The song after the current one: shuffled, or in order, wrapping when repeating all. */
   function advance(auto) {
     if (!st.queue.length) return;
     if (auto && st.repeat === 'one') { go(st.index, true); return; }
-    if (st.shuffle && st.queue.length > 1) {
+    if (st.shuffle === 'random' && st.queue.length > 1) {
       var n;
       do { n = Math.floor(Math.random() * st.queue.length); } while (n === st.index);
+      remember();
       go(n, true);
       return;
+    }
+    if (st.shuffle === 'smart') {
+      var next = pickSmart();
+      if (next >= 0) { remember(); go(next, true); return; }
     }
     if (st.index + 1 >= st.queue.length && st.repeat === 'all') { go(0, true); return; }
     go(st.index + 1, true);
@@ -261,7 +347,7 @@
     st.index = s.index; st.playing = !!s.playing; st.pos = s.pos || 0; st.dur = s.dur || 0;
     if (typeof s.vol === 'number') st.vol = s.vol;
     st.buffering = !!s.buffering; st.loading = !!s.loading; st.blocked = !!s.blocked; st.error = s.error || '';
-    st.shuffle = !!s.shuffle; st.repeat = s.repeat || 'off';
+    st.shuffle = normShuffle(s.shuffle); st.repeat = s.repeat || 'off';
     st.popoutOpen = !!m.popout; st.remoteTs = s.ts || Date.now();
     lastBeat = Date.now();
     emit();
@@ -289,13 +375,22 @@
       case 'play': playNow(); break;
       case 'pause': audio.pause(); break;
       case 'next': advance(false); break;
-      case 'shuffle': st.shuffle = !!arg; break;
+      case 'shuffle': st.shuffle = normShuffle(arg); resetShuffleMemory(); break;
       case 'repeat': st.repeat = arg === 'all' || arg === 'one' ? arg : 'off'; break;
-      case 'prev': if (audio.currentTime > 3) audio.currentTime = 0; else go(st.index - 1, true); break;
+      case 'prev':
+        if (audio.currentTime > 3) { audio.currentTime = 0; break; }
+        // Shuffled: go back to the song that actually played before this one.
+        if (st.shuffle !== 'off' && history.length) {
+          var back = history.pop(), at = st.queue.indexOf(back);
+          if (at >= 0) { go(at, true); break; }
+        }
+        go(st.index - 1, true);
+        break;
       case 'seek': if (isFinite(arg)) { audio.currentTime = clamp(arg, 0, st.dur || 1e9); st.pos = audio.currentTime; } break;
       case 'vol': st.vol = clamp(arg, 0, 1); audio.volume = st.vol; break;
       case 'jump': go(arg, true); break;
       case 'playQueue':
+        resetShuffleMemory();
         st.queue = trimQueue(arg.queue, arg.index);
         go(trimmedIndex(arg), true);
         break;
@@ -410,7 +505,7 @@
     if (s && Array.isArray(s.queue)) {
       st.queue = s.queue; st.index = typeof s.index === 'number' ? s.index : -1;
       st.pos = s.pos || 0; if (typeof s.vol === 'number') st.vol = s.vol;
-      st.shuffle = !!s.shuffle; st.repeat = s.repeat === 'all' || s.repeat === 'one' ? s.repeat : 'off';
+      st.shuffle = normShuffle(s.shuffle); st.repeat = s.repeat === 'all' || s.repeat === 'one' ? s.repeat : 'off';
     }
     emit();
     try {
@@ -625,7 +720,7 @@
     seek: function (sec) { control('seek', sec); },
     volume: function (v) { control('vol', v); },
     jump: function (i) { control('jump', i); },
-    shuffle: function (on) { control('shuffle', on); },
+    shuffle: function (mode) { control('shuffle', mode); },
     repeat: function (mode) { control('repeat', mode); },
     stop: function () { if (st.role === 'remote') post({ k: 'cmd', cmd: 'stop' }); else stopHost(); },
     popout: popout,

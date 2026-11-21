@@ -146,7 +146,7 @@ pub fn inject_page(
         // music-widget.js stays idle (no requests) until the visitor has
         // started the music player; then it shows the follow-along card.
         if !raw.contains("/music-widget.js") {
-            inject_str.push_str("<script src=\"/music-widget.js?v=6\" defer></script>\n");
+            inject_str.push_str("<script src=\"/music-widget.js?v=7\" defer></script>\n");
         }
         if !raw.contains("name=\"viewport\"") {
             inject_str.push_str("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content\">\n");

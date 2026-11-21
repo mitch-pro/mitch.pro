@@ -123,12 +123,23 @@ pub struct CachedLyrics {
     pub body: String,
 }
 
+/// SQL that is true for a cache row whose song is in some playlist. Cache keys
+/// start with the 11-character video id.
+const PINNED: &str = "substr(cache_key, 1, 11) IN \
+     (SELECT video_id FROM music_playlist_tracks WHERE video_id != '')";
+
+/// Cached lyrics for a key, if still good. Lyrics found for a song that is in a
+/// playlist never expire (they stay until the playlist is deleted, like its
+/// stream link); other hits live `HIT_TTL_MS`, and a "nothing found" result of
+/// any song is retried after `MISS_TTL_MS`.
 pub fn get_cached_lyrics(store: &DataStore, cache_key: &str) -> Option<CachedLyrics> {
     let conn = store.conn();
-    let (row, fetched_at): (CachedLyrics, i64) = conn
+    let (row, fetched_at, pinned): (CachedLyrics, i64, bool) = conn
         .query_row(
-            "SELECT source, sync, estimated, body, fetched_at, approximate FROM music_lyrics_cache \
-             WHERE cache_key = ?1",
+            &format!(
+                "SELECT source, sync, estimated, body, fetched_at, approximate, ({PINNED}) \
+                 FROM music_lyrics_cache WHERE cache_key = ?1"
+            ),
             rusqlite::params![cache_key],
             |r| {
                 Ok((
@@ -140,16 +151,15 @@ pub fn get_cached_lyrics(store: &DataStore, cache_key: &str) -> Option<CachedLyr
                         approximate: r.get::<_, i64>(5)? != 0,
                     },
                     r.get(4)?,
+                    r.get::<_, i64>(6)? != 0,
                 ))
             },
         )
         .ok()?;
-    let ttl = if row.sync == "miss" {
-        MISS_TTL_MS
-    } else {
-        HIT_TTL_MS
-    };
-    (now_millis() - fetched_at < ttl).then_some(row)
+    if row.sync == "miss" {
+        return (now_millis() - fetched_at < MISS_TTL_MS).then_some(row);
+    }
+    (pinned || now_millis() - fetched_at < HIT_TTL_MS).then_some(row)
 }
 
 /// The key lyrics are cached under: the video id plus a hash of the title and
@@ -168,8 +178,12 @@ pub fn lyrics_cache_key(video_id: &str, title: &str, artist: &str) -> String {
     format!("{video_id}|{hex}")
 }
 
-/// Rows kept at most (the oldest go first) and the largest body cached.
+/// Rows kept at most (the oldest go first) and the largest body cached. Rows
+/// for songs in playlists are not counted against `MAX_LYRICS_ROWS` (the first
+/// to go would otherwise be a playlist's), but everything together is still
+/// bounded by `MAX_LYRICS_ROWS_TOTAL`.
 pub const MAX_LYRICS_ROWS: i64 = 5000;
+pub const MAX_LYRICS_ROWS_TOTAL: i64 = 30_000;
 const MAX_LYRICS_BODY_BYTES: usize = 120 * 1024;
 
 pub fn put_cached_lyrics(store: &DataStore, cache_key: &str, row: &CachedLyrics) {
@@ -192,25 +206,58 @@ pub fn put_cached_lyrics(store: &DataStore, cache_key: &str, row: &CachedLyrics)
             i64::from(row.approximate)
         ],
     );
-    // Cap the table: keep only the newest MAX_LYRICS_ROWS.
+    // Cap the table: keep the newest MAX_LYRICS_ROWS rows that aren't for a
+    // playlist song, then bound the whole table.
+    let _ = conn.execute(
+        &format!(
+            "DELETE FROM music_lyrics_cache WHERE cache_key IN \
+             (SELECT cache_key FROM music_lyrics_cache WHERE NOT ({PINNED}) \
+              ORDER BY fetched_at DESC LIMIT -1 OFFSET ?1)"
+        ),
+        rusqlite::params![MAX_LYRICS_ROWS],
+    );
     let _ = conn.execute(
         "DELETE FROM music_lyrics_cache WHERE cache_key IN \
          (SELECT cache_key FROM music_lyrics_cache ORDER BY fetched_at DESC LIMIT -1 OFFSET ?1)",
-        rusqlite::params![MAX_LYRICS_ROWS],
+        rusqlite::params![MAX_LYRICS_ROWS_TOTAL],
     );
 }
 
 /// Removes cached lyrics past their time to live (the worker calls this).
+/// Found lyrics of songs that are in a playlist are kept.
 pub fn prune_lyrics_cache(store: &DataStore) -> usize {
     let now = now_millis();
     store
         .conn()
         .execute(
-            "DELETE FROM music_lyrics_cache WHERE \
-             (sync = 'miss' AND fetched_at < ?1) OR fetched_at < ?2",
+            &format!(
+                "DELETE FROM music_lyrics_cache WHERE \
+                 (sync = 'miss' AND fetched_at < ?1) OR (fetched_at < ?2 AND NOT ({PINNED}))"
+            ),
             rusqlite::params![now - MISS_TTL_MS, now - HIT_TTL_MS],
         )
         .unwrap_or(0)
+}
+
+/// Songs that are in a playlist, as `(video id, title, artist, seconds)`: the
+/// wording a player sends when it asks for their lyrics, so the cache key
+/// computed from it is the one a play will look up. At most `limit` rows.
+pub fn playlist_lyrics_candidates(
+    store: &DataStore,
+    limit: i64,
+) -> Vec<(String, String, String, i64)> {
+    let conn = store.conn();
+    let Ok(mut stmt) = conn.prepare(
+        "SELECT video_id, title, artist, MAX(duration_s) FROM music_playlist_tracks \
+         WHERE video_id != '' GROUP BY video_id, title, artist LIMIT ?1",
+    ) else {
+        return Vec::new();
+    };
+    let rows = stmt.query_map(rusqlite::params![limit], |r| {
+        Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+    });
+    rows.map(|r| r.filter_map(Result::ok).collect())
+        .unwrap_or_default()
 }
 
 // ------------------------------------------------------- stream links ----
@@ -420,6 +467,84 @@ mod tests {
             .unwrap();
         assert_eq!(count, MAX_LYRICS_ROWS);
         assert!(get_cached_lyrics(&s, "newest").is_some());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn playlist_songs_keep_their_lyrics_until_the_playlist_is_deleted() {
+        let dir =
+            std::env::temp_dir().join(format!("music-pin-{}", crate::crypto::random_bytes_hex(6)));
+        std::fs::create_dir_all(&dir).unwrap();
+        let s = DataStore::open(&dir, &dir).unwrap();
+        let now = now_millis();
+        let row = |body: &str| CachedLyrics {
+            source: "x".into(),
+            sync: "line".into(),
+            estimated: false,
+            approximate: false,
+            body: body.into(),
+        };
+        let miss = CachedLyrics {
+            source: String::new(),
+            sync: "miss".into(),
+            estimated: false,
+            approximate: false,
+            body: String::new(),
+        };
+        let kept = lyrics_cache_key("kkkkkkkkkkk", "Held", "A");
+        let other = lyrics_cache_key("ooooooooooo", "Loose", "A");
+        let kept_miss = lyrics_cache_key("mmmmmmmmmmm", "Held Miss", "A");
+        put_cached_lyrics(&s, &kept, &row("held"));
+        put_cached_lyrics(&s, &other, &row("loose"));
+        put_cached_lyrics(&s, &kept_miss, &miss);
+        let pl = crate::music_playlists::create(&s, "o@x.test", "P", false, "").unwrap();
+        let track = |id: &str| crate::music_playlists::PlaylistTrack {
+            id: id.into(),
+            title: "t".into(),
+            artist: "a".into(),
+            duration: 1,
+            spotify_id: String::new(),
+        };
+        crate::music_playlists::add_tracks(
+            &s,
+            &pl,
+            vec![track("kkkkkkkkkkk"), track("mmmmmmmmmmm")],
+        )
+        .unwrap();
+        // Age everything past both time limits.
+        s.conn()
+            .execute(
+                "UPDATE music_lyrics_cache SET fetched_at = ?1",
+                [now - HIT_TTL_MS - 1000],
+            )
+            .unwrap();
+        assert!(
+            get_cached_lyrics(&s, &kept).is_some(),
+            "found lyrics of a playlist song never expire"
+        );
+        assert!(
+            get_cached_lyrics(&s, &other).is_none(),
+            "an unheld hit expires after its time to live"
+        );
+        assert!(
+            get_cached_lyrics(&s, &kept_miss).is_none(),
+            "a miss is retried even for a playlist song"
+        );
+        prune_lyrics_cache(&s);
+        let rows: i64 = s
+            .conn()
+            .query_row("SELECT COUNT(*) FROM music_lyrics_cache", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rows, 1, "pruning keeps only the playlist song's lyrics");
+        // The playlist's songs are the candidates the worker fills in.
+        assert_eq!(playlist_lyrics_candidates(&s, 10).len(), 2);
+        // Deleting the playlist releases them.
+        crate::music_playlists::delete(&s, &pl);
+        assert!(
+            get_cached_lyrics(&s, &kept).is_none(),
+            "the lyrics go with the playlist"
+        );
+        assert!(playlist_lyrics_candidates(&s, 10).is_empty());
         let _ = std::fs::remove_dir_all(dir);
     }
 

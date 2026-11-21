@@ -504,6 +504,7 @@ pub async fn find(
     artist: &str,
     duration_ms: u32,
     video_id: &str,
+    with_captions: bool,
 ) -> (Option<Found>, Vec<Tried>) {
     let guesses = ml::query_guesses(title, artist);
     let mut passes = vec![Length::Same];
@@ -514,7 +515,7 @@ pub async fn find(
     for length in passes {
         let results = search_all(
             &guesses,
-            title_query(duration_ms, video_id, length, false),
+            title_query(duration_ms, video_id, length, false, with_captions),
             if length == Length::Same {
                 HARD_DEADLINE
             } else {
@@ -534,7 +535,7 @@ pub async fn find(
             if f.rank == 3 && !f.approximate && duration_ms > 0 {
                 let donors = search_all(
                     &guesses,
-                    title_query(duration_ms, video_id, Length::Similar, true),
+                    title_query(duration_ms, video_id, Length::Similar, true, false),
                     // Word timing to borrow is a bonus: don't hold the lyrics
                     // back long waiting for one that may not exist.
                     DONOR_LIMIT,
@@ -553,7 +554,13 @@ pub async fn find(
     (None, first_tried)
 }
 
-fn title_query(duration_ms: u32, video_id: &str, length: Length, donor: bool) -> Query {
+fn title_query(
+    duration_ms: u32,
+    video_id: &str,
+    length: Length,
+    donor: bool,
+    captions: bool,
+) -> Query {
     Query {
         title: String::new(),
         artist: String::new(),
@@ -561,7 +568,7 @@ fn title_query(duration_ms: u32, video_id: &str, length: Length, donor: bool) ->
         video_id: video_id.to_string(),
         length,
         donor,
-        captions: false,
+        captions,
     }
 }
 
@@ -587,7 +594,7 @@ async fn search_all(
             find_once(Query {
                 title: t.clone(),
                 artist: a.clone(),
-                captions: i == 0 && !base.donor && base.length == Length::Same,
+                captions: base.captions && i == 0 && !base.donor && base.length == Length::Same,
                 ..base.clone()
             })
         })

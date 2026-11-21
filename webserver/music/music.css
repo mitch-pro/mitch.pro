@@ -288,3 +288,9 @@ html.theme-light .mp-ambient { opacity: 0.4; }
 
 /* A problem the import dialog reopens with. */
 .mp-dialog .mp-status.mp-problem { color: color-mix(in srgb, #dc2626 75%, var(--t-fg)); font-weight: 600; }
+
+/* Shuffle: smart shows a small sparkle; "Suggested" marks a song added by it. */
+.mp-toggle[data-mode=random] { color: var(--t-ac); }
+.mp-toggle[data-mode=smart] { color: var(--t-ac); position: relative; }
+.mp-toggle[data-mode=smart]::after { content: '\2726'; position: absolute; top: 3px; right: 3px; font-size: 11px; line-height: 1; }
+.mp-tag { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, var(--t-ac) 20%, transparent); color: var(--t-ac); font-size: 11px; font-weight: 700; vertical-align: 1px; }
