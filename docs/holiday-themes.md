@@ -77,3 +77,18 @@ checks the date windows, including years where Thanksgiving falls on the 22nd.
 `mitch_lib::seasons` has the same date windows as `site-theme.js`; both are tested
 with the same dates.
 
+
+## Emails
+
+Every HTML email follows the same palettes. `mitch_lib::email_theme` holds the
+shell, footer and building blocks (`heading`, `paragraph`, `button`, `code_box`,
+`panel`, `fine_print`) and picks the palette from `seasons` using the current
+Pacific date, so emails switch with the website. Plain-text replies
+(`mitch-mail`), the shared `html_base_template` used by the transactional
+emails, and the newsletter dark theme all go through it. A newsletter accent
+left at the editor's default blue uses the season accent; a color picked in the
+editor is kept. Emails are dark only: mail clients can't read the visitor's
+theme. Older builders that hardcode the pre-redesign purple colors are mapped
+onto the palette by `email_theme::restyle`; build new emails from the helpers
+instead. `cargo run -p mitch-lib --example email_samples -- <dir>` writes every
+palette's samples for review.

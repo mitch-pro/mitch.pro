@@ -1259,7 +1259,10 @@ mod tests {
         assert!(is_sensitive_admin_action("POST", "/api/admin/ban-account"));
         assert!(is_sensitive_admin_action("POST", "/api/admin/vms/delete"));
         assert!(!is_sensitive_admin_action("GET", "/api/admin/bans"));
-        assert!(!is_sensitive_admin_action("POST", "/api/admin/special-schedule"));
+        assert!(!is_sensitive_admin_action(
+            "POST",
+            "/api/admin/special-schedule"
+        ));
     }
 
     #[test]

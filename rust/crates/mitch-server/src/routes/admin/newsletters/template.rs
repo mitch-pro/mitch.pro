@@ -33,16 +33,35 @@ fn paragraphs(value: &str) -> String {
 }
 
 pub(super) fn render(draft: &Draft, unsubscribe: &str) -> String {
+    // The dark theme follows the site palette (holiday colors during a season);
+    // an accent left at the editor's default blue does too, while a color the
+    // editor picked is kept.
+    let season = mitch_lib::email_theme::palette_today();
     let (outer, paper, panel, ink, muted, line, header) = if draft.theme == "paper" {
         (
             "#f1f3f7", "#ffffff", "#f7f9fc", "#172033", "#536176", "#e3e8ef", "#172033",
         )
     } else {
         (
-            "#080e1b", "#111b2e", "#19243a", "#f1f5f9", "#b4c0d4", "#2c3b52", "#0b1120",
+            season.bg,
+            season.card,
+            season.panel,
+            season.ink,
+            season.muted,
+            season.line,
+            season.bg,
         )
     };
-    let accent = &draft.accent;
+    let accent = if draft.accent.eq_ignore_ascii_case("#2563eb") {
+        season.accent
+    } else {
+        draft.accent.as_str()
+    };
+    let accent2 = if draft.accent.eq_ignore_ascii_case("#2563eb") {
+        season.accent2
+    } else {
+        accent
+    };
     let r = u8::from_str_radix(&accent[1..3], 16).unwrap_or(0) as u32;
     let g = u8::from_str_radix(&accent[3..5], 16).unwrap_or(0) as u32;
     let b = u8::from_str_radix(&accent[5..7], 16).unwrap_or(0) as u32;
@@ -112,8 +131,8 @@ pub(super) fn render(draft: &Draft, unsubscribe: &str) -> String {
 <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">{preheader}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="{outer}"><tr><td align="center" class="outer" style="padding:32px 16px;">
 <table role="presentation" width="700" cellpadding="0" cellspacing="0" bgcolor="{paper}" style="width:100%;max-width:700px;background:{paper};border:1px solid {line};border-radius:12px;overflow:hidden;">
-<tr><td height="6" style="background: linear-gradient(to right, #a855f7, #38bdf8);"></td></tr>
-<tr><td class="content" bgcolor="{header}" style="padding:24px 40px;background:{header};border-bottom:1px solid {line};"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="vertical-align:middle;"><a href="https://mitchdog.com" style="text-decoration:none;"><img src="https://mitchdog.com/favicon.ico" width="24" height="24" style="vertical-align:middle;margin-right:10px;border-radius:4px;" alt="mitch.pro"><span style="font:800 24px/1 Arial,Helvetica,sans-serif;letter-spacing:-0.02em;color:#ffffff;vertical-align:middle;">mitch.pro</span><span style="font:300 24px/1 Arial,Helvetica,sans-serif;color:#64748b;vertical-align:middle;margin:0 8px;">/</span><span style="font:800 24px/1 Arial,Helvetica,sans-serif;letter-spacing:-0.02em;color:#38bdf8;vertical-align:middle;">mitchdog.com</span></a></td><td align="right" class="masthead-credit" style="font:500 13px/1.4 Arial,Helvetica,sans-serif;color:#cbd5e1;">mitch.pro</td></tr></table></td></tr>
+<tr><td height="6" bgcolor="{accent}" style="background:{accent};background-image:linear-gradient(to right, {accent}, {accent2});"></td></tr>
+<tr><td class="content" bgcolor="{header}" style="padding:24px 40px;background:{header};border-bottom:1px solid {line};"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="vertical-align:middle;"><a href="https://mitchdog.com" style="text-decoration:none;"><img src="https://mitchdog.com/favicon.ico" width="24" height="24" style="vertical-align:middle;margin-right:10px;border-radius:4px;" alt="mitch.pro"><span style="font:800 24px/1 Arial,Helvetica,sans-serif;letter-spacing:-0.02em;color:#ffffff;vertical-align:middle;">mitch.pro</span><span style="font:300 24px/1 Arial,Helvetica,sans-serif;color:{muted};vertical-align:middle;margin:0 8px;">/</span><span style="font:800 24px/1 Arial,Helvetica,sans-serif;letter-spacing:-0.02em;color:{accent};vertical-align:middle;">mitchdog.com</span></a></td><td align="right" class="masthead-credit" style="font:500 13px/1.4 Arial,Helvetica,sans-serif;color:#cbd5e1;">mitch.pro</td></tr></table></td></tr>
 <tr><td class="content" style="padding:32px 40px 18px;">{edition}<h1 class="headline" style="margin:0;font:750 42px/1.12 Arial,Helvetica,sans-serif;letter-spacing:-1.6px;color:{ink};">{title}</h1></td></tr>
 <tr><td class="content" style="padding:0 40px 14px;font:16px/1.8 Arial,Helvetica,sans-serif;color:{muted};">{intro}</td></tr>
 {hero}{sections}{button}
