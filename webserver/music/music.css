@@ -364,33 +364,32 @@ html.theme-light .mp-ambient { opacity: 0.4; }
   .mp-xfside { order: 2; justify-content: center; margin-top: 8px; display: flex; }
 }
 /* ----------------------------------------------------- lyric effects
- * The line being sung grows and lights up; lines fade and blur with their
- * distance from it (--d, set from script). The word being sung lifts and glows,
- * a held note swells for as long as it is held, and an instrumental break shows
- * three dots that fill up. */
+ * Kept gentle: lines fade (and soften a little) with their distance from the
+ * line being sung (--d, set from script), the sung line is a touch larger, and
+ * small sparkles float off the edge of the fill. Words themselves never move. */
+.mp-lyrics .ml-line { position: relative; }
 .mp-lyrics .ml-timed .ml-line {
-  opacity: calc(0.82 - var(--d, 3) * 0.14);
-  filter: blur(calc(var(--d, 3) * 0.55px));
-  transform: scale(0.9);
-  transition: transform 0.55s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.45s ease, filter 0.45s ease;
-  will-change: transform, opacity, filter;
+  opacity: calc(0.78 - var(--d, 3) * 0.12);
+  filter: blur(calc(var(--d, 3) * 0.3px));
+  transform: scale(0.95);
+  transition: transform 0.5s ease, opacity 0.45s ease, filter 0.45s ease;
 }
-.mp-lyrics .ml-timed .ml-line.ml-past { opacity: calc(0.7 - var(--d, 3) * 0.12); }
-.mp-lyrics .ml-timed .ml-line.ml-active { opacity: 1; filter: none; transform: scale(1.04); }
+.mp-lyrics .ml-timed .ml-line.ml-past { opacity: calc(0.66 - var(--d, 3) * 0.1); }
+.mp-lyrics .ml-timed .ml-line.ml-active { opacity: 1; filter: none; transform: scale(1); }
 .mp-lyrics .ml-timed .ml-line.ml-seekable:hover { opacity: 0.95; filter: none; }
-.mp-lyrics .ml-w {
-  display: inline-block; white-space: pre;
-  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), filter 0.5s ease;
+
+.mp-lyrics .ml-spark {
+  position: absolute; z-index: 1; width: 0.44em; height: 0.44em; margin: -0.22em 0 0 -0.22em; pointer-events: none;
+  background: var(--ml-hi);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);   /* four-point star */
+  filter: drop-shadow(0 0 0.25em color-mix(in srgb, var(--ml-hi) 80%, transparent));
+  opacity: 0;
+  animation: ml-twinkle 1s ease-out forwards;
 }
-.mp-lyrics .ml-w.ml-now {
-  transform: translateY(-0.06em) scale(1.05);
-  filter: drop-shadow(0 0 0.4em color-mix(in srgb, var(--ml-hi) 55%, transparent));
-}
-.mp-lyrics .ml-w.ml-now.ml-long { animation: ml-swell var(--dur, 1s) ease-in-out both; }
-@keyframes ml-swell {
-  0%   { transform: translateY(0) scale(1); }
-  30%  { transform: translateY(-0.1em) scale(1.14); }
-  100% { transform: translateY(-0.07em) scale(1.09); }
+@keyframes ml-twinkle {
+  0%   { opacity: 0;   transform: translate(0, 0) scale(0.2) rotate(0deg); }
+  25%  { opacity: 0.95; transform: translate(calc(var(--dx, 0px) * 0.3), calc(var(--dy, -12px) * 0.3)) scale(var(--s, 0.8)) rotate(30deg); }
+  100% { opacity: 0;   transform: translate(var(--dx, 0px), var(--dy, -20px)) scale(calc(var(--s, 0.8) * 0.3)) rotate(90deg); }
 }
 .mp-lyrics .ml-gap { display: flex; gap: 0.35em; padding: 0.2em 0; letter-spacing: normal; opacity: 0; }
 .mp-lyrics .ml-gap.ml-active { opacity: 1; animation: ml-breathe 2.6s ease-in-out infinite; }
@@ -402,13 +401,13 @@ html.theme-light .mp-ambient { opacity: 0.4; }
 }
 .mp-lyrics .ml-dot:nth-child(2) { --i: 1; }
 .mp-lyrics .ml-dot:nth-child(3) { --i: 2; }
-@keyframes ml-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+@keyframes ml-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
 
 /* The backdrop: slow colour drifting behind the lyrics while a song plays, and a
  * soft pulse on every new line (class set from script). */
 .mp-orbs { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; opacity: 0; transition: opacity 1.2s ease; }
 .mp-stage.is-playing .mp-orbs { opacity: 1; }
-.mp-orbs i { position: absolute; width: 55%; aspect-ratio: 1; border-radius: 50%; filter: blur(70px); opacity: 0.32; will-change: transform; }
+.mp-orbs i { position: absolute; width: 55%; aspect-ratio: 1; border-radius: 50%; filter: blur(70px); opacity: 0.2; will-change: transform; }
 .mp-orbs i:nth-child(1) { left: -12%; top: -8%; background: radial-gradient(circle, var(--t-ac), transparent 68%); animation: mp-drift-a 23s ease-in-out infinite alternate; }
 .mp-orbs i:nth-child(2) { right: -16%; top: 28%; background: radial-gradient(circle, color-mix(in srgb, var(--t-ac) 55%, #6a5cff), transparent 68%); animation: mp-drift-b 29s ease-in-out infinite alternate; }
 .mp-orbs i:nth-child(3) { left: 18%; bottom: -22%; background: radial-gradient(circle, color-mix(in srgb, var(--t-ac) 45%, #22c1c3), transparent 68%); animation: mp-drift-c 26s ease-in-out infinite alternate; }
@@ -416,17 +415,17 @@ html.theme-light .mp-ambient { opacity: 0.4; }
 @keyframes mp-drift-b { to { transform: translate(-42%, -18%) scale(0.85); } }
 @keyframes mp-drift-c { to { transform: translate(30%, -34%) scale(1.15); } }
 .mp-stage.is-playing .mp-ambient.mp-beat { animation: mp-beat 1s ease-out; }
-@keyframes mp-beat { 0% { opacity: 0.85; transform: scale(1.2); } 100% { opacity: 0.55; transform: scale(1.1); } }
-html.theme-light .mp-orbs i { opacity: 0.2; }
+@keyframes mp-beat { 0% { opacity: 0.68; transform: scale(1.14); } 100% { opacity: 0.55; transform: scale(1.1); } }
+html.theme-light .mp-orbs i { opacity: 0.14; }
 @media (pointer: coarse) {
   /* Blurring dozens of lines is heavy on phones: keep the fade and the growth. */
-  .mp-lyrics .ml-timed .ml-line { filter: none; will-change: transform, opacity; }
+  .mp-lyrics .ml-timed .ml-line { filter: none; }
   .mp-orbs i { filter: blur(48px); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .mp-orbs i, .mp-stage.is-playing .mp-ambient.mp-beat, .mp-lyrics .ml-w.ml-now.ml-long, .mp-lyrics .ml-gap.ml-active { animation: none !important; }
+  .mp-orbs i, .mp-stage.is-playing .mp-ambient.mp-beat, .mp-lyrics .ml-gap.ml-active { animation: none !important; }
+  .mp-lyrics .ml-spark { display: none; }
   .mp-lyrics .ml-timed .ml-line { filter: none; transition: none; }
-  .mp-lyrics .ml-w { transition: none; }
 }
 
 /* The stage sits beside the sidebar and list, so it is often narrow: cover and

@@ -397,13 +397,16 @@ bell, mobile dock and credit band, which would cover its controls.
 ## Lyric effects and the backdrop
 
 Beyond the left-to-right fill, `createLyricsView` marks the state of the lyrics
-and `music.css` (section "lyric effects") draws it: every line carries `--d`, its
-distance from the line being sung, and fades and blurs with it (no blur on touch
-screens); the active line grows; the word being sung (`.ml-now`) lifts and glows;
-a word held for 0.8 s or more (`.ml-long`, length in `--dur`) swells for as long as
-it is held; an instrumental break shows three dots that fill up through the break
-(`--gp`). Behind the lyrics three blurred colour orbs drift slowly while a song
-plays (`.mp-orbs`) and the cover backdrop pulses on each new line (`onLine`,
+and `music.css` (section "lyric effects") draws it, kept gentle on purpose (an
+earlier version lifted and enlarged the sung word and read as janky): every line
+carries `--d`, its distance from the line being sung, and fades and softens a
+little with it (no blur on touch screens); the sung line is slightly larger; and
+small four-point sparkles (`.ml-spark`) float off the leading edge of the fill of
+the word being sung, one every 150 ms (260 ms on touch screens), at most 12 alive,
+none with reduced motion or in a hidden tab. Words themselves never move. An
+instrumental break shows three dots that fill up through the break (`--gp`).
+Behind the lyrics three blurred colour orbs drift slowly while a song plays
+(`.mp-orbs`) and the cover backdrop pulses lightly on each new line (`onLine`,
 class `mp-beat`). `prefers-reduced-motion` turns the movement off.
 
 On a narrow screen the stage is hidden while nothing plays (the search comes

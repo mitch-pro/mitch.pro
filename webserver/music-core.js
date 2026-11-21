@@ -744,11 +744,11 @@
       p.className = 'ml-message';
       p.textContent = text;
       root.appendChild(p);
-      data = null; lineEls = []; wordEls = []; active = -2;
+      data = null; lineEls = []; wordEls = []; active = -2; alive = 0;
     }
 
     function set(d) {
-      active = -2; lineEls = []; wordEls = []; wordsOf = [];
+      active = -2; lineEls = []; wordEls = []; wordsOf = []; alive = 0;
       if (d === 'idle') { root.replaceChildren(); data = null; return; }
       if (d === 'loading') return message('Finding lyrics…');
       if (!d || !d.found || !d.lines || !d.lines.length) return message(d && d.error ? 'Could not load lyrics' : 'No lyrics found');
@@ -766,8 +766,7 @@
         } else if (line.words && line.words.length) {
           line.words.forEach(function (w) {
             var s = document.createElement('span');
-            s.className = 'ml-w' + (w.e - w.t >= 800 ? ' ml-long' : '');   // held notes swell
-            s.style.setProperty('--dur', Math.max(1, w.e - w.t) + 'ms');
+            s.className = 'ml-w';
             s.textContent = w.text;
             el.appendChild(s);
             ws.push(s);
@@ -794,8 +793,6 @@
         var w = line.words[k];
         var p = ms >= w.e ? 1 : ms <= w.t ? 0 : (ms - w.t) / Math.max(1, w.e - w.t);
         ws[k].style.setProperty('--p', p.toFixed(3));
-        var now = ms >= w.t && ms < w.e;
-        if (now !== ws[k].classList.contains('ml-now')) ws[k].classList.toggle('ml-now', now);
       }
     }
 
@@ -805,6 +802,41 @@
         if (i === to) continue;
         var v = i < to ? '1' : '0';
         for (var k = 0; k < wordEls[i].length; k++) wordEls[i][k].style.setProperty('--p', v);
+      }
+    }
+
+    /* Sparkles: while a word is sung, small stars appear at the edge of the fill
+     * and float away. A few per second, never more than MAX alive, none with
+     * reduced motion or in a hidden tab. */
+    var lastSpark = 0, alive = 0, MAX = 12;
+    var coarse = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+    function sparkle(i, ms) {
+      if (reduce || opts.sparkles === false || document.hidden || alive >= MAX) return;
+      var now = Date.now();
+      if (now - lastSpark < (coarse ? 260 : 150)) return;
+      var line = data.lines[i], ws = wordEls[i];
+      if (!ws.length) return;
+      for (var k = 0; k < line.words.length; k++) {
+        var w = line.words[k];
+        if (ms >= w.t && ms < w.e) {
+          lastSpark = now;
+          var el = ws[k], p = (ms - w.t) / Math.max(1, w.e - w.t);
+          var star = document.createElement('i');
+          star.className = 'ml-spark';
+          star.style.left = Math.round(el.offsetLeft + el.offsetWidth * p) + 'px';
+          star.style.top = Math.round(el.offsetTop + el.offsetHeight * (0.1 + Math.random() * 0.8)) + 'px';
+          star.style.setProperty('--dx', (Math.random() * 26 - 13).toFixed(1) + 'px');
+          star.style.setProperty('--dy', (-10 - Math.random() * 22).toFixed(1) + 'px');
+          star.style.setProperty('--s', (0.45 + Math.random() * 0.6).toFixed(2));
+          star.style.animationDuration = (700 + Math.random() * 500).toFixed(0) + 'ms';
+          alive++;
+          var gone = false;
+          var done = function () { if (gone) return; gone = true; alive = Math.max(0, alive - 1); star.remove(); };
+          star.addEventListener('animationend', done);
+          setTimeout(done, 1800);                 // in case the animation never ends (hidden tab)
+          lineEls[i].appendChild(star);
+          return;
+        }
       }
     }
 
@@ -830,9 +862,6 @@
         // How far each line is from the one being sung (CSS fades and blurs by it).
         if (i >= 0) {
           for (var d = 0; d < lineEls.length; d++) lineEls[d].style.setProperty('--d', Math.min(5, Math.abs(d - i)));
-          for (var c = 0; c < wordEls.length; c++) {
-            if (c !== i) for (var q = 0; q < wordEls[c].length; q++) if (wordEls[c][q].classList.contains('ml-now')) wordEls[c][q].classList.remove('ml-now');
-          }
           if (opts.onLine) opts.onLine(i);
         }
         if (i >= 0 && Date.now() > userScrollUntil) {
@@ -841,7 +870,7 @@
           root.scrollTo({ top: Math.max(0, top), behavior: reduce ? 'auto' : 'smooth' });
         }
       }
-      if (i >= 0) paintWords(i, ms);
+      if (i >= 0) { paintWords(i, ms); sparkle(i, ms); }
       if (i >= 0 && lineEls[i].classList.contains('ml-gap')) {      // an instrumental break: the dots fill up
         var nextT = data.lines[i + 1] ? data.lines[i + 1].t : data.lines[i].e;
         var span = Math.max(1, nextT - data.lines[i].t);
