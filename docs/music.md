@@ -60,12 +60,19 @@ the playlist (`routes/music/spotify.rs`; only `open.spotify.com` is fetched). So
 - only public playlists work, and Spotify shares only the first 100 songs;
 - no audio comes from Spotify. Each song is matched to a YouTube video the first
   time it is played (`GET /api/music/match`: search `artist title`, accept a result
-  whose title/artist score at least 0.5 and whose length is within 4 s, and which
-  isn't a different version: a result with live, cover, remix, acoustic, slowed,
-  instrumental, karaoke... in its title is skipped unless the Spotify title has
-  the word too (`VERSION_WORDS`). With no qualifying result the song stays
-  unmatched rather than getting the wrong recording). Matches are stored in
-  `music_track_matches` and shared by everyone; when the table gained its
+  that (1) is within 4 s of the Spotify length, (2) is by the same artist
+  (`artist_match`: the Spotify artists against the video's artist and title, at
+  least 0.6, so a cover by someone else is out however well the title matches),
+  (3) has a title that scores at least 0.5, or an artist match of 0.9+ with the
+  length within 2 s (an official upload whose title is in another script), and
+  (4) isn't a different version: a result with live, cover, remix, acoustic,
+  slowed, instrumental, karaoke, English/other-language, dub, fandub, lofi,
+  reprise... in its title is skipped unless the Spotify title has the word too
+  (`VERSION_WORDS`). With no qualifying result the song stays unmatched rather
+  than getting the wrong recording. Matches are stored in
+  `music_track_matches` and shared by everyone; the stored `rules_version` is 3,
+  and whenever older matches are found at start-up (the rules changed) all Spotify
+  matches are dropped once and made again (`data.rs`);
   `rules_version` column every old match was dropped and Spotify songs were
   matched again under these rules (a one-time migration in `data.rs`);
 - **Sync from Spotify** (and an automatic sync when the owner opens a playlist
@@ -383,6 +390,20 @@ bell, mobile dock and credit band, which would cover its controls.
   A failed lookup is ignored.
 
 The mode is stored with the player state, so it survives reloads and page changes.
+
+## Settings and playlist actions
+
+Shuffle, repeat, crossfade and volume are kept in their own storage key
+(`mitch.music.prefs`), apart from the queue, so they can be set before anything
+plays and survive closing the player. With nothing playing they are applied
+directly; otherwise they go to the page that is playing.
+
+A playlist page has a cover (a mosaic of its first songs), a big Play and a
+Shuffle button (`MitchMusic.playShuffled`: random shuffle when it was off, the
+chosen mode when it was on; it starts at a random song), and one "more" menu
+(share link, make public/private, rename, sync from Spotify, delete; for someone
+else's playlist: save a copy, message someone) instead of a row of buttons. New
+playlist and Import from Spotify are in the + menu of the playlist list.
 
 ## Crossfade
 

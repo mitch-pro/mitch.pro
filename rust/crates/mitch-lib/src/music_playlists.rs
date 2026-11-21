@@ -531,8 +531,8 @@ pub fn put_match(store: &DataStore, key: &str, video_id: &str) {
         return;
     }
     let _ = store.conn().execute(
-        "INSERT INTO music_track_matches (match_key, video_id, matched_at) VALUES (?1, ?2, ?3) \
-         ON CONFLICT(match_key) DO UPDATE SET video_id = ?2, matched_at = ?3",
+        "INSERT INTO music_track_matches (match_key, video_id, matched_at, rules_version) VALUES (?1, ?2, ?3, 3) \
+         ON CONFLICT(match_key) DO UPDATE SET video_id = ?2, matched_at = ?3, rules_version = 3",
         rusqlite::params![key, video_id, now_millis()],
     );
 }

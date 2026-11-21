@@ -1052,6 +1052,34 @@ fn similarity(a: &str, b: &str) -> f32 {
     common / ta.len().max(tb.len()) as f32
 }
 
+/// How well a video's artist agrees with the artists a song is known to have
+/// (`wanted` may list several, separated by commas): 1.0 for the same name,
+/// 0.9 when one contains the other, 0.8 when the video's title names the artist
+/// (`Artist - Song` uploads), otherwise the word overlap. A cover by someone
+/// else scores near 0, which is what tells it apart from the real recording.
+pub fn artist_match(wanted: &str, got_title: &str, got_artist: &str) -> f32 {
+    let ga = normalize(got_artist);
+    let gt = normalize(got_title);
+    let mut best = 0.0f32;
+    for w in wanted.split(',') {
+        let wa = normalize(w);
+        if wa.is_empty() {
+            continue;
+        }
+        let mut s = similarity(&wa, &ga);
+        if wa.chars().count() >= 3
+            && (ga.contains(&wa) || (ga.chars().count() >= 3 && wa.contains(&ga)))
+        {
+            s = s.max(0.9);
+        }
+        if wa.chars().count() >= 3 && gt.contains(&wa) {
+            s = s.max(0.8);
+        }
+        best = best.max(s);
+    }
+    best
+}
+
 /// How well a candidate's title and artist match the wanted ones, 0.0 to 1.0.
 /// Artist counts less than title because catalogs spell artists (and
 /// "A & B" credits) many ways. An empty wanted artist is ignored.
@@ -1808,5 +1836,20 @@ mod offset_tests {
         assert!(l.lines.iter().all(|x| x.t == 0));
         shift(&mut l, 1_000_000_000);
         assert!(l.lines.iter().all(|x| x.t <= MAX_MS));
+    }
+}
+
+#[cfg(test)]
+mod artist_tests {
+    use super::*;
+
+    #[test]
+    fn a_cover_by_someone_else_does_not_agree_on_artist() {
+        assert!(artist_match("YOASOBI", "Yusha", "YOASOBI") >= 0.99);
+        assert!(artist_match("YOASOBI", "Yusha", "YOASOBI Official") >= 0.9);
+        assert!(artist_match("YOASOBI", "YOASOBI Yusha", "Some Singer") >= 0.8);
+        assert!(artist_match("YOASOBI, Ayase", "Yusha", "Ayase") >= 0.99);
+        assert!(artist_match("YOASOBI", "Yusha (English Cover)", "Some Singer") < 0.3);
+        assert_eq!(artist_match("", "x", "y"), 0.0);
     }
 }

@@ -357,10 +357,38 @@ const VERSION_WORDS: &[&str] = &[
     "edit",
     "extended",
     "radio",
+    // Translated or fan versions: a different performance of the song.
+    "english",
+    "spanish",
+    "french",
+    "german",
+    "korean",
+    "chinese",
+    "japanese",
+    "indonesian",
+    "portuguese",
+    "italian",
+    "russian",
+    "arabic",
+    "hindi",
+    "thai",
+    "vietnamese",
+    "turkish",
+    "tagalog",
+    "dub",
+    "dubbed",
+    "fandub",
+    "lofi",
+    "boosted",
+    "bass",
+    "rendition",
+    "tribute",
+    "parody",
+    "reprise",
 ];
 
 /// The version words a title carries (a bit per entry of `VERSION_WORDS`).
-fn version_marks(title: &str) -> u32 {
+fn version_marks(title: &str) -> u64 {
     let lower = title.to_lowercase();
     let mut bits = 0;
     for w in lower.split(|c: char| !c.is_alphanumeric()) {
@@ -383,7 +411,6 @@ pub(crate) fn best_match(
     duration: i64,
     found: &[ytdlp::Track],
 ) -> Option<usize> {
-    let first = artist.split(',').next().unwrap_or(artist);
     let wanted = version_marks(title);
     let mut best: Option<(usize, f32)> = None;
     for (i, t) in found.iter().enumerate() {
@@ -394,11 +421,28 @@ pub(crate) fn best_match(
         if version_marks(&t.title) & !wanted != 0 {
             continue;
         }
-        let score = ml::match_score(title, first, &t.title, &t.artist);
-        if score < 0.5 {
+        // The artist has to agree: someone else's recording of the same song
+        // (a cover, an English version) is not the song, however well the
+        // title matches.
+        let by_artist = if artist.trim().is_empty() {
+            1.0
+        } else {
+            ml::artist_match(artist, &t.title, &t.artist)
+        };
+        if by_artist < 0.6 {
             continue;
         }
-        let ranked = score - (gap as f32) * 0.03;
+        let title_score = ml::match_score(title, "", &t.title, "");
+        let ranked = if title_score >= 0.5 {
+            title_score * 0.7 + by_artist * 0.3 - (gap as f32) * 0.03
+        } else if by_artist >= 0.9 && duration > 0 && gap <= 2 {
+            // The official upload with the title in another script (a romaji
+            // Spotify title, a kanji video title): the artist and the length
+            // agree, so it is the same recording. Ranks below a real title match.
+            0.3 - (gap as f32) * 0.03
+        } else {
+            continue;
+        };
         if best.is_none_or(|(_, b)| ranked > b) {
             best = Some((i, ranked));
         }
@@ -477,6 +521,32 @@ mod tests {
         assert_eq!(
             best_match("Blinding Lights", "The Weeknd", 207, &found[2..]),
             None
+        );
+    }
+
+    #[test]
+    fn a_cover_by_another_artist_is_not_the_song() {
+        let found = vec![
+            tr("aaaaaaaaaaa", "Yusha (English Cover)", "Some Singer", 200),
+            tr("bbbbbbbbbbb", "Yusha", "Another Singer", 200),
+            tr("ccccccccccc", "\u{52c7}\u{8005}", "YOASOBI", 200),
+        ];
+        // The cover and the unrelated upload are skipped; the official upload
+        // with the title in kanji is accepted on artist + length.
+        assert_eq!(best_match("Yusha", "YOASOBI", 200, &found), Some(2));
+        assert_eq!(best_match("Yusha", "YOASOBI", 200, &found[..2]), None);
+        // A real title match by the right artist beats the other-script fallback.
+        let mixed = vec![
+            tr("ddddddddddd", "\u{52c7}\u{8005}", "YOASOBI", 200),
+            tr("eeeeeeeeeee", "Yusha", "YOASOBI", 201),
+        ];
+        assert_eq!(best_match("Yusha", "YOASOBI", 200, &mixed), Some(1));
+        // An English version is wanted only when the playlist says so.
+        let english = vec![tr("fffffffffff", "Yusha (English Version)", "YOASOBI", 200)];
+        assert_eq!(best_match("Yusha", "YOASOBI", 200, &english), None);
+        assert_eq!(
+            best_match("Yusha (English Version)", "YOASOBI", 200, &english),
+            Some(0)
         );
     }
 

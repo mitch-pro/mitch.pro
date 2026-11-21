@@ -181,6 +181,36 @@
 .mp-plcardmeta { color: var(--t-fg2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .mp-plhead { margin: 0 4px 8px; }
+.mp-plhero { display: flex; gap: 16px; align-items: flex-end; margin: 0 4px 14px; }
+.mp-plcover { flex: none; width: 112px; }
+.mp-plcover .mp-plmosaic { display: grid; }
+.mp-plhero .mp-plinfo { min-width: 0; padding-bottom: 2px; }
+.mp-plhero .mp-plname { margin: 0 0 4px; font-size: 22px; line-height: 1.15; }
+.mp-plhero .mp-plmeta { margin: 0; }
+.mp-plactions { display: flex; align-items: center; gap: 10px; margin: 0 4px 14px; }
+.mp-bigbtn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 112px; height: 40px; padding: 0 18px;
+  font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+  background: color-mix(in srgb, var(--t-fg) 10%, transparent); color: var(--t-ac); border: 0; border-radius: 10px;
+}
+.mp-bigbtn:hover { background: color-mix(in srgb, var(--t-fg) 16%, transparent); }
+.mp-bigbtn.mp-primary { background: var(--t-ac); color: var(--t-ac-ink); }
+.mp-bigbtn.mp-primary:hover { background: var(--t-ac2, var(--t-ac)); }
+.mp-bigbtn[disabled] { opacity: 0.4; cursor: default; }
+.mp-bigicon { display: inline-grid; place-items: center; width: 20px; height: 20px; }
+.mp-bigicon svg { width: 20px; height: 20px; fill: currentColor; }
+.mp-moremenu { margin-left: auto; color: var(--t-fg2); }
+/* A pop-up list of actions (playlist menu, new/import). */
+.mp-menu {
+  position: fixed; z-index: 60; min-width: 210px; margin: 0; padding: 6px; list-style: none;
+  background: var(--t-bg2); border: 1px solid var(--t-bd); border-radius: 12px; box-shadow: 0 14px 40px rgba(0, 0, 0, 0.4);
+}
+.mp-menuitem {
+  display: block; width: 100%; padding: 9px 12px; text-align: left; font: inherit; font-size: 15px; cursor: pointer;
+  background: none; color: var(--t-fg); border: 0; border-radius: 8px;
+}
+.mp-menuitem:hover, .mp-menuitem:focus-visible { background: color-mix(in srgb, var(--t-fg) 10%, transparent); outline: none; }
+.mp-menuitem.mp-danger { color: color-mix(in srgb, #dc2626 75%, var(--t-fg)); }
 .mp-plname { margin: 0 4px 4px; font-size: 24px; font-weight: 700; letter-spacing: -0.03em; overflow-wrap: anywhere; }
 .mp-plmeta { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; margin: 0 4px 12px; color: var(--t-fg2); font-size: 13px; }
 .mp-owner { display: inline-flex; align-items: center; gap: 6px; }

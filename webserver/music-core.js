@@ -418,6 +418,32 @@
     else if (m.k === 'stop') { if (st.role !== 'host') { st.queue = []; st.index = -1; st.playing = false; st.role = 'idle'; emit(); } }
   }
 
+  /* The player's settings (shuffle, repeat, crossfade, volume). They are kept
+   * apart from the queue, so they can be set before anything is playing and are
+   * still there after the player is closed. */
+  var PREFS_KEY = 'mitch.music.prefs';
+  function savePrefs() {
+    try {
+      localStorage.setItem(PREFS_KEY, JSON.stringify({ shuffle: st.shuffle, repeat: st.repeat, crossfade: st.crossfade, vol: st.vol }));
+    } catch (e) { /* storage unavailable */ }
+  }
+  function loadPrefs() {
+    var p = null;
+    try { p = JSON.parse(localStorage.getItem(PREFS_KEY) || 'null'); } catch (e) { /* ignore */ }
+    if (!p) return;
+    st.shuffle = normShuffle(p.shuffle);
+    st.repeat = p.repeat === 'all' || p.repeat === 'one' ? p.repeat : 'off';
+    st.crossfade = normFade(p.crossfade);
+    if (typeof p.vol === 'number') st.vol = clamp(p.vol, 0, 1);
+  }
+  function setting(cmd, arg) {
+    if (cmd === 'shuffle') { st.shuffle = normShuffle(arg); resetShuffleMemory(); }
+    else if (cmd === 'repeat') st.repeat = arg === 'all' || arg === 'one' ? arg : 'off';
+    else if (cmd === 'crossfade') st.crossfade = normFade(arg);
+    else if (cmd === 'vol') { st.vol = clamp(arg, 0, 1); if (audio && !fade) audio.volume = st.vol; }
+    savePrefs();
+  }
+
   /* -------------------------------------------------------------- commands */
   function runCmd(cmd, arg) {
     // Anything that changes what is playing ends an overlap in progress.
@@ -433,9 +459,11 @@
       case 'play': playNow(); break;
       case 'pause': wantPlayUntil = 0; audio.pause(); break;
       case 'next': advance(false); break;
-      case 'shuffle': st.shuffle = normShuffle(arg); resetShuffleMemory(); break;
-      case 'crossfade': st.crossfade = normFade(arg); break;
-      case 'repeat': st.repeat = arg === 'all' || arg === 'one' ? arg : 'off'; break;
+      case 'shuffle':
+      case 'crossfade':
+      case 'repeat':
+        setting(cmd, arg);
+        break;
       case 'prev':
         if (audio.currentTime > 3) { audio.currentTime = 0; break; }
         // Shuffled: go back to the song that actually played before this one.
@@ -446,7 +474,7 @@
         go(st.index - 1, true);
         break;
       case 'seek': if (isFinite(arg)) { audio.currentTime = clamp(arg, 0, st.dur || 1e9); st.pos = audio.currentTime; } break;
-      case 'vol': st.vol = clamp(arg, 0, 1); if (!fade) audio.volume = st.vol; break;
+      case 'vol': setting('vol', arg); break;
       case 'jump': go(arg, true); break;
       case 'playQueue':
         resetShuffleMemory();
@@ -492,6 +520,13 @@
       return;
     }
     if (st.role === 'idle') {
+      // Settings don't need a song: apply them where they are.
+      if (cmd === 'shuffle' || cmd === 'repeat' || cmd === 'crossfade' || cmd === 'vol') {
+        setting(cmd, arg);
+        if (st.queue.length) save();
+        emit();
+        return;
+      }
       if (!st.queue.length && cmd !== 'playQueue' && cmd !== 'enqueue') return;
       if (cmd === 'playQueue') st.index = -1;      // don't load the stale track first
       // The first play after a page load has to load the song and start it in
@@ -569,6 +604,7 @@
       st.shuffle = normShuffle(s.shuffle); st.repeat = s.repeat === 'all' || s.repeat === 'one' ? s.repeat : 'off';
       st.crossfade = normFade(s.crossfade);
     }
+    loadPrefs();               // the settings win over what an old saved state held
     emit();
     try {
       bc = new BroadcastChannel(CHANNEL);
@@ -668,6 +704,15 @@
   }
   function getLyrics(track, custom) {
     return getLyricsRaw(track, custom).then(function (d) { return track ? withOffset(d, lyricOffset(track.id)) : d; });
+  }
+
+  /** Plays a list in shuffled order: turns shuffle on if it is off (random; an
+   *  already chosen mode is kept) and starts at a random song. */
+  function playShuffled(queue) {
+    var list = (queue || []).filter(function (t) { return t && (t.id || t.spotifyId); });
+    if (!list.length) return;
+    if (st.shuffle === 'off') control('shuffle', 'random');
+    control('playQueue', { queue: list, index: Math.floor(Math.random() * list.length) });
   }
 
   /** Index of the line playing at `ms`, or -1 before the first line. */
@@ -818,6 +863,7 @@
     shuffle: function (mode) { control('shuffle', mode); },
     repeat: function (mode) { control('repeat', mode); },
     crossfade: function (secs) { control('crossfade', secs); },
+    playShuffled: playShuffled,
     stop: function () { if (st.role === 'remote') post({ k: 'cmd', cmd: 'stop' }); else stopHost(); },
     popout: popout,
     getLyrics: getLyrics, lyricOffset: lyricOffset, setLyricOffset: setLyricOffset, lineAt: lineAt, createLyricsView: createLyricsView
