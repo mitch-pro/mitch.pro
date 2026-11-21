@@ -8,6 +8,7 @@
 <script src="/vendor/simplewebauthn.browser.min.js?v=1" defer></script>
 <link rel="stylesheet" href="/app.css">
 <link rel="stylesheet" href="/preferences/preferences-galaxy.css?v=13">
+<link rel="stylesheet" href="/preferences/preferences-v2.css?v=1">
 <script src="/api.js"></script>
 <script src="/app-shell.js" defer></script>
 <script src="/sync.js?v=2"></script>
@@ -766,15 +767,21 @@
     <p class="page-sub"><span class="default-prefs-copy">Theme, account, privacy, and sync settings.</span><span class="school-prefs-copy">Appearance and schedule settings.</span></p>
   </header>
 
-  <div class="pref-summary" aria-label="Current preference snapshot">
-    <div class="status-pill"><b>Theme</b><span id="summaryTheme">Loading</span></div>
-    <div class="status-pill"><b>Homepage</b><span id="summaryHome">Standard</span></div>
-    <div class="status-pill"><b>Sync</b><span id="summarySync">Enabled</span></div>
+  <div class="prefs-search">
+    <input id="prefsSearch" type="search" placeholder="Search settings" aria-label="Search settings" autocomplete="off">
   </div>
 
   <nav class="prefs-jump-nav" aria-label="Preference sections">
-    <a href="#appearance">Appearance</a><a href="#account">Account</a><a href="#privacy">Privacy</a><a href="#security">Security</a><a href="#homepage">Homepage</a><a href="#display">Display</a><a href="#sync">Sync</a><a href="#data">Data</a>
+    <a href="#appearance" data-tab="appearance">Appearance</a>
+    <a href="#account" data-tab="account">Profile</a>
+    <a href="#security" data-tab="security">Security</a>
+    <a href="#privacy" data-tab="privacy">Privacy</a>
+    <a href="#notifications" data-tab="notifications">Notifications</a>
+    <a href="#homepage" data-tab="homepage">Homepage</a>
+    <a href="#display" data-tab="display">Games</a>
+    <a href="#sync" data-tab="sync">Sync &amp; data</a>
   </nav>
+  <p class="prefs-empty" id="prefsEmpty" hidden>No settings match that search.</p>
 
   <div class="pref-stack">
   <section class="pref-section" id="appearance">
@@ -884,7 +891,7 @@
   </section>
 
   <section class="pref-section" id="account">
-    <h2>Account</h2>
+    <h2>Profile</h2>
     <p class="section-sub">Username, nickname, graduation year, gender, referral source, and public profile details.</p>
     <div class="control-grid">
       <div class="field">
@@ -1004,48 +1011,7 @@
             <input type="checkbox" id="privStealthToggle">
             <span class="toggle-slider"></span>
           </label>
-          <span class="toggle-desc">Hide social widgets on homepage.</span>
-        </div>
-      </div>
-      <div class="field">
-        <label>Activity Logging</label>
-        <div class="toggle-row">
-          <label class="toggle-switch">
-            <input type="checkbox" id="privNoHistoryToggle">
-            <span class="toggle-slider"></span>
-          </label>
-          <span class="toggle-desc">Don't show "Most Played" on your home.</span>
-        </div>
-      </div>
-      <div class="field">
-        <label>Newsletter</label>
-        <div class="toggle-row">
-          <label class="toggle-switch">
-            <input type="checkbox" id="privNewsletterToggle" checked>
-            <span class="toggle-slider"></span>
-          </label>
-          <span class="toggle-desc">Receive email updates about new games.</span>
-        </div>
-      </div>
-      <div class="field">
-        <label for="blogAlertsToggle">Blog Alerts</label>
-        <div class="toggle-row">
-          <label class="toggle-switch">
-            <input type="checkbox" id="blogAlertsToggle">
-            <span class="toggle-slider"></span>
-          </label>
-          <span class="toggle-desc">Receive email when new blog posts are published.</span>
-        </div>
-        <div class="status-line" id="blogAlertsStatus" aria-live="polite"></div>
-      </div>
-      <div class="field">
-        <label>Block Profile Lookups</label>
-        <div class="toggle-row">
-          <label class="toggle-switch">
-            <input type="checkbox" id="privBlockProfileToggle">
-            <span class="toggle-slider"></span>
-          </label>
-          <span class="toggle-desc">Prevent others from viewing your profile.</span>
+          <span class="toggle-desc">Hide the People panel and other social widgets on your homepage.</span>
         </div>
       </div>
       </div>
@@ -1154,10 +1120,135 @@
       <div id="sessionStatus"></div>
     </div>
 
-    <hr class="divider soft">
+  </section>
 
+  <section class="pref-section" id="notifications">
+    <h2>Notifications</h2>
+    <p class="section-sub">Choose which alerts reach you. Quiet hours mute all of them. To receive push alerts on this device, <a href="/notifications/">turn them on in Notifications</a>.</p>
+    <div id="notifLoginNote" class="section-sub" hidden>Sign in to change notification settings.</div>
+    <div class="control-grid" id="notifGrid">
+      <div class="field">
+        <label for="notifDm">Direct messages</label>
+        <div class="toggle-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="notifDm" data-notif="dm">
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-desc">Push alerts for new direct messages.</span>
+        </div>
+      </div>
+      <div class="field">
+        <label for="notifGroup">Group chats</label>
+        <div class="toggle-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="notifGroup" data-notif="group">
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-desc">Push alerts for group messages.</span>
+        </div>
+      </div>
+      <div class="field">
+        <label for="notifCalls">Calls</label>
+        <div class="toggle-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="notifCalls" data-notif="calls">
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-desc">Alerts for incoming voice and video calls.</span>
+        </div>
+      </div>
+      <div class="field">
+        <label for="notifFriendsOnline">Friends online</label>
+        <div class="toggle-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="notifFriendsOnline" data-notif="friends_online">
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-desc">Alert when a friend comes online.</span>
+        </div>
+      </div>
+      <div class="field">
+        <label for="notifRequests">Friend requests</label>
+        <div class="toggle-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="notifRequests" data-notif="friend_requests">
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-desc">Alerts for new and accepted friend requests.</span>
+        </div>
+      </div>
+      <div class="field">
+        <label for="notifGifts">Coin gifts</label>
+        <div class="toggle-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="notifGifts" data-notif="coin_gifts">
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-desc">Show coin gifts in your notification bell.</span>
+        </div>
+      </div>
+      <div class="field">
+        <label for="notifDigest">Unread message digest</label>
+        <div class="toggle-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="notifDigest" data-notif="digest">
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-desc">Email a summary of messages you have not read.</span>
+        </div>
+      </div>
+    </div>
+    <div class="control-grid" id="notifQuiet">
+      <div class="field">
+        <label for="notifQuietToggle">Quiet hours</label>
+        <div class="toggle-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="notifQuietToggle" data-notif="quietEnabled">
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-desc">Mute alerts between these times each day.</span>
+        </div>
+      </div>
+      <div class="field">
+        <label for="notifQuietStart">From</label>
+        <input type="time" id="notifQuietStart" value="22:00">
+      </div>
+      <div class="field">
+        <label for="notifQuietEnd">To</label>
+        <input type="time" id="notifQuietEnd" value="08:00">
+      </div>
+    </div>
+    <div class="status-line" id="notifStatus" aria-live="polite"></div>
+
+    <hr class="divider soft">
+    <h3 class="subsection-title">Email</h3>
+    <div class="control-grid">
+      <div class="field">
+        <label>Newsletter</label>
+        <div class="toggle-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="privNewsletterToggle" checked>
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-desc">Email updates about new games and features.</span>
+        </div>
+      </div>
+      <div class="field">
+        <label for="blogAlertsToggle">Blog Alerts</label>
+        <div class="toggle-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="blogAlertsToggle">
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-desc">Email when a new blog post is published.</span>
+        </div>
+        <div class="status-line" id="blogAlertsStatus" aria-live="polite"></div>
+      </div>
+    </div>
+
+    <hr class="divider soft">
     <div class="action-center">
-      <h3 class="subsection-title">Chat Alerts via ntfy</h3>
+      <h3 class="subsection-title">Phone alerts via ntfy</h3>
       <p class="section-sub">Get Secure Chat alerts on your phone with the free <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a> app, even without web push. Enter a topic name (letters, numbers, dashes, underscores) to use ntfy.sh, or paste a full custom server URL. Leave blank to disable.</p>
       <div class="session-actions">
         <label class="ntfy-label" for="ntfyTopicInput">ntfy topic or URL</label>
@@ -1165,7 +1256,6 @@
         <button class="soft-btn" id="saveNtfyBtn" type="button" onclick="saveNtfyTopic()">Save</button>
       </div>
       <div class="status-line" id="ntfyStatus" aria-live="polite"></div>
-      <p class="section-sub spaced"><a href="/notifications/">Notification settings</a>: mute chat, groups, friends-online and digests, or set quiet hours.</p>
     </div>
   </section>
 
@@ -1182,7 +1272,7 @@
   </section>
 
   <section class="pref-section" id="display">
-  <h2>Display</h2>
+  <h2>Games</h2>
 
   <div class="field">
     <label>Game Launch Mode</label>
@@ -1248,22 +1338,12 @@
           <span class="toggle-desc">Floating shortcuts on every page.</span>
         </div>
       </div>
-      <div class="field hidden" id="toolDailyBonus">
-        <label>Daily Bonus Plus</label>
-        <div class="toggle-row">
-          <label class="toggle-switch">
-            <input type="checkbox" id="prefDailyBonus">
-            <span class="toggle-slider"></span>
-          </label>
-          <span class="toggle-desc">Auto-collect higher login rewards.</span>
-        </div>
-      </div>
     </div>
   </div>
   </section>
 
-  <section class="pref-section" id="data">
-  <h2>Data</h2>
+  <section class="pref-section" id="data" data-tab="sync">
+  <h2>Backup and data</h2>
 
   <div class="field">
     <label>Preference Backup</label>
@@ -1288,10 +1368,6 @@
     <div class="status-line" id="deleteAccountStatus"></div>
   </div>
   </section>
-  </div>
-
-  <div class="btn-row">
-    <button id="saveBtn" type="button" onclick="saveAll()">Save Preferences</button>
   </div>
 
   <div class="save-status">
@@ -1909,14 +1985,7 @@ async function deletePasskey(btnEl) {
   else setStatus('passkeyStatus', res.d.message || 'Could not delete passkey.');
 }
 
-function updateSummaries() {
-  var theme = getCookieValue('theme', '');
-  var home = load(HOME_CONFIG_KEY, { showQuickActions: true, showMemberRail: true });
-  var sync = load(SYNC_CONFIG_KEY, { enabled: true });
-  document.getElementById('summaryTheme').textContent = theme || 'system';
-  document.getElementById('summaryHome').textContent = (home.compactHome ? 'Compact' : 'Standard');
-  document.getElementById('summarySync').textContent = sync.enabled === false ? 'Manual' : 'Enabled';
-}
+function updateSummaries() {}
 
 function refreshThemeButtons() {
   var current = getCookieValue('theme', '');
@@ -2034,74 +2103,177 @@ function setupAppearanceControls() {
   };
 }
 
-function setupAccordions() {
-  if (document.documentElement.classList.contains('school-preferences')) {
-    // rjuhsd.school's preferences are appearance-only - every other section
-    // (account, privacy, security, homepage, display, sync, data) needs a
-    // real session and doesn't belong on an anonymous school site.
-    var SCHOOL_CATEGORIES = ['appearance'];
-    var allSections = Array.from(document.querySelectorAll('.pref-section'));
-    var sections = allSections.filter(function(section) { return SCHOOL_CATEGORIES.indexOf(section.id) !== -1; });
-    allSections.forEach(function(section) {
-      if (SCHOOL_CATEGORIES.indexOf(section.id) === -1) section.hidden = true;
+// One section group at a time, chosen from the nav or the URL hash. A section
+// belongs to the tab named by its data-tab (default: its id). The school
+// preferences page only has Appearance.
+function setupTabs() {
+  var school = document.documentElement.classList.contains('school-preferences');
+  var allowed = school ? ['appearance'] : ['appearance', 'account', 'security', 'privacy', 'notifications', 'homepage', 'display', 'sync'];
+  var sections = Array.from(document.querySelectorAll('.pref-section'));
+  var links = Array.from(document.querySelectorAll('.prefs-jump-nav a'));
+  function tabOf(section) { return section.getAttribute('data-tab') || section.id; }
+  links.forEach(function (link) { link.hidden = allowed.indexOf(link.getAttribute('data-tab')) === -1; });
+  var search = document.querySelector('.prefs-search');
+  if (search && school) search.hidden = true;
+
+  function showTab(id, updateHash) {
+    if (allowed.indexOf(id) === -1) id = 'appearance';
+    document.body.classList.remove('is-searching');
+    sections.forEach(function (section) {
+      var on = allowed.indexOf(tabOf(section)) !== -1 && tabOf(section) === id;
+      section.hidden = !on;
+      section.classList.add('open');
     });
-    var allLinks = Array.from(document.querySelectorAll('.prefs-jump-nav a'));
-    var links = allLinks.filter(function(link) { return SCHOOL_CATEGORIES.indexOf(link.hash.slice(1)) !== -1; });
-    allLinks.forEach(function(link) {
-      if (SCHOOL_CATEGORIES.indexOf(link.hash.slice(1)) === -1) link.hidden = true;
+    links.forEach(function (link) {
+      if (link.getAttribute('data-tab') === id) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
     });
-    function showCategory(id) {
-      if (SCHOOL_CATEGORIES.indexOf(id) === -1) id = 'appearance';
-      sections.forEach(function(section) {
-        section.hidden = section.id !== id;
-        section.classList.add('open');
-      });
-      links.forEach(function(link) {
-        if (link.hash === '#' + id) link.setAttribute('aria-current', 'page');
-        else link.removeAttribute('aria-current');
-      });
-    }
-    links.forEach(function(link) {
-      link.addEventListener('click', function(event) {
-        event.preventDefault();
-        history.replaceState(null, '', link.hash);
-        showCategory(link.hash.slice(1));
-      });
-    });
-    window.addEventListener('hashchange', function() { showCategory(location.hash.slice(1)); });
-    showCategory(location.hash.slice(1));
-    return;
+    if (updateHash) history.replaceState(null, '', '#' + id);
   }
-  document.querySelectorAll('.pref-section').forEach(function(section) {
-    var heading = section.querySelector('h2');
-    if (!heading) return;
-    heading.setAttribute('role', 'button');
-    heading.setAttribute('tabindex', '0');
-    heading.setAttribute('aria-expanded', 'false');
-    function toggle() {
-      var open = section.classList.toggle('open');
-      heading.setAttribute('aria-expanded', open ? 'true' : 'false');
-    }
-    heading.addEventListener('click', toggle);
-    heading.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        toggle();
-      }
+  links.forEach(function (link) {
+    link.addEventListener('click', function (event) {
+      event.preventDefault();
+      var box = document.getElementById('prefsSearch');
+      if (box) box.value = '';
+      clearSearch();
+      showTab(link.getAttribute('data-tab'), true);
+      window.scrollTo({ top: 0 });
     });
   });
-  var hash = (location.hash || '').replace(/^#/, '');
-  var target = hash ? document.getElementById(hash) : null;
-  if (target && target.classList.contains('pref-section')) {
-    target.classList.add('open');
-    var h = target.querySelector('h2');
-    if (h) h.setAttribute('aria-expanded', 'true');
-  } else {
-    var appearance = document.getElementById('appearance');
-    var appearanceHeading = appearance && appearance.querySelector('h2');
-    if (appearance) appearance.classList.add('open');
-    if (appearanceHeading) appearanceHeading.setAttribute('aria-expanded', 'true');
+  function fromHash() {
+    var id = (location.hash || '').replace(/^#/, '');
+    var target = id ? document.getElementById(id) : null;
+    // A link to a section inside a tab (for example #data) opens its tab.
+    showTab(target && target.classList.contains('pref-section') ? tabOf(target) : id, false);
   }
+  window.addEventListener('hashchange', fromHash);
+  fromHash();
+  window.scrollTo(0, 0);
+
+  // Search: every setting whose label or description matches, across all tabs.
+  var emptyNote = document.getElementById('prefsEmpty');
+  function fields(section) { return Array.from(section.querySelectorAll('.field, .subsection-title, .subhead')); }
+  function clearSearch() {
+    document.body.classList.remove('is-searching');
+    document.querySelectorAll('[data-search-hidden]').forEach(function (el) { el.removeAttribute('data-search-hidden'); });
+    if (emptyNote) emptyNote.hidden = true;
+  }
+  var box = document.getElementById('prefsSearch');
+  if (box && !school) {
+    box.addEventListener('input', function () {
+      var q = box.value.trim().toLowerCase();
+      if (!q) { clearSearch(); fromHash(); return; }
+      document.body.classList.add('is-searching');
+      var hits = 0;
+      sections.forEach(function (section) {
+        var any = 0;
+        fields(section).forEach(function (el) {
+          var match = el.textContent.toLowerCase().indexOf(q) !== -1;
+          if (match) { el.removeAttribute('data-search-hidden'); any++; } else el.setAttribute('data-search-hidden', '');
+        });
+        var heading = (section.querySelector('h2') || {}).textContent || '';
+        var headingMatch = heading.toLowerCase().indexOf(q) !== -1;
+        if (headingMatch) fields(section).forEach(function (el) { el.removeAttribute('data-search-hidden'); });
+        section.hidden = !(any || headingMatch);
+        hits += any || headingMatch ? 1 : 0;
+      });
+      links.forEach(function (link) { link.removeAttribute('aria-current'); });
+      if (emptyNote) emptyNote.hidden = hits > 0;
+    });
+  }
+}
+
+// Notification settings live on the server (GET/POST /api/me/notif-prefs),
+// the same ones as /notifications/. Every control saves as you change it.
+var NOTIF_TOGGLES = ['notifDm','notifGroup','notifCalls','notifFriendsOnline','notifRequests','notifGifts','notifDigest','notifQuietToggle'];
+var notifPrefs = null;
+var notifSaving = false;
+var notifPending = false;
+
+function notifCollect() {
+  var out = {
+    quietStart: document.getElementById('notifQuietStart').value || '22:00',
+    quietEnd: document.getElementById('notifQuietEnd').value || '08:00',
+    // Minutes to add to local time to get UTC (Date.getTimezoneOffset); the
+    // server needs it to know when quiet hours apply.
+    tzOffset: new Date().getTimezoneOffset()
+  };
+  NOTIF_TOGGLES.forEach(function (id) {
+    var el = document.getElementById(id);
+    out[el.getAttribute('data-notif')] = el.checked;
+  });
+  return out;
+}
+
+function notifReflect() {
+  NOTIF_TOGGLES.forEach(function (id) {
+    var el = document.getElementById(id);
+    var key = el.getAttribute('data-notif');
+    el.checked = key === 'quietEnabled' ? !!notifPrefs[key] : notifPrefs[key] !== false;
+  });
+  document.getElementById('notifQuietStart').value = String(notifPrefs.quietStart || '22:00');
+  document.getElementById('notifQuietEnd').value = String(notifPrefs.quietEnd || '08:00');
+  notifSyncQuiet();
+}
+
+function notifSyncQuiet() {
+  var on = document.getElementById('notifQuietToggle').checked;
+  document.getElementById('notifQuietStart').disabled = !on;
+  document.getElementById('notifQuietEnd').disabled = !on;
+}
+
+async function notifSave() {
+  if (notifSaving) { notifPending = true; return; }
+  notifSaving = true;
+  setStatus('notifStatus', 'Saving...');
+  var payload = notifCollect();
+  var failure = null;
+  try {
+    var res = await fetch('/api/me/notif-prefs', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      var d = await res.json().catch(function () { return {}; });
+      throw new Error(d.error || 'Server error (' + res.status + ')');
+    }
+    notifPrefs = Object.assign({}, notifPrefs, payload);
+    setStatus('notifStatus', 'Saved.');
+  } catch (e) {
+    failure = e;
+  }
+  notifSaving = false;
+  if (notifPending) { notifPending = false; return notifSave(); }
+  if (failure) {
+    setStatus('notifStatus', errMsg(failure, 'Could not save notification settings.'), true);
+    if (notifPrefs) notifReflect();
+  }
+}
+
+async function setupNotifications() {
+  var section = document.getElementById('notifications');
+  if (!section) return;
+  var controls = section.querySelectorAll('#notifGrid input, #notifQuiet input');
+  controls.forEach(function (el) { el.disabled = true; });
+  try {
+    var res = await fetch('/api/me/notif-prefs', { credentials: 'include', cache: 'no-store' });
+    if (res.status === 401) { document.getElementById('notifLoginNote').hidden = false; return; }
+    if (!res.ok) throw new Error('load');
+    var data = await res.json();
+    notifPrefs = data.prefs || {};
+  } catch (e) {
+    setStatus('notifStatus', 'Notification settings could not be loaded.', true);
+    return;
+  }
+  controls.forEach(function (el) { el.disabled = false; });
+  notifReflect();
+  NOTIF_TOGGLES.forEach(function (id) {
+    document.getElementById(id).addEventListener('change', function () { notifSyncQuiet(); notifSave(); });
+  });
+  ['notifQuietStart', 'notifQuietEnd'].forEach(function (id) {
+    document.getElementById(id).addEventListener('change', notifSave);
+  });
 }
 
 var passwordChangeVerificationType = 'email';
@@ -2140,9 +2312,7 @@ function saveAll() {
       hideLocation: !document.getElementById('privHideLocationToggle').checked,
       shareActivity: document.getElementById('privHideLocationToggle').checked,
       stealthDash:  document.getElementById('privStealthToggle').checked,
-      noHistory:    document.getElementById('privNoHistoryToggle').checked,
       newsletter:   document.getElementById('privNewsletterToggle').checked,
-      blockProfile: document.getElementById('privBlockProfileToggle').checked,
     }));
     try { window.MitchPresence?.send(); } catch (_) {}
     localStorage.setItem(HOME_CONFIG_KEY, JSON.stringify(Object.assign(load(HOME_CONFIG_KEY, {}), {
@@ -2162,7 +2332,6 @@ function saveAll() {
     localStorage.setItem(TOOLS_CONFIG_KEY, JSON.stringify({
       canvasLock:  document.getElementById('prefCanvasLock').checked,
       quickAccess: document.getElementById('prefQuickAccess').checked,
-      dailyBonus:  document.getElementById('prefDailyBonus').checked,
     }));
     setThemePref('motion', document.getElementById('motionSelect').value);
     setThemePref('holiday', document.getElementById('holidaySelect').value);
@@ -2386,7 +2555,8 @@ async function deleteAccount() {
 
 (function init() {
   var schoolPrefs = document.documentElement.classList.contains('school-preferences');
-  setupAccordions();
+  setupTabs();
+  if (!document.documentElement.classList.contains('school-preferences')) setupNotifications();
   setupAppearanceControls();
   if (!schoolPrefs) loadAccountProfile();
   document.getElementById('saveProfileBtn').onclick = saveAccountProfile;
@@ -2407,13 +2577,11 @@ async function deleteAccount() {
   document.getElementById('passkeyAddBtn').onclick = enrollPasskey;
   if (!schoolPrefs) loadPasskeyList();
 
-  var pk = load(PRIVACY_CONFIG_KEY, { hideOnline: false, hideLocation: false, stealthDash: false, noHistory: false, newsletter: true, blockProfile: false });
+  var pk = load(PRIVACY_CONFIG_KEY, { hideOnline: false, hideLocation: false, stealthDash: false, newsletter: true });
   document.getElementById('privHideOnlineToggle').checked   = !!pk.hideOnline;
   document.getElementById('privHideLocationToggle').checked = pk.shareActivity === true && !pk.hideLocation;
   document.getElementById('privStealthToggle').checked      = !!pk.stealthDash;
-  document.getElementById('privNoHistoryToggle').checked     = !!pk.noHistory;
   document.getElementById('privNewsletterToggle').checked    = pk.newsletter !== false;
-  document.getElementById('privBlockProfileToggle').checked  = !!pk.blockProfile;
   if (!schoolPrefs) {
     loadBlogAlerts();
     loadNtfyTopic();
@@ -2440,10 +2608,9 @@ async function deleteAccount() {
   document.getElementById('syncToggle').checked = sc.enabled !== false;
   document.getElementById('syncNoticeToggle').checked = sc.restoreNotice !== false;
 
-  var tc = load(TOOLS_CONFIG_KEY, { canvasLock: false, quickAccess: false, dailyBonus: false });
+  var tc = load(TOOLS_CONFIG_KEY, { canvasLock: false, quickAccess: false });
   document.getElementById('prefCanvasLock').checked = !!tc.canvasLock;
   document.getElementById('prefQuickAccess').checked = !!tc.quickAccess;
-  document.getElementById('prefDailyBonus').checked = !!tc.dailyBonus;
 
   if (!schoolPrefs) {
     fetch('/api/me/inventory').then(function(r){return r.ok ? r.json() : {};}).then(function(inv){
@@ -2451,14 +2618,13 @@ async function deleteAccount() {
       var any = false;
       if (tools.includes('canvas_lock_pass')) { document.getElementById('toolCanvasLock').style.display = 'block'; any = true; }
       if (tools.includes('quick_access_pass')) { document.getElementById('toolQuickAccess').style.display = 'block'; any = true; }
-      if (tools.includes('daily_bonus_plus')) { document.getElementById('toolDailyBonus').style.display = 'block'; any = true; }
       if (any) document.getElementById('specialToolsSection').style.display = 'block';
     }).catch(function(){});
   }
 
-  ['privHideOnlineToggle','privHideLocationToggle','privStealthToggle','privNoHistoryToggle','privNewsletterToggle','privBlockProfileToggle',
+  ['privHideOnlineToggle','privHideLocationToggle','privStealthToggle','privNewsletterToggle',
    'syncToggle','syncNoticeToggle','homeQuickToggle','homeMembersToggle','homeRecentToggle','homeLogoToggle','homeCompactToggle',
-   'prefCanvasLock','prefQuickAccess','prefDailyBonus'].forEach(function(id) {
+   'prefCanvasLock','prefQuickAccess'].forEach(function(id) {
     document.getElementById(id).addEventListener('change', saveAll);
   });
   document.getElementById('blogAlertsToggle').addEventListener('change', saveBlogAlerts);
