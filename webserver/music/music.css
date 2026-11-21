@@ -211,8 +211,10 @@ html.theme-light .mp-ambient { opacity: 0.4; }
 .mp-lyrics .ml-plain { padding: 8px 4px 24px; }
 .mp-lyrics .ml-plain .ml-line { font-size: 20px; font-weight: 600; line-height: 1.35; margin-bottom: 10px; }
 .mp-lyrics .ml-message { padding: 40px 4px; font-size: 20px; text-align: left; }
-.mp-lyricsmeta { display: flex; flex: none; justify-content: space-between; align-items: baseline; gap: 12px; padding: 6px 2px 0; color: var(--t-fg2); font-size: 12px; min-height: 1.2em; }
+.mp-lyricsmeta { display: flex; flex: none; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 14px; padding: 6px 2px 0; color: var(--t-fg2); font-size: 12px; min-height: 1.2em; }
 .mp-lyricsmeta > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-lyricsmeta > #mp-lyricsinfo { flex: 1 1 260px; white-space: normal; }   /* wraps below the controls' width instead of being cut off */
+.mp-lyricsmeta > .mp-nudge { margin-left: auto; }
 .mp-lyricsmeta .mp-link { flex: none; white-space: nowrap; }
 .mp-link { padding: 0; background: none; border: 0; color: var(--t-ac); font: inherit; cursor: pointer; text-decoration: underline; }
 .mp-link[hidden], .mp-wrongform[hidden], .mp-nudge[hidden] { display: none; }
