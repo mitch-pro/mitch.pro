@@ -63,13 +63,93 @@ pub async fn handle(
         let norm = mitch_lib::auth::normalize_email(&email);
         let data = mitch_lib::admin::load_admin_passphrase(&state.store, &state.cfg.data_dir);
         let entry = data.get(norm.as_str()).cloned().unwrap_or(json!({}));
+        let unlock_expires = super::admin_unlock_expiry(state, ctx);
         return Some(json_response(
             200,
             json!({
                 "set": !entry.get("hash").and_then(|v| v.as_str()).unwrap_or("").is_empty(),
                 "updatedAt": entry.get("updatedAt").and_then(|v| v.as_i64()).unwrap_or(0),
+                "unlocked": unlock_expires.is_some(),
+                "unlockExpiresAt": unlock_expires.unwrap_or(0),
             }),
         ));
+    }
+
+    // POST /api/admin/unlock — enter the passphrase once; the HttpOnly
+    // `mitch_admin_unlock` cookie then unlocks every admin page and tab until
+    // it expires (see `admin_gate`). Sensitive actions still re-prompt.
+    if path == "/api/admin/unlock" && *method == Method::POST {
+        if !valid_id(&ctx.sid, state) {
+            return Some(unauthorized());
+        }
+        if !ctx.is_admin(state) {
+            return Some(forbidden());
+        }
+        if state
+            .rate_limiter
+            .rate_limited(&format!("ip:{}", ctx.ip), "/api/admin/unlock")
+        {
+            return Some(json_response(429, json!({ "error": "too many attempts" })));
+        }
+        let passphrase = body
+            .get("passphrase")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
+        if !mitch_lib::admin::verify_admin_passphrase_raw(
+            &state.store,
+            &state.id_secret,
+            &state.cfg.data_dir,
+            &ctx.sid,
+            passphrase,
+        ) {
+            return Some(json_response(403, json!({ "error": "invalid_passphrase" })));
+        }
+        let Some((token, expires)) = mitch_lib::admin::make_admin_unlock_token(
+            &state.store,
+            &state.id_secret,
+            &state.cfg.data_dir,
+            &ctx.sid,
+        ) else {
+            return Some(json_response(
+                403,
+                json!({ "error": "passphrase_not_configured" }),
+            ));
+        };
+        let secure_flag = std::env::var("SESSION_COOKIE_SECURE").unwrap_or_default();
+        let node_env_prod = std::env::var("NODE_ENV").unwrap_or_default() == "production";
+        let cookie = mitch_lib::auth::set_cookie_header(
+            mitch_lib::admin::ADMIN_UNLOCK_COOKIE,
+            &token,
+            &secure_flag,
+            node_env_prod,
+            mitch_lib::admin::ADMIN_UNLOCK_TTL_MS / 1000,
+            true,
+        );
+        let mut resp = json_response(200, json!({ "ok": true, "unlockExpiresAt": expires }));
+        if let Ok(v) = axum::http::HeaderValue::from_str(&cookie) {
+            resp.headers_mut()
+                .append(axum::http::header::SET_COOKIE, v);
+        }
+        return Some(resp);
+    }
+
+    // POST /api/admin/lock — drop the unlock cookie (the "Lock" button).
+    if path == "/api/admin/lock" && *method == Method::POST {
+        let secure_flag = std::env::var("SESSION_COOKIE_SECURE").unwrap_or_default();
+        let node_env_prod = std::env::var("NODE_ENV").unwrap_or_default() == "production";
+        let cookie = mitch_lib::auth::clear_cookie_header(
+            mitch_lib::admin::ADMIN_UNLOCK_COOKIE,
+            &secure_flag,
+            node_env_prod,
+            true,
+        );
+        let mut resp = json_response(200, json!({ "ok": true }));
+        if let Ok(v) = axum::http::HeaderValue::from_str(&cookie) {
+            resp.headers_mut()
+                .append(axum::http::header::SET_COOKIE, v);
+        }
+        return Some(resp);
     }
 
     // POST /api/admin/passphrase-status — set or verify.

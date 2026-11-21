@@ -1,6 +1,16 @@
 (function () {
   'use strict';
 
+  // Legacy cookie cleanup. Sign-in lives only in the HttpOnly mitch_session
+  // cookie; the old client-readable studentId/id/adminId/password cookies are
+  // no longer used by anything. Expire any copy left in the browser. Safe to
+  // delete once these have aged out of everyone's browser.
+  try {
+    ['studentId', 'id', 'adminId', 'password'].forEach(function (n) {
+      document.cookie = n + '=;path=/;max-age=0;SameSite=Lax';
+    });
+  } catch (_) {}
+
   // ── Service worker freshness ────────────────────────────────────────────────
   // The SW keeps caching on (network-first for pages/code, cache-first for
   // media) but a phone can sit on an old worker whose cache predates the

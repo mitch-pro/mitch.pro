@@ -5,8 +5,10 @@
 //! Contract highlights:
 //! - Cookie `mitch_session` (AUTH_COOKIE): value = raw 32-byte base64url
 //!   token; only sha256(token).hex is stored (`auth_sessions.token_hash`).
-//! - `studentId`/`id`/`adminId` client cookies are DELETED (except
-//!   NODE_ENV=test) and re-derived from the server-side session.
+//! - There is no client-side identity cookie. Any `studentId`/`id`/`adminId`
+//!   cookie a browser still sends is DELETED (except NODE_ENV=test) and the
+//!   identity is re-derived from the server-side session. The `studentId`/`id`
+//!   keys in the jar are server-internal names for that derived value only.
 //! - `makeEmailId`: sha256(email|email:vN).hex[0..24] = 'e'+hash, sig =
 //!   HMAC-SHA256(ID_SECRET, raw).hex[0..16], joined with '.'.
 //! - `normalizeEmail`: lowercase+trim, strip +suffix, strip dots from local,
@@ -153,9 +155,6 @@ pub fn god_mode_enabled() -> bool {
 #[derive(Debug, Default, Clone)]
 pub struct Cookies {
     pub map: HashMap<String, String>,
-    /// Pre-deletion legacy values (JS cookies.rawStudentId / rawId).
-    pub raw_student_id: String,
-    pub raw_id: String,
 }
 
 impl Cookies {
@@ -197,12 +196,7 @@ pub fn get_cookies_from_header_value(
         }
     }
 
-    let raw_student_id = cookies.get("studentId").unwrap_or("").to_string();
-    let raw_id = cookies.get("id").unwrap_or("").to_string();
-    cookies.raw_student_id = raw_student_id;
-    cookies.raw_id = raw_id;
-
-    // Display-only legacy cookies — never treat as auth proof.
+    // Retired client cookies — never treat as auth proof.
     if !node_env_test {
         cookies.map.remove("studentId");
         cookies.map.remove("id");
@@ -876,6 +870,7 @@ pub fn rate_limit_for(endpoint: &str) -> (u32, u32) {
         "/api/ai" => (20, 60),
         "/api/script" => (600, 60),
         "/api/admin/js" => (5, 60),
+        "/api/admin/unlock" => (10, 60),
         "/api/admin/gift-coins" => (10, 60),
         "/api/admin/grant-premium" => (10, 60),
         "/api/admin/revoke-premium" => (10, 60),

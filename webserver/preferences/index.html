@@ -2761,8 +2761,6 @@ async function deleteAccount() {
       });
       const data = await res.json();
       if (data.success && data.id) {
-        var secureFlag = location.protocol === 'https:' ? ';Secure' : '';
-        document.cookie = "studentId=" + data.id + ";path=/;max-age=31536000" + secureFlag + ";SameSite=Lax";
         status.style.color = 'var(--t-ac)';
         status.textContent = 'Logged out of all other sessions successfully!';
       } else {
@@ -2784,10 +2782,6 @@ async function deleteAccount() {
     try {
       await fetch('/api/logout', { method: 'POST', credentials: 'include' });
     } catch (e) {}
-    var secureFlag = location.protocol === 'https:' ? ';Secure' : '';
-    document.cookie = "studentId=;path=/;max-age=0" + secureFlag + ";SameSite=Lax";
-    document.cookie = "id=;path=/;max-age=0" + secureFlag + ";SameSite=Lax";
-    document.cookie = "password=;path=/;max-age=0" + secureFlag + ";SameSite=Lax";
     window.location.href = '/enroll/';
   }
 

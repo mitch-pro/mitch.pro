@@ -132,6 +132,18 @@ pub fn admin_ctx(state: &AppState, headers: &HeaderMap) -> AdminCtx {
     AdminCtx { cookies, sid, ip }
 }
 
+/// Expiry (ms) of the caller's admin unlock, when their cookie is still valid.
+pub fn admin_unlock_expiry(state: &AppState, ctx: &AdminCtx) -> Option<i64> {
+    let token = ctx.cookies.get(mitch_lib::admin::ADMIN_UNLOCK_COOKIE)?;
+    mitch_lib::admin::verify_admin_unlock_token(
+        &state.store,
+        &state.id_secret,
+        &state.cfg.data_dir,
+        &ctx.sid,
+        token,
+    )
+}
+
 /// `devTestRequestAllowed(req)` — dev-test access + localhost/private host.
 pub fn dev_test_request_allowed(headers: &HeaderMap) -> bool {
     if !mitch_lib::auth::dev_test_access_enabled() {
@@ -143,7 +155,15 @@ pub fn dev_test_request_allowed(headers: &HeaderMap) -> bool {
 }
 
 /// The global admin gate — server.js:7945-7973. `Some` rejects.
-pub fn admin_gate(state: &Arc<AppState>, headers: &HeaderMap) -> Resp {
+///
+/// Full administrators prove the passphrase one of two ways:
+/// - `X-Admin-Passphrase` with the real passphrase (works for everything), or
+/// - the `mitch_admin_unlock` cookie that `POST /api/admin/unlock` issues after
+///   one passphrase entry, valid on every admin page and tab for
+///   `ADMIN_UNLOCK_TTL_MS`. It does not cover the "sensitive" actions listed in
+///   `mitch_lib::admin::is_sensitive_admin_action`; those answer
+///   `reauth_required` until the request carries the real passphrase header.
+pub fn admin_gate(state: &Arc<AppState>, method: &Method, path: &str, headers: &HeaderMap) -> Resp {
     let ctx = admin_ctx(state, headers);
     if !mitch_lib::auth::valid_id(&ctx.sid, &state.id_secret) {
         return Some(unauthorized());
@@ -183,8 +203,8 @@ pub fn admin_gate(state: &Arc<AppState>, headers: &HeaderMap) -> Resp {
             .unwrap_or("")
             .trim()
             .to_string();
-        if pass.is_empty()
-            || !mitch_lib::admin::verify_admin_passphrase_raw(
+        if !pass.is_empty()
+            && mitch_lib::admin::verify_admin_passphrase_raw(
                 &state.store,
                 &state.id_secret,
                 &state.cfg.data_dir,
@@ -192,8 +212,16 @@ pub fn admin_gate(state: &Arc<AppState>, headers: &HeaderMap) -> Resp {
                 &pass,
             )
         {
-            return Some(json_response(403, json!({ "error": "invalid_passphrase" })));
+            return None;
         }
+        let unlocked = admin_unlock_expiry(state, &ctx).is_some();
+        if unlocked {
+            if mitch_lib::admin::is_sensitive_admin_action(method.as_str(), path) {
+                return Some(json_response(403, json!({ "error": "reauth_required" })));
+            }
+            return None;
+        }
+        return Some(json_response(403, json!({ "error": "invalid_passphrase" })));
     }
     None
 }
