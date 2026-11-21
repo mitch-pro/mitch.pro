@@ -60,18 +60,30 @@ the playlist (`routes/music/spotify.rs`; only `open.spotify.com` is fetched). So
 - only public playlists work, and Spotify shares only the first 100 songs;
 - no audio comes from Spotify. Each song is matched to a YouTube video the first
   time it is played (`GET /api/music/match`: search `artist title`, accept a result
-  whose title/artist score at least 0.5 and whose length is within 4 s, and which
-  isn't a different version: a result with live, cover, remix, acoustic, slowed,
-  instrumental, karaoke... in its title is skipped unless the Spotify title has
-  the word too (`VERSION_WORDS`). With no qualifying result the song stays
-  unmatched rather than getting the wrong recording). Matches are stored in
-  `music_track_matches` and shared by everyone; when the table gained its
-  `rules_version` column every old match was dropped and Spotify songs were
-  matched again under these rules (a one-time migration in `data.rs`);
-- **Sync from Spotify** (and an automatic sync when the owner opens a playlist
-  more than a day stale) makes the Spotify part of the playlist equal Spotify's
-  current list and order, keeps existing matches, and keeps songs the owner added
-  by hand after it. Songs removed on Spotify disappear.
+  that (1) is within 4 s of the Spotify length, (2) is by the same artist
+  (`artist_match`: the Spotify artists against the video's artist and title, at
+  least 0.6, so a cover by someone else is out however well the title matches),
+  (3) has a title that scores at least 0.5, or an artist match of 0.9+ with the
+  length within 2 s (an official upload whose title is in another script), and
+  (4) isn't a different version: a result with live, cover, remix, acoustic,
+  slowed, instrumental, karaoke, English/other-language, dub, fandub, lofi,
+  reprise... in its title is skipped unless the Spotify title has the word too
+  (`VERSION_WORDS`). With no qualifying result the song stays unmatched rather
+  than getting the wrong recording. Matches are stored in
+  `music_track_matches` and shared by everyone, each with the `rules_version` it
+  was made under (`MATCH_RULES_VERSION`, now 3). A match from older rules is not
+  trusted (`get_match` ignores it): that is the cache bust, so changing the rules
+  means raising the number, not deleting rows. It is applied lazily: a song is
+  matched again when someone plays it, and when its playlist is synced
+  (`recheck_stale_matches` clears the video of every song of that playlist whose
+  stored match is stale; the worker then matches them). A fresh match isn't
+  touched, so a second sync rechecks nothing;
+- **Resync from Spotify** (in the playlist's ⋯ menu, and an automatic sync when the
+  owner opens a playlist more than a day stale) makes the Spotify part of the
+  playlist equal Spotify's current list and order, keeps matches made under the
+  current rules, rechecks the rest (see above), and keeps songs the owner added
+  by hand after it. Songs removed on Spotify disappear. The response says how
+  many songs are being rechecked (`rechecked`), and the button shows it.
 - Reading the embed page is not an official API. If Spotify changes it,
   `parse_embed` is the one place to fix. Private playlists, Liked Songs and
   playlists past 100 songs would need a registered Spotify app and OAuth, which
@@ -303,6 +315,17 @@ was. The lyrics view also has -0.5 s / +0.5 s buttons; the viewer's correction
 per song is kept in this browser (`mitch.music.lyroff`) and applied in
 `MitchMusic.getLyrics`, so the follow-along card uses it too.
 
+**Retrying for word timing.** Sources answer at different speeds, and a lookup
+only waits 1.2 s for word timing once line timing is in hand, so a slow source can
+be missed and a song cached as line-timed. Two fixes: (1) a cached `line` row gets
+one patient background retry the next time it is played (`spawn_upgrade`,
+`FetchMode::Refresh`: waits 6 s for word timing, one at a time, once per song,
+recorded in `upgrade_tried`), and the cache row is replaced only if the result has
+better timing (`sync_rank`); (2) "Wrong lyrics?" submitted without changing the
+title or artist is sent as `custom=1&retry=1`, which runs the same patient lookup
+for the song itself, shows the result and stores it for everyone if it is better
+(a changed title is still a private custom search that is never cached).
+
 **Word timing from another version.** A music video often differs from the studio
 track (an intro, a repeated section), so the word-timed lyrics for the song are
 a different length and are rejected for the video, leaving only line timing.
@@ -371,6 +394,26 @@ such as the homepage style all buttons with padding and a minimum height, which
 turned its icons into large empty boxes. The pop-out hides the site's wallet bar,
 bell, mobile dock and credit band, which would cover its controls.
 
+## Lyric effects and the backdrop
+
+Beyond the left-to-right fill, `createLyricsView` marks the state of the lyrics
+and `music.css` (section "lyric effects") draws it, kept gentle on purpose (an
+earlier version lifted and enlarged the sung word and read as janky): every line
+carries `--d`, its distance from the line being sung, and fades and softens a
+little with it (no blur on touch screens); the sung line is slightly larger; and
+small four-point sparkles (`.ml-spark`) float off the leading edge of the fill of
+the word being sung, one every 150 ms (260 ms on touch screens), at most 12 alive,
+none with reduced motion or in a hidden tab. Words themselves never move. An
+instrumental break shows three dots that fill up through the break (`--gp`).
+Behind the lyrics three blurred colour orbs drift slowly while a song plays
+(`.mp-orbs`) and the cover backdrop pulses lightly on each new line (`onLine`,
+class `mp-beat`). `prefers-reduced-motion` turns the movement off.
+
+On a narrow screen the stage is hidden while nothing plays (the search comes
+first), the cover and title sit in a row with the heart / add / pop-out buttons
+under the title, and the lyrics pane is only as tall as its message when there are
+no lyrics.
+
 ## Shuffle
 
 - **Random**: a uniformly random song other than the current one; Previous steps
@@ -383,6 +426,24 @@ bell, mobile dock and credit band, which would cover its controls.
   A failed lookup is ignored.
 
 The mode is stored with the player state, so it survives reloads and page changes.
+
+## Settings and playlist actions
+
+Shuffle, repeat, crossfade and volume are kept in their own storage key
+(`mitch.music.prefs`), apart from the queue, so they can be set before anything
+plays and survive closing the player. With nothing playing they are applied
+directly; otherwise they go to the page that is playing.
+
+The player's stage has an **Add to playlist** button (next to the heart) that opens
+the same picker as a search result's playlist button, for the song that is playing.
+
+A playlist page has a cover (a mosaic of its first songs), a big Play and a
+Shuffle button (`MitchMusic.playShuffled`: random shuffle when it was off, the
+chosen mode when it was on; it starts at a random song), and one "more" menu
+(share link, make public/private, rename, delete; for someone
+else's playlist: save a copy, message someone) instead of a row of buttons. A
+playlist imported from Spotify also has a **Resync** button next to Shuffle. New
+playlist and Import from Spotify are in the + menu of the playlist list.
 
 ## Crossfade
 

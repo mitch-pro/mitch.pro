@@ -14,6 +14,8 @@
     pop: 'M14 3h7v7h-2V6.4l-8.3 8.3-1.4-1.4L17.6 5H14zM5 5h6v2H6v11h11v-5h2v7H4V5z',
     heart: 'M12 21s-7.5-4.6-9.6-9.2C.9 8.4 2.7 5 6 5c2 0 3.4 1.1 4 2.2h4c.6-1.1 2-2.2 4-2.2 3.3 0 5.1 3.4 3.6 6.8C19.5 16.4 12 21 12 21z',
     plus: 'M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z',
+    sync: 'M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z',
+    more: 'M6 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z',
     queue: 'M4 6h16v2H4zm0 5h10v2H4zm0 5h10v2H4zm12-5v6.2a3 3 0 1 0 2 2.8V13h2v-2z',
     listadd: 'M3 6h12v2H3zm0 5h12v2H3zm0 5h8v2H3zm13-1v-3h2v3h3v2h-3v3h-2v-3h-3v-2z',
     shuffle: 'M16 4h5v5l-1.8-1.8L5.4 21 4 19.6 17.8 5.8 16 4zm0 16l1.8-1.8-3.2-3.2 1.4-1.4 3.2 3.2L21 15v5h-5zM4 4.4 9.6 10 8.2 11.4 2.6 5.8 4 4.4z',
@@ -47,7 +49,7 @@
   function setAttr(el, name, value) { if (el.getAttribute(name) !== value) el.setAttribute(name, value); }
 
   var el = {
-    art: $('mp-art'), title: $('mp-title'), artist: $('mp-artist'), fav: $('mp-fav'), pop: $('mp-pop'),
+    art: $('mp-art'), title: $('mp-title'), artist: $('mp-artist'), fav: $('mp-fav'), addPl: $('mp-addpl'), pop: $('mp-pop'),
     prev: $('mp-prev'), play: $('mp-play'), next: $('mp-next'), cur: $('mp-cur'), dur: $('mp-dur'),
     seek: $('mp-seek'), vol: $('mp-vol'), lyrics: $('mp-lyrics'), info: $('mp-lyricsinfo'),
     wrong: $('mp-wrong'), wrongForm: $('mp-wrongform'), wt: $('mp-wt'), wa: $('mp-wa'),
@@ -58,16 +60,25 @@
     dialog: $('mp-dialog'), picker: $('mp-picker'),
     shuffle: $('mp-shuffle'), repeat: $('mp-repeat'), stage: $('mp-stage'), ambient: $('mp-ambient')
   };
-  setIcon(el.prev, 'prev'); setIcon(el.play, 'play'); setIcon(el.next, 'next'); setIcon(el.fav, 'heart');
+  setIcon(el.prev, 'prev'); setIcon(el.play, 'play'); setIcon(el.next, 'next'); setIcon(el.fav, 'heart'); if (el.addPl) setIcon(el.addPl, 'listadd');
   if (el.shuffle) setIcon(el.shuffle, 'shuffle');
   if (el.repeat) setIcon(el.repeat, 'repeat');
   if ($('mp-searchicon')) setIcon($('mp-searchicon'), 'search');
   Array.prototype.forEach.call(document.querySelectorAll('.mp-navicon'), function (n) { setIcon(n, n.dataset.ico); });
   if ($('mp-sidepl-new')) setIcon($('mp-sidepl-new'), 'plus');
+  if ($('mp-pl-add')) setIcon($('mp-pl-add'), 'plus');
   if ($('mp-coverempty')) setIcon($('mp-coverempty'), 'note');
   if (el.pop) setIcon(el.pop, 'pop');
 
-  var lv = M.createLyricsView(el.lyrics, { onSeek: function (s) { M.seek(s); } });
+  var lv = M.createLyricsView(el.lyrics, {
+    onSeek: function (s) { M.seek(s); },
+    // Every new line gives the backdrop a soft pulse.
+    onLine: function () {
+      var a = el.ambient;
+      if (!a || !M.state.playing) return;
+      a.classList.remove('mp-beat'); void a.offsetWidth; a.classList.add('mp-beat');
+    }
+  });
   var results = [], library = [], favIds = {}, tab = 'search', shownId = '', seeking = false, queueSig = '';
 
   /* ---------------------------------------------------------- list views */
@@ -245,6 +256,7 @@
   function syncNowFav() {
     var t = M.current();
     el.fav.hidden = !t || !t.id;
+    if (el.addPl) el.addPl.hidden = !t;
     if (t && t.id) syncHeart(el.fav, t.id);
   }
 
@@ -316,13 +328,10 @@
   function on(node, ev, fn) { if (node) node.addEventListener(ev, fn); }
   function post(path, body) { return M.api(path, { body: body }); }
 
-  /** A playlist as a card: a mosaic of its first covers, name and details. */
-  function playlistRow(p) {
-    var li = document.createElement('li');
-    var card = document.createElement('button');
-    card.type = 'button'; card.className = 'mp-plcard';
+  /** A square of up to four cover thumbnails (or a note when there are none). */
+  function buildMosaic(ids) {
+    var covers = ids.slice(0, 4);
     var mosaic = document.createElement('span');
-    var covers = (p.covers || []).slice(0, 4);
     mosaic.className = 'mp-plmosaic' + (covers.length < 4 ? ' one' : '');
     if (covers.length >= 4) {
       covers.forEach(function (id) {
@@ -338,6 +347,56 @@
       var empty = document.createElement('span'); empty.className = 'mp-mosaicempty'; setIcon(empty, 'note');
       mosaic.appendChild(empty);
     }
+    return mosaic;
+  }
+
+  /* A small pop-up list of actions, used instead of a row of buttons. */
+  var openMenuEl = null;
+  function closeMenu() {
+    if (!openMenuEl) return;
+    var a = openMenuEl._anchor;
+    openMenuEl.remove(); openMenuEl = null;
+    if (a) a.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('mousedown', onMenuOutside, true);
+    document.removeEventListener('keydown', onMenuKey, true);
+  }
+  function onMenuOutside(e) {
+    if (openMenuEl && !openMenuEl.contains(e.target) && !openMenuEl._anchor.contains(e.target)) closeMenu();
+  }
+  function onMenuKey(e) {
+    if (e.key === 'Escape') { var a = openMenuEl && openMenuEl._anchor; closeMenu(); if (a) a.focus(); }
+  }
+  function openMenu(anchor, items) {
+    if (openMenuEl && openMenuEl._anchor === anchor) { closeMenu(); return; }
+    closeMenu();
+    var ul = document.createElement('ul');
+    ul.className = 'mp-menu'; ul.setAttribute('role', 'menu');
+    items.forEach(function (it) {
+      if (!it) return;
+      var li = document.createElement('li'); li.setAttribute('role', 'none');
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'mp-menuitem' + (it.danger ? ' mp-danger' : ''); b.setAttribute('role', 'menuitem');
+      b.textContent = it.label;
+      b.addEventListener('click', function () { closeMenu(); it.fn(); });
+      li.appendChild(b); ul.appendChild(li);
+    });
+    document.body.appendChild(ul);
+    var r = anchor.getBoundingClientRect();
+    ul.style.left = Math.max(8, Math.min(r.left, innerWidth - ul.offsetWidth - 8)) + 'px';
+    ul.style.top = (r.bottom + 6 + ul.offsetHeight > innerHeight - 8 ? Math.max(8, r.top - 6 - ul.offsetHeight) : r.bottom + 6) + 'px';
+    ul._anchor = anchor; openMenuEl = ul;
+    anchor.setAttribute('aria-expanded', 'true');
+    document.addEventListener('mousedown', onMenuOutside, true);
+    document.addEventListener('keydown', onMenuKey, true);
+    var first = ul.querySelector('button'); if (first) first.focus();
+  }
+
+  /** A playlist as a card: a mosaic of its first covers, name and details. */
+  function playlistRow(p) {
+    var li = document.createElement('li');
+    var card = document.createElement('button');
+    card.type = 'button'; card.className = 'mp-plcard';
+    var mosaic = buildMosaic(p.covers || []);
     var name = document.createElement('span'); name.className = 'mp-plcardname'; name.textContent = p.name;
     var meta = document.createElement('span'); meta.className = 'mp-plcardmeta'; meta.style.display = 'block';
     var bits = [p.trackCount + (p.trackCount === 1 ? ' song' : ' songs')];
@@ -380,7 +439,7 @@
   function refreshSidePlaylists() {
     return M.api('/api/music/playlists').then(function (d) { myPlaylists = d.playlists; renderSidePlaylists(); }).catch(function () { /* the sidebar just stays as it is */ });
   }
-  on($('mp-sidepl-new'), 'click', function () { setTab('playlists'); var b = $('mp-pl-new'); if (b) b.click(); });
+  on($('mp-sidepl-new'), 'click', function () { setTab('playlists'); newPlaylist(); });
 
   function renderPlaylists() {
     el.plHome.hidden = !!plOpen;
@@ -433,6 +492,24 @@
     return b;
   }
 
+  /** A quiet text button, for secondary actions inside panels. */
+  function linkBtn(label, onClick, cls) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'mp-link' + (cls ? ' ' + cls : '');
+    b.textContent = label;
+    b.addEventListener('click', onClick);
+    return b;
+  }
+  /** The big Play / Shuffle buttons of a playlist. */
+  function bigBtn(label, iconName, onClick, primary) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'mp-bigbtn' + (primary ? ' mp-primary' : '');
+    var ic = document.createElement('span'); ic.className = 'mp-bigicon'; setIcon(ic, iconName);
+    b.append(ic, document.createTextNode(label));
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
   function renderDetail() {
     var p = plOpen.p, tracks = plOpen.tracks;
     el.plName.textContent = p.name;
@@ -455,27 +532,39 @@
       el.plMeta.appendChild(who);
     }
 
+    var coverIds = [];
+    tracks.forEach(function (t) { if (t.id && coverIds.indexOf(t.id) < 0 && coverIds.length < 4) coverIds.push(t.id); });
+    if ($('mp-pl-cover')) $('mp-pl-cover').replaceChildren(buildMosaic(coverIds));
+
     el.plActions.replaceChildren();
-    el.plActions.appendChild(btn('Play', function () { if (tracks.length) M.play(tracks, 0); }, 'mp-primary'));
-    if (p.mine) {
-      el.plActions.appendChild(btn('Share', toggleSharePanel));
-      el.plActions.appendChild(btn('Rename', renamePlaylist));
-      var vis = btn(p.public ? 'Make private' : 'Make public', function () {
-        post('/api/music/playlist/update', { id: p.id, public: !p.public }).then(reopen).catch(function (e) { say(e.message); });
-      });
-      el.plActions.appendChild(vis);
-      if (p.spotify) el.plActions.appendChild(btn('Sync from Spotify', function () { syncSpotify(false); }));
-      el.plActions.appendChild(btn('Delete', deletePlaylist, 'mp-danger'));
-    } else {
-      el.plActions.appendChild(btn('Save a copy', function () {
-        post('/api/music/playlist/copy', { id: p.id, t: plOpen.token }).then(function (d) {
-          say('Saved to your playlists');
-          plMode = 'mine';
-          return openPlaylist(d.id);
-        }).catch(function (e) { say(e.message); });
-      }));
-      el.plActions.appendChild(btn('Message someone', function () { sendInChat(p, plOpen.token); }));
-    }
+    var playBtn = bigBtn('Play', 'play', function () { if (tracks.length) M.play(tracks, 0); }, true);
+    var shuffleBtn = bigBtn('Shuffle', 'shuffle', function () { M.playShuffled(tracks); }, false);
+    playBtn.disabled = shuffleBtn.disabled = !tracks.length;
+    var more = document.createElement('button');
+    more.type = 'button'; more.className = 'mp-icon mp-moremenu';
+    more.title = 'More'; more.setAttribute('aria-label', 'More'); more.setAttribute('aria-haspopup', 'menu'); more.setAttribute('aria-expanded', 'false');
+    setIcon(more, 'more');
+    more.addEventListener('click', function () {
+      openMenu(more, p.mine ? [
+        { label: 'Share link\u2026', fn: toggleSharePanel },
+        { label: p.public ? 'Make private' : 'Make public', fn: function () {
+          post('/api/music/playlist/update', { id: p.id, public: !p.public }).then(reopen).catch(function (e) { say(e.message); });
+        } },
+        { label: 'Rename\u2026', fn: renamePlaylist },
+        p.spotify ? { label: 'Resync from Spotify', fn: function () { syncSpotify(false); } } : null,
+        { label: 'Delete playlist\u2026', fn: deletePlaylist, danger: true }
+      ] : [
+        { label: 'Save a copy', fn: function () {
+          post('/api/music/playlist/copy', { id: p.id, t: plOpen.token }).then(function (d) {
+            say('Saved to your playlists');
+            plMode = 'mine';
+            return openPlaylist(d.id);
+          }).catch(function (e) { say(e.message); });
+        } },
+        { label: 'Message someone', fn: function () { sendInChat(p, plOpen.token); } }
+      ]);
+    });
+    el.plActions.append(playBtn, shuffleBtn, more);
     renderSharePanel();
 
     el.plTracks.replaceChildren();
@@ -527,11 +616,14 @@
   }
 
   function syncSpotify(quiet) {
-    if (!quiet) say('Syncing with Spotify…');
+    if (!quiet) say('Syncing with Spotify\u2026');
     return post('/api/music/playlist/spotify/sync', { id: plOpen.p.id }).then(function (d) {
-      if (!quiet) say(d.added || d.removed ? 'Added ' + d.added + ', removed ' + d.removed : 'Already up to date');
-      return reopen();
-    }).catch(function (e) { if (!quiet) say(e.message); });
+      var bits = [];
+      if (d.added || d.removed) bits.push('Added ' + d.added + ', removed ' + d.removed);
+      if (d.rechecked) bits.push('checking ' + d.rechecked + (d.rechecked === 1 ? ' song' : ' songs') + ' again');
+      // Reopening clears the status line, so the message goes up after it.
+      return reopen().then(function () { if (!quiet) say(bits.length ? bits.join(' \u00b7 ') : 'Already up to date'); });
+    }).catch(function (e) { if (!quiet) { say(e.message); if (plOpen) renderDetail(); } });
   }
 
   /* -------------------------------------------------------------- sharing */
@@ -547,7 +639,7 @@
     if (!p.public && !token) {
       var note = document.createElement('p');
       note.textContent = 'Only you can see this playlist.';
-      box.append(note, btn('Create share link', function () {
+      box.append(note, linkBtn('Create share link', function () {
         post('/api/music/playlist/share', { id: p.id, enable: true }).then(function (d) { p.shareToken = d.shareToken; plOpen.p.shareToken = d.shareToken; renderSharePanel(); }).catch(function (e) { say(e.message); });
       }));
       return;
@@ -560,15 +652,15 @@
     var row2 = document.createElement('div');
     row2.className = 'mp-sharebtns';
     row2.append(
-      btn('Copy link', function () {
+      linkBtn('Copy link', function () {
         function ok() { say('Link copied'); }
         if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(input.value).then(ok, function () { input.select(); });
         else { input.select(); document.execCommand('copy'); ok(); }
       }),
-      btn('Message someone', function () { sendInChat(p, token); })
+      linkBtn('Message someone', function () { sendInChat(p, token); })
     );
     if (!p.public) {
-      row2.appendChild(btn('Stop sharing', function () {
+      row2.appendChild(linkBtn('Stop sharing', function () {
         post('/api/music/playlist/share', { id: p.id, enable: false }).then(function () { p.shareToken = ''; renderSharePanel(); say('Old links no longer work'); }).catch(function (e) { say(e.message); });
       }));
     }
@@ -581,7 +673,7 @@
   }
 
   /* ------------------------------------------------------ create / import */
-  on($('mp-pl-new'), 'click', function () {
+  function newPlaylist() {
     askForm({ title: 'New playlist', submit: 'Create', fields: [
       { name: 'name', label: 'Name', max: 80 }, { name: 'visibility', label: 'Who can see it', options: VISIBILITY }
     ] }).then(function (v) {
@@ -590,7 +682,8 @@
         plMode = 'mine'; return openPlaylist(d.id);
       }).catch(function (e) { say(e.message); });
     });
-  });
+  }
+
   /** The Spotify import dialog. A failure reopens it with the link still filled
    *  in and the reason shown in it, so it is obvious what to fix. */
   function importFromSpotify(prefillUrl, problem, prefillVisibility) {
@@ -611,7 +704,12 @@
       });
     });
   }
-  on($('mp-pl-spotify'), 'click', function () { importFromSpotify('', ''); });
+  on($('mp-pl-add'), 'click', function () {
+    openMenu($('mp-pl-add'), [
+      { label: 'New playlist\u2026', fn: newPlaylist },
+      { label: 'Import from Spotify\u2026', fn: function () { importFromSpotify('', ''); } }
+    ]);
+  });
   on($('mp-seg-mine'), 'click', function () { plMode = 'mine'; renderPlaylists(); });
   on($('mp-seg-public'), 'click', function () { plMode = 'public'; renderPlaylists(); });
   on($('mp-pl-back'), 'click', function () { plOpen = null; shareOpen = false; render(); });
@@ -692,6 +790,7 @@
   el.next.addEventListener('click', function () { M.next(); });
   if (el.pop) el.pop.addEventListener('click', function () { if (!M.popout()) say('Pop-up was blocked by the browser'); });
   el.fav.addEventListener('click', function () { var t = M.current(); if (t) toggleFav(t); });
+  if (el.addPl) el.addPl.addEventListener('click', function () { var t = M.current(); if (t) pickPlaylist(t); });
   el.seek.addEventListener('input', function () {
     seeking = true;
     var d = M.state.dur || 0;
@@ -765,7 +864,10 @@
     e.preventDefault();
     var t = M.current();
     if (!t) return;
-    loadLyrics(t, { title: el.wt.value.trim() || t.title, artist: el.wa.value.trim() });
+    var wantTitle = el.wt.value.trim() || t.title, wantArtist = el.wa.value.trim();
+    // Sent again as it was: a retry of the normal lookup, which may improve the
+    // lyrics everyone gets (a slow source can have missed the first try).
+    loadLyrics(t, { title: wantTitle, artist: wantArtist, retry: wantTitle === t.title && wantArtist === t.artist });
     el.wrongForm.hidden = true;
   });
 

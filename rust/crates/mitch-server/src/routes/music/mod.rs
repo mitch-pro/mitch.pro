@@ -340,6 +340,11 @@ async fn lyrics_for(state: &Arc<AppState>, email: &str, search: &str) -> Respons
     let title = qs(search, "title");
     let artist = qs(search, "artist");
     let custom = qs(search, "custom") == "1";
+    // "Wrong lyrics?" sent again without changing the title or artist: a retry
+    // of the normal lookup, which is allowed to improve what everyone gets.
+    let retry = custom && qs(search, "retry") == "1";
+    let custom = custom && !retry;
+    let skip_cache = custom || retry;
     let duration_s = qs(search, "duration")
         .parse::<u32>()
         .unwrap_or(0)
@@ -350,12 +355,17 @@ async fn lyrics_for(state: &Arc<AppState>, email: &str, search: &str) -> Respons
     // Keyed by the title and artist as well as the video, so what a client
     // sends can't replace the lyrics everyone else gets for the video.
     let cache_key = music::lyrics_cache_key(&id, title.trim(), artist.trim());
-    if !custom {
+    if !skip_cache {
         if let Some(mut hit) = music::get_cached_lyrics(&state.store, &cache_key) {
             // Lyrics warmed in the background haven't had their timing checked
             // yet: do it now, once, before they are shown.
             if !hit.aligned && allow(email, "lyrics", 20, Duration::from_secs(60)) {
                 hit = align_cached(state, &cache_key, &id, hit).await;
+            }
+            // Line-timed lyrics get one patient try at word timing in the
+            // background (a slow source may have missed the first, short wait).
+            if hit.sync == "line" && !hit.upgrade_tried {
+                spawn_upgrade(state, &id, title.trim(), artist.trim(), duration_s);
             }
             return lyrics_response(
                 &hit.source,
@@ -374,7 +384,11 @@ async fn lyrics_for(state: &Arc<AppState>, email: &str, search: &str) -> Respons
         title.trim(),
         artist.trim(),
         duration_s,
-        FetchMode::Request { custom },
+        if retry {
+            FetchMode::Refresh
+        } else {
+            FetchMode::Request { custom }
+        },
     )
     .await;
     match fetched.found {
@@ -399,6 +413,11 @@ pub(super) enum FetchMode {
     /// lyrics are cached, so a miss here never blocks the fuller lookup a real
     /// play does.
     Ahead,
+    /// A second, patient lookup for a song whose lyrics are already cached
+    /// (the "wrong lyrics?" button pressed without changing anything, or the
+    /// background retry for line-timed lyrics). It waits longer for word timing
+    /// and replaces the cached row only if the result is better.
+    Refresh,
 }
 
 pub(super) struct Fetched {
@@ -417,18 +436,19 @@ pub(super) async fn fetch_and_cache(
     mode: FetchMode,
 ) -> Fetched {
     let cache_key = music::lyrics_cache_key(id, title, artist);
-    let (custom, with_captions) = match mode {
-        FetchMode::Request { custom } => (custom, true),
-        FetchMode::Ahead => (false, false),
+    let (custom, with_captions, patient) = match mode {
+        FetchMode::Request { custom } => (custom, true, false),
+        FetchMode::Ahead => (false, false, false),
+        FetchMode::Refresh => (false, true, true),
     };
     let (mut found, tried) =
-        lyrics::find(title, artist, duration_s * 1000, id, with_captions).await;
+        lyrics::find(title, artist, duration_s * 1000, id, with_captions, patient).await;
     // A real play checks the timing against the video's captions right away; a
     // background fetch leaves that for the first play (`aligned` stays false).
     let mut aligned = true;
     if let Some(f) = found.as_mut() {
         if needs_alignment(f.rank, f.approximate, f.source) {
-            if matches!(mode, FetchMode::Request { .. }) {
+            if !matches!(mode, FetchMode::Ahead) {
                 lyrics::align(id, &mut f.lyrics).await;
             } else {
                 aligned = false;
@@ -437,7 +457,17 @@ pub(super) async fn fetch_and_cache(
     }
     match &found {
         Some(f) => {
-            if !custom {
+            // A refresh keeps what is cached unless the new result has better
+            // timing (word over line over text only).
+            let better = match mode {
+                FetchMode::Refresh => music::get_cached_lyrics(&state.store, &cache_key)
+                    .is_none_or(|old| sync_rank(f.lyrics.sync.as_str()) > sync_rank(&old.sync)),
+                _ => true,
+            };
+            if matches!(mode, FetchMode::Refresh) && !better {
+                music::mark_lyrics_upgrade_tried(&state.store, &cache_key);
+            }
+            if !custom && better {
                 music::put_cached_lyrics(
                     &state.store,
                     &cache_key,
@@ -449,6 +479,7 @@ pub(super) async fn fetch_and_cache(
                         body: ml::to_enhanced_lrc(&f.lyrics),
                         approximate: f.approximate,
                         aligned,
+                        upgrade_tried: matches!(mode, FetchMode::Refresh),
                     },
                 );
             }
@@ -460,6 +491,9 @@ pub(super) async fn fetch_and_cache(
                     "timeout" | "unreachable" | "request failed"
                 )
             });
+            if matches!(mode, FetchMode::Refresh) {
+                music::mark_lyrics_upgrade_tried(&state.store, &cache_key);
+            }
             if matches!(mode, FetchMode::Request { custom: false }) && !all_failed {
                 music::put_cached_lyrics(
                     &state.store,
@@ -471,12 +505,60 @@ pub(super) async fn fetch_and_cache(
                         body: String::new(),
                         approximate: false,
                         aligned: true,
+                        upgrade_tried: true,
                     },
                 );
             }
         }
     }
     Fetched { found, tried }
+}
+
+/// How good a lyrics row's timing is: word over line over plain text.
+fn sync_rank(sync: &str) -> u8 {
+    match sync {
+        "word" => 3,
+        "line" => 2,
+        "none" => 1,
+        _ => 0,
+    }
+}
+
+/// Songs whose background word-timing retry is running now (one each).
+fn upgrading() -> &'static std::sync::Mutex<std::collections::HashSet<String>> {
+    static U: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+        std::sync::OnceLock::new();
+    U.get_or_init(Default::default)
+}
+
+/// Retries the lookup of a line-timed song patiently in the background and
+/// keeps the result if it has word timing. One at a time, and once per song.
+fn spawn_upgrade(state: &Arc<AppState>, id: &str, title: &str, artist: &str, duration_s: u32) {
+    static ONE_AT_A_TIME: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
+    let key = music::lyrics_cache_key(id, title, artist);
+    if !upgrading()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(key.clone())
+    {
+        return;
+    }
+    let (state, id, title, artist) = (
+        state.clone(),
+        id.to_string(),
+        title.to_string(),
+        artist.to_string(),
+    );
+    tokio::spawn(async move {
+        if let Ok(_permit) = ONE_AT_A_TIME.acquire().await {
+            let _ =
+                fetch_and_cache(&state, &id, &title, &artist, duration_s, FetchMode::Refresh).await;
+        }
+        upgrading()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&key);
+    });
 }
 
 /// Whether a result's timing is worth checking against the captions: it has

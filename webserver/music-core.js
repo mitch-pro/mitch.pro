@@ -418,6 +418,32 @@
     else if (m.k === 'stop') { if (st.role !== 'host') { st.queue = []; st.index = -1; st.playing = false; st.role = 'idle'; emit(); } }
   }
 
+  /* The player's settings (shuffle, repeat, crossfade, volume). They are kept
+   * apart from the queue, so they can be set before anything is playing and are
+   * still there after the player is closed. */
+  var PREFS_KEY = 'mitch.music.prefs';
+  function savePrefs() {
+    try {
+      localStorage.setItem(PREFS_KEY, JSON.stringify({ shuffle: st.shuffle, repeat: st.repeat, crossfade: st.crossfade, vol: st.vol }));
+    } catch (e) { /* storage unavailable */ }
+  }
+  function loadPrefs() {
+    var p = null;
+    try { p = JSON.parse(localStorage.getItem(PREFS_KEY) || 'null'); } catch (e) { /* ignore */ }
+    if (!p) return;
+    st.shuffle = normShuffle(p.shuffle);
+    st.repeat = p.repeat === 'all' || p.repeat === 'one' ? p.repeat : 'off';
+    st.crossfade = normFade(p.crossfade);
+    if (typeof p.vol === 'number') st.vol = clamp(p.vol, 0, 1);
+  }
+  function setting(cmd, arg) {
+    if (cmd === 'shuffle') { st.shuffle = normShuffle(arg); resetShuffleMemory(); }
+    else if (cmd === 'repeat') st.repeat = arg === 'all' || arg === 'one' ? arg : 'off';
+    else if (cmd === 'crossfade') st.crossfade = normFade(arg);
+    else if (cmd === 'vol') { st.vol = clamp(arg, 0, 1); if (audio && !fade) audio.volume = st.vol; }
+    savePrefs();
+  }
+
   /* -------------------------------------------------------------- commands */
   function runCmd(cmd, arg) {
     // Anything that changes what is playing ends an overlap in progress.
@@ -433,9 +459,11 @@
       case 'play': playNow(); break;
       case 'pause': wantPlayUntil = 0; audio.pause(); break;
       case 'next': advance(false); break;
-      case 'shuffle': st.shuffle = normShuffle(arg); resetShuffleMemory(); break;
-      case 'crossfade': st.crossfade = normFade(arg); break;
-      case 'repeat': st.repeat = arg === 'all' || arg === 'one' ? arg : 'off'; break;
+      case 'shuffle':
+      case 'crossfade':
+      case 'repeat':
+        setting(cmd, arg);
+        break;
       case 'prev':
         if (audio.currentTime > 3) { audio.currentTime = 0; break; }
         // Shuffled: go back to the song that actually played before this one.
@@ -446,7 +474,7 @@
         go(st.index - 1, true);
         break;
       case 'seek': if (isFinite(arg)) { audio.currentTime = clamp(arg, 0, st.dur || 1e9); st.pos = audio.currentTime; } break;
-      case 'vol': st.vol = clamp(arg, 0, 1); if (!fade) audio.volume = st.vol; break;
+      case 'vol': setting('vol', arg); break;
       case 'jump': go(arg, true); break;
       case 'playQueue':
         resetShuffleMemory();
@@ -492,6 +520,13 @@
       return;
     }
     if (st.role === 'idle') {
+      // Settings don't need a song: apply them where they are.
+      if (cmd === 'shuffle' || cmd === 'repeat' || cmd === 'crossfade' || cmd === 'vol') {
+        setting(cmd, arg);
+        if (st.queue.length) save();
+        emit();
+        return;
+      }
       if (!st.queue.length && cmd !== 'playQueue' && cmd !== 'enqueue') return;
       if (cmd === 'playQueue') st.index = -1;      // don't load the stale track first
       // The first play after a page load has to load the song and start it in
@@ -569,6 +604,7 @@
       st.shuffle = normShuffle(s.shuffle); st.repeat = s.repeat === 'all' || s.repeat === 'one' ? s.repeat : 'off';
       st.crossfade = normFade(s.crossfade);
     }
+    loadPrefs();               // the settings win over what an old saved state held
     emit();
     try {
       bc = new BroadcastChannel(CHANNEL);
@@ -628,7 +664,7 @@
     var q = '/api/music/lyrics?id=' + encodeURIComponent(track.id) +
       '&title=' + encodeURIComponent(custom ? custom.title : track.title) +
       '&artist=' + encodeURIComponent(custom ? custom.artist : track.artist) +
-      '&duration=' + encodeURIComponent(track.duration || 0) + (custom ? '&custom=1' : '');
+      '&duration=' + encodeURIComponent(track.duration || 0) + (custom ? '&custom=1' + (custom.retry ? '&retry=1' : '') : '');
     var p = api(q).then(function (d) {
       if (!custom && d && d.found !== undefined) sessionLyrics(track.id, d);
       return d;
@@ -670,6 +706,15 @@
     return getLyricsRaw(track, custom).then(function (d) { return track ? withOffset(d, lyricOffset(track.id)) : d; });
   }
 
+  /** Plays a list in shuffled order: turns shuffle on if it is off (random; an
+   *  already chosen mode is kept) and starts at a random song. */
+  function playShuffled(queue) {
+    var list = (queue || []).filter(function (t) { return t && (t.id || t.spotifyId); });
+    if (!list.length) return;
+    if (st.shuffle === 'off') control('shuffle', 'random');
+    control('playQueue', { queue: list, index: Math.floor(Math.random() * list.length) });
+  }
+
   /** Index of the line playing at `ms`, or -1 before the first line. */
   function lineAt(lines, ms) {
     var lo = 0, hi = lines.length - 1, ans = -1;
@@ -699,11 +744,11 @@
       p.className = 'ml-message';
       p.textContent = text;
       root.appendChild(p);
-      data = null; lineEls = []; wordEls = []; active = -2;
+      data = null; lineEls = []; wordEls = []; active = -2; alive = 0;
     }
 
     function set(d) {
-      active = -2; lineEls = []; wordEls = []; wordsOf = [];
+      active = -2; lineEls = []; wordEls = []; wordsOf = []; alive = 0;
       if (d === 'idle') { root.replaceChildren(); data = null; return; }
       if (d === 'loading') return message('Finding lyrics…');
       if (!d || !d.found || !d.lines || !d.lines.length) return message(d && d.error ? 'Could not load lyrics' : 'No lyrics found');
@@ -717,7 +762,7 @@
         var ws = [];
         if (!line.text) {
           el.classList.add('ml-gap');
-          el.textContent = '• • •';
+          for (var g = 0; g < 3; g++) el.appendChild(document.createElement('i')).className = 'ml-dot';
         } else if (line.words && line.words.length) {
           line.words.forEach(function (w) {
             var s = document.createElement('span');
@@ -760,6 +805,41 @@
       }
     }
 
+    /* Sparkles: while a word is sung, small stars appear at the edge of the fill
+     * and float away. A few per second, never more than MAX alive, none with
+     * reduced motion or in a hidden tab. */
+    var lastSpark = 0, alive = 0, MAX = 12;
+    var coarse = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+    function sparkle(i, ms) {
+      if (reduce || opts.sparkles === false || document.hidden || alive >= MAX) return;
+      var now = Date.now();
+      if (now - lastSpark < (coarse ? 260 : 150)) return;
+      var line = data.lines[i], ws = wordEls[i];
+      if (!ws.length) return;
+      for (var k = 0; k < line.words.length; k++) {
+        var w = line.words[k];
+        if (ms >= w.t && ms < w.e) {
+          lastSpark = now;
+          var el = ws[k], p = (ms - w.t) / Math.max(1, w.e - w.t);
+          var star = document.createElement('i');
+          star.className = 'ml-spark';
+          star.style.left = Math.round(el.offsetLeft + el.offsetWidth * p) + 'px';
+          star.style.top = Math.round(el.offsetTop + el.offsetHeight * (0.1 + Math.random() * 0.8)) + 'px';
+          star.style.setProperty('--dx', (Math.random() * 26 - 13).toFixed(1) + 'px');
+          star.style.setProperty('--dy', (-10 - Math.random() * 22).toFixed(1) + 'px');
+          star.style.setProperty('--s', (0.45 + Math.random() * 0.6).toFixed(2));
+          star.style.animationDuration = (700 + Math.random() * 500).toFixed(0) + 'ms';
+          alive++;
+          var gone = false;
+          var done = function () { if (gone) return; gone = true; alive = Math.max(0, alive - 1); star.remove(); };
+          star.addEventListener('animationend', done);
+          setTimeout(done, 1800);                 // in case the animation never ends (hidden tab)
+          lineEls[i].appendChild(star);
+          return;
+        }
+      }
+    }
+
     function tick(ms) {
       if (!data || data.sync === 'none') return;
       var i = lineAt(data.lines, ms);
@@ -779,13 +859,23 @@
           if (i >= 0) lineEls[i].classList.remove('ml-past');
         }
         active = i;
+        // How far each line is from the one being sung (CSS fades and blurs by it).
+        if (i >= 0) {
+          for (var d = 0; d < lineEls.length; d++) lineEls[d].style.setProperty('--d', Math.min(5, Math.abs(d - i)));
+          if (opts.onLine) opts.onLine(i);
+        }
         if (i >= 0 && Date.now() > userScrollUntil) {
           var el = lineEls[i];
           var top = el.offsetTop - root.clientHeight * 0.32 + el.offsetHeight / 2;
           root.scrollTo({ top: Math.max(0, top), behavior: reduce ? 'auto' : 'smooth' });
         }
       }
-      if (i >= 0) paintWords(i, ms);
+      if (i >= 0) { paintWords(i, ms); sparkle(i, ms); }
+      if (i >= 0 && lineEls[i].classList.contains('ml-gap')) {      // an instrumental break: the dots fill up
+        var nextT = data.lines[i + 1] ? data.lines[i + 1].t : data.lines[i].e;
+        var span = Math.max(1, nextT - data.lines[i].t);
+        lineEls[i].style.setProperty('--gp', Math.min(1, Math.max(0, (ms - data.lines[i].t) / span)).toFixed(3));
+      }
     }
 
     set(null);
@@ -818,6 +908,7 @@
     shuffle: function (mode) { control('shuffle', mode); },
     repeat: function (mode) { control('repeat', mode); },
     crossfade: function (secs) { control('crossfade', secs); },
+    playShuffled: playShuffled,
     stop: function () { if (st.role === 'remote') post({ k: 'cmd', cmd: 'stop' }); else stopHost(); },
     popout: popout,
     getLyrics: getLyrics, lyricOffset: lyricOffset, setLyricOffset: setLyricOffset, lineAt: lineAt, createLyricsView: createLyricsView

@@ -8,10 +8,10 @@
   <link rel="icon" href="/favicon.ico">
   <link rel="stylesheet" href="/app.css">
   <link rel="stylesheet" href="/music-widget.css?v=4">
-  <link rel="stylesheet" href="/music/music.css?v=20">
+  <link rel="stylesheet" href="/music/music.css?v=28">
   <script src="/app-shell.js" defer></script>
-  <script src="/music-core.js?v=7" defer></script>
-  <script src="/music/music.js?v=20" defer></script>
+  <script src="/music-core.js?v=11" defer></script>
+  <script src="/music/music.js?v=25" defer></script>
 </head>
 <body class="app-shell music-page" data-mode="page">
   <main class="app-main mp-main">
@@ -48,8 +48,7 @@
                   <button type="button" id="mp-seg-public" aria-pressed="false">Public</button>
                 </div>
                 <span class="mp-spacer"></span>
-                <button type="button" id="mp-pl-new" class="mp-btn">New</button>
-                <button type="button" id="mp-pl-spotify" class="mp-btn">Import from Spotify</button>
+                <button type="button" id="mp-pl-add" class="mp-icon" aria-label="New playlist or import" title="New playlist or import" aria-haspopup="menu" aria-expanded="false"></button>
               </div>
               <form id="mp-plsearch" class="mp-plsearch" role="search" hidden>
                 <input id="mp-plq" type="search" maxlength="80" placeholder="Search public playlists" aria-label="Search public playlists" autocomplete="off">
@@ -60,11 +59,14 @@
               <div class="mp-plhead">
                 <button type="button" id="mp-pl-back" class="mp-link">&larr; Playlists</button>
               </div>
-              <div class="mp-plinfo">
-                <h2 id="mp-pl-name" class="mp-plname"></h2>
-                <div id="mp-pl-meta" class="mp-plmeta"></div>
+              <div class="mp-plhero">
+                <div id="mp-pl-cover" class="mp-plcover"></div>
+                <div class="mp-plinfo">
+                  <h2 id="mp-pl-name" class="mp-plname"></h2>
+                  <div id="mp-pl-meta" class="mp-plmeta"></div>
+                </div>
               </div>
-              <div id="mp-pl-actions" class="mp-pltools"></div>
+              <div id="mp-pl-actions" class="mp-plactions"></div>
               <div id="mp-pl-share" class="mp-share" hidden></div>
               <ul id="mp-pltracks" class="mp-list"></ul>
             </div>
@@ -75,6 +77,7 @@
 
       <section class="mp-stage is-empty" id="mp-stage" aria-label="Now playing">
         <div id="mp-ambient" class="mp-ambient" aria-hidden="true"></div>
+        <div class="mp-orbs" aria-hidden="true"><i></i><i></i><i></i></div>
         <div class="mp-stagebody">
           <div class="mp-cover">
             <div class="mp-coverart"><img id="mp-art" alt="" hidden><span class="mp-coverempty" id="mp-coverempty" aria-hidden="true"></span></div>
@@ -84,6 +87,7 @@
             </div>
             <div class="mp-nowtools">
               <button type="button" id="mp-fav" class="mp-icon" aria-label="Save to library" aria-pressed="false" title="Save to library" hidden></button>
+              <button type="button" id="mp-addpl" class="mp-icon" aria-label="Add to playlist" title="Add to playlist" hidden></button>
               <button type="button" id="mp-pop" class="mp-icon" aria-label="Pop out player" title="Pop out player"></button>
             </div>
           </div>
