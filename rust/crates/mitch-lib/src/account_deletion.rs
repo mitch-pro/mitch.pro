@@ -86,6 +86,8 @@ pub const EMAIL_TABLES: &[(&str, &str)] = &[
     ("companion_ability_strain", "email"),
     ("companion_upgrades", "email"),
     ("companion_bans", "email"),
+    ("music_favorites", "email"),
+    ("music_playlists", "owner_email"),
 ];
 
 /// Columns that hold an email but are intentionally not erased, with why.
@@ -317,6 +319,8 @@ pub fn erase_account(store: &DataStore, identity: &Identity) -> ErasureReport {
             "DELETE FROM companion_character_images WHERE character_id IN \
              (SELECT id FROM companion_characters WHERE creator_email = ?1)",
             "DELETE FROM companion_characters WHERE creator_email = ?1",
+            "DELETE FROM music_playlist_tracks WHERE playlist_id IN \
+             (SELECT id FROM music_playlists WHERE owner_email = ?1)",
             "DELETE FROM tokens WHERE json_valid(data) AND \
              (lower(json_extract(data, '$.email')) = ?1 OR lower(json_extract(data, '$.norm_email')) = ?1)",
         ];

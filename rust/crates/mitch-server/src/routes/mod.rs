@@ -32,6 +32,7 @@ pub mod me;
 pub mod members;
 pub mod misc;
 pub mod movies;
+pub mod music;
 pub mod pickle;
 pub mod portal_catalog;
 pub mod premium_email;
