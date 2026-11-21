@@ -580,18 +580,30 @@
   /* -------------------------------------------------------------- search */
   var searchForm = $('mp-search');
   if (searchForm) {
-    searchForm.addEventListener('submit', function (e) {
-      e.preventDefault();
+    // Searches as you type: after a short pause, and only for a query not
+    // already shown. Answers that arrive out of order are dropped.
+    var searchSeq = 0, lastQuery = '', typingTimer = 0;
+    var runSearch = function (force) {
       var q = el.q.value.trim();
-      if (!q) return;
+      if (!q) { searchSeq++; lastQuery = ''; results = []; say(''); render(); return; }
+      if (q.length < 2 || (q === lastQuery && !force)) return;
+      lastQuery = q;
+      var mine = ++searchSeq;
       setTab('search');
       say('Searching…');
       M.api('/api/music/search?q=' + encodeURIComponent(q)).then(function (d) {
+        if (mine !== searchSeq) return;
         results = d.tracks || [];
         say(results.length ? '' : 'No results');
         render();
-      }).catch(function (err) { results = []; render(); say(err.message); });
-    });
+      }).catch(function (err) {
+        if (mine !== searchSeq) return;
+        lastQuery = '';
+        results = []; render(); say(err.message);
+      });
+    };
+    searchForm.addEventListener('submit', function (e) { e.preventDefault(); clearTimeout(typingTimer); runSearch(true); });
+    el.q.addEventListener('input', function () { clearTimeout(typingTimer); typingTimer = setTimeout(runSearch, 400); });
     Array.prototype.forEach.call(document.querySelectorAll('.mp-tabs [data-tab]'), function (b) {
       b.addEventListener('click', function () { setTab(b.dataset.tab); });
     });

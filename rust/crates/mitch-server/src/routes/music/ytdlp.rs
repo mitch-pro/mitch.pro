@@ -209,32 +209,113 @@ fn search_cache() -> &'static SearchCache {
     C.get_or_init(Default::default)
 }
 
-/// Searches YouTube. `--flat-playlist` skips per-video extraction, which is
-/// what keeps a search near a second.
+/// Queries being refreshed in the background, so a burst of identical
+/// searches starts one refresh, not many.
+fn refreshing() -> &'static Mutex<std::collections::HashSet<String>> {
+    static R: OnceLock<Mutex<std::collections::HashSet<String>>> = OnceLock::new();
+    R.get_or_init(Default::default)
+}
+
+/// Searches YouTube, answering from the cache when it can.
+///
+/// - Results younger than `SEARCH_TTL` are returned as they are.
+/// - Older results (up to 30 days, kept in `music_search_results`) are returned
+///   at once and a background refresh fetches the current list for next time.
+/// - A query never seen before is fetched live.
 pub async fn search(query: &str) -> Result<Vec<Track>, YtError> {
     let key = query.trim().to_lowercase();
-    if let Some((at, hit)) = search_cache()
+    let mem = search_cache()
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .get(&key)
-    {
+        .cloned();
+    if let Some((at, hit)) = mem {
         if at.elapsed() < SEARCH_TTL {
-            return Ok(hit.clone());
+            return Ok(hit);
         }
     }
+    if let Some(store) = store() {
+        if let Some((fetched_at, rows)) = mitch_lib::music::get_cached_search(store, &key) {
+            if !rows.is_empty() {
+                let tracks: Vec<Track> = rows
+                    .into_iter()
+                    .map(|r| Track {
+                        id: r.id,
+                        title: r.title,
+                        artist: r.artist,
+                        duration: r.duration,
+                    })
+                    .collect();
+                let age_ms = mitch_lib::school::now_millis() - fetched_at;
+                if age_ms >= SEARCH_TTL.as_millis() as i64 {
+                    refresh_search(key.clone());
+                    // Show what we have for the next few minutes meanwhile.
+                    remember(&key, &tracks, Instant::now());
+                } else {
+                    let at = Instant::now()
+                        .checked_sub(Duration::from_millis(age_ms.max(0) as u64))
+                        .unwrap_or_else(Instant::now);
+                    remember(&key, &tracks, at);
+                }
+                return Ok(tracks);
+            }
+        }
+    }
+    fetch_live(&key).await
+}
+
+fn remember(key: &str, tracks: &[Track], at: Instant) {
+    let mut cache = search_cache().lock().unwrap_or_else(|e| e.into_inner());
+    if cache.len() > 200 {
+        cache.retain(|_, (t, _)| t.elapsed() < SEARCH_TTL);
+    }
+    cache.insert(key.to_string(), (at, tracks.to_vec()));
+}
+
+/// Runs yt-dlp for a query and stores the result in memory and the database.
+async fn fetch_live(key: &str) -> Result<Vec<Track>, YtError> {
     let out = run(&[
         "--flat-playlist".into(),
         "--dump-single-json".into(),
-        format!("ytsearch15:{}", query.trim()),
+        format!("ytsearch15:{key}"),
     ])
     .await?;
     let tracks = parse_search(&out);
-    let mut cache = search_cache().lock().unwrap_or_else(|e| e.into_inner());
-    if cache.len() > 200 {
-        cache.retain(|_, (at, _)| at.elapsed() < SEARCH_TTL);
+    remember(key, &tracks, Instant::now());
+    if let Some(store) = store() {
+        let rows: Vec<_> = tracks
+            .iter()
+            .map(|t| mitch_lib::music::SearchRow {
+                id: t.id.clone(),
+                title: t.title.clone(),
+                artist: t.artist.clone(),
+                duration: t.duration,
+            })
+            .collect();
+        mitch_lib::music::put_cached_search(store, key, &rows);
     }
-    cache.insert(key, (Instant::now(), tracks.clone()));
     Ok(tracks)
+}
+
+/// Checks a stale query for updates in the background. A failure leaves the
+/// old results in place.
+fn refresh_search(key: String) {
+    if !refreshing()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(key.clone())
+    {
+        return;
+    }
+    tokio::spawn(async move {
+        if let Ok(tracks) = fetch_live(&key).await {
+            warm(tracks.iter().map(|t| t.id.clone()).collect());
+        }
+        refreshing()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&key);
+    });
 }
 
 /// Turns yt-dlp's search JSON into tracks, dropping live streams, mixes and

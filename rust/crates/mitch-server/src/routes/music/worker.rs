@@ -57,6 +57,7 @@ pub fn spawn(state: Arc<AppState>) {
 /// or blocking us), so the caller backs off.
 async fn cycle(state: &Arc<AppState>) -> bool {
     mitch_lib::music::prune_stream_links(&state.store);
+    mitch_lib::music::prune_search_cache(&state.store);
     mitch_lib::music::prune_lyrics_cache(&state.store);
     // Playlist songs without lyrics yet (a few per cycle): they are kept until
     // the playlist is deleted, so this fills them in once.

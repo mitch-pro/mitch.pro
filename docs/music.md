@@ -153,7 +153,7 @@ queue advances are near-instant. Search takes about 1.4 s (`--flat-playlist`).
 
 | Endpoint | |
 | --- | --- |
-| `GET /api/music/search?q=` | up to 15 tracks `{id, title, artist, duration}`; artist/title are guessed from the video title and channel (`clean_youtube_title`). Live streams, mixes over 20 min and non-video ids are dropped. Cached 10 min. |
+| `GET /api/music/search?q=` | up to 15 tracks `{id, title, artist, duration}`; artist/title are guessed from the video title and channel (`clean_youtube_title`). Live streams, mixes over 20 min and non-video ids are dropped. Cached: see *Search cache* below. |
 | `GET /api/music/stream?id=` | audio, `Range` supported. An open-ended range is capped at 10 MB (`MAX_RANGE_BYTES`) because Google's CDN refuses some larger ones. One retry with a fresh URL on 403/410. |
 | `GET /api/music/prefetch?id=` | resolves a URL ahead of time, 204. Also how the client finds out why the `<audio>` element failed. |
 | `GET /api/music/thumb?id=` | cover art from `i.ytimg.com` |
@@ -172,6 +172,22 @@ Storage: `music_favorites` (per user, erased with the account, listed in
 `account_deletion.rs`) and `music_lyrics_cache` (shared, keyed by the video id plus a hash of the
 title and artist the lookup used, stored as enhanced-LRC text, not JSON). Listening history is **not** stored
 anywhere; only tracks a user saves.
+
+### Search cache
+
+Results are kept in `music_search_queries` / `music_search_results` (real tables,
+keyed by the lower-cased query). A query answered within 10 minutes is returned
+as stored. An older one (up to 30 days; the worker prunes past that, and past
+3,000 queries) is returned **at once** and a background refresh fetches the
+current list for next time (one refresh per query at a time; a failed refresh
+keeps the old results; an empty answer never overwrites a stored one). New
+queries go to yt-dlp and take about a second. Results are warmed (stream links,
+lyrics) on every response.
+
+The page searches as you type: 400 ms after the last keystroke, for 2+
+characters, skipping a query already shown; Enter searches immediately, and an
+older, slower answer never replaces a newer one. The per-user limit of 20
+searches a minute still applies.
 
 ## Lyrics
 

@@ -346,9 +346,153 @@ pub fn prune_stream_links(store: &DataStore) -> usize {
         .unwrap_or(0)
 }
 
+/// One cached search result row.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SearchRow {
+    pub id: String,
+    pub title: String,
+    pub artist: String,
+    pub duration: i64,
+}
+
+/// Most distinct queries kept; the oldest are dropped past this.
+pub const MAX_SEARCH_QUERIES: i64 = 3000;
+/// Queries not refreshed for this long are dropped (milliseconds).
+pub const SEARCH_MAX_AGE_MS: i64 = 30 * 24 * 3600 * 1000;
+
+/// The stored results for a (normalized) query and when they were fetched
+/// (unix ms). Age is the caller's call: stale results are still returned so
+/// they can be shown while a refresh runs.
+pub fn get_cached_search(store: &DataStore, query: &str) -> Option<(i64, Vec<SearchRow>)> {
+    let conn = store.conn();
+    let fetched: i64 = conn
+        .query_row(
+            "SELECT fetched_at FROM music_search_queries WHERE query = ?1",
+            rusqlite::params![query],
+            |r| r.get(0),
+        )
+        .ok()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT video_id, title, artist, duration FROM music_search_results \
+             WHERE query = ?1 ORDER BY position",
+        )
+        .ok()?;
+    let rows: Vec<SearchRow> = stmt
+        .query_map(rusqlite::params![query], |r| {
+            Ok(SearchRow {
+                id: r.get(0)?,
+                title: r.get(1)?,
+                artist: r.get(2)?,
+                duration: r.get(3)?,
+            })
+        })
+        .ok()?
+        .filter_map(Result::ok)
+        .collect();
+    Some((fetched, rows))
+}
+
+/// Replaces the stored results for a query (an empty result isn't stored, so a
+/// blip never hides a real answer).
+pub fn put_cached_search(store: &DataStore, query: &str, rows: &[SearchRow]) {
+    if rows.is_empty() || query.is_empty() || query.len() > 400 {
+        return;
+    }
+    let conn = store.conn();
+    let _ = conn.execute_batch("BEGIN");
+    let ok = (|| -> rusqlite::Result<()> {
+        conn.execute(
+            "DELETE FROM music_search_results WHERE query = ?1",
+            rusqlite::params![query],
+        )?;
+        for (i, t) in rows.iter().enumerate() {
+            if !valid_video_id(&t.id) {
+                continue;
+            }
+            conn.execute(
+                "INSERT INTO music_search_results (query, position, video_id, title, artist, duration) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                rusqlite::params![query, i as i64, t.id, t.title, t.artist, t.duration],
+            )?;
+        }
+        conn.execute(
+            "INSERT INTO music_search_queries (query, fetched_at) VALUES (?1, ?2) \
+             ON CONFLICT(query) DO UPDATE SET fetched_at = ?2",
+            rusqlite::params![query, now_millis()],
+        )?;
+        Ok(())
+    })();
+    let _ = conn.execute_batch(if ok.is_ok() { "COMMIT" } else { "ROLLBACK" });
+}
+
+/// Drops queries past their age limit, then the oldest beyond the count cap.
+pub fn prune_search_cache(store: &DataStore) -> usize {
+    let conn = store.conn();
+    let _ = conn.execute(
+        "DELETE FROM music_search_queries WHERE fetched_at < ?1",
+        rusqlite::params![now_millis() - SEARCH_MAX_AGE_MS],
+    );
+    let _ = conn.execute(
+        "DELETE FROM music_search_queries WHERE query IN (SELECT query FROM music_search_queries \
+         ORDER BY fetched_at DESC LIMIT -1 OFFSET ?1)",
+        rusqlite::params![MAX_SEARCH_QUERIES],
+    );
+    conn.execute(
+        "DELETE FROM music_search_results WHERE query NOT IN (SELECT query FROM music_search_queries)",
+        [],
+    )
+    .unwrap_or(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn search_results_are_stored_replaced_and_pruned() {
+        let dir = std::env::temp_dir().join(format!(
+            "music-search-{}",
+            crate::crypto::random_bytes_hex(6)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let s = DataStore::open(&dir, &dir).unwrap();
+        let row = |id: &str, t: &str| SearchRow {
+            id: id.into(),
+            title: t.into(),
+            artist: "A".into(),
+            duration: 200,
+        };
+        assert!(get_cached_search(&s, "queen").is_none());
+        put_cached_search(
+            &s,
+            "queen",
+            &[row("aaaaaaaaaaa", "One"), row("bbbbbbbbbbb", "Two")],
+        );
+        let (at, rows) = get_cached_search(&s, "queen").unwrap();
+        assert!(at > 0);
+        assert_eq!(
+            rows.iter().map(|r| r.title.as_str()).collect::<Vec<_>>(),
+            ["One", "Two"]
+        );
+        // A refresh replaces the list; an empty answer never wipes it.
+        put_cached_search(&s, "queen", &[row("ccccccccccc", "Three")]);
+        put_cached_search(&s, "queen", &[]);
+        assert_eq!(get_cached_search(&s, "queen").unwrap().1.len(), 1);
+        // Old queries are pruned along with their rows.
+        s.conn()
+            .execute("UPDATE music_search_queries SET fetched_at = 1", [])
+            .unwrap();
+        prune_search_cache(&s);
+        assert!(get_cached_search(&s, "queen").is_none());
+        let left: i64 = s
+            .conn()
+            .query_row("SELECT COUNT(*) FROM music_search_results", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(left, 0);
+    }
 
     #[test]
     fn stream_links_expire_and_are_kept_for_playlist_songs() {
