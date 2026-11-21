@@ -90,6 +90,9 @@ struct Config {
     bin: String,
     proxy: Option<String>,
     cookies: Option<String>,
+    /// The cookies themselves (from `MUSIC_YTDLP_COOKIES_B64`), for deployments
+    /// that keep secrets in a secret manager and put no file on the server.
+    cookies_data: Option<Vec<u8>>,
     js_runtime: Option<String>,
     cache_dir: String,
     extractor_args: Option<String>,
@@ -99,12 +102,29 @@ fn env_nonempty(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|v| !v.trim().is_empty())
 }
 
+/// Decodes `MUSIC_YTDLP_COOKIES_B64` (the base64 of a Netscape cookies.txt).
+/// A value that isn't valid base64 is ignored with a warning (the value itself
+/// is never logged).
+fn cookies_from_env() -> Option<Vec<u8>> {
+    use base64::Engine;
+    let raw = env_nonempty("MUSIC_YTDLP_COOKIES_B64")?;
+    let compact: String = raw.split_whitespace().collect();
+    match base64::engine::general_purpose::STANDARD.decode(compact) {
+        Ok(bytes) if !bytes.is_empty() => Some(bytes),
+        _ => {
+            tracing::warn!("[music] MUSIC_YTDLP_COOKIES_B64 is not valid base64; ignoring it");
+            None
+        }
+    }
+}
+
 fn config() -> &'static Config {
     static CFG: OnceLock<Config> = OnceLock::new();
     CFG.get_or_init(|| Config {
         bin: env_nonempty("MUSIC_YTDLP_BIN").unwrap_or_else(|| "yt-dlp".to_string()),
         proxy: env_nonempty("MUSIC_EGRESS_PROXY"),
         cookies: env_nonempty("MUSIC_YTDLP_COOKIES"),
+        cookies_data: cookies_from_env(),
         js_runtime: env_nonempty("MUSIC_YTDLP_JS_RUNTIME"),
         cache_dir: env_nonempty("MUSIC_YTDLP_CACHE_DIR").unwrap_or_else(|| {
             std::env::temp_dir()
@@ -151,25 +171,55 @@ fn spawn_slots() -> &'static Semaphore {
     SLOTS.get_or_init(|| Semaphore::new(4))
 }
 
-/// A private, short-lived copy of the cookies file for one yt-dlp run, removed
-/// when the run ends (including when it is cancelled).
+/// A private, short-lived cookies file for one yt-dlp run, removed when the run
+/// ends (including when it is cancelled). It is made from the file named by
+/// `MUSIC_YTDLP_COOKIES` or from the secret in `MUSIC_YTDLP_COOKIES_B64`, and
+/// lives in memory-backed `/dev/shm` when there is one, so a secret held only in
+/// a secret manager is never written to disk.
 struct CookieCopy(std::path::PathBuf);
 
 impl CookieCopy {
-    fn make(src: &str, dir: &str) -> Option<Self> {
-        let _ = std::fs::create_dir_all(dir);
-        let dst = std::path::Path::new(dir).join(format!(
-            "cookies-{}.txt",
-            mitch_lib::crypto::random_bytes_hex(6)
+    fn make(path: Option<&str>, data: Option<&[u8]>, fallback_dir: &str) -> Option<Self> {
+        let bytes: Vec<u8> = match (data, path) {
+            (Some(d), _) => d.to_vec(),
+            (None, Some(p)) => match std::fs::read(p) {
+                Ok(b) => b,
+                Err(e) => {
+                    tracing::warn!(
+                        "[music] can't read MUSIC_YTDLP_COOKIES ({e}); running without cookies"
+                    );
+                    return None;
+                }
+            },
+            (None, None) => return None,
+        };
+        let shm = std::path::Path::new("/dev/shm");
+        let dir = if shm.is_dir() {
+            shm.to_path_buf()
+        } else {
+            let d = std::path::PathBuf::from(fallback_dir);
+            let _ = std::fs::create_dir_all(&d);
+            d
+        };
+        let dst = dir.join(format!(
+            "mitch-cookies-{}.txt",
+            mitch_lib::crypto::random_bytes_hex(8)
         ));
-        if let Err(e) = std::fs::copy(src, &dst) {
-            tracing::warn!("[music] can't read MUSIC_YTDLP_COOKIES ({e}); running without cookies");
-            return None;
-        }
+        let mut opts = std::fs::OpenOptions::new();
+        opts.write(true).create_new(true);
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(&dst, std::fs::Permissions::from_mode(0o600));
+            use std::os::unix::fs::OpenOptionsExt;
+            opts.mode(0o600); // never readable by others, not even briefly
+        }
+        let written = opts.open(&dst).and_then(|mut f| {
+            use std::io::Write;
+            f.write_all(&bytes)
+        });
+        if let Err(e) = written {
+            tracing::warn!("[music] can't write a cookies file ({e}); running without cookies");
+            let _ = std::fs::remove_file(&dst);
+            return None;
         }
         Some(CookieCopy(dst))
     }
@@ -232,10 +282,11 @@ async fn run_in(args: &[String], slots: &Semaphore) -> Result<String, YtError> {
     }
     // yt-dlp rewrites its cookies file when it exits, and several runs go at
     // once, so each run gets its own copy; the original is never touched.
-    let _cookie_copy = cfg
-        .cookies
-        .as_deref()
-        .and_then(|src| CookieCopy::make(src, &cfg.cache_dir));
+    let _cookie_copy = CookieCopy::make(
+        cfg.cookies.as_deref(),
+        cfg.cookies_data.as_deref(),
+        &cfg.cache_dir,
+    );
     if let Some(copy) = &_cookie_copy {
         cmd.arg("--cookies").arg(&copy.0);
     }
@@ -1088,19 +1139,43 @@ mod tests {
         let src = dir.join("cookies.txt");
         std::fs::write(&src, "# Netscape HTTP Cookie File\n").unwrap();
         let cache = dir.join("cache");
-        let a = CookieCopy::make(src.to_str().unwrap(), cache.to_str().unwrap()).unwrap();
-        let b = CookieCopy::make(src.to_str().unwrap(), cache.to_str().unwrap()).unwrap();
+        let path = src.to_str().unwrap();
+        let a = CookieCopy::make(Some(path), None, cache.to_str().unwrap()).unwrap();
+        let b = CookieCopy::make(Some(path), None, cache.to_str().unwrap()).unwrap();
         assert_ne!(a.0, b.0, "concurrent runs must not share a file");
         assert_eq!(
             std::fs::read_to_string(&a.0).unwrap(),
             "# Netscape HTTP Cookie File\n"
         );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&a.0).unwrap().permissions().mode();
+            assert_eq!(mode & 0o077, 0, "only the server's user may read it");
+        }
         let kept = a.0.clone();
         drop(a);
         assert!(!kept.exists(), "the copy is removed when the run ends");
         assert!(src.exists(), "the original is never touched");
-        assert!(CookieCopy::make("/nonexistent/cookies.txt", cache.to_str().unwrap()).is_none());
+        assert!(
+            CookieCopy::make(Some("/nonexistent/c.txt"), None, cache.to_str().unwrap()).is_none()
+        );
+        assert!(CookieCopy::make(None, None, cache.to_str().unwrap()).is_none());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn cookies_can_come_from_a_secret_with_no_file_on_the_server() {
+        let secret = b"# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tX\tY\n";
+        let c = CookieCopy::make(None, Some(secret), "/nonexistent-fallback").unwrap();
+        assert_eq!(std::fs::read(&c.0).unwrap(), secret);
+        let path = c.0.clone();
+        // It is a memory-backed file when the system has /dev/shm.
+        if std::path::Path::new("/dev/shm").is_dir() {
+            assert!(path.starts_with("/dev/shm"));
+        }
+        drop(c);
+        assert!(!path.exists());
     }
 
     #[test]

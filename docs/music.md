@@ -137,8 +137,9 @@ queue advances are near-instant. Search takes about 1.4 s (`--flat-playlist`).
   allows `CONNECT` to its three Movies hosts (`egress-proxy/proxy.py`), so using it
   here needs an allowlist change (YouTube, `*.googlevideo.com`, `i.ytimg.com`),
   which is infrastructure and was not touched.
-- Optional: `MUSIC_YTDLP_COOKIES` (path to a Netscape `cookies.txt` of a
-  throwaway YouTube account, see "Cookies" below). Each yt-dlp run uses its own
+- Optional: `MUSIC_YTDLP_COOKIES_B64` (base64 of a Netscape `cookies.txt` of a
+  throwaway YouTube account, from a secret manager) or `MUSIC_YTDLP_COOKIES`
+  (a path to the file); see "Cookies" below. Each yt-dlp run uses its own
   temporary copy (removed afterwards), because yt-dlp rewrites the file on exit
   and runs overlap.
 - Speed. Most of a cold start is yt-dlp resolving the song. Three things help:
@@ -173,11 +174,18 @@ ban an account used this way, and automated access is against its terms.
    format with a cookies.txt extension (e.g. "Get cookies.txt LOCALLY").
 4. Close the private window without signing out, so the browser never refreshes
    those cookies.
-5. Put the file on the server outside git, e.g. `data/youtube-cookies.txt` (the
-   `data/` directory is mounted at `/app/data` and is not tracked), `chmod 600`,
-   and set `MUSIC_YTDLP_COOKIES=/app/data/youtube-cookies.txt` in `.env`.
-   Restart the server. The file is a login credential: never commit it or paste
-   it anywhere.
+5. Give the server the cookies one of two ways:
+   - **Secret manager, no file on the server** (preferred where secrets are kept
+     in a secret manager): base64 the file (`base64 -w0 youtube-cookies.txt`) and
+     store the result as `MUSIC_YTDLP_COOKIES_B64`. `docker-compose.yml` passes it
+     through to the server containers. For each yt-dlp run the server writes a
+     temporary mode-0600 copy in memory-backed `/dev/shm` (the cache directory if
+     there is none) and deletes it when the run ends, so the secret is never
+     stored on disk by the server. It is never logged.
+   - **A file**: `MUSIC_YTDLP_COOKIES=/path/to/cookies.txt` (outside git, `chmod
+     600`; each run still works on its own temporary copy).
+   If both are set, `MUSIC_YTDLP_COOKIES_B64` wins. Restart the server. The cookies
+   are a login credential: never commit or paste them.
 
 When the cookies stop working (yt-dlp logs the bot check again) export a new
 set the same way.

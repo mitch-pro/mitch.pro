@@ -138,6 +138,7 @@ services:
       - PVE_SSH_PORT
       - PVE_URL
       - PVE_TOKEN
+      - MUSIC_YTDLP_COOKIES_B64
       - PVE_NODE
       - PVE_TEMPLATE_LINUX
       - PVE_LXC_TEMPLATE
@@ -241,6 +242,7 @@ services:
       - PVE_SSH_PORT
       - PVE_URL
       - PVE_TOKEN
+      - MUSIC_YTDLP_COOKIES_B64
       - PVE_NODE
       - PVE_TEMPLATE_LINUX
       - PVE_LXC_TEMPLATE
