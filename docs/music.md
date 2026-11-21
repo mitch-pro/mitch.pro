@@ -209,7 +209,7 @@ search over 2.5 s is logged (`slow search`), which means yt-dlp itself (startup,
 network, the egress proxy, CPU) was slow. While a search is running the list
 shows shimmering placeholder rows.
 
-The page searches as you type: 400 ms after the last keystroke, for 2+
+The page searches as you type: 650 ms after the last keystroke, for 2+
 characters, skipping a query already shown; Enter searches immediately, and an
 older, slower answer never replaces a newer one. The per-user limit of 20
 searches a minute still applies.
