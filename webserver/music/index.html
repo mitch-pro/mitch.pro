@@ -8,10 +8,10 @@
   <link rel="icon" href="/favicon.ico">
   <link rel="stylesheet" href="/app.css">
   <link rel="stylesheet" href="/music-widget.css?v=4">
-  <link rel="stylesheet" href="/music/music.css?v=10">
+  <link rel="stylesheet" href="/music/music.css?v=11">
   <script src="/app-shell.js" defer></script>
-  <script src="/music-core.js?v=5" defer></script>
-  <script src="/music/music.js?v=14" defer></script>
+  <script src="/music-core.js?v=7" defer></script>
+  <script src="/music/music.js?v=15" defer></script>
 </head>
 <body class="app-shell music-page" data-mode="page">
   <main class="app-main mp-main">
@@ -98,7 +98,7 @@
             <span id="mp-dur" class="mp-time">0:00</span>
           </div>
           <div class="mp-transport">
-            <div class="mp-transportside"></div>
+            <div class="mp-transportside mp-xfside"><button type="button" id="mp-xfade" class="mp-pill" title="Crossfade between songs" hidden>Crossfade off</button></div>
             <div class="mp-transportmain">
               <button type="button" id="mp-shuffle" class="mp-icon mp-toggle" aria-label="Shuffle" aria-pressed="false" title="Shuffle"></button>
               <button type="button" id="mp-prev" class="mp-icon" aria-label="Previous" title="Previous"></button>

@@ -20,6 +20,7 @@
   var HOST_TIMEOUT_MS = 2500;
   var LOADING_LIMIT_MS = 40000;
   var loadingSince = 0;
+  var wantPlayUntil = 0;             // until then a paused-with-data element is started again (see canplay)
 
   var st = {
     queue: [], index: -1, playing: false, vol: 0.9, pos: 0, dur: 0,
@@ -27,6 +28,8 @@
     buffering: false, blocked: false, error: '',
     loading: false,                    // a start was asked for and sound hasn't begun yet
     isPopout: false, popoutOpen: false, remoteTs: 0,
+    crossfade: 0,                     // seconds of overlap between songs; 0 = off
+    xfOk: false,                       // whether this device lets us set the volume (iOS doesn't)
     shuffle: 'off', repeat: 'off'      // shuffle: 'off' | 'random' | 'smart'; repeat: 'off' | 'all' | 'one'
   };
   var listeners = [];
@@ -53,7 +56,7 @@
     try {
       localStorage.setItem(KEY, JSON.stringify(Object.assign({
         queue: st.queue, index: st.index, pos: currentPos(), playing: st.playing,
-        vol: st.vol, shuffle: st.shuffle, repeat: st.repeat, owner: ownerId(), ts: Date.now()
+        vol: st.vol, shuffle: st.shuffle, repeat: st.repeat, crossfade: st.crossfade, owner: ownerId(), ts: Date.now()
       }, extra || {})));
     } catch (e) { /* storage unavailable */ }
   }
@@ -78,6 +81,7 @@
     });
   }
   function loggedOut() {
+    killFade();
     if (st.role === 'host') { try { audio.pause(); } catch (e) { /* ignore */ } }
     st.queue = []; st.index = -1; st.playing = false; st.role = 'idle';
     clearStore(); emit();
@@ -86,25 +90,73 @@
   /* --------------------------------------------------------------- audio */
   function ensureAudio() {
     if (audio) return audio;
-    audio = new Audio();
-    audio.preload = 'auto';
-    audio.volume = st.vol;
-    audio.addEventListener('playing', function () { st.playing = true; st.loading = false; st.buffering = false; st.blocked = false; st.error = ''; changed(); maybeSuggest(); });
-    audio.addEventListener('pause', function () { if (!audio.ended) { st.playing = false; changed(); } });
-    audio.addEventListener('waiting', function () { st.buffering = true; emit(); });
-    audio.addEventListener('canplay', function () {
+    var el = audio = new Audio();
+    el.preload = 'auto';
+    el.volume = st.vol;
+    // Only the current element may change state: during a crossfade the old one
+    // is still alive and its events (pause, ended) must not touch the player.
+    function on(ev, fn) { el.addEventListener(ev, function () { if (el === audio) fn(); }); }
+    on('playing', function () { st.playing = true; st.loading = false; st.buffering = false; st.blocked = false; st.error = ''; changed(); maybeSuggest(); });
+    on('pause', function () { if (!el.ended) { st.playing = false; changed(); } });
+    on('waiting', function () { st.buffering = true; emit(); });
+    on('canplay', function () {
       st.buffering = false;
       // If a start was asked for but the browser dropped it (a play() cut short
       // by the source loading), try again now that there is data, so a song
       // never sits loaded and waiting for a second click.
-      if (st.loading && audio.paused) playNow();
+      // A stale 'playing' from the previous source can clear `loading`, so a
+      // start asked for in the last few seconds is retried as well.
+      if ((st.loading || Date.now() < wantPlayUntil) && el.paused) playNow();
       emit();
     });
-    audio.addEventListener('loadedmetadata', function () { if (isFinite(audio.duration) && audio.duration > 0) st.dur = audio.duration; });
-    audio.addEventListener('timeupdate', onTime);
-    audio.addEventListener('ended', function () { advance(true); changed(); });
-    audio.addEventListener('error', onAudioError);
-    return audio;
+    on('loadedmetadata', function () { if (isFinite(el.duration) && el.duration > 0) st.dur = el.duration; });
+    on('timeupdate', onTime);
+    on('ended', function () { advance(true); changed(); });
+    on('error', onAudioError);
+    return el;
+  }
+
+  /* ----------------------------------------------------------- crossfade */
+  // The next song starts while the last seconds of this one fade out. It needs
+  // two <audio> elements and control of their volume; iOS fixes the volume of
+  // <audio> at 100%, so there `xfOk` is false and songs simply follow each other.
+  var fade = null;                  // { old, start, ms, timer } while two songs overlap
+  function volumeSettable() {
+    try { var a = new Audio(); a.volume = 0.5; return a.volume === 0.5; } catch (e) { return false; }
+  }
+  st.xfOk = volumeSettable();
+  function normFade(v) { v = Math.round(Number(v)); return st.xfOk && v > 0 ? clamp(v, 1, 12) : 0; }
+
+  function killFade() {
+    if (!fade) return;
+    clearInterval(fade.timer);
+    var old = fade.old;
+    fade = null;
+    try { old.pause(); old.removeAttribute('src'); old.load(); } catch (e) { /* ignore */ }
+    if (audio) audio.volume = st.vol;
+  }
+
+  /** Near the end of a song: start the next one and fade between them. */
+  function maybeCrossfade() {
+    if (fade || !st.crossfade || st.role !== 'host' || !st.playing || st.repeat === 'one') return;
+    var xf = st.crossfade, left = st.dur - st.pos;
+    if (!(st.dur > xf * 3) || left > xf || left < 0.4) return;
+    var hasNext = st.shuffle !== 'off' ? st.queue.length > 1 : st.index + 1 < st.queue.length || st.repeat === 'all';
+    if (!hasNext) return;
+    var old = audio;
+    audio = null;
+    ensureAudio();                                  // a fresh element for the next song
+    audio.volume = 0;
+    var me = { old: old, start: Date.now(), ms: xf * 1000, timer: 0 };
+    fade = me;
+    advance(true);                                  // loads and starts it
+    me.timer = setInterval(function () {
+      if (fade !== me) return;
+      var p = clamp((Date.now() - me.start) / me.ms, 0, 1);
+      try { me.old.volume = st.vol * Math.cos(p * Math.PI / 2); } catch (e) { /* ignore */ }
+      if (audio) audio.volume = st.vol * Math.sin(p * Math.PI / 2);
+      if (p >= 1) killFade();
+    }, 80);
   }
 
   function onTime() {
@@ -118,6 +170,7 @@
       else if (next) matchTrack(next).then(function (id) { next.id = id; queueDirty = true; return fetch('/api/music/prefetch?id=' + encodeURIComponent(id), { credentials: 'include' }); }).catch(function () {});
     }
     if (Math.abs(st.pos - lastSessionPos) > 1) { lastSessionPos = st.pos; updateSessionPosition(); }
+    maybeCrossfade();
     emit();
   }
 
@@ -174,6 +227,7 @@
     st.dur = t.duration || 0;
     st.buffering = true; st.error = ''; st.blocked = false; st.loading = !!autoplay;
     audio.src = '/api/music/stream?id=' + encodeURIComponent(t.id);
+    wantPlayUntil = autoplay ? Date.now() + 8000 : 0;
     if (pos > 0) {
       audio.addEventListener('loadedmetadata', function seekOnce() {
         audio.removeEventListener('loadedmetadata', seekOnce);
@@ -307,6 +361,7 @@
   }
 
   function releaseHost() {
+    killFade();
     if (audio) { try { audio.pause(); } catch (e) { /* ignore */ } }
     save({ playing: false });
     st.playing = false; st.role = 'remote'; lastBeat = Date.now();
@@ -329,7 +384,7 @@
     var s = {
       index: st.index, playing: st.playing, pos: currentPos(), dur: st.dur, vol: st.vol,
       buffering: st.buffering, loading: st.loading, blocked: st.blocked, error: st.error, ts: Date.now(),
-      shuffle: st.shuffle, repeat: st.repeat
+      shuffle: st.shuffle, repeat: st.repeat, crossfade: st.crossfade, xfOk: st.xfOk
     };
     if (withQueue) s.queue = st.queue;
     return s;
@@ -348,6 +403,7 @@
     if (typeof s.vol === 'number') st.vol = s.vol;
     st.buffering = !!s.buffering; st.loading = !!s.loading; st.blocked = !!s.blocked; st.error = s.error || '';
     st.shuffle = normShuffle(s.shuffle); st.repeat = s.repeat || 'off';
+    st.crossfade = s.crossfade || 0; st.xfOk = !!s.xfOk;
     st.popoutOpen = !!m.popout; st.remoteTs = s.ts || Date.now();
     lastBeat = Date.now();
     emit();
@@ -364,18 +420,21 @@
 
   /* -------------------------------------------------------------- commands */
   function runCmd(cmd, arg) {
+    // Anything that changes what is playing ends an overlap in progress.
+    if (fade && cmd !== 'vol' && cmd !== 'seek' && cmd !== 'shuffle' && cmd !== 'repeat' && cmd !== 'crossfade' && cmd !== 'enqueue') killFade();
     switch (cmd) {
       case 'toggle':
         if (!st.queue.length) return;
         // A song that is still being fetched ignores the button, so repeated
         // presses don't start and stop it.
         if (st.loading && !st.playing && !st.error) return;
-        if (audio.paused) playNow(); else audio.pause();
+        if (audio.paused) playNow(); else { wantPlayUntil = 0; audio.pause(); }
         break;
       case 'play': playNow(); break;
-      case 'pause': audio.pause(); break;
+      case 'pause': wantPlayUntil = 0; audio.pause(); break;
       case 'next': advance(false); break;
       case 'shuffle': st.shuffle = normShuffle(arg); resetShuffleMemory(); break;
+      case 'crossfade': st.crossfade = normFade(arg); break;
       case 'repeat': st.repeat = arg === 'all' || arg === 'one' ? arg : 'off'; break;
       case 'prev':
         if (audio.currentTime > 3) { audio.currentTime = 0; break; }
@@ -387,7 +446,7 @@
         go(st.index - 1, true);
         break;
       case 'seek': if (isFinite(arg)) { audio.currentTime = clamp(arg, 0, st.dur || 1e9); st.pos = audio.currentTime; } break;
-      case 'vol': st.vol = clamp(arg, 0, 1); audio.volume = st.vol; break;
+      case 'vol': st.vol = clamp(arg, 0, 1); if (!fade) audio.volume = st.vol; break;
       case 'jump': go(arg, true); break;
       case 'playQueue':
         resetShuffleMemory();
@@ -417,6 +476,8 @@
   }
 
   function stopHost() {
+    killFade();
+    wantPlayUntil = 0;
     if (audio) { try { audio.pause(); audio.removeAttribute('src'); audio.load(); } catch (e) { /* ignore */ } }
     st.queue = []; st.index = -1; st.playing = false; st.pos = 0; st.dur = 0; st.role = 'idle';
     clearStore(); post({ k: 'stop' }); emit();
@@ -506,6 +567,7 @@
       st.queue = s.queue; st.index = typeof s.index === 'number' ? s.index : -1;
       st.pos = s.pos || 0; if (typeof s.vol === 'number') st.vol = s.vol;
       st.shuffle = normShuffle(s.shuffle); st.repeat = s.repeat === 'all' || s.repeat === 'one' ? s.repeat : 'off';
+      st.crossfade = normFade(s.crossfade);
     }
     emit();
     try {
@@ -722,6 +784,7 @@
     jump: function (i) { control('jump', i); },
     shuffle: function (mode) { control('shuffle', mode); },
     repeat: function (mode) { control('repeat', mode); },
+    crossfade: function (secs) { control('crossfade', secs); },
     stop: function () { if (st.role === 'remote') post({ k: 'cmd', cmd: 'stop' }); else stopHost(); },
     popout: popout,
     getLyrics: getLyrics, lineAt: lineAt, createLyricsView: createLyricsView

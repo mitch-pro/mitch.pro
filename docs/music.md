@@ -312,6 +312,18 @@ bell, mobile dock and credit band, which would cover its controls.
 
 The mode is stored with the player state, so it survives reloads and page changes.
 
+## Crossfade
+
+A button left of the transport controls cycles crossfade off, 3, 6 and 9 seconds
+(stored with the player state). In the last N seconds of a song the host starts
+the next song in a second `<audio>` element and fades the two against each other
+(equal-power curve, driven by a timer from the wall clock). Only the current
+element may change player state, so the old one finishing doesn't skip a song.
+Any command that changes what plays (next, previous, jump, pause, stop) ends the
+overlap at once. Songs shorter than 3x the fade, repeat-one and the last song
+without repeat don't fade. iOS fixes `<audio>` volume at 100%, so there
+`xfOk` is false, the button is hidden and songs just follow each other.
+
 ## Playing across pages
 
 Pages here are separate documents, so audio can't survive a link click. Instead:

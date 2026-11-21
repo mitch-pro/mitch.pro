@@ -178,7 +178,7 @@
   }
 
   load('link', { rel: 'stylesheet', href: '/music-widget.css?v=4' });
-  var core = load('script', { src: '/music-core.js?v=5' });
+  var core = load('script', { src: '/music-core.js?v=7' });
   core.onload = function () {
     window.MitchMusic.init();
     build();

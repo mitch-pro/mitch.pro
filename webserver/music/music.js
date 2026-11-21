@@ -636,6 +636,11 @@
     M.shuffle(next);
     say(SHUFFLE_SAY[next]);
   });
+  var XF_STEPS = [0, 3, 6, 9];
+  if ($('mp-xfade')) $('mp-xfade').addEventListener('click', function () {
+    var at = XF_STEPS.indexOf(M.state.crossfade);
+    M.crossfade(XF_STEPS[(at + 1) % XF_STEPS.length]);
+  });
   if (el.repeat) el.repeat.addEventListener('click', function () { M.repeat(M.state.repeat === 'off' ? 'all' : M.state.repeat === 'all' ? 'one' : 'off'); });
 
   function loadLyrics(track, custom) {
@@ -694,6 +699,13 @@
       var sl = s.shuffle === 'smart' ? 'Smart shuffle on' : s.shuffle === 'random' ? 'Shuffle on (random)' : 'Shuffle off';
       if (el.shuffle.title !== sl) el.shuffle.title = sl;
       setAttr(el.shuffle, 'aria-label', sl);
+    }
+    var xf = $('mp-xfade');
+    if (xf) {
+      var xl = s.crossfade ? 'Crossfade ' + s.crossfade + 's' : 'Crossfade off';
+      if (xf.hidden === !!s.xfOk) xf.hidden = !s.xfOk;      // not offered where the device can't do it
+      if (xf.textContent !== xl) xf.textContent = xl;
+      xf.dataset.on = s.crossfade ? 'true' : 'false';
     }
     if (el.repeat) {
       el.repeat.dataset.mode = s.repeat;

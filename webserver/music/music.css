@@ -209,6 +209,10 @@ html.theme-light .mp-ambient { opacity: 0.4; }
 .mp-transport { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; margin-top: 6px; }
 .mp-transportmain { display: flex; align-items: center; justify-content: center; gap: 10px; }
 .mp-volwrap { display: flex; justify-content: flex-end; }
+.mp-pill { padding: 6px 12px; background: none; color: var(--t-fg2); border: 1px solid var(--t-bd); border-radius: 999px; font: inherit; font-size: 12px; cursor: pointer; }
+.mp-pill[hidden] { display: none; }
+.mp-pill:hover { color: var(--t-fg); }
+.mp-pill[data-on=true] { color: var(--t-ac); border-color: var(--t-ac); }
 .mp-playbtn { width: 62px; height: 62px; background: var(--t-ac); color: var(--t-ac-ink); box-shadow: 0 8px 22px color-mix(in srgb, var(--t-ac) 40%, transparent); }
 .mp-playbtn svg { width: 28px; height: 28px; }
 .mp-playbtn:hover { background: var(--t-ac2, var(--t-ac)); transform: scale(1.04); }
@@ -255,7 +259,8 @@ html.theme-light .mp-ambient { opacity: 0.4; }
   .mp-lyrics .ml-line { font-size: clamp(24px, 6.4vw, 34px); }
   .mp-dock { padding: 6px 18px 16px; }
   .mp-transport { grid-template-columns: 1fr; }
-  .mp-transportside { display: none; }
+  .mp-volwrap { display: none; }
+  .mp-xfside { order: 2; justify-content: center; margin-top: 8px; display: flex; }
 }
 @media (max-width: 520px) {
   .mp-rowdur { display: none; }
