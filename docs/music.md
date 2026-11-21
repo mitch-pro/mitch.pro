@@ -78,7 +78,7 @@ the playlist (`routes/music/spotify.rs`; only `open.spotify.com` is fetched). So
   (`recheck_stale_matches` clears the video of every song of that playlist whose
   stored match is stale; the worker then matches them). A fresh match isn't
   touched, so a second sync rechecks nothing;
-- **Resync** (the button on an imported playlist, and an automatic sync when the
+- **Resync from Spotify** (in the playlist's ⋯ menu, and an automatic sync when the
   owner opens a playlist more than a day stale) makes the Spotify part of the
   playlist equal Spotify's current list and order, keeps matches made under the
   current rules, rechecks the rest (see above), and keeps songs the owner added
@@ -315,6 +315,17 @@ was. The lyrics view also has -0.5 s / +0.5 s buttons; the viewer's correction
 per song is kept in this browser (`mitch.music.lyroff`) and applied in
 `MitchMusic.getLyrics`, so the follow-along card uses it too.
 
+**Retrying for word timing.** Sources answer at different speeds, and a lookup
+only waits 1.2 s for word timing once line timing is in hand, so a slow source can
+be missed and a song cached as line-timed. Two fixes: (1) a cached `line` row gets
+one patient background retry the next time it is played (`spawn_upgrade`,
+`FetchMode::Refresh`: waits 6 s for word timing, one at a time, once per song,
+recorded in `upgrade_tried`), and the cache row is replaced only if the result has
+better timing (`sync_rank`); (2) "Wrong lyrics?" submitted without changing the
+title or artist is sent as `custom=1&retry=1`, which runs the same patient lookup
+for the song itself, shows the result and stores it for everyone if it is better
+(a changed title is still a private custom search that is never cached).
+
 **Word timing from another version.** A music video often differs from the studio
 track (an intro, a repeated section), so the word-timed lyrics for the song are
 a different length and are rejected for the video, leaving only line timing.
@@ -402,6 +413,9 @@ Shuffle, repeat, crossfade and volume are kept in their own storage key
 (`mitch.music.prefs`), apart from the queue, so they can be set before anything
 plays and survive closing the player. With nothing playing they are applied
 directly; otherwise they go to the page that is playing.
+
+The player's stage has an **Add to playlist** button (next to the heart) that opens
+the same picker as a search result's playlist button, for the song that is playing.
 
 A playlist page has a cover (a mosaic of its first songs), a big Play and a
 Shuffle button (`MitchMusic.playShuffled`: random shuffle when it was off, the

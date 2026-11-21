@@ -46,6 +46,18 @@ const DONOR_LIMIT: Duration = Duration::from_secs(3);
 /// How long after line-timed lyrics arrive the other sources may still
 /// replace them with word-timed ones.
 const UPGRADE_WINDOW: Duration = Duration::from_millis(1200);
+/// The same, for a lookup made in the background or on a retry, where nobody is
+/// waiting on the first result: slower sources get time to deliver word timing.
+const PATIENT_UPGRADE_WINDOW: Duration = Duration::from_secs(6);
+const PATIENT_DONOR_LIMIT: Duration = Duration::from_secs(6);
+
+fn upgrade_window(patient: bool) -> Duration {
+    if patient {
+        PATIENT_UPGRADE_WINDOW
+    } else {
+        UPGRADE_WINDOW
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Query {
@@ -60,6 +72,8 @@ pub struct Query {
     /// Also try YouTube's captions. Only the first reading of the title does,
     /// so a lookup costs at most one extra yt-dlp run.
     pub captions: bool,
+    /// Wait longer for word timing (see `PATIENT_UPGRADE_WINDOW`).
+    pub patient: bool,
 }
 
 /// How far a recording's length may be from the video's.
@@ -505,6 +519,7 @@ pub async fn find(
     duration_ms: u32,
     video_id: &str,
     with_captions: bool,
+    patient: bool,
 ) -> (Option<Found>, Vec<Tried>) {
     let guesses = ml::query_guesses(title, artist);
     let mut passes = vec![Length::Same];
@@ -515,7 +530,7 @@ pub async fn find(
     for length in passes {
         let results = search_all(
             &guesses,
-            title_query(duration_ms, video_id, length, false, with_captions),
+            title_query(duration_ms, video_id, length, false, with_captions, patient),
             if length == Length::Same {
                 HARD_DEADLINE
             } else {
@@ -535,10 +550,14 @@ pub async fn find(
             if f.rank == 3 && !f.approximate && duration_ms > 0 {
                 let donors = search_all(
                     &guesses,
-                    title_query(duration_ms, video_id, Length::Similar, true, false),
+                    title_query(duration_ms, video_id, Length::Similar, true, false, patient),
                     // Word timing to borrow is a bonus: don't hold the lyrics
                     // back long waiting for one that may not exist.
-                    DONOR_LIMIT,
+                    if patient {
+                        PATIENT_DONOR_LIMIT
+                    } else {
+                        DONOR_LIMIT
+                    },
                 )
                 .await;
                 if let Some(d) = best_of(donors) {
@@ -578,6 +597,7 @@ fn title_query(
     length: Length,
     donor: bool,
     captions: bool,
+    patient: bool,
 ) -> Query {
     Query {
         title: String::new(),
@@ -587,6 +607,7 @@ fn title_query(
         length,
         donor,
         captions,
+        patient,
     }
 }
 
@@ -632,7 +653,7 @@ async fn search_all(
         }
         if rank >= 3 && !upgrading {
             upgrading = true;
-            deadline = deadline.min(tokio::time::Instant::now() + UPGRADE_WINDOW);
+            deadline = deadline.min(tokio::time::Instant::now() + upgrade_window(base.patient));
         }
     }
     out
@@ -689,7 +710,8 @@ async fn find_once(q: Query) -> (Option<Found>, Vec<Tried>) {
             Ok(list) => {
                 let best = list.iter().map(|c| c.rank).max().unwrap_or(0);
                 if best >= 3 && !have_line_sync.swap(true, Ordering::Relaxed) {
-                    deadline = deadline.min(tokio::time::Instant::now() + UPGRADE_WINDOW);
+                    deadline =
+                        deadline.min(tokio::time::Instant::now() + upgrade_window(q.patient));
                 }
                 cands.extend(list);
                 match best {
@@ -777,6 +799,7 @@ mod tests {
             length: Length::Same,
             donor: false,
             captions: false,
+            patient: false,
         };
         let items = vec![
             (0.9, 201_000, "good"),

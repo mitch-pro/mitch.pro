@@ -49,7 +49,7 @@
   function setAttr(el, name, value) { if (el.getAttribute(name) !== value) el.setAttribute(name, value); }
 
   var el = {
-    art: $('mp-art'), title: $('mp-title'), artist: $('mp-artist'), fav: $('mp-fav'), pop: $('mp-pop'),
+    art: $('mp-art'), title: $('mp-title'), artist: $('mp-artist'), fav: $('mp-fav'), addPl: $('mp-addpl'), pop: $('mp-pop'),
     prev: $('mp-prev'), play: $('mp-play'), next: $('mp-next'), cur: $('mp-cur'), dur: $('mp-dur'),
     seek: $('mp-seek'), vol: $('mp-vol'), lyrics: $('mp-lyrics'), info: $('mp-lyricsinfo'),
     wrong: $('mp-wrong'), wrongForm: $('mp-wrongform'), wt: $('mp-wt'), wa: $('mp-wa'),
@@ -60,7 +60,7 @@
     dialog: $('mp-dialog'), picker: $('mp-picker'),
     shuffle: $('mp-shuffle'), repeat: $('mp-repeat'), stage: $('mp-stage'), ambient: $('mp-ambient')
   };
-  setIcon(el.prev, 'prev'); setIcon(el.play, 'play'); setIcon(el.next, 'next'); setIcon(el.fav, 'heart');
+  setIcon(el.prev, 'prev'); setIcon(el.play, 'play'); setIcon(el.next, 'next'); setIcon(el.fav, 'heart'); if (el.addPl) setIcon(el.addPl, 'listadd');
   if (el.shuffle) setIcon(el.shuffle, 'shuffle');
   if (el.repeat) setIcon(el.repeat, 'repeat');
   if ($('mp-searchicon')) setIcon($('mp-searchicon'), 'search');
@@ -248,6 +248,7 @@
   function syncNowFav() {
     var t = M.current();
     el.fav.hidden = !t || !t.id;
+    if (el.addPl) el.addPl.hidden = !t;
     if (t && t.id) syncHeart(el.fav, t.id);
   }
 
@@ -531,19 +532,6 @@
     var playBtn = bigBtn('Play', 'play', function () { if (tracks.length) M.play(tracks, 0); }, true);
     var shuffleBtn = bigBtn('Shuffle', 'shuffle', function () { M.playShuffled(tracks); }, false);
     playBtn.disabled = shuffleBtn.disabled = !tracks.length;
-    var resyncBtn = null;
-    if (p.mine && p.spotify) {
-      // Imported from Spotify: fetch the latest songs, and check once more which
-      // YouTube video each song is (songs already matched under the current
-      // rules are left alone, so repeating it is cheap).
-      resyncBtn = bigBtn('Resync', 'sync', function () {
-        resyncBtn.disabled = true;
-        resyncBtn.lastChild.textContent = 'Syncing\u2026';
-        syncSpotify(false);
-      }, false);
-      resyncBtn.title = 'Get the latest songs from Spotify and check the song matches';
-      resyncBtn.classList.add('mp-compact');
-    }
     var more = document.createElement('button');
     more.type = 'button'; more.className = 'mp-icon mp-moremenu';
     more.title = 'More'; more.setAttribute('aria-label', 'More'); more.setAttribute('aria-haspopup', 'menu'); more.setAttribute('aria-expanded', 'false');
@@ -555,6 +543,7 @@
           post('/api/music/playlist/update', { id: p.id, public: !p.public }).then(reopen).catch(function (e) { say(e.message); });
         } },
         { label: 'Rename\u2026', fn: renamePlaylist },
+        p.spotify ? { label: 'Resync from Spotify', fn: function () { syncSpotify(false); } } : null,
         { label: 'Delete playlist\u2026', fn: deletePlaylist, danger: true }
       ] : [
         { label: 'Save a copy', fn: function () {
@@ -567,9 +556,7 @@
         { label: 'Message someone', fn: function () { sendInChat(p, plOpen.token); } }
       ]);
     });
-    el.plActions.append(playBtn, shuffleBtn);
-    if (resyncBtn) el.plActions.appendChild(resyncBtn);
-    el.plActions.appendChild(more);
+    el.plActions.append(playBtn, shuffleBtn, more);
     renderSharePanel();
 
     el.plTracks.replaceChildren();
@@ -795,6 +782,7 @@
   el.next.addEventListener('click', function () { M.next(); });
   if (el.pop) el.pop.addEventListener('click', function () { if (!M.popout()) say('Pop-up was blocked by the browser'); });
   el.fav.addEventListener('click', function () { var t = M.current(); if (t) toggleFav(t); });
+  if (el.addPl) el.addPl.addEventListener('click', function () { var t = M.current(); if (t) pickPlaylist(t); });
   el.seek.addEventListener('input', function () {
     seeking = true;
     var d = M.state.dur || 0;
@@ -868,7 +856,10 @@
     e.preventDefault();
     var t = M.current();
     if (!t) return;
-    loadLyrics(t, { title: el.wt.value.trim() || t.title, artist: el.wa.value.trim() });
+    var wantTitle = el.wt.value.trim() || t.title, wantArtist = el.wa.value.trim();
+    // Sent again as it was: a retry of the normal lookup, which may improve the
+    // lyrics everyone gets (a slow source can have missed the first try).
+    loadLyrics(t, { title: wantTitle, artist: wantArtist, retry: wantTitle === t.title && wantArtist === t.artist });
     el.wrongForm.hidden = true;
   });
 

@@ -736,7 +736,8 @@ impl DataStore {
                         body TEXT NOT NULL,
                         fetched_at INTEGER NOT NULL,
                         approximate INTEGER NOT NULL DEFAULT 0,
-                        aligned INTEGER NOT NULL DEFAULT 0
+                        aligned INTEGER NOT NULL DEFAULT 0,
+                        upgrade_tried INTEGER NOT NULL DEFAULT 0
                     );
                     CREATE INDEX IF NOT EXISTS idx_music_lyrics_cache_fetched ON music_lyrics_cache (fetched_at);
                     CREATE TABLE IF NOT EXISTS companion_characters (
@@ -947,8 +948,21 @@ impl DataStore {
                      cache_key TEXT PRIMARY KEY, source TEXT NOT NULL, sync TEXT NOT NULL, \
                      estimated INTEGER NOT NULL DEFAULT 0, body TEXT NOT NULL, \
                      fetched_at INTEGER NOT NULL, approximate INTEGER NOT NULL DEFAULT 0, \
-                     aligned INTEGER NOT NULL DEFAULT 0); \
+                     aligned INTEGER NOT NULL DEFAULT 0, upgrade_tried INTEGER NOT NULL DEFAULT 0); \
                  CREATE INDEX IF NOT EXISTS idx_music_lyrics_cache_fetched ON music_lyrics_cache (fetched_at);",
+            )?;
+        }
+        let has_lyrics_upgrade = conn
+            .prepare("PRAGMA table_info(music_lyrics_cache)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+            .iter()
+            .any(|name| name == "upgrade_tried");
+        if !has_lyrics_upgrade {
+            // Rows from before the background word-timing retry get one attempt.
+            conn.execute(
+                "ALTER TABLE music_lyrics_cache ADD COLUMN upgrade_tried INTEGER NOT NULL DEFAULT 0",
+                [],
             )?;
         }
         let has_match_rules = conn

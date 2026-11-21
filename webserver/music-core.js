@@ -664,7 +664,7 @@
     var q = '/api/music/lyrics?id=' + encodeURIComponent(track.id) +
       '&title=' + encodeURIComponent(custom ? custom.title : track.title) +
       '&artist=' + encodeURIComponent(custom ? custom.artist : track.artist) +
-      '&duration=' + encodeURIComponent(track.duration || 0) + (custom ? '&custom=1' : '');
+      '&duration=' + encodeURIComponent(track.duration || 0) + (custom ? '&custom=1' + (custom.retry ? '&retry=1' : '') : '');
     var p = api(q).then(function (d) {
       if (!custom && d && d.found !== undefined) sessionLyrics(track.id, d);
       return d;

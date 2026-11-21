@@ -124,6 +124,9 @@ pub struct CachedLyrics {
     /// shifted if it was off). Lyrics fetched in the background aren't until
     /// the first real play.
     pub aligned: bool,
+    /// Line-timed lyrics get one patient background attempt at finding word
+    /// timing; set once it has been made, so it isn't repeated on every play.
+    pub upgrade_tried: bool,
     pub body: String,
 }
 
@@ -141,7 +144,7 @@ pub fn get_cached_lyrics(store: &DataStore, cache_key: &str) -> Option<CachedLyr
     let (row, fetched_at, pinned): (CachedLyrics, i64, bool) = conn
         .query_row(
             &format!(
-                "SELECT source, sync, estimated, body, fetched_at, approximate, ({PINNED}), aligned \
+                "SELECT source, sync, estimated, body, fetched_at, approximate, ({PINNED}), aligned, upgrade_tried \
                  FROM music_lyrics_cache WHERE cache_key = ?1"
             ),
             rusqlite::params![cache_key],
@@ -154,6 +157,7 @@ pub fn get_cached_lyrics(store: &DataStore, cache_key: &str) -> Option<CachedLyr
                         body: r.get(3)?,
                         approximate: r.get::<_, i64>(5)? != 0,
                         aligned: r.get::<_, i64>(7)? != 0,
+                        upgrade_tried: r.get::<_, i64>(8)? != 0,
                     },
                     r.get(4)?,
                     r.get::<_, i64>(6)? != 0,
@@ -191,16 +195,24 @@ pub const MAX_LYRICS_ROWS: i64 = 5000;
 pub const MAX_LYRICS_ROWS_TOTAL: i64 = 30_000;
 const MAX_LYRICS_BODY_BYTES: usize = 120 * 1024;
 
+/// Records that the patient word-timing retry has been made for a row.
+pub fn mark_lyrics_upgrade_tried(store: &DataStore, cache_key: &str) {
+    let _ = store.conn().execute(
+        "UPDATE music_lyrics_cache SET upgrade_tried = 1 WHERE cache_key = ?1",
+        rusqlite::params![cache_key],
+    );
+}
+
 pub fn put_cached_lyrics(store: &DataStore, cache_key: &str, row: &CachedLyrics) {
     if row.body.len() > MAX_LYRICS_BODY_BYTES {
         return;
     }
     let conn = store.conn();
     let _ = conn.execute(
-        "INSERT INTO music_lyrics_cache (cache_key, source, sync, estimated, body, fetched_at, approximate, aligned) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) \
+        "INSERT INTO music_lyrics_cache (cache_key, source, sync, estimated, body, fetched_at, approximate, aligned, upgrade_tried) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) \
          ON CONFLICT(cache_key) DO UPDATE SET source = ?2, sync = ?3, estimated = ?4, \
-         body = ?5, fetched_at = ?6, approximate = ?7, aligned = ?8",
+         body = ?5, fetched_at = ?6, approximate = ?7, aligned = ?8, upgrade_tried = ?9",
         rusqlite::params![
             cache_key,
             row.source,
@@ -209,7 +221,8 @@ pub fn put_cached_lyrics(store: &DataStore, cache_key: &str, row: &CachedLyrics)
             row.body,
             now_millis(),
             i64::from(row.approximate),
-            i64::from(row.aligned)
+            i64::from(row.aligned),
+            i64::from(row.upgrade_tried)
         ],
     );
     // Cap the table: keep the newest MAX_LYRICS_ROWS rows that aren't for a
@@ -594,6 +607,7 @@ mod tests {
             estimated: false,
             approximate: false,
             aligned: true,
+            upgrade_tried: true,
             body: body.into(),
         };
         put_cached_lyrics(&s, &a, &row("real"));
@@ -622,6 +636,32 @@ mod tests {
     }
 
     #[test]
+    fn the_word_timing_retry_is_recorded_once_made() {
+        let dir =
+            std::env::temp_dir().join(format!("music-upg-{}", crate::crypto::random_bytes_hex(6)));
+        std::fs::create_dir_all(&dir).unwrap();
+        let s = DataStore::open(&dir, &dir).unwrap();
+        let key = lyrics_cache_key("aaaaaaaaaaa", "Song", "Artist");
+        put_cached_lyrics(
+            &s,
+            &key,
+            &CachedLyrics {
+                source: "x".into(),
+                sync: "line".into(),
+                estimated: false,
+                approximate: false,
+                aligned: true,
+                upgrade_tried: false,
+                body: "[00:01.00]hello\n".into(),
+            },
+        );
+        assert!(!get_cached_lyrics(&s, &key).unwrap().upgrade_tried);
+        mark_lyrics_upgrade_tried(&s, &key);
+        assert!(get_cached_lyrics(&s, &key).unwrap().upgrade_tried);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn playlist_songs_keep_their_lyrics_until_the_playlist_is_deleted() {
         let dir =
             std::env::temp_dir().join(format!("music-pin-{}", crate::crypto::random_bytes_hex(6)));
@@ -634,6 +674,7 @@ mod tests {
             estimated: false,
             approximate: false,
             aligned: true,
+            upgrade_tried: true,
             body: body.into(),
         };
         let miss = CachedLyrics {
@@ -642,6 +683,7 @@ mod tests {
             estimated: false,
             approximate: false,
             aligned: true,
+            upgrade_tried: true,
             body: String::new(),
         };
         let kept = lyrics_cache_key("kkkkkkkkkkk", "Held", "A");
