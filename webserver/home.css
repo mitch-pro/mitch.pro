@@ -558,6 +558,8 @@ body.members-rail-open .home-main {padding-left:0;max-width:var(--mh-maxw)}
 #people-edge-trigger svg {width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
 #people-edge-trigger:hover,#people-edge-trigger:focus-visible {width:32px;color:var(--t-ac);border-color:var(--t-ac);outline:0}
 body.members-rail-open #people-edge-trigger {display:none}
+/* Phones have People in the dock; the edge tab only covers the page's left margin. */
+@media (max-width:760px) {#people-edge-trigger {display:none}}
 @media(prefers-reduced-motion:reduce){.hello-writing path,.hello-email{animation:none}}
 .theme-no-motion .hello-writing path,.theme-no-motion .hello-email{animation:none}
 
