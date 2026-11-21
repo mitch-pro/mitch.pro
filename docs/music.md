@@ -60,8 +60,14 @@ the playlist (`routes/music/spotify.rs`; only `open.spotify.com` is fetched). So
 - only public playlists work, and Spotify shares only the first 100 songs;
 - no audio comes from Spotify. Each song is matched to a YouTube video the first
   time it is played (`GET /api/music/match`: search `artist title`, accept a result
-  whose title/artist score at least 0.5 and whose length is within 6 s). Matches
-  are stored in `music_track_matches` and shared by everyone;
+  whose title/artist score at least 0.5 and whose length is within 4 s, and which
+  isn't a different version: a result with live, cover, remix, acoustic, slowed,
+  instrumental, karaoke... in its title is skipped unless the Spotify title has
+  the word too (`VERSION_WORDS`). With no qualifying result the song stays
+  unmatched rather than getting the wrong recording). Matches are stored in
+  `music_track_matches` and shared by everyone; when the table gained its
+  `rules_version` column every old match was dropped and Spotify songs were
+  matched again under these rules (a one-time migration in `data.rs`);
 - **Sync from Spotify** (and an automatic sync when the owner opens a playlist
   more than a day stale) makes the Spotify part of the playlist equal Spotify's
   current list and order, keeps existing matches, and keeps songs the owner added
@@ -235,6 +241,23 @@ length, a second pass accepts a recording up to four times longer than the video
 (`duration_is_full_version`), which is how a 1:30 TV-size upload finds the full
 song's lyrics. That result is flagged `approximate` and the page says "timing is
 for the full song": the start usually lines up, the rest may drift.
+
+**Timing check against the video's captions.** Lyric timing from a source can be
+off by many seconds for a given video (a different edit, an intro). When a result
+has line or word timing for this length of recording, `lyrics::align` fetches the
+video's captions (auto-generated ones are timed per word) and `estimate_offset`
+compares them with the lyrics: each lyric line of 3+ words is looked for among
+the caption words within a minute of where the lyrics put it, and the median
+difference is the correction, but only when at least 6 lines match and 60% of
+them agree within 1.5 s, and it is 0.6 to 45 s. The lyrics are shifted by it
+(`shift`) before they are cached. Ties between repeated choruses go to the one
+nearest the current timing, so doubtful cases are left alone. Lyrics warmed in
+the background are stored with `aligned = 0` and checked on their first real
+play (once; concurrent plays share the work), so the check costs a yt-dlp run
+only for songs somebody plays. A video without captions leaves the timing as it
+was. The lyrics view also has -0.5 s / +0.5 s buttons; the viewer's correction
+per song is kept in this browser (`mitch.music.lyroff`) and applied in
+`MitchMusic.getLyrics`, so the follow-along card uses it too.
 
 **Word timing from another version.** A music video often differs from the studio
 track (an intro, a repeated section), so the word-timed lyrics for the song are

@@ -8,7 +8,7 @@
   <link rel="icon" href="/favicon.ico">
   <link rel="stylesheet" href="/app.css">
   <link rel="stylesheet" href="/music-widget.css?v=4">
-  <link rel="stylesheet" href="/music/music.css?v=11">
+  <link rel="stylesheet" href="/music/music.css?v=12">
   <script src="/app-shell.js" defer></script>
   <script src="/music-core.js?v=7" defer></script>
   <script src="/music/music.js?v=15" defer></script>
@@ -82,6 +82,11 @@
             <div id="mp-lyrics" class="mp-lyrics"></div>
             <div class="mp-lyricsmeta">
               <span id="mp-lyricsinfo"></span>
+              <span class="mp-nudge" id="mp-nudge" hidden>
+                <button type="button" id="mp-lyrbk" class="mp-link" title="Show the lyrics earlier">&minus;0.5s</button>
+                <span id="mp-lyroff" class="mp-lyroff">Timing</span>
+                <button type="button" id="mp-lyrfw" class="mp-link" title="Show the lyrics later">+0.5s</button>
+              </span>
               <button type="button" id="mp-wrong" class="mp-link" hidden>Wrong lyrics?</button>
             </div>
             <form id="mp-wrongform" class="mp-wrongform" hidden>

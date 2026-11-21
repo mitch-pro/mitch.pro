@@ -651,6 +651,7 @@
       if (!M.current() || M.current().id !== track.id) return;
       lv.set(d);
       el.wrong.hidden = false;
+      showNudge(d);
       if (d && d.found) {
         var how = d.sync === 'word' ? 'word by word' : d.sync === 'line' ? (d.estimated ? 'line timing, words estimated' : 'line by line') : 'text only';
         el.info.textContent = 'Lyrics from ' + d.source + ' · ' + how + (d.approximate ? ' · timing is for the full song' : '');
@@ -659,6 +660,23 @@
       }
     });
   }
+  /* A way to fix lyrics that are early or late for this song: shown only for
+   * synced lyrics, remembered in this browser. */
+  function showNudge(d) {
+    var nudge = $('mp-nudge'), t = M.current();
+    if (!nudge) return;
+    nudge.hidden = !(d && d.found && d.sync !== 'none');
+    var off = t ? M.lyricOffset(t.id) : 0;
+    $('mp-lyroff').textContent = off ? 'Timing ' + (off > 0 ? '+' : '') + (off / 1000).toFixed(1) + 's' : 'Timing';
+  }
+  function nudge(by) {
+    var t = M.current();
+    if (!t) return;
+    M.setLyricOffset(t.id, M.lyricOffset(t.id) + by);
+    loadLyrics(t);
+  }
+  if ($('mp-lyrbk')) $('mp-lyrbk').addEventListener('click', function () { nudge(-500); });
+  if ($('mp-lyrfw')) $('mp-lyrfw').addEventListener('click', function () { nudge(500); });
   el.wrong.addEventListener('click', function () {
     var t = M.current();
     if (!t) return;

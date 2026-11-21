@@ -120,6 +120,10 @@ pub struct CachedLyrics {
     /// Matched by relaxed length (the full song for a TV-size upload): the
     /// timing belongs to a longer recording.
     pub approximate: bool,
+    /// Whether the timing has been checked against the video's captions (and
+    /// shifted if it was off). Lyrics fetched in the background aren't until
+    /// the first real play.
+    pub aligned: bool,
     pub body: String,
 }
 
@@ -137,7 +141,7 @@ pub fn get_cached_lyrics(store: &DataStore, cache_key: &str) -> Option<CachedLyr
     let (row, fetched_at, pinned): (CachedLyrics, i64, bool) = conn
         .query_row(
             &format!(
-                "SELECT source, sync, estimated, body, fetched_at, approximate, ({PINNED}) \
+                "SELECT source, sync, estimated, body, fetched_at, approximate, ({PINNED}), aligned \
                  FROM music_lyrics_cache WHERE cache_key = ?1"
             ),
             rusqlite::params![cache_key],
@@ -149,6 +153,7 @@ pub fn get_cached_lyrics(store: &DataStore, cache_key: &str) -> Option<CachedLyr
                         estimated: r.get::<_, i64>(2)? != 0,
                         body: r.get(3)?,
                         approximate: r.get::<_, i64>(5)? != 0,
+                        aligned: r.get::<_, i64>(7)? != 0,
                     },
                     r.get(4)?,
                     r.get::<_, i64>(6)? != 0,
@@ -192,10 +197,10 @@ pub fn put_cached_lyrics(store: &DataStore, cache_key: &str, row: &CachedLyrics)
     }
     let conn = store.conn();
     let _ = conn.execute(
-        "INSERT INTO music_lyrics_cache (cache_key, source, sync, estimated, body, fetched_at, approximate) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) \
+        "INSERT INTO music_lyrics_cache (cache_key, source, sync, estimated, body, fetched_at, approximate, aligned) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) \
          ON CONFLICT(cache_key) DO UPDATE SET source = ?2, sync = ?3, estimated = ?4, \
-         body = ?5, fetched_at = ?6, approximate = ?7",
+         body = ?5, fetched_at = ?6, approximate = ?7, aligned = ?8",
         rusqlite::params![
             cache_key,
             row.source,
@@ -203,7 +208,8 @@ pub fn put_cached_lyrics(store: &DataStore, cache_key: &str, row: &CachedLyrics)
             i64::from(row.estimated),
             row.body,
             now_millis(),
-            i64::from(row.approximate)
+            i64::from(row.approximate),
+            i64::from(row.aligned)
         ],
     );
     // Cap the table: keep the newest MAX_LYRICS_ROWS rows that aren't for a
@@ -587,6 +593,7 @@ mod tests {
             sync: "line".into(),
             estimated: false,
             approximate: false,
+            aligned: true,
             body: body.into(),
         };
         put_cached_lyrics(&s, &a, &row("real"));
@@ -626,6 +633,7 @@ mod tests {
             sync: "line".into(),
             estimated: false,
             approximate: false,
+            aligned: true,
             body: body.into(),
         };
         let miss = CachedLyrics {
@@ -633,6 +641,7 @@ mod tests {
             sync: "miss".into(),
             estimated: false,
             approximate: false,
+            aligned: true,
             body: String::new(),
         };
         let kept = lyrics_cache_key("kkkkkkkkkkk", "Held", "A");

@@ -91,7 +91,7 @@ pub struct Tried {
 pub struct Found {
     pub source: &'static str,
     pub lyrics: Lyrics,
-    rank: u8,
+    pub rank: u8,
     score: f32,
     /// Matched by relaxed length: the timing is for a longer recording.
     pub approximate: bool,
@@ -552,6 +552,24 @@ pub async fn find(
         }
     }
     (None, first_tried)
+}
+
+/// Checks lyric timing against the video's own captions and shifts it when it
+/// is off (see `ml::estimate_offset`). Returns the shift applied, if any. A
+/// video without captions, or a failed fetch, leaves the lyrics as they are.
+pub async fn align(video_id: &str, lyrics: &mut ml::Lyrics) -> Option<i64> {
+    if lyrics.sync == ml::Sync::None || lyrics.lines.is_empty() {
+        return None;
+    }
+    let caps = tokio::time::timeout(CAPTIONS_TIMEOUT, ytdlp::captions(video_id))
+        .await
+        .ok()?
+        .ok()??;
+    let reference = ml::parse_json3(&caps.json);
+    let offset = ml::estimate_offset(lyrics, &reference)?;
+    ml::shift(lyrics, offset);
+    tracing::info!("[music] lyrics for {video_id} were {offset} ms off; shifted");
+    Some(offset)
 }
 
 fn title_query(

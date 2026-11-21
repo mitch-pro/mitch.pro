@@ -351,7 +351,12 @@ async fn lyrics_for(state: &Arc<AppState>, email: &str, search: &str) -> Respons
     // sends can't replace the lyrics everyone else gets for the video.
     let cache_key = music::lyrics_cache_key(&id, title.trim(), artist.trim());
     if !custom {
-        if let Some(hit) = music::get_cached_lyrics(&state.store, &cache_key) {
+        if let Some(mut hit) = music::get_cached_lyrics(&state.store, &cache_key) {
+            // Lyrics warmed in the background haven't had their timing checked
+            // yet: do it now, once, before they are shown.
+            if !hit.aligned && allow(email, "lyrics", 20, Duration::from_secs(60)) {
+                hit = align_cached(state, &cache_key, &id, hit).await;
+            }
             return lyrics_response(
                 &hit.source,
                 ml::from_cached(&hit.body, &hit.sync, hit.estimated),
@@ -416,7 +421,20 @@ pub(super) async fn fetch_and_cache(
         FetchMode::Request { custom } => (custom, true),
         FetchMode::Ahead => (false, false),
     };
-    let (found, tried) = lyrics::find(title, artist, duration_s * 1000, id, with_captions).await;
+    let (mut found, tried) =
+        lyrics::find(title, artist, duration_s * 1000, id, with_captions).await;
+    // A real play checks the timing against the video's captions right away; a
+    // background fetch leaves that for the first play (`aligned` stays false).
+    let mut aligned = true;
+    if let Some(f) = found.as_mut() {
+        if needs_alignment(f.rank, f.approximate, f.source) {
+            if matches!(mode, FetchMode::Request { .. }) {
+                lyrics::align(id, &mut f.lyrics).await;
+            } else {
+                aligned = false;
+            }
+        }
+    }
     match &found {
         Some(f) => {
             if !custom {
@@ -430,6 +448,7 @@ pub(super) async fn fetch_and_cache(
                         estimated: ml::has_unworded_lines(&f.lyrics),
                         body: ml::to_enhanced_lrc(&f.lyrics),
                         approximate: f.approximate,
+                        aligned,
                     },
                 );
             }
@@ -451,12 +470,73 @@ pub(super) async fn fetch_and_cache(
                         estimated: false,
                         body: String::new(),
                         approximate: false,
+                        aligned: true,
                     },
                 );
             }
         }
     }
     Fetched { found, tried }
+}
+
+/// Whether a result's timing is worth checking against the captions: it has
+/// line or word timing from a lyrics source for this length of recording. (The
+/// captions themselves, plain text and full-length matches have nothing to fix.)
+fn needs_alignment(rank: u8, approximate: bool, source: &str) -> bool {
+    rank >= 3 && !approximate && source != "YouTube captions"
+}
+
+/// Songs being aligned right now, so concurrent plays do the work once.
+fn aligning() -> &'static std::sync::Mutex<std::collections::HashSet<String>> {
+    static A: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+        std::sync::OnceLock::new();
+    A.get_or_init(Default::default)
+}
+
+/// Checks a cached row's timing against the video's captions, stores the
+/// result and returns it. Whatever happens the row ends up marked checked.
+async fn align_cached(
+    state: &Arc<AppState>,
+    cache_key: &str,
+    id: &str,
+    hit: CachedLyrics,
+) -> CachedLyrics {
+    let mut l = ml::from_cached(&hit.body, &hit.sync, hit.estimated);
+    let sync_rank = if l.sync == ml::Sync::Word { 4 } else { 3 };
+    if !needs_alignment(sync_rank, hit.approximate, &hit.source) {
+        return CachedLyrics {
+            aligned: true,
+            ..hit
+        };
+    }
+    if !aligning()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(cache_key.to_string())
+    {
+        return hit; // someone else is on it; show what there is
+    }
+    let moved = lyrics::align(id, &mut l).await;
+    aligning()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(cache_key);
+    let row = CachedLyrics {
+        body: if moved.is_some() {
+            ml::to_enhanced_lrc(&l)
+        } else {
+            hit.body
+        },
+        estimated: if moved.is_some() {
+            ml::has_unworded_lines(&l)
+        } else {
+            hit.estimated
+        },
+        aligned: true,
+        ..hit
+    };
+    music::put_cached_lyrics(&state.store, cache_key, &row);
+    row
 }
 
 fn lyrics_response(

@@ -618,7 +618,7 @@
     return null;
   }
   /** Lyrics for a track. `custom` ({title, artist}) searches again by hand. */
-  function getLyrics(track, custom) {
+  function getLyricsRaw(track, custom) {
     if (!track) return Promise.resolve({ found: false });
     if (!custom) {
       if (lyricCache[track.id]) return lyricCache[track.id];
@@ -635,6 +635,39 @@
     }).catch(function () { delete lyricCache[track.id]; return { found: false, error: true }; });
     if (!custom) lyricCache[track.id] = p;
     return p;
+  }
+
+  /* The viewer's own timing correction for a song (milliseconds, kept in this
+   * browser), for lyrics the automatic check couldn't fix. */
+  var OFFSET_KEY = 'mitch.music.lyroff';
+  function lyricOffset(id) {
+    try { return Number((JSON.parse(localStorage.getItem(OFFSET_KEY) || '{}') || {})[id]) || 0; } catch (e) { return 0; }
+  }
+  function setLyricOffset(id, ms) {
+    try {
+      var all = JSON.parse(localStorage.getItem(OFFSET_KEY) || '{}') || {};
+      ms = clamp(Math.round(ms), -30000, 30000);
+      if (ms) all[id] = ms; else delete all[id];
+      var keys = Object.keys(all);
+      if (keys.length > 300) delete all[keys[0]];
+      localStorage.setItem(OFFSET_KEY, JSON.stringify(all));
+    } catch (e) { /* storage unavailable */ }
+  }
+  function withOffset(d, ms) {
+    if (!ms || !d || !d.found || !d.lines || d.sync === 'none') return d;
+    var mv = function (t) { return Math.max(0, t + ms); };
+    var out = {};
+    Object.keys(d).forEach(function (k) { out[k] = d[k]; });
+    out.lines = d.lines.map(function (l) {
+      return Object.assign({}, l, {
+        t: mv(l.t), e: mv(l.e),
+        words: (l.words || []).map(function (w) { return Object.assign({}, w, { t: mv(w.t), e: mv(w.e) }); })
+      });
+    });
+    return out;
+  }
+  function getLyrics(track, custom) {
+    return getLyricsRaw(track, custom).then(function (d) { return track ? withOffset(d, lyricOffset(track.id)) : d; });
   }
 
   /** Index of the line playing at `ms`, or -1 before the first line. */
@@ -787,6 +820,6 @@
     crossfade: function (secs) { control('crossfade', secs); },
     stop: function () { if (st.role === 'remote') post({ k: 'cmd', cmd: 'stop' }); else stopHost(); },
     popout: popout,
-    getLyrics: getLyrics, lineAt: lineAt, createLyricsView: createLyricsView
+    getLyrics: getLyrics, lyricOffset: lyricOffset, setLyricOffset: setLyricOffset, lineAt: lineAt, createLyricsView: createLyricsView
   };
 })();

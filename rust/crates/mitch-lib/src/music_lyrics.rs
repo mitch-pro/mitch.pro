@@ -908,6 +908,108 @@ pub fn strip_credits(l: &mut Lyrics) {
 
 // --------------------------------------------------------- matching ----
 
+/// How far the lyrics' timing is from the audio, in milliseconds (positive =
+/// the lyrics should move later), judged against a reference with the same
+/// words and trusted timing: the video's own captions.
+///
+/// Each lyric line of three or more words is looked for among the caption
+/// words within a minute of where the lyrics put it; the window of caption
+/// words that shares the most words with it gives that line's offset. The
+/// answer is the median over the lines, and only if the lines agree (at least
+/// six matched, 60% of them within 1.5 s of the median) and it is big enough to
+/// matter (0.6 s or more, at most 45 s). Ties between repeats of a chorus go to
+/// the one nearest where the lyrics already are, so a doubtful case leaves the
+/// timing alone.
+pub fn estimate_offset(lyrics: &Lyrics, captions: &Lyrics) -> Option<i64> {
+    const WINDOW_MS: i64 = 60_000;
+    const MAX_TOKENS: usize = 8;
+    let mut cap: Vec<(String, i64)> = Vec::new();
+    for line in &captions.lines {
+        if line.words.is_empty() {
+            for t in normalize(&line.text).split_whitespace() {
+                cap.push((t.to_string(), i64::from(line.t)));
+            }
+        } else {
+            for w in &line.words {
+                for t in normalize(&w.text).split_whitespace() {
+                    cap.push((t.to_string(), i64::from(w.t)));
+                }
+            }
+        }
+    }
+    if cap.len() < 12 || lyrics.lines.len() > 800 || cap.len() > 20_000 {
+        return None;
+    }
+    cap.sort_by_key(|c| c.1);
+    let mut offsets: Vec<i64> = Vec::new();
+    for line in &lyrics.lines {
+        let norm = normalize(&line.text);
+        let toks: Vec<&str> = norm.split_whitespace().take(MAX_TOKENS).collect();
+        if toks.len() < 3 {
+            continue;
+        }
+        let lt = i64::from(line.t);
+        let lo = cap.partition_point(|c| c.1 < lt - WINDOW_MS);
+        let hi = cap.partition_point(|c| c.1 <= lt + WINDOW_MS);
+        if hi < lo + toks.len() {
+            continue;
+        }
+        let mut best: Option<(usize, i64, i64)> = None; // (shared words, offset, |offset|)
+        for i in lo..=hi - toks.len() {
+            let mut pool: Vec<&str> = cap[i..i + toks.len()]
+                .iter()
+                .map(|c| c.0.as_str())
+                .collect();
+            let mut shared = 0;
+            for t in &toks {
+                if let Some(at) = pool.iter().position(|p| p == t) {
+                    pool.swap_remove(at);
+                    shared += 1;
+                }
+            }
+            let off = cap[i].1 - lt;
+            let better = match best {
+                None => true,
+                Some((bs, _, bo)) => shared > bs || (shared == bs && off.abs() < bo),
+            };
+            if better {
+                best = Some((shared, off, off.abs()));
+            }
+        }
+        if let Some((shared, off, _)) = best {
+            if shared * 10 >= toks.len() * 7 {
+                offsets.push(off);
+            }
+        }
+    }
+    if offsets.len() < 6 {
+        return None;
+    }
+    offsets.sort_unstable();
+    let median = offsets[offsets.len() / 2];
+    let agree = offsets
+        .iter()
+        .filter(|o| (**o - median).abs() <= 1500)
+        .count();
+    if agree * 10 < offsets.len() * 6 || median.abs() < 600 || median.abs() > 45_000 {
+        return None;
+    }
+    Some(median)
+}
+
+/// Moves every line and word by `delta` milliseconds (clamped to the track).
+pub fn shift(l: &mut Lyrics, delta: i64) {
+    let mv = |t: u32| (i64::from(t) + delta).clamp(0, i64::from(MAX_MS)) as u32;
+    for line in &mut l.lines {
+        line.t = mv(line.t);
+        line.e = mv(line.e);
+        for w in &mut line.words {
+            w.t = mv(w.t);
+            w.e = mv(w.e);
+        }
+    }
+}
+
 /// Lowercases and strips what differs between catalogs for the same song:
 /// bracketed asides, "feat. ...", "remastered", punctuation.
 pub fn normalize(s: &str) -> String {
@@ -1637,5 +1739,74 @@ mod tests {
             clean_youtube_title("Song Name [Lyrics] (feat. Guest)", "SomeVEVO"),
             ("Some".into(), "Song Name (feat. Guest)".into())
         );
+    }
+}
+
+#[cfg(test)]
+mod offset_tests {
+    use super::*;
+
+    const SONG: &[&str] = &[
+        "we were walking down the road tonight",
+        "holding on to every little light",
+        "nothing ever felt so right",
+        "carry me away from here",
+        "the river runs so slow and clear",
+        "i will find you wherever you are",
+        "singing out across the sea",
+        "everything we wanted was ahead",
+        "all the stars are shining bright",
+        "take me home before the dawn",
+    ];
+
+    fn lrc(shift_ms: i64) -> Lyrics {
+        let mut text = String::new();
+        for (i, l) in SONG.iter().enumerate() {
+            let t = 40_000 + i as i64 * 6_000 + shift_ms;
+            text.push_str(&format!("[{}]{}\n", fmt_ts(t as u32), l));
+        }
+        parse_lrc(&text)
+    }
+
+    #[test]
+    fn finds_how_far_off_the_lyrics_are() {
+        // The audio is the reference; the lyrics are 20 s early.
+        let audio = lrc(0);
+        let early = lrc(-20_000);
+        assert_eq!(estimate_offset(&early, &audio), Some(20_000));
+        let mut fixed = early.clone();
+        shift(&mut fixed, 20_000);
+        assert_eq!(fixed.lines[0].t, audio.lines[0].t);
+        // Well timed lyrics are left alone.
+        assert_eq!(estimate_offset(&audio, &audio), None);
+        // A shift under 0.6 s isn't worth correcting.
+        assert_eq!(estimate_offset(&lrc(-300), &audio), None);
+    }
+
+    #[test]
+    fn leaves_unrelated_or_thin_captions_alone() {
+        let audio = lrc(0);
+        let other = parse_lrc(
+            "[00:10.00]completely different words here today\n[00:16.00]nothing in common at all really\n[00:22.00]another unrelated sentence about cats\n",
+        );
+        assert_eq!(estimate_offset(&lrc(-15_000), &other), None);
+        assert_eq!(estimate_offset(&lrc(-15_000), &Lyrics::empty()), None);
+        // Lines that disagree with each other give no answer.
+        let mut mixed = lrc(-15_000);
+        for (i, line) in mixed.lines.iter_mut().enumerate() {
+            if i % 2 == 0 {
+                line.t += 9_000;
+            }
+        }
+        assert_eq!(estimate_offset(&mixed, &audio), None);
+    }
+
+    #[test]
+    fn shifting_clamps_to_the_track() {
+        let mut l = lrc(0);
+        shift(&mut l, -1_000_000);
+        assert!(l.lines.iter().all(|x| x.t == 0));
+        shift(&mut l, 1_000_000_000);
+        assert!(l.lines.iter().all(|x| x.t <= MAX_MS));
     }
 }

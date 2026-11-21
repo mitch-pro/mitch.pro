@@ -725,7 +725,8 @@ impl DataStore {
                     CREATE TABLE IF NOT EXISTS music_track_matches (
                         match_key TEXT PRIMARY KEY,
                         video_id TEXT NOT NULL,
-                        matched_at INTEGER NOT NULL
+                        matched_at INTEGER NOT NULL,
+                        rules_version INTEGER NOT NULL DEFAULT 2
                     );
                     CREATE TABLE IF NOT EXISTS music_lyrics_cache (
                         cache_key TEXT PRIMARY KEY,
@@ -734,7 +735,8 @@ impl DataStore {
                         estimated INTEGER NOT NULL DEFAULT 0,
                         body TEXT NOT NULL,
                         fetched_at INTEGER NOT NULL,
-                        approximate INTEGER NOT NULL DEFAULT 0
+                        approximate INTEGER NOT NULL DEFAULT 0,
+                        aligned INTEGER NOT NULL DEFAULT 0
                     );
                     CREATE INDEX IF NOT EXISTS idx_music_lyrics_cache_fetched ON music_lyrics_cache (fetched_at);
                     CREATE TABLE IF NOT EXISTS companion_characters (
@@ -944,8 +946,43 @@ impl DataStore {
                  CREATE TABLE music_lyrics_cache ( \
                      cache_key TEXT PRIMARY KEY, source TEXT NOT NULL, sync TEXT NOT NULL, \
                      estimated INTEGER NOT NULL DEFAULT 0, body TEXT NOT NULL, \
-                     fetched_at INTEGER NOT NULL, approximate INTEGER NOT NULL DEFAULT 0); \
+                     fetched_at INTEGER NOT NULL, approximate INTEGER NOT NULL DEFAULT 0, \
+                     aligned INTEGER NOT NULL DEFAULT 0); \
                  CREATE INDEX IF NOT EXISTS idx_music_lyrics_cache_fetched ON music_lyrics_cache (fetched_at);",
+            )?;
+        }
+        let has_match_rules = conn
+            .prepare("PRAGMA table_info(music_track_matches)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+            .iter()
+            .any(|name| name == "rules_version");
+        if !has_match_rules {
+            // Matches made before live, cover and slowed versions were ruled out
+            // may point at the wrong recording. This runs once (the column's
+            // arrival is the marker): every Spotify song is matched again.
+            conn.execute(
+                "ALTER TABLE music_track_matches ADD COLUMN rules_version INTEGER NOT NULL DEFAULT 2",
+                [],
+            )?;
+            conn.execute("DELETE FROM music_track_matches", [])?;
+            conn.execute(
+                "UPDATE music_playlist_tracks SET video_id = '' WHERE spotify_id != ''",
+                [],
+            )?;
+        }
+        let has_lyrics_aligned = conn
+            .prepare("PRAGMA table_info(music_lyrics_cache)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+            .iter()
+            .any(|name| name == "aligned");
+        if !has_lyrics_aligned {
+            // Rows from before timing was checked against the video's captions
+            // start unchecked, so each is checked the next time it is played.
+            conn.execute(
+                "ALTER TABLE music_lyrics_cache ADD COLUMN aligned INTEGER NOT NULL DEFAULT 0",
+                [],
             )?;
         }
         let has_companion_special_ability = conn

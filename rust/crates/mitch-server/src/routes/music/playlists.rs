@@ -331,9 +331,52 @@ async fn spotify_sync(state: &Arc<AppState>, email: &str, p: &Playlist) -> Respo
     }
 }
 
+/// Words that mark a different version of a song than the studio recording.
+const VERSION_WORDS: &[&str] = &[
+    "live",
+    "concert",
+    "acoustic",
+    "unplugged",
+    "cover",
+    "remix",
+    "instrumental",
+    "karaoke",
+    "slowed",
+    "reverb",
+    "nightcore",
+    "sped",
+    "8d",
+    "tour",
+    "session",
+    "sessions",
+    "demo",
+    "mashup",
+    "stripped",
+    "orchestral",
+    "piano",
+    "edit",
+    "extended",
+    "radio",
+];
+
+/// The version words a title carries (a bit per entry of `VERSION_WORDS`).
+fn version_marks(title: &str) -> u32 {
+    let lower = title.to_lowercase();
+    let mut bits = 0;
+    for w in lower.split(|c: char| !c.is_alphanumeric()) {
+        if let Some(i) = VERSION_WORDS.iter().position(|v| *v == w) {
+            bits |= 1 << i;
+        }
+    }
+    bits
+}
+
 /// Picks the search result that is most likely the same recording as a
-/// Spotify track: title/artist must match (`>= 0.5`) and the length be within
-/// 6 s when known; among those, the closest title and length wins.
+/// Spotify track: title/artist must match (`>= 0.5`), the length be within 4 s
+/// when known, and the video must not be a different version (live, cover,
+/// remix, slowed, instrumental...) unless the Spotify title says so itself;
+/// among those, the closest title and length wins. Nothing is better than the
+/// wrong version, so if no candidate qualifies the song stays unmatched.
 pub(crate) fn best_match(
     title: &str,
     artist: &str,
@@ -341,17 +384,21 @@ pub(crate) fn best_match(
     found: &[ytdlp::Track],
 ) -> Option<usize> {
     let first = artist.split(',').next().unwrap_or(artist);
+    let wanted = version_marks(title);
     let mut best: Option<(usize, f32)> = None;
     for (i, t) in found.iter().enumerate() {
         let gap = (t.duration - duration).abs();
-        if duration > 0 && gap > 6 {
+        if duration > 0 && gap > 4 {
+            continue;
+        }
+        if version_marks(&t.title) & !wanted != 0 {
             continue;
         }
         let score = ml::match_score(title, first, &t.title, &t.artist);
         if score < 0.5 {
             continue;
         }
-        let ranked = score - (gap as f32) * 0.01;
+        let ranked = score - (gap as f32) * 0.03;
         if best.is_none_or(|(_, b)| ranked > b) {
             best = Some((i, ranked));
         }
@@ -397,6 +444,41 @@ async fn match_track(state: &Arc<AppState>, email: &str, search: &str) -> Respon
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spotify_matches_skip_other_versions() {
+        let found = vec![
+            tr("aaaaaaaaaaa", "Blinding Lights (Live)", "The Weeknd", 200),
+            tr(
+                "bbbbbbbbbbb",
+                "Blinding Lights (Slowed + Reverb)",
+                "The Weeknd",
+                201,
+            ),
+            tr(
+                "ccccccccccc",
+                "Blinding Lights (Official Audio)",
+                "The Weeknd",
+                202,
+            ),
+        ];
+        let pick = |title: &str| {
+            best_match(title, "The Weeknd", 200, &found).map(|i| found[i].id.as_str())
+        };
+        assert_eq!(pick("Blinding Lights"), Some("ccccccccccc"));
+        // A live version is what the playlist has: then it is the right one.
+        assert_eq!(pick("Blinding Lights - Live"), Some("aaaaaaaaaaa"));
+        // Only other versions around: no match rather than the wrong one.
+        assert_eq!(
+            best_match("Blinding Lights", "The Weeknd", 200, &found[..2]),
+            None
+        );
+        // A length 5 s off is a different cut.
+        assert_eq!(
+            best_match("Blinding Lights", "The Weeknd", 207, &found[2..]),
+            None
+        );
+    }
 
     fn tr(id: &str, title: &str, artist: &str, dur: i64) -> ytdlp::Track {
         ytdlp::Track {
