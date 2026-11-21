@@ -1,6 +1,8 @@
 [global]
 server_name = "mitch.pro"
-log = "trace"
+# Keep this at "warn". "trace"/"debug" write an enormous amount (it once filled
+# 40 GB of Docker logs). Raise it temporarily only while diagnosing something.
+log = "warn"
 database_backend = "rocksdb"
 database_path = "/var/lib/matrix-conduit"
 port = 6167
