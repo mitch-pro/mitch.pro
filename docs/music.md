@@ -394,6 +394,23 @@ such as the homepage style all buttons with padding and a minimum height, which
 turned its icons into large empty boxes. The pop-out hides the site's wallet bar,
 bell, mobile dock and credit band, which would cover its controls.
 
+## Lyric effects and the backdrop
+
+Beyond the left-to-right fill, `createLyricsView` marks the state of the lyrics
+and `music.css` (section "lyric effects") draws it: every line carries `--d`, its
+distance from the line being sung, and fades and blurs with it (no blur on touch
+screens); the active line grows; the word being sung (`.ml-now`) lifts and glows;
+a word held for 0.8 s or more (`.ml-long`, length in `--dur`) swells for as long as
+it is held; an instrumental break shows three dots that fill up through the break
+(`--gp`). Behind the lyrics three blurred colour orbs drift slowly while a song
+plays (`.mp-orbs`) and the cover backdrop pulses on each new line (`onLine`,
+class `mp-beat`). `prefers-reduced-motion` turns the movement off.
+
+On a narrow screen the stage is hidden while nothing plays (the search comes
+first), the cover and title sit in a row with the heart / add / pop-out buttons
+under the title, and the lyrics pane is only as tall as its message when there are
+no lyrics.
+
 ## Shuffle
 
 - **Random**: a uniformly random song other than the current one; Previous steps

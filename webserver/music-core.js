@@ -762,11 +762,12 @@
         var ws = [];
         if (!line.text) {
           el.classList.add('ml-gap');
-          el.textContent = '• • •';
+          for (var g = 0; g < 3; g++) el.appendChild(document.createElement('i')).className = 'ml-dot';
         } else if (line.words && line.words.length) {
           line.words.forEach(function (w) {
             var s = document.createElement('span');
-            s.className = 'ml-w';
+            s.className = 'ml-w' + (w.e - w.t >= 800 ? ' ml-long' : '');   // held notes swell
+            s.style.setProperty('--dur', Math.max(1, w.e - w.t) + 'ms');
             s.textContent = w.text;
             el.appendChild(s);
             ws.push(s);
@@ -793,6 +794,8 @@
         var w = line.words[k];
         var p = ms >= w.e ? 1 : ms <= w.t ? 0 : (ms - w.t) / Math.max(1, w.e - w.t);
         ws[k].style.setProperty('--p', p.toFixed(3));
+        var now = ms >= w.t && ms < w.e;
+        if (now !== ws[k].classList.contains('ml-now')) ws[k].classList.toggle('ml-now', now);
       }
     }
 
@@ -824,6 +827,14 @@
           if (i >= 0) lineEls[i].classList.remove('ml-past');
         }
         active = i;
+        // How far each line is from the one being sung (CSS fades and blurs by it).
+        if (i >= 0) {
+          for (var d = 0; d < lineEls.length; d++) lineEls[d].style.setProperty('--d', Math.min(5, Math.abs(d - i)));
+          for (var c = 0; c < wordEls.length; c++) {
+            if (c !== i) for (var q = 0; q < wordEls[c].length; q++) if (wordEls[c][q].classList.contains('ml-now')) wordEls[c][q].classList.remove('ml-now');
+          }
+          if (opts.onLine) opts.onLine(i);
+        }
         if (i >= 0 && Date.now() > userScrollUntil) {
           var el = lineEls[i];
           var top = el.offsetTop - root.clientHeight * 0.32 + el.offsetHeight / 2;
@@ -831,6 +842,11 @@
         }
       }
       if (i >= 0) paintWords(i, ms);
+      if (i >= 0 && lineEls[i].classList.contains('ml-gap')) {      // an instrumental break: the dots fill up
+        var nextT = data.lines[i + 1] ? data.lines[i + 1].t : data.lines[i].e;
+        var span = Math.max(1, nextT - data.lines[i].t);
+        lineEls[i].style.setProperty('--gp', Math.min(1, Math.max(0, (ms - data.lines[i].t) / span)).toFixed(3));
+      }
     }
 
     set(null);

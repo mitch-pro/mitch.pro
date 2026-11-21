@@ -70,7 +70,15 @@
   if ($('mp-coverempty')) setIcon($('mp-coverempty'), 'note');
   if (el.pop) setIcon(el.pop, 'pop');
 
-  var lv = M.createLyricsView(el.lyrics, { onSeek: function (s) { M.seek(s); } });
+  var lv = M.createLyricsView(el.lyrics, {
+    onSeek: function (s) { M.seek(s); },
+    // Every new line gives the backdrop a soft pulse.
+    onLine: function () {
+      var a = el.ambient;
+      if (!a || !M.state.playing) return;
+      a.classList.remove('mp-beat'); void a.offsetWidth; a.classList.add('mp-beat');
+    }
+  });
   var results = [], library = [], favIds = {}, tab = 'search', shownId = '', seeking = false, queueSig = '';
 
   /* ---------------------------------------------------------- list views */
