@@ -52,6 +52,7 @@ pub mod matrix;
 pub mod matrix_reports;
 pub mod minigames;
 pub mod music;
+pub mod music_audio;
 pub mod music_lyrics;
 pub mod music_playlists;
 pub mod newsletter_unsub;

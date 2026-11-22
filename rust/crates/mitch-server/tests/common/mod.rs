@@ -26,6 +26,8 @@ pub struct Reply {
     pub status: u16,
     pub json: serde_json::Value,
     pub text: String,
+    /// The raw response body.
+    pub body: Vec<u8>,
     /// Every `Set-Cookie` header value of the response.
     pub set_cookies: Vec<String>,
 }
@@ -101,6 +103,16 @@ impl TestServer {
             secret,
             client,
         }
+    }
+
+    /// The server's data directory.
+    pub fn data_dir(&self) -> std::path::PathBuf {
+        self.dir.join("data")
+    }
+
+    /// A connection to the server's database, for setting up fixtures.
+    pub fn db(&self) -> rusqlite::Connection {
+        rusqlite::Connection::open(self.dir.join("data/mitchpro.db")).unwrap()
     }
 
     /// Create a signed-in session for `email` and return its session id. The
@@ -183,12 +195,14 @@ impl TestServer {
             .iter()
             .filter_map(|v| v.to_str().ok().map(str::to_string))
             .collect();
-        let text = resp.text().await.unwrap_or_default();
+        let body = resp.bytes().await.map(|b| b.to_vec()).unwrap_or_default();
+        let text = String::from_utf8_lossy(&body).into_owned();
         let json = serde_json::from_str(&text).unwrap_or(serde_json::Value::Null);
         Reply {
             status,
             json,
             text,
+            body,
             set_cookies,
         }
     }

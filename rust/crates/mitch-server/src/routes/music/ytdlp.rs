@@ -804,6 +804,10 @@ pub async fn resolve_timed(id: &str) -> Result<(Resolved, &'static str), YtError
 }
 
 /// Resolves in the background pool: for warming, where nobody is waiting.
+pub(super) async fn resolve_background(id: &str) -> Result<Resolved, YtError> {
+    resolve_bg(id).await
+}
+
 async fn resolve_bg(id: &str) -> Result<Resolved, YtError> {
     resolve_in(id, true).await.map(|(r, _)| r)
 }

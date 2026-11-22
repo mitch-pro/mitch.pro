@@ -89,11 +89,59 @@ the playlist (`routes/music/spotify.rs`; only `open.spotify.com` is fetched). So
 ## Where the audio comes from
 
 YouTube, through [yt-dlp](https://github.com/yt-dlp/yt-dlp) on the server.
-Nothing is stored. For a track the server asks yt-dlp for a short-lived signed
+Songs people keep are saved (next section); everything else is streamed live and not stored. For a track the server asks yt-dlp for a short-lived signed
 URL on Google's CDN, caches it (`ytdlp::RESOLVE_TTL`, 4 h), and proxies the
 bytes to the browser. Everything goes through this server (audio, cover art,
 lyrics), so a network that blocks YouTube or the lyric sites still works and no
 third party sees the visitor.
+
+### Saved songs
+
+Every song in a user's playlists or library is downloaded once and kept, so it
+plays without a YouTube lookup and its link never expires. Code:
+`mitch-lib/src/music_audio.rs` (what is saved, quotas), `routes/music/saved.rs`
+(downloading, serving, cleanup) and `routes/music/audio_store.rs` (where the
+bytes go). Tables: `music_audio_files`, `music_audio_failures`.
+
+- **Quota: 512 MB per user** (`USER_QUOTA_BYTES`) of distinct songs in their
+  playlists and library. Files are shared, so a song several people keep is stored
+  once and counts for each of them. Before a download the server checks, by
+  estimated size (about 17 KB per second), that some keeper has room; after it, by
+  the real size. A song nobody has room for stays unsaved and streams live as
+  before; failures are retried after 1 h, 2 h, ... at most 24 h.
+- **Saver**: a background loop (`saved::spawn`) takes three songs at a time, four
+  seconds apart, in no particular order. It stops
+  for 15 minutes when YouTube blocks the server. Files over 80 MB are skipped.
+- **Playing**: `GET /api/music/stream` serves a saved song from the store with
+  `Range` support, and falls back to the live path if the store can't be read (a
+  file missing from the local folder is forgotten so it is saved again).
+- **Cleanup**: a file nobody keeps (playlist deleted, song removed from every
+  list) is deleted within a minute or so.
+- **Usage line**: the Mine tab of Playlists shows "Saved on the server: X of
+  512 MB (n of m songs)" from `GET /api/music/storage`.
+
+#### Where the files live
+
+Chosen at startup by `MUSIC_AUDIO_STORE`, with credentials in
+`MUSIC_AUDIO_STORE_USER` and `MUSIC_AUDIO_STORE_PASS`. They are ordinary
+environment variables, so the secret manager injects them like the rest
+(`docs/secrets-providers.md`).
+
+| `MUSIC_AUDIO_STORE` | Backend |
+| --- | --- |
+| unset or `local` | `<data dir>/music-audio` |
+| `local:/path` | any folder. For NFS or SMB, mount the share on the host (and into the container) and point this at it |
+| `webdav:https://host/path` | WebDAV, which covers Nextcloud: `webdav:https://cloud.example.com/remote.php/dav/files/USER/mitch-music` with a Nextcloud app password as `MUSIC_AUDIO_STORE_PASS`. The folder is created if missing |
+
+Other schemes (`s3:`, `gdrive:`, `sftp:`) are not built; the server logs it and
+uses the local folder. To add one: a new `AudioStore` variant with `put`, `read`
+and `delete`, and its scheme in `AudioStore::from_env`. Nothing else changes.
+Changing the backend does not move existing files: songs missing from the new
+place are not found, so they are downloaded again by the saver only if their
+database row is deleted (`DELETE FROM music_audio_files`).
+
+Not verified: the WebDAV backend has not been run against a real Nextcloud (only
+the local folder is tested); the saver has not run against live YouTube here.
 
 ### Keeping links ready
 
