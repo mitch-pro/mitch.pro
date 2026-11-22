@@ -33,7 +33,19 @@ pub fn spawn(state: Arc<AppState>) {
                 continue;
             }
             for (id, _) in work {
-                match save_one(&state, store, &id).await {
+                let claimed = in_flight()
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(id.clone());
+                if !claimed {
+                    continue;
+                }
+                let outcome = save_one(&state, store, &id).await;
+                in_flight()
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(&id);
+                match outcome {
                     Outcome::Saved | Outcome::Skipped => {}
                     Outcome::SourceUnavailable => {
                         tokio::time::sleep(BLOCKED_WAIT).await;
@@ -43,6 +55,41 @@ pub fn spawn(state: Arc<AppState>) {
                 tokio::time::sleep(BETWEEN_SONGS).await;
             }
         }
+    });
+}
+
+/// Songs being saved right now, so the loop and an urgent request don't both
+/// download one.
+fn in_flight() -> &'static std::sync::Mutex<std::collections::HashSet<String>> {
+    static SET: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+        std::sync::OnceLock::new();
+    SET.get_or_init(Default::default)
+}
+
+/// Starts saving a song at once if it should be saved (it is coming up in
+/// someone's queue). Does nothing for songs nobody keeps, or already saved.
+pub fn save_soon(state: &Arc<AppState>, id: &str) {
+    let Some(store) = audio_store::get() else {
+        return;
+    };
+    if !audio::wants_save(&state.store, id) {
+        return;
+    }
+    let claimed = in_flight()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(id.to_string());
+    if !claimed {
+        return;
+    }
+    let state = state.clone();
+    let id = id.to_string();
+    tokio::spawn(async move {
+        save_one(&state, store, &id).await;
+        in_flight()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&id);
     });
 }
 

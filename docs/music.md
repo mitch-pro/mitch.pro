@@ -112,6 +112,12 @@ bytes go). Tables: `music_audio_files`, `music_audio_failures`.
 - **Saver**: a background loop (`saved::spawn`) takes three songs at a time, four
   seconds apart, in no particular order. It stops
   for 15 minutes when YouTube blocks the server. Files over 80 MB are skipped.
+- **Up next**: while a song plays, the player warms the next three queue entries
+  (`warmUpcoming` in `music-core.js`, from 2 s in and again when a song starts):
+  Spotify songs are matched to a video, the stream link is resolved
+  (`GET /api/music/prefetch`), and a song someone keeps that isn't saved yet is
+  saved right away (`saved::save_soon`) instead of waiting for the loop. Each queue
+  entry is warmed once.
 - **Playing**: `GET /api/music/stream` serves a saved song from the store with
   `Range` support, and falls back to the live path if the store can't be read (a
   file missing from the local folder is forgotten so it is saved again).

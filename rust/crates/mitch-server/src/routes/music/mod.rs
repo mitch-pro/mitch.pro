@@ -121,7 +121,7 @@ pub async fn handle(
         "search" => search_tracks(state, &email, search).await,
         "stream" => stream(state, &email, headers, search).await,
         "storage" => saved::summary(state, &email),
-        "prefetch" => prefetch(&email, search).await,
+        "prefetch" => prefetch(state, &email, search).await,
         "related" => related_tracks(&email, search).await,
         "thumb" => thumb(search).await,
         "lyrics" => lyrics_for(state, &email, search).await,
@@ -182,7 +182,7 @@ async fn related_tracks(email: &str, search: &str) -> Response {
     }
 }
 
-async fn prefetch(email: &str, search: &str) -> Response {
+async fn prefetch(state: &Arc<AppState>, email: &str, search: &str) -> Response {
     let id = qs(search, "id");
     if !valid_video_id(&id) {
         return json_response(400, json!({ "error": "bad track id" }));
@@ -190,6 +190,14 @@ async fn prefetch(email: &str, search: &str) -> Response {
     if !allow(email, "resolve", 40, Duration::from_secs(60)) {
         return limited();
     }
+    // A saved song needs nothing; a kept one that isn't saved yet is saved now.
+    if mitch_lib::music_audio::get_file(&state.store, &id).is_some() {
+        return Response::builder()
+            .status(StatusCode::NO_CONTENT)
+            .body(axum::body::Body::empty())
+            .unwrap_or_default();
+    }
+    saved::save_soon(state, &id);
     match ytdlp::resolve(&id).await {
         Ok(_) => Response::builder()
             .status(StatusCode::NO_CONTENT)

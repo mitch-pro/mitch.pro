@@ -169,6 +169,34 @@ pub fn next_to_save(store: &DataStore, limit: usize) -> Vec<(String, i64)> {
         .collect()
 }
 
+/// Whether `video_id` should be saved now: nobody has it saved, it is not
+/// waiting out a failure, and some keeper has room for it.
+pub fn wants_save(store: &DataStore, video_id: &str) -> bool {
+    if get_file(store, video_id).is_some() {
+        return false;
+    }
+    let conn = store.conn();
+    let waiting: bool = conn
+        .query_row(
+            "SELECT 1 FROM music_audio_failures WHERE video_id = ?1 AND next_try_at > ?2",
+            rusqlite::params![video_id, now_millis()],
+            |_| Ok(true),
+        )
+        .unwrap_or(false);
+    if waiting {
+        return false;
+    }
+    let dur: i64 = conn
+        .query_row(
+            &format!("SELECT COALESCE(MAX(dur), 0) FROM ({REFS}) WHERE video_id = ?1"),
+            rusqlite::params![video_id],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    drop(conn);
+    has_room(store, video_id, estimate(dur))
+}
+
 /// A save failed: wait longer each time (1 h, 2 h, ... at most 24 h).
 pub fn record_failure(store: &DataStore, video_id: &str) {
     let conn = store.conn();
