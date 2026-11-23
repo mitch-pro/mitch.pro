@@ -24,6 +24,7 @@ mod access;
 mod alias;
 mod app_log_layer;
 mod chat_cleanup;
+mod dev_mode;
 mod env_file;
 mod errors;
 mod handler;
@@ -44,6 +45,8 @@ mod ws;
 
 #[tokio::main]
 async fn main() {
+    // MITCH_DEV=1 fills in the development defaults before anything reads them.
+    dev_mode::apply();
     {
         use tracing_subscriber::layer::SubscriberExt;
         use tracing_subscriber::util::SubscriberInitExt;
@@ -59,7 +62,8 @@ async fn main() {
             .init();
     }
 
-    if mitch_lib::auth::god_mode_enabled() {
+    dev_mode::announce();
+    if mitch_lib::auth::god_mode_enabled() && !dev_mode::enabled() {
         let bar = "=".repeat(60);
         tracing::warn!(
             "\n{bar}\n  GOD_MODE=1 is active — EVERY visitor, logged in or not,\n  is auto-logged-in as admin@mitch.pro with full\n  owner/admin/moderator privileges. LOCAL DEV ONLY.\n  Refuses to activate when NODE_ENV=production.\n{bar}"
@@ -95,10 +99,17 @@ async fn main() {
         .ok()
         .and_then(|p| p.parse().ok())
         .unwrap_or(6801_u16);
-    let listener = tokio::net::TcpListener::bind(("0.0.0.0", port))
+    // Every interface by default (production sits behind a proxy); LISTEN_HOST
+    // narrows it, and MITCH_DEV sets it to loopback.
+    let host = std::env::var("LISTEN_HOST")
+        .ok()
+        .map(|h| h.trim().to_string())
+        .filter(|h| !h.is_empty())
+        .unwrap_or_else(|| "0.0.0.0".to_string());
+    let listener = tokio::net::TcpListener::bind((host.as_str(), port))
         .await
-        .unwrap_or_else(|e| panic!("bind 0.0.0.0:{port}: {e}"));
-    tracing::info!("mitch-server (rust) listening on 0.0.0.0:{port}");
+        .unwrap_or_else(|e| panic!("bind {host}:{port}: {e}"));
+    tracing::info!("mitch-server (rust) listening on {host}:{port}");
     axum::serve(listener, app)
         .await
         .unwrap_or_else(|e| panic!("serve: {e}"));

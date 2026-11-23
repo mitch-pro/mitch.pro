@@ -12,7 +12,8 @@ Locked down on purpose, since it listens on the host:
   - if the interface is missing it answers 503 and never falls back to the
     normal route.
 
-Environment: EGRESS_INTERFACE (default eth1), LISTEN_HOST (0.0.0.0),
+Environment: EGRESS_INTERFACE (default eth1; "default" or "direct" leaves it to the
+system's default route, for development machines only), LISTEN_HOST (0.0.0.0),
 LISTEN_PORT (3128), ALLOWED_HOSTS (comma-separated, default below).
 """
 import asyncio
@@ -21,6 +22,8 @@ import os
 import socket
 
 INTERFACE = os.environ.get("EGRESS_INTERFACE", "eth1").strip() or "eth1"
+# Development: use whatever interface the system routes out of by default.
+SYSTEM_DEFAULT = INTERFACE.lower() in ("default", "direct")
 LISTEN_HOST = os.environ.get("LISTEN_HOST", "0.0.0.0")
 LISTEN_PORT = int(os.environ.get("LISTEN_PORT", "3128"))
 ALLOWED_HOSTS = {
@@ -37,6 +40,8 @@ def log(msg):
 
 
 def interface_exists():
+    if SYSTEM_DEFAULT:
+        return True
     return os.path.isdir(f"/sys/class/net/{INTERFACE}")
 
 
@@ -65,7 +70,8 @@ async def dial(host):
         sock = socket.socket(family, type_, proto)
         try:
             sock.setblocking(False)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, INTERFACE.encode())
+            if not SYSTEM_DEFAULT:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, INTERFACE.encode())
             await asyncio.wait_for(loop.sock_connect(sock, addr), CONNECT_TIMEOUT)
             return await asyncio.open_connection(sock=sock)
         except (OSError, asyncio.TimeoutError) as err:
@@ -134,7 +140,7 @@ async def main():
     if not interface_exists():
         log(f"WARNING: interface {INTERFACE!r} not found on this host; answering 503 until it exists")
     server = await asyncio.start_server(handle, LISTEN_HOST, LISTEN_PORT)
-    log(f"listening on {LISTEN_HOST}:{LISTEN_PORT}, out via {INTERFACE}, hosts: {', '.join(sorted(ALLOWED_HOSTS))}")
+    log(f"listening on {LISTEN_HOST}:{LISTEN_PORT}, out via {"the system default route" if SYSTEM_DEFAULT else INTERFACE}, hosts: {', '.join(sorted(ALLOWED_HOSTS))}")
     async with server:
         await server.serve_forever()
 

@@ -257,14 +257,35 @@ pub mod webfs {
         }
     }
 
-    /// Loads the frontend from `root`. Call once at startup, before serving.
+    /// `MITCH_STATIC_LIVE=1` (development): no snapshot. Every file is read from
+    /// disk on every request so edits show up on the next reload.
+    pub fn live() -> bool {
+        matches!(
+            std::env::var("MITCH_STATIC_LIVE")
+                .unwrap_or_default()
+                .trim()
+                .to_lowercase()
+                .as_str(),
+            "1" | "true" | "yes" | "on"
+        )
+    }
+
+    /// Loads the frontend from `root`. Call once at startup, before serving. In
+    /// live mode (see [`live`]) nothing is loaded.
     pub fn init(root: &Path) -> (usize, usize) {
+        if live() {
+            tracing::warn!("[static] MITCH_STATIC_LIVE: serving the frontend straight from disk");
+            return (0, 0);
+        }
         reload(root)
     }
 
     /// Replaces the snapshot with what is on disk now. Used at startup and by the
     /// admin "refresh static cache" action; nothing else calls it.
     pub fn reload(root: &Path) -> (usize, usize) {
+        if live() {
+            return (0, 0);
+        }
         let snap = Arc::new(build(root));
         let counts = (snap.files.len(), snap.dirs.len());
         *SNAPSHOT.write().unwrap_or_else(|e| e.into_inner()) = Some(snap);
@@ -415,7 +436,9 @@ impl StaticCache {
         if let Some(entry) = inner.map.get(path).cloned() {
             inner.order.retain(|k| k != path);
             inner.order.push(path.to_path_buf());
-            if now_ms().saturating_sub(entry.checked_at) < STATIC_CACHE_REVALIDATE_MS {
+            if !webfs::live()
+                && now_ms().saturating_sub(entry.checked_at) < STATIC_CACHE_REVALIDATE_MS
+            {
                 return Some(entry);
             }
             match std::fs::metadata(path) {

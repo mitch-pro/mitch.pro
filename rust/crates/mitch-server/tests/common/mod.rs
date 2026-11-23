@@ -48,6 +48,18 @@ impl TestServer {
         ready_path: &str,
         ready_status: u16,
     ) -> Self {
+        Self::start_with_env(web_files, data_files, &[], ready_path, ready_status).await
+    }
+
+    /// Like [`start_with_webroot`], with extra environment variables for the
+    /// server process (they are applied after the defaults, so they win).
+    pub async fn start_with_env(
+        web_files: &[(&str, &str)],
+        data_files: &[(&str, &str)],
+        extra_env: &[(&str, &str)],
+        ready_path: &str,
+        ready_status: u16,
+    ) -> Self {
         // Tests in one binary run in parallel and the clock can be coarse, so
         // pid + time alone collided (the second server's symlink then failed
         // with "File exists"); a per-process counter keeps every dir unique.
@@ -83,7 +95,8 @@ impl TestServer {
             .local_addr()
             .unwrap()
             .port();
-        let child = Command::new(env!("CARGO_BIN_EXE_mitch-server"))
+        let mut command = Command::new(env!("CARGO_BIN_EXE_mitch-server"));
+        command
             .current_dir(&dir)
             .env("DATA_DIR", dir.join("data"))
             .env("MITCH_BASE", &dir)
@@ -92,7 +105,11 @@ impl TestServer {
             .env("GOD_MODE", "0")
             .env("PORT", port.to_string())
             .env("VAPID_PUBLIC_KEY", "")
-            .env("RECAPTCHA_SITE_KEY", "")
+            .env("RECAPTCHA_SITE_KEY", "");
+        for (name, value) in extra_env {
+            command.env(name, value);
+        }
+        let child = command
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()

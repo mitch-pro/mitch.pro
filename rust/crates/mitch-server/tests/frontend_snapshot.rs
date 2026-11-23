@@ -42,3 +42,30 @@ async fn the_frontend_is_served_from_the_startup_snapshot() {
     std::fs::write(root.join("backgrounds/live.txt"), "uploaded").unwrap();
     assert_eq!(get("/backgrounds/live.txt").await.text, "uploaded");
 }
+
+/// With `MITCH_STATIC_LIVE=1` or `MITCH_DEV=1` nothing is snapshotted: edits and
+/// new files show up on the next request.
+#[tokio::test(flavor = "multi_thread")]
+async fn live_mode_reads_the_disk_on_every_request() {
+    for flag in ["MITCH_STATIC_LIVE", "MITCH_DEV"] {
+        let s = TestServer::start_with_env(
+            &[("hello.txt", "version one")],
+            &[],
+            &[(flag, "1")],
+            "/api/tester/status",
+            403,
+        )
+        .await;
+        let root = s.webroot();
+        let me = s.session_for("test1@example.com");
+        let get = |path: &'static str| {
+            let (s, me) = (&s, me.clone());
+            async move { s.call(Some(&me), "GET", path, None).await }
+        };
+        assert_eq!(get("/hello.txt").await.text, "version one", "{flag}");
+        std::fs::write(root.join("hello.txt"), "version two").unwrap();
+        std::fs::write(root.join("added-later.txt"), "new").unwrap();
+        assert_eq!(get("/hello.txt").await.text, "version two", "{flag}");
+        assert_eq!(get("/added-later.txt").await.text, "new", "{flag}");
+    }
+}

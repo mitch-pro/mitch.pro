@@ -26,6 +26,12 @@ What this means in practice:
   by the server and admins while it runs, so they are read from disk as they change
   (`LIVE_DIRS`).
 
+## Development: reading from disk
+
+For development there is a switch that turns the snapshot off, `MITCH_STATIC_LIVE=1`
+(or the all-in-one `MITCH_DEV=1`, which includes it): every file is read from disk on
+every request, so edits show up on reload. See [dev-mode.md](dev-mode.md).
+
 ## The one deliberate reload
 
 `POST /api/cache/refresh` rebuilds the snapshot from disk and empties the live-folder
