@@ -16,6 +16,7 @@
 //! still works, and so no third party sees the visitor.
 
 mod audio_store;
+mod discover;
 mod lyrics;
 mod playlists;
 mod saved;
@@ -109,6 +110,7 @@ pub async fn handle(
                 | "library"
                 | "related"
                 | "storage"
+                | "discover"
         ) | ("POST", "library/add" | "library/remove")
     );
     if !known {
@@ -121,6 +123,7 @@ pub async fn handle(
         "search" => search_tracks(state, &email, search).await,
         "stream" => stream(state, &email, headers, search).await,
         "storage" => saved::summary(state, &email),
+        "discover" => discover::handle(state, &email, search).await,
         "prefetch" => prefetch(state, &email, search).await,
         "related" => related_tracks(&email, search).await,
         "thumb" => thumb(search).await,
