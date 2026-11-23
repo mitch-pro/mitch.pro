@@ -444,7 +444,7 @@ async fn fetch_live(key: &str, background: bool) -> Result<Vec<Track>, YtError> 
     )
     .await?;
     if started.elapsed() > Duration::from_millis(2500) {
-        tracing::info!(
+        tracing::debug!(
             "[music] slow search ({} ms): yt-dlp itself, not queueing, took this long",
             started.elapsed().as_millis()
         );
@@ -907,7 +907,7 @@ async fn resolve_in(id: &str, background: bool) -> Result<(Resolved, &'static st
     to_db(id, &resolved);
     let took = started.elapsed();
     if took > Duration::from_millis(2500) {
-        tracing::info!("[music] resolving {id} took {} ms", took.as_millis());
+        tracing::debug!("[music] resolving {id} took {} ms", took.as_millis());
     }
     Ok((resolved, "yt-dlp"))
 }

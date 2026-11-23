@@ -555,11 +555,19 @@ pub async fn handle(
     if status == StatusCode::FORBIDDEN {
         // Cloudflare turns away clients it doesn't like; the blocking ray id is
         // what a bug report needs.
-        tracing::warn!(
-            "[movies] {} answered 403 (cf-ray {})",
-            target.host,
-            upstream.head.get("cf-ray").unwrap_or("-")
-        );
+        // A page can retry this every few seconds; note it once per ten minutes
+        // per host (the ray id of the first is enough for a report).
+        let ray = upstream.head.get("cf-ray").unwrap_or("-");
+        tracing::debug!("[movies] {} answered 403 (cf-ray {ray})", target.host);
+        if let Some(skipped) = crate::log_throttle::due(
+            &format!("movies-403-{}", target.host),
+            std::time::Duration::from_secs(600),
+        ) {
+            tracing::warn!(
+                "[movies] {} answered 403 (cf-ray {ray}); {skipped} more since the last note",
+                target.host
+            );
+        }
     }
     let mut builder = Response::builder().status(status);
 
