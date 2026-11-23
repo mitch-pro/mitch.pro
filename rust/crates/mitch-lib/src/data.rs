@@ -708,6 +708,10 @@ impl DataStore {
                         expires_at INTEGER NOT NULL
                     );
                     CREATE INDEX IF NOT EXISTS idx_music_stream_links_expires ON music_stream_links (expires_at);
+                    CREATE TABLE IF NOT EXISTS profile_privacy (
+                        email TEXT PRIMARY KEY,
+                        block_lookups INTEGER NOT NULL DEFAULT 0
+                    );
                     CREATE TABLE IF NOT EXISTS music_audio_files (
                         video_id TEXT PRIMARY KEY,
                         size INTEGER NOT NULL,
