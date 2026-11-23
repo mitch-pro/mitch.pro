@@ -332,7 +332,9 @@ html.theme-light .mp-ambient { opacity: 0.4; }
   .mp-left { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 12px; width: min(100%, 420px); }
   .mp-nav { padding: 12px 10px 10px; }
   .mp-tabs { flex-direction: row; margin: 0; }
-  .mp-tabs button { flex: 1; justify-content: center; gap: 6px; padding: 8px 4px; font-size: 14px; }
+  /* Five tabs must fit the column on a phone: icon over label, equal widths. */
+  .mp-nav, .mp-tabs { min-width: 0; }
+  .mp-tabs button { flex: 1 1 0; min-width: 0; flex-direction: column; justify-content: center; gap: 3px; padding: 7px 2px; font-size: 12px; text-align: center; white-space: nowrap; }
   .mp-sidepl { display: none; }
   .mp-viewtitle { font-size: 22px; }
 }
