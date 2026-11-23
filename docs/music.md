@@ -12,6 +12,28 @@ Code: `rust/crates/mitch-server/src/routes/music/` (API), `mitch-lib/src/music.r
 `mitch-lib/src/music_lyrics.rs` (lyrics formats and matching),
 `webserver/music-core.js`, `music-widget.js/.css`, `webserver/music/`.
 
+## Discover
+
+The Discover tab (`routes/music/discover.rs`, `GET /api/music/discover`) has three
+parts:
+
+- **Browse by genre**: 18 genres (`GENRES`). A genre is one YouTube search such as
+  "top hip hop songs 2026" (the year is added for the chart genres), answered from
+  the same search cache as the Search tab, so repeat visits are instant.
+  `GET /api/music/discover?genre=<id>` returns one genre's songs.
+- **Top songs**: if `MUSIC_TOP_PLAYLIST` is set to a YouTube playlist id (an
+  official chart playlist, for example), its first 25 songs, kept for six hours.
+  Otherwise two YouTube searches for this year's hits, interleaved. Search results
+  are only as good as YouTube's ranking, so set the chart playlist for a
+  trustworthy list.
+- **Popular on mitch.pro**: songs kept (in a playlist or the library) by at least
+  three different accounts, most kept first. The response has the songs only: no
+  account, no count, and a song one or two people keep never appears. Nothing about
+  listening is recorded.
+
+If the music source is down, Top songs is empty and the other sections still work.
+Songs listed here are warmed like search results, so they start quickly.
+
 ## Playlists
 
 Any signed-in user can make up to 100 playlists of up to 500 songs. Tables:

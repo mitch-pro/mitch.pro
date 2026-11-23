@@ -25,6 +25,7 @@
         </form>
         <div class="mp-tabs" role="tablist">
           <button type="button" role="tab" id="tab-search" aria-selected="true" data-tab="search"><span class="mp-navicon" data-ico="search"></span>Search</button>
+          <button type="button" role="tab" id="tab-discover" aria-selected="false" data-tab="discover"><span class="mp-navicon" data-ico="discover"></span>Discover</button>
           <button type="button" role="tab" id="tab-library" aria-selected="false" data-tab="library"><span class="mp-navicon" data-ico="heart"></span>Library</button>
           <button type="button" role="tab" id="tab-playlists" aria-selected="false" data-tab="playlists"><span class="mp-navicon" data-ico="playlist"></span>Playlists</button>
           <button type="button" role="tab" id="tab-queue" aria-selected="false" data-tab="queue"><span class="mp-navicon" data-ico="upnext"></span>Queue</button>
@@ -40,6 +41,7 @@
         <div class="mp-scroll">
           <ul id="mp-list" class="mp-list"></ul>
 
+          <div id="mp-discover" class="mp-discover" hidden></div>
           <div id="mp-playlists" class="mp-playlists" hidden>
             <div id="mp-plhome">
               <div class="mp-pltools">
