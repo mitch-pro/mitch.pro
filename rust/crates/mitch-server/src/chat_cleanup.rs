@@ -394,7 +394,16 @@ pub async fn run_job(state: &AppState, email: &str, cutoff: i64) -> bool {
         data::finish_erasure(&state.store, email);
     }
     if !done {
-        tracing::warn!("Chat cleanup is pending; it will retry automatically");
+        // The worker retries every minute, so a chat server that is down would
+        // repeat this forever: one line per half hour, the cause at debug.
+        tracing::debug!("Chat cleanup retry pending: {error}");
+        if let Some(skipped) =
+            crate::log_throttle::due("chat-cleanup", std::time::Duration::from_secs(1800))
+        {
+            tracing::warn!(
+                "Chat cleanup is pending and will retry every minute ({skipped} retries since the last note)"
+            );
+        }
     }
     done
 }
