@@ -114,7 +114,7 @@ fn match_in_background(state: &Arc<AppState>, tracks: &[pl::PlaylistTrack]) {
         for t in &todo {
             let key = pl::match_key(&t.title, &t.artist);
             if !stop {
-                match playlists::find_match(&t.title, &t.artist, t.duration).await {
+                match playlists::find_match(&t.title, &t.artist, t.duration, true).await {
                     Ok(Some(id)) => {
                         pl::put_match(&state.store, &key, &id);
                         found.push(id);

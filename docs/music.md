@@ -143,6 +143,7 @@ bytes go). Tables: `music_audio_files`, `music_audio_failures`.
 - **Saver**: a background loop (`saved::spawn`) takes three songs at a time, four
   seconds apart, in no particular order. It stops
   for 15 minutes when YouTube blocks the server. Files over 80 MB are skipped.
+- **Look-ahead never competes with a click**: yt-dlp work runs in three pools (main 4 slots for what a person is waiting on, search 3, background 2). Looking ahead (`prefetch`, `match?bg=1`), matching songs for Discover or playlists, and the worker that refreshes playlist links all use the **background** pool and their own rate buckets (`prefetch`, `match-ahead`), and the player warms one upcoming song at a time. The main pool and the `resolve`/`match` buckets are only for the song being played. If a request ever gives up waiting for a slot, the server logs `a request gave up waiting for a free yt-dlp slot` with how many slots were free (at most once a minute).
 - **Up next**: while a song plays, the player warms the next three queue entries
   (`warmUpcoming` in `music-core.js`, from 2 s in and again when a song starts):
   Spotify songs are matched to a video, the stream link is resolved
