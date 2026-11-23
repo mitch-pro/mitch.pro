@@ -29,6 +29,7 @@ mod errors;
 mod handler;
 mod hosts;
 mod inject;
+mod log_throttle;
 mod manifests;
 mod pipeline;
 mod presence;
