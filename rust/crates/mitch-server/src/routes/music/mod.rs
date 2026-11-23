@@ -6,7 +6,7 @@
 //! | `GET search?q=` | yt-dlp search, tracks with cleaned artist/title |
 //! | `GET stream?id=` | audio bytes proxied from YouTube's CDN, Range supported |
 //! | `GET prefetch?id=` | resolves a stream URL ahead of time (204) |
-//! | `GET thumb?id=` | cover art from i.ytimg.com, through this server |
+//! | `GET thumb?id=` | cover art (iTunes, then Deezer, then the video's own thumbnail), through this server |
 //! | `GET related?id=` | YouTube's Mix for a song, for smart shuffle |
 //! | `GET lyrics?id=&title=&artist=&duration=` | best lyrics from every source, word-timed when possible |
 //! | `GET library`, `POST library/add`, `POST library/remove` | saved tracks |
@@ -16,6 +16,7 @@
 //! still works, and so no third party sees the visitor.
 
 mod audio_store;
+mod cover;
 mod discover;
 mod lyrics;
 mod playlists;
@@ -126,7 +127,7 @@ pub async fn handle(
         "discover" => discover::handle(state, &email, search).await,
         "prefetch" => prefetch(state, &email, search).await,
         "related" => related_tracks(&email, search).await,
-        "thumb" => thumb(search).await,
+        "thumb" => thumb(state, search).await,
         "lyrics" => lyrics_for(state, &email, search).await,
         "library" => library(state, &email),
         "library/add" => library_add(state, &email, body_bytes),
@@ -342,33 +343,68 @@ async fn stream(state: &Arc<AppState>, email: &str, headers: &HeaderMap, search:
     }
 }
 
-async fn thumb(search: &str) -> Response {
+/// `GET thumb?id=`: the song's album cover from iTunes or Deezer when one is
+/// found (see `cover.rs`), otherwise the video's own YouTube thumbnail.
+async fn thumb(state: &Arc<AppState>, search: &str) -> Response {
     let id = qs(search, "id");
     if !valid_video_id(&id) {
         return json_response(400, json!({ "error": "bad track id" }));
+    }
+    if let Some(url) = cover::find(state, &id).await {
+        if let Some(resp) = fetch_image(cover::image_client(), &url, true).await {
+            return resp;
+        }
     }
     let Some(client) = ytdlp::media_client() else {
         return json_response(503, json!({ "error": "music source is not set up" }));
     };
     let url = format!("https://i.ytimg.com/vi/{id}/hqdefault.jpg");
-    let Ok(resp) = client.get(url).send().await else {
-        return json_response(502, json!({ "error": "no image" }));
-    };
-    if !resp.status().is_success() {
-        return json_response(404, json!({ "error": "no image" }));
+    match fetch_image(Some(client), &url, false).await {
+        Some(resp) => resp,
+        None => json_response(404, json!({ "error": "no image" })),
     }
-    let Ok(bytes) = resp.bytes().await else {
-        return json_response(502, json!({ "error": "no image" }));
-    };
+}
+
+/// Fetches an image (at most `cover::MAX_IMAGE_BYTES`) and wraps it for the
+/// browser. `None` on any failure, so the caller can fall back.
+async fn fetch_image(
+    client: Option<&reqwest::Client>,
+    url: &str,
+    catalog: bool,
+) -> Option<Response> {
+    if catalog && !cover::image_host_ok(url) {
+        return None;
+    }
+    let resp = client?.get(url).send().await.ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let mime = resp
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .filter(|m| m.starts_with("image/"))
+        .unwrap_or("image/jpeg")
+        .to_string();
+    if resp
+        .content_length()
+        .is_some_and(|n| n > cover::MAX_IMAGE_BYTES as u64)
+    {
+        return None;
+    }
+    let bytes = resp.bytes().await.ok()?;
+    if bytes.len() > cover::MAX_IMAGE_BYTES {
+        return None;
+    }
     Response::builder()
-        .header(header::CONTENT_TYPE, "image/jpeg")
+        .header(header::CONTENT_TYPE, mime)
         .header(
             header::CACHE_CONTROL,
             HeaderValue::from_static("private, max-age=604800"),
         )
         .header("x-content-type-options", "nosniff")
         .body(axum::body::Body::from(bytes))
-        .unwrap_or_default()
+        .ok()
 }
 
 /// `GET lyrics`. Cached per video id; a query with a custom `title`/`artist`

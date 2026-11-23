@@ -464,6 +464,77 @@ pub fn prune_search_cache(store: &DataStore) -> usize {
     .unwrap_or(0)
 }
 
+/// Title, artist and length (seconds, 0 when unknown) the site already holds
+/// for a video: a playlist row, a saved track, or a search result, in that
+/// order (Spotify-sourced rows have the cleanest names). `None` when the video
+/// is in none of them.
+pub fn known_track(store: &DataStore, video_id: &str) -> Option<(String, String, i64)> {
+    let conn = store.conn();
+    for sql in [
+        "SELECT title, artist, duration_s FROM music_playlist_tracks \
+         WHERE video_id = ?1 AND title <> '' LIMIT 1",
+        "SELECT title, artist, duration_s FROM music_favorites WHERE video_id = ?1 LIMIT 1",
+        "SELECT title, artist, duration FROM music_search_results \
+         WHERE video_id = ?1 AND title <> '' LIMIT 1",
+    ] {
+        if let Ok(row) = conn.query_row(sql, rusqlite::params![video_id], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, i64>(2)?,
+            ))
+        }) {
+            return Some(row);
+        }
+    }
+    None
+}
+
+/// A found cover is kept this long before it is looked up again.
+const COVER_HIT_TTL_MS: i64 = 90 * 24 * 3600 * 1000;
+/// "No official cover found" is retried after this long.
+const COVER_MISS_TTL_MS: i64 = 3 * 24 * 3600 * 1000;
+
+/// The cached cover lookup for a video: `Some(url)` for a found cover,
+/// `Some("")` for a recent miss, `None` when it needs looking up.
+pub fn get_cover(store: &DataStore, video_id: &str) -> Option<String> {
+    let (url, at): (String, i64) = store
+        .conn()
+        .query_row(
+            "SELECT image_url, checked_at FROM music_cover_art WHERE video_id = ?1",
+            rusqlite::params![video_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .ok()?;
+    let ttl = if url.is_empty() {
+        COVER_MISS_TTL_MS
+    } else {
+        COVER_HIT_TTL_MS
+    };
+    (now_millis() - at < ttl).then_some(url)
+}
+
+/// Remembers a cover lookup (`image_url` empty for a miss).
+pub fn put_cover(store: &DataStore, video_id: &str, image_url: &str, source: &str) {
+    if !valid_video_id(video_id) {
+        return;
+    }
+    let _ = store.conn().execute(
+        "INSERT INTO music_cover_art (video_id, image_url, source, checked_at) VALUES (?1, ?2, ?3, ?4) \
+         ON CONFLICT(video_id) DO UPDATE SET image_url = ?2, source = ?3, checked_at = ?4",
+        rusqlite::params![video_id, image_url, source, now_millis()],
+    );
+}
+
+/// Drops cover rows past their time limit.
+pub fn prune_cover_cache(store: &DataStore) {
+    let now = now_millis();
+    let _ = store.conn().execute(
+        "DELETE FROM music_cover_art WHERE (image_url = '' AND checked_at < ?1) OR checked_at < ?2",
+        rusqlite::params![now - COVER_MISS_TTL_MS, now - COVER_HIT_TTL_MS],
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

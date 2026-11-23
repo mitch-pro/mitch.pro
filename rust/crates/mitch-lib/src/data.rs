@@ -726,6 +726,12 @@ impl DataStore {
                         tries INTEGER NOT NULL,
                         next_try_at INTEGER NOT NULL
                     );
+                    CREATE TABLE IF NOT EXISTS music_cover_art (
+                        video_id TEXT PRIMARY KEY,
+                        image_url TEXT NOT NULL,
+                        source TEXT NOT NULL,
+                        checked_at INTEGER NOT NULL
+                    );
                     CREATE TABLE IF NOT EXISTS music_search_queries (
                         query TEXT PRIMARY KEY,
                         fetched_at INTEGER NOT NULL
@@ -917,6 +923,20 @@ impl DataStore {
         if !has_vm_keep_alive {
             conn.execute(
                 "ALTER TABLE virtual_machines ADD COLUMN keep_alive INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
+        // Saved songs that were rewritten as a plain MP4 with the index up front
+        // (iOS starts those at once); see `routes/music/saved.rs`.
+        let has_audio_progressive = conn
+            .prepare("PRAGMA table_info(music_audio_files)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+            .iter()
+            .any(|name| name == "progressive");
+        if !has_audio_progressive {
+            conn.execute(
+                "ALTER TABLE music_audio_files ADD COLUMN progressive INTEGER NOT NULL DEFAULT 0",
                 [],
             )?;
         }

@@ -576,7 +576,7 @@
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: t.title, artist: t.artist,
-        artwork: [{ src: absolute('/api/music/thumb?id=' + encodeURIComponent(t.id)), sizes: '480x360', type: 'image/jpeg' }]
+        artwork: [{ src: absolute('/api/music/thumb?id=' + encodeURIComponent(t.id)), sizes: '600x600' }]
       });
       var h = navigator.mediaSession.setActionHandler.bind(navigator.mediaSession);
       h('play', function () { control('play'); });
