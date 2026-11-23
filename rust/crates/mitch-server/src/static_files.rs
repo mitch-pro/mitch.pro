@@ -142,7 +142,18 @@ pub const LIVE_DIRS: &[&str] = &["backgrounds", "blog/uploads"];
 /// what was loaded. A path that is outside the webroot, inside a live folder, or
 /// too big to keep in memory falls back to the disk.
 pub mod webfs {
-    use super::{cache_max_bytes, normalize_lexical, LIVE_DIRS};
+    use super::{normalize_lexical, LIVE_DIRS};
+
+    /// The folders inside `games/` (third-party game bundles, thousands of files
+    /// and gigabytes on the server) are never held in memory: they are read from
+    /// disk when asked, as they always were. Files directly in `games/` (the
+    /// library page) and `game-portal/` are part of the frontend and are.
+    const GAMES_DIR: &str = "games";
+
+    fn in_games_folders(root: &Path, path: &Path) -> bool {
+        let games = root.join(GAMES_DIR);
+        path.starts_with(&games) && path != games
+    }
     use std::collections::{HashMap, HashSet};
     use std::path::{Path, PathBuf};
     use std::sync::{Arc, RwLock};
@@ -184,7 +195,7 @@ pub mod webfs {
         )
     }
 
-    fn walk(
+    pub(super) fn walk(
         dir: &Path,
         root: &Path,
         depth: u32,
@@ -205,6 +216,9 @@ pub mod webfs {
                 continue;
             };
             if md.is_dir() {
+                if dir == root.join(GAMES_DIR) {
+                    continue; // a game's own folder: read from disk when asked
+                }
                 walk(&path, root, depth + 1, files, dirs);
             } else if md.is_file() {
                 files.push((path, md.len()));
@@ -212,42 +226,101 @@ pub mod webfs {
         }
     }
 
+    /// Budget for what is held in memory. Both containers of a blue/green deploy
+    /// run at once, so this is kept small: `MITCH_STATIC_SNAPSHOT_MB`, default 512.
+    fn budget_bytes() -> u64 {
+        std::env::var("MITCH_STATIC_SNAPSHOT_MB")
+            .ok()
+            .and_then(|v| v.trim().parse::<u64>().ok())
+            .map(|mb| mb * 1024 * 1024)
+            .unwrap_or(512 * 1024 * 1024)
+    }
+
+    /// A code file (page, script, style, data) is held up to this size.
+    const MAX_CODE_BYTES: u64 = 32 * 1024 * 1024;
+    /// Anything else (images, audio, video, archives) only when it is this
+    /// small. Bigger media stays on disk: it is immutable per file name, so
+    /// reading it live cannot put a new frontend in front of an old backend.
+    const MAX_OTHER_BYTES: u64 = 2 * 1024 * 1024;
+
+    /// Which of `found` (path, size) are held in memory: code files first, then
+    /// other small files, smallest first, until `budget` is used. Returns
+    /// `(load, leave_on_disk)`.
+    pub(super) fn plan(
+        mut found: Vec<(PathBuf, u64)>,
+        budget: u64,
+    ) -> (Vec<PathBuf>, Vec<PathBuf>) {
+        found.sort_by_key(|(p, len)| (!is_code(p), *len));
+        let mut used: u64 = 0;
+        let mut load = Vec::new();
+        let mut disk = Vec::new();
+        for (path, len) in found {
+            let limit = if is_code(&path) {
+                MAX_CODE_BYTES
+            } else {
+                MAX_OTHER_BYTES
+            };
+            if len > limit.min(MAX_FILE_BYTES) || used + len > budget {
+                disk.push(path);
+            } else {
+                used += len;
+                load.push(path);
+            }
+        }
+        (load, disk)
+    }
+
+    /// Reads `paths` on a few threads, since a cold disk is the slow part.
+    fn read_all(paths: Vec<PathBuf>) -> Vec<(PathBuf, Option<Vec<u8>>)> {
+        const THREADS: usize = 8;
+        let chunk = paths.len().div_ceil(THREADS).max(1);
+        std::thread::scope(|scope| {
+            let handles: Vec<_> = paths
+                .chunks(chunk)
+                .map(|part| {
+                    scope.spawn(move || {
+                        part.iter()
+                            .map(|p| (p.clone(), std::fs::read(p).ok()))
+                            .collect::<Vec<_>>()
+                    })
+                })
+                .collect();
+            handles
+                .into_iter()
+                .flat_map(|h| h.join().unwrap_or_default())
+                .collect()
+        })
+    }
+
     fn build(root: &Path) -> Snapshot {
+        let started = std::time::Instant::now();
         let mut found: Vec<(PathBuf, u64)> = Vec::new();
         let mut dirs = HashSet::new();
         walk(root, root, 0, &mut found, &mut dirs);
-        // Code first, then everything else smallest first, until the budget is
-        // used up; the rest stays on disk.
-        found.sort_by_key(|(p, len)| (!is_code(p), *len));
-        let budget = cache_max_bytes();
-        let mut used: u64 = 0;
+        let total = found.len();
+        let (load, disk) = plan(found, budget_bytes());
+        let mut on_disk: HashSet<PathBuf> = disk.into_iter().collect();
         let mut files = HashMap::new();
-        let mut on_disk = HashSet::new();
-        for (path, len) in found {
-            if len > MAX_FILE_BYTES || used + len > budget {
-                on_disk.insert(path);
-                continue;
-            }
-            match std::fs::read(&path) {
-                Ok(data) => {
+        let mut used: u64 = 0;
+        for (path, data) in read_all(load) {
+            match data {
+                Some(data) => {
                     used += data.len() as u64;
                     files.insert(path, Arc::new(data));
                 }
-                Err(_) => {
+                None => {
                     on_disk.insert(path);
                 }
             }
         }
-        if !on_disk.is_empty() {
-            tracing::warn!(
-                "[static] {} files were too big for the in-memory frontend and are read from disk",
-                on_disk.len()
-            );
-        }
+        // One line: how much is in memory, how much stays on disk, how long it took.
         tracing::info!(
-            "[static] frontend loaded into memory: {} files, {} MB",
+            "[static] frontend in memory: {} of {} files, {} MB, in {} ms ({} large or media files are read from disk)",
             files.len(),
-            used / (1024 * 1024)
+            total,
+            used / (1024 * 1024),
+            started.elapsed().as_millis(),
+            on_disk.len()
         );
         Snapshot {
             root: root.to_path_buf(),
@@ -318,6 +391,9 @@ pub mod webfs {
         }
         if snap.dirs.contains(&path) {
             return Found::Dir;
+        }
+        if in_games_folders(&snap.root, &path) {
+            return Found::Disk;
         }
         Found::Missing
     }
@@ -859,5 +935,93 @@ mod tests {
             cache_control_for("json", "application/json", "/game-portal/catalog.json")[0].1,
             "no-cache, no-store, must-revalidate"
         );
+    }
+
+    #[test]
+    fn the_snapshot_holds_code_and_small_files_and_leaves_big_media_on_disk() {
+        let mb = 1024 * 1024;
+        let found = vec![
+            (PathBuf::from("/w/index.html"), 10_000),
+            (PathBuf::from("/w/app.js"), 3 * mb), // code: kept even though over 2 MB
+            (PathBuf::from("/w/logo.png"), 50_000),
+            (PathBuf::from("/w/tour.mp4"), 40 * mb), // media: stays on disk
+            (PathBuf::from("/w/big-art.png"), 3 * mb), // over the 2 MB limit for non-code
+            (PathBuf::from("/w/games/engine.wasm"), 40 * mb), // code type, over 32 MB
+        ];
+        let (load, disk) = webfs::plan(found, 512 * mb);
+        let names = |v: &[PathBuf]| -> Vec<String> {
+            let mut n: Vec<String> = v.iter().map(|p| p.to_string_lossy().into_owned()).collect();
+            n.sort();
+            n
+        };
+        assert_eq!(names(&load), ["/w/app.js", "/w/index.html", "/w/logo.png"]);
+        assert_eq!(
+            names(&disk),
+            ["/w/big-art.png", "/w/games/engine.wasm", "/w/tour.mp4"]
+        );
+    }
+
+    #[test]
+    fn the_snapshot_never_passes_its_budget_and_code_wins_a_tight_one() {
+        let found = vec![
+            (PathBuf::from("/w/a.png"), 600),
+            (PathBuf::from("/w/b.html"), 700),
+            (PathBuf::from("/w/c.js"), 200),
+        ];
+        let (load, disk) = webfs::plan(found, 1000);
+        // Code first (smallest first): c.js, then b.html would pass 1000, so it
+        // stays on disk; a.png (600) still fits after c.js.
+        assert!(load.contains(&PathBuf::from("/w/c.js")));
+        assert!(
+            disk.contains(&PathBuf::from("/w/b.html"))
+                || load.contains(&PathBuf::from("/w/b.html"))
+        );
+        let used: u64 = load
+            .iter()
+            .map(|p| match p.to_str().unwrap() {
+                "/w/a.png" => 600,
+                "/w/b.html" => 700,
+                _ => 200,
+            })
+            .sum();
+        assert!(used <= 1000);
+    }
+
+    #[test]
+    fn game_folders_are_skipped_but_the_library_page_and_game_portal_are_held() {
+        let root = std::env::temp_dir().join(format!("walk-games-{}", std::process::id()));
+        for (rel, body) in [
+            ("games/index.html", "library"),
+            ("games/some-game/index.html", "game"),
+            ("games/some-game/deep/engine.js", "engine"),
+            ("game-portal/index.html", "portal"),
+            ("index.html", "home"),
+        ] {
+            let path = root.join(rel);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, body).unwrap();
+        }
+        let mut files = Vec::new();
+        let mut dirs = std::collections::HashSet::new();
+        webfs::walk(&root, &root, 0, &mut files, &mut dirs);
+        let names: std::collections::HashSet<String> = files
+            .iter()
+            .map(|(p, _)| {
+                p.strip_prefix(&root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        assert!(names.contains("games/index.html"));
+        assert!(names.contains("game-portal/index.html"));
+        assert!(names.contains("index.html"));
+        assert!(
+            !names.iter().any(|n| n.starts_with("games/some-game")),
+            "{names:?}"
+        );
+        assert!(!dirs.contains(&root.join("games/some-game")));
+        assert!(dirs.contains(&root.join("game-portal")));
+        let _ = std::fs::remove_dir_all(root);
     }
 }
