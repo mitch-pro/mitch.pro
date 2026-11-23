@@ -169,7 +169,7 @@ environment variables, so the secret manager injects them like the rest
 | --- | --- |
 | unset or `local` | `<data dir>/music-audio` |
 | `local:/path` | any folder. For NFS or SMB, mount the share on the host (and into the container) and point this at it |
-| `webdav:https://host/path` (http only on a private network, since the password goes with every request) | WebDAV, which covers Nextcloud: `webdav:https://cloud.example.com/remote.php/dav/files/USER/mitch-music` with a Nextcloud app password as `MUSIC_AUDIO_STORE_PASS`. The folder is created if missing |
+| `webdav:https://host/path` (http only on a private network, since the password goes with every request) | WebDAV, which covers Nextcloud: `webdav:https://cloud.example.com/remote.php/dav/files/USER/mitch-music` with a Nextcloud app password as `MUSIC_AUDIO_STORE_PASS`. The folder is created if missing (only that folder: the server's own root folders such as Nextcloud's `/remote.php` are never touched) |
 
 Other schemes (`s3:`, `gdrive:`, `sftp:`) are not built; the server logs it and
 uses the local folder. To add one: a new `AudioStore` variant with `put`, `read`

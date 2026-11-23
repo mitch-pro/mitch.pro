@@ -176,39 +176,53 @@ impl WebDav {
         }
     }
 
-    /// Creates the folder (and parents) if it is missing. 405 means it exists.
+    /// `MKCOL` on one URL; returns the HTTP status.
+    async fn mkcol(&self, url: &str) -> Result<u16, String> {
+        let method = reqwest::Method::from_bytes(b"MKCOL").map_err(|e| e.to_string())?;
+        let resp = self
+            .auth(self.client.request(method, url))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(resp.status().as_u16())
+    }
+
+    /// Creates the storage folder if it is missing. The folder itself is tried
+    /// first: 201 means created and 405 means it already exists. Only when its
+    /// parent is missing (409) are the parents created, top down, ignoring their
+    /// answers (a server's own root folders, like Nextcloud's `/remote.php`, are
+    /// not collections and refuse `MKCOL`).
     async fn ensure_folder(&self) -> Result<(), String> {
-        let rest = self
-            .base
-            .split_once("://")
-            .map(|(_, r)| r)
-            .unwrap_or(&self.base);
-        let scheme = if self.base.starts_with("https") {
-            "https"
-        } else {
-            "http"
-        };
-        let mut parts = rest.split('/');
-        let host = parts.next().unwrap_or("");
-        let mut path = String::new();
-        for seg in parts.filter(|s| !s.is_empty()) {
-            path.push('/');
-            path.push_str(seg);
-            let url = format!("{scheme}://{host}{path}");
-            let method = reqwest::Method::from_bytes(b"MKCOL").map_err(|e| e.to_string())?;
-            let resp = self
-                .auth(self.client.request(method, &url))
-                .send()
-                .await
-                .map_err(|e| e.to_string())?;
-            let s = resp.status().as_u16();
-            // 201 created, 405 already there; anything else on a parent we
-            // don't own (for example 403) is fine as long as the PUT works.
-            if !(s == 201 || s == 405 || s == 403 || s == 409 || s == 301 || s == 200) {
-                return Err(format!("creating the folder failed ({s})"));
-            }
+        let first = self.mkcol(&self.base).await?;
+        if matches!(first, 200 | 201 | 405) {
+            return Ok(());
         }
-        Ok(())
+        let status = if first == 409 {
+            let (scheme, rest) = self.base.split_once("://").unwrap_or(("https", &self.base));
+            let mut parts = rest.split('/').filter(|p| !p.is_empty());
+            let host = parts.next().unwrap_or("");
+            let segments: Vec<&str> = parts.collect();
+            let mut path = String::new();
+            for seg in &segments[..segments.len().saturating_sub(1)] {
+                path.push('/');
+                path.push_str(seg);
+                let _ = self.mkcol(&format!("{scheme}://{host}{path}")).await;
+            }
+            self.mkcol(&self.base).await?
+        } else {
+            first
+        };
+        match status {
+            200 | 201 | 405 => Ok(()),
+            404 => Err(
+                "the folder URL was not found (404): check MUSIC_AUDIO_STORE and the account name in it"
+                    .to_string(),
+            ),
+            401 | 403 => Err(format!(
+                "not allowed to create the folder ({status}): check MUSIC_AUDIO_STORE_USER and _PASS"
+            )),
+            other => Err(format!("creating the folder failed ({other})")),
+        }
     }
 
     async fn put(&self, key: &str, src: &Path) -> Result<(), String> {
@@ -352,5 +366,104 @@ mod tests {
         assert_eq!(ext_for("audio/webm"), "webm");
         assert_eq!(key("aaaaaaaaaaa", "m4a"), "aaaaaaaaaaa.m4a");
         assert_eq!(AudioStore::Local(data.join("music-audio")).name(), "local");
+    }
+
+    /// A tiny in-process WebDAV server shaped like Nextcloud: only the user's
+    /// own `/remote.php/dav/files/u/` tree is a real collection, the parents
+    /// above it answer 404 to `MKCOL`, and a `PUT` into a folder that does not
+    /// exist yet answers 409 (404 when the folder's parent is also missing).
+    async fn mock_webdav() -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+        use axum::extract::State;
+        use axum::http::{Method, StatusCode, Uri};
+        use axum::routing::any;
+        type Log = std::sync::Arc<std::sync::Mutex<Vec<String>>>;
+        let log: Log = Default::default();
+        let folders: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(
+                ["/remote.php/dav/files/u".to_string()]
+                    .into_iter()
+                    .collect(),
+            ));
+        let state = (log.clone(), folders);
+        async fn handle(
+            State((log, folders)): State<(
+                Log,
+                std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
+            )>,
+            method: Method,
+            uri: Uri,
+            _body: axum::body::Bytes,
+        ) -> StatusCode {
+            let path = uri.path().trim_end_matches('/').to_string();
+            log.lock().unwrap().push(format!("{method} {path}"));
+            let mut folders = folders.lock().unwrap();
+            let parent = path
+                .rsplit_once('/')
+                .map(|(p, _)| p.to_string())
+                .unwrap_or_default();
+            match method.as_str() {
+                "MKCOL" if folders.contains(&path) => StatusCode::METHOD_NOT_ALLOWED,
+                "MKCOL" if folders.contains(&parent) => {
+                    folders.insert(path);
+                    StatusCode::CREATED
+                }
+                "MKCOL" => StatusCode::NOT_FOUND,
+                "PUT" if folders.contains(&parent) => StatusCode::CREATED,
+                "PUT" => StatusCode::NOT_FOUND,
+                _ => StatusCode::METHOD_NOT_ALLOWED,
+            }
+        }
+        let app = axum::Router::new().fallback(any(handle)).with_state(state);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+        (format!("http://{addr}"), log)
+    }
+
+    fn webdav(base: String) -> AudioStore {
+        AudioStore::WebDav(WebDav {
+            base,
+            user: "u".into(),
+            pass: "p".into(),
+            client: reqwest::Client::new(),
+        })
+    }
+
+    #[tokio::test]
+    async fn webdav_creates_only_the_storage_folder_when_the_root_refuses_mkcol() {
+        let (host, log) = mock_webdav().await;
+        let dir = tmp("dav");
+        let src = dir.join("a.bin");
+        std::fs::write(&src, b"audio").unwrap();
+        let store = webdav(format!("{host}/remote.php/dav/files/u/mitch-music"));
+        store.put("aaaaaaaaaaa.m4a", &src).await.unwrap();
+        let log = log.lock().unwrap().clone();
+        assert!(
+            log.iter()
+                .any(|l| l == "MKCOL /remote.php/dav/files/u/mitch-music"),
+            "{log:?}"
+        );
+        assert!(
+            !log.iter().any(|l| l == "MKCOL /remote.php"),
+            "must not try to create the server's own folders: {log:?}"
+        );
+        // A second upload finds the folder and just uploads.
+        store.put("bbbbbbbbbbb.m4a", &src).await.unwrap();
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[tokio::test]
+    async fn webdav_says_what_is_wrong_when_the_url_is_bad() {
+        let (host, _log) = mock_webdav().await;
+        let dir = tmp("dav-bad");
+        let src = dir.join("a.bin");
+        std::fs::write(&src, b"audio").unwrap();
+        // The account in the URL does not exist, so nothing under it can be made.
+        let store = webdav(format!("{host}/remote.php/dav/files/nobody/mitch-music"));
+        let err = store.put("aaaaaaaaaaa.m4a", &src).await.unwrap_err();
+        assert!(err.contains("not found (404)"), "{err}");
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
