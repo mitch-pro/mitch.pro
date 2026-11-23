@@ -251,6 +251,13 @@
   }
 
   function toggleFav(track) {
+    if (!track.id) {         // a chart song not matched to a video yet: match it, then save
+      return M.api('/api/music/match?title=' + encodeURIComponent(track.title) + '&artist=' + encodeURIComponent(track.artist) +
+        '&duration=' + encodeURIComponent(track.duration || 0)).then(function (d) {
+        track.id = d.id;
+        return toggleFav(track);
+      }).catch(function (e) { say(e.message); });
+    }
     var on = !!favIds[track.id];
     var req = on
       ? M.api('/api/music/library/remove', { body: { id: track.id } })

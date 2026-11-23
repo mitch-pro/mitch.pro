@@ -559,27 +559,6 @@ pub fn only_songs(tracks: Vec<Track>) -> Vec<Track> {
     }
 }
 
-/// The first `limit` songs of a YouTube playlist (for example an official
-/// chart). `list_id` must look like a playlist id. Not cached here.
-pub async fn playlist(list_id: &str, limit: usize) -> Result<Vec<Track>, YtError> {
-    let ok = (10..=64).contains(&list_id.len())
-        && list_id
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-');
-    if !ok {
-        return Err(YtError::Failed("bad playlist id".into()));
-    }
-    let out = run_bg(&[
-        "--flat-playlist".into(),
-        "--dump-single-json".into(),
-        "--playlist-end".into(),
-        limit.to_string(),
-        format!("https://www.youtube.com/playlist?list={list_id}"),
-    ])
-    .await?;
-    Ok(only_songs(parse_search(&out)))
-}
-
 /// Songs YouTube's own "Mix" for a video suggests (its radio of related songs),
 /// for smart shuffle. The seed song itself is left out. Cached for 30 minutes.
 pub async fn related(id: &str) -> Result<Vec<Track>, YtError> {
