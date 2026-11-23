@@ -260,6 +260,44 @@ fn net0_with_fresh_mac(net0: &str) -> String {
     }
 }
 
+/// The `bridge=` value of a Proxmox `netN` string, if it has one.
+fn net0_bridge(net0: &str) -> Option<&str> {
+    net0.split(',').find_map(|seg| seg.strip_prefix("bridge="))
+}
+
+/// Forces a `netN` string onto `bridge`, keeping the NIC model and every
+/// other option (`firewall=`, `tag=`, ...). Any MAC is dropped so Proxmox
+/// assigns a fresh one (same reasoning as [`net0_with_fresh_mac`]). A string
+/// with no `bridge=` segment gets one appended.
+fn net0_on_bridge(net0: &str, bridge: &str) -> String {
+    let mut segments = net0.split(',');
+    let first = segments.next().unwrap_or("");
+    // "virtio=AA:BB:..." -> "virtio"; a bare model passes through.
+    let model = first.split('=').next().unwrap_or("virtio");
+    let model = if model.is_empty() { "virtio" } else { model };
+    let mut out = vec![model.to_string()];
+    let mut replaced = false;
+    for seg in segments {
+        if seg.starts_with("bridge=") {
+            out.push(format!("bridge={bridge}"));
+            replaced = true;
+        } else if !seg.is_empty() {
+            out.push(seg.to_string());
+        }
+    }
+    if !replaced {
+        out.push(format!("bridge={bridge}"));
+    }
+    out.join(",")
+}
+
+/// The `net0` value to apply to a freshly cloned VM so it lands on the
+/// student bridge, or `None` when the template already uses it (the clone
+/// then inherits it untouched, with the MAC Proxmox generated for it).
+fn net0_override_for_clone(template_net0: &str, bridge: &str) -> Option<String> {
+    (net0_bridge(template_net0) != Some(bridge)).then(|| net0_on_bridge(template_net0, bridge))
+}
+
 /// The `vga` value a VM should be switched to at power-on, or `None` to
 /// leave its display alone. See `ensure_optimized_vm_config` for the rules.
 fn display_update(
@@ -397,11 +435,14 @@ pub struct ProxmoxDesktopService {
     /// thin-provisioned VM storage; override if this host uses ZFS or
     /// something else).
     vm_disk_storage: String,
-    /// Bridge a BYO-OS VM's NIC attaches to — `PROXMOX_VM_BRIDGE`, default
-    /// `"vmbr0"` (Proxmox's usual default bridge). The template-clone path
-    /// doesn't need this: it inherits whatever bridge the template's own
-    /// net0 already uses. A from-scratch VM has no template to inherit
-    /// from, so this needs its own setting.
+    /// The student/sandbox bridge (or SDN VNet) every guest NIC must attach
+    /// to — `PROXMOX_VM_BRIDGE`, e.g. `stunet`. There is deliberately NO
+    /// default: the API token can only use this one bridge, and guessing
+    /// another (the old `vmbr0`) would put guests on a network they must
+    /// not reach. Empty means unconfigured and every VM-creating path
+    /// refuses to run (see [`ProxmoxDesktopService::student_bridge`]).
+    /// Template clones are rewritten onto it when the template's own net0
+    /// names a different bridge.
     vm_bridge: String,
     /// vmid of an admin-built, already-installed ChromeOS Proxmox template
     /// — `PROXMOX_CHROMEOS_TEMPLATE_VMID`. `None` when unset, which is the
@@ -570,12 +611,18 @@ impl ProxmoxDesktopService {
                 String::new()
             }
         } else {
-            options
+            let legacy = options
                 .legacy_token
                 .clone()
                 .unwrap_or_default()
                 .trim()
-                .to_string()
+                .to_string();
+            if !legacy.is_empty() {
+                tracing::warn!(
+                    "[proxmox] PVE_TOKEN is deprecated and will be removed: set PROXMOX_TOKEN_ID and PROXMOX_TOKEN_SECRET (the mitch-portal@pve!website token) instead"
+                );
+            }
+            legacy
         };
         let verify_tls = parse_boolean(options.verify_tls.as_deref(), false);
         let tls_server_name = options
@@ -631,14 +678,7 @@ impl ProxmoxDesktopService {
                     v.trim().to_string()
                 }
             },
-            vm_bridge: {
-                let v = options.vm_bridge.unwrap_or_default();
-                if v.trim().is_empty() {
-                    "vmbr0".to_string()
-                } else {
-                    v.trim().to_string()
-                }
-            },
+            vm_bridge: options.vm_bridge.unwrap_or_default().trim().to_string(),
             chromeos_template_vmid: options
                 .chromeos_template_vmid
                 .filter(|raw| raw.is_finite() && raw.fract() == 0.0 && *raw > 0.0)
@@ -741,6 +781,28 @@ impl ProxmoxDesktopService {
     /// `get configured` — `Boolean(baseUrl && node && authorization)`.
     pub fn configured(&self) -> bool {
         !self.base_url.is_empty() && !self.node.is_empty() && !self.authorization.is_empty()
+    }
+
+    /// The configured student bridge, or a fail-closed error when
+    /// `PROXMOX_VM_BRIDGE` is unset/empty. Every path that creates a guest
+    /// NIC calls this *before* touching Proxmox so nothing is half-created.
+    pub fn student_bridge(&self) -> Result<&str, ProxmoxServiceError> {
+        if self.vm_bridge.is_empty() {
+            return Err(ProxmoxServiceError::new(
+                "BRIDGE_NOT_CONFIGURED",
+                "The student network bridge is not configured (PROXMOX_VM_BRIDGE is unset), so new computers can't be created.",
+                503,
+            ));
+        }
+        Ok(&self.vm_bridge)
+    }
+
+    /// The `Authorization` header value for Proxmox calls made outside this
+    /// service (the legacy LXC routes). One token for everything: the
+    /// dedicated `PROXMOX_TOKEN_ID`/`PROXMOX_TOKEN_SECRET` pair, or the
+    /// deprecated `PVE_TOKEN` fallback.
+    pub fn authorization(&self) -> &str {
+        &self.authorization
     }
 
     fn assert_configured(&self) -> Result<(), ProxmoxServiceError> {
@@ -860,6 +922,26 @@ impl ProxmoxDesktopService {
             } else {
                 status
             };
+            if status == 403 {
+                // Missing privilege (the token's role/ACL doesn't cover this
+                // endpoint). Never retried and never retried with another
+                // token: log exactly what was denied so an admin can extend
+                // the role, and tell the UI plainly.
+                let reason = payload
+                    .get("message")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or("no detail from Proxmox");
+                tracing::error!(
+                    "[proxmox] 403 on {method} {api_path}: {reason} — the API token lacks a required privilege; see docs/proxmox-privileges.md"
+                );
+                return Err(ProxmoxServiceError::new(
+                    "PERMISSION_DENIED",
+                    "The computer service refused this action because the portal's Proxmox token lacks a required permission. An admin needs to check the server log.",
+                    503,
+                ));
+            }
             // Proxmox puts the real diagnostic (e.g. "VM is locked (backup)",
             // "unable to open file - No space left on device") in `message`,
             // or per-field detail in `errors` — surface it instead of a
@@ -1618,6 +1700,7 @@ impl ProxmoxDesktopService {
         }
         let login =
             self.validate_desktop_login(&params.desktop_username, &params.desktop_password)?;
+        let student_bridge = self.student_bridge()?.to_string();
         let template_config = self
             .get_config(&json!({ "vmid": template_vmid, "node": self.node, "guestType": "qemu" }))
             .await?;
@@ -1643,6 +1726,7 @@ impl ProxmoxDesktopService {
             ));
         }
         let net0 = jsval::str_or(template_config.get("net0"), "");
+        let net0_override = net0_override_for_clone(&net0, &student_bridge);
         static BRIDGE_RE: OnceLock<Regex> = OnceLock::new();
         let bridge_re = BRIDGE_RE
             .get_or_init(|| Regex::new(r"(?:^|,)bridge=").unwrap_or_else(|_| unreachable_regex()));
@@ -1719,6 +1803,12 @@ impl ProxmoxDesktopService {
         );
         config_body.insert("balloon".to_string(), jsval::num_value(balloon));
         config_body.insert("agent".to_string(), json!(1));
+        // Fail-closed network: a clone inherits the template's net0, which
+        // may name a bridge the API token can't use (or one students must not
+        // be on). Pin it to the student bridge; the MAC is regenerated.
+        if let Some(net0) = &net0_override {
+            config_body.insert("net0".to_string(), json!(net0));
+        }
         config_body.insert("ciuser".to_string(), json!(login.0));
         config_body.insert("cipassword".to_string(), json!(login.1));
         config_body.insert("ciupgrade".to_string(), json!(0));
@@ -1838,6 +1928,7 @@ impl ProxmoxDesktopService {
             ));
         };
         let vmid = self.assert_vmid(params.vmid)?;
+        let student_bridge = self.student_bridge()?.to_string();
         let template_config = self
             .get_config(
                 &json!({ "vmid": template_vmid as f64, "node": self.node, "guestType": "qemu" }),
@@ -1852,6 +1943,7 @@ impl ProxmoxDesktopService {
             ));
         }
         let net0 = jsval::str_or(template_config.get("net0"), "");
+        let net0_override = net0_override_for_clone(&net0, &student_bridge);
         static BRIDGE_RE: OnceLock<Regex> = OnceLock::new();
         let bridge_re = BRIDGE_RE
             .get_or_init(|| Regex::new(r"(?:^|,)bridge=").unwrap_or_else(|_| unreachable_regex()));
@@ -1927,6 +2019,12 @@ impl ProxmoxDesktopService {
         );
         config_body.insert("balloon".to_string(), jsval::num_value(balloon));
         config_body.insert("agent".to_string(), json!(1));
+        // Fail-closed network: a clone inherits the template's net0, which
+        // may name a bridge the API token can't use (or one students must not
+        // be on). Pin it to the student bridge; the MAC is regenerated.
+        if let Some(net0) = &net0_override {
+            config_body.insert("net0".to_string(), json!(net0));
+        }
         if jsval::truthy(&template_config["sshkeys"]) {
             config_body.insert("delete".to_string(), json!("sshkeys"));
         }
@@ -2494,13 +2592,14 @@ impl ProxmoxDesktopService {
     /// installing their own OS by hand) booting from an ISO already present
     /// on `iso_storage`, and starts it. Mirrors `clone_desktop`'s
     /// cores/memory/disk handling but has no template to read a network
-    /// bridge or VGA config from, so those come from `vm_bridge` and a
-    /// fixed default instead.
+    /// bridge or VGA config from, so the bridge comes from `vm_bridge`
+    /// (required: fails closed when unset) and VGA from a fixed default.
     pub async fn create_from_iso(
         &self,
         params: &CreateFromIsoParams,
     ) -> Result<Value, ProxmoxServiceError> {
         let vmid = self.assert_vmid(params.vmid)?;
+        let student_bridge = self.student_bridge()?.to_string();
         let cpu_input = match params.cpu_cores {
             Some(raw) if !raw.is_nan() && raw != 0.0 => raw,
             _ => 2.0,
@@ -2540,16 +2639,11 @@ impl ProxmoxDesktopService {
         };
         let clean_host = clean_hostname(&params.hostname, vmid);
 
-        // clone_desktop never sets net0 explicitly — a cloned VM just
-        // inherits whatever network config the template already has, which
-        // is how every template-based "My Computer" ends up on the right
-        // bridge (a VPN/sandboxed one, not a bare default). A from-scratch
-        // VM has no template to clone from, so without this it would fall
-        // back to vm_bridge's own independently-configured default and can
-        // silently end up on the wrong network entirely. Read the same
-        // template's current net0 and reuse it verbatim instead of
-        // maintaining a second, separately-configured bridge setting that
-        // can drift out of sync with reality.
+        // The NIC always lands on the configured student bridge. The first
+        // template's net0 is still read so the NIC model/firewall/tag
+        // options match the template computers, but its bridge is rewritten
+        // onto the student bridge when it differs, and a template that can't
+        // be read falls back to a plain virtio NIC on the student bridge.
         let net0 = match self.template_vmids().first() {
             Some(&template_vmid) => {
                 match self
@@ -2560,24 +2654,22 @@ impl ProxmoxDesktopService {
                         let value = jsval::str_or(template_config.get("net0"), "");
                         if value.is_empty() {
                             tracing::warn!(
-                                "[proxmox] BYO-OS: template {template_vmid} has no net0 — falling back to vm_bridge={}",
-                                self.vm_bridge
+                                "[proxmox] BYO-OS: template {template_vmid} has no net0 — using bridge={student_bridge}"
                             );
-                            format!("virtio,bridge={}", self.vm_bridge)
+                            format!("virtio,bridge={student_bridge}")
                         } else {
-                            net0_with_fresh_mac(&value)
+                            net0_on_bridge(&value, &student_bridge)
                         }
                     }
                     Err(e) => {
                         tracing::warn!(
-                            "[proxmox] BYO-OS: could not read template {template_vmid}'s network config ({e:?}) — falling back to vm_bridge={}",
-                            self.vm_bridge
+                            "[proxmox] BYO-OS: could not read template {template_vmid}'s network config ({e:?}) — using bridge={student_bridge}"
                         );
-                        format!("virtio,bridge={}", self.vm_bridge)
+                        format!("virtio,bridge={student_bridge}")
                     }
                 }
             }
-            None => format!("virtio,bridge={}", self.vm_bridge),
+            None => format!("virtio,bridge={student_bridge}"),
         };
 
         let mut body = Map::new();
@@ -3023,6 +3115,76 @@ mod tests {
         );
         // Degenerate case: no comma at all.
         assert_eq!(net0_with_fresh_mac("virtio"), "virtio");
+    }
+
+    #[test]
+    fn net0_on_bridge_rewrites_only_the_bridge() {
+        // Different bridge: swap it, keep model/firewall/tag, drop the MAC.
+        assert_eq!(
+            net0_on_bridge(
+                "virtio=AA:BB:CC:DD:EE:FF,bridge=vmbr2,firewall=1,tag=50",
+                "stunet"
+            ),
+            "virtio,bridge=stunet,firewall=1,tag=50"
+        );
+        assert_eq!(
+            net0_on_bridge("e1000=11:22:33:44:55:66,bridge=vmbr0", "stunet"),
+            "e1000,bridge=stunet"
+        );
+        // No bridge segment: one is added.
+        assert_eq!(net0_on_bridge("virtio", "stunet"), "virtio,bridge=stunet");
+        assert_eq!(net0_bridge("virtio,bridge=vmbr2,firewall=1"), Some("vmbr2"));
+        assert_eq!(net0_bridge("virtio"), None);
+    }
+
+    #[test]
+    fn clone_override_only_when_bridge_differs() {
+        assert_eq!(
+            net0_override_for_clone("virtio=AA:BB:CC:DD:EE:FF,bridge=vmbr2,firewall=1", "stunet"),
+            Some("virtio,bridge=stunet,firewall=1".to_string())
+        );
+        // Already on the student bridge: leave the clone's own MAC alone.
+        assert_eq!(
+            net0_override_for_clone("virtio=AA:BB:CC:DD:EE:FF,bridge=stunet", "stunet"),
+            None
+        );
+        // `bridge=stunet2` is not `stunet`.
+        assert!(net0_override_for_clone("virtio,bridge=stunet2", "stunet").is_some());
+    }
+
+    #[test]
+    fn bridge_is_required_not_defaulted() {
+        let unset = ProxmoxDesktopService::new(ProxmoxOptions::default());
+        let err = unset.student_bridge().unwrap_err();
+        assert_eq!(err.code, "BRIDGE_NOT_CONFIGURED");
+        let blank = ProxmoxDesktopService::new(ProxmoxOptions {
+            vm_bridge: Some("   ".to_string()),
+            ..ProxmoxOptions::default()
+        });
+        assert!(blank.student_bridge().is_err());
+        let set = ProxmoxDesktopService::new(ProxmoxOptions {
+            vm_bridge: Some(" stunet ".to_string()),
+            ..ProxmoxOptions::default()
+        });
+        assert_eq!(set.student_bridge().unwrap(), "stunet");
+    }
+
+    #[tokio::test]
+    async fn create_from_iso_refuses_without_a_bridge() {
+        let service = ProxmoxDesktopService::new(ProxmoxOptions::default());
+        let params = CreateFromIsoParams {
+            windows: false,
+            owner_resources: false,
+            vmid: Some(300.0),
+            hostname: "t".to_string(),
+            cpu_cores: None,
+            memory_mb: None,
+            disk_gb: None,
+            iso_filename: "x.iso".to_string(),
+            hardware: mitch_lib::vm_hardware::HardwareOptions::default(),
+        };
+        let err = service.create_from_iso(&params).await.unwrap_err();
+        assert_eq!(err.code, "BRIDGE_NOT_CONFIGURED");
     }
 
     #[test]

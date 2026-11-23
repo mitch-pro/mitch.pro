@@ -24,13 +24,14 @@ PROXMOX_PORT=8006
 PROXMOX_NODE=tartarus
 PROXMOX_TOKEN_ID=portal@pve!customer-portal
 PROXMOX_TOKEN_SECRET=<secret supplied outside source control>
+PROXMOX_VM_BRIDGE=stunet
 PROXMOX_VERIFY_TLS=true
 PROXMOX_TLS_SERVERNAME=mitch.pro
 PROXMOX_DESKTOP_TEMPLATES=9010
 HIDE_VM_FEATURES=0
 ```
 
-`PROXMOX_TLS_SERVERNAME` validates the host's certificate for `mitch.pro` while the connection uses the private address. Install a trusted CA on the application host if replacing the existing publicly trusted certificate. Do not disable certificate validation to hide a hostname mismatch. The legacy server-side `PVE_*` settings remain supported for older VM features; a complete new token configuration takes precedence for the graphical portal.
+`PROXMOX_TLS_SERVERNAME` validates the host's certificate for `mitch.pro` while the connection uses the private address. Install a trusted CA on the application host if replacing the existing publicly trusted certificate. Do not disable certificate validation to hide a hostname mismatch. `PROXMOX_VM_BRIDGE` is the student bridge / SDN VNet (`stunet`). It has no default: while it is unset the portal refuses to create any VM or container. Template clones whose `net0` names another bridge are rewritten onto it (model, `firewall=` and `tag=` are kept; the MAC is regenerated), and student containers are created with DHCP on it. All Proxmox calls, including the older LXC/VM routes, use the one `PROXMOX_TOKEN_ID`/`PROXMOX_TOKEN_SECRET` token. `PVE_TOKEN` is deprecated: it is only used when those two are unset, and logs a startup warning. A 403 from Proxmox is logged with the endpoint and the missing privilege and shown as a clear error; it is never retried or retried with another token. VM IPs are only what the guest agent reports (`null` when unknown); nothing derives an address from the VM ID. The full endpoint/privilege list is in [proxmox-privileges.md](proxmox-privileges.md).
 
 Grant a dedicated, privilege-separated Proxmox API token only the permissions needed for the customer pool, permitted templates, target storage/network, and node status. Both the token and its parent user must have the required ACLs. Do not give it root's unrestricted role. Check effective permissions with `pveum user token permissions` after configuring ACLs. The portal needs guest audit/console/power/configuration/clone permissions, pool membership, storage allocation for cloning/resizing, permitted network attachment, and node audit for capacity. Existing unrelated VMs must remain outside that scope.
 
