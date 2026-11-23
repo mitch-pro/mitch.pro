@@ -2,7 +2,10 @@
 
 Signed-in users search for songs, play them, and watch synced lyrics. A small
 card follows the user to every other page so they can pause from anywhere, and
-the player can be popped out into its own window.
+the player can be popped out into its own window. The card's eye button hides it
+without stopping the music (it comes back when a different song starts), the X
+stops the music, and Preferences > Games > Music player card turns it off for
+good (`_prefDisplay.musicCard`).
 
 Code: `rust/crates/mitch-server/src/routes/music/` (API), `mitch-lib/src/music.rs`
 (favorites, lyrics cache), `mitch-lib/src/music_playlists.rs` (playlists),

@@ -1275,6 +1275,17 @@
   <h2>Games</h2>
 
   <div class="field">
+    <label for="musicCardToggle">Music player card</label>
+    <div class="toggle-row">
+      <label class="toggle-switch">
+        <input type="checkbox" id="musicCardToggle" checked>
+        <span class="toggle-slider"></span>
+      </label>
+      <span class="toggle-desc">Show the small player on other pages while music is playing. You can also hide it from the card itself.</span>
+    </div>
+  </div>
+
+  <div class="field">
     <label>Game Launch Mode</label>
     <div class="chip-row">
       <button class="chip active" data-launch="default" onclick="selectChip(this,'[data-launch]','activeLaunch')">Default</button>
@@ -2323,7 +2334,8 @@ function saveAll() {
       compactHome: document.getElementById('homeCompactToggle').checked
     })));
     localStorage.setItem(DISPLAY_CONFIG_KEY, JSON.stringify(Object.assign(load(DISPLAY_CONFIG_KEY, {}), {
-      gameLaunch: activeLaunch
+      gameLaunch: activeLaunch,
+      musicCard: document.getElementById('musicCardToggle').checked
     })));
     localStorage.setItem(SYNC_CONFIG_KEY, JSON.stringify({
       enabled: document.getElementById('syncToggle').checked,
@@ -2600,6 +2612,7 @@ async function deleteAccount() {
 
   var dc = load(DISPLAY_CONFIG_KEY, { gameLaunch: 'default' });
   activeLaunch = dc.gameLaunch || 'default';
+  document.getElementById('musicCardToggle').checked = dc.musicCard !== false;
   var al = document.querySelector('[data-launch="' + activeLaunch + '"]');
   if (al) { document.querySelectorAll('[data-launch]').forEach(function(b){b.classList.remove('active');}); al.classList.add('active'); }
 
@@ -2622,7 +2635,7 @@ async function deleteAccount() {
     }).catch(function(){});
   }
 
-  ['privHideOnlineToggle','privHideLocationToggle','privStealthToggle','privNewsletterToggle',
+  ['musicCardToggle','privHideOnlineToggle','privHideLocationToggle','privStealthToggle','privNewsletterToggle',
    'syncToggle','syncNoticeToggle','homeQuickToggle','homeMembersToggle','homeRecentToggle','homeLogoToggle','homeCompactToggle',
    'prefCanvasLock','prefQuickAccess'].forEach(function(id) {
     document.getElementById(id).addEventListener('change', saveAll);

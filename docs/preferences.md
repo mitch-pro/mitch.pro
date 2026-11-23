@@ -15,7 +15,7 @@ to their id.
 | Privacy | online presence, activity sharing, stealth dashboard |
 | Notifications | push/bell alert types, quiet hours, email (newsletter, blog alerts), ntfy |
 | Homepage | homepage widgets |
-| Games | game launch mode |
+| Games | game launch mode, music player card |
 | Sync & data | sync, special tools, preference backup, game saves, account deletion |
 
 The school page (`rjuhsd.school`, `/rjuhsd/preferences`) only has Appearance.
