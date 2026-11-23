@@ -11,7 +11,12 @@ use common::TestServer;
 #[tokio::test(flavor = "multi_thread")]
 async fn the_frontend_is_served_from_the_startup_snapshot() {
     let s = TestServer::start_with_webroot(
-        &[("hello.txt", "version one"), ("backgrounds/keep.txt", "x")],
+        &[
+            ("hello.txt", "version one"),
+            ("backgrounds/keep.txt", "x"),
+            ("games/some-game/page.txt", "game one"),
+            ("game-portal/portal.txt", "portal one"),
+        ],
         &[],
         "/api/tester/status",
         403,
@@ -37,6 +42,13 @@ async fn the_frontend_is_served_from_the_startup_snapshot() {
     // Even after the file is deleted from disk, it is still served from memory.
     std::fs::remove_file(root.join("hello.txt")).unwrap();
     assert_eq!(get("/hello.txt").await.text, "version one");
+
+    // A game's own folder is not held in memory: it is read from disk as it
+    // changes. The game portal's files are held like the rest of the frontend.
+    std::fs::write(root.join("games/some-game/page.txt"), "game two").unwrap();
+    std::fs::write(root.join("game-portal/portal.txt"), "portal two").unwrap();
+    assert_eq!(get("/games/some-game/page.txt").await.text, "game two");
+    assert_eq!(get("/game-portal/portal.txt").await.text, "portal one");
 
     // Live folders (uploads, backgrounds) are read from disk as they change.
     std::fs::write(root.join("backgrounds/live.txt"), "uploaded").unwrap();

@@ -18,10 +18,18 @@ What this means in practice:
   lookups, the `.html` to folder redirect, the matrix SPA fallback, the daily alias
   section list) is answered from the snapshot too, so it cannot disagree with the
   files that are served.
-- Loading takes well under a second for the current ~230 MB. Code files (html, js,
-  css, json) load first, then smaller files before bigger ones, until
-  `MITCH_STATIC_CACHE_MB` (default 4096) is used. A file over 256 MB, or past the
-  budget, stays on disk and is read when asked (logged at startup).
+- **What is held in memory**: code files (html, js, css, json, svg, wasm...) up to
+  32 MB each, then other files up to 2 MB each, smallest first, until
+  `MITCH_STATIC_SNAPSHOT_MB` (default **512**) is used. Everything else (large images,
+  audio, video, game archives) stays on disk and is read when asked. That is safe: those
+  files don't change what the backend expects, and their names don't get reused. The
+  budget is small on purpose, because the old and the new container both run during a
+  deploy and each holds its own copy. Startup logs one line with how many files are in
+  memory, how many stay on disk and how long loading took (it reads on 8 threads).
+  The first version loaded everything, including the game folders (32,900 files, 4 GB on
+  production), which took longer than the deploy health-check window on a cold disk, so
+  the first deploy attempt failed and the retry (files now cached) passed.
+- **Game folders are skipped**: the folders inside `games/` (`games/<game>/...`, the third-party bundles that can be tens of thousands of files and several GB on the server) are never held in memory. They are read from disk when asked, as they always were. Files directly in `games/` (the library page) and everything in `game-portal/` are part of the frontend and are held.
 - **Live folders** are the exception: `backgrounds/` and `blog/uploads/` are written
   by the server and admins while it runs, so they are read from disk as they change
   (`LIVE_DIRS`).
