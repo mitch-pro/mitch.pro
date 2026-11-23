@@ -11,8 +11,24 @@ The logic is in `tools/ci/pr_screen.py`. The workflow passes the PR's SHAs and a
 - Scans only **added** lines for risky patterns: secrets and tokens, owner/privilege checks, dynamic execution, download-piped-to-shell, `unsafe`, SQL built with `format!`, raw HTML injection, `pull_request_target`, workflow secret use.
 - Flags newly added `data/*.json` files (new storage must be a SQL table).
 - Reports `file:line` and the rule name only. It never prints the matched line, so a leaked secret is not copied into the PR comment.
+- Says an owner approval is required only when the PR changes a path listed in `.github/CODEOWNERS` (read from the base branch), because that's the only case where branch protection enforces one. Otherwise the report says its findings are advisory.
 - Writes the report to the job summary too. PRs from forks get a read-only token and cannot be commented on, so the summary is the fallback.
 
 ## Limits
 
 It is regex-based and advisory: the job always passes and does not block merging. A clean report is not a security review. To add a rule, append to `RULES` in the script.
+
+## AI code review
+
+The `AI Code Review` job sends the PR to Gemini and posts one comment that it updates in place. It's meant to answer the owner's real question, whether merging is good for the site and its users, not just whether the code works. CI already checks that the code builds and the tests pass.
+
+The prompt asks the model to judge, in order: user value (and added friction), direction and scope (parallel systems, duplicated pages or logic, changes that should be split), maintenance cost, breaches of the project rules, and then security, privacy and economy integrity. It answers with **Summary**, **Good for users**, **Concerns** and **Recommendation** (Merge, Merge with changes, Split or Don't merge). Merge is reserved for changes that are clearly a good direction, not just correct ones.
+
+What the model gets:
+
+- `AGENTS.md` and `docs/ui-design-standards.md` from the **base** branch, so a PR can't rewrite the rules it's judged against.
+- The PR title and description, passed in through env vars and `jq --arg`, never interpolated into shell.
+- The full list of changed files, plus the diff against the merge base, capped at 60 KB. When the diff is truncated, the model is told so and pointed to the file list.
+
+Everything in the user message is marked as data, and the model is told not to follow instructions found in it. The review is advisory and never blocks a merge. The prompt is in `.github/workflows/pr-security-review.yml`.
+

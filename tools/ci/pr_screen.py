@@ -110,6 +110,32 @@ def categorize(path):
     return "code", "Application code", False
 
 
+def codeowner_paths(base, files):
+    """Return the changed paths that GitHub will hold for a code owner's approval.
+
+    Branch protection on master requires a code owner's approval only for paths
+    listed in `.github/CODEOWNERS`; nothing else needs one. GitHub reads that file
+    from the base branch, so this does too. Only the pattern forms the file uses
+    are handled: `/dir/` (a directory) and `/path/file` (one file), plus
+    unanchored names, which match anywhere.
+    """
+    try:
+        text = git("show", f"{base}:.github/CODEOWNERS")
+    except subprocess.CalledProcessError:
+        return []
+    patterns = [line.split()[0] for line in text.splitlines()
+                if line.strip() and not line.lstrip().startswith("#")]
+
+    def matches(pattern, path):
+        anchored = pattern.startswith("/")
+        pat = pattern.strip("/")
+        if pattern.endswith("/"):
+            return path.startswith(pat + "/") if anchored else f"/{pat}/" in f"/{path}"
+        return path == pat if anchored else path == pat or path.endswith("/" + pat)
+
+    return sorted(p for p in files if any(matches(pt, p) for pt in patterns))
+
+
 def added_lines(base, head):
     """Yield (path, line number, text) for every line the PR adds."""
     path, lineno = None, 0
@@ -166,6 +192,7 @@ def main():
     counts = Counter(k for _, (_, k, *_r) in files.items())
     only_static = bool(files) and set(counts) <= {"static"}
     need_review = bool(secrets or reviews or flagged_cats or new_json)
+    owner_gated = codeowner_paths(base, files)
 
     md = ["### 🛡️ Automated PR Security Screener Report", ""]
     md += ["| | |", "| :--- | :--- |",
@@ -188,8 +215,8 @@ def main():
     elif not files:
         md += ["#### ℹ️ No changes", "The diff against the base branch is empty."]
     else:
-        md += ["#### ℹ️ Code review required",
-               "This PR changes application code and needs the owner's review before deploy."]
+        md += ["#### ℹ️ Application code changed",
+               "Nothing matched the screener's rules."]
 
     findings = []
     for r, locs in secrets + reviews:
@@ -206,8 +233,14 @@ def main():
         findings.append("- **Dependencies changed**: " + ", ".join(f"`{p}`" for p in by_cat["deps"][:MAX_PER_RULE]))
     if findings:
         md += findings + [""]
-    if need_review:
-        md += ["Required: the owner reviews this diff before it is approved.", ""]
+    # Only claim an approval is required when GitHub actually enforces one.
+    if owner_gated:
+        shown = ", ".join(f"`{p}`" for p in owner_gated[:MAX_PER_RULE])
+        more = f" (+{len(owner_gated) - MAX_PER_RULE} more)" if len(owner_gated) > MAX_PER_RULE else ""
+        md += ["GitHub won't merge this until a code owner approves it, because it changes "
+               f"paths listed in `.github/CODEOWNERS`: {shown}{more}", ""]
+    elif need_review:
+        md += ["These findings are advisory. This screener doesn't block merging.", ""]
 
     if files:
         md += ["<details><summary>Files by category</summary>", ""]
