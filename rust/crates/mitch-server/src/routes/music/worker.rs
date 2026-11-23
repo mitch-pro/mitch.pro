@@ -75,7 +75,7 @@ async fn cycle(state: &Arc<AppState>) -> bool {
         REFRESH_PER_CYCLE,
     );
     for id in due {
-        match ytdlp::refresh(&id).await {
+        match ytdlp::refresh_background(&id).await {
             Ok(_) => {}
             Err(ytdlp::YtError::Blocked | ytdlp::YtError::NotInstalled) => return false,
             Err(_) => {}
@@ -92,7 +92,7 @@ async fn match_spotify(state: &Arc<AppState>, limit: i64) -> bool {
         let key = pl::match_key(&title, &artist);
         let id = match pl::get_match(&state.store, &key) {
             Some(id) => Some(id),
-            None => match playlists::find_match(&title, &artist, duration).await {
+            None => match playlists::find_match(&title, &artist, duration, true).await {
                 Ok(found) => {
                     if let Some(id) = &found {
                         pl::put_match(&state.store, &key, id);
@@ -185,7 +185,7 @@ pub fn warm_playlist(state: &Arc<AppState>, playlist_id: &str) {
             let key = pl::match_key(&t.title, &t.artist);
             let id = match pl::get_match(&state.store, &key) {
                 Some(id) => Some(id),
-                None => match playlists::find_match(&t.title, &t.artist, t.duration).await {
+                None => match playlists::find_match(&t.title, &t.artist, t.duration, true).await {
                     Ok(found) => {
                         if let Some(id) = &found {
                             pl::put_match(&state.store, &key, id);

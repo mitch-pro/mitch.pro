@@ -190,7 +190,18 @@ async fn prefetch(state: &Arc<AppState>, email: &str, search: &str) -> Response 
     if !valid_video_id(&id) {
         return json_response(400, json!({ "error": "bad track id" }));
     }
-    if !allow(email, "resolve", 40, Duration::from_secs(60)) {
+    // Looking ahead (the default) uses the background yt-dlp slots and its own
+    // rate bucket: it must never take a slot, or a request from the shared
+    // limit, that the song being played needs. `now=1` is the player asking why
+    // the current song failed.
+    let now = qs(search, "now") == "1";
+    let bucket = if now { "resolve" } else { "prefetch" };
+    if !allow(
+        email,
+        bucket,
+        if now { 40 } else { 90 },
+        Duration::from_secs(60),
+    ) {
         return limited();
     }
     // A saved song needs nothing; a kept one that isn't saved yet is saved now.
@@ -201,7 +212,12 @@ async fn prefetch(state: &Arc<AppState>, email: &str, search: &str) -> Response 
             .unwrap_or_default();
     }
     saved::save_soon(state, &id);
-    match ytdlp::resolve(&id).await {
+    let resolved = if now {
+        ytdlp::resolve(&id).await
+    } else {
+        ytdlp::resolve_background(&id).await
+    };
+    match resolved {
         Ok(_) => Response::builder()
             .status(StatusCode::NO_CONTENT)
             .body(axum::body::Body::empty())

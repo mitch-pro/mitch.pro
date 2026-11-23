@@ -231,6 +231,31 @@ impl Drop for CookieCopy {
     }
 }
 
+/// A request gave up waiting for a yt-dlp slot: say so at most once a minute,
+/// since this is what "music never plays" looks like from the server.
+fn note_slots_full() {
+    static LAST: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+    let now = mitch_lib::school::now_millis();
+    let last = LAST.load(std::sync::atomic::Ordering::Relaxed);
+    if now - last > 60_000
+        && LAST
+            .compare_exchange(
+                last,
+                now,
+                std::sync::atomic::Ordering::Relaxed,
+                std::sync::atomic::Ordering::Relaxed,
+            )
+            .is_ok()
+    {
+        tracing::warn!(
+            "[music] a request gave up waiting for a free yt-dlp slot (main {}/4 free, search {}/3, background {}/2)",
+            spawn_slots().available_permits(),
+            search_slots().available_permits(),
+            background_slots().available_permits()
+        );
+    }
+}
+
 /// Slots kept for searches. A search is what someone is waiting on, so it never
 /// queues behind the stream-link, caption and related-song runs that share the
 /// main slots.
@@ -265,7 +290,10 @@ async fn run_in(args: &[String], slots: &Semaphore) -> Result<String, YtError> {
     let _slot = match tokio::time::timeout(SLOT_WAIT, slots.acquire()).await {
         Ok(Ok(slot)) => slot,
         Ok(Err(_)) => return Err(YtError::Failed("shutting down".into())),
-        Err(_) => return Err(YtError::Timeout),
+        Err(_) => {
+            note_slots_full();
+            return Err(YtError::Timeout);
+        }
     };
     let mut cmd = Command::new(&cfg.bin);
     cmd.arg("--ignore-config")
@@ -338,6 +366,17 @@ fn refreshing() -> &'static Mutex<std::collections::HashSet<String>> {
 ///   at once and a background refresh fetches the current list for next time.
 /// - A query never seen before is fetched live.
 pub async fn search(query: &str) -> Result<Vec<Track>, YtError> {
+    search_in(query, false).await
+}
+
+/// Like `search`, for work nobody is waiting on (matching songs ahead of time):
+/// a live fetch uses the background yt-dlp slots, so it can't queue a person's
+/// own search behind it.
+pub async fn search_background(query: &str) -> Result<Vec<Track>, YtError> {
+    search_in(query, true).await
+}
+
+async fn search_in(query: &str, background: bool) -> Result<Vec<Track>, YtError> {
     let key = query.trim().to_lowercase();
     let mem = search_cache()
         .lock()
@@ -377,7 +416,7 @@ pub async fn search(query: &str) -> Result<Vec<Track>, YtError> {
             }
         }
     }
-    fetch_live(&key).await
+    fetch_live(&key, background).await
 }
 
 fn remember(key: &str, tracks: &[Track], at: Instant) {
@@ -389,7 +428,7 @@ fn remember(key: &str, tracks: &[Track], at: Instant) {
 }
 
 /// Runs yt-dlp for a query and stores the result in memory and the database.
-async fn fetch_live(key: &str) -> Result<Vec<Track>, YtError> {
+async fn fetch_live(key: &str, background: bool) -> Result<Vec<Track>, YtError> {
     let started = Instant::now();
     let out = run_in(
         &[
@@ -397,7 +436,11 @@ async fn fetch_live(key: &str) -> Result<Vec<Track>, YtError> {
             "--dump-single-json".into(),
             format!("ytsearch15:{key}"),
         ],
-        search_slots(),
+        if background {
+            background_slots()
+        } else {
+            search_slots()
+        },
     )
     .await?;
     if started.elapsed() > Duration::from_millis(2500) {
@@ -434,7 +477,7 @@ fn refresh_search(key: String) {
         return;
     }
     tokio::spawn(async move {
-        if let Ok(tracks) = fetch_live(&key).await {
+        if let Ok(tracks) = fetch_live(&key, true).await {
             warm(tracks.iter().map(|t| t.id.clone()).collect());
         }
         refreshing()
@@ -631,9 +674,10 @@ pub fn is_cached(id: &str) -> bool {
         || from_db(id).is_some()
 }
 
-/// Forces a fresh resolution (for the background refresh of playlist songs),
-/// replacing the cached link.
-pub async fn refresh(id: &str) -> Result<Resolved, YtError> {
+/// Forces a fresh resolution, replacing the cached link, in the background pool:
+/// for the worker that keeps playlist links fresh, which must never take a slot a
+/// person's click needs.
+pub async fn refresh_background(id: &str) -> Result<Resolved, YtError> {
     resolve_cache()
         .lock()
         .unwrap_or_else(|e| e.into_inner())
@@ -641,7 +685,7 @@ pub async fn refresh(id: &str) -> Result<Resolved, YtError> {
     if let Some(store) = store() {
         mitch_lib::music::delete_stream_link(store, id);
     }
-    resolve(id).await
+    resolve_bg(id).await
 }
 
 pub fn forget(id: &str) {

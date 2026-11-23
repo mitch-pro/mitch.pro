@@ -165,18 +165,26 @@
   // warmed once.
   var UPCOMING = 3;
   var warmed = typeof WeakSet === 'function' ? new WeakSet() : null;
+  var warming = false;
   function warmUpcoming() {
-    for (var k = 1; k <= UPCOMING; k++) {
-      var next = st.queue[st.index + k];
-      if (!next || (warmed && warmed.has(next))) continue;
-      if (warmed) warmed.add(next);
-      (function (n) {
-        var ready = n.id ? Promise.resolve(n.id) : matchTrack(n).then(function (id) { n.id = id; queueDirty = true; return id; });
-        ready.then(function (id) {
-          return fetch('/api/music/prefetch?id=' + encodeURIComponent(id), { credentials: 'include' });
-        }).catch(function () { if (warmed) warmed.delete(n); });
-      })(next);
+    // One song at a time, so looking ahead never floods the server or the
+    // connection the song being played needs.
+    if (warming) return;
+    var next = null;
+    for (var k = 1; k <= UPCOMING && !next; k++) {
+      var n = st.queue[st.index + k];
+      if (n && !(warmed && warmed.has(n))) next = n;
     }
+    if (!next) return;
+    if (warmed) warmed.add(next);
+    warming = true;
+    var ready = next.id ? Promise.resolve(next.id) : matchTrack(next, true).then(function (id) { next.id = id; queueDirty = true; return id; });
+    ready.then(function (id) {
+      return fetch('/api/music/prefetch?id=' + encodeURIComponent(id), { credentials: 'include' });
+    }).catch(function () { if (warmed) warmed.delete(next); }).then(function () {
+      warming = false;
+      warmUpcoming();
+    });
   }
 
   function onTime() {
@@ -193,7 +201,7 @@
     var t = current();
     if (!t) return;
     // The <audio> element can't say why; ask the server.
-    fetch('/api/music/prefetch?id=' + encodeURIComponent(t.id), { credentials: 'include' })
+    fetch('/api/music/prefetch?now=1&id=' + encodeURIComponent(t.id), { credentials: 'include' })
       .then(function (r) {
         if (r.status === 401) { loggedOut(); return; }
         return r.json().catch(function () { return {}; }).then(function (d) {
@@ -214,9 +222,10 @@
   }
 
   /** Finds the YouTube video for a track that came from a Spotify playlist. */
-  function matchTrack(t) {
+  // `ahead`: matching an upcoming song, not the one about to play.
+  function matchTrack(t, ahead) {
     return api('/api/music/match?title=' + encodeURIComponent(t.title) + '&artist=' + encodeURIComponent(t.artist) +
-      '&duration=' + encodeURIComponent(t.duration || 0)).then(function (d) { return d.id; });
+      '&duration=' + encodeURIComponent(t.duration || 0) + (ahead ? '&bg=1' : '')).then(function (d) { return d.id; });
   }
 
   function loadTrack(i, pos, autoplay) {

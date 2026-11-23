@@ -712,6 +712,8 @@ impl DataStore {
                         email TEXT PRIMARY KEY,
                         block_lookups INTEGER NOT NULL DEFAULT 0
                     );
+                    CREATE INDEX IF NOT EXISTS idx_music_tracks_video ON music_playlist_tracks (video_id);
+                    CREATE INDEX IF NOT EXISTS idx_music_favorites_video ON music_favorites (video_id);
                     CREATE TABLE IF NOT EXISTS music_audio_files (
                         video_id TEXT PRIMARY KEY,
                         size INTEGER NOT NULL,
