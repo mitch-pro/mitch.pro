@@ -14,8 +14,9 @@ Code: `rust/crates/mitch-server/src/routes/music/` (API), `mitch-lib/src/music.r
 
 ## Discover
 
-The Discover tab (`routes/music/discover.rs`, `GET /api/music/discover`) has three
-parts:
+The Discover tab (`routes/music/discover.rs`, `GET /api/music/discover`) has two
+parts. Neither uses what people on this site keep or play, so nothing about
+listening is derived from it:
 
 - **Browse by genre**: 18 genres (`GENRES`). A genre is one YouTube search such as
   "top hip hop songs 2026" (the year is added for the chart genres), answered from
@@ -26,12 +27,7 @@ parts:
   Otherwise two YouTube searches for this year's hits, interleaved. Search results
   are only as good as YouTube's ranking, so set the chart playlist for a
   trustworthy list.
-- **Popular on mitch.pro**: songs kept (in a playlist or the library) by at least
-  three different accounts, most kept first. The response has the songs only: no
-  account, no count, and a song one or two people keep never appears. Nothing about
-  listening is recorded.
-
-If the music source is down, Top songs is empty and the other sections still work.
+If the music source is down, Top songs is empty and the genres still work.
 Songs listed here are warmed like search results, so they start quickly.
 
 ## Playlists

@@ -333,7 +333,7 @@
   function trackBody(t) { return { id: t.id || '', title: t.title, artist: t.artist, duration: t.duration || 0, spotifyId: t.spotifyId || '' }; }
 
   /* ----------------------------------------------------------- discover */
-  // Top songs, songs popular on the site, and genres. Loaded when the tab opens
+  // Top songs and genres. Loaded when the tab opens
   // and kept for ten minutes.
 
   function loadDiscover() {
@@ -405,7 +405,6 @@
     genres.append(gh, grid);
     box.appendChild(genres);
     if (d.top && d.top.length) box.appendChild(discoverSection('Top songs', d.top));
-    if (d.popular && d.popular.length) box.appendChild(discoverSection('Popular on mitch.pro', d.popular));
     if (!(d.top && d.top.length)) {
       var note = document.createElement('p'); note.className = 'mp-empty'; note.textContent = 'Top songs are unavailable right now. Genres still work.';
       box.appendChild(note);

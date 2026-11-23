@@ -1,10 +1,9 @@
-//! The Discover tab: top songs, songs popular on this site, and browsing by
-//! genre (see `docs/music.md`, "Discover").
+//! The Discover tab: top songs and browsing by genre (see `docs/music.md`,
+//! "Discover"). Nothing here is built from what people on this site keep or
+//! play.
 //!
 //! - **Top songs**: an official chart playlist if `MUSIC_TOP_PLAYLIST` names one
 //!   (a YouTube playlist id), otherwise YouTube searches for this year's hits.
-//! - **Popular here**: songs kept by at least `POPULAR_MIN_KEEPERS` accounts. Only
-//!   the songs are returned; nobody's listening is tracked.
 //! - **Genres**: one cached search per genre (`GENRES`), the same search cache as
 //!   the Search tab, so repeat visits are instant.
 
@@ -15,8 +14,6 @@ use serde_json::json;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// Fewest accounts that must keep a song for it to count as popular.
-const POPULAR_MIN_KEEPERS: i64 = 3;
 const LIST_LEN: usize = 25;
 
 /// `(id, name, search words, add the year)`.
@@ -157,22 +154,11 @@ pub async fn handle(state: &Arc<AppState>, email: &str, search: &str) -> Respons
         }
     };
     warm(state, &top);
-    let popular: Vec<_> = mitch_lib::music::popular_songs(
-        &state.store,
-        POPULAR_MIN_KEEPERS,
-        LIST_LEN as i64,
-    )
-    .into_iter()
-    .map(|p| json!({ "id": p.id, "title": p.title, "artist": p.artist, "duration": p.duration }))
-    .collect();
     let genres: Vec<_> = GENRES
         .iter()
         .map(|g| json!({ "id": g.0, "name": g.1 }))
         .collect();
-    json_response(
-        200,
-        json!({ "top": top, "popular": popular, "genres": genres }),
-    )
+    json_response(200, json!({ "top": top, "genres": genres }))
 }
 
 #[cfg(test)]

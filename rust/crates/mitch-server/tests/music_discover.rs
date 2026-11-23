@@ -1,7 +1,6 @@
-//! Discover: genres are listed, songs several accounts keep show up as
-//! popular (and nothing about who keeps them), unknown genres 404. The music
-//! source (yt-dlp) is absent here, so "top songs" is empty and the page still
-//! answers.
+//! Discover: genres are listed, unknown genres 404, and the page answers when
+//! the music source (yt-dlp) is absent, as it is here ("top songs" is empty).
+//! Nothing in the response comes from what accounts keep or play.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod common;
@@ -9,9 +8,10 @@ mod common;
 use common::TestServer;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn discover_lists_genres_and_popular_songs_without_naming_anyone() {
+async fn discover_lists_genres_and_knows_nothing_about_listeners() {
     let s = TestServer::start(&[], "/api/tester/status", 403).await;
     let me = s.session_for("test1@example.com");
+    // Songs several accounts keep must not show up anywhere in Discover.
     {
         let db = s.db();
         for who in ["test1", "test2", "test3"] {
@@ -22,24 +22,12 @@ async fn discover_lists_genres_and_popular_songs_without_naming_anyone() {
             )
             .unwrap();
         }
-        db.execute(
-            "INSERT INTO music_favorites (email, video_id, title, artist, duration_s, added_at) \
-             VALUES ('test1@example.com', 'bbbbbbbbbbb', 'Private Song', 'Solo', 200, 1)",
-            [],
-        )
-        .unwrap();
     }
     let r = s.call(Some(&me), "GET", "/api/music/discover", None).await;
     assert_eq!(r.status, 200, "{}", r.text);
     assert!(r.json["genres"].as_array().unwrap().len() >= 10);
-    let popular = r.json["popular"].as_array().unwrap();
-    assert_eq!(popular.len(), 1, "{}", r.text);
-    assert_eq!(popular[0]["title"], "Shared Song");
-    assert!(
-        !r.text.contains("example.com"),
-        "no account in the response"
-    );
-    assert!(!r.text.contains("Private Song"));
+    assert!(r.json.get("popular").is_none(), "{}", r.text);
+    assert!(!r.text.contains("Shared Song"));
 
     let unknown = s
         .call(Some(&me), "GET", "/api/music/discover?genre=nope", None)

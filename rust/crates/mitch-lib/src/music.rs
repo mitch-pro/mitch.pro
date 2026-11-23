@@ -295,42 +295,6 @@ pub struct StreamLink {
     pub expires_at: i64,
 }
 
-/// A song kept by several accounts, for the Discover tab.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PopularSong {
-    pub id: String,
-    pub title: String,
-    pub artist: String,
-    pub duration: i64,
-}
-
-/// Songs kept (in a playlist or the library) by at least `min_keepers`
-/// different accounts, most kept first. Only the song is returned: no account,
-/// no count, and the minimum keeps a song one person kept from showing up.
-pub fn popular_songs(store: &DataStore, min_keepers: i64, limit: i64) -> Vec<PopularSong> {
-    let conn = store.conn();
-    let Ok(mut stmt) = conn.prepare(
-        "SELECT video_id, MIN(title), MIN(artist), MAX(duration_s), COUNT(DISTINCT email) AS keepers FROM ( \
-           SELECT p.owner_email AS email, t.video_id AS video_id, t.title AS title, t.artist AS artist, t.duration_s AS duration_s \
-             FROM music_playlist_tracks t JOIN music_playlists p ON p.id = t.playlist_id WHERE t.video_id != '' \
-           UNION ALL \
-           SELECT email, video_id, title, artist, duration_s FROM music_favorites \
-         ) GROUP BY video_id HAVING keepers >= ?1 ORDER BY keepers DESC, video_id LIMIT ?2",
-    ) else {
-        return Vec::new();
-    };
-    let rows = stmt.query_map(rusqlite::params![min_keepers, limit], |r| {
-        Ok(PopularSong {
-            id: r.get(0)?,
-            title: r.get(1)?,
-            artist: r.get(2)?,
-            duration: r.get(3)?,
-        })
-    });
-    rows.map(|r| r.filter_map(Result::ok).collect())
-        .unwrap_or_default()
-}
-
 /// A link with at least `min_left_ms` of life left.
 pub fn get_stream_link(store: &DataStore, video_id: &str, min_left_ms: i64) -> Option<StreamLink> {
     let link: StreamLink = store
@@ -787,31 +751,5 @@ mod tests {
         assert!(!valid_video_id("fJ9rUzIMcZQ "));
         assert!(!valid_video_id("fJ9rUzIMc;Q"));
         assert!(!valid_video_id("../etc/pass"));
-    }
-
-    #[test]
-    fn popular_songs_need_several_keepers_and_name_no_one() {
-        let dir =
-            std::env::temp_dir().join(format!("music-pop-{}", crate::crypto::random_bytes_hex(6)));
-        std::fs::create_dir_all(&dir).unwrap();
-        let s = DataStore::open(&dir, &dir).unwrap();
-        let fav = |email: &str, id: &str| {
-            s.conn()
-                .execute(
-                    "INSERT INTO music_favorites (email, video_id, title, artist, duration_s, added_at) VALUES (?1, ?2, 'T', 'A', 200, 1)",
-                    rusqlite::params![email, id],
-                )
-                .unwrap();
-        };
-        for who in ["a", "b", "c"] {
-            fav(&format!("{who}@example.com"), "aaaaaaaaaaa");
-        }
-        fav("a@example.com", "bbbbbbbbbbb");
-        fav("b@example.com", "bbbbbbbbbbb");
-        let top = popular_songs(&s, 3, 10);
-        assert_eq!(top.len(), 1);
-        assert_eq!(top[0].id, "aaaaaaaaaaa");
-        assert_eq!(popular_songs(&s, 2, 10).len(), 2);
-        let _ = std::fs::remove_dir_all(dir);
     }
 }
