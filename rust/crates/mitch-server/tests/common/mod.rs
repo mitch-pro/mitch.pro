@@ -37,6 +37,17 @@ impl TestServer {
     /// (e.g. `("testers.json", "[...]")`). `ready_path` is polled until it
     /// answers with `ready_status`, which shows the router is serving.
     pub async fn start(data_files: &[(&str, &str)], ready_path: &str, ready_status: u16) -> Self {
+        Self::start_with_webroot(&[], data_files, ready_path, ready_status).await
+    }
+
+    /// Like [`start`], but with a webroot holding only `web_files` (relative
+    /// paths, written before launch) instead of the repo's `webserver/`.
+    pub async fn start_with_webroot(
+        web_files: &[(&str, &str)],
+        data_files: &[(&str, &str)],
+        ready_path: &str,
+        ready_status: u16,
+    ) -> Self {
         // Tests in one binary run in parallel and the clock can be coarse, so
         // pid + time alone collided (the second server's symlink then failed
         // with "File exists"); a per-process counter keeps every dir unique.
@@ -52,9 +63,17 @@ impl TestServer {
         ));
         std::fs::create_dir_all(dir.join("data")).unwrap();
         let webserver = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../webserver");
-        #[cfg(unix)]
-        std::os::unix::fs::symlink(webserver.canonicalize().unwrap(), dir.join("webserver"))
-            .unwrap();
+        if web_files.is_empty() {
+            #[cfg(unix)]
+            std::os::unix::fs::symlink(webserver.canonicalize().unwrap(), dir.join("webserver"))
+                .unwrap();
+        } else {
+            for (name, content) in web_files {
+                let path = dir.join("webserver").join(name);
+                std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+                std::fs::write(path, content).unwrap();
+            }
+        }
         for (name, content) in data_files {
             std::fs::write(dir.join("data").join(name), content).unwrap();
         }
@@ -103,6 +122,11 @@ impl TestServer {
             secret,
             client,
         }
+    }
+
+    /// The server's webroot (`webserver/`).
+    pub fn webroot(&self) -> std::path::PathBuf {
+        self.dir.join("webserver")
     }
 
     /// The server's data directory.

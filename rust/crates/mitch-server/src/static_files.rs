@@ -4,6 +4,12 @@
 //!   or range requests. Only 200 + redirects + 404/403.
 //! - In practice every requestable file goes through the cached branch (the
 //!   cache loads on miss), so the cached-branch mime map is the contract.
+//! - The site's own files (`webserver/`) are read into memory once, when the server
+//!   starts, and served from that snapshot for the life of the process (`webfs`).
+//!   They are never re-read from disk, so a deploy that replaces the files under a
+//!   running server does not change what it serves: the old server keeps serving
+//!   the old frontend until it is replaced. Only folders the server itself writes
+//!   into (`LIVE_DIRS`: uploads, backgrounds) are read from disk as before.
 //! - Cache-Control classes: code (html/htm/js/css or text types) →
 //!   `no-cache, no-store, must-revalidate` + Pragma + Expires 0; media exts →
 //!   `public, max-age=31536000, immutable`; else `public, max-age=2592000`.
@@ -125,6 +131,231 @@ fn cache_max_bytes() -> u64 {
         .unwrap_or(4 * 1024 * 1024 * 1024)
 }
 
+/// Folders under the webroot that the server or an admin writes into while it
+/// runs. They are not part of the frontend, so they are read from disk when
+/// requested.
+pub const LIVE_DIRS: &[&str] = &["backgrounds", "blog/uploads"];
+
+/// The frontend, loaded into memory once at startup and never refreshed from
+/// disk (see the module docs). Files and directories are answered from the
+/// snapshot, so "does this page exist" and "read this file" cannot disagree with
+/// what was loaded. A path that is outside the webroot, inside a live folder, or
+/// too big to keep in memory falls back to the disk.
+pub mod webfs {
+    use super::{cache_max_bytes, normalize_lexical, LIVE_DIRS};
+    use std::collections::{HashMap, HashSet};
+    use std::path::{Path, PathBuf};
+    use std::sync::{Arc, RwLock};
+
+    /// A single file bigger than this stays on disk.
+    const MAX_FILE_BYTES: u64 = 256 * 1024 * 1024;
+
+    struct Snapshot {
+        root: PathBuf,
+        files: HashMap<PathBuf, Arc<Vec<u8>>>,
+        dirs: HashSet<PathBuf>,
+        /// Files that exist but were not loaded (over budget): read from disk.
+        on_disk: HashSet<PathBuf>,
+    }
+
+    static SNAPSHOT: RwLock<Option<Arc<Snapshot>>> = RwLock::new(None);
+
+    /// What a path resolves to.
+    pub enum Found {
+        /// The file, from memory.
+        File(Arc<Vec<u8>>),
+        /// A directory in the snapshot.
+        Dir,
+        /// Not in the snapshot, and the snapshot covers this path: it does not
+        /// exist.
+        Missing,
+        /// Not covered by the snapshot: ask the disk.
+        Disk,
+    }
+
+    fn is_live(root: &Path, path: &Path) -> bool {
+        LIVE_DIRS.iter().any(|d| path.starts_with(root.join(d)))
+    }
+
+    fn is_code(path: &Path) -> bool {
+        matches!(
+            path.extension().and_then(|e| e.to_str()).unwrap_or(""),
+            "html" | "htm" | "js" | "css" | "json" | "txt" | "xml" | "svg" | "wasm"
+        )
+    }
+
+    fn walk(
+        dir: &Path,
+        root: &Path,
+        depth: u32,
+        files: &mut Vec<(PathBuf, u64)>,
+        dirs: &mut HashSet<PathBuf>,
+    ) {
+        if depth > 32 || is_live(root, dir) {
+            return;
+        }
+        dirs.insert(dir.to_path_buf());
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            // `metadata` follows symlinks, so a linked file or folder counts.
+            let Ok(md) = std::fs::metadata(&path) else {
+                continue;
+            };
+            if md.is_dir() {
+                walk(&path, root, depth + 1, files, dirs);
+            } else if md.is_file() {
+                files.push((path, md.len()));
+            }
+        }
+    }
+
+    fn build(root: &Path) -> Snapshot {
+        let mut found: Vec<(PathBuf, u64)> = Vec::new();
+        let mut dirs = HashSet::new();
+        walk(root, root, 0, &mut found, &mut dirs);
+        // Code first, then everything else smallest first, until the budget is
+        // used up; the rest stays on disk.
+        found.sort_by_key(|(p, len)| (!is_code(p), *len));
+        let budget = cache_max_bytes();
+        let mut used: u64 = 0;
+        let mut files = HashMap::new();
+        let mut on_disk = HashSet::new();
+        for (path, len) in found {
+            if len > MAX_FILE_BYTES || used + len > budget {
+                on_disk.insert(path);
+                continue;
+            }
+            match std::fs::read(&path) {
+                Ok(data) => {
+                    used += data.len() as u64;
+                    files.insert(path, Arc::new(data));
+                }
+                Err(_) => {
+                    on_disk.insert(path);
+                }
+            }
+        }
+        if !on_disk.is_empty() {
+            tracing::warn!(
+                "[static] {} files were too big for the in-memory frontend and are read from disk",
+                on_disk.len()
+            );
+        }
+        tracing::info!(
+            "[static] frontend loaded into memory: {} files, {} MB",
+            files.len(),
+            used / (1024 * 1024)
+        );
+        Snapshot {
+            root: root.to_path_buf(),
+            files,
+            dirs,
+            on_disk,
+        }
+    }
+
+    /// Loads the frontend from `root`. Call once at startup, before serving.
+    pub fn init(root: &Path) -> (usize, usize) {
+        reload(root)
+    }
+
+    /// Replaces the snapshot with what is on disk now. Used at startup and by the
+    /// admin "refresh static cache" action; nothing else calls it.
+    pub fn reload(root: &Path) -> (usize, usize) {
+        let snap = Arc::new(build(root));
+        let counts = (snap.files.len(), snap.dirs.len());
+        *SNAPSHOT.write().unwrap_or_else(|e| e.into_inner()) = Some(snap);
+        counts
+    }
+
+    /// Number of files held in memory.
+    pub fn file_count() -> usize {
+        SNAPSHOT
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(|s| s.files.len())
+            .unwrap_or(0)
+    }
+
+    pub fn lookup(path: &Path) -> Found {
+        let Some(snap) = SNAPSHOT.read().unwrap_or_else(|e| e.into_inner()).clone() else {
+            return Found::Disk;
+        };
+        let path = normalize_lexical(path);
+        if !path.starts_with(&snap.root) || is_live(&snap.root, &path) {
+            return Found::Disk;
+        }
+        if let Some(data) = snap.files.get(&path) {
+            return Found::File(data.clone());
+        }
+        if snap.on_disk.contains(&path) {
+            return Found::Disk;
+        }
+        if snap.dirs.contains(&path) {
+            return Found::Dir;
+        }
+        Found::Missing
+    }
+
+    /// File contents, from memory (or the disk for the exceptions above).
+    pub fn read(path: &Path) -> Option<Arc<Vec<u8>>> {
+        match lookup(path) {
+            Found::File(d) => Some(d),
+            Found::Disk => std::fs::read(path).ok().map(Arc::new),
+            Found::Dir | Found::Missing => None,
+        }
+    }
+
+    pub fn read_text(path: &Path) -> Option<String> {
+        read(path).map(|d| String::from_utf8_lossy(&d).into_owned())
+    }
+
+    pub fn is_file(path: &Path) -> bool {
+        match lookup(path) {
+            Found::File(_) => true,
+            Found::Disk => path.is_file(),
+            Found::Dir | Found::Missing => false,
+        }
+    }
+
+    pub fn is_dir(path: &Path) -> bool {
+        match lookup(path) {
+            Found::Dir => true,
+            Found::Disk => path.is_dir(),
+            Found::File(_) | Found::Missing => false,
+        }
+    }
+
+    pub fn exists(path: &Path) -> bool {
+        is_file(path) || is_dir(path)
+    }
+
+    /// Names of the directories directly inside `dir`.
+    pub fn child_dir_names(dir: &Path) -> Vec<String> {
+        let snapshot = SNAPSHOT.read().unwrap_or_else(|e| e.into_inner()).clone();
+        let dir = normalize_lexical(dir);
+        match snapshot {
+            Some(snap) if matches!(lookup(&dir), Found::Dir) => snap
+                .dirs
+                .iter()
+                .filter(|d| d.parent() == Some(dir.as_path()))
+                .filter_map(|d| d.file_name().and_then(|n| n.to_str()).map(str::to_string))
+                .collect(),
+            _ => std::fs::read_dir(&dir)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+                .filter_map(|e| e.file_name().into_string().ok())
+                .collect(),
+        }
+    }
+}
+
 #[derive(Clone)]
 struct CacheEntry {
     data: Arc<Vec<u8>>,
@@ -163,9 +394,23 @@ impl StaticCache {
         }
     }
 
-    /// `staticCacheGet`: touch, revalidate against mtime+size every 30 min,
-    /// load on miss (like `staticCacheLoad`).
+    /// `staticCacheGet` for what the snapshot does not hold (live folders, files
+    /// over the memory budget): touch, revalidate against mtime+size every 30
+    /// min, load on miss (like `staticCacheLoad`).
     fn get(&self, path: &Path) -> Option<CacheEntry> {
+        // The frontend comes from the startup snapshot and is never revalidated.
+        match webfs::lookup(path) {
+            webfs::Found::File(data) => {
+                return Some(CacheEntry {
+                    size: data.len(),
+                    data,
+                    mtime_ms: 0,
+                    checked_at: now_ms(),
+                });
+            }
+            webfs::Found::Dir | webfs::Found::Missing => return None,
+            webfs::Found::Disk => {}
+        }
         let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(entry) = inner.map.get(path).cloned() {
             inner.order.retain(|k| k != path);
@@ -228,64 +473,25 @@ impl StaticCache {
         (inner.map.len(), inner.bytes, self.max_bytes)
     }
 
-    pub fn clear(&self, webroot: &Path, base_dir: &Path, specific_files: &[String]) -> ClearResult {
+    /// The admin "refresh static cache" action: the one deliberate way to re-read
+    /// the frontend from disk while the server runs. It rebuilds the whole
+    /// snapshot (whatever files were named) and empties the cache of live folders.
+    pub fn clear(
+        &self,
+        webroot: &Path,
+        _base_dir: &Path,
+        specific_files: &[String],
+    ) -> ClearResult {
+        let before = webfs::file_count();
+        let (after, _) = webfs::reload(webroot);
         let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-        if !specific_files.is_empty() {
-            let mut evicted = 0;
-            let mut reloaded = 0;
-            for item in specific_files {
-                let item = item.trim();
-                if item.is_empty() {
-                    continue;
-                }
-                let clean = item.trim_start_matches('/');
-                let mut candidates = Vec::new();
-                if let Some(p) = safe_webroot_path(webroot, &format!("/{clean}")) {
-                    candidates.push(p);
-                }
-                candidates.push(webroot.join(clean));
-                candidates.push(base_dir.join(clean));
-
-                for p in candidates {
-                    if let Some(old) = inner.map.remove(&p) {
-                        inner.bytes = inner.bytes.saturating_sub(old.size);
-                        inner.order.retain(|k| k != &p);
-                        evicted += 1;
-                    }
-                    if p.is_file() {
-                        if let Ok(data) = std::fs::read(&p) {
-                            if let Ok(md) = std::fs::metadata(&p) {
-                                let size = data.len();
-                                let entry = CacheEntry {
-                                    data: Arc::new(data),
-                                    mtime_ms: mtime_of(&md),
-                                    size,
-                                    checked_at: now_ms(),
-                                };
-                                inner.map.insert(p.clone(), entry);
-                                inner.order.push(p);
-                                inner.bytes += size;
-                                reloaded += 1;
-                            }
-                        }
-                    }
-                }
-            }
-            ClearResult {
-                evicted,
-                reloaded,
-                full: false,
-            }
-        } else {
-            let count = inner.map.len();
-            inner.map.clear();
-            inner.order.clear();
-            inner.bytes = 0;
-            ClearResult {
-                evicted: count,
-                reloaded: 0,
-                full: true,
-            }
+        inner.map.clear();
+        inner.order.clear();
+        inner.bytes = 0;
+        ClearResult {
+            evicted: before,
+            reloaded: after,
+            full: specific_files.is_empty(),
         }
     }
 }
@@ -467,16 +673,13 @@ pub fn serve_static(
     };
 
     // Directory: check for index.html, then index.htm.
-    if std::fs::metadata(&file_path)
-        .map(|m| m.is_dir())
-        .unwrap_or(false)
-    {
+    if webfs::is_dir(&file_path) {
         if !url_path.ends_with('/') {
             return redirect(&format!("{url_path}/"), 301);
         }
-        if file_path.join("index.html").exists() {
+        if webfs::exists(&file_path.join("index.html")) {
             file_path = file_path.join("index.html");
-        } else if file_path.join("index.htm").exists() {
+        } else if webfs::exists(&file_path.join("index.htm")) {
             let target = format!("{url_path}index.htm");
             return redirect(&target, 302);
         }
@@ -495,7 +698,7 @@ pub fn serve_static(
         .map(|s| s.contains("gzip"))
         .unwrap_or(false);
     let gz_path = PathBuf::from(format!("{}.gz", file_path.display()));
-    let can_serve_gzip = accepts_gzip && ext != "html" && ext != "htm" && gz_path.exists();
+    let can_serve_gzip = accepts_gzip && ext != "html" && ext != "htm" && webfs::exists(&gz_path);
     let target_file_path = if can_serve_gzip { gz_path } else { file_path };
 
     let Some(entry) = cache.get(&target_file_path) else {
@@ -530,8 +733,7 @@ pub fn serve_static(
 pub fn pickle_asset_response(webroot: &std::path::Path, path: &str) -> Option<Response> {
     let rel = path.trim_start_matches('/');
     let asset = safe_webroot_path(webroot, &format!("sexypickleclub/{rel}"))?;
-    let md = std::fs::metadata(&asset).ok()?;
-    if !md.is_file() {
+    if !webfs::is_file(&asset) {
         return None;
     }
     let ext = asset
@@ -556,7 +758,9 @@ pub fn pickle_asset_response(webroot: &std::path::Path, path: &str) -> Option<Re
             .status(axum::http::StatusCode::OK)
             .header(header::CONTENT_TYPE, mime)
             .header(header::CACHE_CONTROL, "public, max-age=86400")
-            .body(axum::body::Body::from(std::fs::read(asset).ok()?))
+            .body(axum::body::Body::from(
+                webfs::read(&asset)?.as_ref().clone(),
+            ))
             .expect("static response"),
     )
 }

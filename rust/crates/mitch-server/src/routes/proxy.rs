@@ -206,7 +206,7 @@ pub async fn content(
             }),
         ));
     }
-    let Ok(html) = std::fs::read_to_string(&file_path) else {
+    let Some(html) = crate::static_files::webfs::read_text(&file_path) else {
         return Some(json_response(
             200,
             json!({

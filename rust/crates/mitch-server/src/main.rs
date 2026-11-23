@@ -67,6 +67,9 @@ async fn main() {
     }
 
     let cfg = hosts::SiteConfig::load();
+    // The frontend is read into memory once, here, and never again from disk, so a
+    // deploy that swaps the files under a running server can't change what it serves.
+    static_files::webfs::init(&cfg.webroot);
     let store = Arc::new(
         mitch_lib::data::DataStore::open(&cfg.base_dir, &cfg.data_dir)
             .unwrap_or_else(|e| panic!("open data store at {}: {e}", cfg.data_dir.display())),

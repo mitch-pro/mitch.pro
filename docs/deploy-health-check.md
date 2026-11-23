@@ -16,7 +16,8 @@ switches Caddy to it. This covers the wait (step 4) and what happens when it fai
 1. The failed slot is stopped, so a reboot cannot bring the bad build back up.
 2. The git checkout is moved back to the commit it was on before this deploy's pull
    (`git reset --keep`). The webroot HTML on disk then matches the backend that is still
-   serving, and a reboot starts the old code. `--keep` refuses rather than discarding local
+   serving (which kept serving its own startup snapshot of it all along, see
+   [static-files.md](static-files.md)), and a reboot starts the old code. `--keep` refuses rather than discarding local
    edits made on the server; if it refuses, the owner gets an urgent ntfy and the checkout
    stays on the new commit.
 3. `caddy/Caddyfile` is pointed back at the live slot, the static cache is refreshed on the
