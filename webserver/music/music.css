@@ -478,3 +478,12 @@ html.theme-light .mp-orbs i { opacity: 0.14; }
 .mp-toggle[data-mode=smart] { color: var(--t-ac); position: relative; }
 .mp-toggle[data-mode=smart]::after { content: '\2726'; position: absolute; top: 3px; right: 3px; font-size: 11px; line-height: 1; }
 .mp-tag { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, var(--t-ac) 20%, transparent); color: var(--t-ac); font-size: 11px; font-weight: 700; vertical-align: 1px; }
+
+/* Discover */
+.mp-dvsection { margin: 0 0 22px; }
+.mp-dvtitle { margin: 0 4px 10px; font-size: 18px; letter-spacing: -0.01em; }
+.mp-genres { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; padding: 0 4px; }
+.mp-genre { min-height: 38px; padding: 8px 10px; text-align: left; font: inherit; font-weight: 650; font-size: 13px; cursor: pointer; color: var(--t-fg); background: color-mix(in srgb, var(--t-ac) 12%, var(--t-bg2, transparent)); border: 1px solid var(--t-bd); border-radius: 12px; }
+.mp-genre:hover { border-color: var(--t-ac); }
+.mp-genre:focus-visible { outline: 2px solid var(--t-ac); outline-offset: 2px; }
+.mp-dvback { margin: 0 4px 12px; }

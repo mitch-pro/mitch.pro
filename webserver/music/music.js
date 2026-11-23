@@ -24,6 +24,7 @@
     note: 'M12 3v10.55A4 4 0 1 0 14 17V7h4V3z',
     playlist: 'M3 6h12v2H3zm0 5h12v2H3zm0 5h7v2H3zm13-8v7.2a3 3 0 1 0 2 2.8V10h3V8z',
     upnext: 'M4 6h12v2H4zm0 5h12v2H4zm0 5h7v2H4zm11-1.5 6 3.5-6 3.5z',
+    discover: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM7.5 16.5l3.2-5.8 5.8-3.2-3.2 5.8-5.8 3.2zm4.5-5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z',
     up: 'M7 14l5-5 5 5z',
     down: 'M7 10l5 5 5-5z',
     remove: 'M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6z'
@@ -54,6 +55,7 @@
     seek: $('mp-seek'), vol: $('mp-vol'), lyrics: $('mp-lyrics'), info: $('mp-lyricsinfo'),
     wrong: $('mp-wrong'), wrongForm: $('mp-wrongform'), wt: $('mp-wt'), wa: $('mp-wa'),
     status: $('mp-status'), list: $('mp-list'), q: $('mp-q'),
+    dvPanel: $('mp-discover'),
     plPanel: $('mp-playlists'), plHome: $('mp-plhome'), plList: $('mp-pllist'), plDetail: $('mp-pldetail'),
     plName: $('mp-pl-name'), plMeta: $('mp-pl-meta'), plActions: $('mp-pl-actions'), plShare: $('mp-pl-share'),
     plTracks: $('mp-pltracks'), plSearch: $('mp-plsearch'), plQ: $('mp-plq'),
@@ -79,6 +81,7 @@
       a.classList.remove('mp-beat'); void a.offsetWidth; a.classList.add('mp-beat');
     }
   });
+  var dv = { data: null, at: 0, genre: null, genreTracks: null, loading: false, req: 0 };
   var results = [], library = [], favIds = {}, tab = 'search', shownId = '', seeking = false, queueSig = '';
 
   /* ---------------------------------------------------------- list views */
@@ -169,8 +172,10 @@
   function render() {
     if (!el.list) return;
     setTitle();
-    el.list.hidden = tab === 'playlists';
+    el.list.hidden = tab === 'playlists' || tab === 'discover';
     el.plPanel.hidden = tab !== 'playlists';
+    if (el.dvPanel) el.dvPanel.hidden = tab !== 'discover';
+    if (tab === 'discover') { renderDiscover(); return; }
     if (tab === 'playlists') { renderPlaylists(); return; }
     var list = tab === 'search' ? results : tab === 'library' ? library : M.state.queue;
     el.list.replaceChildren();
@@ -197,7 +202,9 @@
   function markPlaying() {
     if (!el.list) return;
     var cur = M.current();
-    [el.list, el.plTracks].forEach(function (ul) {
+    var lists = [el.list, el.plTracks];
+    if (el.dvPanel) Array.prototype.forEach.call(el.dvPanel.querySelectorAll('ul.mp-list'), function (ul) { lists.push(ul); });
+    lists.forEach(function (ul) {
       Array.prototype.forEach.call(ul.children, function (li) {
         var mine = !!cur && !!cur.id && li.dataset.id === cur.id;
         li.classList.toggle('mp-playing', mine);
@@ -213,6 +220,7 @@
     if (!t) return;
     var q = ($('mp-q') && $('mp-q').value.trim()) || '';
     var text = tab === 'search' ? (q ? 'Results for \u201c' + q + '\u201d' : 'Search')
+      : tab === 'discover' ? (dv.genre ? dv.genre.name : 'Discover')
       : tab === 'library' ? 'Library' : tab === 'queue' ? 'Queue'
       : plOpen ? plOpen.p.name : plMode === 'public' ? 'Public playlists' : 'Playlists';
     t.hidden = tab === 'playlists' && !!plOpen;       // an open playlist shows its own heading
@@ -222,12 +230,14 @@
   function setTab(name) {
     tab = name;
     queueSig = '';
-    ['search', 'library', 'playlists', 'queue'].forEach(function (n) {
+    ['search', 'discover', 'library', 'playlists', 'queue'].forEach(function (n) {
       $('tab-' + n).setAttribute('aria-selected', n === name ? 'true' : 'false');
     });
     say('');
     setTitle();
-    if (name === 'library') loadLibrary(); else render();
+    if (name === 'library') loadLibrary();
+    else if (name === 'discover') { dv.genre = null; loadDiscover(); }
+    else render();
   }
 
   function loadLibrary() {
@@ -241,6 +251,13 @@
   }
 
   function toggleFav(track) {
+    if (!track.id) {         // a chart song not matched to a video yet: match it, then save
+      return M.api('/api/music/match?title=' + encodeURIComponent(track.title) + '&artist=' + encodeURIComponent(track.artist) +
+        '&duration=' + encodeURIComponent(track.duration || 0)).then(function (d) {
+        track.id = d.id;
+        return toggleFav(track);
+      }).catch(function (e) { say(e.message); });
+    }
     var on = !!favIds[track.id];
     var req = on
       ? M.api('/api/music/library/remove', { body: { id: track.id } })
@@ -321,6 +338,86 @@
 
   var VISIBILITY = [['private', 'Private'], ['public', 'Public']];
   function trackBody(t) { return { id: t.id || '', title: t.title, artist: t.artist, duration: t.duration || 0, spotifyId: t.spotifyId || '' }; }
+
+  /* ----------------------------------------------------------- discover */
+  // Top songs and genres. Loaded when the tab opens
+  // and kept for ten minutes.
+
+  function loadDiscover() {
+    if (dv.data && Date.now() - dv.at < 600000) { render(); return Promise.resolve(); }
+    dv.loading = true; render();
+    return M.api('/api/music/discover').then(function (d) {
+      dv.data = d; dv.at = Date.now(); dv.loading = false; render();
+    }).catch(function (e) { dv.loading = false; say(e.message); render(); });
+  }
+
+  function openGenre(g) {
+    var req = ++dv.req;
+    dv.genre = g; dv.genreTracks = null; say(''); render();
+    M.api('/api/music/discover?genre=' + encodeURIComponent(g.id)).then(function (d) {
+      if (req !== dv.req || dv.genre !== g) return;
+      dv.genreTracks = d.tracks || []; render();
+    }).catch(function (e) { if (req === dv.req) { dv.genreTracks = []; say(e.message); render(); } });
+  }
+
+  function discoverSection(title, tracks) {
+    var box = document.createElement('section');
+    box.className = 'mp-dvsection';
+    var h = document.createElement('h3');
+    h.className = 'mp-dvtitle'; h.textContent = title;
+    var ul = document.createElement('ul');
+    ul.className = 'mp-list';
+    tracks.forEach(function (t, i) { ul.appendChild(row(t, i, tracks)); });
+    box.append(h, ul);
+    return box;
+  }
+
+  function renderDiscover() {
+    var box = el.dvPanel;
+    box.replaceChildren();
+    if (dv.genre) {
+      var back = document.createElement('button');
+      back.type = 'button'; back.className = 'mp-link mp-dvback'; back.textContent = '\u2190 Discover';
+      back.addEventListener('click', function () { dv.genre = null; dv.req++; say(''); render(); });
+      box.appendChild(back);
+      if (dv.genreTracks === null) {
+        var ul = document.createElement('ul'); ul.className = 'mp-list'; box.appendChild(ul);
+        var saved = el.list; el.list = ul; skeleton(); el.list = saved;
+      } else if (!dv.genreTracks.length) {
+        var none = document.createElement('p'); none.className = 'mp-empty'; none.textContent = 'No songs found for this genre right now';
+        box.appendChild(none);
+      } else {
+        var gl = document.createElement('ul'); gl.className = 'mp-list'; box.appendChild(gl);
+        dv.genreTracks.forEach(function (t, i) { gl.appendChild(row(t, i, dv.genreTracks)); });
+      }
+      markPlaying();
+      return;
+    }
+    if (!dv.data) {
+      var wait = document.createElement('ul'); wait.className = 'mp-list'; box.appendChild(wait);
+      var keep = el.list; el.list = wait; skeleton(); el.list = keep;
+      return;
+    }
+    var d = dv.data;
+    var genres = document.createElement('section');
+    genres.className = 'mp-dvsection';
+    var gh = document.createElement('h3'); gh.className = 'mp-dvtitle'; gh.textContent = 'Browse by genre';
+    var grid = document.createElement('div'); grid.className = 'mp-genres';
+    (d.genres || []).forEach(function (g) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'mp-genre'; b.textContent = g.name;
+      b.addEventListener('click', function () { openGenre(g); });
+      grid.appendChild(b);
+    });
+    genres.append(gh, grid);
+    box.appendChild(genres);
+    if (d.top && d.top.length) box.appendChild(discoverSection('Top songs', d.top));
+    if (!(d.top && d.top.length)) {
+      var note = document.createElement('p'); note.className = 'mp-empty'; note.textContent = 'Top songs are unavailable right now. Genres still work.';
+      box.appendChild(note);
+    }
+    markPlaying();
+  }
 
   /* ---------------------------------------------------------- playlists */
   var plMode = 'mine', plQuery = '', plOpen = null, myPlaylists = null, plReq = 0;

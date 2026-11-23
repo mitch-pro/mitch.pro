@@ -12,6 +12,34 @@ Code: `rust/crates/mitch-server/src/routes/music/` (API), `mitch-lib/src/music.r
 `mitch-lib/src/music_lyrics.rs` (lyrics formats and matching),
 `webserver/music-core.js`, `music-widget.js/.css`, `webserver/music/`.
 
+## Discover
+
+The Discover tab (`routes/music/discover.rs`, `GET /api/music/discover`) has two
+parts. Neither uses what people on this site keep or play, so nothing about
+listening is derived from it:
+
+- **Top songs**: Spotify's "Top 50 - Global" chart, read from its public embed page
+  the same way as a playlist import (`spotify.rs`; no account or key). Set
+  `MUSIC_TOP_SPOTIFY_PLAYLIST` to another public playlist id, for example a
+  country's Top 50.
+- **Browse by genre**: 18 genres (`GENRES`). Each uses a Spotify editorial playlist
+  for that genre (`GET /api/music/discover?genre=<id>` returns one genre's songs).
+  Genres without a Spotify playlist, and any playlist that can't be read, use a
+  cached YouTube search instead, so the tab works even when Spotify's page changes.
+  The response says which source it used (`source`).
+
+Spotify lists are cached six hours, the first 25 songs of each. Spotify has no audio
+here: each song is matched to a YouTube video once and the match is kept forever
+(`music_track_matches`). Matching runs in the background, one song at a time, right
+after a list is shown; a song that isn't matched yet is matched when it is played,
+or saved, exactly like a song in an imported playlist. Songs already matched come
+back with their video id.
+
+The Spotify playlist ids in `GENRES` are Spotify's own editorial lists and were not
+checked against live Spotify when written: if a genre looks wrong or empty, fix its
+id there (a bad id just falls back to the YouTube search). If the music source is
+down, Top songs falls back to nothing and the genres still list.
+
 ## Playlists
 
 Any signed-in user can make up to 100 playlists of up to 500 songs. Tables:
