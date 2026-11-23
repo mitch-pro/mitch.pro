@@ -86,6 +86,7 @@ fn members(state: &Arc<AppState>, headers: &HeaderMap, search: &str) -> Response
     };
     let node_env_test = std::env::var("NODE_ENV").unwrap_or_default() == "test";
     let is_admin = auth::is_admin_id(&state.store, &state.id_secret, &sid, node_env_test);
+    let viewer_is_staff = super::me::account::sid_is_staff(state, &sid);
     let now = mitch_lib::school::now_millis();
     let viewer_norm = auth::normalize_email(&viewer_email);
 
@@ -191,7 +192,12 @@ fn members(state: &Arc<AppState>, headers: &HeaderMap, search: &str) -> Response
         } else {
             let display =
                 jsval::string(&jsval::or(processed.get("displayName"), json!(""))).to_lowercase();
-            username.to_lowercase().contains(&q) || display.contains(&q)
+            // Accounts that block profile lookups can't be found by search
+            // (except by themselves and staff).
+            (username.to_lowercase().contains(&q) || display.contains(&q))
+                && (is_self
+                    || viewer_is_staff
+                    || !mitch_lib::profile_privacy::blocks_lookups(&state.store, &norm))
         };
         if !in_scope {
             continue;

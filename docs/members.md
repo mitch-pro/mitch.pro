@@ -27,3 +27,21 @@ lists, not the roster. `GET /api/friends/list` returns the caller's own friends.
 
 A test in `routes/members.rs` covers: default scope, one-character queries,
 email-domain queries, and name search.
+
+## Block profile lookups
+
+An account can turn this on in Preferences > Privacy (`GET/POST /api/me/profile-privacy`,
+table `profile_privacy`, `mitch_lib::profile_privacy`). Then:
+
+- `GET /api/profile/<slug>` answers 404 (the same as a missing profile) to everyone
+  except the account itself and staff. By slug, username, uid or email.
+- `GET /api/members?q=` leaves the account out of search results for everyone except
+  itself and staff.
+- **Staff** means admins (owner, developer, admin) and moderators. Testers get no
+  exception (`routes/me/account.rs::sid_is_staff`).
+- Not covered on purpose: the account's own contacts (friends, pending requests and
+  people it has messaged) still appear in each other's friend and chat lists, and
+  friend requests by exact username still work, so people can connect. Names and
+  avatars shown inside chat and games are not profile lookups and are unchanged.
+
+The setting moves with an email change and is erased with the account.

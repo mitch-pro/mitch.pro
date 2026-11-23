@@ -46,6 +46,7 @@ start and removes it (every step is idempotent).
 | Aggregate game plays | `global_game_stats.json` | Popular games list; counts per game, no account | Kept |
 | Per-account playtime counters | `user_stats.playtime` (count per category) | Profile stats | Until the account is deleted |
 | Music playlists, library and quota | `music_playlists`, `music_playlist_tracks`, `music_favorites` | What the user chose to keep; the saved-audio quota is computed from them, nothing is stored per listen ([music.md](music.md)) | Until the user removes them or the account is deleted |
+| Block profile lookups | `profile_privacy` (account, on) | The account's choice to hide its profile from everyone but staff ([members.md](members.md)) | Until turned off or the account is deleted |
 | Saved song audio | `music_audio_files` plus the audio store (no account on the file) | Plays kept songs without a YouTube lookup | Deleted within minutes once no one keeps the song |
 | Admin unlock | `mitch_admin_unlock` cookie, nothing stored on the server | One passphrase entry for several hours instead of per page ([admin-panel.md](admin-panel.md)) | 8 hours, or until lock/logout/passphrase change |
 
