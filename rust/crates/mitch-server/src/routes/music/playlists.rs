@@ -392,7 +392,7 @@ const VERSION_WORDS: &[&str] = &[
 ];
 
 /// The version words a title carries (a bit per entry of `VERSION_WORDS`).
-fn version_marks(title: &str) -> u64 {
+pub(super) fn version_marks(title: &str) -> u64 {
     let lower = title.to_lowercase();
     let mut bits = 0;
     for w in lower.split(|c: char| !c.is_alphanumeric()) {

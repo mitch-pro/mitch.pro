@@ -12,7 +12,7 @@ use crate::data::DataStore;
 use crate::music::valid_video_id;
 
 /// Most audio one user may keep saved.
-pub const USER_QUOTA_BYTES: i64 = 512 * 1024 * 1024;
+pub const USER_QUOTA_BYTES: i64 = 1024 * 1024 * 1024;
 
 /// Default cap on all saved audio together, so many users can't fill the disk.
 /// `MUSIC_AUDIO_TOTAL_MB` overrides it.
@@ -286,6 +286,35 @@ pub fn record_failure(store: &DataStore, video_id: &str) {
          ON CONFLICT(video_id) DO UPDATE SET tries = ?2, next_try_at = ?3",
         rusqlite::params![video_id, tries, now_millis() + wait_ms],
     );
+}
+
+/// Marks a saved file as rewritten into a plain MP4 with the index up front.
+pub fn mark_progressive(store: &DataStore, video_id: &str) {
+    let _ = store.conn().execute(
+        "UPDATE music_audio_files SET progressive = 1 WHERE video_id = ?1",
+        rusqlite::params![video_id],
+    );
+}
+
+/// Saved MP4/M4A files not yet rewritten (see `mark_progressive`), up to `limit`.
+pub fn needing_progressive(store: &DataStore, limit: i64) -> Vec<AudioFile> {
+    let conn = store.conn();
+    let Ok(mut stmt) = conn.prepare(
+        "SELECT video_id, size, mime, ext FROM music_audio_files \
+         WHERE progressive = 0 AND mime = 'audio/mp4' LIMIT ?1",
+    ) else {
+        return Vec::new();
+    };
+    let rows = stmt.query_map(rusqlite::params![limit], |r| {
+        Ok(AudioFile {
+            video_id: r.get(0)?,
+            size: r.get(1)?,
+            mime: r.get(2)?,
+            ext: r.get(3)?,
+        })
+    });
+    rows.map(|r| r.filter_map(Result::ok).collect())
+        .unwrap_or_default()
 }
 
 /// Saved files nobody keeps any more (playlist deleted, song removed...).

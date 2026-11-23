@@ -29,6 +29,7 @@ pub fn spawn(state: Arc<AppState>) {
         tokio::time::sleep(Duration::from_secs(90)).await;
         loop {
             collect_garbage(&state, store).await;
+            convert_existing(&state, store).await;
             let work = audio::next_to_save(&state.store, SONGS_PER_PASS);
             if work.is_empty() {
                 tokio::time::sleep(IDLE_WAIT).await;
@@ -122,36 +123,140 @@ async fn save_one(state: &Arc<AppState>, store: &audio_store::AudioStore, id: &s
             Outcome::Skipped
         }
         Ok((size, mime)) => {
+            // YouTube's audio is a fragmented MP4 (index spread through the
+            // file). Rewrite it as a plain MP4 with the index first, which
+            // iPhones start playing at once; keep the original if that fails.
+            let fast = tmp.with_extension("fast");
+            let (path, size, progressive) =
+                if mime == "audio/mp4" && make_progressive(&tmp, &fast).await {
+                    let len = tokio::fs::metadata(&fast)
+                        .await
+                        .map(|m| m.len())
+                        .unwrap_or(0);
+                    if len > 0 {
+                        (fast.clone(), len, true)
+                    } else {
+                        (tmp.clone(), size, false)
+                    }
+                } else {
+                    (tmp.clone(), size, false)
+                };
             // Only keep it if someone who keeps this song still has room.
-            if !audio::has_room(&state.store, id, i64::try_from(size).unwrap_or(i64::MAX)) {
-                audio::record_failure(&state.store, id);
-                Outcome::Skipped
-            } else {
-                let ext = audio_store::ext_for(mime);
-                match store.put(&audio_store::key(id, ext), &tmp).await {
-                    Ok(()) => {
-                        audio::put_file(
-                            &state.store,
-                            &audio::AudioFile {
-                                video_id: id.to_string(),
-                                size: i64::try_from(size).unwrap_or(i64::MAX),
-                                mime: mime.to_string(),
-                                ext: ext.to_string(),
-                            },
-                        );
-                        Outcome::Saved
+            let result =
+                if !audio::has_room(&state.store, id, i64::try_from(size).unwrap_or(i64::MAX)) {
+                    audio::record_failure(&state.store, id);
+                    Outcome::Skipped
+                } else {
+                    let ext = audio_store::ext_for(mime);
+                    match store.put(&audio_store::key(id, ext), &path).await {
+                        Ok(()) => {
+                            audio::put_file(
+                                &state.store,
+                                &audio::AudioFile {
+                                    video_id: id.to_string(),
+                                    size: i64::try_from(size).unwrap_or(i64::MAX),
+                                    mime: mime.to_string(),
+                                    ext: ext.to_string(),
+                                },
+                            );
+                            if progressive {
+                                audio::mark_progressive(&state.store, id);
+                            }
+                            Outcome::Saved
+                        }
+                        Err(e) => {
+                            tracing::warn!("[music] audio store refused {id}: {e}");
+                            audio::record_failure(&state.store, id);
+                            Outcome::Skipped
+                        }
                     }
-                    Err(e) => {
-                        tracing::warn!("[music] audio store refused {id}: {e}");
-                        audio::record_failure(&state.store, id);
-                        Outcome::Skipped
-                    }
-                }
-            }
+                };
+            let _ = tokio::fs::remove_file(&fast).await;
+            result
         }
     };
     let _ = tokio::fs::remove_file(&tmp).await;
     outcome
+}
+
+/// Rewrites `src` (YouTube's fragmented MP4 audio) as a plain MP4 at `dst` with
+/// the index at the front, without re-encoding (about a second for a song).
+/// iPhones need the whole index up front to start a song at once and to know
+/// its length; a fragmented file makes them read on before playing. `false`
+/// when ffmpeg is missing or fails, in which case the caller keeps `src`.
+async fn make_progressive(src: &std::path::Path, dst: &std::path::Path) -> bool {
+    let run = tokio::process::Command::new("ffmpeg")
+        .args(["-nostdin", "-v", "error", "-y", "-i"])
+        .arg(src)
+        .args([
+            "-map",
+            "0:a:0",
+            "-vn",
+            "-c",
+            "copy",
+            "-movflags",
+            "+faststart",
+            "-f",
+            "mp4",
+        ])
+        .arg(dst)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .kill_on_drop(true)
+        .status();
+    let ok = matches!(
+        tokio::time::timeout(Duration::from_secs(90), run).await,
+        Ok(Ok(status)) if status.success()
+    );
+    if !ok {
+        let _ = tokio::fs::remove_file(dst).await;
+    }
+    ok
+}
+
+/// Rewrites saved songs that predate `make_progressive` (a couple per pass).
+/// A song that can't be rewritten is marked done anyway, so it isn't retried
+/// forever. The file is replaced under the same name; a listener who is
+/// mid-song at that instant may hiccup once.
+async fn convert_existing(state: &Arc<AppState>, store: &audio_store::AudioStore) {
+    use futures_util::StreamExt;
+    use tokio::io::AsyncWriteExt;
+    for f in audio::needing_progressive(&state.store, 2) {
+        let key = audio_store::key(&f.video_id, &f.ext);
+        let raw = tmp_dir(state).join(format!("{}.old", f.video_id));
+        let fast = tmp_dir(state).join(format!("{}.fast", f.video_id));
+        let _ = tokio::fs::create_dir_all(tmp_dir(state)).await;
+        let size = u64::try_from(f.size).unwrap_or(0);
+        let fetched = async {
+            let read = store.read(&key, 0, size.saturating_sub(1)).await.ok()?;
+            let mut out = tokio::fs::File::create(&raw).await.ok()?;
+            let mut body = read.body.into_data_stream();
+            while let Some(chunk) = body.next().await {
+                out.write_all(&chunk.ok()?).await.ok()?;
+            }
+            out.flush().await.ok()
+        }
+        .await
+        .is_some();
+        if fetched && size > 0 && make_progressive(&raw, &fast).await {
+            let len = tokio::fs::metadata(&fast)
+                .await
+                .map(|m| m.len())
+                .unwrap_or(0);
+            if len > 0 && store.put(&key, &fast).await.is_ok() {
+                audio::put_file(
+                    &state.store,
+                    &audio::AudioFile {
+                        size: i64::try_from(len).unwrap_or(i64::MAX),
+                        ..f.clone()
+                    },
+                );
+            }
+        }
+        audio::mark_progressive(&state.store, &f.video_id);
+        let _ = tokio::fs::remove_file(&raw).await;
+        let _ = tokio::fs::remove_file(&fast).await;
+    }
 }
 
 /// Downloads the song's audio to `dest` and returns its size and MIME type.
@@ -307,4 +412,53 @@ pub fn summary(state: &Arc<AppState>, email: &str) -> Response {
             "backend": audio_store::get().map(|s| s.name()).unwrap_or("local"),
         }),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Top-level MP4 box names, in order.
+    fn boxes(data: &[u8]) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut i = 0;
+        while i + 8 <= data.len() {
+            let size =
+                u32::from_be_bytes([data[i], data[i + 1], data[i + 2], data[i + 3]]) as usize;
+            out.push(String::from_utf8_lossy(&data[i + 4..i + 8]).to_string());
+            if size == 0 {
+                break;
+            }
+            i += size;
+        }
+        out
+    }
+
+    #[tokio::test]
+    async fn a_fragmented_m4a_becomes_a_plain_mp4_with_the_index_first() {
+        let dir = std::env::temp_dir().join(format!("mitch-prog-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (src, dst) = (dir.join("frag.m4a"), dir.join("plain.m4a"));
+        let made = std::process::Command::new("ffmpeg")
+            .args([
+                "-nostdin", "-v", "error", "-y", "-f", "lavfi", "-i", "sine=d=5", "-c:a", "aac",
+            ])
+            .args([
+                "-movflags",
+                "frag_keyframe+empty_moov+default_base_moof+dash",
+            ])
+            .arg(&src)
+            .status();
+        if !matches!(made, Ok(s) if s.success()) {
+            return; // no ffmpeg on this machine
+        }
+        assert!(boxes(&std::fs::read(&src).unwrap()).contains(&"moof".to_string()));
+        assert!(make_progressive(&src, &dst).await);
+        let plain = boxes(&std::fs::read(&dst).unwrap());
+        assert!(!plain.contains(&"moof".to_string()), "{plain:?}");
+        let moov = plain.iter().position(|b| b == "moov").unwrap();
+        let mdat = plain.iter().position(|b| b == "mdat").unwrap();
+        assert!(moov < mdat, "index must come first: {plain:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
