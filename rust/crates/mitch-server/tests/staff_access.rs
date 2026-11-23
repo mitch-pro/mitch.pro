@@ -564,3 +564,126 @@ async fn special_schedule_is_staff_only_and_reaches_the_public_endpoint() {
         .await;
     assert!(after.json["override"].is_null(), "{}", after.text);
 }
+
+/// One passphrase entry unlocks the admin API through a cookie; large actions
+/// still need the passphrase every time.
+#[tokio::test(flavor = "multi_thread")]
+async fn admin_unlock_cookie_covers_pages_but_not_large_actions() {
+    let admins = json!({"owners": [OWNER], "coOwners": [], "admins": [ADMIN]}).to_string();
+    let s = TestServer::start(&[("admins.json", &admins)], "/api/tester/status", 403).await;
+    let admin = s.session_for(ADMIN);
+    let origin = [("Origin", s.url.as_str())];
+    // The admin sets a passphrase (first use).
+    let set = staff_post(
+        &s,
+        Some(&admin),
+        "/api/admin/passphrase-status",
+        json!({"passphrase": PASS}),
+    )
+    .await;
+    assert_eq!(set.status, 200, "{}", set.text);
+
+    let search = "/api/admin/account-search?q=member";
+    let locked = s.call_with(Some(&admin), "GET", search, None, &[]).await;
+    assert_eq!(locked.status, 403);
+    assert_eq!(locked.json["error"], "invalid_passphrase");
+
+    // A wrong passphrase unlocks nothing.
+    let wrong = s
+        .call_with(
+            Some(&admin),
+            "POST",
+            "/api/admin/unlock",
+            Some(json!({"passphrase": "not the passphrase"})),
+            &origin,
+        )
+        .await;
+    assert_eq!(wrong.status, 403);
+    assert!(wrong.set_cookies.is_empty());
+
+    let unlock = s
+        .call_with(
+            Some(&admin),
+            "POST",
+            "/api/admin/unlock",
+            Some(json!({"passphrase": PASS})),
+            &origin,
+        )
+        .await;
+    assert_eq!(unlock.status, 200, "{}", unlock.text);
+    let cookie = unlock
+        .set_cookies
+        .iter()
+        .find(|c| c.starts_with("mitch_admin_unlock="))
+        .expect("unlock cookie");
+    assert!(cookie.contains("HttpOnly"));
+    let pair = cookie.split(';').next().unwrap().to_string();
+
+    // With the cookie and no passphrase header, ordinary admin calls work.
+    let open = s
+        .call_with(Some(&admin), "GET", search, None, &[("Cookie", &pair)])
+        .await;
+    assert_eq!(open.status, 200, "{}", open.text);
+    let status = s
+        .call_with(
+            Some(&admin),
+            "GET",
+            "/api/admin/passphrase-status",
+            None,
+            &[("Cookie", &pair)],
+        )
+        .await;
+    assert_eq!(status.json["unlocked"], true);
+
+    // Large actions ask again, and accept the real passphrase.
+    let ban = json!({"email": MEMBER, "banned": true, "reason": "test"});
+    let ask = s
+        .call_with(
+            Some(&admin),
+            "POST",
+            "/api/admin/ban-account",
+            Some(ban.clone()),
+            &[("Cookie", &pair), ("Origin", s.url.as_str())],
+        )
+        .await;
+    assert_eq!(ask.status, 403);
+    assert_eq!(ask.json["error"], "reauth_required");
+    let go = s
+        .call_with(
+            Some(&admin),
+            "POST",
+            "/api/admin/ban-account",
+            Some(ban),
+            &[
+                ("Cookie", &pair),
+                ("Origin", s.url.as_str()),
+                ("X-Admin-Passphrase", PASS),
+            ],
+        )
+        .await;
+    assert_ne!(go.json["error"], "reauth_required", "{}", go.text);
+    assert_ne!(go.json["error"], "invalid_passphrase", "{}", go.text);
+
+    // The cookie is bound to the session: someone else's cookie is no use.
+    let other = s.session_for(OWNER);
+    let stolen = s
+        .call_with(Some(&other), "GET", search, None, &[("Cookie", &pair)])
+        .await;
+    assert_eq!(stolen.status, 403);
+
+    // Locking drops it.
+    let lock = s
+        .call_with(
+            Some(&admin),
+            "POST",
+            "/api/admin/lock",
+            Some(json!({})),
+            &origin,
+        )
+        .await;
+    assert_eq!(lock.status, 200);
+    assert!(lock
+        .set_cookies
+        .iter()
+        .any(|c| c.starts_with("mitch_admin_unlock=;")));
+}

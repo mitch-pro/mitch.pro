@@ -127,13 +127,11 @@ async function submit() {
     captcha = await window.getCaptchaToken('newsletter_signup') || '';
   }
 
-  var c = new URLSearchParams(document.cookie.replaceAll('; ', '&'));
-  var studentId = c.get('studentId') || c.get('password') || '';
   try {
     var r = await (await fetch('/api/newsletter-signup', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({email, studentId, recaptcha_token: captcha})
+      body: JSON.stringify({email, recaptcha_token: captcha})
     })).json();
     if (r.success) {
       msg.className = 'ok';

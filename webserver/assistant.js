@@ -2,14 +2,6 @@
   'use strict';
   if (window.self !== window.top) return;
 
-  function getCook(n) {
-    var m = document.cookie.match(new RegExp('(?:^|; )' + n.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '=([^;]*)'));
-    return m ? decodeURIComponent(m[1]) : null;
-  }
-
-  var SID = getCook('studentId') || getCook('id');
-  if (!SID) return;
-
   var _aiPref = {};
   try { _aiPref = JSON.parse(localStorage.getItem('_prefAI') || '{}'); } catch(e) {}
   if (_aiPref.enabled === false) return;
@@ -217,7 +209,6 @@
         headers: {'Content-Type': 'application/json'},
         credentials: 'include',
         body: JSON.stringify({
-          studentId: SID,
           prompt: text,
           history: _history.slice(-8),
           type: 'assistant',

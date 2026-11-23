@@ -441,6 +441,23 @@
   }
   on($('mp-sidepl-new'), 'click', function () { setTab('playlists'); newPlaylist(); });
 
+  /** Songs in your playlists and library are saved on the server, up to a limit. */
+  function fmtBytes(n) {
+    if (n >= 1073741824) return (n / 1073741824).toFixed(1) + ' GB';
+    return Math.round(n / 1048576) + ' MB';
+  }
+  function refreshStorage() {
+    var line = $('mp-storage');
+    if (!line) return;
+    if (plMode !== 'mine') { line.hidden = true; return; }
+    M.api('/api/music/storage').then(function (d) {
+      if (!d.songs) { line.hidden = true; return; }
+      line.textContent = 'Saved on the server: ' + fmtBytes(d.usedBytes) + ' of ' + fmtBytes(d.limitBytes) +
+        ' (' + d.saved + ' of ' + d.songs + ' songs)';
+      line.hidden = false;
+    }).catch(function () { line.hidden = true; });
+  }
+
   function renderPlaylists() {
     el.plHome.hidden = !!plOpen;
     el.plDetail.hidden = !plOpen;
@@ -449,6 +466,7 @@
     $('mp-seg-public').setAttribute('aria-pressed', plMode === 'public' ? 'true' : 'false');
     el.plSearch.hidden = plMode !== 'public';
     var url = plMode === 'mine' ? '/api/music/playlists' : '/api/music/playlists/public?q=' + encodeURIComponent(plQuery);
+    refreshStorage();
     var req = ++plReq;
     M.api(url).then(function (d) {
       if (plOpen || req !== plReq) return;          // a newer request or a detail view took over

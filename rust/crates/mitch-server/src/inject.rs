@@ -185,6 +185,7 @@ pub fn inject_credit(html: &str) -> String {
 @media (max-width:380px) {{ #site-credit {{ padding-inline:10px; gap:5px; font-size:10px; }} }}
 body #mobile-dock {{ bottom:calc(var(--site-credit-height) + 10px); }}
 body .mobile-nav-dock {{ bottom:var(--site-credit-height); padding-bottom:6px; }}
+@media (max-width:760px) {{ body.mitch-next #site-credit, body.mitch-next #site-credit-space {{ display:none !important; }} body.mitch-next #mobile-dock {{ bottom:max(10px, env(safe-area-inset-bottom, 0px)); }} }}
 @media print {{ #site-credit {{ position:static; height:auto; padding:6px 16px; }} #site-credit-space {{ display:none; }} }}
 </style><div id="site-credit-space" aria-hidden="true"></div><div id="site-credit">{copy}<span id="site-active" hidden title="Members online now"></span></div><script src="/site-status.js" defer></script>"#
     );

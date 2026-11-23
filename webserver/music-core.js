@@ -159,16 +159,31 @@
     }, 80);
   }
 
+  // Gets the next few songs ready while the current one plays: matched to a
+  // video if they came from Spotify, their stream link resolved, and (for songs
+  // in the listener's library) the server starts saving them. Each queue entry is
+  // warmed once.
+  var UPCOMING = 3;
+  var warmed = typeof WeakSet === 'function' ? new WeakSet() : null;
+  function warmUpcoming() {
+    for (var k = 1; k <= UPCOMING; k++) {
+      var next = st.queue[st.index + k];
+      if (!next || (warmed && warmed.has(next))) continue;
+      if (warmed) warmed.add(next);
+      (function (n) {
+        var ready = n.id ? Promise.resolve(n.id) : matchTrack(n).then(function (id) { n.id = id; queueDirty = true; return id; });
+        ready.then(function (id) {
+          return fetch('/api/music/prefetch?id=' + encodeURIComponent(id), { credentials: 'include' });
+        }).catch(function () { if (warmed) warmed.delete(n); });
+      })(next);
+    }
+  }
+
   function onTime() {
     st.pos = audio.currentTime || 0;
     if (isFinite(audio.duration) && audio.duration > 0) st.dur = audio.duration;
     var t = current();
-    if (t && st.pos > 6 && prefetchedFor !== t.id) {
-      prefetchedFor = t.id;
-      var next = st.queue[st.index + 1];
-      if (next && next.id) fetch('/api/music/prefetch?id=' + encodeURIComponent(next.id), { credentials: 'include' }).catch(function () {});
-      else if (next) matchTrack(next).then(function (id) { next.id = id; queueDirty = true; return fetch('/api/music/prefetch?id=' + encodeURIComponent(id), { credentials: 'include' }); }).catch(function () {});
-    }
+    if (t && st.pos > 2 && prefetchedFor !== t.id) { prefetchedFor = t.id; warmUpcoming(); }
     if (Math.abs(st.pos - lastSessionPos) > 1) { lastSessionPos = st.pos; updateSessionPosition(); }
     maybeCrossfade();
     emit();
@@ -227,6 +242,7 @@
     st.dur = t.duration || 0;
     st.buffering = true; st.error = ''; st.blocked = false; st.loading = !!autoplay;
     audio.src = '/api/music/stream?id=' + encodeURIComponent(t.id);
+    setTimeout(warmUpcoming, 1500);      // after this song has had the first requests
     wantPlayUntil = autoplay ? Date.now() + 8000 : 0;
     if (pos > 0) {
       audio.addEventListener('loadedmetadata', function seekOnce() {

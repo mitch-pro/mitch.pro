@@ -330,11 +330,6 @@ function toggleAI() {
   if (aiPanel.classList.contains('open')) setTimeout(function() { aiInput.focus(); }, 200);
 }
 
-function getCook(n) {
-  var m = document.cookie.match(new RegExp('(?:^|; )' + n + '=([^;]*)'));
-  return m ? decodeURIComponent(m[1]) : null;
-}
-var _sid = getCook('studentId');
 
 function aiAddMsg(text, cls, hasCode) {
   var d = document.createElement('div');
@@ -369,7 +364,6 @@ aiInput.addEventListener('input', function() {
 async function aiSend() {
   var text = aiInput.value.trim();
   if (!text || _aiBusy) return;
-  if (!_sid) { aiAddMsg('Not signed in.', 'aim-err', false); return; }
   aiInput.value = ''; aiInput.style.height = '';
   aiAddMsg(text, 'aim-u', false);
   _aiHistory.push({role:'user', text: text});
@@ -382,7 +376,7 @@ async function aiSend() {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       credentials: 'include',
-      body: JSON.stringify({studentId: _sid, prompt: fullPrompt, history: _aiHistory.slice(-6), type: 'html', page: window.location.href})
+      body: JSON.stringify({prompt: fullPrompt, history: _aiHistory.slice(-6), type: 'html', page: window.location.href})
     });
     var d = await r.json();
     thinking.remove();

@@ -130,10 +130,9 @@ async function submitSite() {
     recaptcha_token = await window.getCaptchaToken('report_game') || '';
   }
 
-  var id = new URLSearchParams(document.cookie.replaceAll('; ','&')).get('id') || '';
   var r = await (await fetch('/api/suggest', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({id, type: 'broken_game', text: site, recaptcha_token: recaptcha_token})
+    body: JSON.stringify({type: 'broken_game', text: site, recaptcha_token: recaptcha_token})
   })).json();
   status.textContent = r.success ? 'submitted!' : (r.message || 'error');
   if (r.success) { document.getElementById('site').value = ''; }

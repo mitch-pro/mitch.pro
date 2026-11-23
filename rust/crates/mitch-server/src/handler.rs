@@ -857,10 +857,12 @@ async fn handle_resolved(
     // isAnyAdminId, and (for full admins) the X-Admin-Passphrase header.
     if path.starts_with("/api/admin/")
         && path != "/api/admin/passphrase-status"
+        && path != "/api/admin/unlock"
+        && path != "/api/admin/lock"
         && !path.starts_with("/api/admin/passphrase-reset/")
         && path != "/api/admin/cache/refresh"
     {
-        if let Some(resp) = crate::routes::admin::admin_gate(&state, headers) {
+        if let Some(resp) = crate::routes::admin::admin_gate(&state, &method, &path, headers) {
             return resp;
         }
     }

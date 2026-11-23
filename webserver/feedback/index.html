@@ -269,11 +269,6 @@ function setStatus(text, cls) {
   status.textContent = text || '';
   status.className = cls || '';
 }
-function studentId() {
-  return new URLSearchParams(document.cookie.replaceAll('; ', '&')).get('id')
-    || new URLSearchParams(document.cookie.replaceAll('; ', '&')).get('studentId')
-    || '';
-}
 document.querySelectorAll('.chip').forEach(function(btn) {
   btn.addEventListener('click', function() {
     selectedType = btn.dataset.type;
@@ -306,7 +301,6 @@ async function submitSite(e) {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
-        id: studentId(),
         type: selectedType,
         text: details,
         recaptcha_token: recaptcha_token

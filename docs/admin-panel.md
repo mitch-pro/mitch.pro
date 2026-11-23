@@ -16,24 +16,41 @@ use. Static CSS/JS contain no privileged data. API authorization remains
 independent of page access.
 
 Administrative API requests use the signed account session, full role checks,
-and `X-Admin-Passphrase`. Passphrases are verified on the server and kept only in
-session storage on the client. The global CSRF gate rejects foreign origins on
-mutations; clients send `X-Mitch-Requested-With: 1`. A successful page load does
-not grant API access or bypass the passphrase gate.
+and proof of the admin passphrase. A successful page load does not grant API
+access or bypass the passphrase gate. The global CSRF gate rejects foreign
+origins on mutations; clients send `X-Mitch-Requested-With: 1`.
 
-Every admin tool's frontend is responsible for wiring this itself — the
-server-side gate in `handler.rs` enforces it regardless, but a tool that
-never sends `X-Admin-Passphrase` just fails every write with
-`invalid_passphrase` for any full admin (moderators are exempt, and a
-local dev-superuser session on localhost bypasses it, both of which can
-mask a missing frontend wire-up during testing). `/staff-dashboard/bans/`'s
-`bans.js` is the reference implementation: check
-`GET /api/admin/passphrase-status` on load, show a lock screen if unset
-or not yet entered this session, cache the entered passphrase in
-`sessionStorage`, send it as `X-Admin-Passphrase` on every request, and
-re-show the lock screen on any `invalid_passphrase`/
-`passphrase_not_configured` response. `/staff-dashboard/companion/` (see
-`docs/companion.md`) follows the same pattern.
+## Unlocking once, re-entering for large actions
+
+Full admins enter the passphrase once. `POST /api/admin/unlock {passphrase}`
+verifies it and sets the HttpOnly `mitch_admin_unlock` cookie (`<expiry>.<mac>`,
+8 hours, stateless: the MAC binds the session id, the current passphrase hash
+and the expiry, so logging out or changing the passphrase revokes it).
+`POST /api/admin/lock` clears it. `GET /api/admin/passphrase-status` also
+reports `unlocked` and `unlockExpiresAt`. The cookie is shared by every tab, so
+all staff pages are unlocked together.
+
+`admin_gate` (`routes/admin/mod.rs`) accepts a request when either the
+`X-Admin-Passphrase` header verifies or the unlock cookie is valid. Actions
+listed in `mitch_lib::admin::is_sensitive_admin_action` (bans, role changes,
+passphrase changes, VM deletion and power control, coin and premium changes,
+broadcasts, newsletter sends, maintenance mode, ...) ignore the cookie: without
+the real passphrase in the header they answer `403 reauth_required`. Add new
+destructive endpoints to that list.
+
+`webserver/admin-auth.js` is the single client piece. Load it first in `<head>`
+of every staff page. It
+- turns `reauth_required` / `invalid_passphrase` responses into a passphrase
+  dialog and retries the request once (the passphrase is never stored);
+- converts the passphrase older page scripts save in
+  `sessionStorage['admin_passphrase']` into an unlock cookie, keeping only a
+  placeholder in storage, and sets a `localStorage` marker so a new tab skips
+  its lock screen.
+
+So a tool's frontend needs no passphrase code of its own: call the API and let
+`admin-auth.js` prompt when needed. Moderators are exempt from the passphrase,
+and a local dev-superuser session on localhost bypasses it, which can mask a
+missing `admin-auth.js` include during testing.
 
 ## Forgotten passphrase
 

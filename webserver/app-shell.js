@@ -1,6 +1,16 @@
 (function () {
   'use strict';
 
+  // Legacy cookie cleanup. Sign-in lives only in the HttpOnly mitch_session
+  // cookie; the old client-readable studentId/id/adminId/password cookies are
+  // no longer used by anything. Expire any copy left in the browser. Safe to
+  // delete once these have aged out of everyone's browser.
+  try {
+    ['studentId', 'id', 'adminId', 'password'].forEach(function (n) {
+      document.cookie = n + '=;path=/;max-age=0;SameSite=Lax';
+    });
+  } catch (_) {}
+
   // ── Service worker freshness ────────────────────────────────────────────────
   // The SW keeps caching on (network-first for pages/code, cache-first for
   // media) but a phone can sit on an old worker whose cache predates the
@@ -202,11 +212,19 @@
     menu.setAttribute('aria-labelledby', 'mobile-menu-title');
     menu.innerHTML = '<header><h2 id="mobile-menu-title">mitch.pro</h2><button type="button" aria-label="Close menu">×</button></header><nav aria-label="All sections"></nav>';
     var links = menu.querySelector('nav');
-    [['/profile/', 'My profile'], ['/preferences/', 'Customizer'], ['/friends/', 'Friends'], ['/coins/?v=2', 'MitchCoins'], ['/shop/', 'Shop'], ['/casino/', 'Casino'], ['/inventory/', 'Inventory'], ['/leaderboard/', 'Leaderboard'], ['/teachers/', 'Rate my teacher'], ['https://rjuhsd.school/', 'Bell schedule'], ['/vms/', 'VM Lab'], ['/notifications/', 'Notifications'], ['/blog/', 'Blog'], ['/invite/', 'Invite friends'], ['/learn/', 'Learn about the site'], ['/feedback/', 'Feedback'], ['/support/', 'Help']].forEach(function (item) {
+    // Only live pages: Casino, the leaderboard and the site tour are retired
+    // (docs/deprecated-pages.md), and the schedule is the on-site /bell/ page.
+    [['/profile/', 'My profile'], ['/friends/', 'Friends'], ['/preferences/', 'Preferences'], ['/notifications/', 'Notifications'], ['/coins/?v=2', 'MitchCoins'], ['/shop/', 'Shop'], ['/inventory/', 'Inventory'], ['/vms/', 'VM Lab'], ['/music/', 'Music'], ['/bell/', 'Schedule'], ['/teachers/', 'Rate my teacher'], ['/blog/', 'Blog'], ['/invite/', 'Invite friends'], ['/feedback/', 'Feedback'], ['/support/', 'Help']].forEach(function (item) {
       var link = document.createElement('a'); link.href = item[0]; link.textContent = item[1];
       if (item[0].charAt(0) === '/' && currentPath() === item[0].split('?')[0].replace(/\/$/, '')) link.setAttribute('aria-current', 'page');
       links.appendChild(link);
     });
+    // On phones the footer band is hidden to leave room for the dock, so the
+    // legal links live here.
+    var legal = document.createElement('p');
+    legal.className = 'mobile-menu-legal';
+    legal.innerHTML = '<a href="/use-agreement/">Use agreement</a> · <a href="/privacy/">Privacy</a> · <a href="/cookies/">Cookies</a> · <a href="/copyright/">Copyright</a>';
+    menu.appendChild(legal);
     more.addEventListener('click', function () { menu.showModal(); more.setAttribute('aria-expanded', 'true'); });
     menu.querySelector('button').addEventListener('click', function () { menu.close(); });
     menu.addEventListener('click', function (event) { if (event.target === menu) { var box = menu.getBoundingClientRect(); if (event.clientY < box.top || event.clientY > box.bottom || event.clientX < box.left || event.clientX > box.right) menu.close(); } });

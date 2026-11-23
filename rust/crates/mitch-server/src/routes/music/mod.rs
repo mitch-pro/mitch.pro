@@ -15,8 +15,10 @@
 //! this server so that a network that blocks YouTube or the lyric sites
 //! still works, and so no third party sees the visitor.
 
+mod audio_store;
 mod lyrics;
 mod playlists;
+mod saved;
 mod spotify;
 mod worker;
 mod ytdlp;
@@ -76,6 +78,7 @@ pub(super) fn qs(search: &str, key: &str) -> String {
 
 /// Starts the music background worker (called once at startup).
 pub fn spawn_worker(state: Arc<AppState>) {
+    saved::spawn(state.clone());
     worker::spawn(state);
 }
 
@@ -98,7 +101,14 @@ pub async fn handle(
         (method.as_str(), route),
         (
             "GET",
-            "search" | "stream" | "prefetch" | "thumb" | "lyrics" | "library" | "related"
+            "search"
+                | "stream"
+                | "prefetch"
+                | "thumb"
+                | "lyrics"
+                | "library"
+                | "related"
+                | "storage"
         ) | ("POST", "library/add" | "library/remove")
     );
     if !known {
@@ -109,8 +119,9 @@ pub async fn handle(
     };
     Some(match route {
         "search" => search_tracks(state, &email, search).await,
-        "stream" => stream(&email, headers, search).await,
-        "prefetch" => prefetch(&email, search).await,
+        "stream" => stream(state, &email, headers, search).await,
+        "storage" => saved::summary(state, &email),
+        "prefetch" => prefetch(state, &email, search).await,
         "related" => related_tracks(&email, search).await,
         "thumb" => thumb(search).await,
         "lyrics" => lyrics_for(state, &email, search).await,
@@ -171,7 +182,7 @@ async fn related_tracks(email: &str, search: &str) -> Response {
     }
 }
 
-async fn prefetch(email: &str, search: &str) -> Response {
+async fn prefetch(state: &Arc<AppState>, email: &str, search: &str) -> Response {
     let id = qs(search, "id");
     if !valid_video_id(&id) {
         return json_response(400, json!({ "error": "bad track id" }));
@@ -179,6 +190,14 @@ async fn prefetch(email: &str, search: &str) -> Response {
     if !allow(email, "resolve", 40, Duration::from_secs(60)) {
         return limited();
     }
+    // A saved song needs nothing; a kept one that isn't saved yet is saved now.
+    if mitch_lib::music_audio::get_file(&state.store, &id).is_some() {
+        return Response::builder()
+            .status(StatusCode::NO_CONTENT)
+            .body(axum::body::Body::empty())
+            .unwrap_or_default();
+    }
+    saved::save_soon(state, &id);
     match ytdlp::resolve(&id).await {
         Ok(_) => Response::builder()
             .status(StatusCode::NO_CONTENT)
@@ -217,10 +236,14 @@ fn content_range_total(v: &str) -> Option<u64> {
     v.rsplit('/').next()?.trim().parse().ok()
 }
 
-async fn stream(email: &str, headers: &HeaderMap, search: &str) -> Response {
+async fn stream(state: &Arc<AppState>, email: &str, headers: &HeaderMap, search: &str) -> Response {
     let id = qs(search, "id");
     if !valid_video_id(&id) {
         return json_response(400, json!({ "error": "bad track id" }));
+    }
+    // A saved song plays from the audio store: no lookup, no expiring link.
+    if let Some(resp) = saved::serve(state, &id, headers).await {
+        return resp;
     }
     let Some(client) = ytdlp::media_client() else {
         return json_response(503, json!({ "error": "music source is not set up" }));

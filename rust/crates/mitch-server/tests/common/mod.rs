@@ -26,6 +26,10 @@ pub struct Reply {
     pub status: u16,
     pub json: serde_json::Value,
     pub text: String,
+    /// The raw response body.
+    pub body: Vec<u8>,
+    /// Every `Set-Cookie` header value of the response.
+    pub set_cookies: Vec<String>,
 }
 
 impl TestServer {
@@ -101,8 +105,20 @@ impl TestServer {
         }
     }
 
-    /// Create a signed-in session for `email` and return the session id used in
-    /// the `studentId`/`id` cookies.
+    /// The server's data directory.
+    pub fn data_dir(&self) -> std::path::PathBuf {
+        self.dir.join("data")
+    }
+
+    /// A connection to the server's database, for setting up fixtures.
+    pub fn db(&self) -> rusqlite::Connection {
+        rusqlite::Connection::open(self.dir.join("data/mitchpro.db")).unwrap()
+    }
+
+    /// Create a signed-in session for `email` and return its session id. The
+    /// server runs with NODE_ENV=test, which is the only mode where it accepts the
+    /// id from the `studentId`/`id` cookies this harness sends (real browsers
+    /// authenticate with the HttpOnly `mitch_session` cookie only).
     pub fn session_for(&self, email: &str) -> String {
         let sid = make_email_id(email, 0, &self.secret);
         let db = rusqlite::Connection::open(self.dir.join("data/mitchpro.db")).unwrap();
@@ -150,20 +166,45 @@ impl TestServer {
             .client
             .request(method.parse().unwrap(), format!("{}{path}", self.url))
             .header("X-Mitch-Requested-With", "1");
-        for (name, value) in headers {
-            req = req.header(*name, *value);
-        }
+        // A `Cookie` entry in `headers` is added to the session cookies.
+        let mut cookie = String::new();
         if let Some(sid) = sid {
-            req = req.header("Cookie", format!("studentId={sid}; id={sid}"));
+            cookie = format!("studentId={sid}; id={sid}");
+        }
+        for (name, value) in headers {
+            if name.eq_ignore_ascii_case("cookie") {
+                if !cookie.is_empty() {
+                    cookie.push_str("; ");
+                }
+                cookie.push_str(value);
+            } else {
+                req = req.header(*name, *value);
+            }
+        }
+        if !cookie.is_empty() {
+            req = req.header("Cookie", cookie);
         }
         if let Some(body) = body {
             req = req.json(&body);
         }
         let resp = req.send().await.expect("request");
         let status = resp.status().as_u16();
-        let text = resp.text().await.unwrap_or_default();
+        let set_cookies = resp
+            .headers()
+            .get_all("set-cookie")
+            .iter()
+            .filter_map(|v| v.to_str().ok().map(str::to_string))
+            .collect();
+        let body = resp.bytes().await.map(|b| b.to_vec()).unwrap_or_default();
+        let text = String::from_utf8_lossy(&body).into_owned();
         let json = serde_json::from_str(&text).unwrap_or(serde_json::Value::Null);
-        Reply { status, json, text }
+        Reply {
+            status,
+            json,
+            text,
+            body,
+            set_cookies,
+        }
     }
 }
 
