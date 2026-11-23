@@ -9,6 +9,11 @@ if qm config "$TEMPLATE_ID" >/dev/null 2>&1; then
   exit 1
 fi
 
+# Student bridge / SDN VNet the template NIC attaches to (same value as the
+# portal's PROXMOX_VM_BRIDGE). Required: there is no default.
+STUDENT_BRIDGE="${PROXMOX_VM_BRIDGE:-}"
+[[ -n "$STUDENT_BRIDGE" ]] || { echo 'Set PROXMOX_VM_BRIDGE to the student bridge (e.g. stunet).'; exit 1; }
+
 BUILD_DIR="/var/lib/vz/desktop-template-build"
 mkdir -p "$BUILD_DIR"
 chmod 700 "$BUILD_DIR"
@@ -21,7 +26,7 @@ awk -v file="$IMAGE" '$2 == "*"file || $2 == file {print}' SHA256SUMS | sha256su
 echo 'Ubuntu image SHA256 verified.'
 KEY="$BUILD_DIR/build-access"
 ssh-keygen -q -t ed25519 -N '' -C 'temporary-desktop-template-build' -f "$KEY"
-qm create "$TEMPLATE_ID" --name ubuntu-desktop-24-04-template --memory 8192 --cores 4 --cpu x86-64-v2-AES --net0 virtio,bridge=vmbr2,firewall=1 --scsihw virtio-scsi-single --agent 1 --vga std,memory=64 --serial0 socket --ostype l26 --pool sandboxes
+qm create "$TEMPLATE_ID" --name ubuntu-desktop-24-04-template --memory 8192 --cores 4 --cpu x86-64-v2-AES --net0 "virtio,bridge=$STUDENT_BRIDGE,firewall=1" --scsihw virtio-scsi-single --agent 1 --vga std,memory=64 --serial0 socket --ostype l26 --pool sandboxes
 qm importdisk "$TEMPLATE_ID" "$BUILD_DIR/$IMAGE" local-lvm
 qm set "$TEMPLATE_ID" --scsi0 "local-lvm:vm-$TEMPLATE_ID-disk-0,discard=on,iothread=1" --ide2 local-lvm:cloudinit --boot order=scsi0 --ciuser ubuntu --sshkeys "$KEY.pub" --ipconfig0 ip=dhcp --nameserver 1.1.1.1
 qm resize "$TEMPLATE_ID" scsi0 40G
