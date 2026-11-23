@@ -45,6 +45,26 @@ fn env(name: &str) -> String {
     std::env::var(name).unwrap_or_default().trim().to_string()
 }
 
+/// WebDAV sends the password with every request, so it must be https. Plain
+/// http is accepted only for loopback and private-network hosts.
+fn webdav_url_ok(url: &str) -> bool {
+    if url.starts_with("https://") {
+        return true;
+    }
+    let Some(rest) = url.strip_prefix("http://") else {
+        return false;
+    };
+    let host = rest.split(['/', ':']).next().unwrap_or("");
+    host == "localhost"
+        || host.starts_with("127.")
+        || host.starts_with("10.")
+        || host.starts_with("192.168.")
+        || host
+            .strip_prefix("172.")
+            .and_then(|r| r.split('.').next()?.parse::<u8>().ok())
+            .is_some_and(|n| (16..=31).contains(&n))
+}
+
 impl AudioStore {
     /// Builds the backend from `MUSIC_AUDIO_STORE`. `data_dir` holds the default
     /// local folder.
@@ -59,9 +79,9 @@ impl AudioStore {
         }
         if let Some(url) = spec.strip_prefix("webdav:") {
             let url = url.trim_end_matches('/').to_string();
-            if !url.starts_with("https://") && !url.starts_with("http://") {
+            if !webdav_url_ok(&url) {
                 tracing::warn!(
-                    "[music] MUSIC_AUDIO_STORE webdav needs an http(s) URL; using local"
+                    "[music] MUSIC_AUDIO_STORE webdav needs an https URL (http only on a private network); using local"
                 );
                 return default();
             }
@@ -310,6 +330,17 @@ mod tests {
         assert!(store.read("aaaaaaaaaaa.m4a", 0, 1).await.is_err());
         store.delete("aaaaaaaaaaa.m4a").await.unwrap(); // already gone is fine
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn webdav_needs_https_except_on_private_networks() {
+        assert!(webdav_url_ok("https://cloud.example.com/dav"));
+        assert!(webdav_url_ok("http://192.168.1.5/dav"));
+        assert!(webdav_url_ok("http://localhost:8080/dav"));
+        assert!(webdav_url_ok("http://172.20.0.2/dav"));
+        assert!(!webdav_url_ok("http://cloud.example.com/dav"));
+        assert!(!webdav_url_ok("http://172.40.0.2/dav"));
+        assert!(!webdav_url_ok("ftp://x/dav"));
     }
 
     #[test]

@@ -23,6 +23,8 @@ const SONGS_PER_PASS: usize = 3;
 /// Starts the background saver. Call once at startup.
 pub fn spawn(state: Arc<AppState>) {
     let store = audio_store::init(&state.cfg.data_dir);
+    // Scratch files left by a crash.
+    let _ = std::fs::remove_dir_all(tmp_dir(&state));
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_secs(90)).await;
         loop {
@@ -85,6 +87,11 @@ pub fn save_soon(state: &Arc<AppState>, id: &str) {
     let state = state.clone();
     let id = id.to_string();
     tokio::spawn(async move {
+        // At most two urgent saves at once, so a burst of requests can't start
+        // dozens of downloads.
+        static URGENT: std::sync::OnceLock<tokio::sync::Semaphore> = std::sync::OnceLock::new();
+        let slots = URGENT.get_or_init(|| tokio::sync::Semaphore::new(2));
+        let _permit = slots.acquire().await;
         save_one(&state, store, &id).await;
         in_flight()
             .lock()

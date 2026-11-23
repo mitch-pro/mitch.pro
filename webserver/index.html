@@ -436,9 +436,8 @@ document.addEventListener('click', function(e) {
 }, true);
 
 async function showIframe(src, escape) {
-  var id = new URLSearchParams(document.cookie.replaceAll('; ', '&')).get('id');
   try {
-    await fetch('/api/ping', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id: id, page: src})});
+    await fetch('/api/ping', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({page: src})});
   } catch(e) {}
   var main = document.getElementById('mainpage');
   if (main) main.style.display = 'none';

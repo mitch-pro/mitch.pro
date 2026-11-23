@@ -14,6 +14,32 @@ use crate::music::valid_video_id;
 /// Most audio one user may keep saved.
 pub const USER_QUOTA_BYTES: i64 = 512 * 1024 * 1024;
 
+/// Default cap on all saved audio together, so many users can't fill the disk.
+/// `MUSIC_AUDIO_TOTAL_MB` overrides it.
+pub const DEFAULT_TOTAL_CAP_BYTES: i64 = 50 * 1024 * 1024 * 1024;
+
+/// The cap in force: `MUSIC_AUDIO_TOTAL_MB` if set, else the default.
+pub fn total_cap_bytes() -> i64 {
+    std::env::var("MUSIC_AUDIO_TOTAL_MB")
+        .ok()
+        .and_then(|v| v.trim().parse::<i64>().ok())
+        .filter(|mb| *mb > 0)
+        .map(|mb| mb.saturating_mul(1024 * 1024))
+        .unwrap_or(DEFAULT_TOTAL_CAP_BYTES)
+}
+
+/// Bytes of all saved audio.
+pub fn total_bytes(store: &DataStore) -> i64 {
+    store
+        .conn()
+        .query_row(
+            "SELECT COALESCE(SUM(size), 0) FROM music_audio_files",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(0)
+}
+
 /// Bytes per second used to estimate a song's size before it is downloaded
 /// (about 136 kbps, a little above YouTube's usual AAC).
 const EST_BYTES_PER_SECOND: i64 = 17_000;
@@ -135,8 +161,11 @@ fn keepers(store: &DataStore, video_id: &str) -> Vec<String> {
 }
 
 /// Whether at least one person who keeps `video_id` would stay within their
-/// quota with `size` more bytes saved.
+/// quota with `size` more bytes saved, and the store as a whole is under its cap.
 pub fn has_room(store: &DataStore, video_id: &str, size: i64) -> bool {
+    if total_bytes(store) + size > total_cap_bytes() {
+        return false;
+    }
     keepers(store, video_id)
         .iter()
         .any(|email| used_bytes(store, email) + size <= USER_QUOTA_BYTES)
@@ -334,6 +363,19 @@ mod tests {
         let orphans = orphan_files(&s, 10);
         assert_eq!(orphans.len(), 1);
         assert_eq!(orphans[0].video_id, "bbbbbbbbbbb");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn nothing_is_saved_past_the_total_cap() {
+        let (dir, s) = store();
+        keep(&s, "a@example.com", "aaaaaaaaaaa", 200);
+        put_file(
+            &s,
+            &file("zzzzzzzzzzz", DEFAULT_TOTAL_CAP_BYTES - 1_000_000),
+        );
+        assert!(!has_room(&s, "aaaaaaaaaaa", 5_000_000));
+        assert!(next_to_save(&s, 10).is_empty());
         let _ = std::fs::remove_dir_all(dir);
     }
 }

@@ -1205,8 +1205,7 @@ function openAboutBlank(target) {
 }
 
 function showIframe(src, escape) {
-  var id = new URLSearchParams(document.cookie.replaceAll('; ', '&')).get('id');
-  fetch('/api/ping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, page: src }) }).catch(function(){});
+  fetch('/api/ping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page: src }) }).catch(function(){});
   document.getElementById('mainpage').style.display = 'none';
   var frame = document.getElementById('fullframe');
   frame.src = src;

@@ -112,6 +112,7 @@ bytes go). Tables: `music_audio_files`, `music_audio_failures`.
   estimated size (about 17 KB per second), that some keeper has room; after it, by
   the real size. A song nobody has room for stays unsaved and streams live as
   before; failures are retried after 1 h, 2 h, ... at most 24 h.
+- **Disk cap**: all saved audio together may not pass 50 GB (`MUSIC_AUDIO_TOTAL_MB` to change), so many users can't fill the disk. Past it nothing new is saved. Urgent saves for upcoming songs run two at a time at most.
 - **Saver**: a background loop (`saved::spawn`) takes three songs at a time, four
   seconds apart, in no particular order. It stops
   for 15 minutes when YouTube blocks the server. Files over 80 MB are skipped.
@@ -140,7 +141,7 @@ environment variables, so the secret manager injects them like the rest
 | --- | --- |
 | unset or `local` | `<data dir>/music-audio` |
 | `local:/path` | any folder. For NFS or SMB, mount the share on the host (and into the container) and point this at it |
-| `webdav:https://host/path` | WebDAV, which covers Nextcloud: `webdav:https://cloud.example.com/remote.php/dav/files/USER/mitch-music` with a Nextcloud app password as `MUSIC_AUDIO_STORE_PASS`. The folder is created if missing |
+| `webdav:https://host/path` (http only on a private network, since the password goes with every request) | WebDAV, which covers Nextcloud: `webdav:https://cloud.example.com/remote.php/dav/files/USER/mitch-music` with a Nextcloud app password as `MUSIC_AUDIO_STORE_PASS`. The folder is created if missing |
 
 Other schemes (`s3:`, `gdrive:`, `sftp:`) are not built; the server logs it and
 uses the local folder. To add one: a new `AudioStore` variant with `put`, `read`
