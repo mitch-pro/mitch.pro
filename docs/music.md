@@ -22,11 +22,12 @@ listening is derived from it:
   the same way as a playlist import (`spotify.rs`; no account or key). Set
   `MUSIC_TOP_SPOTIFY_PLAYLIST` to another public playlist id, for example a
   country's Top 50.
-- **Browse by genre**: 18 genres (`GENRES`). Each uses a Spotify editorial playlist
-  for that genre (`GET /api/music/discover?genre=<id>` returns one genre's songs).
-  Genres without a Spotify playlist, and any playlist that can't be read, use a
-  cached YouTube search instead, so the tab works even when Spotify's page changes.
-  The response says which source it used (`source`).
+- **Browse by genre**: 12 genres (`GENRES`), each a Spotify editorial playlist for
+  that genre (`GET /api/music/discover?genre=<id>` returns one genre's songs), shown
+  as small pills. A genre is listed only if it has a playlist id; there is no YouTube
+  search fallback, because a search returns compilation videos ("My Top 50 Anime
+  Openings of 2026"), not songs. If Spotify can't be read, Top songs is empty and a
+  genre says it can't load right now.
 
 Spotify lists are cached six hours, the first 25 songs of each. Spotify has no audio
 here: each song is matched to a YouTube video once and the match is kept forever
@@ -35,10 +36,8 @@ after a list is shown; a song that isn't matched yet is matched when it is playe
 or saved, exactly like a song in an imported playlist. Songs already matched come
 back with their video id.
 
-The Spotify playlist ids in `GENRES` are Spotify's own editorial lists and were not
-checked against live Spotify when written: if a genre looks wrong or empty, fix its
-id there (a bad id just falls back to the YouTube search). If the music source is
-down, Top songs falls back to nothing and the genres still list.
+The Spotify playlist ids in `GENRES` are Spotify's own editorial lists. If a genre
+looks wrong or fails to load, fix its id there, or remove the genre.
 
 ## Playlists
 
@@ -169,7 +168,7 @@ environment variables, so the secret manager injects them like the rest
 | --- | --- |
 | unset or `local` | `<data dir>/music-audio` |
 | `local:/path` | any folder. For NFS or SMB, mount the share on the host (and into the container) and point this at it |
-| `webdav:https://host/path` (http only on a private network, since the password goes with every request) | WebDAV, which covers Nextcloud: `webdav:https://cloud.example.com/remote.php/dav/files/USER/mitch-music` with a Nextcloud app password as `MUSIC_AUDIO_STORE_PASS`. The folder is created if missing |
+| `webdav:https://host/path` (http only on a private network, since the password goes with every request) | WebDAV, which covers Nextcloud: `webdav:https://cloud.example.com/remote.php/dav/files/USER/mitch-music` with a Nextcloud app password as `MUSIC_AUDIO_STORE_PASS`. The folder is created if missing (only that folder: the server's own root folders such as Nextcloud's `/remote.php` are never touched) |
 
 Other schemes (`s3:`, `gdrive:`, `sftp:`) are not built; the server logs it and
 uses the local folder. To add one: a new `AudioStore` variant with `put`, `read`
