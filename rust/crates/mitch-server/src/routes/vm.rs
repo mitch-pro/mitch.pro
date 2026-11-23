@@ -20,10 +20,37 @@ pub(crate) fn pve_url() -> String {
     std::env::var("PVE_URL").unwrap_or_else(|_| "https://192.168.100.1:8006/api2/json".to_string())
 }
 
-/// `PVE_TOKEN` — "PVEAPIToken=api-helper@pve!token-id=…"; empty means the
-/// Proxmox surface is unconfigured (the JS gates status fetches on it).
+/// The `Authorization` header for raw Proxmox calls in this file — the same
+/// token the desktop service uses (`PROXMOX_TOKEN_ID`/`PROXMOX_TOKEN_SECRET`,
+/// i.e. `mitch-portal@pve!website`; the deprecated `PVE_TOKEN` only when
+/// those are unset, with a startup warning). Empty means the Proxmox surface
+/// is unconfigured.
 pub(crate) fn pve_token() -> String {
-    std::env::var("PVE_TOKEN").unwrap_or_default()
+    crate::proxmox_desktop::desktop()
+        .authorization()
+        .to_string()
+}
+
+/// Shown to the UI when Proxmox answers 403.
+const PVE_FORBIDDEN_MESSAGE: &str = "The computer service refused this action because the portal's Proxmox token lacks a required permission. An admin needs to check the server log.";
+
+/// Handles a Proxmox 403 for the raw (non-`ProxmoxDesktopService`) calls:
+/// logs the endpoint and Proxmox's own privilege message (e.g. "Permission
+/// check failed (/vms/200, VM.PowerMgmt)") and returns the user-facing text.
+/// Callers must NOT retry or switch tokens — a 403 is a role/ACL gap to fix on
+/// the host (see docs/proxmox-privileges.md). Returns `None` for other statuses.
+fn pve_forbidden(method: &str, url: &str, status: u16, body: &str) -> Option<String> {
+    if status != 403 {
+        return None;
+    }
+    let reason = serde_json::from_str::<Value>(body)
+        .ok()
+        .and_then(|v| v.get("message").and_then(Value::as_str).map(str::to_string))
+        .unwrap_or_else(|| "no detail from Proxmox".to_string());
+    tracing::error!(
+        "[proxmox] 403 on {method} {url}: {reason} — the API token lacks a required privilege; see docs/proxmox-privileges.md"
+    );
+    Some(PVE_FORBIDDEN_MESSAGE.to_string())
 }
 
 /// `PVE_NODE` — the production host.
@@ -124,8 +151,6 @@ pub(crate) async fn get_user_vm_status(state: &AppState, vmid: f64) -> Value {
     if !(vmid >= 0.0 && vmid.fract() == 0.0) {
         return json!({ "success": false, "error": "invalid vmid" });
     }
-    let suffix = if vmid >= 300.0 { vmid - 200.0 } else { vmid } as i64;
-    let fallback_ip = format!("10.0.0.{suffix}");
     let record = vmlib::get_virtual_machine_by_vmid(&state.store, vmid)
         .map(|r| r.to_json())
         .unwrap_or_else(|| {
@@ -138,79 +163,22 @@ pub(crate) async fn get_user_vm_status(state: &AppState, vmid: f64) -> Value {
     match crate::proxmox_desktop::desktop().get_status(&record).await {
         Ok(rt) => {
             let status = jsval::str_or(rt.get("state"), "unknown");
-            // LXC guests keep the deterministic fallback — the agent is
-            // never queried for them (see ProxmoxDesktopService::get_status),
-            // matching the original's `type === 'lxc'` short-circuit.
+            // Only an address the guest agent actually reported. There is no
+            // guessed fallback: the old `10.0.0.{vmid}` was wrong for
+            // vmid >= 256 and for the stunet subnet. Unknown is `null`;
+            // consoles use vncproxy and never need it. (LXC guests never
+            // query the agent, so they report no IP.)
             let guest_type = jsval::str_or(record.get("guestType"), "qemu");
             let found_ip = jsval::str_or(rt.get("ipAddress"), "");
             let ip = if guest_type != "lxc" && !found_ip.is_empty() {
-                found_ip
+                Value::String(found_ip)
             } else {
-                fallback_ip
+                Value::Null
             };
             json!({ "success": true, "status": status, "ip": ip })
         }
         Err(e) => json!({ "success": false, "error": e.message }),
     }
-}
-
-/// `getVmConnectionIpForEmail` (server.js:25908-25927) — resolves the SSH/VNC
-/// authorization IP for a user's VM: activeFreeVms, then an approved
-/// vm_applications entry; out-of-range or unassigned → '' (denied).
-pub(crate) async fn get_vm_connection_ip_for_email(state: &AppState, email: &str) -> String {
-    let norm = mitch_lib::auth::normalize_email(email);
-    let mut vmid: Option<f64> = None;
-    {
-        let free = state
-            .active_free_vms
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        if let Some(entry) = free.get(&norm) {
-            vmid = entry.get("vmid").and_then(jsval::number);
-        }
-    }
-    if vmid.is_none() {
-        let apps = vm_applications(state);
-        let app = apps.get(&norm);
-        if let Some(app) = app {
-            if jsval::string(&jsval::or(app.get("status"), json!(""))) == "approved" {
-                let candidate = app.get("vmid").and_then(jsval::number);
-                if candidate.is_some() {
-                    vmid = candidate;
-                }
-            }
-        }
-    }
-    let Some(vmid) = vmid.filter(|v| is_vm_id_in_range(*v)) else {
-        return String::new();
-    };
-
-    // KVM guests use DHCP — resolve the real address through the guest agent
-    // before authorizing the bridge; LXC keeps the deterministic fallback.
-    let status = get_user_vm_status(state, vmid).await;
-    let ip = status
-        .get("ip")
-        .and_then(|i| i.as_str())
-        .unwrap_or("")
-        .to_string();
-    if status
-        .get("success")
-        .and_then(|s| s.as_bool())
-        .unwrap_or(false)
-        && js_is_10_ip(&ip)
-    {
-        return ip;
-    }
-    let suffix = if vmid >= 300.0 { vmid - 200.0 } else { vmid } as i64;
-    format!("10.0.0.{suffix}")
-}
-
-/// `/^10\.0\.0\.\d{1,3}$/` (server.js:25922).
-fn js_is_10_ip(s: &str) -> bool {
-    let Some(rest) = s.strip_prefix("10.0.0.") else {
-        return false;
-    };
-    !rest.is_empty() && rest.len() <= 3 && rest.bytes().all(|b| b.is_ascii_digit())
 }
 
 // ── batch 4: the /api/vm route layer (server.js:18849-19809) + helpers ───────
@@ -1866,6 +1834,11 @@ pub(crate) async fn get_existing_vmids() -> std::collections::HashMap<i64, Strin
             .get(&url)
             .header("Authorization", pve_token());
         if let Ok(res) = res.send().await {
+            if res.status().as_u16() == 403 {
+                let body = res.text().await.unwrap_or_default();
+                pve_forbidden("GET", &url, 403, &body);
+                continue;
+            }
             if res.status().is_success() {
                 if let Ok(data) = res.json::<Value>().await {
                     if let Some(list) = data.get("data").and_then(Value::as_array) {
@@ -1914,9 +1887,14 @@ pub(crate) async fn power_user_vm(state: &AppState, vmid: f64, action: &str) -> 
     {
         Ok(res) => {
             if !res.status().is_success() {
+                let code = res.status().as_u16();
+                let body = res.text().await.unwrap_or_default();
+                if let Some(msg) = pve_forbidden("POST", &url, code, &body) {
+                    return json!({ "success": false, "error": msg });
+                }
                 return json!({
                     "success": false,
-                    "error": format!("Failed to set power state: {}", res.status().as_u16())
+                    "error": format!("Failed to set power state: {code}")
                 });
             }
             json!({ "success": true })
@@ -2016,10 +1994,21 @@ pub(crate) async fn create_lxc_container(
         return json!({ "success": false, "error": msg });
     }
 
+    // Fail closed: guests only ever attach to the configured student bridge.
+    let bridge = match crate::proxmox_desktop::desktop().student_bridge() {
+        Ok(b) => b.to_string(),
+        Err(e) => return json!({ "success": false, "error": e.message }),
+    };
+    // Never fall back to a well-known password: use the caller's, or mint a
+    // random one and hand it back once in the result.
+    let (password, generated_password) = if password.is_empty() {
+        (mitch_lib::crypto::random_bytes_hex(12), true)
+    } else {
+        (password.to_string(), false)
+    };
+
     let cores = if tier == "premium" { 2 } else { 1 };
     let memory = if tier == "premium" { 4096 } else { 1024 };
-    let ip_suffix = if vmid >= 300.0 { vmid - 200.0 } else { vmid } as i64;
-    let container_ip = format!("10.0.0.{}", ip_suffix);
     let hostname = if tier == "premium" {
         format!("premium-lxc-{}", vmid as i64)
     } else {
@@ -2034,20 +2023,11 @@ pub(crate) async fn create_lxc_container(
         form.append_pair("memory", &memory.to_string());
         form.append_pair("swap", "512");
         form.append_pair("hostname", &hostname);
-        form.append_pair(
-            "password",
-            if password.is_empty() {
-                "password"
-            } else {
-                password
-            },
-        );
+        form.append_pair("password", &password);
         form.append_pair("rootfs", "local-lvm:8");
-        form.append_pair(
-            "net0",
-            &format!("name=eth0,bridge=vmbr2,firewall=0,ip={container_ip}/24,gw=10.0.0.1"),
-        );
-        form.append_pair("nameserver", "1.1.1.1");
+        // DHCP from the host supplies address, gateway and DNS; firewall=1
+        // keeps the per-NIC firewall switch on.
+        form.append_pair("net0", &lxc_net0(&bridge));
         form.append_pair("unprivileged", "1");
         form.append_pair("start", "1");
         form.append_pair("pool", "sandboxes");
@@ -2075,6 +2055,9 @@ pub(crate) async fn create_lxc_container(
     };
     let status = res.status();
     let text = res.text().await.unwrap_or_default();
+    if let Some(msg) = pve_forbidden("POST", &url, status.as_u16(), &text) {
+        return json!({ "success": false, "error": msg });
+    }
     let data: Value = match serde_json::from_str(&text) {
         Ok(v) => v,
         Err(_) => {
@@ -2119,7 +2102,16 @@ pub(crate) async fn create_lxc_container(
         }
     });
 
-    json!({ "success": true, "vmid": vmid })
+    if generated_password {
+        json!({ "success": true, "vmid": vmid, "password": password })
+    } else {
+        json!({ "success": true, "vmid": vmid })
+    }
+}
+
+/// The LXC `net0` value: DHCP on the student bridge, per-NIC firewall on.
+fn lxc_net0(bridge: &str) -> String {
+    format!("name=eth0,bridge={bridge},firewall=1,ip=dhcp")
 }
 
 /// `cloneUserVm(email, tier, vmid, password)` (server.js:28322-28410).
@@ -2168,6 +2160,13 @@ pub(crate) async fn clone_user_vm(
         }
     };
     let clone_status = clone_res.status();
+    if clone_status.as_u16() == 403 {
+        let body = clone_res.text().await.unwrap_or_default();
+        if let Some(msg) = pve_forbidden("POST", &clone_url, 403, &body) {
+            return json!({ "success": false, "error": msg });
+        }
+        return json!({ "success": false, "error": "Proxmox clone failed." });
+    }
     let clone_data: Value = match clone_res.json::<Value>().await {
         Ok(v) => v,
         Err(err) => {
@@ -2206,14 +2205,15 @@ pub(crate) async fn clone_user_vm(
     config_form.append_pair("balloon", &mem_min.to_string());
     config_form.append_pair("cores", &cores.to_string());
     config_form.append_pair("sockets", "1");
-    config_form.append_pair(
-        "cipassword",
-        if password.is_empty() {
-            "password"
-        } else {
-            password
-        },
-    );
+    // No well-known default password: mint one when the caller gave none.
+    let generated_password;
+    let cipassword = if password.is_empty() {
+        generated_password = mitch_lib::crypto::random_bytes_hex(12);
+        generated_password.as_str()
+    } else {
+        password
+    };
+    config_form.append_pair("cipassword", cipassword);
     config_form.append_pair("ciuser", "debian");
     let config_res = pve_client_no_deadline()
         .post(&config_url)
@@ -2260,7 +2260,11 @@ pub(crate) async fn clone_user_vm(
         _ => {}
     }
 
-    json!({ "success": true, "vmid": vmid })
+    if password.is_empty() {
+        json!({ "success": true, "vmid": vmid, "password": cipassword })
+    } else {
+        json!({ "success": true, "vmid": vmid })
+    }
 }
 
 /// `stopUserVm(vmid)` (server.js:28412-28430).
@@ -2289,7 +2293,15 @@ pub(crate) async fn stop_user_vm(state: &AppState, vmid: f64) -> Value {
             if res.status().as_u16() == 404 {
                 return json!({ "success": true });
             }
-            json!({ "success": res.status().is_success() })
+            if !res.status().is_success() {
+                let code = res.status().as_u16();
+                let body = res.text().await.unwrap_or_default();
+                if let Some(msg) = pve_forbidden("POST", &url, code, &body) {
+                    return json!({ "success": false, "error": msg });
+                }
+                return json!({ "success": false });
+            }
+            json!({ "success": true })
         }
         Err(err) => {
             tracing::warn!("[proxmox] Error stopping {type_}: {}", err);
@@ -2323,6 +2335,13 @@ pub(crate) async fn destroy_user_vm(state: &AppState, vmid: f64) -> Value {
         }
     };
     let destroy_ok = res.status().is_success();
+    if res.status().as_u16() == 403 {
+        let body = res.text().await.unwrap_or_default();
+        return json!({
+            "success": false,
+            "error": pve_forbidden("DELETE", &url, 403, &body).unwrap_or_default()
+        });
+    }
     if res.status().as_u16() == 404 {
         tracing::info!(
             "[proxmox] {} VMID {} already deleted (404). Treating as successful destruction.",
@@ -3021,9 +3040,7 @@ pub(crate) async fn handle(
             {
                 let _ = power_user_vm(state, vmid, "start").await;
             }
-            let suffix = if vmid >= 300.0 { vmid - 200.0 } else { vmid } as i64;
-            let fallback_ip = format!("10.0.0.{suffix}");
-            let ip = jsval::str_or(pve_status.get("ip"), &fallback_ip);
+            let ip = pve_status.get("ip").cloned().unwrap_or(Value::Null);
             return Some(json_response(
                 200,
                 json!({
@@ -3128,13 +3145,7 @@ pub(crate) async fn handle(
 
         tokio::time::sleep(Duration::from_millis(4000)).await;
         let pve_status = get_user_vm_status(state, target_vmid as f64).await;
-        let suffix = if target_vmid >= 300 {
-            target_vmid - 200
-        } else {
-            target_vmid
-        };
-        let fallback_ip = format!("10.0.0.{suffix}");
-        let ip = jsval::str_or(pve_status.get("ip"), &fallback_ip);
+        let ip = pve_status.get("ip").cloned().unwrap_or(Value::Null);
 
         return Some(json_response(
             200,
@@ -3305,9 +3316,9 @@ pub(crate) async fn handle(
                 .map(jsval::truthy)
                 .unwrap_or(false)
             {
-                jsval::str_or(pve_status.get("ip"), "")
+                pve_status.get("ip").cloned().unwrap_or(Value::Null)
             } else {
-                String::new()
+                Value::Null
             };
 
             let mut resp = json!({
@@ -3373,9 +3384,9 @@ pub(crate) async fn handle(
                     .map(jsval::truthy)
                     .unwrap_or(false)
                 {
-                    jsval::str_or(pve_status.get("ip"), "")
+                    pve_status.get("ip").cloned().unwrap_or(Value::Null)
                 } else {
-                    String::new()
+                    Value::Null
                 };
                 let price_usd = app.get("priceUsd").and_then(jsval::number);
                 let complimentary = is_admin || price_usd == Some(0.0);
@@ -3533,13 +3544,7 @@ pub(crate) async fn handle(
 
         tokio::time::sleep(Duration::from_millis(4000)).await;
         let pve_status = get_user_vm_status(state, target_vmid as f64).await;
-        let suffix = if target_vmid >= 300 {
-            target_vmid - 200
-        } else {
-            target_vmid
-        };
-        let fallback_ip = format!("10.0.0.{suffix}");
-        let ip = jsval::str_or(pve_status.get("ip"), &fallback_ip);
+        let ip = pve_status.get("ip").cloned().unwrap_or(Value::Null);
 
         return Some(json_response(
             200,
@@ -5714,14 +5719,27 @@ mod tests {
     }
 
     #[test]
-    fn ten_ip_regex() {
-        assert!(js_is_10_ip("10.0.0.5"));
-        assert!(js_is_10_ip("10.0.0.123"));
-        assert!(!js_is_10_ip("10.0.0.1234"));
-        assert!(!js_is_10_ip("10.0.0."));
-        assert!(!js_is_10_ip("10.0.0.x"));
-        assert!(!js_is_10_ip("192.168.0.5"));
-        assert!(!js_is_10_ip(""));
+    fn lxc_net0_is_dhcp_on_the_student_bridge() {
+        let n = lxc_net0("stunet");
+        assert_eq!(n, "name=eth0,bridge=stunet,firewall=1,ip=dhcp");
+        assert!(!n.contains("gw="));
+        assert!(!n.contains("vmbr"));
+    }
+
+    #[test]
+    fn forbidden_is_reported_without_retry_text() {
+        assert!(pve_forbidden("POST", "u", 200, "{}").is_none());
+        assert!(pve_forbidden("POST", "u", 500, "{}").is_none());
+        let msg = pve_forbidden(
+            "POST",
+            "https://pve/nodes/n/qemu/200/status/start",
+            403,
+            r#"{"message":"Permission check failed (/vms/200, VM.PowerMgmt)"}"#,
+        )
+        .expect("403 handled");
+        assert!(msg.contains("lacks a required permission"));
+        // Non-JSON 403 bodies are still handled.
+        assert!(pve_forbidden("GET", "u", 403, "<html>").is_some());
     }
 
     #[test]
