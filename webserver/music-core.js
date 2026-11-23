@@ -168,7 +168,9 @@
   var warming = false;
   function warmUpcoming() {
     // One song at a time, so looking ahead never floods the server or the
-    // connection the song being played needs.
+    // connection the song being played needs. An entry is tried once: whether it
+    // worked or not it stays marked, so a song that can't be matched (or a
+    // rate limit) can't turn this into a loop of requests.
     if (warming) return;
     var next = null;
     for (var k = 1; k <= UPCOMING && !next; k++) {
@@ -181,7 +183,7 @@
     var ready = next.id ? Promise.resolve(next.id) : matchTrack(next, true).then(function (id) { next.id = id; queueDirty = true; return id; });
     ready.then(function (id) {
       return fetch('/api/music/prefetch?id=' + encodeURIComponent(id), { credentials: 'include' });
-    }).catch(function () { if (warmed) warmed.delete(next); }).then(function () {
+    }).catch(function () { /* best effort: not retried */ }).then(function () {
       warming = false;
       warmUpcoming();
     });
