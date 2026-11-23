@@ -892,12 +892,8 @@ async function loadSites(append = false) {
   isLoading = true;
   setArcadeDay();
   
-  var c = new URLSearchParams(document.cookie.replaceAll('; ', '&'));
-  var hash = c.get('studentId') || c.get('id') || c.get('password');
-  
   try {
     const body = { 
-      hash: hash, 
       offset: currentOffset, 
       limit: limitPerPage,
       q: currentSearch,
@@ -1159,12 +1155,10 @@ function launchGame(type, href) {
 }
 
 function trackGameLaunch(src) {
-  var c = new URLSearchParams(document.cookie.replaceAll('; ', '&'));
-  var id = c.get('studentId') || c.get('id') || c.get('password') || '';
   fetch('/api/ping', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id: id, page: src, category: 'Games' })
+    body: JSON.stringify({ page: src, category: 'Games' })
   }).catch(function(){});
   var current = visitsFor(src);
   gameStats[src] = current + 1;
@@ -1211,8 +1205,7 @@ function openAboutBlank(target) {
 }
 
 function showIframe(src, escape) {
-  var id = new URLSearchParams(document.cookie.replaceAll('; ', '&')).get('id');
-  fetch('/api/ping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, page: src }) }).catch(function(){});
+  fetch('/api/ping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page: src }) }).catch(function(){});
   document.getElementById('mainpage').style.display = 'none';
   var frame = document.getElementById('fullframe');
   frame.src = src;

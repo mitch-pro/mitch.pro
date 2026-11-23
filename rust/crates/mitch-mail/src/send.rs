@@ -485,6 +485,7 @@ mod tests {
         // ── support --raw ───────────────────────────────────────────────
         std::env::set_var("SUPPORT_USER", "support@mitch.pro");
         std::env::set_var("SUPPORT_PASS", "secret");
+        std::env::set_var("SUPPORT_SCHOOL_EMAIL", "test.teacher1@student.rjuhsd.us");
         let (cfg, store) = test_cfg();
         let mut r = req("support");
         r.raw = true;
@@ -492,7 +493,7 @@ mod tests {
         assert_eq!(p.text_body, r.body);
         assert!(!p.html_body.contains("unsubscribe from this list"));
         assert!(
-            p.html_body.contains("or mitchell.fogler@student.rjuhsd.us"),
+            p.html_body.contains("or test.teacher1@student.rjuhsd.us"),
             "support footer keeps the student line even raw"
         );
         // But the token is still minted (JS writes the token regardless).

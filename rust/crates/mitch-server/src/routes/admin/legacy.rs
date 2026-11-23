@@ -63,13 +63,91 @@ pub async fn handle(
         let norm = mitch_lib::auth::normalize_email(&email);
         let data = mitch_lib::admin::load_admin_passphrase(&state.store, &state.cfg.data_dir);
         let entry = data.get(norm.as_str()).cloned().unwrap_or(json!({}));
+        let unlock_expires = super::admin_unlock_expiry(state, ctx);
         return Some(json_response(
             200,
             json!({
                 "set": !entry.get("hash").and_then(|v| v.as_str()).unwrap_or("").is_empty(),
                 "updatedAt": entry.get("updatedAt").and_then(|v| v.as_i64()).unwrap_or(0),
+                "unlocked": unlock_expires.is_some(),
+                "unlockExpiresAt": unlock_expires.unwrap_or(0),
             }),
         ));
+    }
+
+    // POST /api/admin/unlock — enter the passphrase once; the HttpOnly
+    // `mitch_admin_unlock` cookie then unlocks every admin page and tab until
+    // it expires (see `admin_gate`). Sensitive actions still re-prompt.
+    if path == "/api/admin/unlock" && *method == Method::POST {
+        if !valid_id(&ctx.sid, state) {
+            return Some(unauthorized());
+        }
+        if !ctx.is_admin(state) {
+            return Some(forbidden());
+        }
+        if state
+            .rate_limiter
+            .rate_limited(&format!("ip:{}", ctx.ip), "/api/admin/unlock")
+        {
+            return Some(json_response(429, json!({ "error": "too many attempts" })));
+        }
+        let passphrase = body
+            .get("passphrase")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
+        if !mitch_lib::admin::verify_admin_passphrase_raw(
+            &state.store,
+            &state.id_secret,
+            &state.cfg.data_dir,
+            &ctx.sid,
+            passphrase,
+        ) {
+            return Some(json_response(403, json!({ "error": "invalid_passphrase" })));
+        }
+        let Some((token, expires)) = mitch_lib::admin::make_admin_unlock_token(
+            &state.store,
+            &state.id_secret,
+            &state.cfg.data_dir,
+            &ctx.sid,
+        ) else {
+            return Some(json_response(
+                403,
+                json!({ "error": "passphrase_not_configured" }),
+            ));
+        };
+        let secure_flag = std::env::var("SESSION_COOKIE_SECURE").unwrap_or_default();
+        let node_env_prod = std::env::var("NODE_ENV").unwrap_or_default() == "production";
+        let cookie = mitch_lib::auth::set_cookie_header(
+            mitch_lib::admin::ADMIN_UNLOCK_COOKIE,
+            &token,
+            &secure_flag,
+            node_env_prod,
+            mitch_lib::admin::ADMIN_UNLOCK_TTL_MS / 1000,
+            true,
+        );
+        let mut resp = json_response(200, json!({ "ok": true, "unlockExpiresAt": expires }));
+        if let Ok(v) = axum::http::HeaderValue::from_str(&cookie) {
+            resp.headers_mut().append(axum::http::header::SET_COOKIE, v);
+        }
+        return Some(resp);
+    }
+
+    // POST /api/admin/lock — drop the unlock cookie (the "Lock" button).
+    if path == "/api/admin/lock" && *method == Method::POST {
+        let secure_flag = std::env::var("SESSION_COOKIE_SECURE").unwrap_or_default();
+        let node_env_prod = std::env::var("NODE_ENV").unwrap_or_default() == "production";
+        let cookie = mitch_lib::auth::clear_cookie_header(
+            mitch_lib::admin::ADMIN_UNLOCK_COOKIE,
+            &secure_flag,
+            node_env_prod,
+            true,
+        );
+        let mut resp = json_response(200, json!({ "ok": true }));
+        if let Ok(v) = axum::http::HeaderValue::from_str(&cookie) {
+            resp.headers_mut().append(axum::http::header::SET_COOKIE, v);
+        }
+        return Some(resp);
     }
 
     // POST /api/admin/passphrase-status — set or verify.
@@ -551,15 +629,18 @@ pub fn make_access_status_html(
     action_url: &str,
     action_label: &str,
 ) -> String {
+    use mitch_lib::email_theme as et;
+    let p = et::palette_today();
     let action_html = if action_url.is_empty() {
         String::new()
     } else {
-        format!(
-            "\n    <div style=\"text-align: center; margin-bottom: 8px;\">\n      <a href=\"{action_url}\" style=\"display: inline-block; background: linear-gradient(135deg, #a855f7, #6366f1); color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 700;\">{action_label}</a>\n    </div>\n    "
-        )
+        et::button(&p, action_url, action_label)
     };
     let content = format!(
-        "\n    <h2 style=\"margin: 0 0 16px; font-size: 20px; font-weight: 700; color: #f4f4f5; text-align: center;\">{title}</h2>\n    <div style=\"background-color: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px;\">\n      <p style=\"margin: 0; color: #cbd5e1; line-height: 1.6;\">{message_text}</p>\n    </div>\n    {action_html}\n  "
+        "{}{}{}",
+        et::heading(&p, title),
+        et::paragraph(&p, message_text),
+        action_html
     );
     html_base_template(state, email, title, &content)
 }
@@ -623,70 +704,31 @@ pub fn html_base_template(
     } else {
         String::new()
     };
-    // The exact template-literal whitespace: the interpolated block carries a
-    // trailing "\n        " and the surrounding line contributes its own.
-    let unsub_block = if unsub.is_empty() {
-        String::new()
-    } else {
-        format!(
-            "\n        <p style=\"margin: 0 0 8px;\">\n          To opt-out of these communications, you can <a href=\"{unsub}\" style=\"color: #38bdf8; text-decoration: underline;\">unsubscribe from this list</a>.\n        </p>\n        "
-        )
-    };
-    let footer = format!(
-        "\n      <div style=\"margin-top: 32px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 12px; color: #64748b; line-height: 1.5; text-align: center;\">\n        <p style=\"margin: 0 0 8px;\">\n          Delivered by <a href=\"{alt}\" style=\"color: #64748b; text-decoration: underline; font-weight: 600;\">mitchdog.com</a> | <a href=\"{primary}\" style=\"color: #64748b; text-decoration: underline;\">mitch.pro</a>\n        </p>\n        {unsub_block}\n        <p style=\"margin: 0;\">\n          For support: email SUPPORT to <a href=\"mailto:support@mitch.pro\" style=\"color: #64748b; text-decoration: none;\">support@mitch.pro</a> or mitchell.fogler@student.rjuhsd.us\n        </p>\n        <p style=\"margin: 8px 0 0; font-size: 11px; color: #475569;\">\n          2014 Capitol Ave #100, Sacramento, CA 95811\n        </p>\n      </div>\n    "
+    let palette = mitch_lib::email_theme::palette_today();
+    let footer = mitch_lib::email_theme::footer(
+        &palette,
+        primary,
+        alt,
+        if unsub.is_empty() { None } else { Some(&unsub) },
+        true,
     );
-    let shell = r##"
-<!DOCTYPE html>
-<html lang="en" style="background:#06060c;">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="color-scheme" content="light dark">
-  <meta name="supported-color-schemes" content="light dark">
-  <style> :root { color-scheme: light dark; supported-color-schemes: light dark; } </style>
-  <title>@@SUBJECT@@</title>
-</head>
-<body style="margin: 0; padding: 0; background-color: #06060c; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #f8fafc; -webkit-font-smoothing: antialiased;">
-  <table border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="#06060c" style="background-color: #06060c; border-collapse: collapse;">
-    <tr>
-      <td align="center" bgcolor="#06060c" style="background-color: #06060c; padding: 40px 20px;">
-        <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 580px; background-color: #0f172a; border-radius: 16px; overflow: hidden; border: 1px solid #0f172a; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
-          <tr>
-            <td height="6" style="background: linear-gradient(to right, #a855f7, #38bdf8);"></td>
-          </tr>
-          <tr>
-            <td style="padding: 32px 32px 16px;">
-              <table border="0" cellpadding="0" cellspacing="0" width="100%">
-                <tr>
-                  <td style="vertical-align: middle;">
-                    <img src="https://mitchdog.com/favicon.ico" width="24" height="24" style="vertical-align: middle; margin-right: 10px; border-radius: 4px;" alt="mitch.pro">
-                    <span style="font-size: 24px; font-weight: 800; color: #ffffff; vertical-align: middle; letter-spacing: -0.02em;">mitch.pro</span>
-                    <span style="font-size: 24px; font-weight: 300; color: #64748b; vertical-align: middle; margin: 0 8px;">/</span>
-                    <span style="font-size: 24px; font-weight: 800; color: #38bdf8; vertical-align: middle; letter-spacing: -0.02em;">mitchdog.com</span>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 0 32px 32px; font-size: 15px; color: #cbd5e1; line-height: 1.6;">
-              @@CONTENT@@
-              @@FOOTER@@
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-  "##;
-    shell
-        .replace("@@SUBJECT@@", subject)
-        .replace("@@CONTENT@@", content_html)
-        .replace("@@FOOTER@@", &footer)
-        .trim()
-        .to_string()
+    // Builders that predate the redesign hardcode the old purple palette.
+    let content = mitch_lib::email_theme::restyle(&palette, content_html);
+    mitch_lib::email_theme::shell(
+        &palette,
+        subject,
+        "",
+        &content,
+        &footer,
+        &host_label(primary),
+        alt,
+    )
+}
+
+/// Display label for a site URL: host without scheme or trailing slash.
+fn host_label(url: &str) -> String {
+    let rest = url.split_once("://").map_or(url, |(_, r)| r);
+    rest.trim_end_matches('/').to_string()
 }
 
 /// `resolveMemberRef(raw)` — profiles-based member lookup (email or username).

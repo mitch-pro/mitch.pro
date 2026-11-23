@@ -708,6 +708,18 @@ impl DataStore {
                         expires_at INTEGER NOT NULL
                     );
                     CREATE INDEX IF NOT EXISTS idx_music_stream_links_expires ON music_stream_links (expires_at);
+                    CREATE TABLE IF NOT EXISTS music_audio_files (
+                        video_id TEXT PRIMARY KEY,
+                        size INTEGER NOT NULL,
+                        mime TEXT NOT NULL,
+                        ext TEXT NOT NULL,
+                        stored_at INTEGER NOT NULL
+                    );
+                    CREATE TABLE IF NOT EXISTS music_audio_failures (
+                        video_id TEXT PRIMARY KEY,
+                        tries INTEGER NOT NULL,
+                        next_try_at INTEGER NOT NULL
+                    );
                     CREATE TABLE IF NOT EXISTS music_search_queries (
                         query TEXT PRIMARY KEY,
                         fetched_at INTEGER NOT NULL

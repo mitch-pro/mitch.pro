@@ -34,6 +34,7 @@
     open: 'M12 3v10.55A4 4 0 1 0 14 17V7h4V3z',
     min: 'M5 11h14v2H5z',
     max: 'M5 5h14v14H5V5zm2 2v10h10V7z',
+    hide: 'M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z',
     close: 'M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6z'
   };
   function icon(name) {
@@ -54,6 +55,22 @@
     b.appendChild(icon(name));
     b.addEventListener('click', onClick);
     return b;
+  }
+
+  var HIDDEN_KEY = 'mitch.music.card.hidden';
+  function trackKey(t) { return t.id || (t.title + '|' + t.artist); }
+  // Off for good in Preferences (Games > Music player card), or hidden for the
+  // current song with the card's hide button.
+  function cardHidden(t) {
+    try {
+      var d = JSON.parse(localStorage.getItem('_prefDisplay') || '{}');
+      if (d.musicCard === false) return true;
+      var h = localStorage.getItem(HIDDEN_KEY);
+      if (!h) return false;
+      if (h === trackKey(t) || h === '1') return true;
+      localStorage.removeItem(HIDDEN_KEY);     // a different song: show it again
+    } catch (e) { /* ignore */ }
+    return false;
   }
 
   function build() {
@@ -84,14 +101,21 @@
     });
     var openPage = button('open', 'Open music page', function () { location.href = '/music/'; });
     var min = button('min', 'Minimize', function () { setMin(!card.classList.contains('mm-min')); });
-    var close = button('close', 'Close player', function () { M.stop(); });
+    // Hiding keeps the music playing; it stays hidden until a different song
+    // starts. Closing stops the music.
+    var hide = button('hide', 'Hide player (music keeps playing)', function () {
+      var t = M.current();
+      try { localStorage.setItem(HIDDEN_KEY, t ? trackKey(t) : '1'); } catch (e) { /* ignore */ }
+      render(M.state);
+    });
+    var close = button('close', 'Stop music and close player', function () { M.stop(); });
 
     var btns = document.createElement('div');
     btns.className = 'mm-btns';
     btns.append(prev, play, next);
     var tools = document.createElement('div');
     tools.className = 'mm-tools';
-    tools.append(pop, openPage, min, close);
+    tools.append(pop, openPage, min, hide, close);
 
     var bar = document.createElement('div');
     bar.className = 'mm-bar';
@@ -136,7 +160,8 @@
     function render(s) {
       var t = M.current();
       if (!t) { card.hidden = true; return; }
-      card.hidden = false;
+      card.hidden = cardHidden(t);
+      if (card.hidden) return;
       if (title.textContent !== t.title) title.textContent = t.title;
       if (artist.textContent !== t.artist) artist.textContent = t.artist;
       if (t.id && shownId !== t.id) {          // tracks from Spotify have no id until matched

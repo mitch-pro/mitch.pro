@@ -102,6 +102,7 @@ services:
       - NTFY_USER
       - NTFY_PASS
       - SUPPORT_EMAIL
+      - SUPPORT_SCHOOL_EMAIL
       - GMAIL_USER_ALT
       - GMAIL_USER
       - GMAIL_PASS_ALT
@@ -139,6 +140,9 @@ services:
       - PVE_URL
       - PVE_TOKEN
       - MUSIC_YTDLP_COOKIES_B64
+      - MUSIC_AUDIO_STORE
+      - MUSIC_AUDIO_STORE_USER
+      - MUSIC_AUDIO_STORE_PASS
       - PVE_NODE
       - PVE_TEMPLATE_LINUX
       - PVE_LXC_TEMPLATE
@@ -209,6 +213,7 @@ services:
       - NTFY_USER
       - NTFY_PASS
       - SUPPORT_EMAIL
+      - SUPPORT_SCHOOL_EMAIL
       - GMAIL_USER_ALT
       - GMAIL_USER
       - GMAIL_PASS_ALT
@@ -243,6 +248,9 @@ services:
       - PVE_URL
       - PVE_TOKEN
       - MUSIC_YTDLP_COOKIES_B64
+      - MUSIC_AUDIO_STORE
+      - MUSIC_AUDIO_STORE_USER
+      - MUSIC_AUDIO_STORE_PASS
       - PVE_NODE
       - PVE_TEMPLATE_LINUX
       - PVE_LXC_TEMPLATE
@@ -304,6 +312,7 @@ services:
       - NTFY_USER
       - NTFY_PASS
       - SUPPORT_EMAIL
+      - SUPPORT_SCHOOL_EMAIL
       - GMAIL_USER_ALT
       - GMAIL_USER
       - GMAIL_PASS_ALT

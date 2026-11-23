@@ -223,45 +223,65 @@ pub(crate) fn make_verification_code_html(
     minutes: i64,
     target_email: &str,
 ) -> String {
+    use mitch_lib::email_theme as et;
+    let p = et::palette_today();
     let content = format!(
-        r#"
-    <h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 700; color: #f4f4f5; text-align: center;">{action_label}</h2>
-    <p style="margin: 0 0 20px; text-align: center; color: #cbd5e1;">Your verification code is below. It will expire in {minutes} minutes.</p>
-    <div style="background: rgba(168, 85, 247, 0.1); border: 2px dashed #a855f7; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px;">
-      <span style="font-family: monospace; font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #c084fc;">{code}</span>
-    </div>
-    <p style="margin: 0; font-size: 13px; color: #94a3b8; text-align: center;">If you didn't request this code, you can safely ignore this email.</p>
-    "#
+        "{}{}{}{}",
+        et::heading(&p, action_label),
+        et::paragraph(
+            &p,
+            &format!("Your verification code is below. It expires in {minutes} minutes.")
+        ),
+        et::code_box(&p, code),
+        et::fine_print(
+            &p,
+            "If you didn't request this code, you can safely ignore this email."
+        ),
     );
     html_base_template(state, target_email, action_label, &content)
 }
 
 fn make_invite_award_html(state: &AppState, email: &str) -> String {
-    let content = r#"
-    <h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 700; color: #10b981; text-align: center;">🎉 Referral Bonus Claimed!</h2>
-    <div style="background-color: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px;">
-      <p style="margin: 0 0 8px; font-size: 16px; font-weight: 700; color: #f4f4f5;">You earned 2,000 MitchCoins!</p>
-      <p style="margin: 0; color: #cbd5e1;">Someone you invited just completed their sign-up on mitch.pro. Keep sharing your invite link to earn more referral bonuses!</p>
-    </div>
-    <div style="text-align: center; margin-bottom: 8px;">
-      <a href="https://mitchdog.com" style="display: inline-block; background-color: #10b981; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 700;">Claim Bonus</a>
-    </div>
-    "#;
-    html_base_template(state, email, "mitch.pro - Referral Bonus Claimed!", content)
+    use mitch_lib::email_theme as et;
+    let p = et::palette_today();
+    let content = format!(
+        "{}{}{}",
+        et::heading(&p, "Referral bonus claimed"),
+        et::panel(
+            &p,
+            &format!(
+                "<p style=\"margin:0 0 6px;font-size:16px;font-weight:700;color:{};\">You earned 2,000 MitchCoins</p><p style=\"margin:0;font-size:15px;line-height:1.6;color:{};\">Someone you invited just finished signing up. Keep sharing your invite link to earn more.</p>",
+                p.ink, p.text
+            )
+        ),
+        et::button(&p, "https://mitchdog.com", "Open mitch.pro"),
+    );
+    html_base_template(
+        state,
+        email,
+        "mitch.pro - Referral Bonus Claimed!",
+        &content,
+    )
 }
 
 fn make_newsletter_welcome_html(state: &AppState, email: &str, unsub_url: &str) -> String {
+    use mitch_lib::email_theme as et;
+    let p = et::palette_today();
     let content = format!(
-        r#"
-    <h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 700; color: #38bdf8; text-align: center;">Welcome to the Newsletter!</h2>
-    <p style="margin: 0 0 24px; text-align: center; color: #cbd5e1;">You are now subscribed to the mitch.pro newsletter. You'll receive updates when new games, features, or developer updates are posted.</p>
-    <div style="text-align: center; margin-bottom: 8px;">
-      <a href="https://mitchdog.com" style="display: inline-block; background: linear-gradient(135deg, #a855f7, #6366f1); color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 700;">Explore mitch.pro</a>
-    </div>
-    <p style="margin: 32px 0 0; font-size: 11px; color: #64748b; text-align: center;">
-      If you wish to opt-out, you can <a href="{unsub_url}" style="color: #64748b; text-decoration: underline;">unsubscribe here</a> at any time.
-    </p>
-    "#
+        "{}{}{}{}",
+        et::heading(&p, "You're subscribed"),
+        et::paragraph(
+            &p,
+            "You'll get an email when new games, features or developer updates are posted."
+        ),
+        et::button(&p, "https://mitchdog.com", "Open mitch.pro"),
+        et::fine_print(
+            &p,
+            &format!(
+                "To opt out at any time, <a href=\"{unsub_url}\" style=\"color:{};text-decoration:underline;\">unsubscribe here</a>.",
+                p.muted
+            )
+        ),
     );
     html_base_template(state, email, "mitch.pro Newsletter Subscription", &content)
 }
@@ -272,18 +292,23 @@ fn make_invite_friend_html(
     sender_display: &str,
     invite_link: &str,
 ) -> String {
+    use mitch_lib::email_theme as et;
+    let p = et::palette_today();
     let content = format!(
-        r#"
-    <h2 style="margin: 0 0 16px; font-size: 22px; font-weight: 800; color: #f4f4f5; text-align: center;">🎮 Join mitch.pro</h2>
-    <div style="background-color: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 20px; margin-bottom: 24px; text-align: center;">
-      <p style="margin: 0 0 12px; font-size: 16px; font-weight: 700; color: #f4f4f5;">You've been invited by {sender_display}!</p>
-      <p style="margin: 0 0 16px; color: #94a3b8; line-height: 1.6;">mitch.pro is a student-only platform featuring custom games, tools, secure messaging, and MitchCoins.</p>
-      <p style="margin: 0; color: #fbbf24; font-weight: 700;">🎁 Sign up today and you'll both earn 2,000 MitchCoins!</p>
-    </div>
-    <div style="text-align: center; margin-bottom: 8px;">
-      <a href="{invite_link}" style="display: inline-block; background: linear-gradient(135deg, #a855f7, #6366f1); color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 10px; font-weight: 700; box-shadow: 0 10px 20px rgba(168, 85, 247, 0.3);">Accept Invite</a>
-    </div>
-    "#
+        "{}{}{}{}",
+        et::heading(&p, &format!("{sender_display} invited you to mitch.pro")),
+        et::paragraph(
+            &p,
+            "mitch.pro is a student-only site with games, tools, secure messaging and MitchCoins."
+        ),
+        et::panel(
+            &p,
+            &format!(
+                "<p style=\"margin:0;font-size:15px;font-weight:700;color:{};\">Sign up and you both get 2,000 MitchCoins.</p>",
+                p.ink
+            )
+        ),
+        et::button(&p, invite_link, "Accept invite"),
     );
     html_base_template(state, to_email, "You're invited to mitch.pro!", &content)
 }

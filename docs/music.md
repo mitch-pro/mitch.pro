@@ -2,7 +2,10 @@
 
 Signed-in users search for songs, play them, and watch synced lyrics. A small
 card follows the user to every other page so they can pause from anywhere, and
-the player can be popped out into its own window.
+the player can be popped out into its own window. The card's eye button hides it
+without stopping the music (it comes back when a different song starts), the X
+stops the music, and Preferences > Games > Music player card turns it off for
+good (`_prefDisplay.musicCard`).
 
 Code: `rust/crates/mitch-server/src/routes/music/` (API), `mitch-lib/src/music.rs`
 (favorites, lyrics cache), `mitch-lib/src/music_playlists.rs` (playlists),
@@ -71,19 +74,16 @@ the playlist (`routes/music/spotify.rs`; only `open.spotify.com` is fetched). So
   (`VERSION_WORDS`). With no qualifying result the song stays unmatched rather
   than getting the wrong recording. Matches are stored in
   `music_track_matches` and shared by everyone, each with the `rules_version` it
-  was made under (`MATCH_RULES_VERSION`, now 3). A match from older rules is not
-  trusted (`get_match` ignores it): that is the cache bust, so changing the rules
-  means raising the number, not deleting rows. It is applied lazily: a song is
-  matched again when someone plays it, and when its playlist is synced
-  (`recheck_stale_matches` clears the video of every song of that playlist whose
-  stored match is stale; the worker then matches them). A fresh match isn't
-  touched, so a second sync rechecks nothing;
+  was made under (`MATCH_RULES_VERSION`, now 3, for reference only). **Matches are
+  permanent**: a song keeps the first video it was matched to, so a playlist never
+  waits on a new search, and changing the rules does not discard anything (raising
+  the version once made every song re-match and made playlists very slow). To redo
+  one on purpose, delete its `music_track_matches` row;
 - **Resync from Spotify** (in the playlist's ⋯ menu, and an automatic sync when the
   owner opens a playlist more than a day stale) makes the Spotify part of the
-  playlist equal Spotify's current list and order, keeps matches made under the
-  current rules, rechecks the rest (see above), and keeps songs the owner added
+  playlist equal Spotify's current list and order, keeps every stored match, and keeps songs the owner added
   by hand after it. Songs removed on Spotify disappear. The response says how
-  many songs are being rechecked (`rechecked`), and the button shows it.
+  many songs are being rechecked (`rechecked`, always 0 now).
 - Reading the embed page is not an official API. If Spotify changes it,
   `parse_embed` is the one place to fix. Private playlists, Liked Songs and
   playlists past 100 songs would need a registered Spotify app and OAuth, which
@@ -92,11 +92,66 @@ the playlist (`routes/music/spotify.rs`; only `open.spotify.com` is fetched). So
 ## Where the audio comes from
 
 YouTube, through [yt-dlp](https://github.com/yt-dlp/yt-dlp) on the server.
-Nothing is stored. For a track the server asks yt-dlp for a short-lived signed
+Songs people keep are saved (next section); everything else is streamed live and not stored. For a track the server asks yt-dlp for a short-lived signed
 URL on Google's CDN, caches it (`ytdlp::RESOLVE_TTL`, 4 h), and proxies the
 bytes to the browser. Everything goes through this server (audio, cover art,
 lyrics), so a network that blocks YouTube or the lyric sites still works and no
 third party sees the visitor.
+
+### Saved songs
+
+Every song in a user's playlists or library is downloaded once and kept, so it
+plays without a YouTube lookup and its link never expires. Code:
+`mitch-lib/src/music_audio.rs` (what is saved, quotas), `routes/music/saved.rs`
+(downloading, serving, cleanup) and `routes/music/audio_store.rs` (where the
+bytes go). Tables: `music_audio_files`, `music_audio_failures`.
+
+- **Quota: 512 MB per user** (`USER_QUOTA_BYTES`) of distinct songs in their
+  playlists and library. Files are shared, so a song several people keep is stored
+  once and counts for each of them. Before a download the server checks, by
+  estimated size (about 17 KB per second), that some keeper has room; after it, by
+  the real size. A song nobody has room for stays unsaved and streams live as
+  before; failures are retried after 1 h, 2 h, ... at most 24 h.
+- **Disk cap**: all saved audio together may not pass 50 GB (`MUSIC_AUDIO_TOTAL_MB` to change), so many users can't fill the disk. Past it nothing new is saved. Urgent saves for upcoming songs run two at a time at most.
+- **Saver**: a background loop (`saved::spawn`) takes three songs at a time, four
+  seconds apart, in no particular order. It stops
+  for 15 minutes when YouTube blocks the server. Files over 80 MB are skipped.
+- **Up next**: while a song plays, the player warms the next three queue entries
+  (`warmUpcoming` in `music-core.js`, from 2 s in and again when a song starts):
+  Spotify songs are matched to a video, the stream link is resolved
+  (`GET /api/music/prefetch`), and a song someone keeps that isn't saved yet is
+  saved right away (`saved::save_soon`) instead of waiting for the loop. Each queue
+  entry is warmed once.
+- **Playing**: `GET /api/music/stream` serves a saved song from the store with
+  `Range` support, and falls back to the live path if the store can't be read (a
+  file missing from the local folder is forgotten so it is saved again).
+- **Cleanup**: a file nobody keeps (playlist deleted, song removed from every
+  list) is deleted within a minute or so.
+- **Usage line**: the Mine tab of Playlists shows "Saved on the server: X of
+  512 MB (n of m songs)" from `GET /api/music/storage`.
+
+#### Where the files live
+
+Chosen at startup by `MUSIC_AUDIO_STORE`, with credentials in
+`MUSIC_AUDIO_STORE_USER` and `MUSIC_AUDIO_STORE_PASS`. They are ordinary
+environment variables, so the secret manager injects them like the rest
+(`docs/secrets-providers.md`).
+
+| `MUSIC_AUDIO_STORE` | Backend |
+| --- | --- |
+| unset or `local` | `<data dir>/music-audio` |
+| `local:/path` | any folder. For NFS or SMB, mount the share on the host (and into the container) and point this at it |
+| `webdav:https://host/path` (http only on a private network, since the password goes with every request) | WebDAV, which covers Nextcloud: `webdav:https://cloud.example.com/remote.php/dav/files/USER/mitch-music` with a Nextcloud app password as `MUSIC_AUDIO_STORE_PASS`. The folder is created if missing |
+
+Other schemes (`s3:`, `gdrive:`, `sftp:`) are not built; the server logs it and
+uses the local folder. To add one: a new `AudioStore` variant with `put`, `read`
+and `delete`, and its scheme in `AudioStore::from_env`. Nothing else changes.
+Changing the backend does not move existing files: songs missing from the new
+place are not found, so they are downloaded again by the saver only if their
+database row is deleted (`DELETE FROM music_audio_files`).
+
+Not verified: the WebDAV backend has not been run against a real Nextcloud (only
+the local folder is tested); the saver has not run against live YouTube here.
 
 ### Keeping links ready
 
@@ -115,7 +170,7 @@ Playback starts fast because links are resolved before anyone clicks:
 - **Kept fresh**: Google's links last about six hours and only work from the IP
   that asked, so they can't be kept forever. For every song that is in a playlist,
   a background worker (`routes/music/worker.rs`, every 5 minutes) re-resolves any
-  link missing or lapsing within 45 minutes (25 per cycle, one at a time). Links
+  link missing or lapsing within 45 minutes (60 per cycle, one at a time). Links
   stay as long as any playlist holds the song. Deleting a playlist removes the
   links of songs no other playlist has, and expired links nothing needs are pruned.
 - A 403/410 from the CDN drops the link and resolves again once.

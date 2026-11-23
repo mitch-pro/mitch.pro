@@ -116,8 +116,6 @@ pub async fn enforce_ban(
     for sid in [
         cookies.get("studentId").unwrap_or(""),
         cookies.get("id").unwrap_or(""),
-        &cookies.raw_student_id,
-        &cookies.raw_id,
     ] {
         if mitch_lib::auth::valid_id(sid, &state.id_secret) {
             if let Some(email) = mitch_lib::auth::names_get_email(&state.store, sid)

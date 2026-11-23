@@ -329,51 +329,6 @@ pub fn unmatched_spotify_tracks(
         .unwrap_or_default()
 }
 
-/// Forgets the YouTube video of this playlist's Spotify songs whose match was
-/// made under older rules (no stored match from the current rules), so they get
-/// matched again. Runs once per song: after the new match is stored the song
-/// no longer qualifies. Returns how many songs will be rechecked.
-pub fn recheck_stale_matches(store: &DataStore, playlist_id: &str) -> usize {
-    let conn = store.conn();
-    let rows: Vec<(i64, String, String)> = {
-        let Ok(mut stmt) = conn.prepare(
-            "SELECT position, title, artist FROM music_playlist_tracks \
-             WHERE playlist_id = ?1 AND spotify_id != '' AND video_id != ''",
-        ) else {
-            return 0;
-        };
-        let mapped = stmt.query_map(rusqlite::params![playlist_id], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?))
-        });
-        mapped
-            .map(|m| m.filter_map(Result::ok).collect())
-            .unwrap_or_default()
-    };
-    let mut cleared = 0;
-    for (position, title, artist) in rows {
-        let fresh: bool = conn
-            .query_row(
-                "SELECT 1 FROM music_track_matches WHERE match_key = ?1 AND rules_version >= ?2",
-                rusqlite::params![match_key(&title, &artist), MATCH_RULES_VERSION],
-                |_| Ok(true),
-            )
-            .unwrap_or(false);
-        if !fresh
-            && conn
-                .execute(
-                    "UPDATE music_playlist_tracks SET video_id = '' \
-                     WHERE playlist_id = ?1 AND position = ?2",
-                    rusqlite::params![playlist_id, position],
-                )
-                .unwrap_or(0)
-                > 0
-        {
-            cleared += 1;
-        }
-    }
-    cleared
-}
-
 /// Records the YouTube video found for a Spotify track in every playlist row
 /// that holds it, so those songs play without a lookup.
 pub fn set_spotify_match(store: &DataStore, spotify_id: &str, video_id: &str) {
@@ -560,19 +515,19 @@ pub fn match_key(title: &str, artist: &str) -> String {
     )
 }
 
-/// The version of the rules that decide which YouTube video is a Spotify song
-/// (`routes/music/playlists.rs::best_match`). A stored match made under older
-/// rules is ignored (and made again), which is how a change to the rules busts
-/// the cache without deleting anything. Raise it when the rules change.
+/// The version of the rules that picked a stored match, kept on each row for
+/// reference. Matches are permanent: a Spotify song keeps the YouTube video it
+/// was first matched to (so playlists never wait on a new search), and changing
+/// the rules does not discard them. To redo one on purpose, delete its row.
 pub const MATCH_RULES_VERSION: i64 = 3;
 
-/// A stored match, if it was made under the current rules.
+/// The stored YouTube video for a song, if it was ever matched.
 pub fn get_match(store: &DataStore, key: &str) -> Option<String> {
     store
         .conn()
         .query_row(
-            "SELECT video_id FROM music_track_matches WHERE match_key = ?1 AND rules_version >= ?2",
-            rusqlite::params![key, MATCH_RULES_VERSION],
+            "SELECT video_id FROM music_track_matches WHERE match_key = ?1",
+            rusqlite::params![key],
             |r| r.get(0),
         )
         .ok()
@@ -594,41 +549,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn old_matches_are_rechecked_once() {
+    fn matches_made_under_older_rules_are_still_used() {
         let (dir, s) = store();
-        let owner = "a@example.com";
-        let id = create(&s, owner, "From Spotify", false, "spid").unwrap();
-        let mk = |sid: &str, title: &str| PlaylistTrack {
-            id: String::new(),
-            title: title.into(),
-            artist: "A".into(),
-            duration: 100,
-            spotify_id: sid.into(),
-        };
-        sync_spotify(&s, &id, vec![mk("s1", "One"), mk("s2", "Two")]).unwrap();
-        // Both songs were matched under the old rules: a video id on the row, and
-        // a stored match with rules_version 2 for one, none for the other.
-        set_spotify_match(&s, "s1", "aaaaaaaaaaa");
-        set_spotify_match(&s, "s2", "bbbbbbbbbbb");
         s.conn()
             .execute(
-                "INSERT INTO music_track_matches (match_key, video_id, matched_at, rules_version) VALUES (?1, 'aaaaaaaaaaa', 1, 2)",
+                "INSERT INTO music_track_matches (match_key, video_id, matched_at, rules_version) VALUES (?1, 'aaaaaaaaaaa', 1, 1)",
                 rusqlite::params![match_key("One", "A")],
             )
             .unwrap();
-        assert!(
-            get_match(&s, &match_key("One", "A")).is_none(),
-            "an old match is not trusted"
+        assert_eq!(
+            get_match(&s, &match_key("One", "A")).as_deref(),
+            Some("aaaaaaaaaaa"),
+            "a stored match is kept forever"
         );
-        assert_eq!(recheck_stale_matches(&s, &id), 2);
-        assert!(tracks(&s, &id).iter().all(|t| t.id.is_empty()));
-        // Matched again under the current rules: nothing is rechecked a second time.
-        put_match(&s, &match_key("One", "A"), "ccccccccccc");
-        put_match(&s, &match_key("Two", "A"), "ddddddddddd");
-        set_spotify_match(&s, "s1", "ccccccccccc");
-        set_spotify_match(&s, "s2", "ddddddddddd");
-        assert_eq!(recheck_stale_matches(&s, &id), 0);
-        assert!(tracks(&s, &id).iter().all(|t| !t.id.is_empty()));
         let _ = std::fs::remove_dir_all(dir);
     }
 

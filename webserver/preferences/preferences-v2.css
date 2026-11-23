@@ -1,0 +1,170 @@
+/* Preferences layout: a nav column and one settings group at a time.
+   Loaded after preferences-galaxy.css and scoped away from the school page,
+   which keeps its own layout (preferences-school.css). Colors come from the
+   site tokens (--t-*), so holiday and custom themes apply. */
+html:not(.school-preferences) .prefs-page .prefs-shell {
+  display: block;
+  width: min(1040px, calc(100% - 40px));
+  max-width: 1040px;
+  padding: 28px 0 96px;
+}
+
+html:not(.school-preferences) .prefs-page .page-head {
+  margin-bottom: 18px;
+  padding-bottom: 18px;
+}
+html:not(.school-preferences) .prefs-page .page-head h1 { font-size: clamp(28px, 3.4vw, 36px); }
+
+/* Search */
+.prefs-search { margin: 0 0 14px; }
+.prefs-search input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 42px;
+  padding: 10px 14px;
+  border: 1px solid var(--t-bd);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg2);
+  color: var(--t-fg);
+  font: inherit;
+  font-size: 14px;
+}
+.prefs-search input:focus-visible { outline: 2px solid var(--t-ac); outline-offset: 2px; }
+.prefs-empty { margin: 24px 0; color: var(--t-fg2); font-size: 14px; }
+[data-search-hidden] { display: none !important; }
+
+/* Navigation: a strip on phones, a sticky column on wide screens */
+html:not(.school-preferences) .prefs-page .prefs-jump-nav {
+  position: sticky;
+  top: 56px;
+  z-index: 30;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 8px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--t-bg);
+  border: 0;
+}
+html:not(.school-preferences) .prefs-page .prefs-jump-nav::-webkit-scrollbar { display: none; }
+html:not(.school-preferences) .prefs-page .prefs-jump-nav a {
+  flex: 0 0 auto;
+  padding: 9px 14px;
+  border: 1px solid var(--t-bd);
+  border-radius: 999px;
+  color: var(--t-fg2);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+html:not(.school-preferences) .prefs-page .prefs-jump-nav a:hover { color: var(--t-fg); border-color: var(--t-bda); }
+html:not(.school-preferences) .prefs-page .prefs-jump-nav a[aria-current='page'] {
+  background: var(--t-ac);
+  border-color: var(--t-ac);
+  color: var(--t-ac-ink);
+}
+.is-searching .prefs-jump-nav a { opacity: 0.55; }
+
+@media (min-width: 900px) {
+  html:not(.school-preferences) .prefs-page .prefs-shell {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    column-gap: 36px;
+    align-items: start;
+  }
+  html:not(.school-preferences) .prefs-page .page-head,
+  html:not(.school-preferences) .prefs-page .prefs-search { grid-column: 1 / -1; }
+  html:not(.school-preferences) .prefs-page .prefs-search { max-width: 420px; }
+  html:not(.school-preferences) .prefs-page .prefs-jump-nav {
+    grid-column: 1;
+    grid-row: 3 / span 3;
+    top: 76px;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+    background: none;
+  }
+  html:not(.school-preferences) .prefs-page .prefs-jump-nav a {
+    padding: 10px 14px;
+    border-color: transparent;
+    border-radius: var(--t-radius-sm);
+    font-size: 14px;
+  }
+  html:not(.school-preferences) .prefs-page .prefs-jump-nav a:hover { background: var(--t-bg2); }
+  html:not(.school-preferences) .prefs-page .pref-stack,
+  html:not(.school-preferences) .prefs-page .prefs-empty { grid-column: 2; }
+}
+
+/* Sections: plain panels, no collapsing */
+html:not(.school-preferences) .prefs-page .pref-stack { gap: 16px; }
+html:not(.school-preferences) .prefs-page .pref-section[hidden] { display: none; }
+html:not(.school-preferences) .prefs-page .pref-section h2 {
+  min-height: 0;
+  padding: 20px 22px 4px;
+  cursor: default;
+  font-size: 20px;
+}
+html:not(.school-preferences) .prefs-page .pref-section h2::after { content: none; }
+html:not(.school-preferences) .prefs-page .pref-section > :not(h2) { margin-inline: 22px; }
+html:not(.school-preferences) .prefs-page .pref-section > h2 + * { margin-top: 12px; }
+html:not(.school-preferences) .prefs-page .pref-section > :last-child { margin-bottom: 22px; }
+html:not(.school-preferences) .prefs-page .pref-section .subsection-title { font-size: 15px; }
+html:not(.school-preferences) .prefs-page .pref-section .divider { margin-block: 20px; }
+
+/* Setting rows: label and description on the left, switch on the right */
+.prefs-page .control-grid:has(> .field > .toggle-row) { grid-template-columns: minmax(0, 1fr); gap: 0; }
+.prefs-page .field:has(> .toggle-row) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 16px;
+  align-items: center;
+  margin: 0;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--t-bd);
+}
+.prefs-page .control-grid > .field:last-child:has(> .toggle-row) { border-bottom: 0; }
+.prefs-page .field:has(> .toggle-row) > label:first-child { grid-column: 1; margin: 0; font-size: 14px; font-weight: 600; }
+.prefs-page .field:has(> .toggle-row) > .toggle-row { display: contents; }
+.prefs-page .field:has(> .toggle-row) .toggle-switch { grid-column: 2; grid-row: 1 / span 2; justify-self: end; }
+.prefs-page .field:has(> .toggle-row) .toggle-desc { grid-column: 1; grid-row: 2; margin: 2px 0 0; font-size: 13px; color: var(--t-fg2); }
+.prefs-page .field:has(> .toggle-row) > .status-line { grid-column: 1 / -1; }
+
+/* Quiet hours: the switch, then the two times side by side */
+.prefs-page #notifQuiet { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; }
+.prefs-page #notifQuiet > .field:first-child { grid-column: 1 / -1; }
+.prefs-page #notifQuiet > .field:not(:first-child) { padding-top: 14px; }
+
+/* Save confirmation floats instead of sitting under a Save button */
+.prefs-page .save-status {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  pointer-events: none;
+}
+.prefs-page .save-status #savedMsg {
+  padding: 8px 14px;
+  border: 1px solid var(--t-bd);
+  border-radius: 999px;
+  background: var(--t-bg2);
+  color: var(--t-fg);
+  font-size: 13px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+.prefs-page .save-status #savedMsg:empty { display: none !important; }
+.prefs-page .save-status #savedMsg.is-err { border-color: var(--t-ac); }
+.prefs-page .save-status .soft-btn { pointer-events: auto; }
+
+@media (max-width: 760px) {
+  html:not(.school-preferences) .prefs-page .prefs-shell { width: calc(100% - 28px); }
+  .prefs-page .save-status { right: 14px; bottom: calc(84px + env(safe-area-inset-bottom)); }
+}

@@ -13,6 +13,20 @@ html {
   background: var(--t-bg);
 }
 
+/* Content scrolls under the sticky bars; keep the notch / status-bar strip
+   opaque so it never shows through (installed iPhone PWA). */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top, 0px);
+  background: var(--t-bg);
+  z-index: 399;
+  pointer-events: none;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -350,6 +364,8 @@ body.enroll-page { background: var(--t-bg); }
 #mobile-dock { display: none; }
 #mobile-menu { width: min(520px, calc(100% - 24px)); max-height: 85dvh; padding: 20px; color: var(--t-fg); background: var(--t-bg); border: 1px solid var(--t-bd); border-radius: var(--t-radius); }
 #mobile-menu::backdrop { background: rgba(10, 8, 14, 0.55); backdrop-filter: blur(6px); }
+#mobile-menu .mobile-menu-legal { margin: 16px 0 0; font-size: 12px; color: var(--t-fg3); text-align: center; }
+#mobile-menu .mobile-menu-legal a { color: inherit; }
 #mobile-menu > header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 12px; }
 #mobile-menu h2 { margin: 0; font-size: 22px; letter-spacing: -0.03em; }
 #mobile-menu header button { width: 40px; height: 40px; padding: 0; border-radius: 50%; }

@@ -29,8 +29,8 @@ use std::time::Duration;
 
 const CYCLE: Duration = Duration::from_secs(300);
 const REFRESH_WINDOW_MS: i64 = 45 * 60 * 1000;
-const REFRESH_PER_CYCLE: i64 = 25;
-const MATCH_PER_CYCLE: i64 = 10;
+const REFRESH_PER_CYCLE: i64 = 60;
+const MATCH_PER_CYCLE: i64 = 30;
 
 /// Starts the background worker. Call once at startup.
 pub fn spawn(state: Arc<AppState>) {
@@ -80,7 +80,7 @@ async fn cycle(state: &Arc<AppState>) -> bool {
             Err(ytdlp::YtError::Blocked | ytdlp::YtError::NotInstalled) => return false,
             Err(_) => {}
         }
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        tokio::time::sleep(Duration::from_millis(600)).await;
     }
     true
 }

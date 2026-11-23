@@ -324,6 +324,33 @@ pub fn save_admin_passphrase_for_user(
     let _ = store.write_document(&data_dir.join("admin_passphrase.json"), &data);
 }
 
+/// The stored Argon2 hash for the admin behind `sid`: the per-user entry,
+/// falling back to the shared `admin@mitch.pro` one. Empty when none is set.
+pub fn admin_passphrase_hash_for_sid(
+    store: &DataStore,
+    id_secret: &[u8],
+    data_dir: &Path,
+    sid: &str,
+) -> String {
+    let email =
+        crate::auth::email_from_sid(store, id_secret, sid).unwrap_or_else(|| "admin".to_string());
+    let norm = normalize_email(&email);
+    let data = load_admin_passphrase(store, data_dir);
+    let hash_of = |key: &str| {
+        data.get(key)
+            .and_then(|e| e.get("hash"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string()
+    };
+    let hash = hash_of(&norm);
+    if hash.is_empty() {
+        hash_of("admin@mitch.pro")
+    } else {
+        hash
+    }
+}
+
 /// `verifyAdminPassphraseRaw(sid, passphrase)` — per-user hash with the
 /// admin@mitch.pro fallback; argon2 PHC verify. Returns false on any failure.
 pub fn verify_admin_passphrase_raw(
@@ -333,24 +360,7 @@ pub fn verify_admin_passphrase_raw(
     sid: &str,
     passphrase: &str,
 ) -> bool {
-    let email =
-        crate::auth::email_from_sid(store, id_secret, sid).unwrap_or_else(|| "admin".to_string());
-    let norm = normalize_email(&email);
-    let data = load_admin_passphrase(store, data_dir);
-    let mut hash = data
-        .get(&norm)
-        .and_then(|e| e.get("hash"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    if hash.is_empty() {
-        hash = data
-            .get("admin@mitch.pro")
-            .and_then(|e| e.get("hash"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-    }
+    let hash = admin_passphrase_hash_for_sid(store, id_secret, data_dir, sid);
     if hash.is_empty() {
         return false;
     }
@@ -359,6 +369,110 @@ pub fn verify_admin_passphrase_raw(
         return false;
     }
     crate::crypto::argon2_verify(&hash, pass)
+}
+
+/// Name of the cookie that keeps the admin dashboard unlocked.
+pub const ADMIN_UNLOCK_COOKIE: &str = "mitch_admin_unlock";
+
+/// How long one passphrase entry keeps the admin pages unlocked.
+pub const ADMIN_UNLOCK_TTL_MS: i64 = 8 * 60 * 60 * 1000;
+
+/// MAC over what an unlock grant is bound to: the session id, the current
+/// passphrase hash (so changing the passphrase revokes every grant) and the
+/// expiry. Keyed with the server's id secret.
+fn admin_unlock_mac(id_secret: &[u8], sid: &str, hash: &str, expires: i64) -> String {
+    let fingerprint = crate::crypto::sha256_hex(hash.as_bytes());
+    let data = format!("admin-unlock|{sid}|{fingerprint}|{expires}");
+    crate::crypto::hmac_sha256_hex(id_secret, data.as_bytes())
+}
+
+/// Cookie value proving `sid` entered the admin passphrase recently:
+/// `<expires-ms>.<mac>`. Stateless, so nothing is stored server-side;
+/// logging out (new sid) or changing the passphrase invalidates it.
+pub fn make_admin_unlock_token(
+    store: &DataStore,
+    id_secret: &[u8],
+    data_dir: &Path,
+    sid: &str,
+) -> Option<(String, i64)> {
+    let hash = admin_passphrase_hash_for_sid(store, id_secret, data_dir, sid);
+    if hash.is_empty() {
+        return None;
+    }
+    let expires = now_millis() + ADMIN_UNLOCK_TTL_MS;
+    let mac = admin_unlock_mac(id_secret, sid, &hash, expires);
+    Some((format!("{expires}.{mac}"), expires))
+}
+
+/// Returns the unlock's expiry (ms) when `token` is a live grant for `sid`.
+pub fn verify_admin_unlock_token(
+    store: &DataStore,
+    id_secret: &[u8],
+    data_dir: &Path,
+    sid: &str,
+    token: &str,
+) -> Option<i64> {
+    let (expires, mac) = token.split_once('.')?;
+    let expires: i64 = expires.parse().ok()?;
+    if expires <= now_millis() {
+        return None;
+    }
+    let hash = admin_passphrase_hash_for_sid(store, id_secret, data_dir, sid);
+    if hash.is_empty() {
+        return None;
+    }
+    let expected = admin_unlock_mac(id_secret, sid, &hash, expires);
+    if expected.len() != mac.len() {
+        return None;
+    }
+    // Constant-time compare.
+    let diff = expected
+        .bytes()
+        .zip(mac.bytes())
+        .fold(0u8, |acc, (a, b)| acc | (a ^ b));
+    (diff == 0).then_some(expires)
+}
+
+/// Admin actions that must be confirmed with the passphrase every time,
+/// even while the dashboard is unlocked: destructive or hard-to-undo work.
+/// Everything else under `/api/admin/` is covered by the unlock cookie.
+pub fn is_sensitive_admin_action(method: &str, path: &str) -> bool {
+    if !matches!(method, "POST" | "PUT" | "PATCH" | "DELETE") {
+        return false;
+    }
+    const EXACT: &[&str] = &[
+        "/api/admin/ban-account",
+        "/api/admin/unban-account",
+        "/api/admin/bans",
+        "/api/admin/vm-ban",
+        "/api/admin/byo-os-ban",
+        "/api/admin/admins",
+        "/api/admin/co-owners",
+        "/api/admin/moderators",
+        "/api/admin/change-passphrase",
+        "/api/admin/reset-other-passphrase",
+        "/api/admin/audit/revert",
+        "/api/admin/broadcast",
+        "/api/admin/newsletters/send",
+        "/api/admin/maintenance-toggle",
+        "/api/admin/restricted-mode",
+        "/api/admin/economy/burn",
+        "/api/admin/economy/cap-coins",
+        "/api/admin/economy/set-coins",
+        "/api/admin/economy/multiplier",
+        "/api/admin/gift-coins",
+        "/api/admin/grant-premium",
+        "/api/admin/revoke-premium",
+        "/api/admin/matrix/purge-user",
+        "/api/admin/owner-container",
+        "/api/admin/lxc-attach-sshd-hook",
+        "/api/admin/vms/delete",
+        "/api/admin/vms/fleet/delete-chromeos",
+        "/api/admin/vms/fleet/power",
+        "/api/admin/terminate-vm",
+        "/api/admin/blog-deletions",
+    ];
+    EXACT.contains(&path)
 }
 
 /// `publicSessionId(id)` — sha256(id).hex[0..12] or 'unknown'.
@@ -1138,5 +1252,26 @@ mod tests {
             Some("daily login")
         );
         std::fs::remove_dir_all(base).ok();
+    }
+
+    #[test]
+    fn sensitive_admin_actions_are_mutations_only() {
+        assert!(is_sensitive_admin_action("POST", "/api/admin/ban-account"));
+        assert!(is_sensitive_admin_action("POST", "/api/admin/vms/delete"));
+        assert!(!is_sensitive_admin_action("GET", "/api/admin/bans"));
+        assert!(!is_sensitive_admin_action(
+            "POST",
+            "/api/admin/special-schedule"
+        ));
+    }
+
+    #[test]
+    fn unlock_mac_is_bound_to_session_hash_and_expiry() {
+        let key = b"secret";
+        let base = admin_unlock_mac(key, "sid1", "hash-a", 1000);
+        assert_eq!(base, admin_unlock_mac(key, "sid1", "hash-a", 1000));
+        assert_ne!(base, admin_unlock_mac(key, "sid2", "hash-a", 1000));
+        assert_ne!(base, admin_unlock_mac(key, "sid1", "hash-b", 1000));
+        assert_ne!(base, admin_unlock_mac(key, "sid1", "hash-a", 1001));
     }
 }
