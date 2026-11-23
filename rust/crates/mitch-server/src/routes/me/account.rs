@@ -33,6 +33,14 @@ pub(crate) async fn handle(
     if path == "/api/profile" && *method == Method::POST {
         return Some(post_profile(state, headers, body_bytes));
     }
+    if path == "/api/me/profile-privacy" {
+        if *method == Method::GET {
+            return Some(profile_privacy_get(state, headers));
+        }
+        if *method == Method::POST {
+            return Some(profile_privacy_set(state, headers, body_bytes));
+        }
+    }
     if path == "/api/me/change-email" && method == Method::POST {
         return Some(change_email(state, headers, body_bytes));
     }
@@ -52,6 +60,53 @@ pub(crate) async fn handle(
     None
 }
 
+/// `GET /api/me/profile-privacy`: the caller's "block profile lookups" setting.
+fn profile_privacy_get(state: &Arc<AppState>, headers: &HeaderMap) -> Response {
+    let cookies = cookies_of(state, headers);
+    let sid = me_uid(&cookies);
+    let Some(email) = auth::email_from_sid(&state.store, &state.id_secret, &sid) else {
+        return json_response(401, json!({ "error": "Not authenticated" }));
+    };
+    json_response(
+        200,
+        json!({ "blockLookups": mitch_lib::profile_privacy::blocks_lookups(
+            &state.store,
+            &auth::normalize_email(&email),
+        ) }),
+    )
+}
+
+/// `POST /api/me/profile-privacy {blockLookups: bool}`.
+fn profile_privacy_set(state: &Arc<AppState>, headers: &HeaderMap, body_bytes: &[u8]) -> Response {
+    let cookies = cookies_of(state, headers);
+    let sid = me_uid(&cookies);
+    let Some(email) = auth::email_from_sid(&state.store, &state.id_secret, &sid) else {
+        return json_response(401, json!({ "error": "Not authenticated" }));
+    };
+    let Some(block) = serde_json::from_slice::<Value>(body_bytes)
+        .ok()
+        .and_then(|b| b.get("blockLookups").and_then(Value::as_bool))
+    else {
+        return json_response(
+            400,
+            json!({ "error": "blockLookups must be true or false" }),
+        );
+    };
+    mitch_lib::profile_privacy::set_blocks_lookups(
+        &state.store,
+        &auth::normalize_email(&email),
+        block,
+    );
+    json_response(200, json!({ "blockLookups": block }))
+}
+
+/// Whether the session `sid` belongs to staff: an admin (owner, developer or
+/// admin) or a moderator. Testers are not staff, so they get no extra access.
+pub(crate) fn sid_is_staff(state: &AppState, sid: &str) -> bool {
+    let node_env_test = std::env::var("NODE_ENV").unwrap_or_default() == "test";
+    auth::is_any_admin_id(&state.store, &state.id_secret, sid, node_env_test)
+}
+
 fn get_public_profile(state: &Arc<AppState>, headers: &HeaderMap, slug_raw: &str) -> Response {
     let slug = auth::decode_uri_component(slug_raw);
     let cookies = cookies_of(state, headers);
@@ -60,6 +115,17 @@ fn get_public_profile(state: &Arc<AppState>, headers: &HeaderMap, slug_raw: &str
     let actual_email =
         mitch_lib::profile::email_from_hash(&state.store, &state.id_secret, &slug).unwrap_or(slug);
     let norm = auth::normalize_email(&actual_email);
+    // An account that blocks profile lookups is invisible to everyone but
+    // itself and staff, and looks the same as one that doesn't exist.
+    let viewer_is_self = viewer_email
+        .as_deref()
+        .is_some_and(|v| auth::normalize_email(v) == norm);
+    if !viewer_is_self
+        && mitch_lib::profile_privacy::blocks_lookups(&state.store, &norm)
+        && !sid_is_staff(state, &sid)
+    {
+        return json_response(404, json!({ "error": "Profile not found" }));
+    }
     let mut profile =
         mitch_lib::profiles::profile_get_opt(&state.store, &norm).unwrap_or_else(|| {
             json!({
@@ -1184,6 +1250,7 @@ pub(crate) fn rename_email_references(
     mitch_lib::passwords::rename_password_email(&state.store, old_norm, new_norm);
     mitch_lib::user_stats::rename_user_stats_email(&state.store, old_norm, new_norm);
     mitch_lib::profiles::rename_profile_email(&state.store, old_norm, new_norm, new_email);
+    mitch_lib::profile_privacy::rename_email(&state.store, old_norm, new_norm);
     let key_maps = ["premium_gifts_sent.json", "sebastians_claims.json"];
     for file in key_maps {
         let path = data_file(state, file);
