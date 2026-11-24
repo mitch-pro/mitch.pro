@@ -154,7 +154,7 @@ mod tests {
         let sealed = seal_totp_secret(&secret, id_secret);
         assert!(
             sealed.starts_with("totp1:"),
-            "prefix must be totp1: {sealed}"
+            "sealed secret must use the totp1: prefix"
         );
         assert_eq!(open_totp_secret(&sealed, id_secret), secret);
         // Malformed framing → '' (JS parity, unlike openAtRest).

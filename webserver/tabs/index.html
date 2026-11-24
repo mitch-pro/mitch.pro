@@ -320,9 +320,14 @@
       let url = document.getElementById('url-input').value;
       if (!url) return;
       if (!url.startsWith('http')) url = 'https://' + url;
+      // Only open http(s) pages.
+      let parsed;
+      try { parsed = new URL(url); } catch (e) { return; }
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return;
+      url = parsed.href;
 
       const id = Date.now();
-      const title = new URL(url).hostname.replace('www.', '');
+      const title = parsed.hostname.replace('www.', '');
 
       const tab = { id, url, title };
       tabs.push(tab);

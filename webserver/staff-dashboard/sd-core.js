@@ -129,7 +129,7 @@
           try {
             var res = await fetch('/api/admin/passphrase-status', { method: 'POST', credentials: 'same-origin', headers: headers({ 'X-Admin-Passphrase': pass }), body: JSON.stringify({ passphrase: pass }) });
             var data = await res.json().catch(function () { return {}; });
-            if (res.ok && data.ok) { sessionStorage.setItem('admin_passphrase', pass); close(true); return; }
+            if (res.ok && data.ok) { window.MitchAdminAuth.remember(pass); close(true); return; }
           } catch (x) { /* fall through */ }
           sessionStorage.removeItem('admin_passphrase');
           err.textContent = 'Incorrect admin passphrase.'; input.select();

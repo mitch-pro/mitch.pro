@@ -57,7 +57,7 @@
     var box = document.getElementById('existing-list');
     list.slice().reverse().forEach(function (t) {
       var a = document.createElement('a');
-      a.href = '/support/ticket/#' + t.id + '.' + t.token;
+      a.href = '/support/ticket/#' + encodeURIComponent(String(t.id)) + '.' + encodeURIComponent(String(t.token));
       a.textContent = (t.subject || 'Request') + ' · ' + new Date(t.at).toLocaleDateString();
       a.style.display = 'block';
       a.style.marginTop = '6px';

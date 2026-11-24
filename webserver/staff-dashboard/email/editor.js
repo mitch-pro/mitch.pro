@@ -211,7 +211,7 @@
       const response = await fetch('/api/admin/passphrase-status', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' }, body: JSON.stringify({ passphrase }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Passphrase could not be verified.');
-      sessionStorage.setItem('admin_passphrase', passphrase); $('admin-passphrase').value = '';
+      window.MitchAdminAuth.remember(passphrase); $('admin-passphrase').value = '';
       await initialize();
     } catch (error) { $('access-message').textContent = error.message; }
   };

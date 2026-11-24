@@ -23,7 +23,7 @@
 
 <script src="/onboarding.js?v=3" defer></script>
 <script src="/app-shell.js?v=18" defer></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/zxcvbn/4.4.2/zxcvbn.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/zxcvbn/4.4.2/zxcvbn.js" integrity="sha512-TZlMGFY9xKj38t/5m2FzJ+RM/aD5alMHDe26p0mYUMoCF5G7ibfHUQILq0qQPV3wlsnCwL+TPRNK4vIWGLOkUQ==" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
 </head>
 <body class="enroll-page onboarding-page mitch-design" data-shell="off">
   <a class="ob-skip" href="#account-access">Skip to account access</a>
@@ -237,23 +237,27 @@ var _attempts = [], _LIMIT = 3, _WINDOW = 60000;
 
 // Where to land after sign-in. Only our own two domains are allowed, so a
 // crafted ?next= can never send anyone elsewhere.
+// Where to go after signing in. `next` may be a same-site path or an https
+// URL on one of our own domains; anything else goes home. The result is
+// always an absolute URL on the current origin (a path is re-rooted with a
+// single leading slash so `//host` or tab-smuggled `/\t/host` can't escape),
+// and other-domain targets go through the SSO bridge.
 function postLoginDestination() {
+  var origin = window.location.origin;
+  var home = origin + '/';
   var next = '';
   try { next = new URLSearchParams(window.location.search).get('next') || ''; } catch (_) {}
-  if (next) {
-    if (/^\/[^/\\]/.test(next) || next === '/') return next;
-    if (/^https:\/\/(mitchdog\.com|([a-z0-9-]+\.)*(mitch\.pro|rjuhsd\.school))(\/|$|\?)/i.test(next)) {
-      var target = new URL(next);
-      if (target.origin === window.location.origin) return next;
-      // mitch.pro permanently redirects to mitchdog.com, so keep its
-      // destination on the current cookie-owning host.
-      if (target.hostname === 'mitch.pro' && window.location.hostname === 'mitchdog.com') {
-        return target.pathname + target.search + target.hash;
-      }
-      return '/api/sso/bridge?back=' + encodeURIComponent(next);
-    }
-  }
-  return '/';
+  if (!next) return home;
+  var target;
+  try { target = new URL(next, home); } catch (_) { return home; }
+  var local = function (u) { return origin + '/' + u.pathname.replace(/^\/+/, '') + u.search + u.hash; };
+  if (target.origin === origin) return local(target);
+  if (target.protocol !== 'https:' || target.port) return home;
+  if (!/^(mitchdog\.com|([a-z0-9-]+\.)*(mitch\.pro|rjuhsd\.school))$/i.test(target.hostname)) return home;
+  // mitch.pro permanently redirects to mitchdog.com, so keep its
+  // destination on the current cookie-owning host.
+  if (target.hostname === 'mitch.pro' && window.location.hostname === 'mitchdog.com') return local(target);
+  return origin + '/api/sso/bridge?back=' + encodeURIComponent(target.href);
 }
 
 async function confirmAuthSession(expectedEmail) {

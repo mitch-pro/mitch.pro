@@ -70,7 +70,7 @@ import RFB from '/novnc/core/rfb.js';
       });
       const d = await verifyRes.json().catch(() => ({}));
       if (verifyRes.ok && d.ok) {
-        sessionStorage.setItem('admin_passphrase', pass);
+        window.MitchAdminAuth.remember(pass);
         setPassphraseStatus('Passphrase verified.', 'success');
         setTimeout(() => {
           hidePassphraseLockBox();

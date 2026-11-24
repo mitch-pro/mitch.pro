@@ -88,6 +88,8 @@
 
 <script>
 const $ = s => document.querySelector(s);
+// data-copy attributes hold "#id" references; look them up by id only.
+const byIdRef = ref => document.getElementById(String(ref || '').replace(/^#/, ''));
 
 async function copyText(t){
   try { await navigator.clipboard.writeText(t); }
@@ -97,9 +99,9 @@ async function copyText(t){
 
 document.addEventListener('click', e=>{
   const c1 = e.target.closest('[data-copy]');
-  if(c1){ const el = $(c1.getAttribute('data-copy')); copyText(el.value||''); }
+  if(c1){ const el = byIdRef(c1.getAttribute('data-copy')); if(el) copyText(el.value||''); }
   const c2 = e.target.closest('[data-copy-text]');
-  if(c2){ const el = $(c2.getAttribute('data-copy-text')); copyText((el.textContent||'').trim()); }
+  if(c2){ const el = byIdRef(c2.getAttribute('data-copy-text')); if(el) copyText((el.textContent||'').trim()); }
 });
 
 function modPow(base, exp, mod){

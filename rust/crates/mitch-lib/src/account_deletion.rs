@@ -629,7 +629,7 @@ mod tests {
             }
         }
         let report = erase_account(&store, &id);
-        assert!(report.rows >= 3, "{report:?}");
+        assert!(report.rows >= 3, "expected at least 3 erased rows");
         assert_eq!(report.documents, 1);
         assert_eq!(report.log_lines, 1);
         let conn = store.conn();

@@ -200,19 +200,18 @@ pub fn admin_gate(state: &Arc<AppState>, method: &Method, path: &str, headers: &
         let pass = headers
             .get("X-Admin-Passphrase")
             .and_then(|v| v.to_str().ok())
-            .unwrap_or("")
-            .trim()
-            .to_string();
-        if !pass.is_empty()
-            && mitch_lib::admin::verify_admin_passphrase_raw(
+            .map(str::trim)
+            .filter(|v| !v.is_empty());
+        if let Some(pass) = pass {
+            if mitch_lib::admin::verify_admin_passphrase_raw(
                 &state.store,
                 &state.id_secret,
                 &state.cfg.data_dir,
                 &ctx.sid,
-                &pass,
-            )
-        {
-            return None;
+                pass,
+            ) {
+                return None;
+            }
         }
         let unlocked = admin_unlock_expiry(state, &ctx).is_some();
         if unlocked {

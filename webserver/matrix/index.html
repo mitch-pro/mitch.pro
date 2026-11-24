@@ -340,7 +340,7 @@
             const href = a.getAttribute('href') || '';
             let target = '';
             if (href === 'https://github.com/cinnyapp/cinny') target = '/members/';
-            else if (href.startsWith('https://cinny.in')) target = '/support/';
+            else if (/^https:\/\/cinny\.in(?:[/?#]|$)/.test(href)) target = '/support/';
             else if (href.startsWith('https://github.com/cinnyapp/cinny/releases')) { a.style.display = 'none'; return; }
             else return;
             a.setAttribute('href', target);

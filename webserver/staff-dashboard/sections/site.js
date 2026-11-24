@@ -127,7 +127,7 @@
         submit: async function (v) {
           if (v.newPassphrase.length < 4) throw new Error('The passphrase must be at least 4 characters.');
           await SD.api('/api/admin/change-passphrase', { newPassphrase: v.newPassphrase });
-          sessionStorage.setItem('admin_passphrase', v.newPassphrase);
+          window.MitchAdminAuth.remember(v.newPassphrase);
           return 'Passphrase changed.';
         },
       }),

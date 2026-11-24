@@ -271,7 +271,7 @@
         if (!res.ok) {
           throw new Error(res.data.error === 'invalid_passphrase' ? 'Incorrect passphrase.' : res.data.error || 'Could not unlock companion management.');
         }
-        sessionStorage.setItem('admin_passphrase', pass);
+        window.MitchAdminAuth.remember(pass);
         $('admin-passphrase').value = '';
         return loadCharacters();
       })

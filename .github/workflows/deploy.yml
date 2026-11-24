@@ -19,6 +19,11 @@ concurrency:
   group: deploy-${{ github.event.workflow_run.head_branch || github.ref_name }}
   cancel-in-progress: false
 
+# Only the `test` job checks out code. The deploy jobs SSH to the server and
+# never touch the GitHub API, so they get no GITHUB_TOKEN scopes at all.
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Unit tests
@@ -88,6 +93,7 @@ jobs:
     # Secrets come from the `production` environment (master only, requires
     # approval), not repo-level secrets, so other branches can't read them.
     environment: production
+    permissions: {}
     if: >-
       github.event_name == 'workflow_run'
       && github.event.workflow_run.conclusion == 'success'
@@ -141,6 +147,7 @@ jobs:
     # that environment's required reviewers (the `owners` team), not a name
     # check here: a push to `dev` waits for their approval before this job runs.
     environment: dev
+    permissions: {}
     needs: test
     # The dev server (port 37222) has `dev` checked out; deploy.sh pulls the
     # checked-out branch, so this only deploys what is pushed to dev.

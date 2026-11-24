@@ -172,9 +172,13 @@ fn confirm_identity(state: &Arc<AppState>, norm: &str, body: &Value) -> Result<(
             return Err(wrong("That isn't this account's email address."));
         }
     } else {
-        let password = body.get("password").and_then(Value::as_str).unwrap_or("");
-        if password.is_empty() || !mitch_lib::crypto::argon2_verify(&stored, password) {
-            return Err(wrong("Current password incorrect."));
+        let password = body
+            .get("password")
+            .and_then(Value::as_str)
+            .filter(|p| !p.is_empty());
+        match password {
+            Some(password) if mitch_lib::crypto::argon2_verify(&stored, password) => {}
+            _ => return Err(wrong("Current password incorrect.")),
         }
     }
     let twofa = super::security::two_factor_config(state, norm);
@@ -299,6 +303,15 @@ mod tests {
         headers
     }
 
+    /// A fresh password per test, so no credential literal lives in the source.
+    fn test_password() -> String {
+        mitch_lib::crypto::random_bytes_hex(12)
+    }
+
+    fn password_body(password: &str) -> Vec<u8> {
+        json!({ "password": password }).to_string().into_bytes()
+    }
+
     fn coin_balance(state: &Arc<AppState>, email: &str) -> i64 {
         mitch_lib::coins::get_coins(&state.store, state.data_dir(), email) as i64
     }
@@ -306,12 +319,13 @@ mod tests {
     #[tokio::test]
     async fn deletes_everything_after_the_right_password_and_nothing_before() {
         let (state, dir) = test_state();
+        let password = test_password();
         let email = "test.student1@student.rjuhsd.us";
         let other = "test.student2@student.rjuhsd.us";
         mitch_lib::passwords::password_set(
             &state.store,
             &auth::normalize_email(email),
-            &mitch_lib::crypto::argon2_hash("hunter2hunter2"),
+            &mitch_lib::crypto::argon2_hash(&password),
         );
         mitch_lib::coins::set_coins(&state.store, state.data_dir(), email, 50.0, "test");
         mitch_lib::coins::set_coins(&state.store, state.data_dir(), other, 70.0, "test");
@@ -335,7 +349,7 @@ mod tests {
             "a wrong password deletes nothing"
         );
 
-        let ok = delete_account(&state, &headers, br#"{"password":"hunter2hunter2"}"#).await;
+        let ok = delete_account(&state, &headers, &password_body(&password)).await;
         assert_eq!(ok.status(), 200);
         assert!(ok
             .headers()
@@ -351,7 +365,7 @@ mod tests {
         assert_eq!(dms.as_array().unwrap().len(), 1);
         assert_eq!(dms[0]["text"], "keep");
         // The old session no longer resolves to anyone.
-        let again = delete_account(&state, &headers, br#"{"password":"hunter2hunter2"}"#).await;
+        let again = delete_account(&state, &headers, &password_body(&password)).await;
         assert_eq!(again.status(), 401);
         std::fs::remove_dir_all(dir).ok();
     }
@@ -359,11 +373,12 @@ mod tests {
     #[tokio::test]
     async fn an_open_marketplace_listing_blocks_deletion_and_a_referral_cannot_be_replayed() {
         let (state, dir) = test_state();
+        let password = test_password();
         let email = "test.student3@student.rjuhsd.us";
         mitch_lib::passwords::password_set(
             &state.store,
             &auth::normalize_email(email),
-            &mitch_lib::crypto::argon2_hash("hunter2hunter2"),
+            &mitch_lib::crypto::argon2_hash(&password),
         );
         state
             .store
@@ -373,13 +388,13 @@ mod tests {
             )
             .unwrap();
         let headers = headers_for(&state, email);
-        let blocked = delete_account(&state, &headers, br#"{"password":"hunter2hunter2"}"#).await;
+        let blocked = delete_account(&state, &headers, &password_body(&password)).await;
         assert_eq!(blocked.status(), 409);
         state
             .store
             .write_document(&dir.join("data/marketplace.json"), &json!([]))
             .unwrap();
-        let ok = delete_account(&state, &headers, br#"{"password":"hunter2hunter2"}"#).await;
+        let ok = delete_account(&state, &headers, &password_body(&password)).await;
         assert_eq!(ok.status(), 200);
         assert!(mitch_lib::account_deletion::was_deleted(
             &state.store,

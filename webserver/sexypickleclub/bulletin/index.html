@@ -91,8 +91,8 @@
     return '';
   }
   function sanitizeClientHtml(html) {
-    const tpl = document.createElement('template');
-    tpl.innerHTML = String(html || '');
+    // Inert parse (no scripts, no resource loads); only allow-listed nodes are copied out.
+    const parsed = new DOMParser().parseFromString(String(html || ''), 'text/html');
     const allowed = new Set(['p','br','strong','b','em','i','u','s','a','h2','h3','ul','ol','li','blockquote','pre','code','img','hr','span','div']);
     const alias = { div: 'p', b: 'strong', i: 'em' };
     function clean(node) {
@@ -127,7 +127,7 @@
       return el;
     }
     const frag = document.createDocumentFragment();
-    Array.from(tpl.content.childNodes).forEach(child => frag.appendChild(clean(child)));
+    Array.from(parsed.body.childNodes).forEach(child => frag.appendChild(clean(child)));
     const out = document.createElement('div');
     out.appendChild(frag);
     return out.innerHTML;
