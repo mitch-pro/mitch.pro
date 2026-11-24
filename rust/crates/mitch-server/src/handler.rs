@@ -699,7 +699,10 @@ async fn handle_resolved(
         let pin =
             crate::inject::holiday_pin_prefix(std::env::var("MITCH_HOLIDAY_THEME").ok().as_deref());
         if !pin.is_empty() {
-            if let Ok(script) = std::fs::read_to_string(state.cfg.webroot.join("site-theme.js")) {
+            if let Ok(script) =
+                crate::static_files::webfs::read_text(&state.cfg.webroot.join("site-theme.js"))
+                    .ok_or(())
+            {
                 return Response::builder()
                     .status(200)
                     .header("content-type", "application/javascript; charset=utf-8")
@@ -908,14 +911,12 @@ async fn handle_resolved(
     let public_root = webroot.join("public");
     if path != "/" {
         if let Some(public_candidate) = safe_webroot_path(&public_root, &path) {
-            let matches = std::fs::metadata(&public_candidate)
-                .map(|m| {
-                    m.is_file()
-                        || (m.is_dir()
-                            && (public_candidate.join("index.html").is_file()
-                                || public_candidate.join("index.htm").is_file()))
-                })
-                .unwrap_or(false);
+            let matches = crate::static_files::webfs::is_file(&public_candidate)
+                || (crate::static_files::webfs::is_dir(&public_candidate)
+                    && (crate::static_files::webfs::is_file(&public_candidate.join("index.html"))
+                        || crate::static_files::webfs::is_file(
+                            &public_candidate.join("index.htm"),
+                        )));
             if matches {
                 return serve_static(
                     &state.static_cache,
@@ -1410,7 +1411,9 @@ async fn handle_resolved(
 
     // 5. /team route (GET) — injectReadability of the team page.
     if path == "/team" || path == "/team/" || path == "/team/index.html" {
-        if let Ok(html) = std::fs::read_to_string(webroot.join("team/index.html")) {
+        if let Ok(html) =
+            crate::static_files::webfs::read_text(&webroot.join("team/index.html")).ok_or(())
+        {
             return html_response(inject_readability(&html, &path));
         }
     }
@@ -1442,7 +1445,9 @@ async fn handle_resolved(
         } else {
             ("robots.txt", "text/plain; charset=utf-8")
         };
-        if let Ok(body) = std::fs::read_to_string(webroot.join("rjuhsd").join(file)) {
+        if let Ok(body) =
+            crate::static_files::webfs::read_text(&webroot.join("rjuhsd").join(file)).ok_or(())
+        {
             return Response::builder()
                 .status(StatusCode::OK)
                 .header(axum::http::header::CONTENT_TYPE, content_type)
@@ -1453,18 +1458,15 @@ async fn handle_resolved(
 
     // 7. Site hubs and previews.
     let pickle_hub_html = || -> Option<String> {
-        std::fs::read_to_string(webroot.join("sexypickleclub").join("index.html"))
-            .ok()
+        crate::static_files::webfs::read_text(&webroot.join("sexypickleclub").join("index.html"))
             .map(|h| inject_shared_head(&h))
     };
-    let rjuhsd_hub_html = |req_host_val: Option<&str>,
-                           is_rjuhsd_val: bool,
-                           search_val: &str|
-     -> Option<String> {
-        std::fs::read_to_string(webroot.join("rjuhsd").join("index.html"))
-            .ok()
-            .map(|h| prepare_rjuhsd_html(&h, req_host_val, is_rjuhsd_val, search_val, &state.cfg))
-    };
+    let rjuhsd_hub_html =
+        |req_host_val: Option<&str>, is_rjuhsd_val: bool, search_val: &str| -> Option<String> {
+            crate::static_files::webfs::read_text(&webroot.join("rjuhsd").join("index.html")).map(
+                |h| prepare_rjuhsd_html(&h, req_host_val, is_rjuhsd_val, search_val, &state.cfg),
+            )
+        };
 
     if (path == "/" || path == "/index.html") && pickle_host {
         if let Some(html) = pickle_hub_html() {
@@ -1589,10 +1591,7 @@ async fn handle_resolved(
     // 8. Trailing-slash redirect for directories under WEBROOT.
     if path != "/" && !path.ends_with('/') {
         if let Some(disk) = safe_webroot_path(&webroot, &path) {
-            if std::fs::metadata(&disk)
-                .map(|m| m.is_dir())
-                .unwrap_or(false)
-            {
+            if crate::static_files::webfs::is_dir(&disk) {
                 let q = if search.is_empty() {
                     String::new()
                 } else {
@@ -1735,7 +1734,7 @@ async fn handle_resolved(
     // .html → sibling-directory 302 (file missing but <dir>/index.html exists).
     if path.ends_with(".html") {
         let missing = safe_webroot_path(&webroot, &path)
-            .map(|p| !p.exists())
+            .map(|p| !crate::static_files::webfs::exists(&p))
             .unwrap_or(true);
         if missing {
             let dir_name = &path[1..path.len() - 5];
@@ -1743,7 +1742,7 @@ async fn handle_resolved(
                 if let Some(index_path) =
                     safe_webroot_path(&webroot, &format!("{dir_name}/index.html"))
                 {
-                    if index_path.exists() {
+                    if crate::static_files::webfs::exists(&index_path) {
                         return redirect(&format!("/{dir_name}/{search}"), 302);
                     }
                 }
@@ -1774,23 +1773,23 @@ async fn handle_resolved(
         let rel_path = path.strip_prefix("/matrix/").unwrap_or("");
         if rel_path == "version" {
             let candidate = std::path::Path::new(&webroot).join("matrix").join(rel_path);
-            if let Ok(content) = std::fs::read(&candidate) {
+            if let Some(content) = crate::static_files::webfs::read(&candidate) {
                 return Response::builder()
                     .status(StatusCode::OK)
                     .header(
                         axum::http::header::CONTENT_TYPE,
                         "text/plain; charset=utf-8",
                     )
-                    .body(axum::body::Body::from(content))
+                    .body(axum::body::Body::from(content.as_ref().clone()))
                     .expect("static file response");
             }
         } else if rel_path == "apple-app-site-association" {
             let candidate = std::path::Path::new(&webroot).join("matrix").join(rel_path);
-            if let Ok(content) = std::fs::read(&candidate) {
+            if let Some(content) = crate::static_files::webfs::read(&candidate) {
                 return Response::builder()
                     .status(StatusCode::OK)
                     .header(axum::http::header::CONTENT_TYPE, "application/json")
-                    .body(axum::body::Body::from(content))
+                    .body(axum::body::Body::from(content.as_ref().clone()))
                     .expect("static file response");
             }
         }
@@ -1798,7 +1797,7 @@ async fn handle_resolved(
         // If it's a real file that exists on disk (e.g. css, js, images), DO NOT intercept here!
         // Allow it to fall through to serve_static() which inspects MIME types, adds caching headers, etc.
         let candidate = std::path::Path::new(&webroot).join("matrix").join(rel_path);
-        if !candidate.is_file() {
+        if !crate::static_files::webfs::is_file(&candidate) {
             let is_asset = path.starts_with("/matrix/assets/")
                 || path.starts_with("/matrix/public/")
                 || [
@@ -1811,8 +1810,8 @@ async fn handle_resolved(
                 let index_path = std::path::Path::new(&webroot)
                     .join("matrix")
                     .join("index.html");
-                if index_path.exists() {
-                    if let Ok(content) = std::fs::read_to_string(&index_path) {
+                if crate::static_files::webfs::exists(&index_path) {
+                    if let Some(content) = crate::static_files::webfs::read_text(&index_path) {
                         let content =
                             if crate::presence::authenticated_email(&state, headers).is_some() {
                                 crate::inject::inject_presence(&content, None)
@@ -1879,8 +1878,9 @@ async fn handle_resolved(
             safe_webroot_path(&webroot, &path)
         };
         if let Some(fp) = file_path {
-            if fp.exists() && std::fs::metadata(&fp).map(|m| !m.is_dir()).unwrap_or(false) {
-                if let Ok(raw) = std::fs::read(&fp) {
+            if crate::static_files::webfs::is_file(&fp) {
+                if let Some(raw) = crate::static_files::webfs::read(&fp).map(|d| d.as_ref().clone())
+                {
                     if path == "/vms/desktop"
                         || path == "/vms/desktop/"
                         || path == "/vms/desktop/index.html"
@@ -2189,9 +2189,8 @@ fn site_page_block(
                 .map(|re| re.replace_all(stripped, "").to_string())
                 .unwrap_or_else(|| stripped.to_string())
         );
-        let is_dir = std::fs::metadata(site_webroot.join(as_dir.trim_start_matches('/')))
-            .map(|m| m.is_dir())
-            .unwrap_or(false);
+        let is_dir =
+            crate::static_files::webfs::is_dir(&site_webroot.join(as_dir.trim_start_matches('/')));
         if is_dir {
             let q = if query.is_empty() {
                 String::new()
@@ -2206,8 +2205,7 @@ fn site_page_block(
         return Some(err_resp(404, None, None));
     }
     let file = site_webroot.join(format!("{}/index.html", rel.trim_start_matches('/')));
-    let stat = std::fs::metadata(&file).ok();
-    if stat.is_none() || stat.map(|s| s.is_dir()).unwrap_or(true) {
+    if !crate::static_files::webfs::is_file(&file) {
         return Some(err_resp(404, Some(not_found_title), Some(not_found_detail)));
     }
     // Gate: open pages pass; everything else redirects.
@@ -2235,7 +2233,7 @@ fn site_page_block(
             }
         }
     }
-    match std::fs::read_to_string(&file) {
+    match crate::static_files::webfs::read_text(&file).ok_or(()) {
         Ok(mut html) => {
             if domain == "rjuhsd.school" {
                 let req_host = request_host(headers);

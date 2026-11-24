@@ -1014,6 +1014,17 @@
           <span class="toggle-desc">Hide the People panel and other social widgets on your homepage.</span>
         </div>
       </div>
+      <div class="field">
+        <label for="privBlockLookupsToggle">Block profile lookups</label>
+        <div class="toggle-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="privBlockLookupsToggle" disabled>
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-desc">Nobody but you and staff can open your profile or find you in search. Friends and people you message still see you in their lists.</span>
+        </div>
+        <div class="status-line" id="blockLookupsStatus" aria-live="polite"></div>
+      </div>
       </div>
   </section>
 
@@ -2194,6 +2205,37 @@ function setupTabs() {
   }
 }
 
+// "Block profile lookups" is enforced by the server (GET/POST
+// /api/me/profile-privacy), not stored in the synced local preferences.
+async function setupBlockLookups() {
+  var box = document.getElementById('privBlockLookupsToggle');
+  if (!box) return;
+  try {
+    var res = await fetch('/api/me/profile-privacy', { credentials: 'include', cache: 'no-store' });
+    if (!res.ok) return;                       // signed out: the switch stays off
+    box.checked = !!(await res.json()).blockLookups;
+    box.disabled = false;
+  } catch (e) { return; }
+  box.addEventListener('change', async function () {
+    var wanted = box.checked;
+    box.disabled = true;
+    setStatus('blockLookupsStatus', 'Saving...');
+    try {
+      var res = await fetch('/api/me/profile-privacy', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-Mitch-Requested-With': '1' },
+        body: JSON.stringify({ blockLookups: wanted })
+      });
+      if (!res.ok) throw new Error('save');
+      setStatus('blockLookupsStatus', wanted ? 'Your profile is hidden from everyone but staff.' : 'Your profile can be looked up again.');
+    } catch (e) {
+      box.checked = !wanted;
+      setStatus('blockLookupsStatus', errMsg(e, 'Could not save. Try again.'), true);
+    }
+    box.disabled = false;
+  });
+}
+
 // Notification settings live on the server (GET/POST /api/me/notif-prefs),
 // the same ones as /notifications/. Every control saves as you change it.
 var NOTIF_TOGGLES = ['notifDm','notifGroup','notifCalls','notifFriendsOnline','notifRequests','notifGifts','notifDigest','notifQuietToggle'];
@@ -2568,7 +2610,7 @@ async function deleteAccount() {
 (function init() {
   var schoolPrefs = document.documentElement.classList.contains('school-preferences');
   setupTabs();
-  if (!document.documentElement.classList.contains('school-preferences')) setupNotifications();
+  if (!document.documentElement.classList.contains('school-preferences')) { setupNotifications(); setupBlockLookups(); }
   setupAppearanceControls();
   if (!schoolPrefs) loadAccountProfile();
   document.getElementById('saveProfileBtn').onclick = saveAccountProfile;

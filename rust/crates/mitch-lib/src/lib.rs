@@ -61,6 +61,7 @@ pub mod passwords;
 pub mod premium_email;
 pub mod privacy;
 pub mod profile;
+pub mod profile_privacy;
 pub mod profiles;
 pub mod push_subs;
 pub mod reserved_usernames;

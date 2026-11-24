@@ -59,12 +59,8 @@ fn looks_like_uuid(s: &str) -> bool {
 /// directories and `proxy/movies`. A section is one or more path segments. Hidden directories and `api` are
 /// never listed.
 pub fn sections(webroot: &std::path::Path) -> Vec<String> {
-    let mut out: Vec<String> = std::fs::read_dir(webroot)
+    let mut out: Vec<String> = crate::static_files::webfs::child_dir_names(webroot)
         .into_iter()
-        .flatten()
-        .flatten()
-        .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
-        .filter_map(|e| e.file_name().into_string().ok())
         .filter(|n| !n.starts_with('.') && n != "api")
         .collect();
     out.push("proxy".to_string());

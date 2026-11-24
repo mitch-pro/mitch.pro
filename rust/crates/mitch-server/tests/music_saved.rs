@@ -49,7 +49,7 @@ async fn a_kept_song_plays_from_the_store_and_counts_toward_the_quota() {
     let summary = s.call(Some(&me), "GET", "/api/music/storage", None).await;
     assert_eq!(summary.status, 200, "{}", summary.text);
     assert_eq!(summary.json["usedBytes"], 200);
-    assert_eq!(summary.json["limitBytes"], 512 * 1024 * 1024);
+    assert_eq!(summary.json["limitBytes"], 1024 * 1024 * 1024);
     assert_eq!(summary.json["songs"], 1);
     assert_eq!(summary.json["saved"], 1);
 

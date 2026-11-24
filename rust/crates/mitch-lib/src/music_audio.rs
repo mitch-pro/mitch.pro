@@ -12,7 +12,7 @@ use crate::data::DataStore;
 use crate::music::valid_video_id;
 
 /// Most audio one user may keep saved.
-pub const USER_QUOTA_BYTES: i64 = 512 * 1024 * 1024;
+pub const USER_QUOTA_BYTES: i64 = 1024 * 1024 * 1024;
 
 /// Default cap on all saved audio together, so many users can't fill the disk.
 /// `MUSIC_AUDIO_TOTAL_MB` overrides it.
@@ -106,14 +106,21 @@ pub fn delete_file(store: &DataStore, video_id: &str) {
     );
 }
 
+/// The song ids `email` keeps, as a subquery with `?1` = the email. Written
+/// directly against the two tables (not through `REFS`) so SQLite can use the
+/// owner index, which keeps the per-user totals cheap.
+const KEPT_BY_EMAIL: &str = "SELECT t.video_id FROM music_playlist_tracks t \
+     JOIN music_playlists p ON p.id = t.playlist_id \
+     WHERE p.owner_email = ?1 AND t.video_id != '' \
+     UNION SELECT video_id FROM music_favorites WHERE email = ?1";
+
 /// Bytes of saved audio `email` keeps (their playlists and favorites).
 pub fn used_bytes(store: &DataStore, email: &str) -> i64 {
     store
         .conn()
         .query_row(
             &format!(
-                "SELECT COALESCE(SUM(f.size), 0) FROM music_audio_files f \
-                 WHERE f.video_id IN (SELECT video_id FROM ({REFS}) WHERE email = ?1)"
+                "SELECT COALESCE(SUM(size), 0) FROM music_audio_files WHERE video_id IN ({KEPT_BY_EMAIL})"
             ),
             rusqlite::params![email],
             |r| r.get(0),
@@ -126,17 +133,14 @@ pub fn counts(store: &DataStore, email: &str) -> (i64, i64) {
     let conn = store.conn();
     let total: i64 = conn
         .query_row(
-            &format!("SELECT COUNT(*) FROM ({REFS}) WHERE email = ?1"),
+            &format!("SELECT COUNT(*) FROM ({KEPT_BY_EMAIL})"),
             rusqlite::params![email],
             |r| r.get(0),
         )
         .unwrap_or(0);
     let saved: i64 = conn
         .query_row(
-            &format!(
-                "SELECT COUNT(*) FROM ({REFS}) r JOIN music_audio_files f ON f.video_id = r.video_id \
-                 WHERE r.email = ?1"
-            ),
+            &format!("SELECT COUNT(*) FROM music_audio_files WHERE video_id IN ({KEPT_BY_EMAIL})"),
             rusqlite::params![email],
             |r| r.get(0),
         )
@@ -151,8 +155,11 @@ fn estimate(duration_s: i64) -> i64 {
 /// People who keep `video_id`.
 fn keepers(store: &DataStore, video_id: &str) -> Vec<String> {
     let conn = store.conn();
-    let Ok(mut stmt) = conn.prepare(&format!("SELECT email FROM ({REFS}) WHERE video_id = ?1"))
-    else {
+    let Ok(mut stmt) = conn.prepare(
+        "SELECT p.owner_email FROM music_playlist_tracks t \
+         JOIN music_playlists p ON p.id = t.playlist_id WHERE t.video_id = ?1 \
+         UNION SELECT email FROM music_favorites WHERE video_id = ?1",
+    ) else {
         return Vec::new();
     };
     let rows = stmt.query_map(rusqlite::params![video_id], |r| r.get(0));
@@ -173,29 +180,65 @@ pub fn has_room(store: &DataStore, video_id: &str, size: i64) -> bool {
 
 /// Songs to save next: kept by someone, not saved yet, not waiting out a
 /// failure, and small enough (by estimate) for one of their keepers' quota.
-/// Returns `(video_id, duration_s)`, oldest additions first.
+/// Returns `(video_id, duration_s)`.
+///
+/// A fixed handful of queries however big the libraries are (this runs every
+/// half minute, and the database has one connection): the store-wide total
+/// first (nothing to do when it is full), then everyone's usage, then the
+/// unsaved songs with who keeps them.
 pub fn next_to_save(store: &DataStore, limit: usize) -> Vec<(String, i64)> {
+    let total = total_bytes(store);
+    let cap = total_cap_bytes();
+    if total >= cap {
+        return Vec::new();
+    }
     let now = now_millis();
-    let rows: Vec<(String, i64)> = {
-        let conn = store.conn();
-        let Ok(mut stmt) = conn.prepare(&format!(
-            "SELECT r.video_id, MAX(r.dur) FROM ({REFS}) r \
-             LEFT JOIN music_audio_files f ON f.video_id = r.video_id \
-             LEFT JOIN music_audio_failures x ON x.video_id = r.video_id \
-             WHERE f.video_id IS NULL AND (x.video_id IS NULL OR x.next_try_at <= ?1) \
-             GROUP BY r.video_id LIMIT 400"
-        )) else {
-            return Vec::new();
-        };
-        let mapped = stmt.query_map(rusqlite::params![now], |r| Ok((r.get(0)?, r.get(1)?)));
-        mapped
-            .map(|m| m.filter_map(Result::ok).collect())
-            .unwrap_or_default()
+    let conn = store.conn();
+    // email -> bytes of saved audio they keep.
+    let mut used: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
+    if let Ok(mut stmt) = conn.prepare(&format!(
+        "SELECT r.email, COALESCE(SUM(f.size), 0) FROM ({REFS}) r \
+         JOIN music_audio_files f ON f.video_id = r.video_id GROUP BY r.email"
+    )) {
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)));
+        for (email, bytes) in rows.into_iter().flatten().flatten() {
+            used.insert(email, bytes);
+        }
+    }
+    // Unsaved songs, each with the people who keep it.
+    let Ok(mut stmt) = conn.prepare(&format!(
+        "SELECT r.video_id, r.email, r.dur FROM ({REFS}) r \
+         LEFT JOIN music_audio_files f ON f.video_id = r.video_id \
+         LEFT JOIN music_audio_failures x ON x.video_id = r.video_id \
+         WHERE f.video_id IS NULL AND (x.video_id IS NULL OR x.next_try_at <= ?1) \
+         ORDER BY r.video_id LIMIT 2000"
+    )) else {
+        return Vec::new();
     };
-    rows.into_iter()
-        .filter(|(id, dur)| has_room(store, id, estimate(*dur)))
-        .take(limit)
-        .collect()
+    let rows = stmt.query_map(rusqlite::params![now], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, i64>(2)?,
+        ))
+    });
+    let mut out: Vec<(String, i64)> = Vec::new();
+    for (id, email, dur) in rows.into_iter().flatten().flatten() {
+        if out.len() >= limit && out.last().map(|(l, _)| l != &id).unwrap_or(false) {
+            break;
+        }
+        if out.iter().any(|(o, _)| o == &id) {
+            continue;
+        }
+        let have = used.get(&email).copied().unwrap_or(0);
+        if have + estimate(dur) <= USER_QUOTA_BYTES && total + estimate(dur) <= cap {
+            out.push((id, dur));
+        }
+        if out.len() >= limit {
+            break;
+        }
+    }
+    out
 }
 
 /// Whether `video_id` should be saved now: nobody has it saved, it is not
@@ -243,6 +286,35 @@ pub fn record_failure(store: &DataStore, video_id: &str) {
          ON CONFLICT(video_id) DO UPDATE SET tries = ?2, next_try_at = ?3",
         rusqlite::params![video_id, tries, now_millis() + wait_ms],
     );
+}
+
+/// Marks a saved file as rewritten into a plain MP4 with the index up front.
+pub fn mark_progressive(store: &DataStore, video_id: &str) {
+    let _ = store.conn().execute(
+        "UPDATE music_audio_files SET progressive = 1 WHERE video_id = ?1",
+        rusqlite::params![video_id],
+    );
+}
+
+/// Saved MP4/M4A files not yet rewritten (see `mark_progressive`), up to `limit`.
+pub fn needing_progressive(store: &DataStore, limit: i64) -> Vec<AudioFile> {
+    let conn = store.conn();
+    let Ok(mut stmt) = conn.prepare(
+        "SELECT video_id, size, mime, ext FROM music_audio_files \
+         WHERE progressive = 0 AND mime = 'audio/mp4' LIMIT ?1",
+    ) else {
+        return Vec::new();
+    };
+    let rows = stmt.query_map(rusqlite::params![limit], |r| {
+        Ok(AudioFile {
+            video_id: r.get(0)?,
+            size: r.get(1)?,
+            mime: r.get(2)?,
+            ext: r.get(3)?,
+        })
+    });
+    rows.map(|r| r.filter_map(Result::ok).collect())
+        .unwrap_or_default()
 }
 
 /// Saved files nobody keeps any more (playlist deleted, song removed...).

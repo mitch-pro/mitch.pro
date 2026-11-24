@@ -24,14 +24,19 @@ use std::sync::Arc;
 
 /// Starts every Step 13 batch-1 worker task. Call once from `workers::spawn`.
 pub fn spawn(state: Arc<AppState>) {
-    // Email workers — setInterval semantics: first run one period in.
+    // Email workers — setInterval semantics: first run one period in. Not in
+    // dev mode: a dev server with a copy of real data must not email anyone.
+    if crate::dev_mode::mail_disabled() {
+        tracing::warn!("[email] digest workers are off (MITCH_DEV_NO_MAIL)");
+    }
+    let email_workers_on = !crate::dev_mode::mail_disabled();
     type EmailWorker = (u64, fn(&Arc<AppState>));
     let email_workers: Vec<EmailWorker> = vec![
         (600, weekly_digest_worker),
         (600, clock_warn_worker),
         (1800, dm_digest_worker),
     ];
-    for (secs, run) in email_workers {
+    for (secs, run) in email_workers.into_iter().filter(|_| email_workers_on) {
         let state = state.clone();
         tokio::spawn(async move {
             let mut tick = tokio::time::interval(std::time::Duration::from_secs(secs));

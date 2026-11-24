@@ -8,10 +8,11 @@
 //! YouTube video, once, and the match is kept for good (`music_track_matches`).
 //! Matching runs in the background right after a list is shown, and a song that
 //! isn't matched yet is matched when it is played, like an imported playlist.
-//! If Spotify can't be read, the list falls back to a YouTube search so the tab
-//! still works.
+//! Only genres with a Spotify playlist are listed, and if Spotify can't be read
+//! the list is simply unavailable: a YouTube search stands in badly (it returns
+//! compilation videos, not songs), so there is no fallback.
 
-use super::{allow, json_response, limited, playlists, qs, spotify, worker, yt_error, ytdlp};
+use super::{allow, json_response, limited, playlists, qs, spotify, ytdlp};
 use crate::state::AppState;
 use axum::response::Response;
 use mitch_lib::music_playlists as pl;
@@ -27,112 +28,22 @@ const SPOTIFY_TTL: Duration = Duration::from_secs(6 * 3600);
 /// (any public playlist id, for example a country's Top 50).
 const TOP_PLAYLIST: &str = "37i9dQZEVXbMDoHDwVN2tF";
 
-/// `(id, name, Spotify playlist id, YouTube search words, add the year)`. The
-/// Spotify ids are Spotify's editorial playlists for the genre; an empty one, or
-/// one that stops working, uses the YouTube search instead.
-pub const GENRES: &[(&str, &str, &str, &str, bool)] = &[
-    (
-        "pop",
-        "Pop",
-        "37i9dQZF1DXcBWIGoYBM5M",
-        "top pop songs",
-        true,
-    ),
-    (
-        "hip-hop",
-        "Hip-hop",
-        "37i9dQZF1DX0XUsuxWHRQd",
-        "top hip hop songs",
-        true,
-    ),
-    (
-        "rock",
-        "Rock",
-        "37i9dQZF1DXcF6B6QPhFDv",
-        "top rock songs",
-        true,
-    ),
-    (
-        "r-and-b",
-        "R&B",
-        "37i9dQZF1DX4SBhb3fqCJd",
-        "top r&b songs",
-        true,
-    ),
-    (
-        "country",
-        "Country",
-        "37i9dQZF1DX1lVhptIYYxV",
-        "top country songs",
-        true,
-    ),
-    (
-        "latin",
-        "Latin",
-        "37i9dQZF1DX10zKzsJ2jva",
-        "top latin songs",
-        true,
-    ),
-    (
-        "k-pop",
-        "K-pop",
-        "37i9dQZF1DX9tPFwDMOaN1",
-        "top k-pop songs",
-        true,
-    ),
-    (
-        "electronic",
-        "Electronic",
-        "37i9dQZF1DX4dyzvuaRJ0n",
-        "top electronic dance songs",
-        true,
-    ),
-    ("indie", "Indie", "", "top indie songs", true),
-    (
-        "alternative",
-        "Alternative",
-        "",
-        "best alternative songs",
-        false,
-    ),
-    (
-        "metal",
-        "Metal",
-        "37i9dQZF1DX9qNs32fujYe",
-        "best metal songs",
-        false,
-    ),
-    ("punk", "Punk", "", "best punk rock songs", false),
-    (
-        "jazz",
-        "Jazz",
-        "37i9dQZF1DXbITWG1ZJKYt",
-        "best jazz songs",
-        false,
-    ),
-    (
-        "classical",
-        "Classical",
-        "37i9dQZF1DWWEJlAGA9gs0",
-        "best classical music pieces",
-        false,
-    ),
-    (
-        "lofi",
-        "Lo-fi",
-        "37i9dQZF1DWWQRwui0ExPn",
-        "lofi songs with vocals",
-        false,
-    ),
-    ("reggae", "Reggae", "", "best reggae songs", false),
-    ("soul", "Soul & funk", "", "best soul and funk songs", false),
-    ("anime", "Anime", "", "top anime opening songs", false),
+/// `(id, name, Spotify playlist id)`: Spotify's editorial playlist for the genre.
+/// Add a genre only with a playlist id that has been checked.
+pub const GENRES: &[(&str, &str, &str)] = &[
+    ("pop", "Pop", "37i9dQZF1DXcBWIGoYBM5M"),
+    ("hip-hop", "Hip-hop", "37i9dQZF1DX0XUsuxWHRQd"),
+    ("rock", "Rock", "37i9dQZF1DXcF6B6QPhFDv"),
+    ("r-and-b", "R&B", "37i9dQZF1DX4SBhb3fqCJd"),
+    ("country", "Country", "37i9dQZF1DX1lVhptIYYxV"),
+    ("latin", "Latin", "37i9dQZF1DX10zKzsJ2jva"),
+    ("k-pop", "K-pop", "37i9dQZF1DX9tPFwDMOaN1"),
+    ("electronic", "Electronic", "37i9dQZF1DX4dyzvuaRJ0n"),
+    ("metal", "Metal", "37i9dQZF1DX9qNs32fujYe"),
+    ("jazz", "Jazz", "37i9dQZF1DXbITWG1ZJKYt"),
+    ("classical", "Classical", "37i9dQZF1DWWEJlAGA9gs0"),
+    ("lofi", "Lo-fi", "37i9dQZF1DWWQRwui0ExPn"),
 ];
-
-fn year() -> i32 {
-    use chrono::Datelike;
-    chrono::Utc::now().year()
-}
 
 type SpotifyCache = Mutex<HashMap<String, (Instant, Vec<pl::PlaylistTrack>)>>;
 
@@ -203,7 +114,7 @@ fn match_in_background(state: &Arc<AppState>, tracks: &[pl::PlaylistTrack]) {
         for t in &todo {
             let key = pl::match_key(&t.title, &t.artist);
             if !stop {
-                match playlists::find_match(&t.title, &t.artist, t.duration).await {
+                match playlists::find_match(&t.title, &t.artist, t.duration, true).await {
                     Ok(Some(id)) => {
                         pl::put_match(&state.store, &key, &id);
                         found.push(id);
@@ -221,56 +132,12 @@ fn match_in_background(state: &Arc<AppState>, tracks: &[pl::PlaylistTrack]) {
     });
 }
 
-/// YouTube search fallback for the top list.
-async fn top_from_youtube() -> Result<Vec<ytdlp::Track>, ytdlp::YtError> {
-    let y = year();
-    let first = format!("top songs of {y} official music video");
-    let second = format!("billboard hot 100 {y} songs");
-    let (a, b) = tokio::join!(ytdlp::search(&first), ytdlp::search(&second));
-    // Interleave the two lists so neither dominates, and drop repeats.
-    let (a, b) = (a?, b.unwrap_or_default());
-    let mut out: Vec<ytdlp::Track> = Vec::new();
-    for i in 0..a.len().max(b.len()) {
-        for t in [a.get(i), b.get(i)].into_iter().flatten() {
-            if !out.iter().any(|o| o.id == t.id) {
-                out.push(t.clone());
-            }
-        }
-    }
-    out.truncate(LIST_LEN);
-    Ok(out)
-}
-
-fn warm(state: &Arc<AppState>, tracks: &[ytdlp::Track]) {
-    ytdlp::warm_search(tracks.iter().map(|t| t.id.clone()).collect());
-    worker::warm_lyrics(
-        state,
-        tracks
-            .iter()
-            .map(|t| (t.id.clone(), t.title.clone(), t.artist.clone(), t.duration))
-            .collect(),
-    );
-}
-
-/// Songs for a list: from the Spotify playlist if it can be read, else from
-/// the YouTube search `fallback`. Returns the JSON tracks and where they came from.
-async fn list(
-    state: &Arc<AppState>,
-    spotify_id: &str,
-    fallback: impl std::future::Future<Output = Result<Vec<ytdlp::Track>, ytdlp::YtError>>,
-) -> Result<(Vec<Value>, &'static str), ytdlp::YtError> {
-    if !spotify_id.is_empty() {
-        if let Some(tracks) = spotify_songs(spotify_id).await {
-            match_in_background(state, &tracks);
-            return Ok((
-                tracks.iter().map(|t| track_json(state, t)).collect(),
-                "spotify",
-            ));
-        }
-    }
-    let tracks = fallback.await?;
-    warm(state, &tracks);
-    Ok((tracks.iter().map(|t| json!(t)).collect(), "youtube"))
+/// Songs for a Spotify playlist as the player's tracks, matching them to
+/// YouTube videos in the background. `None` when Spotify can't be read.
+async fn list(state: &Arc<AppState>, spotify_id: &str) -> Option<Vec<Value>> {
+    let tracks = spotify_songs(spotify_id).await?;
+    match_in_background(state, &tracks);
+    Some(tracks.iter().map(|t| track_json(state, t)).collect())
 }
 
 /// `GET /api/music/discover` (the home sections) and
@@ -281,20 +148,18 @@ pub async fn handle(state: &Arc<AppState>, email: &str, search: &str) -> Respons
     }
     let genre = qs(search, "genre");
     if !genre.is_empty() {
-        let Some((_, name, spotify_id, words, fresh)) = GENRES.iter().find(|g| g.0 == genre) else {
+        let Some((_, name, spotify_id)) = GENRES.iter().find(|g| g.0 == genre) else {
             return json_response(404, json!({ "error": "unknown genre" }));
         };
-        let query = if *fresh {
-            format!("{words} {}", year())
-        } else {
-            (*words).to_string()
-        };
-        return match list(state, spotify_id, ytdlp::search(&query)).await {
-            Ok((tracks, source)) => json_response(
+        return match list(state, spotify_id).await {
+            Some(tracks) => json_response(
                 200,
-                json!({ "genre": genre, "name": name, "tracks": tracks, "source": source }),
+                json!({ "genre": genre, "name": name, "tracks": tracks }),
             ),
-            Err(e) => yt_error(&e),
+            None => json_response(
+                502,
+                json!({ "error": "Couldn't load this genre right now. Try again in a bit." }),
+            ),
         };
     }
     let top_id = std::env::var("MUSIC_TOP_SPOTIFY_PLAYLIST")
@@ -302,14 +167,7 @@ pub async fn handle(state: &Arc<AppState>, email: &str, search: &str) -> Respons
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty())
         .unwrap_or_else(|| TOP_PLAYLIST.to_string());
-    let top = match list(state, &top_id, top_from_youtube()).await {
-        Ok((tracks, _)) => tracks,
-        // The genres still work when the music source is down.
-        Err(e) => {
-            tracing::warn!("[music] top songs unavailable: {}", e.public_message());
-            Vec::new()
-        }
-    };
+    let top = list(state, &top_id).await.unwrap_or_default();
     let genres: Vec<_> = GENRES
         .iter()
         .map(|g| json!({ "id": g.0, "name": g.1 }))
@@ -324,15 +182,13 @@ mod tests {
     #[test]
     fn genre_ids_are_unique_and_url_safe() {
         let mut seen = std::collections::HashSet::new();
-        for (id, name, spotify_id, words, _) in GENRES {
+        for (id, name, spotify_id) in GENRES {
             assert!(seen.insert(*id), "duplicate genre {id}");
             assert!(id.bytes().all(|b| b.is_ascii_lowercase() || b == b'-'));
-            assert!(!name.is_empty() && !words.is_empty());
+            assert!(!name.is_empty());
             assert!(
-                spotify_id.is_empty()
-                    || (spotify_id.len() == 22
-                        && spotify_id.bytes().all(|b| b.is_ascii_alphanumeric())),
-                "{id} has a malformed Spotify id"
+                spotify_id.len() == 22 && spotify_id.bytes().all(|b| b.is_ascii_alphanumeric()),
+                "{id} needs a 22-character Spotify playlist id"
             );
         }
         assert_eq!(TOP_PLAYLIST.len(), 22);

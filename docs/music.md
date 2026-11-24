@@ -22,11 +22,12 @@ listening is derived from it:
   the same way as a playlist import (`spotify.rs`; no account or key). Set
   `MUSIC_TOP_SPOTIFY_PLAYLIST` to another public playlist id, for example a
   country's Top 50.
-- **Browse by genre**: 18 genres (`GENRES`). Each uses a Spotify editorial playlist
-  for that genre (`GET /api/music/discover?genre=<id>` returns one genre's songs).
-  Genres without a Spotify playlist, and any playlist that can't be read, use a
-  cached YouTube search instead, so the tab works even when Spotify's page changes.
-  The response says which source it used (`source`).
+- **Browse by genre**: 12 genres (`GENRES`), each a Spotify editorial playlist for
+  that genre (`GET /api/music/discover?genre=<id>` returns one genre's songs), shown
+  as small pills. A genre is listed only if it has a playlist id; there is no YouTube
+  search fallback, because a search returns compilation videos ("My Top 50 Anime
+  Openings of 2026"), not songs. If Spotify can't be read, Top songs is empty and a
+  genre says it can't load right now.
 
 Spotify lists are cached six hours, the first 25 songs of each. Spotify has no audio
 here: each song is matched to a YouTube video once and the match is kept forever
@@ -35,10 +36,8 @@ after a list is shown; a song that isn't matched yet is matched when it is playe
 or saved, exactly like a song in an imported playlist. Songs already matched come
 back with their video id.
 
-The Spotify playlist ids in `GENRES` are Spotify's own editorial lists and were not
-checked against live Spotify when written: if a genre looks wrong or empty, fix its
-id there (a bad id just falls back to the YouTube search). If the music source is
-down, Top songs falls back to nothing and the genres still list.
+The Spotify playlist ids in `GENRES` are Spotify's own editorial lists. If a genre
+looks wrong or fails to load, fix its id there, or remove the genre.
 
 ## Playlists
 
@@ -134,16 +133,24 @@ plays without a YouTube lookup and its link never expires. Code:
 (downloading, serving, cleanup) and `routes/music/audio_store.rs` (where the
 bytes go). Tables: `music_audio_files`, `music_audio_failures`.
 
-- **Quota: 512 MB per user** (`USER_QUOTA_BYTES`) of distinct songs in their
+- **Quota: 1 GB per user** (`USER_QUOTA_BYTES`) of distinct songs in their
   playlists and library. Files are shared, so a song several people keep is stored
   once and counts for each of them. Before a download the server checks, by
   estimated size (about 17 KB per second), that some keeper has room; after it, by
   the real size. A song nobody has room for stays unsaved and streams live as
   before; failures are retried after 1 h, 2 h, ... at most 24 h.
 - **Disk cap**: all saved audio together may not pass 50 GB (`MUSIC_AUDIO_TOTAL_MB` to change), so many users can't fill the disk. Past it nothing new is saved. Urgent saves for upcoming songs run two at a time at most.
+- **Playable on iPhone**: YouTube's audio is a fragmented MP4 (the index is spread
+  through the file), which iPhones read on through before starting. The saver
+  rewrites each saved M4A with ffmpeg (`-c copy -movflags +faststart`, no
+  re-encode, about a second) into a plain MP4 with the index first, and keeps the
+  original if ffmpeg fails (`saved::make_progressive`). `music_audio_files.progressive`
+  marks rewritten files; `saved::convert_existing` rewrites older ones, two per
+  pass. WebM files are left as they are.
 - **Saver**: a background loop (`saved::spawn`) takes three songs at a time, four
   seconds apart, in no particular order. It stops
   for 15 minutes when YouTube blocks the server. Files over 80 MB are skipped.
+- **Look-ahead never competes with a click**: yt-dlp work runs in three pools (main 4 slots for what a person is waiting on, search 3, background 2). Looking ahead (`prefetch`, `match?bg=1`), matching songs for Discover or playlists, and the worker that refreshes playlist links all use the **background** pool and their own rate buckets (`prefetch`, `match-ahead`), and the player warms one upcoming song at a time. The main pool and the `resolve`/`match` buckets are only for the song being played. If a request ever gives up waiting for a slot, the server logs `a request gave up waiting for a free yt-dlp slot` with how many slots were free (at most once a minute).
 - **Up next**: while a song plays, the player warms the next three queue entries
   (`warmUpcoming` in `music-core.js`, from 2 s in and again when a song starts):
   Spotify songs are matched to a video, the stream link is resolved
@@ -156,7 +163,7 @@ bytes go). Tables: `music_audio_files`, `music_audio_failures`.
 - **Cleanup**: a file nobody keeps (playlist deleted, song removed from every
   list) is deleted within a minute or so.
 - **Usage line**: the Mine tab of Playlists shows "Saved on the server: X of
-  512 MB (n of m songs)" from `GET /api/music/storage`.
+  1 GB (n of m songs)" from `GET /api/music/storage`.
 
 #### Where the files live
 
@@ -169,7 +176,7 @@ environment variables, so the secret manager injects them like the rest
 | --- | --- |
 | unset or `local` | `<data dir>/music-audio` |
 | `local:/path` | any folder. For NFS or SMB, mount the share on the host (and into the container) and point this at it |
-| `webdav:https://host/path` (http only on a private network, since the password goes with every request) | WebDAV, which covers Nextcloud: `webdav:https://cloud.example.com/remote.php/dav/files/USER/mitch-music` with a Nextcloud app password as `MUSIC_AUDIO_STORE_PASS`. The folder is created if missing |
+| `webdav:https://host/path` (http only on a private network, since the password goes with every request) | WebDAV, which covers Nextcloud: `webdav:https://cloud.example.com/remote.php/dav/files/USER/mitch-music` with a Nextcloud app password as `MUSIC_AUDIO_STORE_PASS`. The folder is created if missing (only that folder: the server's own root folders such as Nextcloud's `/remote.php` are never touched) |
 
 Other schemes (`s3:`, `gdrive:`, `sftp:`) are not built; the server logs it and
 uses the local folder. To add one: a new `AudioStore` variant with `put`, `read`
@@ -180,6 +187,26 @@ database row is deleted (`DELETE FROM music_audio_files`).
 
 Not verified: the WebDAV backend has not been run against a real Nextcloud (only
 the local folder is tested); the saver has not run against live YouTube here.
+
+### Cover art
+
+`GET /api/music/thumb?id=` (code: `routes/music/cover.rs`). A video's own
+thumbnail is whatever the uploader chose, so the song's real album cover is looked
+up first by title and artist, taken from the site's own playlist, library or
+search rows for that video (`music::known_track`):
+
+1. iTunes Search (`artworkUrl100` resized to 600x600).
+2. Deezer search (`album.cover_xl`).
+3. The video's `hqdefault.jpg`, when neither has it or the site has no title/artist
+   for the video.
+
+A result must match the title (score 0.7), the artist (0.6) and, when both are
+known, the length (within 10 s), and must not be a different version (live, remix,
+...) unless the wanted title says so. Results, including "none found", are cached
+in `music_cover_art` (found: 90 days, not found: 3 days). Only the song's title
+and artist are sent to the catalogs. Image URLs are fetched only from
+`*.mzstatic.com` and `*.dzcdn.net` over https, with no redirects and a 3 MB limit.
+At most four catalog lookups run at once.
 
 ### Keeping links ready
 
@@ -292,7 +319,7 @@ set the same way.
 | `GET /api/music/search?q=` | up to 15 tracks `{id, title, artist, duration}`; artist/title are guessed from the video title and channel (`clean_youtube_title`). Live streams, mixes over 20 min and non-video ids are dropped. Cached: see *Search cache* below. |
 | `GET /api/music/stream?id=` | audio, `Range` supported. An open-ended range is capped at 10 MB (`MAX_RANGE_BYTES`) because Google's CDN refuses some larger ones. One retry with a fresh URL on 403/410. |
 | `GET /api/music/prefetch?id=` | resolves a URL ahead of time, 204. Also how the client finds out why the `<audio>` element failed. |
-| `GET /api/music/thumb?id=` | cover art from `i.ytimg.com` |
+| `GET /api/music/thumb?id=` | cover art: iTunes, then Deezer, then the video's own `i.ytimg.com` thumbnail. See *Cover art*. |
 | `GET /api/music/lyrics?id=&title=&artist=&duration=[&custom=1]` | see below |
 | `GET /api/music/related?id=` | up to 20 songs YouTube's Mix suggests for a song (`watch?v=ID&list=RDID`), the seed excluded; cached 30 min. Used by smart shuffle. |
 | `GET /api/music/library`, `POST library/add`, `POST library/remove` | saved tracks (max 500 per user) |

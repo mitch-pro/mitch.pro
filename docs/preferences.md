@@ -12,7 +12,7 @@ to their id.
 | Appearance | theme, accent, contrast, density, corners, font, motion, holiday theme, material |
 | Profile | profile fields, email change |
 | Security | password, two-factor, passkeys, sessions |
-| Privacy | online presence, activity sharing, stealth dashboard |
+| Privacy | online presence, activity sharing, stealth dashboard, block profile lookups |
 | Notifications | push/bell alert types, quiet hours, email (newsletter, blog alerts), ntfy |
 | Homepage | homepage widgets |
 | Games | game launch mode, music player card |
@@ -35,6 +35,6 @@ The school page (`rjuhsd.school`, `/rjuhsd/preferences`) only has Appearance.
 
 Every control must be read by something. When adding one, add its consumer in the same
 change and list it above. Removed because nothing read them: "Activity Logging"
-(`noHistory`), "Block Profile Lookups" (`blockProfile`) and the "Daily Bonus Plus"
+(`noHistory`) and the "Daily Bonus Plus"
 toggle (the +50 coin bonus applies to owners automatically in `routes/daily_login.rs`).
 Old stored values are ignored and dropped on the next save.

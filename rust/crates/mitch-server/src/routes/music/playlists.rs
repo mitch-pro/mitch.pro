@@ -392,7 +392,7 @@ const VERSION_WORDS: &[&str] = &[
 ];
 
 /// The version words a title carries (a bit per entry of `VERSION_WORDS`).
-fn version_marks(title: &str) -> u64 {
+pub(super) fn version_marks(title: &str) -> u64 {
     let lower = title.to_lowercase();
     let mut bits = 0;
     for w in lower.split(|c: char| !c.is_alphanumeric()) {
@@ -459,9 +459,15 @@ pub(super) async fn find_match(
     title: &str,
     artist: &str,
     duration: i64,
+    background: bool,
 ) -> Result<Option<String>, ytdlp::YtError> {
     let first = artist.split(',').next().unwrap_or("").trim();
-    let found = ytdlp::search(&format!("{first} {title}")).await?;
+    let query = format!("{first} {title}");
+    let found = if background {
+        ytdlp::search_background(&query).await?
+    } else {
+        ytdlp::search(&query).await?
+    };
     Ok(best_match(title, artist, duration, &found).map(|i| found[i].id.clone()))
 }
 
@@ -476,10 +482,20 @@ async fn match_track(state: &Arc<AppState>, email: &str, search: &str) -> Respon
     if let Some(id) = pl::get_match(&state.store, &key) {
         return json_response(200, json!({ "id": id }));
     }
-    if !allow(email, "match", 40, Duration::from_secs(60)) {
+    // `bg=1`: the player is matching an upcoming song ahead of time, not one it
+    // is about to play. That uses the background slots and its own rate bucket,
+    // so it can never make the song that is playing wait.
+    let background = qs(search, "bg") == "1";
+    let bucket = if background { "match-ahead" } else { "match" };
+    if !allow(
+        email,
+        bucket,
+        if background { 60 } else { 40 },
+        Duration::from_secs(60),
+    ) {
         return limited();
     }
-    match find_match(&title, &artist, duration).await {
+    match find_match(&title, &artist, duration, background).await {
         Ok(Some(id)) => {
             pl::put_match(&state.store, &key, &id);
             json_response(200, json!({ "id": id }))
