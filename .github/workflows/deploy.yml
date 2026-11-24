@@ -90,8 +90,9 @@ jobs:
   deploy:
     name: Build & Blue-Green Deploy
     runs-on: ubuntu-latest
-    # Secrets come from the `production` environment (master only, requires
-    # approval), not repo-level secrets, so other branches can't read them.
+    # Secrets come from the `production` environment, which only master may
+    # use, so other branches can't read them. There is no approval step: every
+    # push to master that passes rust-ci deploys, whoever merged it.
     environment: production
     permissions: {}
     if: >-
@@ -143,9 +144,9 @@ jobs:
   deploy-dev:
     name: Build & Deploy (dev)
     runs-on: ubuntu-latest
-    # Secrets come from the `dev` environment (dev branch only). The gate is
-    # that environment's required reviewers (the `owners` team), not a name
-    # check here: a push to `dev` waits for their approval before this job runs.
+    # Secrets come from the `dev` environment (dev branch only). The only
+    # possible gate is that environment's required reviewers; there is no name
+    # check here. See docs/branch-protection.md.
     environment: dev
     permissions: {}
     needs: test

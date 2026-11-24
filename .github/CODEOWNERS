@@ -8,3 +8,22 @@
 /tools/deploy.sh        @mitch-pro/owners
 /AGENTS.md              @mitch-pro/owners
 /rust/crates/mitch-lib/src/auth.rs @mitch-pro/owners
+
+# Build and hosting: what production runs and how traffic reaches it.
+/rust/Dockerfile        @mitch-pro/owners
+/docker-compose.yml     @mitch-pro/owners
+/caddy/                 @mitch-pro/owners
+/SECURITY_POSTURE.md    @mitch-pro/owners
+
+# Security gates: the global request gate (CSRF, auth checks), the admin
+# passphrase, crypto helpers and the shared admin unlock client.
+/rust/crates/mitch-server/src/handler.rs   @mitch-pro/owners
+/rust/crates/mitch-lib/src/admin.rs        @mitch-pro/owners
+/rust/crates/mitch-lib/src/crypto.rs       @mitch-pro/owners
+/webserver/admin-auth.js                   @mitch-pro/owners
+
+# Economy (see the "Economy integrity" rules in AGENTS.md).
+/rust/crates/mitch-lib/src/coins.rs                    @mitch-pro/owners
+/rust/crates/mitch-lib/src/shop.rs                     @mitch-pro/owners
+/rust/crates/mitch-server/src/routes/casino.rs         @mitch-pro/owners
+/rust/crates/mitch-server/src/routes/me/cosmetics.rs   @mitch-pro/owners
