@@ -865,6 +865,14 @@ function makeGameAnchor(entry, leadText) {
   return a;
 }
 
+// Game labels are plain text (escaped again when rendered). Strip markup
+// until nothing changes, then drop any stray angle brackets.
+function stripTags(value) {
+  var s = String(value || ''), prev;
+  do { prev = s; s = s.replace(/<[^>]*>/g, ''); } while (s !== prev);
+  return s.replace(/[<>]/g, '');
+}
+
 function parseGameText(text) {
   var list = [];
   text.split('\n').forEach(function(line) {
@@ -875,7 +883,7 @@ function parseGameText(text) {
     list.push({
       type: parts[0],
       href: parts[1],
-      label: parts.slice(2).join(' ').replace(/<[^>]*>/g, '').replace(/[<>]/g, '').trim(),
+      label: stripTags(parts.slice(2).join(' ')).trim(),
       cat: categoryForHref(parts[1])
     });
   });
@@ -1026,7 +1034,7 @@ function parseGamesChunk(text, append) {
     var entry = {
       type: parts[0],
       href: parts[1],
-      label: parts.slice(2).join(' ').replace(/<[^>]*>/g, '').replace(/[<>]/g, '').trim()
+      label: stripTags(parts.slice(2).join(' ')).trim()
     };
     entry.cat = categoryForHref(entry.href);
     frag.appendChild(makeGameAnchor(entry, catInfo(entry.cat).icon));
