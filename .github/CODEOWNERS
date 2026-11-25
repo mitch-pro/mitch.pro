@@ -1,9 +1,14 @@
-# Only the paths below need the owner's approval. Branch protection on master
-# has "Require review from Code Owners" enabled with 0 required general
-# approvals, so a PR touching only unlisted paths can be merged by its author,
-# while a PR touching any path below cannot merge until a member of the `owners`
-# team approves it. The team needs Write access to the repo or GitHub ignores it.
-# Do not add a catch-all `*` rule: it would make every PR owner-gated again.
+# Only the paths below need a code owner's approval. Enforcement is the
+# "Code owner gate" required status check (.github/workflows/codeowner-gate.yml),
+# NOT GitHub's native "Require review from Code Owners" (which does nothing while
+# required approvals is 0). The gate reads the path patterns below and:
+#   - passes PRs that touch none of them (merge solo);
+#   - passes when the PR author is a code owner (CODE_OWNER_LOGINS repo variable);
+#   - otherwise blocks until a code owner other than the author approves on the
+#     current head commit.
+# Keep CODE_OWNER_LOGINS in sync with the @mitch-pro/owners team. The team still
+# needs Write access so GitHub honors the reviewer requests these rules create.
+# Do not add a catch-all `*` rule: it would gate every PR. See docs/branch-protection.md.
 /.github/               @mitch-pro/owners
 /tools/deploy.sh        @mitch-pro/owners
 /AGENTS.md              @mitch-pro/owners

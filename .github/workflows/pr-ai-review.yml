@@ -69,7 +69,7 @@ jobs:
 
       # First review of a PR only (stands in for the old "opened" trigger).
       - name: Notify via ntfy (new PR)
-        if: steps.pr.outputs.found == 'true' && steps.pr.outputs.first == 'true' && steps.pr.outputs.author != 'urashil' && steps.pr.outputs.author != 'Mitch-Fogler'
+        if: steps.pr.outputs.found == 'true' && steps.pr.outputs.first == 'true' && steps.pr.outputs.author != 'urashyl' && steps.pr.outputs.author != 'Mitch-Fogler'
         continue-on-error: true
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
@@ -263,7 +263,7 @@ jobs:
             }
 
       - name: Request your review (for a mobile push notification)
-        if: steps.pr.outputs.found == 'true' && steps.pr.outputs.first == 'true' && steps.pr.outputs.author != 'urashil' && steps.pr.outputs.author != 'Mitch-Fogler'
+        if: steps.pr.outputs.found == 'true' && steps.pr.outputs.first == 'true' && steps.pr.outputs.author != 'urashyl' && steps.pr.outputs.author != 'Mitch-Fogler'
         continue-on-error: true
         uses: actions/github-script@v9
         env:
@@ -274,5 +274,5 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: Number(process.env.PR_NUMBER),
-              reviewers: ['urashil'],
+              reviewers: ['urashyl'],
             });
