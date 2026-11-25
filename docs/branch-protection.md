@@ -18,7 +18,7 @@ How changes reach `master` (which deploys to production) and who must approve th
 - otherwise **fails** until a code owner *other than the author* has an approving review **on the current head commit** (a new commit invalidates a prior approval, like "dismiss stale reviews").
 
 Who counts as a code owner is the **`CODE_OWNER_LOGINS`** repo variable (comma/space separated), kept in sync with `@mitch-pro/owners` by hand. If it is empty, or CODEOWNERS can't be read, the gate fails closed. This means a solo owner still cannot get a second-party review of their *own* sensitive changes — that is a logical limit (no one else to approve), not a gap; add a second owner to `CODE_OWNER_LOGINS` and the team to change it.
-- The `Deploy to Production` workflow deploys `master` once `rust-ci` succeeds on the push. The `production` environment is limited to `master` and has **no required reviewers**, so every green master push deploys.
+- The `Deploy to Production` workflow is triggered by every push to `master` once `rust-ci` succeeds. The `production` environment is limited to `master` and **requires the owner's approval**, so each deploy pauses as a pending deployment until `urashyl` approves it in the environment's UI. The push triggers the deploy; the approval gates it.
 
 ## Secrets
 
@@ -28,7 +28,7 @@ Who counts as a code owner is the **`CODE_OWNER_LOGINS`** repo variable (comma/s
 
 ## `dev`
 
-`dev` is unprotected so collaborators can push to it. A push to `dev` deploys to the dev server (`deploy-dev` job in `deploy.yml`) over SSH, so anyone who can push to `dev` could run code on that host. The `dev` environment must have **required reviewers set to the `owners` team**: that approval is the only gate, because the job has no name check. If it is ever removed, every push to `dev` deploys unreviewed. Use a dev-only SSH key and host, and keep the SSH secrets in an environment limited to the branches that need them.
+`dev` is unprotected so collaborators can push to it. A push to `dev` deploys to the dev server (`deploy-dev` job in `deploy.yml`) over SSH, so anyone who can push to `dev` could run code on that host. The `dev` environment currently has **no required reviewers**: the owner has accepted that anyone with write access can deploy to the dev server unreviewed, since the dev host is isolated from production and the owner's data. Use a dev-only SSH key and host, and keep the SSH secrets in an environment limited to the branches that need them. If that risk tolerance ever changes, set the `dev` environment's required reviewers to the `owners` team — that approval is the only possible gate, because the job has no name check.
 
 ## Changing the rules
 
