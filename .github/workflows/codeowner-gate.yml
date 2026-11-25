@@ -1,0 +1,148 @@
+name: Code owner gate
+
+# Enforces code-owner review on the sensitive paths in .github/CODEOWNERS, as a
+# required status check named "Code owner gate".
+#
+# Why a status check instead of GitHub's native "Require review from Code
+# Owners": that native rule does nothing unless required approvals is >= 1, and
+# setting that to 1 would block the owner from merging *any* of their own PRs,
+# because GitHub forbids authors from approving their own PR. This gate instead:
+#   - passes freely on PRs that touch no owned path (everyday PRs merge solo);
+#   - passes when the PR author is themselves a code owner (a code owner editing
+#     their own owned area — this is the owner's no-click pass, granted by the
+#     gate, not by any branch-protection bypass right);
+#   - otherwise requires an *approving review from a code owner other than the
+#     author*, on the current head commit, before the check passes.
+#
+# Tamper-proofing: it runs on pull_request_target / pull_request_review, which
+# always execute THIS file from the default branch, never a PR's edited copy,
+# and it never checks out or runs PR code — it only reads PR metadata via the
+# API. CODEOWNERS is read from the default branch for the same reason.
+#
+# Who counts as a code owner is the CODE_OWNER_LOGINS repo variable (comma/space
+# separated), kept in sync with the @mitch-pro/owners team by hand. See
+# docs/branch-protection.md.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted, dismissed, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+
+concurrency:
+  group: codeowner-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Code owner gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Evaluate code-owner requirement
+        uses: actions/github-script@v9
+        env:
+          CODE_OWNER_LOGINS: ${{ vars.CODE_OWNER_LOGINS }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pr = context.payload.pull_request;
+            if (!pr) { core.setFailed('No pull_request in the event payload.'); return; }
+            const number = pr.number;
+            const headSha = pr.head.sha;
+            const author = (pr.user && pr.user.login || '').toLowerCase();
+            const CONTEXT = 'Code owner gate';
+
+            const owners = new Set(
+              (process.env.CODE_OWNER_LOGINS || '')
+                .split(/[\s,]+/).map(s => s.trim().toLowerCase()).filter(Boolean));
+            if (owners.size === 0) {
+              core.warning('CODE_OWNER_LOGINS is empty; failing closed. Set the repo variable.');
+            }
+
+            // Read the owned-path patterns from CODEOWNERS on the DEFAULT branch,
+            // so a PR cannot change which paths are gated.
+            let patterns = [];
+            try {
+              const res = await github.rest.repos.getContent({
+                owner, repo, path: '.github/CODEOWNERS',
+                ref: context.payload.repository.default_branch,
+              });
+              const text = Buffer.from(res.data.content, 'base64').toString('utf8');
+              patterns = text.split('\n')
+                .map(l => l.replace(/#.*$/, '').trim())
+                .filter(Boolean)
+                .map(l => l.split(/\s+/)[0])
+                .filter(Boolean);
+            } catch (e) {
+              core.warning(`Could not read CODEOWNERS: ${e.message}. Failing closed.`);
+            }
+
+            // Minimal CODEOWNERS matcher for the forms this repo uses: anchored
+            // paths (leading /), directory prefixes (trailing /), exact files,
+            // and simple * globs. Not a full gitignore implementation.
+            const toTest = (pat) => {
+              let p = pat.replace(/^\//, '');            // strip leading anchor
+              const dir = p.endsWith('/');
+              if (dir) p = p.slice(0, -1);
+              const rx = p.split('/').map(seg =>
+                seg.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*')
+              ).join('/');
+              return { re: new RegExp('^' + rx + (dir ? '(/|$)' : '($|/)')), raw: pat };
+            };
+            const matchers = patterns.map(toTest);
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner, repo, pull_number: number, per_page: 100,
+            });
+            const changed = files.map(f => f.filename);
+            const touched = changed.filter(f => matchers.some(m => m.re.test(f)));
+
+            const setStatus = async (state, description) => {
+              await github.rest.repos.createCommitStatus({
+                owner, repo, sha: headSha, state, context: CONTEXT,
+                description: description.slice(0, 140),
+              });
+              core.info(`${state.toUpperCase()}: ${description}`);
+            };
+
+            if (touched.length === 0) {
+              await setStatus('success', 'No code-owner paths changed.');
+              return;
+            }
+            core.info(`Owned paths changed: ${touched.join(', ')}`);
+
+            if (owners.has(author)) {
+              await setStatus('success', `Author @${pr.user.login} is a code owner.`);
+              return;
+            }
+
+            // A non-owner changed an owned path: require an approving review from
+            // a code owner (not the author) on the CURRENT head commit.
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner, repo, pull_number: number, per_page: 100,
+            });
+            // Latest APPROVED / CHANGES_REQUESTED review per code owner.
+            const latest = new Map();
+            for (const r of reviews) {
+              const login = (r.user && r.user.login || '').toLowerCase();
+              if (!owners.has(login) || login === author) continue;
+              if (r.state !== 'APPROVED' && r.state !== 'CHANGES_REQUESTED') continue;
+              latest.set(login, r); // reviews are returned in chronological order
+            }
+            const approver = [...latest.values()].find(
+              r => r.state === 'APPROVED' && r.commit_id === headSha);
+            if (approver) {
+              await setStatus('success', `Approved by code owner @${approver.user.login}.`);
+            } else {
+              const changesReq = [...latest.values()].some(r => r.state === 'CHANGES_REQUESTED');
+              const msg = changesReq
+                ? 'A code owner requested changes.'
+                : 'Needs an approving review from a code owner (not the author) on this commit.';
+              await setStatus('failure', msg);
+            }
