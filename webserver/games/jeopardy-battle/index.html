@@ -605,8 +605,12 @@ async function api(path, data = null) {
 }
 
 function showStatus(msg, type = 'info') {
-  document.getElementById('status-bar').innerHTML = `<div class="status-msg ${type}">${msg}</div>`;
-  setTimeout(() => { if (document.getElementById('status-bar').innerHTML.includes(msg)) clearStatus(); }, 5000);
+  const bar = document.getElementById('status-bar');
+  const note = document.createElement('div');
+  note.className = 'status-msg ' + (['info', 'success', 'error'].includes(type) ? type : 'info');
+  note.textContent = String(msg);
+  bar.replaceChildren(note);
+  setTimeout(() => { if (note.isConnected) clearStatus(); }, 5000);
 }
 function clearStatus() { document.getElementById('status-bar').innerHTML = ''; }
 

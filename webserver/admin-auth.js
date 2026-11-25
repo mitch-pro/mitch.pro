@@ -5,9 +5,11 @@
 //  - Typing the admin passphrase once calls POST /api/admin/unlock, which sets
 //    an HttpOnly cookie. That cookie unlocks every admin page and tab for
 //    several hours; the passphrase itself is never kept in the browser.
-//  - Older page scripts still read/write sessionStorage['admin_passphrase'] and
-//    send it as X-Admin-Passphrase. This file keeps that working: the real
-//    value is swapped for a placeholder (the cookie does the real work), and a
+//  - Page scripts hand a verified passphrase to MitchAdminAuth.remember(),
+//    which trades it for the cookie and leaves only a placeholder in
+//    sessionStorage['admin_passphrase'] (scripts still send that as
+//    X-Admin-Passphrase; the cookie does the real work). A sessionStorage
+//    setItem override routes any direct write through remember() too, and a
 //    localStorage marker lets a new tab skip the lock screen.
 //  - Large actions (bans, deletes, role changes, mass sends...) answer
 //    `reauth_required`. A fetch wrapper catches that, asks for the passphrase
@@ -54,14 +56,23 @@
     }).catch(function () { return false; });
   }
 
-  // Page scripts save the passphrase they just verified. Keep it out of
-  // storage: trade it for the unlock cookie and store the placeholder.
+  // A page script has just verified a passphrase. Trade it for the unlock
+  // cookie and store only the placeholder, so the passphrase itself never
+  // reaches browser storage. Page scripts call this directly.
+  function remember(pass) {
+    var p = unlock(String(pass));
+    pendingUnlock = p;
+    p.then(function () { if (pendingUnlock === p) pendingUnlock = null; });
+    store(KEY, PLACEHOLDER);
+    return p;
+  }
+
+  // Backstop for any older script that still writes the passphrase straight
+  // to sessionStorage: route it through remember() instead.
   proto.setItem = function (k, v) {
     if (this === sessionStorage && k === KEY && v && v !== PLACEHOLDER) {
-      var p = unlock(String(v));
-      pendingUnlock = p;
-      p.then(function () { if (pendingUnlock === p) pendingUnlock = null; });
-      return nativeSet.call(this, k, PLACEHOLDER);
+      remember(v);
+      return undefined;
     }
     return nativeSet.call(this, k, v);
   };
@@ -182,5 +193,5 @@
     });
   };
 
-  window.MitchAdminAuth = { lock: lock, unlock: unlock, ask: ask };
+  window.MitchAdminAuth = { lock: lock, unlock: unlock, ask: ask, remember: remember };
 })();

@@ -221,7 +221,7 @@ function askPassphrase() {
           headers: adminHeaders({ 'X-Admin-Passphrase': pass }), body: JSON.stringify({ passphrase: pass }),
         });
         const d = await res.json().catch(() => ({}));
-        if (res.ok && d.ok) { sessionStorage.setItem('admin_passphrase', pass); done(resolve, pass); return; }
+        if (res.ok && d.ok) { window.MitchAdminAuth.remember(pass); done(resolve, pass); return; }
         sessionStorage.removeItem('admin_passphrase');
         status.textContent = 'Incorrect admin passphrase. Try again.'; input.select();
       } catch { status.textContent = 'Verification failed. Try again.'; }

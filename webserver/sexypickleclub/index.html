@@ -405,7 +405,12 @@
       if (!r.ok) return;
       const site = await r.json();
       siteInfo = site;
-      const base = (site.alternate || site.primary || '').replace(/\/+$/, '');
+      // Only follow an https origin from the site config.
+      let base = '';
+      try {
+        const parsed = new URL(site.alternate || site.primary || '');
+        if (parsed.protocol === 'https:') base = parsed.origin;
+      } catch {}
       if (!base) return;
       document.querySelectorAll('[data-site-link]').forEach(a => {
         const spec = a.getAttribute('data-site-link') || '';

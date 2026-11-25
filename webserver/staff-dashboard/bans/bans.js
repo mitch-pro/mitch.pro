@@ -142,7 +142,7 @@
       const response=await fetch('/api/admin/passphrase-status',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-Mitch-Requested-With':'1','X-Admin-Passphrase':pass},body:JSON.stringify({passphrase:pass})});
       const data=await response.json();
       if(!response.ok)throw new Error(data.error==='invalid_passphrase'?'Incorrect passphrase.':data.error || 'Could not unlock ban management.');
-      sessionStorage.setItem('admin_passphrase',pass);$('admin-passphrase').value='';
+      window.MitchAdminAuth.remember(pass);$('admin-passphrase').value='';
       await loadBans();status('unlock-status','');
     } catch(error) {status('unlock-status',error.message,true);} finally {$('unlock-button').disabled=false;}
   });

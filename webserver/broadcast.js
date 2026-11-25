@@ -153,7 +153,9 @@
     function showBroadcast(msg) {
       var el = document.createElement('div');
       el.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#ef4444;color:#fff;padding:1.5rem;text-align:center;z-index:1000000;font-weight:900;box-shadow:0 10px 40px rgba(0,0,0,0.5);font-family:system-ui,sans-serif;font-size:1.1rem;animation:slideDown .4s ease-out;';
-      el.innerHTML = '<div style="margin-bottom:10px;font-size:.8rem;opacity:.8;letter-spacing:.1em;text-transform:uppercase;">Global Broadcast</div>' + msg + '<div style="margin-top:15px;"><button id="close-broadcast" style="background:#fff;color:#000;border:none;border-radius:6px;padding:6px 15px;font-weight:800;cursor:pointer;">Dismiss</button></div>';
+      // The message is shown as text, never parsed as HTML.
+      el.innerHTML = '<div style="margin-bottom:10px;font-size:.8rem;opacity:.8;letter-spacing:.1em;text-transform:uppercase;">Global Broadcast</div><div class="broadcast-message"></div><div style="margin-top:15px;"><button id="close-broadcast" style="background:#fff;color:#000;border:none;border-radius:6px;padding:6px 15px;font-weight:800;cursor:pointer;">Dismiss</button></div>';
+      el.querySelector('.broadcast-message').textContent = String(msg == null ? '' : msg);
       
       if (!document.getElementById('broadcast-style')) {
         var style = document.createElement('style');

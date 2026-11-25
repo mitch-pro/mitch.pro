@@ -16,8 +16,10 @@ function remember(key,value){try{localStorage.setItem(key,value)}catch{}}
 // but this still reads it client-side just in case something bypasses that).
 const schoolPath = location.pathname.replace(/^\/|\/$/g,"");
 const schoolHost = /(^|\.)rjuhsd\.school$/.test(location.hostname);
-let school = (SCHOOLS[schoolPath] ? schoolPath : null) || new URLSearchParams(location.search).get("school") || saved("rjuhsd_school","woodcreek");
-if(!SCHOOLS[school]) school="woodcreek";
+// Resolve to one of the SCHOOLS keys (own keys only, so "constructor" and
+// friends can't match); the result is built into URLs below.
+function knownSchool(value){return Object.keys(SCHOOLS).find(k=>k===value)||null}
+let school = knownSchool(schoolPath) || knownSchool(new URLSearchParams(location.search).get("school")) || knownSchool(saved("rjuhsd_school","woodcreek")) || "woodcreek";
 let events=[],requestVersion=0,scheduleMode="auto",includePeriod0=false,calendarVerified=false,calendarState="checking",bellOverride=null;
 let foodMenu=null,foodMenuState="loading",foodMenuStale=false,foodMenuDate="",foodMenuVersion=0;
 const foodMenuPage="https://www.rjuhsdfoodservice.com/index.php?sid=0212112146052111&page=menus";
@@ -400,8 +402,9 @@ async function load(){
 }
 $("school-select").innerHTML=Object.entries(SCHOOLS).map(([key,s])=>'<option value="'+key+'">'+s.name+'</option>').join("");$("school-select").value=school;
 function switchSchool(s){
- if(!SCHOOLS[s]||s===school)return;
- school=s;
+ const next=knownSchool(s);
+ if(!next||next===school)return;
+ school=next;
  if($("school-select"))$("school-select").value=school;
  remember("rjuhsd_school",school);
  lunch=saved("rjuhsd_lunch_"+school,"1")==="2"?"2":"1";

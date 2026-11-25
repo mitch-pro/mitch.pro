@@ -262,7 +262,7 @@
         });
         const d = await verifyRes.json().catch(() => ({}));
         if (verifyRes.ok && d.ok) {
-          sessionStorage.setItem('admin_passphrase', pass);
+          window.MitchAdminAuth.remember(pass);
           status('passphrase-status', 'Passphrase verified.', 'success');
           setTimeout(() => {
             hidePassphraseLockBox();

@@ -16,6 +16,8 @@ jobs:
   ai-notify:
     name: AI Summary + ntfy for direct pushes
     runs-on: ubuntu-latest
+    # GEMINI_API_KEY and NTFY_* live in the master-only `automation` environment.
+    environment: automation
     if: >-
       github.actor != 'Mitch-Fogler' &&
       github.event.forced == false &&
@@ -41,7 +43,7 @@ jobs:
           set -euo pipefail
           if [ -z "${GEMINI_API_KEY:-}" ]; then
             echo "GEMINI_API_KEY secret not set." >&2
-            echo "AI summary unavailable (GEMINI_API_KEY not set) - add it as a repo secret." > ai_summary.txt
+            echo "AI summary unavailable (GEMINI_API_KEY not set) - add it to the automation environment." > ai_summary.txt
             exit 0
           fi
           SYSTEM_PROMPT=$(cat <<'PROMPT'

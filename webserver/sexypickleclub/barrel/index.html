@@ -108,25 +108,20 @@
   function toast(text){const el=document.getElementById('chatToast');el.textContent=text;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),3200)}
   function connection(label,on){const el=document.getElementById('connectionState');el.classList.toggle('offline',!on);el.innerHTML='<i></i> '+esc(label)}
   function removeMessage(id){Array.from(box.querySelectorAll('.msg')).find(row=>row.dataset.msgId===String(id))?.remove();document.getElementById('messageCount').textContent=box.querySelectorAll('.msg').length}
-  function reactionsHtml(m){
+  // Reaction chips are built with DOM calls; nothing here is parsed as HTML.
+  function reactionsNode(m){
     const rx=m.reactions&&typeof m.reactions==='object'?m.reactions:{};
     const mine=Array.isArray(m.myReactions)?m.myReactions:[];
-    const chips=Object.entries(rx).filter(([,c])=>c>0).map(([e,c])=>`<button type="button" data-react="${esc(e)}" class="${mine.includes(e)?'mine':''}">${esc(e)} ${c}</button>`).join('');
-    const picker='<span class="react-row">'+REACTIONS.filter(e=>!rx[e]).map(e=>`<button type="button" data-react="${e}" title="React ${e}">${e}</button>`).join('')+'</span>';
-    return (chips||picker)?`<span class="reactions">${chips}${picker}</span>`:'';
-  }
-  function render(m){const id=key(m);if(seen.has(id))return;seen.add(id);if(!loaded){box.replaceChildren();loaded=true}const own=norm(m.email)===norm(myEmail),row=document.createElement('article'),effect=String(m.chatEffect||'').replace(/[^a-z0-9_-]/gi,'');row.className='msg'+(own?' own':'')+(effect?' '+effect:'');row.dataset.msgId=String(m.id||'');row.dataset.msgKey=id;row.dataset.email=String(m.email||'');row.dataset.msgTs=String(m.ts||0);const color=String(m.color||'').replace(/[^a-z0-9_-]/gi,'');const badges={verified_badge:'✓',og_badge:'OG',artist_badge:'◆',chess_badge:'♟',builder_badge:'⌁',lucky_badge:'♣',premium_star_badge:'★',owner_fan_badge:'♛'};const badge=m.badge?`<span class="chat-badge ${m.badge==='verified_badge'?'badge-verified':m.badge==='og_badge'?'badge-og':''}">${esc(badges[m.badge]||'◆')}</span>`:'';const jar=m.jar?`<span class="jar-chip" title="Approved club member">🫙 #${esc(m.jar)}</span>`:'';row.innerHTML=`<span class="msg-avatar">${esc(String(m.name||'?')[0].toUpperCase())}</span><span class="msg-copy"><span class="author ${color}">${esc(m.name||'Member')}${badge}${jar}</span><time>${new Date(m.ts||Date.now()).toLocaleTimeString('en-US', {hour12:true,hour:'numeric',minute:'2-digit'})}</time><span class="text">${esc(m.text)}</span></span>`;
-    const tools=document.createElement('span');tools.className='msg-tools';
-    const reactBtn=document.createElement('button');reactBtn.type='button';reactBtn.textContent='🥒+';reactBtn.title='Add a reaction';reactBtn.onclick=()=>quickReact(row,m);
-    tools.append(reactBtn);
-    if(staff){const moderate=document.createElement('button');moderate.type='button';moderate.textContent='Moderate';moderate.onclick=()=>openModeration(m);const remove=document.createElement('button');remove.type='button';remove.textContent='Delete';remove.onclick=()=>deleteMessage(m);tools.append(moderate,remove)}
-    row.append(tools);
-    row.querySelector('.msg-copy').append(reactionsNode(m));
-    box.append(row);document.getElementById('messageCount').textContent=box.querySelectorAll('.msg').length}
-  function reactionsNode(m){const tpl=document.createElement('template');tpl.innerHTML=reactionsHtml(m).trim();const node=tpl.content.firstElementChild;if(node)node.querySelectorAll('[data-react]').forEach(b=>{b.onclick=()=>react(m,String(b.dataset.react))});return node||document.createElement('span')}
+    const wrap=document.createElement('span');wrap.className='reactions';
+    const chip=(emoji,label,cls,title)=>{const b=document.createElement('button');b.type='button';b.dataset.react=emoji;if(cls)b.className=cls;if(title)b.title=title;b.textContent=label;b.onclick=()=>react(m,String(emoji));return b};
+    Object.entries(rx).filter(([,c])=>c>0).forEach(([e,c])=>wrap.append(chip(e,`${e} ${Number(c)||0}`,mine.includes(e)?'mine':'')));
+    const row=document.createElement('span');row.className='react-row';
+    REACTIONS.filter(e=>!rx[e]).forEach(e=>row.append(chip(e,e,'',`React ${e}`)));
+    wrap.append(row);
+    return wrap}
   async function quickReact(row,m){try{await react(m,'🥒')}catch(e){toast(e.message)}}
   async function react(m,emoji){try{const r=await fetch('/api/pickle-chat/react',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({msgId:String(m.id||''),emoji})});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Reaction failed');const fresh={...m,reactions:d.reactions||{},myReactions:d.myReactions||[]};const row=box.querySelector(`.msg[data-msg-id="${CSS.escape(String(m.id))}"]`);if(row){row.querySelector('.reactions')?.remove();row.querySelector('.msg-copy').append(reactionsNode(fresh))}applyReactions(String(m.id),d.reactions||{})}catch(e){toast(e.message)}}
-  function applyReactions(msgId,tally){const row=box.querySelector(`.msg[data-msg-id="${CSS.escape(String(msgId))}"]`);if(!row)return;row.querySelectorAll('.reactions button[data-react]').forEach(b=>{const c=tally[String(b.dataset.react)];if(c===undefined){b.remove()}else{b.innerHTML=`${esc(String(b.dataset.react))} ${c}`}})}
+  function applyReactions(msgId,tally){const row=box.querySelector(`.msg[data-msg-id="${CSS.escape(String(msgId))}"]`);if(!row)return;row.querySelectorAll('.reactions button[data-react]').forEach(b=>{const c=tally[String(b.dataset.react)];if(c===undefined){b.remove()}else{b.textContent=`${String(b.dataset.react)} ${Number(c)||0}`}})}
   async function request(path,body){const r=await fetch(path,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||d.message||'Request failed');return d}
   async function history(){try{const stick=box.scrollHeight-box.scrollTop-box.clientHeight<90,r=await fetch('/api/pickle-chat/history',{credentials:'include',cache:'no-store'});if(!r.ok)throw Error();const d=await r.json(),messages=d.messages||[];const ids=new Set(messages.map(key));if(messages.length){const min=Number(messages[0].ts||0);box.querySelectorAll('.msg').forEach(el=>{if(Number(el.dataset.msgTs)>=min&&!ids.has(el.dataset.msgKey))el.remove()})}messages.forEach(render);document.getElementById('messageCount').textContent=messages.length;if(stick)box.scrollTop=box.scrollHeight}catch(_){if(!loaded)box.innerHTML='<div class="empty-chat"><div><span>!</span>Could not load messages.</div></div>'}}
   function heartbeat(){fetch('/api/pickle-chat/presence',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:'{}'}).then(r=>r.ok?r.json():null).then(d=>{if(d&&typeof d.online==='number')document.getElementById('presenceCount').textContent=d.online}).catch(()=>{})}

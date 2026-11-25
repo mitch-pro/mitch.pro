@@ -228,11 +228,16 @@ pub async fn handle(
         if !ctx.is_admin(state) {
             return Some(forbidden());
         }
+        // A missing or blank header is rejected outright rather than being
+        // verified as an empty passphrase.
         let current = headers
             .get("X-Admin-Passphrase")
             .and_then(|v| v.to_str().ok())
-            .unwrap_or("")
-            .trim();
+            .map(str::trim)
+            .filter(|v| !v.is_empty());
+        let Some(current) = current else {
+            return Some(json_response(403, json!({ "error": "invalid_passphrase" })));
+        };
         if !mitch_lib::admin::verify_admin_passphrase_raw(
             &state.store,
             &state.id_secret,

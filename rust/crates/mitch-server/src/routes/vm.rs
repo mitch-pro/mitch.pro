@@ -15,9 +15,12 @@ use std::sync::Arc;
 
 // ── Proxmox configuration (server.js:25518-25522, 25787-25788) ───────────────
 
-/// `PVE_URL` — env value first, then the tartarus default.
+/// The Proxmox API base (`https://host:port/api2/json`) for the raw calls in
+/// this file. It comes from the desktop service's config (`PROXMOX_HOST`/
+/// `PROXMOX_PORT`, falling back to `PVE_URL`), so these calls hit the same
+/// host, with the same TLS name, as the rest of the Proxmox code.
 pub(crate) fn pve_url() -> String {
-    std::env::var("PVE_URL").unwrap_or_else(|_| "https://192.168.100.1:8006/api2/json".to_string())
+    crate::proxmox_desktop::desktop().api_base()
 }
 
 /// The `Authorization` header for raw Proxmox calls in this file — the same
@@ -74,19 +77,21 @@ pub(crate) fn vm_applications(state: &AppState) -> Value {
         .read_document(&state.data_dir().join("vm_applications.json"), json!({}))
 }
 
-/// A PVE API client: self-signed certs on the tartarus interface, so the JS
-/// `tls: { rejectUnauthorized: false }` maps to `danger_accept_invalid_certs`.
-fn pve_client(deadline: u64) -> reqwest::Client {
-    reqwest::Client::builder()
-        .danger_accept_invalid_certs(true)
-        .timeout(std::time::Duration::from_millis(deadline))
-        .build()
-        .unwrap_or_default()
+/// The PVE API client. It is the desktop service's client, so certificate
+/// checking follows `PROXMOX_VERIFY_TLS` (and `PROXMOX_TLS_SERVERNAME`)
+/// instead of being switched off here. See docs/computer-portal.md.
+fn pve_client() -> &'static reqwest::Client {
+    crate::proxmox_desktop::desktop().http_client()
+}
+
+fn ms(deadline: u64) -> std::time::Duration {
+    std::time::Duration::from_millis(deadline)
 }
 
 async fn pve_get_json(url: &str, deadline: u64) -> Result<Value, String> {
-    pve_client(deadline)
+    pve_client()
         .get(url)
+        .timeout(ms(deadline))
         .header("Authorization", pve_token())
         .send()
         .await
@@ -1815,23 +1820,15 @@ pub(crate) fn assert_vmid_in_range(vmid: f64, where_: &str) -> Result<(), String
     Ok(())
 }
 
-/// A PVE client without the JS fetchWithDeadline — the plain `fetch` calls
-/// (powerUserVm, cloneUserVm, stop/destroy) have no timeout in the JS.
-fn pve_client_no_deadline() -> reqwest::Client {
-    reqwest::Client::builder()
-        .danger_accept_invalid_certs(true)
-        .build()
-        .unwrap_or_default()
-}
-
 /// `getExistingVmids()` (server.js:28008-28035) — the node's LXC + QEMU
 /// lists folded into a vmid→name map.
 pub(crate) async fn get_existing_vmids() -> std::collections::HashMap<i64, String> {
     let mut ids = std::collections::HashMap::new();
     for type_ in ["lxc", "qemu"] {
         let url = format!("{}/nodes/{}/{type_}", pve_url(), pve_node());
-        let res = pve_client(5000)
+        let res = pve_client()
             .get(&url)
+            .timeout(ms(5000))
             .header("Authorization", pve_token());
         if let Ok(res) = res.send().await {
             if res.status().as_u16() == 403 {
@@ -1879,7 +1876,7 @@ pub(crate) async fn power_user_vm(state: &AppState, vmid: f64, action: &str) -> 
         pve_url(),
         pve_node()
     );
-    match pve_client_no_deadline()
+    match pve_client()
         .post(&url)
         .header("Authorization", pve_token())
         .send()
@@ -2035,8 +2032,9 @@ pub(crate) async fn create_lxc_container(
     };
     let url = format!("{}/nodes/{}/lxc", pve_url(), pve_node());
 
-    let res = pve_client(15000)
+    let res = pve_client()
         .post(&url)
+        .timeout(ms(15000))
         .header("Authorization", pve_token())
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body(body_str)
@@ -2145,7 +2143,7 @@ pub(crate) async fn clone_user_vm(
     clone_form.append_pair("name", &format!("student-{}", vmid_int));
     clone_form.append_pair("full", "0");
     clone_form.append_pair("pool", "sandboxes");
-    let clone_res = pve_client_no_deadline()
+    let clone_res = pve_client()
         .post(&clone_url)
         .header("Authorization", pve_token())
         .header("Content-Type", "application/x-www-form-urlencoded")
@@ -2215,7 +2213,7 @@ pub(crate) async fn clone_user_vm(
     };
     config_form.append_pair("cipassword", cipassword);
     config_form.append_pair("ciuser", "debian");
-    let config_res = pve_client_no_deadline()
+    let config_res = pve_client()
         .post(&config_url)
         .header("Authorization", pve_token())
         .header("Content-Type", "application/x-www-form-urlencoded")
@@ -2242,7 +2240,7 @@ pub(crate) async fn clone_user_vm(
         pve_node(),
         vmid_int
     );
-    let start_res = pve_client_no_deadline()
+    let start_res = pve_client()
         .post(&start_url)
         .header("Authorization", pve_token())
         .send()
@@ -2283,7 +2281,7 @@ pub(crate) async fn stop_user_vm(state: &AppState, vmid: f64) -> Value {
         pve_url(),
         pve_node()
     );
-    match pve_client_no_deadline()
+    match pve_client()
         .post(&url)
         .header("Authorization", pve_token())
         .send()
@@ -2322,7 +2320,7 @@ pub(crate) async fn destroy_user_vm(state: &AppState, vmid: f64) -> Value {
         return json!({ "success": false, "error": "invalid vmid" });
     };
     let url = format!("{}/nodes/{}/{type_}/{vmid_int}", pve_url(), pve_node());
-    let res = match pve_client_no_deadline()
+    let res = match pve_client()
         .delete(&url)
         .header("Authorization", pve_token())
         .send()

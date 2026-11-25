@@ -170,7 +170,7 @@ body {
   </div>
 </div>
 
-<iframe id="preview" frameborder="0"></iframe>
+<iframe id="preview" frameborder="0" sandbox="allow-scripts allow-modals allow-forms allow-popups"></iframe>
 
 <script>
 var editor = document.getElementById('editor');
@@ -184,9 +184,15 @@ var _prevTag = null;
 var _aiBusy = false;
 var _aiHistory = [];
 
+// The preview is a sandboxed iframe without allow-same-origin, so the
+// markup being tested runs in an opaque origin and can't reach this site's
+// cookies, storage or DOM. It is loaded from a Blob URL.
+var _previewUrl = null;
 function render() {
-  var doc = document.getElementById('preview').contentDocument;
-  doc.open(); doc.write(editor.value); doc.close();
+  var frame = document.getElementById('preview');
+  if (_previewUrl) URL.revokeObjectURL(_previewUrl);
+  _previewUrl = URL.createObjectURL(new Blob([editor.value], { type: 'text/html' }));
+  frame.src = _previewUrl;
 }
 
 var VOID_TAGS = {area:1,base:1,br:1,col:1,embed:1,hr:1,img:1,input:1,link:1,meta:1,param:1,source:1,track:1,wbr:1};

@@ -58,6 +58,7 @@
       .post h3{padding-right:0}
     }
   </style>
+<script src="/vendor/purify-3.2.4.min.js"></script>
 </head>
 <body class="plaza-page pickle-page">
 <main class="app-main bulletin-main">
@@ -91,8 +92,10 @@
     return '';
   }
   function sanitizeClientHtml(html) {
-    const tpl = document.createElement('template');
-    tpl.innerHTML = String(html || '');
+    // DOMPurify (vendored) parses and strips anything executable; the walk
+    // below keeps only allow-listed tags and safe URLs. Without it, show text.
+    if (!window.DOMPurify) return esc(String(html || ''));
+    const parsed = DOMPurify.sanitize(String(html || ''), { RETURN_DOM_FRAGMENT: true });
     const allowed = new Set(['p','br','strong','b','em','i','u','s','a','h2','h3','ul','ol','li','blockquote','pre','code','img','hr','span','div']);
     const alias = { div: 'p', b: 'strong', i: 'em' };
     function clean(node) {
@@ -127,7 +130,7 @@
       return el;
     }
     const frag = document.createDocumentFragment();
-    Array.from(tpl.content.childNodes).forEach(child => frag.appendChild(clean(child)));
+    Array.from(parsed.childNodes).forEach(child => frag.appendChild(clean(child)));
     const out = document.createElement('div');
     out.appendChild(frag);
     return out.innerHTML;

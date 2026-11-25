@@ -283,28 +283,40 @@
     const url4 = new URLSearchParams(window.location.search).get('url4') ?? "";
     const url5 = new URLSearchParams(window.location.search).get('url5') ?? "";
 
+    // Only http(s) URLs are opened. The iframe is built with DOM calls so the
+    // URL is never spliced into HTML.
+    function safeTarget(target) {
+      target = String(target || '').trim();
+      if (!/^https?:\/\//i.test(target)) target = 'https://' + target;
+      try {
+        const parsed = new URL(target);
+        return (parsed.protocol === 'https:' || parsed.protocol === 'http:') ? parsed.href : '';
+      } catch (e) {
+        return '';
+      }
+    }
+
     function openBlank(target) {
       if (!target) return alert("Enter a URL first!");
-      target = target.trim();
-      if (!/^https?:\/\//i.test(target)) target = 'https://' + target;
+      const href = safeTarget(target);
+      if (!href) return alert("Enter a valid web address.");
       const w = window.open("", "_blank", "width=1000,height=700");
       if (!w) return alert("Popup blocked! Allow popups for this site.");
-      const html = `<!doctype html>
-<html>
-<head>
-  <title>New Tab</title>
-  <link rel="icon" type="image/svg" href="https://www.google.com/chrome/static/images/chrome-logo_112px.svg">
-  <meta charset="utf-8">
-  <style>
-    html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#000}
-    iframe{border:0;width:100%;height:100%;display:block}
-  </style>
-</head>
-<body><iframe src="${target}" allowfullscreen allow="fullscreen; autoplay; clipboard-read; clipboard-write; encrypted-media"></iframe></body>
-</html>`;
-      w.document.open();
-      w.document.write(html);
-      w.document.close();
+      const doc = w.document;
+      doc.title = 'New Tab';
+      const icon = doc.createElement('link');
+      icon.rel = 'icon';
+      icon.type = 'image/svg';
+      icon.href = 'https://www.google.com/chrome/static/images/chrome-logo_112px.svg';
+      doc.head.appendChild(icon);
+      const style = doc.createElement('style');
+      style.textContent = 'html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#000}iframe{border:0;width:100%;height:100%;display:block}';
+      doc.head.appendChild(style);
+      const frame = doc.createElement('iframe');
+      frame.allowFullscreen = true;
+      frame.setAttribute('allow', 'fullscreen; autoplay; clipboard-read; clipboard-write; encrypted-media');
+      frame.src = href;
+      doc.body.appendChild(frame);
     }
 
     document.getElementById('openBtn').onclick = () => {

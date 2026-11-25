@@ -20,7 +20,7 @@ It is regex-based and advisory: the job always passes and does not block merging
 
 ## AI code review
 
-The `AI Code Review` job sends the PR to Gemini and posts one comment that it updates in place. It's meant to answer the owner's real question, whether merging is good for the site and its users, not just whether the code works. CI already checks that the code builds and the tests pass.
+The `AI Code Review` job (`.github/workflows/pr-ai-review.yml`) sends the PR to Gemini and posts one comment that it updates in place. It's meant to answer the owner's real question, whether merging is good for the site and its users, not just whether the code works. CI already checks that the code builds and the tests pass.
 
 The prompt asks the model to judge, in order: user value (and added friction), direction and scope (parallel systems, duplicated pages or logic, changes that should be split), maintenance cost, breaches of the project rules, and then security, privacy and economy integrity. It answers with **Summary**, **Good for users**, **Concerns** and **Recommendation** (Merge, Merge with changes, Split or Don't merge). Merge is reserved for changes that are clearly a good direction, not just correct ones.
 
@@ -30,5 +30,7 @@ What the model gets:
 - The PR title and description, passed in through env vars and `jq --arg`, never interpolated into shell.
 - The full list of changed files, plus the diff against the merge base, capped at 60 KB. When the diff is truncated, the model is told so and pointed to the file list.
 
-Everything in the user message is marked as data, and the model is told not to follow instructions found in it. The review is advisory and never blocks a merge. The prompt is in `.github/workflows/pr-security-review.yml`.
+Everything in the user message is marked as data, and the model is told not to follow instructions found in it. The review is advisory and never blocks a merge. The prompt is in `.github/workflows/pr-ai-review.yml`.
+
+The job is a `workflow_run` that starts when `PR Security Review` finishes, not part of that `pull_request` workflow. That way it can use `GEMINI_API_KEY` and the ntfy credentials from the master-only `automation` environment: GitHub always runs master's copy of a `workflow_run` workflow, so a PR can't edit what runs with the secrets. The job looks up the PR from the run's head commit, checks out master, and fetches the PR head as git objects only, never checking it out or running it. It sends the "new PR" ntfy push and the review request only on a PR's first review. Because it runs from master, it shows on the Actions tab rather than in the PR's checks, and changes to it only take effect once merged.
 

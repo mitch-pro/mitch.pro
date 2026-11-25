@@ -805,6 +805,27 @@ impl ProxmoxDesktopService {
         &self.authorization
     }
 
+    /// The `.../api2/json` base that API requests go to. With certificate
+    /// verification on and `PROXMOX_TLS_SERVERNAME` set, requests are
+    /// addressed to that name (which the client resolves to the private
+    /// host) so the certificate is checked against it; otherwise the
+    /// configured host/IP is used directly.
+    pub fn api_base(&self) -> String {
+        if self.verify_tls && !self.tls_server_name.is_empty() {
+            format!("https://{}:{}/api2/json", self.tls_server_name, self.port)
+        } else {
+            self.base_url.clone()
+        }
+    }
+
+    /// The shared HTTP client for Proxmox API calls made outside this service
+    /// (the legacy LXC routes in `routes/vm.rs`). It carries the
+    /// `PROXMOX_VERIFY_TLS` / `PROXMOX_TLS_SERVERNAME` settings, so every
+    /// Proxmox call follows one TLS policy. Pair it with [`Self::api_base`].
+    pub fn http_client(&self) -> &reqwest::Client {
+        &self.client
+    }
+
     fn assert_configured(&self) -> Result<(), ProxmoxServiceError> {
         if !self.configured() {
             return Err(ProxmoxServiceError::new(
@@ -871,14 +892,7 @@ impl ProxmoxDesktopService {
     ) -> Result<Value, ProxmoxServiceError> {
         self.assert_configured()?;
         let verb = reqwest::Method::from_bytes(method.as_bytes()).unwrap_or(reqwest::Method::GET);
-        let url = if self.verify_tls && !self.tls_server_name.is_empty() {
-            format!(
-                "https://{}:{}/api2/json{}",
-                self.tls_server_name, self.port, api_path
-            )
-        } else {
-            format!("{}{}", self.base_url, api_path)
-        };
+        let url = format!("{}{}", self.api_base(), api_path);
         let mut req = self
             .client
             .request(verb.clone(), url)

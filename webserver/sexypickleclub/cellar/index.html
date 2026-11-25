@@ -2518,9 +2518,8 @@ async function selectDm(email) {
   unreadDm[directKey(email)] = 0;
   if (member && member.email) unreadDm[directKey(member.email)] = 0;
   if (member && member.handle) unreadDm[directKey(member.handle)] = 0;
-  const isSelf = isMe(email);
   const titleName = displayNameFor(email);
-  document.getElementById('chat-title').innerHTML = isSelf ? titleName : esc(titleName);
+  document.getElementById('chat-title').textContent = titleName;
   document.getElementById('chat-subtitle').textContent = (member && member.online ? 'online' : 'offline') + ' - ' + (member && member.handle ? '@' + member.handle : email);
   document.getElementById('leave-group-btn').style.display = 'none';
   renderConversationProfile(member);
@@ -2570,7 +2569,7 @@ async function fetchEncryptedChatAdmin(url, options = {}, allowPrompt = true) {
   if (!['invalid_passphrase', 'passphrase_not_configured'].includes(String(details.error || ''))) return response;
   const passphrase = await customPrompt('Admin Passphrase', 'Enter your admin passphrase to open encrypted-chat reports:');
   if (!passphrase) return response;
-  sessionStorage.setItem('admin_passphrase', passphrase);
+  window.MitchAdminAuth.remember(passphrase);
   request.headers = encryptedChatAdminHeaders(options.headers || {});
   response = await fetch(url, request);
   if (response.status === 403) sessionStorage.removeItem('admin_passphrase');

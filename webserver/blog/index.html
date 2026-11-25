@@ -399,6 +399,7 @@
     transition: none;
   }
 </style>
+<script src="/vendor/purify-3.2.4.min.js"></script>
 </head>
 <body>
 <main class="app-main">
@@ -539,8 +540,11 @@ function safeUrl(value, image) {
   return '';
 }
 function sanitizeClientHtml(html) {
-  const tpl = document.createElement('template');
-  tpl.innerHTML = String(html || '');
+  // DOMPurify (vendored, /vendor/purify-*.min.js) does the parsing and strips
+  // anything executable; the walk below then keeps only allow-listed tags and
+  // safe URLs. Without DOMPurify the input is shown as plain text.
+  if (!window.DOMPurify) return legacyTextToHtml(String(html || ''));
+  const parsed = DOMPurify.sanitize(String(html || ''), { RETURN_DOM_FRAGMENT: true });
   const allowed = new Set(['p','br','strong','b','em','i','u','s','a','h2','h3','ul','ol','li','blockquote','pre','code','img','hr','span','div']);
   const alias = { div: 'p', b: 'strong', i: 'em' };
   function clean(node) {
@@ -575,7 +579,7 @@ function sanitizeClientHtml(html) {
     return el;
   }
   const out = document.createElement('div');
-  Array.from(tpl.content.childNodes).forEach(node => out.appendChild(clean(node)));
+  Array.from(parsed.childNodes).forEach(node => out.appendChild(clean(node)));
   return out.innerHTML;
 }
 // fetch that never rejects: a network failure becomes a 599 response with a

@@ -210,7 +210,7 @@
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error === 'invalid_passphrase' ? 'Incorrect passphrase.' : data.error || 'Could not unlock.');
-      sessionStorage.setItem('admin_passphrase', pass);
+      window.MitchAdminAuth.remember(pass);
       $('admin-passphrase').value = '';
       await load();
       say('unlock-status', '');

@@ -554,7 +554,7 @@ var AddLanguage=function(id,name,json,mod)
 		
 		locPlur=(function(plural_form){
 			//lifted and modified from gettext.js
-			var pf_re=new RegExp('^\\s*nplurals\\s*=\\s*[0-9]+\\s*;\\s*plural\\s*=\\s*(?:\\s|[-\\?\\|&=!<>+*/%:;n0-9_\(\)])+');
+			var pf_re=new RegExp('^\\s*nplurals\\s*=\\s*[0-9]+\\s*;\\s*plural\\s*=\\s*(?:\\s|[-\\?\\|&=!<>+*/%:;n0-9_\\(\\)])+');
 			if (!pf_re.test(plural_form))
 			throw new Error('The plural form "'+plural_form+'" is not valid');
 			return new Function('n','var plural, nplurals; '+ plural_form +' return plural;');
@@ -865,7 +865,7 @@ function writeIcon(icon)
 {
 	//returns CSS for an icon's background image
 	//for use in CSS strings
-	return (icon[2]?'background-image:url(\''+icon[2].replace(/'/g,"\\'")+'\');':'')+'background-position:'+(-icon[0]*48)+'px '+(-icon[1]*48)+'px;';
+	return (icon[2]?'background-image:url(\''+icon[2].replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\');':'')+'background-position:'+(-icon[0]*48)+'px '+(-icon[1]*48)+'px;';
 }
 function tinyIcon(icon,css)
 {
@@ -1335,7 +1335,7 @@ if (App && new URL(window.location.href).searchParams.get('modless')) Game.modle
 Game.local=LOCAL;
 if (App) Game.local=true;
 Game.resPath='';
-if (!App && !Game.local && window.location.href.indexOf('orteil.dashnet.org')!=-1)
+if (!App && !Game.local && window.location.hostname=='orteil.dashnet.org')
 {
 	Game.resPath=('//'+location.host+location.pathname).replace('orteil.dashnet.org','cdn.dashnet.org');
 	if (Game.resPath.slice(-1)!='/') Game.resPath+='/';
@@ -2373,7 +2373,7 @@ Game.Launch=function()
 			}
 			catch(e)
 			{
-				var exp=new RegExp('\W+','g');
+				var exp=new RegExp('\\W+','g');
 				Game.bakeryName=what.replace(exp,' ');
 				//Game.bakeryName=what.replace(/\W+/g,' ');
 				Game.bakeryName=Game.bakeryName.substring(0,28);
@@ -2650,8 +2650,7 @@ Game.Launch=function()
 			Game.attachTooltip(l('httpsSwitch'),'<div style="padding:8px;width:350px;text-align:center;font-size:11px;">'+loc("You are currently playing Cookie Clicker on the <b>%1</b> protocol.<br>The <b>%2</b> version uses a different save slot than this one.<br>Click this lock to reload the page and switch to the <b>%2</b> version!",[(Game.https?'HTTPS':'HTTP'),(Game.https?'HTTP':'HTTPS')])+'</div>','this');
 			AddEvent(l('httpsSwitch'),'click',function(){
 				PlaySound('snd/pop'+Math.floor(Math.random()*3+1)+'.mp3',0.75);
-				if (location.protocol=='https:') location.href='http:'+window.location.href.substring(window.location.protocol.length);
-				else if (location.protocol=='http:') location.href='https:'+window.location.href.substring(window.location.protocol.length);
+				//protocol switching removed: this copy is served over https only
 			});
 			
 			AddEvent(l('changeLanguage'),'click',function()
@@ -8728,7 +8727,7 @@ Game.Launch=function()
 								text=[
 									text,
 									Game.bakeryName+' '+romanize(pic.id+2)+(Math.random()<0.05?choose([', Jr.',', Esq.',', Etc.',', Cont\'d',', and so forth']):''),
-									choose([choose(['Lil\' $','Mini-$','$ '+(pic.id+2),'Attempt '+(pic.id+1),'Experiment '+(pic.id+1),'Not $','$, again','$, the sequel','$ '+(pic.id+2)+' Electric Boogaloo','Also $','$ (remixed)','The Other $','$, The Next Generation','$, part '+romanize(pic.id+2),'Revenge of $','The Return of $','$ reborn','$ in the flesh']),'$ "'+choose(['The Menace','The Artisan','The Relative','The Twin','The Specialist','The Officer','The Snitch','The Simpleton','The Genius','The Conformist','The Mistake','The Accident','Lab-grown','Vat Kid','Photocopy','Cloney','Ditto','Accounted For','Twitchy','Wacky','Zen','Rinse & Repeat','Spitting Image','Passing Resemblance','Nickname','Make It So','Deja-vu','Cookie','Clicky','Orteil','But Better','Guess Who','Transplant Fodder','Furthermore','One More Thing','Liquid','Second Chance','Offspring','Mulligan','Spare Parts'])+'" McClone']).replace('$',Game.bakeryName),
+									choose([choose(['Lil\' $','Mini-$','$ '+(pic.id+2),'Attempt '+(pic.id+1),'Experiment '+(pic.id+1),'Not $','$, again','$, the sequel','$ '+(pic.id+2)+' Electric Boogaloo','Also $','$ (remixed)','The Other $','$, The Next Generation','$, part '+romanize(pic.id+2),'Revenge of $','The Return of $','$ reborn','$ in the flesh']),'$ "'+choose(['The Menace','The Artisan','The Relative','The Twin','The Specialist','The Officer','The Snitch','The Simpleton','The Genius','The Conformist','The Mistake','The Accident','Lab-grown','Vat Kid','Photocopy','Cloney','Ditto','Accounted For','Twitchy','Wacky','Zen','Rinse & Repeat','Spitting Image','Passing Resemblance','Nickname','Make It So','Deja-vu','Cookie','Clicky','Orteil','But Better','Guess Who','Transplant Fodder','Furthermore','One More Thing','Liquid','Second Chance','Offspring','Mulligan','Spare Parts'])+'" McClone']).split('$').join(Game.bakeryName),
 								][cloneTitle];
 							}
 							//Math.seedrandom();//disables a certain exploit
@@ -16539,15 +16538,7 @@ Game.Launch=function()
 			l('storeTitle').childNodes[0].textContent=loc("Store");
 		}
 		
-		if (!App && Game.local && new URL(window.location.href).searchParams.get('addon'))
-		{
-			//load addon at path defined in url - only if game is run locally; used mostly for development
-			var path=new URL(window.location.href).searchParams.get('addon');
-			console.log('Loading addon at path:',path);
-			var script=document.createElement('script');
-			script.setAttribute('src',path);
-			document.head.appendChild(script);
-		}
+		//loading an addon from a ?addon= URL is removed: it ran any script on this origin
 	}
 	/*=====================================================================================
 	LOGIC

@@ -42,10 +42,12 @@ destructive endpoints to that list.
 of every staff page. It
 - turns `reauth_required` / `invalid_passphrase` responses into a passphrase
   dialog and retries the request once (the passphrase is never stored);
-- converts the passphrase older page scripts save in
-  `sessionStorage['admin_passphrase']` into an unlock cookie, keeping only a
-  placeholder in storage, and sets a `localStorage` marker so a new tab skips
-  its lock screen.
+- exposes `MitchAdminAuth.remember(pass)`, which page scripts call after
+  verifying a passphrase: it trades it for the unlock cookie, keeps only a
+  placeholder in `sessionStorage['admin_passphrase']`, and sets a
+  `localStorage` marker so a new tab skips its lock screen. Never write the
+  passphrase to storage directly; a `sessionStorage.setItem` override routes
+  any such write through `remember()` as a backstop.
 
 So a tool's frontend needs no passphrase code of its own: call the API and let
 `admin-auth.js` prompt when needed. Moderators are exempt from the passphrase,
