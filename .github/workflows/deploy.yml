@@ -91,8 +91,9 @@ jobs:
     name: Build & Blue-Green Deploy
     runs-on: ubuntu-latest
     # Secrets come from the `production` environment, which only master may
-    # use, so other branches can't read them. There is no approval step: every
-    # push to master that passes rust-ci deploys, whoever merged it.
+    # use, so other branches can't read them. The push triggers this deploy,
+    # but the `production` environment requires the owner's approval, so it
+    # pauses as a pending deployment until approved. See docs/branch-protection.md.
     environment: production
     permissions: {}
     if: >-
