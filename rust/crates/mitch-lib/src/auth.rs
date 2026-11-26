@@ -72,7 +72,10 @@ pub const DEV_TEST_EMAIL: &str = "admin@mitch.pro";
 /// add a bypass for this email anywhere, including in new admin
 /// endpoints that don't yet call it.
 pub const OWNER_TEST_ACCOUNT_EMAIL: &str = "newaccount123@student.rjuhsd.us";
-pub const WHITELISTED_IPS: &[&str] = &["66.60.183.124"];
+/// IPs exempt from rate limiting. Intentionally empty: no hardcoded public
+/// address gets a standing bypass of the rate limiter. Populate from config if
+/// an allowlist is ever needed again, rather than baking an IP into the binary.
+pub const WHITELISTED_IPS: &[&str] = &[];
 
 /// `normalizeEmail(email)` — server.js:2054.
 pub fn normalize_email(email: &str) -> String {

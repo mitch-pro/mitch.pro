@@ -292,7 +292,10 @@ pub async fn verify_recaptcha(state: &Arc<AppState>, token: &str, ip: &str, sid:
     if std::env::var("NODE_ENV").unwrap_or_default() == "test" {
         return true;
     }
-    if !ip.is_empty() && (ip == "66.60.183.124" || ip == "127.0.0.1" || ip == "::1") {
+    // Loopback requests (genuine server-local calls) skip reCAPTCHA. No public
+    // IP is exempted: a hardcoded address is a standing captcha bypass if the IP
+    // is ever reassigned, shared, or spoofable via the real-IP header chain.
+    if !ip.is_empty() && (ip == "127.0.0.1" || ip == "::1") {
         return true;
     }
 
